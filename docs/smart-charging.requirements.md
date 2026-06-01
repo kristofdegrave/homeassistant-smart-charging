@@ -86,6 +86,18 @@ These are hard rules that must never be violated, regardless of mode or circumst
 | `Power` | Charge at a fixed configured current; no solar or CapTar rules |
 | `Off` | Charging disabled; charger set to 0A |
 
+**Control interval:** The time between consecutive coordinator control cycles. Configurable via `input_number.sc_control_interval_s` (see R9). All duration expressions in this document that reference a number of control cycles resolve to `n × control_interval` seconds at runtime.
+
+**`sensor.sc_charger_status`:** The normalised charger connection state. Wraps the charger's native status entity and maps it to one of three canonical values:
+
+| Value | Meaning |
+| --- | --- |
+| `disconnected` | No vehicle present |
+| `connected` | Vehicle plugged in but not actively drawing current |
+| `charging` | Vehicle plugged in and drawing current |
+
+All integration logic must reference `sensor.sc_charger_status` — never the raw charger entity directly.
+
 **Sun is down:** `sun.sun` state is `below_horizon`.
 
 ---
@@ -107,8 +119,8 @@ Solar surplus always takes priority over grid charging — the system shall neve
 
 **Acceptance criteria:**
 
-- **Solar:** When smoothed solar surplus ≥ 150 W, charging starts within one control cycle (≤10 s) unless a cooldown or stop condition (R7) prevents it.
-- **SolarOnly:** When smoothed solar surplus ≥ 1300 W, charging starts within one control cycle (≤10 s) unless a cooldown or stop condition (R7) prevents it. When surplus drops below 1300 W, the charger stops immediately (no 5-minute hold).
+- **Solar:** When smoothed solar surplus ≥ 150 W, charging starts within one control cycle unless a cooldown or stop condition (R7) prevents it.
+- **SolarOnly:** When smoothed solar surplus ≥ 1300 W, charging starts within one control cycle unless a cooldown or stop condition (R7) prevents it. When surplus drops below 1300 W, the charger stops immediately (no 5-minute hold).
 - **Solar:** When smoothed solar surplus drops to 0 W, the system holds minimum current for 5 minutes before stopping (R7).
 - The charger current never pushes net import above 0 W while in either solar mode, except within sensor noise bounds (±1 reading cycle).
 
@@ -191,7 +203,7 @@ This check shall use **raw (unsmoothed)** sensor values — smoothed values (R6)
 
 **Acceptance criteria:**
 
-- In any 10-second control cycle, the charger current set-point never results in net import exceeding the effective peak limit, based on the most recent raw sensor reading.
+- In any control cycle, the charger current set-point never results in net import exceeding the effective peak limit, based on the most recent raw sensor reading.
 - When the effective peak limit would be breached at the minimum charging current (6A), the charger is stopped immediately (0A).
 
 ---
@@ -241,14 +253,14 @@ If the required current exceeds the peak headroom even at minimum (6A), the syst
 
 ### R6 — Sensor smoothing
 
-Net power (`net_w`) and solar power (`solar_w`) readings shall be smoothed using a rolling average over the last **4 readings** (~40 seconds at 10-second poll rate) before use in charging current calculations (R1, R4, R5).
+Net power (`net_w`) and solar power (`solar_w`) readings shall be smoothed using a rolling average over the last **4 readings** (4 × `control_interval`) before use in charging current calculations (R1, R4, R5).
 
 Smoothing shall be bypassed for peak protection decisions (R3) — raw sensor values apply there.
 
 **Acceptance criteria:**
 
-- A sudden 500 W spike in `net_w` lasting one reading cycle (10 s) does not change the charger set-point.
-- A sustained 500 W change in `net_w` lasting 40 s does change the charger set-point within the next control cycle.
+- A sudden 500 W spike in `net_w` lasting one control cycle does not change the charger set-point.
+- A sustained 500 W change in `net_w` lasting 4 control cycles does change the charger set-point within the next control cycle.
 
 ---
 
@@ -282,11 +294,11 @@ The 10-minute Captar cooldown must always run to completion — it may not be sh
 The system shall send a single mobile notification when all of the following conditions are met simultaneously:
 
 - The car is at home (`device_tracker` state = `home`)
-- The charger is not connected (no vehicle detected)
+- `sensor.sc_charger_status` = `disconnected`
 - Car SOC is below the active SOC target (R2d)
 - The current time is within the first control cycle where `now >= departure_time − 8h` (i.e. the first poll at or past the 8-hour mark, not an exact match)
 
-**Deduplication:** If a notification was already sent for the current departure window and the car is still not connected, no repeat notification is sent until the car has been connected and disconnected again (i.e. the condition resets on connection).
+**Deduplication:** If a notification was already sent for the current departure window and `sensor.sc_charger_status` is still `disconnected`, no repeat notification is sent until the charger status transitions away from `disconnected` and back again.
 
 **Purpose:** Catches the "forgot to plug in" scenario. Complements the watchdog that covers "plugged in but not charging".
 
@@ -301,6 +313,7 @@ Default departure times are configurable rather than hardcoded:
 | Weekday departure | `input_datetime.sc_departure_time_weekday` | 06:00 | Typical weekday departure time |
 | Weekend/holiday departure | `input_datetime.sc_departure_time_weekend` | 10:00 | Typical weekend departure time |
 | EV battery capacity | `input_number.sc_ev_battery_capacity_kwh` | 75 | Usable battery capacity in kWh — used by R5 deadline calculation |
+| Control interval | `input_number.sc_control_interval_s` | 10 | Coordinator poll interval in seconds — all cycle-count durations scale with this value |
 
 The system shall use the weekday departure time on Monday–Friday and the weekend departure time on Saturday, Sunday, and public holidays.
 
@@ -327,7 +340,7 @@ The four modes and their modules:
 | Solar | `flow/solar.py` | Charge from solar surplus ≥ 150 W; grid fallback allowed at minimum current |
 | SolarOnly | `flow/solar_only.py` | Charge from solar surplus ≥ 1300 W only; no grid fallback |
 | Captar | `flow/captar.py` | Charge within peak limit; cheap-tariff windows preferred |
-| Power | `flow/power.py` | Charge at a configured fixed current (e.g. 15A); no solar or CapTar rules apply |
+| Power | `flow/power.py` | Charge at a fixed current read from `input_number.sc_power_mode_amps`; no solar or CapTar rules apply |
 
 **Rationale:** A per-mode module is simpler to read, test, and replace independently. A single monolithic module with nested branches for all modes has been the primary maintainability problem in v2.
 
@@ -347,3 +360,38 @@ The four modes and their modules:
 ## Future scope
 
 - Public holiday awareness for R9 — departure time currently uses weekday/weekend only; public holiday detection deferred until a calendar source is agreed.
+- Charger-type mapping layer — `sensor.sc_charger_status` currently assumes a fixed mapping from the Alfen Eve's native states. A future mapping layer will allow configuring the translation per charger type so the integration works with other EV chargers without code changes.
+
+---
+
+## Helper entity reference
+
+### Naming convention
+
+All helpers owned by this integration follow the pattern:
+
+```text
+<domain>.sc_<descriptive_name>
+```
+
+- **`sc_` prefix** — namespaces every entity to the smart-charging integration; prevents collisions with other helpers and makes it trivial to find all related entities in the HA UI.
+- **`<domain>`** — the HA helper type that best matches the data: `input_number` for numeric set-points, `input_boolean` for flags, `input_select` for enum choices, `input_datetime` for timestamps, `sensor` for computed/read-only values.
+- **`<descriptive_name>`** — snake_case, expresses what the value represents (not where it comes from). Units are included when they disambiguate (e.g. `_amps`, `_kwh`, `_soc`).
+
+Raw integration entities (e.g. `sensor.tesla_batterijniveau`) must never be referenced directly — always wrap them in an `sc_` sensor.
+
+### Complete entity table
+
+| Entity | Domain | Range / States | Default | Defined in | Purpose |
+| --- | --- | --- | --- | --- | --- |
+| `sensor.sc_ev_soc` | `sensor` | 0–100 % | — | Definitions | EV state of charge; wraps raw Tesla entity |
+| `sensor.sc_charger_status` | `sensor` | disconnected / connected / charging | — | Definitions | Normalised charger connection state; wraps raw charger entity |
+| `input_select.sc_active_profile` | `input_select` | Solar / SolarOnly / Captar / Power / Off | — | Definitions | Active charging mode; read by coordinator |
+| `input_boolean.sc_wfh_tomorrow` | `input_boolean` | on / off | off | Definitions | WFH flag set by evening notification; resets at midnight |
+| `input_number.sc_active_soc` | `input_number` | 50–100 % | 80 % | R2a | Default charge target SOC |
+| `input_number.sc_max_solar_soc` | `input_number` | 80–100 % | 100 % | R2b | Maximum SOC the solar step-up may reach |
+| `input_number.sc_power_mode_amps` | `input_number` | 6–32 A | 15 A | NF2 / UC4 | Fixed charging current used in Power mode |
+| `input_number.sc_ev_battery_capacity_kwh` | `input_number` | — | 75 kWh | R9 | Usable battery capacity; used by R5 deadline calculation |
+| `input_datetime.sc_departure_time_weekday` | `input_datetime` | time | 06:00 | R9 | Departure time applied Monday–Friday |
+| `input_datetime.sc_departure_time_weekend` | `input_datetime` | time | 10:00 | R9 | Departure time applied Saturday–Sunday and public holidays |
+| `input_number.sc_control_interval_s` | `input_number` | — | 10 s | R9 | Coordinator poll interval; all cycle-count durations scale with this value |
