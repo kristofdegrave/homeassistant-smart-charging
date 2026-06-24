@@ -67,6 +67,17 @@ Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
 
 ---
 
+## Review protocol for analysis documents
+
+When reviewing any analysis document (`docs/analysis/**`):
+
+1. **Always use a fresh separate agent** — spin up a dedicated Opus agent for the review, never review inline in the main session.
+2. **Check cross-document consistency** — verify that any change is consistent with all other analysis documents (system-overview, requirements, other flows). Terms must match the glossary; requirement IDs must match what flows reference.
+3. **Check against requirements** — every flow must satisfy the requirements it claims to; every requirement must be reachable from at least one flow.
+4. **Commit after review** — after all sections of a document are approved, commit with `docs: review and refine <filename>`.
+
+---
+
 ## Flow document standard
 
 Each flow doc: Purpose → Trigger → **Domain events** → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
