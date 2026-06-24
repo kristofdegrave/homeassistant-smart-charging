@@ -56,8 +56,19 @@ Previous iteration archived at `docs/archive/` — do not use as source of truth
 
 ---
 
+## DDD alignment (lightweight)
+
+Two DDD concepts are intentionally adopted:
+
+1. **Ubiquitous Language glossary** — lives in `system-overview.md`. Every domain term used across documents must be defined here first.
+2. **Domain events** — each flow doc lists the events it produces (past tense, PascalCase, e.g. `ChargingStarted`). Shown as named nodes in Mermaid diagrams. Map directly to HA automation triggers.
+
+Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
+
+---
+
 ## Flow document standard
 
-Each flow doc: Purpose → Trigger → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
+Each flow doc: Purpose → Trigger → **Domain events** → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
 
 Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.

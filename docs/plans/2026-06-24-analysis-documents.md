@@ -22,6 +22,7 @@ Content must cover:
 - **Stakeholders** — EV driver (car ready on time), Energy manager (cost minimised, solar used, peak controlled), System maintainer (observable, debuggable, safe to change). All three roles are currently one person but are kept separate because convenience, cost, and maintainability can pull in different directions.
 - **Problem statement** — unmanaged EV charging draws full grid power regardless of solar, tariff, or peak demand
 - **Goals** — maximise solar self-consumption, keep CapTar peak low, charge during cheap tariff windows, always meet departure SOC target
+- **Ubiquitous Language glossary** — define every domain term used across all documents. Each entry: term, definition in one sentence, unit/type where applicable. Seed list: `solar surplus`, `effective peak limit`, `CapTar`, `control cycle`, `active SOC limit`, `cheap-tariff window`, `urgency`, `charger status`, `smoothed value`. Add any additional terms that emerge while writing.
 - **Out of scope** — mode-selection automation (separate HA concern), Eco mode (deferred)
 
 **Step 2: Self-review against 6Cs**
@@ -135,12 +136,15 @@ Structure:
 
 ## Purpose
 ## Trigger / Entry condition
+## Domain events
 ## Flow diagram
 [Mermaid flowchart TD]
 ## Steps
 ## Edge cases
 ## Requirements satisfied
 ```
+
+Domain events to identify: `ControlCycleExecuted`, `ChargerCurrentSet`, `ModeDispatched`. Add others that emerge.
 
 The flow must show:
 1. Read sensors (raw values)
@@ -170,6 +174,8 @@ git commit -m "docs: add control cycle flow"
 
 **Step 1: Write the document**
 
+Domain events to identify: `SolarChargingStarted`, `SolarChargingHeld`, `SolarChargingStopped`, `GridFallbackActivated`. Add others that emerge.
+
 Cover:
 - Trigger: active profile = `Solar`, charger connected
 - Smoothed surplus ≥ 150W → start charging
@@ -195,6 +201,8 @@ git commit -m "docs: add solar flow"
 
 **Step 1: Write the document**
 
+Domain events to identify: `SolarOnlyChargingStarted`, `SolarOnlyChargingStopped`. Reuse events from Solar flow where behaviour is identical; only add new events where Solar-Only differs.
+
 Key differences from Solar flow:
 - Start threshold: smoothed surplus ≥ 1300W (≈ 5.65A proxy for sustaining 6A from solar)
 - No grid fallback — stops immediately when surplus drops below 1300W
@@ -217,6 +225,8 @@ git commit -m "docs: add solar-only flow"
 - Create: `docs/analysis/flows/03-captar-flow.md`
 
 **Step 1: Write the document**
+
+Domain events to identify: `CaptarChargingStarted`, `CaptarChargingStopped`, `CaptarCooldownStarted`, `ChargingSuppressedByWFHCap`. Add others that emerge.
 
 Cover:
 - Trigger: active profile = `Captar`, charger connected
@@ -243,6 +253,8 @@ git commit -m "docs: add captar flow"
 
 **Step 1: Write the document**
 
+Domain events to identify: `PowerModeChargingStarted`, `PowerModeChargingStopped`.
+
 Cover:
 - Trigger: active profile = `Power`, charger connected
 - Set current to fixed value from `input_number.sc_power_mode_amps`
@@ -265,6 +277,8 @@ git commit -m "docs: add power flow"
 - Create: `docs/analysis/flows/05-soc-management.md`
 
 **Step 1: Write the document**
+
+Domain events to identify: `SolarSOCStepUpApplied`, `SolarSOCStepUpReverted`, `SOCLimitResolved`.
 
 Cover three sub-flows:
 
@@ -295,6 +309,8 @@ git commit -m "docs: add SOC management flow"
 - Create: `docs/analysis/flows/06-deadline-override.md`
 
 **Step 1: Write the document**
+
+Domain events to identify: `DeadlineUrgencyTriggered`, `DeadlineUnreachableWarned`.
 
 Cover:
 - When: car cannot reach active SOC limit by departure time at current rate
@@ -327,6 +343,8 @@ git commit -m "docs: add deadline override flow"
 
 **Step 1: Write the document**
 
+Domain events to identify: `WFHConfirmed`, `WFHNotificationSent`, `WFHNightCapActivated`, `WFHNightCapLifted`.
+
 Cover two sub-flows:
 
 **Evening notification (18:00 daily):**
@@ -357,6 +375,8 @@ git commit -m "docs: add WFH logic flow"
 - Create: `docs/analysis/flows/08-flow-selection.md`
 
 **Step 1: Write the document**
+
+Domain events to identify: `ActiveProfileChanged`, `SolarProfileSelected`, `CaptarProfileSelected`. These are the events that *trigger* profile changes — useful for HA automation design.
 
 This describes how `input_select.sc_active_profile` gets its value — the HA automation layer that decides *when* to switch modes. This is out of scope for the integration itself (NF1) but needs to be analysed so the integration is designed correctly.
 

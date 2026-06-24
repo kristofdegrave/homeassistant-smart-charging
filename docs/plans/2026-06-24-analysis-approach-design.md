@@ -19,11 +19,23 @@ The smart charging project is being restarted using a spec-driven, analysis-firs
 
 ---
 
+## DDD Alignment
+
+This methodology intentionally adopts two lightweight DDD concepts — enough to gain the benefits without the full tactical overhead:
+
+1. **Ubiquitous Language glossary** (in `system-overview.md`) — agreed terms shared between domain expert and developer. Prevents ambiguity in requirements and flow diagrams. Every term used across documents must appear here first.
+
+2. **Domain events** (in each flow doc) — explicit named events that *happen* in the domain (e.g. `ChargingStarted`, `PeakLimitBreached`, `DeadlineUrgencyTriggered`). Named in past tense. They make flow diagrams precise and map directly to HA automation triggers later.
+
+Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope — this is a single bounded context with no persistence layer.
+
+---
+
 ## Document Structure
 
-```
+```text
 docs/analysis/
-  system-overview.md    — stakeholders, problem statement, goals, hardware constraints
+  system-overview.md    — stakeholders, problem statement, goals, hardware constraints, glossary
   requirements.md       — fresh requirements (6Cs + SMART + MoSCoW), what not how
   flows/
     00-control-cycle.md — coordinator loop: the spine everything plugs into
@@ -100,8 +112,12 @@ One paragraph: what this flow does and why it exists.
 ## Trigger / Entry condition
 When does this flow activate?
 
+## Domain events
+Named events this flow produces (past tense, PascalCase):
+- `EventName` — when it occurs and what it signals
+
 ## Flow diagram
-[Mermaid diagram]
+[Mermaid diagram — include domain events as named nodes]
 
 ## Steps
 Numbered prose walkthrough of the diagram.
@@ -128,5 +144,5 @@ Preferred diagram types:
 
 ## Reference
 
-- Requirements writing guidelines: https://www.modernrequirements.com/blogs/good-software-requirements/
+- Requirements writing guidelines: [modernrequirements.com — Good Software Requirements](https://www.modernrequirements.com/blogs/good-software-requirements/)
 - Archived previous iteration: `docs/archive/`
