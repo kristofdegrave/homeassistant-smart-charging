@@ -8,7 +8,7 @@ It is the first document in the analysis layer. The Ubiquitous Language glossary
 
 ## Hardware context
 
-The integration is hardware-agnostic. It controls any charger, EV, and solar installation through a set of **configurable parameters**; no specific make or model is assumed. This release targets single-phase installations, so all power and current calculations assume single-phase voltage (Amperes convert to watts as `A × V`, default `V = 230`); three-phase support is deferred.
+The integration is hardware-agnostic. It controls any charger, EV, and solar installation through a set of **configurable parameters**; no specific make or model is assumed. This release targets single-phase installations, so all power and current calculations assume single-phase voltage (Amperes convert to watts as `A × V`, where `V` is the supply voltage — the measured grid voltage when a healthy reading is available, otherwise a configurable nominal voltage, default 230 V); three-phase support is deferred.
 
 The parameters the system reasons over:
 
@@ -63,6 +63,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 **`solar surplus`** — Solar power available to the charger after all other household consumption, computed as `charger_w − net_w` where `net_w` is net grid import (positive = importing, negative = exporting); a positive surplus means solar is feeding the charger. Unit: watts (W).
 
 **`net import`** — Net power flowing from the grid into the house, equal to `net_w`; positive means importing from the grid, negative means exporting to the grid. Unit: watts (W).
+
+**`supply voltage`** — The single-phase voltage used to convert between amperes and watts (`watts = A × supply voltage`): the measured grid voltage when a healthy reading is available, otherwise a configurable nominal voltage (default 230 V). Using the live value keeps current-derived thresholds (e.g. the minimum charging current) accurate as grid voltage drifts. Unit: volts (V).
 
 **`monthly peak demand`** — The highest 15-minute average net import recorded so far in the current calendar month; the value CapTar bills against and one operand of the effective peak limit. Resets at the start of each month. Unit: kilowatts (kW).
 
