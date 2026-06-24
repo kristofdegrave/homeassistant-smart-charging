@@ -37,9 +37,9 @@ Three roles drive the design. All three are currently filled by the same person,
 
 ## Problem statement
 
-Charging an EV without intelligence draws power from the grid at full speed regardless of solar production, electricity tariff, or monthly peak demand. This maximises both cost and CapTar impact: solar surplus is exported instead of self-consumed, expensive peak-tariff energy is bought when cheap windows are available, and every uncontrolled charging session can raise the monthly peak that the capacity tariff bills against.
+Charging an EV without intelligence draws power from the grid at full speed regardless of solar production, electricity tariff, or monthly peak demand. This maximises both cost and CapTar impact: solar surplus is exported instead of self-consumed, expensive peak-tariff energy is bought even while the low-tariff flag is active, and every uncontrolled charging session can raise the monthly peak that the capacity tariff bills against.
 
-The smart charging system must charge the car at the lowest possible cost while still guaranteeing it reaches its target SOC before the configured departure time.
+The smart charging system must charge the car at the lowest possible cost while still guaranteeing it reaches its active SOC limit before the configured departure time.
 
 ---
 
@@ -50,13 +50,13 @@ The smart charging system must charge the car at the lowest possible cost while 
 3. **Charge cost-efficiently from the grid** — when grid power is needed, prefer low-tariff periods (when the low-tariff flag is active) over peak-tariff periods.
 4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting peak-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
 
-These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee — yet the deadline guarantee itself is bounded by the effective peak limit. Deadline urgency raises charging current up to that limit (whose floor is raised during urgency) but never beyond it. The strength of the guarantee is therefore configurable: the urgency floor of the effective peak limit sets how aggressively the system is permitted to chase the deadline, and raising or lowering it trades CapTar cost against deadline confidence.
+These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee. That guarantee is itself bounded by the effective peak limit — deadline urgency raises charging current up to that limit (raising the limit to its urgency floor) but never beyond it. Its strength is therefore configurable: the urgency floor sets how aggressively the system may chase the deadline, trading CapTar cost against deadline confidence.
 
 ---
 
 ## Ubiquitous Language
 
-Shared vocabulary for all analysis documents. Every domain term used in requirements or flows must be defined here. Entries are alphabetised within groupings: domain concepts first, then entity-naming conventions.
+Shared vocabulary for all analysis documents. Every domain term used in requirements or flows must be defined here. Entries are grouped thematically: domain concepts first, then entity-naming conventions.
 
 ### Domain concepts
 
@@ -64,11 +64,15 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`net import`** — Net power flowing from the grid into the house, equal to `net_w`; positive means importing from the grid, negative means exporting to the grid. Unit: watts (W).
 
-**`effective peak limit`** — The ceiling on net import that charging must never exceed, equal to `min(monthly_peak_demand, solar_inverter_ceiling)` (reference setup: 4 kW). During deadline urgency the floor is raised to a configurable urgency floor (reference setup: 3.5 kW) so the limit is never below it; this floor sets how aggressively the system may chase the deadline. Unit: kilowatts (kW).
+**`monthly peak demand`** — The highest 15-minute average net import recorded so far in the current calendar month; the value CapTar bills against and one operand of the effective peak limit. Resets at the start of each month. Unit: kilowatts (kW).
 
-**`peak headroom`** — The additional power the charger may draw without breaching the effective peak limit *less the safety margin*, expressed in amperes for set-point calculations. Unit: amperes (A).
+**`solar inverter ceiling`** — The maximum power the solar inverter can deliver (a configurable parameter — see Hardware context; reference setup: 4 kW); it caps both solar surplus and, as the other operand of the effective peak limit, the peak the system will ever target. Unit: kilowatts (kW).
 
-**`safety margin`** — A configurable buffer held in reserve below the effective peak limit; the charger targets `effective peak limit − safety margin` rather than the limit itself, so measurement noise and control-loop response lag cannot push the real 15-minute net import past the billed peak. Unit: watts (W) (reference setup: configurable default). A larger margin trades a little charging speed for stronger peak-breach protection.
+**`effective peak limit`** — The ceiling on net import that charging must never exceed, equal to `min(monthly_peak_demand, solar_inverter_ceiling)` (reference setup: 4 kW). A configurable urgency floor applies during deadline urgency (reference setup: 3.5 kW): if `monthly_peak_demand` has been driven low enough that the normal limit would fall below this floor, the limit is held at the floor instead, so urgency can still charge meaningfully. The floor sets how aggressively the system may chase the deadline. Unit: kilowatts (kW).
+
+**`peak headroom`** — The additional charging current the charger may draw before net import would reach the safety target (`effective peak limit − safety margin`); expressed in amperes for set-point calculations. Unit: amperes (A).
+
+**`safety margin`** — A configurable buffer held in reserve below the effective peak limit; the charger targets `effective peak limit − safety margin` rather than the limit itself, so measurement noise and control-loop response lag cannot push the real 15-minute net import past the billed peak. A larger margin trades a little charging speed for stronger peak-breach protection. Unit: watts (W).
 
 **`CapTar`** — Capacity tariff; the Belgian distribution-grid billing component charged on the highest 15-minute average net import (monthly peak demand) rather than total energy, which is why every avoidable peak directly raises the bill.
 
@@ -101,6 +105,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 **`profile`** — An extensible, higher-level strategy that determines which mode is active over time. This release ships two built-in profiles: `Manual` (the user selects the active mode directly) and `Auto` (the system selects it). The concept is deliberately designed so additional profiles can be added later — `Eco` is the first deferred candidate (see Out of scope) — and, in future, so users could define their own profiles with custom behaviour. A profile *sets* the active mode; it is not itself a mode. Selected via `input_select.sc_active_profile`. NF1 holds: profiles decide the mode, the coordinator only executes it.
 
 **`Auto` profile** — The built-in profile that automatically selects the active mode over time from observable conditions (time of day, SOC, solar forecast, low-tariff flag, departure deadline, WFH reservation) and escalates between modes when circumstances demand it — for example, switching from `Solar` to `Captar` when deadline urgency requires grid charging that solar surplus alone cannot satisfy.
+
+**`WFH reservation`** — The recorded confirmation that the user will work from home the next day, captured the previous evening (see R12) and reset each day; while active it enables the WFH night cap. Held in an `sc_` helper.
 
 **`WFH night cap`** — A configurable active SOC limit (default 60 %) applied overnight when the user has confirmed they will work from home tomorrow and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for solar charging the following day; low-tariff grid charging is suppressed while the cap is active.
 
