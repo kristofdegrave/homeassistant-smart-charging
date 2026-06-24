@@ -386,6 +386,7 @@ Raw integration entities (e.g. `sensor.tesla_batterijniveau`) must never be refe
 | --- | --- | --- | --- | --- | --- |
 | `sensor.sc_ev_soc` | `sensor` | 0–100 % | — | Definitions | EV state of charge; wraps raw Tesla entity |
 | `sensor.sc_charger_status` | `sensor` | disconnected / connected / charging | — | Definitions | Normalised charger connection state; wraps raw charger entity |
+| `sensor.sc_charger_w` | `sensor` | W | — | UC0 | Charger power output in watts; wraps the raw charger power entity configured at setup |
 | `input_select.sc_active_profile` | `input_select` | Solar / SolarOnly / Captar / Power / Off | — | Definitions | Active charging mode; read by coordinator |
 | `input_boolean.sc_wfh_tomorrow` | `input_boolean` | on / off | off | Definitions | WFH flag set by evening notification; resets at midnight |
 | `input_number.sc_active_soc` | `input_number` | 50–100 % | 80 % | R2a | Default charge target SOC |

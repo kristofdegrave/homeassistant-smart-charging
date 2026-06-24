@@ -4,6 +4,28 @@ Use cases derived from [smart-charging.requirements.md](smart-charging.requireme
 
 ---
 
+## Setup & Configuration
+
+### UC0 — Integration Setup
+Install the integration by mapping hardware sensor entities to their `sc_` wrappers.
+Determine the capability set: if a solar power sensor is provided, Solar and SolarOnly
+profiles are enabled in `sc_active_profile`; if omitted, only Captar, Power, and Off
+are available.
+
+*Derived from: hardware context, entity naming convention*
+
+---
+
+### UC0a — Integration Reconfiguration
+Modify entity mappings on a running installation. Update `sc_` wrapper bindings,
+adjust `sc_active_profile` options if solar capability changes, and reload the
+integration. If the solar sensor is removed while a solar profile is active, reset
+`sc_active_profile` to Off.
+
+*Derived from: UC0, solar capability split*
+
+---
+
 ## Charging Mode Execution
 
 ### UC1 — Solar Mode
@@ -21,9 +43,9 @@ Charge only when solar surplus ≥ 1300 W. Adjust current each cycle to maximise
 ---
 
 ### UC3 — Captar Mode
-Charge within the monthly peak limit. Prefer cheap-tariff windows (weekdays 22:00–07:00, weekends all day). Stop immediately when net import at the current set-point would breach the effective peak limit. Enforce a 10-minute cooldown after each stop.
+Charge at the maximum current that keeps net grid import at or below the effective peak limit, restricted to cheap-tariff windows (weekdays 22:00–07:00, weekends all day). Suppress charging when the WFH reservation is active and the sun is below the horizon, unless urgency (R5) demands the car reach its departure target. Stop immediately when even the minimum current (6 A) would breach the peak limit. Enforce a 10-minute cooldown before any restart.
 
-*Requirements: R3, R4, R7*
+*Requirements: R3, R4, R5, R7*
 
 ---
 
