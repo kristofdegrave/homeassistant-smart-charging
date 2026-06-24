@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast, pathlib; errors = []; [errors.append\\(\\(f, e\\)\\) for f in pathlib.Path\\('custom_components'\\).rglob\\('*.py'\\) for e in [None] if \\(lambda: \\(ast.parse\\(f.read_text\\(encoding='utf-8'\\)\\), None\\)\\)\\(\\)[1] is None or True]; print\\('Parsed OK:', len\\(list\\(pathlib.Path\\('custom_components'\\).rglob\\('*.py'\\)\\)\\), 'files'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(Remove-Item -Recurse -Force \"custom_components/smart_charging/__init__.py\", \"custom_components/smart_charging/config_flow.py\", \"custom_components/smart_charging/const.py\", \"custom_components/smart_charging/coordinator.py\", \"custom_components/smart_charging/flow\", \"custom_components/smart_charging/strings.json\", \"tests\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
