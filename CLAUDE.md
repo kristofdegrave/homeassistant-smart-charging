@@ -10,7 +10,7 @@ The full methodology is documented in [docs/plans/2026-06-24-analysis-approach-d
 
 ## Document structure
 
-```
+```text
 docs/analysis/
   system-overview.md    — stakeholders, problem, goals, hardware
   requirements.md       — what the system must do (6Cs + SMART + MoSCoW)
@@ -39,13 +39,20 @@ Previous iteration archived at `docs/archive/` — do not use as source of truth
 
 ---
 
+## Model selection
+
+- **Analysis work** (`docs/analysis/`) → use **Opus**
+- **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
+
+---
+
 ## Requirements standard
 
 - Describe **what**, never **how**
 - MoSCoW priority on every requirement
 - SMART acceptance criteria
 - 6Cs quality check: Clarity, Concision, Completeness, Consistency, Correctness, Concreteness
-- Reference: https://www.modernrequirements.com/blogs/good-software-requirements/
+- Reference: [modernrequirements.com — Good Software Requirements](https://www.modernrequirements.com/blogs/good-software-requirements/)
 
 ---
 
