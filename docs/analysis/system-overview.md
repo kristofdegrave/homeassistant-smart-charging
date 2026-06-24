@@ -8,16 +8,18 @@ It is the first document in the analysis layer. The Ubiquitous Language glossary
 
 ## Hardware context
 
-All power and current calculations assume single-phase 230 V. Amperes convert to watts as `A × 230`.
+The integration is hardware-agnostic. It controls any charger, EV, and solar installation through a set of **configurable parameters**; no specific make or model is assumed. This release targets single-phase installations, so all power and current calculations assume single-phase voltage (Amperes convert to watts as `A × V`, default `V = 230`); three-phase support is deferred.
 
-| Component | Specification | Relevant constraint |
+The parameters the system reasons over:
+
+| Parameter | Meaning | Relevant constraint |
 |---|---|---|
-| Grid connection | Single-phase 230 V, 40 A | Whole-house supply ceiling is 40 A; the charger shares it with all household load. |
-| Charger — Alfen Eve Single Pro | 1-phase, max 32 A (7.4 kW) | Charging current set-point ranges 6–32 A; below 6 A is not usable (see C1). |
-| EV — Tesla Model 3 LR Dual Motor | ~75 kWh usable battery | Battery capacity feeds the deadline energy calculation; configurable to match the actual car. |
-| Solar — SMA SunnyBoy 4000TL-21 | 4.68 kWp panels, 4 kW inverter ceiling | Solar production is capped at the 4 kW inverter ceiling, so surplus available to the charger never exceeds ~4 kW. |
+| Grid supply ceiling | Maximum current the whole-house connection can draw | The charger shares this ceiling with all household load. |
+| Charger current range | The minimum and maximum charging current set-point | Set-point ranges from the minimum (default 6 A, the IEC 61851 floor — see C1) to the configured maximum; below the minimum is not usable. |
+| EV battery capacity | Usable battery capacity of the connected car | Feeds the deadline energy calculation; configured to match the actual car. |
+| Solar inverter ceiling | Maximum power the solar inverter can deliver | Solar surplus available to the charger never exceeds this ceiling, which is why the effective peak limit is capped at the inverter ceiling — there is no benefit to allowing a higher monthly peak than the most the solar system can ever offset. |
 
-The 4 kW inverter ceiling is the reason the effective peak limit is capped at 4 kW: there is no benefit to allowing a higher monthly peak than the most the solar system can ever offset.
+**Reference setup (example only).** The figures used throughout these documents are grounded in one concrete installation, but they are illustrative defaults, not architectural assumptions: single-phase 230 V / 40 A grid connection; charger with a 6–32 A range (7.4 kW); ~75 kWh EV battery; 4 kW solar inverter ceiling. Where a later document cites a number like "4 kW" or "6 A", read it as "the configured value, which in the reference setup is 4 kW / 6 A".
 
 ---
 
@@ -27,8 +29,8 @@ Three roles drive the design. All three are currently filled by the same person,
 
 | Stakeholder | Needs | Concerns |
 |---|---|---|
-| **EV driver** | The car charged to its target SOC before departure; a reminder if it was left unplugged. | Car not ready on time; charging stops unexpectedly. |
-| **Household energy manager** | Electricity cost minimised; solar surplus fully used; the CapTar monthly peak kept under control. | A monthly peak spike; cheap-tariff windows missed; unnecessary grid charging; wasted solar surplus. |
+| **EV driver** | The car charged to its active SOC limit before departure; a reminder if it was left unplugged. | Car not ready on time; charging stops unexpectedly. |
+| **Household energy manager** | Electricity cost minimised; solar surplus fully used; the CapTar monthly peak kept under control. | A monthly peak spike; low-tariff periods missed; unnecessary grid charging; wasted solar surplus. |
 | **System maintainer** | Observable behaviour; easy to debug; safe to deploy changes. | Silent failures (wrong sensor value, automation not firing); hard-to-trace logic; breakage after Home Assistant updates. |
 
 ---
@@ -45,10 +47,10 @@ The smart charging system must charge the car at the lowest possible cost while 
 
 1. **Maximise solar self-consumption** — solar is always the cheapest source and is used before any grid power.
 2. **Keep the monthly peak (CapTar) under control** — avoid raising the billed peak demand through unnecessary charging spikes.
-3. **Charge cost-efficiently from the grid** — when grid power is needed, prefer cheap-tariff windows over peak-tariff periods.
-4. **Always meet the departure deadline** — the car reaches its active SOC limit by the configured departure time, even when that requires accepting peak-tariff cost.
+3. **Charge cost-efficiently from the grid** — when grid power is needed, prefer low-tariff periods (when the low-tariff flag is active) over peak-tariff periods.
+4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting peak-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
 
-These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee.
+These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee — yet the deadline guarantee itself is bounded by the effective peak limit. Deadline urgency raises charging current up to that limit (whose floor is raised during urgency) but never beyond it. The strength of the guarantee is therefore configurable: the urgency floor of the effective peak limit sets how aggressively the system is permitted to chase the deadline, and raising or lowering it trades CapTar cost against deadline confidence.
 
 ---
 
@@ -62,9 +64,11 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`net import`** — Net power flowing from the grid into the house, equal to `net_w`; positive means importing from the grid, negative means exporting to the grid. Unit: watts (W).
 
-**`effective peak limit`** — The ceiling on net import that charging must never exceed, equal to `min(monthly_peak_demand, 4 kW)`; during deadline urgency the floor is raised so the limit is never below 3.5 kW. The charger does not consume headroom freed up by other household appliances. Unit: kilowatts (kW).
+**`effective peak limit`** — The ceiling on net import that charging must never exceed, equal to `min(monthly_peak_demand, solar_inverter_ceiling)` (reference setup: 4 kW). During deadline urgency the floor is raised to a configurable urgency floor (reference setup: 3.5 kW) so the limit is never below it; this floor sets how aggressively the system may chase the deadline. Unit: kilowatts (kW).
 
-**`peak headroom`** — The additional power the charger may draw without breaching the effective peak limit, expressed in amperes for set-point calculations. Unit: amperes (A).
+**`peak headroom`** — The additional power the charger may draw without breaching the effective peak limit *less the safety margin*, expressed in amperes for set-point calculations. Unit: amperes (A).
+
+**`safety margin`** — A configurable buffer held in reserve below the effective peak limit; the charger targets `effective peak limit − safety margin` rather than the limit itself, so measurement noise and control-loop response lag cannot push the real 15-minute net import past the billed peak. Unit: watts (W) (reference setup: configurable default). A larger margin trades a little charging speed for stronger peak-breach protection.
 
 **`CapTar`** — Capacity tariff; the Belgian distribution-grid billing component charged on the highest 15-minute average net import (monthly peak demand) rather than total energy, which is why every avoidable peak directly raises the bill.
 
@@ -72,29 +76,35 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`control interval`** — The time between consecutive control cycles, configured via `input_number.sc_control_interval_s` (default 10 s); every duration expressed as a number of control cycles resolves to `n × control_interval` seconds at runtime.
 
-**`active SOC limit`** — The charge-limit target in effect at a given moment, resolved in priority order: (1) WFH night cap of 60 % when the reservation is active and the sun is below the horizon, (2) the solar step-up value (85–100 %) when a step-up is in effect, otherwise (3) the default `sc_active_soc` (default 80 %). Unit: percent (%).
+**`active SOC limit`** — The charge-limit target in effect at a given moment, resolved in priority order: (1) the WFH night cap (configurable, default 60 %) when the reservation is active and the sun is below the horizon, (2) the solar step-up value (configurable range, default ceiling `sc_max_solar_soc` 100 %) when a step-up is in effect, otherwise (3) the default `sc_active_soc` (configurable, default 80 %). Unit: percent (%).
 
-**`solar step-up`** — The mechanism that raises the active SOC limit by 5 percentage points (up to `sc_max_solar_soc`) when solar charging is active and SOC comes within 2 % of the current limit, so abundant solar is stored rather than exported. Unit: percentage points (pp).
+**`solar step-up`** — The mechanism that raises the active SOC limit by a configurable step (default 5 percentage points, up to `sc_max_solar_soc`) when solar charging is active and SOC comes within a configurable threshold (default 2 %) of the current limit, so abundant solar is stored rather than exported. Unit: percentage points (pp).
 
-**`cheap-tariff window`** — The period when grid energy is at the low tariff: weekdays 22:00–07:00 and weekends all day; CapTar-mode grid charging is permitted only inside this window.
+**`low-tariff flag`** — A configurable boolean signal the installation provides, indicating that grid energy is currently at the low tariff; used instead of a hard-coded schedule, which keeps the system tariff-agnostic. CapTar-mode grid charging is permitted only while this flag is active.
 
-**`urgency`** — Deadline urgency; the condition where the car cannot reach its active SOC limit by the configured departure time at the current charger output, triggering an escalation of charging current (accepting peak tariff if needed) up to — but not beyond — the active SOC limit. See R5.
+**`urgency`** — Deadline urgency; the condition where the car cannot reach its active SOC limit by the configured departure time at the current charger output, triggering an escalation of charging current (accepting peak tariff if needed) up to — but not beyond — the effective peak limit. See R5.
 
 **`departure deadline`** — The configured time by which the car must reach its active SOC limit; the weekday time applies Monday–Friday and the weekend time applies Saturday, Sunday, and public holidays.
 
 **`charger status`** — The normalised charger connection state exposed via `sensor.sc_charger_status`, mapped to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current).
 
-**`smoothed value`** — A sensor reading averaged over the last 4 control cycles (a rolling mean of `net_w` or `solar_w`) used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
+**`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w` or `solar_w` — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
 
 **`raw value`** — An unsmoothed, most-recent sensor reading; used by peak protection (R3) so a peak breach cannot persist for up to one smoothing window.
 
-**`grid fallback`** — In Solar mode, charging at the minimum current (6 A) using grid power when solar surplus alone cannot sustain it; permitted in Solar mode, explicitly excluded in SolarOnly mode.
+**`grid fallback`** — In Solar mode, charging at the minimum charging current using grid power when solar surplus alone cannot sustain it; permitted in Solar mode, explicitly excluded in SolarOnly mode.
 
-**`charging mode` / `active profile`** — The behaviour the integration executes, selected via `input_select.sc_active_profile`: `Solar`, `SolarOnly`, `Captar`, `Power`, or `Off`. The coordinator reads this helper and dispatches to the matching module; deciding *when* to switch profiles is out of scope (NF1).
+**`charging mode` (mode)** — The concrete behaviour the coordinator executes at a given moment: `Solar`, `SolarOnly`, `Captar`, `Power`, or `Off`. A fixed set provided by the integration. The coordinator reads the active mode and dispatches to the matching module; it contains no logic for *choosing* the mode (NF1).
 
-**`WFH night cap`** — A 60 % active SOC limit applied overnight when the user has confirmed they will work from home tomorrow and the next-day solar forecast exceeds 12 kWh, reserving battery room for solar charging the following day; cheap-tariff grid charging is suppressed while the cap is active.
+**`active mode`** — The mode currently in effect, exposed via `input_select.sc_active_mode`.
 
-**`minimum charging current`** — 6 A, the lowest current the charger may be set to other than 0 A (IEC 61851 minimum); enforced by C1.
+**`profile`** — An extensible, higher-level strategy that determines which mode is active over time. This release ships two built-in profiles: `Manual` (the user selects the active mode directly) and `Auto` (the system selects it). The concept is deliberately designed so additional profiles can be added later — `Eco` is the first deferred candidate (see Out of scope) — and, in future, so users could define their own profiles with custom behaviour. A profile *sets* the active mode; it is not itself a mode. Selected via `input_select.sc_active_profile`. NF1 holds: profiles decide the mode, the coordinator only executes it.
+
+**`Auto` profile** — The built-in profile that automatically selects the active mode over time from observable conditions (time of day, SOC, solar forecast, low-tariff flag, departure deadline, WFH reservation) and escalates between modes when circumstances demand it — for example, switching from `Solar` to `Captar` when deadline urgency requires grid charging that solar surplus alone cannot satisfy.
+
+**`WFH night cap`** — A configurable active SOC limit (default 60 %) applied overnight when the user has confirmed they will work from home tomorrow and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for solar charging the following day; low-tariff grid charging is suppressed while the cap is active.
+
+**`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 
 **`sun is down`** — The condition `sun.sun` state equals `below_horizon`.
 
@@ -106,5 +116,6 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 ## Out of scope
 
-- **Mode-selection automation** — the Home Assistant automation that decides *when* to switch `input_select.sc_active_profile` (based on time, SOC, solar forecast, WFH flag, and departure time) is a separate HA configuration concern. The integration only executes the selected mode; it contains no mode-selection logic (NF1).
-- **`Eco` mode** — fully automatic day→Solar, night→Captar switching is deferred; it will be covered by the mode-selection automation when that is built.
+- **`Eco` profile** — a profile beyond `Auto` that applies a richer cost/comfort strategy (e.g. forecast-driven day→`Solar`, night→`Captar` scheduling) is deferred. The `profile` concept is built to accept it later without rework; this release ships only the `Manual` and `Auto` profiles.
+- **User-defined custom profiles** — letting users author their own profiles with bespoke behaviour is a future capability. The two-layer mode/profile model is designed to make it possible, but no authoring mechanism is provided this release.
+- **Three-phase support** — all calculations assume single-phase this release (see Hardware context); three-phase is deferred.
