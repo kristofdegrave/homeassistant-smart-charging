@@ -62,15 +62,15 @@ This is the orientation map; flow `00-control-cycle.md` details the loop and the
 
 ```mermaid
 flowchart TD
-    Profile["Active profile<br/>(Manual / Auto)"] -->|selects| Mode["Active mode<br/>(Solar / SolarOnly / Captar / Power / Off)"]
+    Profile["Active profile<br/>(Manual / Auto)"] -->|selects| Mode["Active mode"]
     subgraph Cycle["Control cycle — every control interval"]
         direction TB
-        Read["Read sc_ wrapper sensors"] --> Smooth["Smooth<br/>(rolling mean, N cycles)"]
+        Read["Read sensors"] --> Smooth["Smooth<br/>(rolling mean, N cycles)"]
         Smooth --> Dispatch["Dispatch to active mode module"]
         Mode -.-> Dispatch
         Dispatch --> Desired["Desired charger current"]
-        Desired --> Peak["Peak protection<br/>(≤ effective peak limit − safety margin;<br/>raw readings)"]
-        Peak --> Set["Set charger current<br/>via sc_ output"]
+        Desired --> Peak["Peak protection"]
+        Peak --> Set["Set charger current"]
     end
 ```
 
