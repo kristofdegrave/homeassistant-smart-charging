@@ -11,222 +11,303 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R1 — Solar-first charging
 
 **Priority:** Must
-**What:** When solar mode is active and surplus solar power is available, the system charges the car from that surplus and prefers solar over grid power at all times.
+**What:** When `Solar` mode is active and surplus solar power is available, the system charges the car from that surplus and prefers solar over grid power at all times.
 
 **Acceptance criteria:**
-- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least 150 W and no stop or cooldown condition applies.
-- [ ] The charger current is set to the highest value that keeps net grid import at or below 0 W, rounded down to a whole ampere.
-- [ ] When surplus drops to 0 W, the charger holds at the minimum current for 5 minutes before stopping, riding out brief cloud cover.
-- [ ] Net grid import never stays above 0 W for longer than one reading cycle while charging in this mode.
-- [ ] The system never lowers charger current below what solar surplus supports in order to draw the difference from the grid.
+
+- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 150 W) and no stop or cooldown condition applies.
+- [ ] While surplus sustains at least the minimum charging current, the charger current is set to the highest whole ampere (rounded down) that keeps net grid import at or below 0 W.
+- [ ] When smoothed surplus is at or above the start threshold but below the minimum charging current, the charger holds at the minimum charging current and draws the shortfall from the grid (grid fallback), accepting a small positive net import.
+- [ ] When smoothed surplus falls below the start threshold (default 150 W), the charger holds at the minimum charging current for a configurable period (default 5 minutes) before stopping, riding out brief cloud cover.
+- [ ] Except during grid fallback and the post-surplus hold, net grid import does not stay above 0 W for longer than one control cycle while charging in this mode.
 
 ---
 
 ### R2 — Solar-only charging
 
 **Priority:** Must
-**What:** When solar-only mode is active, the system charges the car exclusively from solar surplus and never draws supplementary power from the grid.
+**What:** When `SolarOnly` mode is active, the system charges the car exclusively from solar surplus and never draws supplementary power from the grid.
 
 **Acceptance criteria:**
-- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least 1300 W and no stop or cooldown condition applies.
+
+- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 1300 W, chosen so the minimum charging current can be met from solar alone) and no stop or cooldown condition applies.
 - [ ] The charger current is set to the highest value that keeps net grid import at or below 0 W, rounded down to a whole ampere.
-- [ ] When smoothed solar surplus falls below 1300 W, the charger stops within one control cycle with no hold period.
-- [ ] The car is never charged from the grid while in this mode; net grid import attributable to charging never exceeds 0 W beyond one reading cycle of sensor noise.
+- [ ] When smoothed solar surplus falls below the start threshold (default 1300 W), the charger stops within one control cycle with no hold period.
+- [ ] The car is never charged from the grid while in this mode; net grid import attributable to charging never exceeds 0 W beyond one control cycle of sensor noise.
 
 ---
 
 ### R3 — CapTar peak protection
 
 **Priority:** Must
-**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit.
+**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin below it.
 
 **Acceptance criteria:**
-- [ ] In every control cycle, the chosen charger current keeps net grid import at or below the effective peak limit — the lower of the current monthly peak demand and 4 kW.
+
+- [ ] In every control cycle, the chosen charger current keeps net grid import at or below the effective peak limit minus the safety margin.
 - [ ] This check uses the most recent raw (unsmoothed) sensor readings so that a breach cannot persist for the duration of a smoothing window.
-- [ ] When even the minimum charging current would push net import above the effective peak limit, the charger is stopped within the same control cycle.
-- [ ] Headroom created by other household appliances switching off is not consumed by the charger beyond the effective peak limit.
+- [ ] When net import would exceed the effective peak limit minus the safety margin, the charger current is first reduced — within the same control cycle — to the highest whole ampere that keeps net import at or below that target.
+- [ ] The charger stops (0 A) only when it is already at the minimum charging current and net import still exceeds the effective peak limit minus the safety margin continuously for a configurable grace period (default 2 minutes); a momentary breach does not stop charging.
+- [ ] The charger may use all headroom up to the effective peak limit minus the safety margin, including capacity freed when other household appliances switch off.
 
 ---
 
 ### R4 — Cost-efficient grid charging
 
 **Priority:** Must
-**What:** When grid power is needed to charge, the system charges during the cheapest available tariff window and avoids peak-tariff charging unless a deadline forces it.
+**What:** When `Captar` mode is active and grid power is needed to charge, the system's baseline policy charges only while the low-tariff flag is active. Deadline urgency can supersede this policy (see R5).
 
 **Acceptance criteria:**
+
 - [ ] Grid charging only occurs when no solar surplus is available to cover the session.
-- [ ] During cheap-tariff windows (weekdays 22:00–07:00 and all day at weekends), grid charging is permitted up to the effective peak limit.
-- [ ] Outside cheap-tariff windows, the system does not charge from the grid unless a departure deadline (R5) requires it.
-- [ ] When no permitted charging source is available, the charger outputs 0 A.
+- [ ] While the low-tariff flag is active, grid charging is permitted up to the effective peak limit minus the safety margin.
+- [ ] While the low-tariff flag is inactive, the baseline policy does not charge from the grid.
+- [ ] When no baseline condition permits charging, the charger defaults to 0 A; the only departure from this is the R5 deadline override.
 
 ---
 
 ### R5 — Departure deadline guarantee
 
 **Priority:** Must
-**What:** When the car would otherwise not reach its target charge by the configured departure time, the system raises the charging rate to the lowest level that still meets the deadline.
+**What:** As a cross-cutting override above the active mode's normal cost policy (e.g. R4), when the car would otherwise not reach its active SOC limit by the configured departure time, the system relaxes those cost restrictions — charging at high tariff and, if necessary, raising the peak it is willing to create — to the lowest level that still meets the deadline.
 
 **Acceptance criteria:**
-- [ ] When the projected charge at the current rate would fall short of the active SOC target by departure time, the charger current increases to the minimum rate that closes the gap before departure.
-- [ ] Peak-tariff charging is permitted while meeting a deadline.
-- [ ] The effective peak limit is never exceeded, even while meeting a deadline.
-- [ ] The active SOC target itself is never raised by deadline logic — when a lower target is in force (for example the work-from-home night cap), the system only accelerates toward that lower target.
-- [ ] When even continuous charging cannot meet the deadline, the system charges at the maximum permitted rate and raises a warning that the deadline is unreachable.
+
+- [ ] When the projected charge at the current rate would fall short of the active SOC limit by departure time, the charger current increases to the lowest rate that closes the gap before departure.
+- [ ] High-tariff charging is permitted while meeting a deadline — this is R5's primary purpose: cost optimisation yields to the deadline.
+- [ ] To meet a deadline, the system may raise the effective peak limit up to the configured maximum peak (default 4 kW), accepting a higher monthly peak demand.
+- [ ] The safety margin is always respected: net import stays at or below the effective peak limit in force minus the safety margin, even while meeting a deadline.
+- [ ] The active SOC limit itself is never raised by deadline logic — when a lower limit is in force (e.g. the solar-reserve cap), the system only accelerates toward that lower limit.
+- [ ] When even charging at the maximum permitted rate cannot meet the deadline, the system charges at that maximum and sends the user a notification that the deadline is unreachable.
 
 ---
 
-### R6 — Configurable SOC target
+### R6 — Configurable SOC limit
 
 **Priority:** Must
-**What:** The car is charged up to a target state of charge that the user can configure, and charging stops once that target is reached.
+**What:** The car is charged up to a configurable active SOC limit. The system keeps this limit synchronised with the vehicle's own charge-limit setting in both directions: it writes the active limit to the vehicle, and it adopts any limit the user sets directly on the vehicle as a manual change.
 
 **Acceptance criteria:**
-- [ ] The default charge target is user-configurable within a 50–100% range.
-- [ ] Charging stops when the car reaches the currently active SOC target.
-- [ ] At any moment a single active SOC target applies, resolved by a defined priority order across the default target, any solar step-up, and the work-from-home night cap.
-- [ ] Charging does not resume above the active target until the target changes or the car is unplugged and replugged.
+
+- [ ] The default SOC limit is user-configurable within a 50–100% range (default 80%).
+- [ ] While the car is plugged in at home, the system writes the active SOC limit to the vehicle (when the vehicle exposes a settable charge limit) so it stops at that SOC independently of charger-current control.
+- [ ] When the car is unplugged while at home, the system resets the vehicle's charge limit to the default SOC limit (default 80%).
+- [ ] The vehicle's charge limit is never changed while the car is away from home (C2).
+- [ ] A change to the vehicle's charge limit that the system did not initiate (e.g. set by the user in the car or its app) is adopted as a manual update to the default SOC limit, rather than being overwritten.
+- [ ] Charging stops when the car reaches the active SOC limit.
 
 ---
 
-### R7 — Solar SOC step-up
+### R7 — Active SOC limit resolution & lifecycle
+
+**Priority:** Must
+**What:** At any moment a single active SOC limit is in force, resolved from the configured default and any active modifiers; this requirement defines how it is resolved and when it resets.
+
+**Acceptance criteria:**
+
+- [ ] At any moment exactly one active SOC limit applies, resolved in priority order: the solar-reserve cap (R9) first, then any solar step-up (R8), otherwise the default SOC limit (R6).
+- [ ] A solar step-up raises the active SOC limit only while charging in a solar mode (`Solar` or `SolarOnly`); switching between those two preserves an in-effect step-up.
+- [ ] When the active mode is no longer a solar mode, any solar step-up is cleared and the active SOC limit returns to the default limit.
+- [ ] On disconnect, the active SOC limit resets to the default limit (any solar step-up is cleared).
+- [ ] Charging does not resume above the active SOC limit until the limit changes or the car is unplugged and replugged.
+
+---
+
+### R8 — Solar SOC step-up
 
 **Priority:** Should
-**What:** While charging on solar, the system raises the charge target in steps so that abundant free solar energy is stored rather than wasted.
+**What:** While charging in a solar mode, the system raises the active SOC limit in steps so that abundant free solar energy is stored rather than wasted. (Its scope and reset are governed by R7.)
 
 **Acceptance criteria:**
-- [ ] When solar charging is active and the car's charge reaches within 2 percentage points of the active target, the target rises by 5 percentage points.
-- [ ] The stepped-up target never exceeds a user-configurable maximum (80–100%, default 100%); a step that would overshoot it clamps to the maximum.
-- [ ] Consecutive step-ups are at least 10 minutes apart.
-- [ ] The stepped-up target reverts to the default target when the car disconnects or when charging switches to CapTar mode.
-- [ ] Switching between solar and solar-only mode does not revert the stepped-up target.
+
+- [ ] When solar charging is active and the car's SOC reaches within a configurable threshold (default 2 pp) of the active SOC limit, the limit rises by a configurable step (default 5 pp).
+- [ ] The stepped-up limit never exceeds a user-configurable maximum (50–100%, default 100%); a step that would overshoot it clamps to the maximum.
+- [ ] Consecutive step-ups are at least a configurable interval apart (default 10 minutes).
 
 ---
 
-### R8 — Work-from-home night charging cap
+### R9 — Solar-reserve overnight cap
 
 **Priority:** Should
-**What:** When the user will work from home the next day and sufficient solar is forecast, the system caps overnight charging so daytime solar energy can be used instead.
+**What:** When the home-day flag is set for the next day and the next-day solar forecast is high enough, the system caps the overnight active SOC limit so the next day's solar energy can be used instead.
 
 **Acceptance criteria:**
-- [ ] The cap activates only when the user has confirmed working from home tomorrow and the forecast solar yield for tomorrow exceeds 12 kWh.
-- [ ] While active, the overnight charge target is capped at 60% from sunset until sunrise.
-- [ ] Cheap-tariff grid charging is suppressed while the cap is active.
-- [ ] A departure deadline (R5) may charge up to the 60% cap but never beyond it.
-- [ ] At sunrise the cap lifts and normal solar charging resumes.
+
+- [ ] The cap activates only when the home-day flag is set for tomorrow — sourced from the evening prompt (R13) or any configured external source such as a calendar sensor (NF3) — and the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh).
+- [ ] While active, the overnight active SOC limit is capped at a configurable value (default 60%) while the sun is down.
+- [ ] Low-tariff grid charging is suppressed while the cap is active.
+- [ ] A departure deadline (R5) may charge up to the cap but never beyond it.
+- [ ] When the sun comes up, the cap lifts and normal solar charging resumes.
 
 ---
 
-### R9 — Sensor smoothing
+### R10 — Sensor smoothing
 
 **Priority:** Must
 **What:** The system bases charging-rate decisions on smoothed power readings so that momentary fluctuations do not cause the charging rate to change.
 
 **Acceptance criteria:**
-- [ ] Net grid power and solar power readings are averaged over the most recent 4 readings before being used to set the charging rate.
+
+- [ ] Net grid power and solar power are each sampled once per control cycle, and the most recent *N* samples (configurable, default 4 — i.e. `N × control interval` in real time) are averaged before being used to set the charging rate.
 - [ ] A power spike lasting a single control cycle does not change the charger set-point.
-- [ ] A power change sustained across 4 control cycles changes the charger set-point within the following control cycle.
+- [ ] A power change sustained across the full smoothing window changes the charger set-point within the following control cycle.
 - [ ] Peak-protection decisions (R3) are exempt and use raw, unsmoothed readings.
 
 ---
 
-### R10 — Rapid cycling prevention
+### R11 — Rapid cycling prevention
 
 **Priority:** Must
 **What:** The system prevents the charger from starting and stopping in quick succession so the car never enters a charging error state.
 
 **Acceptance criteria:**
-- [ ] After charging stops, it does not restart until a mode-specific cooldown has fully elapsed (2 minutes for solar modes, 10 minutes for CapTar).
+
+- [ ] After charging stops, it does not restart until a mode-specific cooldown has fully elapsed (configurable; defaults: 2 minutes for solar modes, 10 minutes for `Captar`).
 - [ ] A cooldown, once started, always runs to completion and is not shortened by a change in conditions.
-- [ ] The charger current is never set to a value between 1 A and 5 A.
+- [ ] The charger current is only ever 0 A or at least the minimum charging current, never in between (per C1).
 - [ ] Switching the active mode resets all hold and cooldown timers so the incoming mode starts fresh.
 
 ---
 
-### R11 — Plug-in reminder notification
+### R12 — Plug-in reminder notification
 
-**Priority:** Should
-**What:** The system notifies the user to plug in the car when it is home, unplugged, and below target with limited time before departure.
+**Priority:** Could
+**What:** The system notifies the user to plug in the car when it is home, unplugged, and below the active SOC limit with limited time before departure.
 
 **Acceptance criteria:**
-- [ ] A single notification is sent when the car is home, disconnected, below the active SOC target, and within 8 hours of the next departure time.
+
+- [ ] A single notification is sent when the car is home, disconnected, below the active SOC limit, and within a configurable lead time (default 8 hours) of the next departure time (R14).
 - [ ] No further reminder is sent for the same departure window unless the charger is connected and then disconnected again.
-- [ ] No reminder is sent when the car is already connected or already at or above the active SOC target.
+- [ ] No reminder is sent when the car is already connected or already at or above the active SOC limit.
 
 ---
 
-### R12 — WFH evening notification
+### R13 — Home-day evening prompt
+
+**Priority:** Could
+**What:** As one way to set the home-day flag, each evening the system can ask the user whether the car will be home during the next day, so a solar-reserve cap can be planned. (An external source such as a calendar may set the flag instead — R9.)
+
+**Acceptance criteria:**
+
+- [ ] When enabled, an actionable yes/no notification is sent at a configurable time (default 18:00) each evening.
+- [ ] No prompt is sent when an external source has already set the home-day flag for tomorrow.
+- [ ] Answering "yes" sets the home-day flag for tomorrow.
+- [ ] If no answer is given within a configurable timeout (default 2 hours), the system treats the answer as "no".
+- [ ] The home-day flag resets each day at midnight.
+
+---
+
+### R14 — Configurable departure times
+
+**Priority:** Must
+**What:** The system targets a departure time for the current day, resolved from a per-day-of-week default, optional public-holiday and home-day overrides, or an external sensor. Any of these may resolve to "no deadline".
+
+**Acceptance criteria:**
+
+- [ ] A default departure time is user-configurable for each day of the week (defaults: 06:00 Mon–Fri; no deadline Sat–Sun).
+- [ ] Public-holiday and home-day (home-day flag, R9) departure times can each be configured and override the day-of-week default; both default to no deadline. If a day is both, the public-holiday override takes precedence.
+- [ ] Public holidays are recognised from a configured source (e.g. a holiday calendar sensor, NF3).
+- [ ] When an external departure-time sensor is configured (NF3), its value takes precedence over all configured values.
+- [ ] Any resolved departure time may be "no deadline", in which case no deadline applies that day and R5 does not force charging.
+- [ ] The active departure time is resolved in priority order — external sensor, then public-holiday / home-day override, then day-of-week default — and feeds the deadline guarantee (R5) and plug-in reminder (R12).
+
+---
+
+### R15 — Configurable EV battery capacity
+
+**Priority:** Must
+**What:** The car's usable battery capacity is configurable so charging-time estimates reflect the actual vehicle; it may alternatively be read from a sensor when one is available.
+
+**Acceptance criteria:**
+
+- [ ] The usable battery capacity is user-configurable in kWh (default 75 kWh).
+- [ ] When a capacity sensor is configured (NF3), its value is used in preference to the configured number, falling back to the configured value if the sensor is unavailable.
+- [ ] The effective capacity (sensed or configured) is used when calculating the energy and time needed to meet a departure deadline (R5).
+- [ ] Changing the effective capacity changes the deadline calculation accordingly within the next control cycle.
+
+---
+
+### R16 — Auto profile
+
+**Priority:** Must
+**What:** The active profile is chosen by the user (`Manual` or `Auto`); under `Auto` the system selects the active mode over time from observable conditions, so the user need not switch modes by hand.
+
+**Acceptance criteria:**
+
+- [ ] The active profile is selected via a single profile selector; the built-in profiles are `Manual` and `Auto`. A profile sets the active mode and is not itself a mode.
+- [ ] Under `Manual`, the system makes no automatic mode changes — the active mode is whatever the user or an external source sets (NF1).
+- [ ] Under `Auto`, the system sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, SOC, departure deadline, home-day flag).
+- [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required.
+- [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
+
+---
+
+### R17 — Power mode
 
 **Priority:** Should
-**What:** Each evening the system asks the user whether they will work from home the next day so overnight charging can be planned accordingly.
+**What:** When `Power` mode is active, the system charges as fast as possible — at the maximum charging current — ignoring solar surplus and tariff, for when the user simply wants the car charged now.
 
 **Acceptance criteria:**
-- [ ] An actionable yes/no notification is sent at 18:00 each evening.
-- [ ] Answering "yes" records that the user will work from home tomorrow.
-- [ ] If no answer is given within 2 hours, the system treats the answer as "no".
-- [ ] The recorded answer resets each day at midnight.
 
----
-
-### R13 — Configurable departure times
-
-**Priority:** Must
-**What:** The user can configure separate departure times for weekdays and weekends, and the system applies the correct one for each day.
-
-**Acceptance criteria:**
-- [ ] Separate weekday and weekend departure times are user-configurable (defaults 06:00 and 10:00).
-- [ ] The weekday departure time is applied Monday through Friday.
-- [ ] The weekend departure time is applied on Saturday and Sunday.
-- [ ] The active departure time feeds the deadline guarantee (R5) and plug-in reminder (R11).
-
----
-
-### R14 — Configurable EV battery capacity
-
-**Priority:** Must
-**What:** The user can configure the car's usable battery capacity so charging-time estimates reflect the actual vehicle.
-
-**Acceptance criteria:**
-- [ ] The usable battery capacity is user-configurable in kWh (default 75 kWh).
-- [ ] The configured capacity is used when calculating the energy and time needed to meet a departure deadline (R5).
-- [ ] Changing the configured capacity changes the deadline calculation accordingly within the next control cycle.
+- [ ] While `Power` mode is active, the charger current is set to the maximum charging current, regardless of solar surplus or the low-tariff flag.
+- [ ] A configurable option determines whether `Power` mode respects CapTar peak protection: when enabled (default), net import stays at or below the effective peak limit minus the safety margin (R3); when disabled, charging may breach the peak, bounded only by the grid supply ceiling.
+- [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option.
+- [ ] The active SOC limit (R7) still applies; charging stops when it is reached.
 
 ---
 
 ## Non-functional requirements
 
-### NF1 — Mode selection owned by HA, not the integration
+### NF1 — Coordinator executes modes; profiles select them
 
 **Priority:** Must
-**What:** The integration executes whichever charging mode it is told is active and contains no logic deciding when to switch modes.
+**What:** The coordinator executes whichever charging mode is currently active and contains no logic for deciding which mode should be active. Choosing the mode is the responsibility of the active profile.
 
 **Acceptance criteria:**
-- [ ] The active mode is supplied to the integration from outside it, and the integration acts on that value alone.
-- [ ] The integration contains no rules that select or change the active mode based on time, solar forecast, SOC, or departure.
-- [ ] Changing the active mode externally changes the integration's behaviour within the next control cycle.
+
+- [ ] The coordinator reads the active mode and dispatches to the matching mode module; it contains no rules that choose or change the active mode.
+- [ ] The active mode is set either by the user / an external source (the `Manual` profile) or by the `Auto` profile (R16).
+- [ ] Changing the active mode changes the coordinator's behaviour within the next control cycle.
 
 ---
 
-### NF2 — One module per charging mode
+### NF2 — One self-contained unit per mode and per profile
 
 **Priority:** Must
-**What:** Each charging mode is implemented in its own self-contained unit with no logic belonging to another mode.
+**What:** Each charging mode — and each profile — is implemented in its own self-contained unit with no logic belonging to another.
 
 **Acceptance criteria:**
-- [ ] There is exactly one unit of logic per charging mode (Solar, SolarOnly, CapTar, Power).
-- [ ] No mode's logic references or branches on another mode's behaviour.
-- [ ] Mode behaviour can be changed or replaced one mode at a time without altering the others.
+
+- [ ] There is exactly one unit of logic per charging mode (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) and one per profile (`Manual`, `Auto`).
+- [ ] No mode's or profile's logic references or branches on another mode's or profile's internals.
+- [ ] A mode or profile can be changed, replaced, or added one at a time without altering the others.
 
 ---
 
-### NF3 — All sensor access via sc_ wrapper entities
+### NF3 — All device I/O via sc_ wrapper entities
 
 **Priority:** Must
-**What:** All charging logic reads its inputs through the integration's own namespaced wrapper entities rather than raw device entities.
+**What:** All charging logic reads its inputs and issues its outputs through the integration's own namespaced wrappers rather than raw device entities.
 
 **Acceptance criteria:**
+
 - [ ] Every sensor value used by the charging logic is read from an `sc_`-prefixed wrapper entity.
-- [ ] No charging logic references a raw device or third-party integration entity directly.
-- [ ] Replacing the underlying device requires changing only the wrapper entity, not the charging logic.
+- [ ] Every command the logic issues — setting charger current, starting/stopping charging, writing the vehicle charge limit — goes through an `sc_`-prefixed wrapper (entity or action), not a raw device entity or service.
+- [ ] No charging logic references a raw device or third-party integration entity directly, for input or output.
+- [ ] Replacing the underlying charger or vehicle requires changing only the wrappers, not the charging logic.
+
+---
+
+### NF4 — Voltage-aware power conversion
+
+**Priority:** Should
+**What:** The system converts between charging current and power using the measured supply voltage when a healthy reading is available, and falls back to a configurable nominal voltage when it is not.
+
+**Acceptance criteria:**
+
+- [ ] When a healthy supply-voltage reading is available, current↔power conversions use that measured value, taking effect within the next control cycle.
+- [ ] When no healthy supply-voltage reading is available, conversions use a user-configurable nominal voltage (default 230 V).
+- [ ] Current-derived thresholds (such as the minimum charging current and any threshold expressed in amperes) remain correct as the measured supply voltage varies.
 
 ---
 
@@ -234,8 +315,8 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 These are hard rules that must never be violated, regardless of mode or circumstance.
 
-| ID | Constraint |
-|----|-----------|
-| C1 | The charging current is always either 0 A or in the 6–32 A range; values of 1–5 A are never sent because they cause Tesla charging errors. |
-| C2 | The charge limit is changed only while the car is at home; no charge-limit change is made remotely. |
-| C3 | Net grid import is never allowed to exceed the effective peak limit — the lower of the current monthly peak demand and 4 kW, with a 3.5 kW floor during deadline urgency. |
+| ID | Constraint                                                                                                                                                                                                                  |
+|----|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| C1 | The charging current is always either 0 A or between the minimum and maximum charging current (reference setup: 6–32 A); values below the minimum charging current are never sent, as many vehicles/chargers fault on them. |
+| C2 | The vehicle charge limit is changed only while the car is at home; no charge-limit change is made remotely.                                                                                                                 |
+| C3 | Net grid import is never allowed to exceed the effective peak limit (which rises to the maximum peak only during deadline urgency), and charging targets a safety margin below it.                                          |
