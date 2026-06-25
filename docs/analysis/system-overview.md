@@ -1,6 +1,6 @@
 # Smart Charging v3 — System Overview
 
-This document sets the context for the smart charging integration: the hardware it controls, the people it serves, the problem it solves, the goals it pursues, the shared vocabulary used across every analysis document, and what is explicitly out of scope.
+This document sets the context for the smart charging integration: the hardware it controls, the people it serves, the problem it solves, the goals it pursues, how its pieces fit together, the shared vocabulary used across every analysis document, and what is explicitly out of scope.
 
 It is the first document in the analysis layer. The Ubiquitous Language glossary below is authoritative: every domain term used in `requirements.md` and the flow documents must be defined here first.
 
@@ -51,6 +51,28 @@ The smart charging system must charge the car at the lowest possible cost while 
 4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting high-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
 
 These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee. That guarantee is itself bounded by the effective peak limit — during urgency the limit rises to the configured maximum peak, and charging current escalates up to it (less the safety margin) but never beyond. Its strength is therefore configurable: the maximum peak sets how aggressively the system may chase the deadline, trading CapTar cost against deadline confidence.
+
+---
+
+## How it fits together
+
+At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing them, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an `sc_` wrapper entity, which is what keeps the integration hardware-agnostic.
+
+This is the orientation map; flow `00-control-cycle.md` details the loop and the per-mode flows detail each mode module.
+
+```mermaid
+flowchart TD
+    Profile["Active profile<br/>(Manual / Auto)"] -->|selects| Mode["Active mode<br/>(Solar / SolarOnly / Captar / Power / Off)"]
+    subgraph Cycle["Control cycle — every control interval"]
+        direction TB
+        Read["Read sc_ wrapper sensors"] --> Smooth["Smooth<br/>(rolling mean, N cycles)"]
+        Smooth --> Dispatch["Dispatch to active mode module"]
+        Mode -.-> Dispatch
+        Dispatch --> Desired["Desired charger current"]
+        Desired --> Peak["Peak protection<br/>(≤ effective peak limit − safety margin;<br/>raw readings)"]
+        Peak --> Set["Set charger current<br/>via sc_ output"]
+    end
+```
 
 ---
 
