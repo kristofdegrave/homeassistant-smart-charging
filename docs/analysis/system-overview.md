@@ -37,7 +37,7 @@ Three roles drive the design. All three are currently filled by the same person,
 
 ## Problem statement
 
-Charging an EV without intelligence draws power from the grid at full speed regardless of solar production, electricity tariff, or monthly peak demand. This maximises both cost and CapTar impact: solar surplus is exported instead of self-consumed, expensive peak-tariff energy is bought even while the low-tariff flag is active, and every uncontrolled charging session can raise the monthly peak that the capacity tariff bills against.
+Charging an EV without intelligence draws power from the grid at full speed regardless of solar production, electricity tariff, or monthly peak demand. This maximises both cost and CapTar impact: solar surplus is exported instead of self-consumed, expensive high-tariff energy is bought even when low-tariff periods are available, and every uncontrolled charging session can raise the monthly peak that the capacity tariff bills against.
 
 The smart charging system must charge the car at the lowest possible cost while still guaranteeing it reaches its active SOC limit before the configured departure time.
 
@@ -47,10 +47,10 @@ The smart charging system must charge the car at the lowest possible cost while 
 
 1. **Maximise solar self-consumption** — solar is always the cheapest source and is used before any grid power.
 2. **Keep the monthly peak (CapTar) under control** — avoid raising the billed peak demand through unnecessary charging spikes.
-3. **Charge cost-efficiently from the grid** — when grid power is needed, prefer low-tariff periods (when the low-tariff flag is active) over peak-tariff periods.
-4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting peak-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
+3. **Charge cost-efficiently from the grid** — when grid power is needed, prefer low-tariff periods (when the low-tariff flag is active) over high-tariff periods.
+4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting high-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
 
-These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee. That guarantee is itself bounded by the effective peak limit — deadline urgency raises charging current up to that limit (raising the limit to its urgency floor) but never beyond it. Its strength is therefore configurable: the urgency floor sets how aggressively the system may chase the deadline, trading CapTar cost against deadline confidence.
+These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee. That guarantee is itself bounded by the effective peak limit — during urgency the limit rises to the configured maximum peak, and charging current escalates up to it (less the safety margin) but never beyond. Its strength is therefore configurable: the maximum peak sets how aggressively the system may chase the deadline, trading CapTar cost against deadline confidence.
 
 ---
 
@@ -68,9 +68,9 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`monthly peak demand`** — The highest 15-minute average net import recorded so far in the current calendar month; the value CapTar bills against and one operand of the effective peak limit. Resets at the start of each month. Unit: kilowatts (kW).
 
-**`solar inverter ceiling`** — The maximum power the solar inverter can deliver (a configurable parameter — see Hardware context; reference setup: 4 kW); it caps both solar surplus and, as the other operand of the effective peak limit, the peak the system will ever target. Unit: kilowatts (kW).
+**`maximum peak`** — The highest monthly peak demand the system is ever willing to create, a configurable parameter (reference setup: 4 kW, defaulting to the solar inverter ceiling from the Hardware context — there is no benefit to a peak higher than the most solar can ever offset). It is the upper operand of the effective peak limit and the single ceiling that deadline urgency may raise the limit to. Unit: kilowatts (kW).
 
-**`effective peak limit`** — The ceiling on net import that charging must never exceed, equal to `min(monthly_peak_demand, solar_inverter_ceiling)` (reference setup: 4 kW). A configurable urgency floor applies during deadline urgency (reference setup: 3.5 kW): if `monthly_peak_demand` has been driven low enough that the normal limit would fall below this floor, the limit is held at the floor instead, so urgency can still charge meaningfully. The floor sets how aggressively the system may chase the deadline. Unit: kilowatts (kW).
+**`effective peak limit`** — The ceiling on net import that charging keeps a safety margin below and must never exceed. Normally `min(monthly_peak_demand, maximum_peak)`, so ordinary charging never raises the billed monthly peak beyond what is already incurred. During deadline urgency the limit rises to the maximum peak, allowing the deadline to push the monthly peak up to — but never beyond — that ceiling (see R5). Unit: kilowatts (kW).
 
 **`peak headroom`** — The additional charging current the charger may draw before net import would reach the safety target (`effective peak limit − safety margin`); expressed in amperes for set-point calculations. Unit: amperes (A).
 
@@ -88,7 +88,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`low-tariff flag`** — A configurable boolean signal the installation provides, indicating that grid energy is currently at the low tariff; used instead of a hard-coded schedule, which keeps the system tariff-agnostic. CapTar-mode grid charging is permitted only while this flag is active.
 
-**`urgency`** — Deadline urgency; the condition where the car cannot reach its active SOC limit by the configured departure time at the current charger output, triggering an escalation of charging current (accepting peak tariff if needed) up to — but not beyond — the effective peak limit. See R5.
+**`urgency`** — Deadline urgency; the condition where the car cannot reach its active SOC limit by the configured departure time at the current charger output, triggering an escalation of charging current (accepting high tariff if needed) up to — but not beyond — the effective peak limit, which itself rises to the maximum peak during urgency. See R5.
 
 **`departure deadline`** — The configured time by which the car must reach its active SOC limit; the weekday time applies Monday–Friday and the weekend time applies Saturday, Sunday, and public holidays.
 
