@@ -12,12 +12,12 @@ The integration is hardware-agnostic. It controls any charger, EV, and solar ins
 
 The parameters the system reasons over:
 
-| Parameter | Meaning | Relevant constraint |
-|---|---|---|
-| Grid supply ceiling | Maximum current the whole-house connection can draw | The charger shares this ceiling with all household load. |
-| Charger current range | The minimum and maximum charging current set-point | Set-point ranges from the minimum (default 6 A, the IEC 61851 floor — see C1) to the configured maximum; below the minimum is not usable. |
-| EV battery capacity | Usable battery capacity of the connected car | Feeds the deadline energy calculation; configured to match the actual car. |
-| Solar inverter ceiling | Maximum power the solar inverter can deliver | Solar surplus available to the charger never exceeds this ceiling, which is why the effective peak limit is capped at the inverter ceiling — there is no benefit to allowing a higher monthly peak than the most the solar system can ever offset. |
+| Parameter              | Meaning                                             | Relevant constraint                                                                                                                                                                                                                                |
+|------------------------|-----------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Grid supply ceiling    | Maximum current the whole-house connection can draw | The charger shares this ceiling with all household load.                                                                                                                                                                                           |
+| Charger current range  | The minimum and maximum charging current set-point  | Set-point ranges from the minimum (default 6 A, the IEC 61851 floor — see C1) to the configured maximum; below the minimum is not usable.                                                                                                          |
+| EV battery capacity    | Usable battery capacity of the connected car        | Feeds the deadline energy calculation; configured to match the actual car.                                                                                                                                                                         |
+| Solar inverter ceiling | Maximum power the solar inverter can deliver        | Solar surplus available to the charger never exceeds this ceiling, which is why the effective peak limit is capped at the inverter ceiling — there is no benefit to allowing a higher monthly peak than the most the solar system can ever offset. |
 
 **Reference setup (example only).** The figures used throughout these documents are grounded in one concrete installation, but they are illustrative defaults, not architectural assumptions: single-phase 230 V / 40 A grid connection; charger with a 6–32 A range (7.4 kW); ~75 kWh EV battery; 4 kW solar inverter ceiling. Where a later document cites a number like "4 kW" or "6 A", read it as "the configured value, which in the reference setup is 4 kW / 6 A".
 
@@ -27,11 +27,11 @@ The parameters the system reasons over:
 
 Three roles drive the design. All three are currently filled by the same person, but they are kept separate because their concerns — **convenience**, **cost**, and **maintainability** — can pull in different directions, and naming them makes those trade-offs explicit.
 
-| Stakeholder | Needs | Concerns |
-|---|---|---|
-| **EV driver** | The car charged to its active SOC limit before departure; a reminder if it was left unplugged. | Car not ready on time; charging stops unexpectedly. |
-| **Household energy manager** | Electricity cost minimised; solar surplus fully used; the CapTar monthly peak kept under control. | A monthly peak spike; low-tariff periods missed; unnecessary grid charging; wasted solar surplus. |
-| **System maintainer** | Observable behaviour; easy to debug; safe to deploy changes. | Silent failures (wrong sensor value, automation not firing); hard-to-trace logic; breakage after Home Assistant updates. |
+| Stakeholder                  | Needs                                                                                             | Concerns                                                                                                                 |
+|------------------------------|---------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| **EV driver**                | The car charged to its active SOC limit before departure; a reminder if it was left unplugged.    | Car not ready on time; charging stops unexpectedly.                                                                      |
+| **Household energy manager** | Electricity cost minimised; solar surplus fully used; the CapTar monthly peak kept under control. | A monthly peak spike; low-tariff periods missed; unnecessary grid charging; wasted solar surplus.                        |
+| **System maintainer**        | Observable behaviour; easy to debug; safe to deploy changes.                                      | Silent failures (wrong sensor value, automation not firing); hard-to-trace logic; breakage after Home Assistant updates. |
 
 ---
 
@@ -82,7 +82,9 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`control interval`** — The time between consecutive control cycles, configured via `input_number.sc_control_interval_s` (default 10 s); every duration expressed as a number of control cycles resolves to `n × control_interval` seconds at runtime.
 
-**`active SOC limit`** — The charge-limit target in effect at a given moment, resolved in priority order: (1) the WFH night cap (configurable, default 60 %) when the reservation is active and the sun is below the horizon, (2) the solar step-up value (configurable range, default ceiling `sc_max_solar_soc` 100 %) when a step-up is in effect, otherwise (3) the default `sc_active_soc` (configurable, default 80 %). Unit: percent (%).
+**`active SOC limit`** — The charge-limit target in effect at a given moment, resolved in priority order: (1) the solar-reserve cap (configurable, default 60 %) when the home-day flag is set and the sun is below the horizon, (2) the solar step-up value (configurable range, default ceiling `sc_max_solar_soc` 100 %) when a step-up is in effect, otherwise (3) the default `sc_active_soc` (configurable, default 80 %). Unit: percent (%).
+
+**`solar forecast`** — The predicted solar energy yield for the next day, read from a configured forecast sensor (NF3); compared against a configurable threshold to decide whether the solar-reserve cap applies. Unit: kilowatt-hours (kWh).
 
 **`solar step-up`** — The mechanism that raises the active SOC limit by a configurable step (default 5 percentage points, up to `sc_max_solar_soc`) when solar charging is active and SOC comes within a configurable threshold (default 2 %) of the current limit, so abundant solar is stored rather than exported. Unit: percentage points (pp).
 
@@ -90,7 +92,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`urgency`** — Deadline urgency; the condition where the car cannot reach its active SOC limit by the configured departure time at the current charger output, triggering an escalation of charging current (accepting high tariff if needed) up to — but not beyond — the effective peak limit, which itself rises to the maximum peak during urgency. See R5.
 
-**`departure deadline`** — The configured time by which the car must reach its active SOC limit; the weekday time applies Monday–Friday and the weekend time applies Saturday, Sunday, and public holidays.
+**`departure deadline`** — The time by which the car must reach its active SOC limit on a given day, resolved in priority order: an external departure-time sensor, then a public-holiday or home-day override, then the per-day-of-week default. By default weekends, public holidays, and home days have no deadline; a day with no departure time imposes no deadline at all. See R14.
 
 **`charger status`** — The normalised charger connection state exposed via `sensor.sc_charger_status`, mapped to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current).
 
@@ -106,11 +108,11 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`profile`** — An extensible, higher-level strategy that determines which mode is active over time. This release ships two built-in profiles: `Manual` (the user selects the active mode directly) and `Auto` (the system selects it). The concept is deliberately designed so additional profiles can be added later — `Eco` is the first deferred candidate (see Out of scope) — and, in future, so users could define their own profiles with custom behaviour. A profile *sets* the active mode; it is not itself a mode. Selected via `input_select.sc_active_profile`. NF1 holds: profiles decide the mode, the coordinator only executes it.
 
-**`Auto` profile** — The built-in profile that automatically selects the active mode over time from observable conditions (time of day, SOC, solar forecast, low-tariff flag, departure deadline, WFH reservation) and escalates between modes when circumstances demand it — for example, switching from `Solar` to `Captar` when deadline urgency requires grid charging that solar surplus alone cannot satisfy.
+**`Auto` profile** — The built-in profile that automatically selects the active mode over time from observable conditions (time of day, SOC, solar forecast, low-tariff flag, departure deadline, home-day flag) and escalates between modes when circumstances demand it — for example, switching from `Solar` to `Captar` when deadline urgency requires grid charging that solar surplus alone cannot satisfy.
 
-**`WFH reservation`** — The recorded confirmation that the user will work from home the next day, captured the previous evening (see R12) and reset each day; while active it enables the WFH night cap. Held in an `sc_` helper.
+**`home-day flag`** — A boolean flag indicating the car will be home during the next day's daylight hours (e.g. a work-from-home day, weekend, or holiday), so it could absorb solar then. While set it enables the solar-reserve cap. Read via an `sc_` helper and reset each day; its source is configurable — set by the evening prompt (R13) or by an external source such as a calendar or presence sensor.
 
-**`WFH night cap`** — A configurable active SOC limit (default 60 %) applied overnight when the user has confirmed they will work from home tomorrow and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for solar charging the following day; low-tariff grid charging is suppressed while the cap is active.
+**`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) applied while the sun is down when the home-day flag is set and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar; low-tariff grid charging is suppressed while the cap is active.
 
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 
@@ -126,4 +128,5 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 - **`Eco` profile** — a profile beyond `Auto` that applies a richer cost/comfort strategy (e.g. forecast-driven day→`Solar`, night→`Captar` scheduling) is deferred. The `profile` concept is built to accept it later without rework; this release ships only the `Manual` and `Auto` profiles.
 - **User-defined custom profiles** — letting users author their own profiles with bespoke behaviour is a future capability. The two-layer mode/profile model is designed to make it possible, but no authoring mechanism is provided this release.
+- **EV battery-capacity lookup** — a built-in database (vendor/model/variant → capacity) or external API to populate battery capacity automatically is deferred; for now capacity is configured or read from a sensor (R15).
 - **Three-phase support** — all calculations assume single-phase this release (see Hardware context); three-phase is deferred.
