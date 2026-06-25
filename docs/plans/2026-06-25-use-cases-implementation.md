@@ -22,9 +22,9 @@ These replace the code-oriented TDD loop for documentation work. Each task below
 
 **Review brief (reuse for every doc, fill in `<FILE>`):**
 
-> Review `docs/analysis/<FILE>` as a fresh Opus agent. Check: (1) cross-document consistency — every domain term matches the `system-overview.md` glossary; every requirement ID matches `requirements.md`; relationships to other use-cases are accurate. (2) Requirement coverage — the doc satisfies every requirement it claims, and nothing it describes contradicts another analysis doc. (3) Use-case quality — testable pre/postconditions, Given/When/Then scenarios, no implementation detail ("what, not how"), no duplication of the shared resolution rules. Report issues by severity; do not edit the file.
+> Review `docs/analysis/<FILE>` as a fresh Opus agent. Check: (1) cross-document consistency — every domain term matches the `system-overview.md` glossary; every requirement ID matches `requirements.md`; relationships to other use-cases are accurate. (2) Requirement coverage — the doc satisfies every requirement it claims, and nothing it describes contradicts another analysis doc. (3) Use-case quality — testable pre/postconditions, Given/When/Then scenarios, no implementation detail ("what, not how"), no duplication of the shared resolution rules; for a mode use-case, a `stateDiagram-v2` whose states and transitions match the Given/When/Then scenarios; for a use-case, `entity-catalog.md`'s *Read by* / *Written by* columns reflect the entities it touches. Report issues by severity; do not edit the file.
 
-**Gate:** Do not start a use-case task until `control-cycle.md` and `resolution-rules.md` are committed — the use-cases reference both.
+**Gate:** Do not start a use-case task until `control-cycle.md`, `resolution-rules.md`, and `entity-catalog.md` are committed — the use-cases reference all three.
 
 ---
 
@@ -64,6 +64,23 @@ These replace the code-oriented TDD loop for documentation work. Each task below
 
 ---
 
+## Task 2b: Entity catalog document
+
+**Files:**
+- Create: `docs/analysis/entity-catalog.md`
+
+**Content requirements:**
+- Short intro: the single source of truth for every `sc_` entity. The glossary stays authoritative for each term's *meaning*; this doc is authoritative for each entity's *binding*.
+- One row per `sc_` entity, harvested from the `system-overview.md` glossary and `requirements.md`. Columns: Entity id · Domain · Role (`config`/`sensor`/`state`) · Unit · Default / range · Realizes (glossary term) · Read by · Written by.
+- For a `sensor`-role row, note the upstream entity the wrapper reads (or "configured").
+- Seed *Read by* / *Written by* from the already-committed `control-cycle.md` and `resolution-rules.md`; use-case references are filled as each UC lands.
+- Do not re-define glossary terms — the *Realizes* column links to them.
+- **Supports:** the `sc_` entity-naming convention (system-overview); not a requirement home.
+
+**Cycle:** Draft → 6Cs self-check → fresh-Opus review (`<FILE>` = `entity-catalog.md`) → address → commit `docs: review and refine entity-catalog.md`.
+
+---
+
 ## Task 3: Use-cases index README
 
 **Files:**
@@ -81,7 +98,15 @@ These replace the code-oriented TDD loop for documentation work. Each task below
 
 ## Tasks 4–13: One use-case per task
 
-Each follows the **use-case template** from the design doc (Primary actor · Stakeholders · Scope/level · Preconditions · Trigger · Main success scenario (Given/When/Then) · Alternate flows (numbered to branch step) · Exception flows · Postconditions · Domain events · Mermaid · Requirements satisfied · Relationships).
+Each follows the **use-case template** from the design doc (Primary actor · Stakeholders · Scope/level · Preconditions · Trigger · Main success scenario (Given/When/Then) · Alternate flows (numbered to branch step) · Exception flows · Postconditions · **State model** · Domain events · Mermaid · Requirements satisfied · Relationships).
+
+The four mode use-cases (UC01–UC04) **must** carry a `stateDiagram-v2` and a State model
+subsection (states, transition conditions, set-point rule) — this is where the archived
+`process-flow.md` state machines are re-derived against the *current* `requirements.md` (use the
+archive as a checklist, not a source of truth). UC08 (prompt lifecycle) and UC10 (reminder
+de-dup) carry a lighter state model; the remaining use-cases may omit it.
+
+As the **final step before commit**, update `entity-catalog.md`'s *Read by* / *Written by* columns for every entity the use-case touches; the fresh-Opus review checks this binding is current.
 
 Write **one at a time**, each with its own draft → 6Cs → fresh-Opus review → address → commit `docs: review and refine UCnn-<slug>`.
 
@@ -118,6 +143,7 @@ Write **one at a time**, each with its own draft → 6Cs → fresh-Opus review �
 ## Done when
 
 - [ ] `control-cycle.md` and `resolution-rules.md` written, reviewed, committed.
+- [ ] `entity-catalog.md` written, reviewed, committed; its *Read by* / *Written by* columns cover every use-case and mechanism doc.
 - [ ] `use-cases/README.md` + UC01–UC10 written, reviewed, committed.
-- [ ] Every requirement (R1–R17, NF1–NF4, C1–C3) is reachable from a use-case or a mechanism doc (coverage table in design doc holds).
+- [ ] Every requirement (R1–R17, NF1–NF4, C1–C3) has exactly one home per the design doc's coverage table — a use-case, a mechanism doc, or already homed in `system-overview.md` / `requirements.md`.
 - [ ] Old `flows/` references in CLAUDE.md and the methodology doc updated.

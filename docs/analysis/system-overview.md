@@ -128,7 +128,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`active mode`** — The mode currently in effect, exposed via `input_select.sc_active_mode`.
 
-**`profile`** — An extensible, higher-level strategy that determines which mode is active over time. This release ships two built-in profiles: `Manual` (the user selects the active mode directly) and `Auto` (the system selects it). The concept is deliberately designed so additional profiles can be added later — `Eco` is the first deferred candidate (see Out of scope) — and, in future, so users could define their own profiles with custom behaviour. A profile *sets* the active mode; it is not itself a mode. Selected via `input_select.sc_active_profile`. NF1 holds: profiles decide the mode, the coordinator only executes it.
+**`profile`** — An extensible, higher-level strategy that determines which mode is active over time. This release ships two built-in profiles: `Manual` (the user selects the active mode directly) and `Auto` (the system selects it). The concept is deliberately designed so additional profiles can be added later and, in future, so users could define their own profiles with custom behaviour. A profile *sets* the active mode; it is not itself a mode. Selected via `input_select.sc_active_profile`. NF1 holds: profiles decide the mode, the coordinator only executes it.
 
 **`Auto` profile** — The built-in profile that automatically selects the active mode over time from observable conditions (time of day, SOC, solar forecast, low-tariff flag, departure deadline, home-day flag) and escalates between modes when circumstances demand it — for example, switching from `Solar` to `Captar` when deadline urgency requires grid charging that solar surplus alone cannot satisfy.
 
@@ -148,7 +148,6 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 ## Out of scope
 
-- **`Eco` profile** — a profile beyond `Auto` that applies a richer cost/comfort strategy (e.g. forecast-driven day→`Solar`, night→`Captar` scheduling) is deferred. The `profile` concept is built to accept it later without rework; this release ships only the `Manual` and `Auto` profiles.
 - **User-defined custom profiles** — letting users author their own profiles with bespoke behaviour is a future capability. The two-layer mode/profile model is designed to make it possible, but no authoring mechanism is provided this release.
 - **EV battery-capacity lookup** — a built-in database (vendor/model/variant → capacity) or external API to populate battery capacity automatically is deferred; for now capacity is configured or read from a sensor (R15).
 - **Three-phase support** — all calculations assume single-phase this release (see Hardware context); three-phase is deferred.

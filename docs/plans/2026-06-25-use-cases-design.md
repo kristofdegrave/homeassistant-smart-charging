@@ -52,6 +52,7 @@ docs/analysis/
     UC01..UC10-*.md
   control-cycle.md        — the control pipeline: read → smooth → dispatch → clamp → set (NEW)
   resolution-rules.md     — shared priority-ordered lookups, as decision tables (NEW)
+  entity-catalog.md       — single source of truth for sc_ entity bindings (NEW)
 ```
 
 Every requirement maps to exactly one home:
@@ -66,6 +67,8 @@ Every requirement maps to exactly one home:
 
 `R15` is a configuration parameter feeding UC05's deadline calculation, not a behaviour.
 `R11` is a cross-cutting invariant referenced by every charging use-case.
+`entity-catalog.md` is not a requirement home — it realizes the `sc_` entity-naming convention
+from `system-overview.md` and binds the entities every other doc references (see Decision 5).
 
 ## Decision 3 — Use-case inventory
 
@@ -93,6 +96,47 @@ Every requirement maps to exactly one home:
   table in `resolution-rules.md`. The `Manual` profile needs no documentation (the user/external
   source sets the mode directly).
 - **`Off` mode** is the null behaviour — not a use-case.
+
+## Decision 4 — Mode mechanism lives inside the mode use-case
+
+The archived `process-flow.md` captured each mode as a state machine (Solar:
+`IDLE → COOLDOWN → CHARGING → HOLD`, with restart hysteresis and hold/cooldown timers).
+Dissolving the `flows/` layer must not lose this. The state machine and the mode's set-point
+rule are **observable behaviour, not implementation**, so they belong to the mode use-case:
+each of UC01–UC04 carries a `stateDiagram-v2` and a **State model** subsection (states,
+transition conditions, set-point rule). The Given/When/Then scenarios describe the observable
+transitions; the state diagram is authoritative for the state set.
+
+**No shared set-point formula is extracted.** Solar/SolarOnly use *incremental* convergence
+toward net import = 0 W on smoothed readings, while CapTar computes *absolute* headroom below the
+effective peak limit on raw readings — genuinely different control laws, not one rule with
+parameters. The only shared primitives are amps↔watts conversion (NF4) and the min/peak clamps
+(C1, R3), which already live in `control-cycle.md` / `requirements.md`; modes reference them
+rather than restating them.
+
+## Decision 5 — `entity-catalog.md` is the single source of truth for `sc_` entities
+
+The `sc_` wrapper entities are currently scattered as prose inside the `system-overview.md`
+glossary. For a hardware-agnostic system whose entire design rests on those wrappers — and to make
+the eventual spec/code step implementable — they are consolidated into one table:
+`entity-catalog.md`, a mechanism doc alongside `control-cycle.md` and `resolution-rules.md`.
+
+This introduces no new "how": the glossary already treats `sc_` entity names as ubiquitous
+language. The glossary stays authoritative for each **term's meaning**; the catalog is
+authoritative for each entity's **binding** (id, unit, default, and which behaviour reads or writes
+it). The catalog's *Realizes* column links each row back to its glossary term; it never restates
+the definition.
+
+**Use-cases reference it by domain language, not by entity id.** GWT scenarios speak in glossary
+terms ("the active SOC limit", "charger status"); the entity binding lives only in the catalog,
+keyed by its *Read by* / *Written by* columns. This keeps GWT at the "what" level and keeps the
+entity↔behaviour mapping in exactly one place; the dev/codegen step joins a use-case to its
+entities through those columns.
+
+**Populated incrementally.** Created with every entity row and its static columns, with *Read by* /
+*Written by* seeded from the already-written `control-cycle.md` and `resolution-rules.md`. Each
+subsequent use-case task updates those two columns for the entities it touches — so the mapping is
+always current without a big-bang pass.
 
 ---
 
@@ -128,11 +172,19 @@ System-level failures where the goal is NOT met and intervention is needed.
 ## Postconditions
 - Testable end state, joined with And/Or.
 
+## State model  *(stateful behaviours only — all four modes; lighter for UC08/UC10)*
+The states the behaviour moves through and the transitions between them, each transition
+labelled with its threshold/timer condition. For charging states, state the **set-point rule**
+— how the desired current is computed (e.g. Solar nudges current toward net import = 0 W on
+smoothed readings; CapTar takes absolute headroom below the effective peak limit on raw
+readings). The `stateDiagram-v2` in the Diagram section is authoritative for the state set.
+
 ## Domain events produced
 - `EventName` — past-tense PascalCase — when it occurs and what it signals.
 
 ## Diagram
-[Mermaid — flowchart TD / stateDiagram-v2 / sequenceDiagram]
+[Mermaid — `stateDiagram-v2` for stateful modes; `flowchart TD` for decision logic;
+`sequenceDiagram` for actor-driven prompts/notifications]
 
 ## Requirements satisfied
 Links to requirements.md entries (traceability).
@@ -153,6 +205,12 @@ Then = system responses + postconditions. Used for main, alternate, and exceptio
 - Extract shared steps (the priority-ordered resolutions) into `resolution-rules.md`
   rather than duplicating them across use-cases.
 
+**What "how" means here (so the State model isn't mistaken for it):** for an autonomous
+behaviour the state set, transitions, thresholds, and set-point rule *are* the observable
+behaviour contract — they are "what". The excluded "how" is the code / HA realization: the
+Python module, which timer helper holds a cooldown, how state is persisted across restarts.
+Those never appear in a use-case.
+
 ### `control-cycle.md`
 
 Keeps the existing flow-document standard from CLAUDE.md verbatim:
@@ -172,15 +230,27 @@ One decision table per resolution, each stating its priority order and requireme
 - **Effective peak limit**: `min(monthly_peak_demand, maximum_peak)`, rising to maximum peak under urgency.
 - **Auto mode-selection** (R16): conditions → active mode, including Solar→CapTar escalation and revert.
 
+### `entity-catalog.md`
+
+One row per `sc_` entity, harvested from the `system-overview.md` glossary and `requirements.md`:
+
+| Entity id | Domain | Role | Unit | Default / range | Realizes (glossary term) | Read by | Written by |
+
+- **Role** — `config` (user-set helper), `sensor` (wraps an upstream entity), `state` (internal). For a `sensor` row, note the upstream entity it wraps (or "configured").
+- **Realizes** — links to the glossary term the entity binds; never re-defines it.
+- **Read by / Written by** — the use-cases and mechanism docs that touch the entity; bidirectional traceability, populated incrementally as each doc lands.
+- Raw upstream entities are never catalog rows — they appear only as the source noted on a `sensor`-role wrapper.
+
 ---
 
 ## Writing order
 
 1. `control-cycle.md` — the spine every use-case references.
 2. `resolution-rules.md` — the shared lookups use-cases reference.
-3. `use-cases/README.md` — inventory index.
-4. `UC01` → `UC10` — one at a time.
-5. Revisit `requirements.md` where use-cases reveal gaps or contradictions.
+3. `entity-catalog.md` — the `sc_` entity bindings every use-case references (seed *Read by* / *Written by* from steps 1–2).
+4. `use-cases/README.md` — inventory index.
+5. `UC01` → `UC10` — one at a time (each updates the catalog's *Read by* / *Written by*).
+6. Revisit `requirements.md` where use-cases reveal gaps or contradictions.
 
 ## Review protocol (per CLAUDE.md)
 
