@@ -100,6 +100,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`CapTar`** — Capacity tariff; the Belgian distribution-grid billing component charged on the highest 15-minute average net import (monthly peak demand) rather than total energy, which is why every avoidable peak directly raises the bill.
 
+**`coordinator`** — The single control loop at the heart of the integration. Each control cycle it reads sensors, smooths them, dispatches to the active mode module for a desired charger current, applies peak protection, and sets the charger current. It executes whichever mode is active and contains no logic for *choosing* the mode (NF1); choosing is the profile's responsibility. Detailed in `control-cycle.md`.
+
 **`control cycle`** — One iteration of the coordinator loop: read sensors, smooth, dispatch to the active mode module, apply peak protection, set charger current. Runs every control interval (configurable, default 10 s).
 
 **`control interval`** — The time between consecutive control cycles, configured via `input_number.sc_control_interval_s` (default 10 s); every duration expressed as a number of control cycles resolves to `n × control_interval` seconds at runtime.
