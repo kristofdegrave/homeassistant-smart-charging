@@ -69,12 +69,16 @@ Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
 
 ## Review protocol for analysis documents
 
-When reviewing any analysis document (`docs/analysis/**`):
+Every **new** analysis document — and every **change** to an existing one (`docs/analysis/**`) — must go through this cycle before it is committed:
 
-1. **Always use a fresh separate agent** — spin up a dedicated Opus agent for the review, never review inline in the main session.
-2. **Check cross-document consistency** — verify that any change is consistent with all other analysis documents (system-overview, requirements, other flows). Terms must match the glossary; requirement IDs must match what flows reference.
-3. **Check against requirements** — every flow must satisfy the requirements it claims to; every requirement must be reachable from at least one flow.
-4. **Commit after review** — after all sections of a document are approved, commit with `docs: review and refine <filename>`.
+1. **Draft** against the applicable template.
+2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness. Confirm every domain term used already exists in the `system-overview.md` glossary; if not, **add it to the glossary first**.
+3. **Fresh-agent review** — always spin up a dedicated, separate **Opus** agent for the review; **never review inline** in the main session. The review checks:
+   - **Cross-document consistency** — consistent with all other analysis documents (system-overview, requirements, mechanism docs, other use-cases). Terms match the glossary; requirement IDs match what the document references.
+   - **Requirement coverage** — the document satisfies every requirement it claims, and every requirement is reachable from at least one document.
+4. **Address** the review feedback in the draft.
+5. **Commit** once approved, with `docs: review and refine <filename>`.
+6. **Stop and report** — after each committed document, report status and wait before starting the next.
 
 ---
 
