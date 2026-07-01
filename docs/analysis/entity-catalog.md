@@ -36,6 +36,14 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 Every entity in this section is `config` role, so the Role column is omitted here; entities are
 grouped by functional concern.
 
+### Capabilities
+
+| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
+| `input_boolean.sc_solar_available` | input_boolean | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, (UC01, UC02, UC06, UC07) | user |
+
+> Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
+
 ### Core & coordinator
 
 | Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
@@ -171,3 +179,11 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
   set-point on the current wrapper.
 - The `<dow>` row stands for seven concrete entities (`sc_departure_mon` … `sc_departure_sun`),
   collapsed to keep the table readable.
+- **Solar-dependent entities are conditional on the solar capability (R18).** When
+  `sc_solar_available` is off, the `Solar`/`SolarOnly` mode configs, the Solar SOC step-up and
+  Solar-reserve configs, and the solar sensors (`sc_solar_power_w`, `sc_solar_forecast_kwh`) are
+  not required; the `Auto` rule skips the solar mode accordingly.
+- **The `sc_active_mode` selector offers only the modes available under the current capabilities
+  (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for manual
+  selection; `Captar`, `Power`, and `Off` are always offered. This is where R18's manual-availability
+  criterion is realized (the `Manual` profile itself needs no rule — the user sets the mode directly).

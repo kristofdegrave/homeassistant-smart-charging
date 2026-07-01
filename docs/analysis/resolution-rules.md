@@ -30,6 +30,8 @@ moment. Priority order: [solar-reserve cap](system-overview.md#ubiquitous-langua
   and resets to the default on disconnect. This table resolves the *current* value only.
 - Deadline urgency (R5) never raises the active SOC limit — it only accelerates toward
   whichever limit this table returns.
+- Without the solar capability (R18), rows 1–2 are inert: no solar mode ever runs (so no
+  step-up), and the solar-reserve inputs are not configured, so the table returns the default.
 
 **Satisfies:** R7 · **Consumed by:** UC01, UC02, UC03, UC04, UC05, UC06, UC07, UC09, UC10.
 
@@ -92,7 +94,7 @@ escalation and revert happen automatically.
 | --- | --- | --- |
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
 | 2 | Deadline urgency is in effect: the car would miss the active SOC limit by the departure deadline at the current charger output (R5) | `Captar` (carries the R5 override — high tariff and the raised peak limit) |
-| 3 | The sun is up and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
+| 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
 | 4 | The sun is down, the low-tariff flag is active, and the solar-reserve cap is not suppressing grid charging (R9) | `Captar` (cost-efficient overnight grid top-up) |
 | 5 | Otherwise | `Off` |
 
@@ -108,6 +110,9 @@ escalation and revert happen automatically.
 - **Suppression:** while the solar-reserve cap is active (R9), row 4 does not match, so Auto
   does not start low-tariff grid charging overnight; row 2 (urgency) can still escalate up to
   the cap.
+- **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
+  matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
+  available regardless of capabilities.
 - **`SolarOnly` and `Power` are never Auto-selected.** They are deliberate user intents —
   strictly-no-grid and charge-now — that conflict with Auto's cost/deadline balancing, so they
   are reachable only under the `Manual` profile.

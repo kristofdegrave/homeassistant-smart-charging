@@ -8,7 +8,7 @@ It is the first document in the analysis layer. The Ubiquitous Language glossary
 
 ## Hardware context
 
-The integration is hardware-agnostic. It controls any charger, EV, and solar installation through a set of **configurable parameters**; no specific make or model is assumed. This release targets single-phase installations, so all power and current calculations assume single-phase voltage (Amperes convert to watts as `A × V`, where `V` is the supply voltage — the measured grid voltage when a healthy reading is available, otherwise a configurable nominal voltage, default 230 V); three-phase support is deferred.
+The integration is hardware-agnostic. It controls any charger and EV — and, when present, a solar installation — through a set of **configurable parameters**; no specific make or model is assumed. A solar installation is **optional**: it is declared through the solar capability (see `capability` in the glossary, R18), and an installation without solar simply runs the `Captar`, `Power`, and `Off` modes. This release targets single-phase installations, so all power and current calculations assume single-phase voltage (Amperes convert to watts as `A × V`, where `V` is the supply voltage — the measured grid voltage when a healthy reading is available, otherwise a configurable nominal voltage, default 230 V); three-phase support is deferred.
 
 The parameters the system reasons over:
 
@@ -126,7 +126,9 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`grid fallback`** — In Solar mode, charging at the minimum charging current using grid power when solar surplus alone cannot sustain it; permitted in Solar mode, explicitly excluded in SolarOnly mode.
 
-**`charging mode` (mode)** — The concrete behaviour the coordinator executes at a given moment: `Solar`, `SolarOnly`, `Captar`, `Power`, or `Off`. A fixed set provided by the integration. The coordinator reads the active mode and dispatches to the matching module; it contains no logic for *choosing* the mode (NF1).
+**`charging mode` (mode)** — The concrete behaviour the coordinator executes at a given moment: `Solar`, `SolarOnly`, `Captar`, `Power`, or `Off`. A set provided by the integration; which of them are *available* depends on the installation's capabilities (see `capability`, R18). The coordinator reads the active mode and dispatches to the matching module; it contains no logic for *choosing* the mode (NF1).
+
+**`capability`** — A hardware feature the installation has, declared by configuration, that determines which modes and behaviours are available. This release recognises the **solar capability** (a solar PV installation is present, `input_boolean.sc_solar_available`, default present). When it is absent, the `Solar` and `SolarOnly` modes, the solar SOC step-up, and the solar-reserve cap are all unavailable, and the `Auto` profile never selects a solar mode; `Captar`, `Power`, and `Off` remain. The concept is extensible so further capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on that hardware, without changing existing modes (NF2). See R18.
 
 **`active mode`** — The mode currently in effect, exposed via `input_select.sc_active_mode`.
 
@@ -153,3 +155,4 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 - **User-defined custom profiles** — letting users author their own profiles with bespoke behaviour is a future capability. The two-layer mode/profile model is designed to make it possible, but no authoring mechanism is provided this release.
 - **EV battery-capacity lookup** — a built-in database (vendor/model/variant → capacity) or external API to populate battery capacity automatically is deferred; for now capacity is configured or read from a sensor (R15).
 - **Three-phase support** — all calculations assume single-phase this release (see Hardware context); three-phase is deferred.
+- **Home battery integration** — deferred. The capability model (R18) is deliberately designed to accommodate a future home-battery capability, but no battery-aware behaviour ships this release.

@@ -237,6 +237,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The active profile is selected via a single profile selector; the built-in profiles are `Manual` and `Auto`. A profile sets the active mode and is not itself a mode.
 - [ ] Under `Manual`, the system makes no automatic mode changes — the active mode is whatever the user or an external source sets (NF1).
 - [ ] Under `Auto`, the system sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, SOC, departure deadline, home-day flag).
+- [ ] Under `Auto`, a mode that is unavailable given the installation's capabilities (R18) is never selected.
 - [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required.
 - [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
 
@@ -253,6 +254,21 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] A configurable option determines whether `Power` mode respects CapTar peak protection: when enabled (default), net import stays at or below the effective peak limit minus the safety margin (R3); when disabled, charging may breach the peak, bounded only by the grid supply ceiling.
 - [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option.
 - [ ] The active SOC limit (R7) still applies; charging stops when it is reached.
+
+---
+
+### R18 — Configurable installation capabilities
+
+**Priority:** Should
+**What:** The available charging modes and the solar-dependent behaviours adapt to the hardware the installation actually has, declared as configurable capabilities, so the system is fully usable on an installation without a solar array.
+
+**Acceptance criteria:**
+
+- [ ] The presence of a solar installation (the solar capability) is user-configurable, defaulting to present.
+- [ ] When the solar capability is absent, the `Solar` and `SolarOnly` modes are not offered for manual selection and are never chosen by the `Auto` profile (R16); the `Captar`, `Power`, and `Off` modes remain available.
+- [ ] When the solar capability is absent, the solar SOC step-up (R8) and the solar-reserve overnight cap (R9) do not apply, and the solar-specific inputs (solar power, solar forecast) are not required to be configured.
+- [ ] Changing a capability takes effect within the next control cycle.
+- [ ] The capability model is extensible: additional hardware capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on that hardware, without altering existing modes (NF2). Capabilities beyond solar are out of scope this release.
 
 ---
 
