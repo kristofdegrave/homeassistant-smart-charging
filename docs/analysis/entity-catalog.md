@@ -60,6 +60,8 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
+| `input_number.sc_grid_supply_ceiling_a` | config | A | 40 (reference setup) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | control-cycle | user |
+| `input_number.sc_grid_safety_offset_a` | config | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user |
 | `input_number.sc_nominal_voltage_v` | config | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
 | `sensor.sc_grid_voltage_v` | sensor | V | grid voltage sensor | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
 | `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle | — |
@@ -79,7 +81,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_safety_margin_w` | config | W | no default specified | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user |
+| `input_number.sc_safety_margin_w` | config | W | 250 | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user |
 | `input_number.sc_max_peak_kw` | config | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user |
 | `input_number.sc_peak_grace_min` | config | min | 2 | R3 peak-breach grace period | control-cycle | user |
 | `sensor.sc_monthly_peak_kw` | sensor | kW | derived from `sc_net_power_w` over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |

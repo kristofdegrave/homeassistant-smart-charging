@@ -40,7 +40,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R3 — CapTar peak protection
 
 **Priority:** Must
-**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin below it.
+**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it.
 
 **Acceptance criteria:**
 
@@ -251,7 +251,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] While `Power` mode is active, the charger current is set to the maximum charging current, regardless of solar surplus or the low-tariff flag.
-- [ ] A configurable option determines whether `Power` mode respects CapTar peak protection: when enabled (default), net import stays at or below the effective peak limit minus the safety margin (R3); when disabled, charging may breach the peak, bounded only by the grid supply ceiling.
+- [ ] A configurable option determines whether `Power` mode respects CapTar peak protection: when enabled (default), net import stays at or below the effective peak limit minus the safety margin (R3); when disabled, charging may breach the CapTar peak but is still bounded by the grid supply ceiling (C4).
 - [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option.
 - [ ] The active SOC limit (R7) still applies; charging stops when it is reached.
 
@@ -331,8 +331,9 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 These are hard rules that must never be violated, regardless of mode or circumstance.
 
-| ID | Constraint                                                                                                                                                                                                                  |
-|----|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ID | Constraint |
+| --- | --- |
 | C1 | The charging current is always either 0 A or between the minimum and maximum charging current (reference setup: 6–32 A); values below the minimum charging current are never sent, as many vehicles/chargers fault on them. |
-| C2 | The vehicle charge limit is changed only while the car is at home; no charge-limit change is made remotely.                                                                                                                 |
-| C3 | Net grid import is never allowed to exceed the effective peak limit (which rises to the maximum peak only during deadline urgency), and charging targets a safety margin below it.                                          |
+| C2 | The vehicle charge limit is changed only while the car is at home; no charge-limit change is made remotely. |
+| C3 | Net grid import is never allowed to exceed the effective peak limit (which rises to the maximum peak only during deadline urgency), and charging targets a safety margin below it. |
+| C4 | Net grid import (all household load plus charging) never exceeds the grid supply ceiling; the charger targets a configurable grid safety offset below the ceiling, checked against raw (unsmoothed) readings so a sudden swing cannot trip the main fuse before the next control cycle reacts. This hard limit applies in every mode, including `Power` mode with CapTar peak protection disabled (R17). |
