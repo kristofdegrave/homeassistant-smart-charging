@@ -62,15 +62,32 @@ grouped by functional concern.
 | `input_number.sc_active_soc` | input_number | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
 | `input_number.sc_battery_capacity_kwh` | input_number | kWh | 75 | EV battery capacity (R15) | — | user |
 
-### Charging modes (Solar · SolarOnly · CapTar · Power)
+### `Solar` mode
 
 | Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_start_threshold_w` | input_number | W | 150 | Solar start threshold (R1) | — | user |
 | `input_number.sc_solar_hold_min` | input_number | min | 5 | Solar post-surplus hold (R1) | — | user |
-| `input_number.sc_solar_cooldown_min` | input_number | min | 2 | Solar-mode cooldown (R11) | — | user |
+| `input_number.sc_solar_cooldown_min` | input_number | min | 2 | Solar-modes cooldown (R11) — shared with `SolarOnly` | — | user |
+
+### `SolarOnly` mode
+
+| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_only_start_threshold_w` | input_number | W | 1300 | SolarOnly start threshold (R2) | — | user |
+
+Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
+
+### `Captar` mode
+
+| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_captar_cooldown_min` | input_number | min | 10 | `Captar`-mode cooldown (R11) | — | user |
+
+### `Power` mode
+
+| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
 | `input_boolean.sc_power_respect_peak` | input_boolean | — | on | `Power` peak-protection option (R17) | — | user |
 
 ### Solar SOC step-up
