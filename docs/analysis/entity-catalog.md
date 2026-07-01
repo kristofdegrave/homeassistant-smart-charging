@@ -5,10 +5,16 @@ convention). The [glossary](system-overview.md#ubiquitous-language) stays author
 term's **meaning**; this catalog is authoritative for each entity's **binding** — its id, role,
 unit, default/range, and which behaviour reads or writes it.
 
+Entities are organized by **configuration area** (General · EV · Solar · Notification ·
+Deadline / urgency), each divided into functional subgroups. A subgroup lists every entity of that
+concern regardless of role; the **Role** column distinguishes them.
+
 **How to read it:**
 
 - **Role** — `config` (a user-set helper), `sensor` (wraps an upstream device/source entity per
   NF3), or `state` (a value the system itself maintains, including the output wrappers it writes).
+- **Default / range / source** — for a `config` row, its default and range; for a `sensor` row,
+  the upstream entity it wraps (NF3); for a `state` row, the value's range or how it is derived.
 - **Realizes** — the glossary term the entity binds; where a parameter has no dedicated glossary
   term, the requirement that defines it (e.g. R1) is cited instead. The catalog never re-defines a
   term — it links to it.
@@ -31,136 +37,149 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 ---
 
-## Config entities (user-set)
-
-Every entity in this section is `config` role, so the Role column is omitted here; entities are
-grouped by functional concern.
+## General configuration
 
 ### Capabilities
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_solar_available` | input_boolean | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, (UC01, UC02, UC06, UC07) | user |
+| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, (UC01, UC02, UC06, UC07) | user |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 
 ### Core & coordinator
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_select.sc_active_profile` | input_select | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | resolution-rules | user |
-| `input_number.sc_control_interval_s` | input_number | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user |
-| `input_number.sc_smoothing_window` | input_number | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user |
-| `input_number.sc_nominal_voltage_v` | input_number | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
+| `input_select.sc_active_profile` | config | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | resolution-rules | user |
+| `input_number.sc_control_interval_s` | config | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user |
+| `input_number.sc_smoothing_window` | config | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user |
+| `input_select.sc_active_mode` | state | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) | control-cycle | user (Manual) / Auto profile (R16) |
 
-### Charger current & peak protection
+### Installation
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_min_current_a` | input_number | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle | user |
-| `input_number.sc_max_current_a` | input_number | A | 32 | charger current range, max (C1) | control-cycle | user |
-| `input_number.sc_safety_margin_w` | input_number | W | no default specified | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user |
-| `input_number.sc_max_peak_kw` | input_number | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user |
-| `input_number.sc_peak_grace_min` | input_number | min | 2 | R3 peak-breach grace period | control-cycle | user |
+| `input_number.sc_nominal_voltage_v` | config | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
+| `sensor.sc_grid_voltage_v` | sensor | V | grid voltage sensor | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
+| `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle | — |
+| `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
-### SOC & battery
+### Charger
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_active_soc` | input_number | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
-| `input_number.sc_battery_capacity_kwh` | input_number | kWh | 75 | EV battery capacity (R15) | — | user |
+| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle | user |
+| `input_number.sc_max_current_a` | config | A | 32 | charger current range, max (C1) | control-cycle | user |
+| `sensor.sc_charger_power_w` | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle | — |
+| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle | — |
+| `number.sc_charger_current` | state (output) | A | 0 or 6–32 | charger current set-point output (C1, NF3) | — | control-cycle |
 
-### `Solar` mode
+### Peak protection
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_start_threshold_w` | input_number | W | 150 | Solar start threshold (R1) | — | user |
-| `input_number.sc_solar_hold_min` | input_number | min | 5 | Solar post-surplus hold (R1) | — | user |
-| `input_number.sc_solar_cooldown_min` | input_number | min | 2 | Solar-modes cooldown (R11) — shared with `SolarOnly` | — | user |
-
-### `SolarOnly` mode
-
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
-| --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_only_start_threshold_w` | input_number | W | 1300 | SolarOnly start threshold (R2) | — | user |
-
-Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
-
-### `Captar` mode
-
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
-| --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_captar_cooldown_min` | input_number | min | 10 | `Captar`-mode cooldown (R11) | — | user |
+| `input_number.sc_safety_margin_w` | config | W | no default specified | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user |
+| `input_number.sc_max_peak_kw` | config | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user |
+| `input_number.sc_peak_grace_min` | config | min | 2 | R3 peak-breach grace period | control-cycle | user |
+| `sensor.sc_monthly_peak_kw` | sensor | kW | derived from `sc_net_power_w` over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
+| `input_number.sc_captar_cooldown_min` | config | min | 10 | `Captar`-mode cooldown (R11) | — | user |
 
 ### `Power` mode
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_power_respect_peak` | input_boolean | — | on | `Power` peak-protection option (R17) | — | user |
+| `input_boolean.sc_power_respect_peak` | config | — | on | `Power` peak-protection option (R17) | — | user |
+
+---
+
+## EV configuration
+
+### SOC & battery
+
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
+| `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
+| `input_number.sc_battery_capacity_kwh` | config | kWh | 75 | EV battery capacity (R15) | — | user |
+| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules | — |
+| `sensor.sc_battery_capacity_kwh` | sensor | kWh | vehicle capacity sensor (optional, NF3) | EV battery capacity, sensed (R15) | — | — |
+| `binary_sensor.sc_car_home` | sensor | bool | presence / device-tracker | car-at-home presence (R12) | — | — |
+| `number.sc_vehicle_charge_limit` | state (output) | % | mirrors active SOC limit | vehicle charge-limit output wrapper (R6, NF3) | — | (UC09) |
+
+---
+
+## Solar configuration
+
+*All entities in this area are conditional on the solar capability (`sc_solar_available`, R18); when it is off they are not required.*
+
+### `Solar` mode
+
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
+| `input_number.sc_solar_start_threshold_w` | config | W | 150 | Solar start threshold (R1) | — | user |
+| `input_number.sc_solar_hold_min` | config | min | 5 | Solar post-surplus hold (R1) | — | user |
+| `input_number.sc_solar_cooldown_min` | config | min | 2 | Solar-modes cooldown (R11) — shared with `SolarOnly` | — | user |
+| `sensor.sc_solar_power_w` | sensor | W | solar production sensor | solar power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle | — |
+
+### `SolarOnly` mode
+
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
+| `input_number.sc_solar_only_start_threshold_w` | config | W | 1300 | SolarOnly start threshold (R2) | — | user |
+
+Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
 
 ### Solar SOC step-up
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_max_solar_soc` | input_number | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules | user |
-| `input_number.sc_solar_step_pp` | input_number | pp | 5 | solar step-up size (R8) | — | user |
-| `input_number.sc_solar_step_threshold_pp` | input_number | pp | 2 | solar step-up trigger gap (R8) | — | user |
-| `input_number.sc_solar_step_interval_min` | input_number | min | 10 | solar step-up min interval (R8) | — | user |
+| `input_number.sc_max_solar_soc` | config | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules | user |
+| `input_number.sc_solar_step_pp` | config | pp | 5 | solar step-up size (R8) | — | user |
+| `input_number.sc_solar_step_threshold_pp` | config | pp | 2 | solar step-up trigger gap (R8) | — | user |
+| `input_number.sc_solar_step_interval_min` | config | min | 10 | solar step-up min interval (R8) | — | user |
 
 ### Solar-reserve cap
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | input_number | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules | user |
-| `input_number.sc_solar_forecast_threshold_kwh` | input_number | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules | user |
+| `input_number.sc_solar_reserve_soc` | config | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules | user |
+| `input_number.sc_solar_forecast_threshold_kwh` | config | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules | user |
+| `sensor.sc_solar_forecast_kwh` | sensor | kWh | next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
-### Departure times
+---
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
-| --- | --- | --- | --- | --- | --- | --- |
-| `input_datetime.sc_departure_<dow>` | input_datetime | time | 06:00 Mon–Fri; none Sat–Sun | [departure deadline](system-overview.md#ubiquitous-language) day-of-week default (R14) — seven entities, `mon`…`sun` | resolution-rules | user |
-| `input_datetime.sc_departure_holiday` | input_datetime | time | none | departure public-holiday override (R14) | resolution-rules | user |
-| `input_datetime.sc_departure_home_day` | input_datetime | time | none | departure home-day override (R14) | resolution-rules | user |
+## Notification configuration
 
 ### Reminders & prompts
 
-| Entity id | Domain | Unit | Default / range | Realizes | Read by | Written by |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_reminder_lead_h` | input_number | h | 8 | plug-in reminder lead time (R12) | — | user |
-| `input_boolean.sc_evening_prompt_enabled` | input_boolean | — | on | evening home-day prompt enable (R13) | — | user |
-| `input_datetime.sc_evening_prompt_time` | input_datetime | time | 18:00 | evening prompt time (R13) | — | user |
-| `input_number.sc_prompt_timeout_h` | input_number | h | 2 | evening prompt timeout (R13) | — | user |
+| `input_number.sc_reminder_lead_h` | config | h | 8 | plug-in reminder lead time (R12) | — | user |
+| `input_boolean.sc_evening_prompt_enabled` | config | — | on | evening home-day prompt enable (R13) | — | user |
+| `input_datetime.sc_evening_prompt_time` | config | time | 18:00 | evening prompt time (R13) | — | user |
+| `input_number.sc_prompt_timeout_h` | config | h | 2 | evening prompt timeout (R13) | — | user |
 
 ---
 
-## Sensor entities (wrap an upstream source — NF3)
+## Deadline / urgency configuration
 
-| Entity id | Domain | Role | Unit | Source (upstream wrapped) | Realizes | Read by | Written by |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `sensor.sc_net_power_w` | sensor | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle | — |
-| `sensor.sc_solar_power_w` | sensor | sensor | W | solar production sensor | solar power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle | — |
-| `sensor.sc_charger_power_w` | sensor | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle | — |
-| `sensor.sc_grid_voltage_v` | sensor | sensor | V | grid voltage sensor | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
-| `sensor.sc_charger_status` | sensor | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle | — |
-| `sensor.sc_ev_soc` | sensor | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules | — |
-| `sensor.sc_monthly_peak_kw` | sensor | sensor | kW | derived from `sc_net_power_w` over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `binary_sensor.sc_low_tariff` | binary_sensor | sensor | bool | installation tariff signal | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `sensor.sc_solar_forecast_kwh` | sensor | sensor | kWh | next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `binary_sensor.sc_car_home` | binary_sensor | sensor | bool | presence / device-tracker | car-at-home presence (R12) | — | — |
-| `sensor.sc_departure_external` | sensor | sensor | time | external departure-time sensor (NF3) | [departure deadline](system-overview.md#ubiquitous-language) external override (R14) | resolution-rules | — |
-| `binary_sensor.sc_home_day_external` | binary_sensor | sensor | bool | calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules | — |
-| `sensor.sc_battery_capacity_kwh` | sensor | sensor | kWh | vehicle capacity sensor (optional, NF3) | EV battery capacity, sensed (R15) | — | — |
+### Departure times
 
----
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
+| `input_datetime.sc_departure_<dow>` | config | time | 06:00 Mon–Fri; none Sat–Sun | [departure deadline](system-overview.md#ubiquitous-language) day-of-week default (R14) — seven entities, `mon`…`sun` | resolution-rules | user |
+| `input_datetime.sc_departure_holiday` | config | time | none | departure public-holiday override (R14) | resolution-rules | user |
+| `input_datetime.sc_departure_home_day` | config | time | none | departure home-day override (R14) | resolution-rules | user |
+| `sensor.sc_departure_external` | sensor | time | external departure-time sensor (NF3) | [departure deadline](system-overview.md#ubiquitous-language) external override (R14) | resolution-rules | — |
 
-## State entities (system-maintained, incl. outputs)
+### Home day
 
-| Entity id | Domain | Role | Unit | Default / range | Realizes | Read by | Written by |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_select.sc_active_mode` | input_select | state | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) | control-cycle | user (Manual) / Auto profile (R16) |
-| `input_boolean.sc_home_day` | input_boolean | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules | external / (UC08) |
-| `number.sc_charger_current` | number | state (output) | A | 0 or 6–32 | charger current set-point output (C1, NF3) | — | control-cycle |
-| `number.sc_vehicle_charge_limit` | number | state (output) | % | mirrors active SOC limit | vehicle charge-limit output wrapper (R6, NF3) | — | (UC09) |
+| Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
+| --- | --- | --- | --- | --- | --- | --- |
+| `binary_sensor.sc_home_day_external` | sensor | bool | calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules | — |
+| `input_boolean.sc_home_day` | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules | external / (UC08) |
+
+The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14), and is set by the evening prompt (R13, Notification) or an external source.
 
 ---
 
@@ -177,13 +196,16 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 - **Output wrappers (`number.sc_charger_current`, `number.sc_vehicle_charge_limit`)** satisfy the
   NF3 requirement that every command crosses an `sc_` wrapper; a start/stop is expressed as a 0 A
   set-point on the current wrapper.
-- The `<dow>` row stands for seven concrete entities (`sc_departure_mon` … `sc_departure_sun`),
-  collapsed to keep the table readable.
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
-  `sc_solar_available` is off, the `Solar`/`SolarOnly` mode configs, the Solar SOC step-up and
-  Solar-reserve configs, and the solar sensors (`sc_solar_power_w`, `sc_solar_forecast_kwh`) are
-  not required; the `Auto` rule skips the solar mode accordingly.
+  `sc_solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
+  required, and the `Auto` rule skips the solar mode accordingly.
 - **The `sc_active_mode` selector offers only the modes available under the current capabilities
   (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for manual
   selection; `Captar`, `Power`, and `Off` are always offered. This is where R18's manual-availability
   criterion is realized (the `Manual` profile itself needs no rule — the user sets the mode directly).
+- The `<dow>` row stands for seven concrete entities (`sc_departure_mon` … `sc_departure_sun`),
+  collapsed to keep the table readable.
+- **Cross-area entities.** `binary_sensor.sc_car_home` (EV) is also read by the plug-in reminder;
+  the home-day entities (Deadline / urgency) also drive the solar-reserve cap (R9, Solar) and are
+  set by the evening prompt (R13, Notification). They are filed under their primary area to avoid
+  duplicate rows.
