@@ -146,6 +146,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 
+**`maximum charging current`** — The highest current the charger may be set to (configurable, default 32 A; reference setup: 32 A), the upper bound of the charger current range; the set-point never exceeds it (C1). Unit: amperes (A).
+
 **`sun is down`** — The condition `sun.sun` state equals `below_horizon`.
 
 ### Entity naming convention
