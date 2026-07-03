@@ -127,7 +127,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_only_start_threshold_w` | config | W | 1300 | SolarOnly start threshold (R2) | — | user |
+| `input_number.sc_solar_only_start_threshold_w` | config | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | — | user |
 
 Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
 
