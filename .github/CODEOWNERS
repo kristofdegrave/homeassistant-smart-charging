@@ -1,0 +1,15 @@
+# Code owners — every change requires review/approval from the repo owner.
+# Enforced only when the `main` branch protection rule has
+# "Require review from Code Owners" enabled (see repo Settings → Branches).
+#
+# Because CI-drafted PRs are opened by github-actions[bot], you (a different user)
+# can approve them; the bot cannot self-approve.
+
+*                       @kristofdegrave
+
+# Analysis layer and project guardrails — called out explicitly for clarity.
+/docs/analysis/         @kristofdegrave
+/docs/plans/            @kristofdegrave
+/.github/               @kristofdegrave
+/.claude/               @kristofdegrave
+/CLAUDE.md              @kristofdegrave

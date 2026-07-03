@@ -1,0 +1,77 @@
+name: Generate use-case from issue label
+
+# Triggered only when the `generate-uc` label is added to an issue.
+# Guards (see SECURITY notes below):
+#   1. Label must be exactly `generate-uc`.
+#   2. The person who applied the label must be in ALLOWED_TRIGGERERS.
+#   3. The job runs in the `ai` environment, which requires your manual approval
+#      before the ANTHROPIC_API_KEY (an environment secret) is released.
+
+on:
+  issues:
+    types: [labeled]
+
+# Least privilege: only what the runner needs to draft docs and open a PR.
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: generate-uc-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  generate-and-pr:
+    # Guard 1 (label) + Guard 2 (actor allow-list). Edit the JSON list to change who may trigger.
+    if: >
+      github.event.label.name == 'generate-uc' &&
+      contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
+    runs-on: ubuntu-latest
+    # Guard 3: required-reviewer environment holds ANTHROPIC_API_KEY and pauses for approval.
+    environment: ai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Draft the use-case with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The action auto-loads CLAUDE.md, .claude/skills/, and .claude/agents/.
+          prompt: |
+            A maintainer labeled issue #${{ github.event.issue.number }} `generate-uc` to have a
+            Smart Charging use-case drafted.
+
+            Issue title: ${{ github.event.issue.title }}
+            Issue body:
+            ${{ github.event.issue.body }}
+
+            Do the following, using the `write-use-case` skill in .claude/skills/ and the project
+            conventions in CLAUDE.md:
+            1. Draft the use-case at the file slug given in the issue
+               (docs/analysis/use-cases/UCnn-<slug>.md), following the template in
+               docs/plans/2026-06-25-use-cases-design.md.
+            2. Confirm every domain term is already in system-overview.md's glossary; if a term is
+               missing, add it to the glossary first.
+            3. Reference — do not restate — control-cycle.md and resolution-rules.md.
+            4. Update entity-catalog.md's Read by / Written by columns for every entity touched.
+            5. Do NOT commit or open a PR yourself — the workflow does that in the next step.
+          claude_args: "--model opus --max-turns 15 --allowed-tools Read,Write,Edit,Glob,Grep"
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: draft ${{ github.event.issue.title }} (CI, #${{ github.event.issue.number }})"
+          title: "${{ github.event.issue.title }}"
+          body: |
+            Automated first draft for #${{ github.event.issue.number }}.
+
+            Closes #${{ github.event.issue.number }}
+
+            The `review-analysis` workflow will post a fresh-agent review on this PR.
+            **A maintainer's manual review and approval is required before merge** (per CLAUDE.md).
+          branch: "uc/${{ github.event.issue.number }}"
+          delete-branch: true
+          labels: use-case, needs-review

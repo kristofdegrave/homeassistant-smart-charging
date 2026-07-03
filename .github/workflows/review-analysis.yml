@@ -1,0 +1,51 @@
+name: Review analysis docs
+
+# Runs a fresh Opus review on any PR that changes analysis docs, using the committed
+# `analysis-reviewer` agent, and posts findings as a PR comment. This is the automated
+# first-pass review; a maintainer's manual approval is still required before merge.
+#
+# Uses `pull_request` (NOT pull_request_target): fork PRs run WITHOUT secrets, so an
+# external PR cannot spend the API key. The `ai` environment additionally requires your
+# approval before the key is released.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "docs/analysis/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: review-analysis-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    environment: ai
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the reviewer can diff against the base branch
+
+      - name: Fresh-agent review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review the analysis-document changes in this pull request
+            (base: ${{ github.event.pull_request.base.sha }}, head: ${{ github.event.pull_request.head.sha }}).
+
+            Launch the `analysis-reviewer` agent (.claude/agents/analysis-reviewer.md) on the changed
+            files under docs/analysis/ — it carries the project's full review brief (cross-document
+            consistency with the glossary and requirement IDs, requirement coverage, use-case quality
+            including the mode-UC stateDiagram-v2, and the entity-catalog Read by / Written by binding).
+
+            Then post the agent's findings as a single PR comment, grouped by severity
+            (Critical / Major / Minor / Nit), ending with a ready-to-merge recommendation.
+            Do not edit any files.
+          claude_args: "--model opus --max-turns 12 --allowed-tools Read,Glob,Grep,Task,Bash(gh pr comment:*),Bash(git diff:*)"
