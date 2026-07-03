@@ -1,8 +1,9 @@
 name: Review analysis docs
 
-# Runs a fresh Opus review on any PR that changes analysis docs, using the committed
-# `analysis-reviewer` agent, and posts findings as a PR comment. This is the automated
-# first-pass review; a maintainer's manual approval is still required before merge.
+# Runs a fresh Opus review on any PR that changes analysis docs and posts findings as a PR
+# comment. This is the automated first-pass review; a maintainer's manual approval is still
+# required before merge. Single-pass inline review (no sub-agent hop) to keep CI fast and cheap;
+# the interactive `analysis-reviewer` agent carries the same brief for local use.
 #
 # Uses `pull_request` (NOT pull_request_target): fork PRs run WITHOUT secrets, so an
 # external PR cannot spend the API key. The `ai` environment additionally requires your
@@ -34,20 +35,34 @@ jobs:
 
       - name: Fresh-agent review
         uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # so `gh pr comment` works in the runner
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Use the default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Review the analysis-document changes in this pull request
-            (base: ${{ github.event.pull_request.base.sha }}, head: ${{ github.event.pull_request.head.sha }}).
+            Review the analysis-document changes in pull request #${{ github.event.pull_request.number }}.
+            Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis`
+            to see the changed files, then read the ones that changed plus, as needed,
+            system-overview.md (glossary + `sc_` naming), requirements.md (requirement IDs),
+            control-cycle.md, resolution-rules.md, and entity-catalog.md.
 
-            Launch the `analysis-reviewer` agent (.claude/agents/analysis-reviewer.md) on the changed
-            files under docs/analysis/ — it carries the project's full review brief (cross-document
-            consistency with the glossary and requirement IDs, requirement coverage, use-case quality
-            including the mode-UC stateDiagram-v2, and the entity-catalog Read by / Written by binding).
+            Check, in one pass:
+            1. Cross-document consistency — every domain term is defined in the system-overview.md
+               glossary (flag any that isn't); every requirement ID exists and is used correctly;
+               entity ids match entity-catalog.md; relationships to other docs are accurate.
+            2. Requirement coverage — the doc satisfies the requirement(s) it claims; nothing
+               contradicts another analysis doc; no requirement is mis-homed.
+            3. Quality — "what, not how" (no code/HA implementation detail); it references, and does
+               not restate, control-cycle.md / resolution-rules.md; for a use-case: testable
+               pre/postconditions, Given/When/Then, alternate flows numbered to the step they branch
+               from, and entity-catalog Read by / Written by updated for entities it touches; for a
+               mode use-case (UC01–UC04): a stateDiagram-v2 whose states/transitions match the
+               scenarios; domain events are past-tense PascalCase.
 
-            Then post the agent's findings as a single PR comment, grouped by severity
-            (Critical / Major / Minor / Nit), ending with a ready-to-merge recommendation.
-            Do not edit any files.
-          claude_args: "--model opus --max-turns 12 --allowed-tools Read,Glob,Grep,Task,Bash(gh pr comment:*),Bash(git diff:*)"
+            Post exactly ONE PR comment via
+            `gh pr comment ${{ github.event.pull_request.number }} --body "<markdown>"`,
+            with findings grouped by severity (Critical / Major / Minor / Nit), each with a file/line
+            reference, ending with a ready-to-merge recommendation. Do not edit any files.
+          claude_args: "--model opus --max-turns 8 --allowed-tools Read,Glob,Grep,Bash(gh pr comment:*),Bash(git diff:*)"
