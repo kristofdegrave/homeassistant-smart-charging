@@ -118,9 +118,9 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_start_threshold_w` | config | W | 150 | Solar start threshold (R1) | UC01 | user |
-| `input_number.sc_solar_hold_min` | config | min | 5 | Solar post-surplus hold (R1) | UC01 | user |
-| `input_number.sc_solar_cooldown_min` | config | min | 2 | Solar-modes cooldown (R11) — shared with `SolarOnly` | UC01 | user |
+| `input_number.sc_solar_start_threshold_w` | config | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
+| `input_number.sc_solar_hold_min` | config | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
+| `input_number.sc_solar_cooldown_min` | config | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01 | user |
 | `sensor.sc_solar_power_w` | sensor | W | solar production sensor | solar power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle | — |
 
 ### `SolarOnly` mode

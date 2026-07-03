@@ -15,11 +15,10 @@
 - The solar [capability](../system-overview.md#ubiquitous-language) is present (R18).
 - The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`).
 - State of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`).
-- No solar-mode cooldown is currently in effect (R11).
 
 ## Trigger
 
-A [control cycle](../system-overview.md#ubiquitous-language) observes that smoothed [solar surplus](../system-overview.md#ubiquitous-language) has reached at least the solar start threshold (default 150 W).
+A [control cycle](../system-overview.md#ubiquitous-language) observes that smoothed [solar surplus](../system-overview.md#ubiquitous-language) has reached at least the [solar start threshold](../system-overview.md#ubiquitous-language) (default 150 W). Here *smoothed* solar surplus rides on the smoothed [net import](../system-overview.md#ubiquitous-language) — `control-cycle.md` step 2 smooths `net_w` (raw charger power enters unsmoothed), consistent with the `solar surplus` formula `charger_w − net_w`.
 
 ## Main success scenario
 
@@ -30,7 +29,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that smoot
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a solar-mode cooldown is still running after a previous stop (R11)
+Given a [solar-mode cooldown](../system-overview.md#ubiquitous-language) is still running after a previous stop (R11)
 When smoothed solar surplus reaches the start threshold
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -42,7 +41,7 @@ Then the System holds the charger at the minimum charging current and draws the 
 **3b — Post-surplus hold (ride out cloud cover)** — branches from step 3.
 Given the System is charging in `Solar` mode
 When smoothed solar surplus falls below the start threshold (default 150 W)
-Then the System holds the charger at the minimum charging current for the post-surplus hold period (default 5 minutes)
+Then the System holds the charger at the minimum charging current for the [post-surplus hold](../system-overview.md#ubiquitous-language) period (default 5 minutes)
 And if smoothed surplus returns to at least the start threshold within that period, the System resumes normal solar charging (the hold is cancelled)
 And if the hold period elapses with surplus still below the start threshold, the System stops charging (0 A) and starts the solar-mode cooldown (R11).
 
@@ -75,6 +74,10 @@ surplus as it changes, without holding net import above 0 W beyond a single-cycl
 `stateDiagram-v2` below is authoritative for the state set. All thresholds/timers are configurable
 (defaults shown). The peak-protection (R3) and grid-supply-ceiling (C4) clamps are applied by the
 coordinator *after* the mode returns its desired current and are not repeated here.
+A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected"
+precondition and exits this use-case's scope from any state, returning to Idle; on disconnect
+the active SOC limit resets to the default and any solar step-up is cleared (R7), which is why
+the diagram does not draw a disconnect edge from every state.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
@@ -97,15 +100,15 @@ coordinator *after* the mode returns its desired current and are not repeated he
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Charging: smoothed surplus ≥ start threshold\n& SOC < active SOC limit & no cooldown
+    Idle --> Charging: smoothed surplus ≥ start threshold<br/>& SOC < active SOC limit & no cooldown
     Charging --> Hold: smoothed surplus < start threshold
-    Hold --> Charging: smoothed surplus ≥ start threshold\n(within hold — rides out cloud)
-    Hold --> Cooldown: hold period elapsed (5 min)\nsurplus still below threshold
+    Hold --> Charging: smoothed surplus ≥ start threshold<br/>(within hold — rides out cloud)
+    Hold --> Cooldown: hold period elapsed (5 min)<br/>surplus still below threshold
     Charging --> SocReached: SOC ≥ active SOC limit
-    Hold --> SocReached: SOC ≥ active SOC limit\n(minimum current draws from grid)
-    Cooldown --> Charging: cooldown elapsed (2 min)\n& surplus ≥ start threshold
-    Cooldown --> Idle: cooldown elapsed\n& surplus < start threshold
-    SocReached --> Idle: active SOC limit changes,\nor unplug/replug
+    Hold --> SocReached: SOC ≥ active SOC limit<br/>(minimum current draws from grid)
+    Cooldown --> Charging: cooldown elapsed (2 min)<br/>& surplus ≥ start threshold
+    Cooldown --> Idle: cooldown elapsed<br/>& surplus < start threshold
+    SocReached --> Idle: active SOC limit changes,<br/>or unplug/replug
     note right of Charging
         Set-point: highest whole ampere keeping
         smoothed net import ≤ 0 W, recomputed each
