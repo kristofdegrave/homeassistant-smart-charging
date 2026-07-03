@@ -75,9 +75,13 @@ jobs:
           # NOTE: claude_args is tokenized shell-style, so the --allowed-tools value MUST be
           # quoted — unquoted spaces inside Bash(...) patterns split the list into garbage
           # tokens and every Bash call gets denied.
+          # 50 turns: every tool call is a turn, and a fix pass reads the review + several
+          # analysis docs, edits multiple files, and posts a summary — 20 was hit mid-work.
+          # Read-only git commands included so inspecting its own edits doesn't burn turns
+          # on permission denials.
           claude_args: >-
-            --model opus --max-turns 20
-            --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*)"
+            --model opus --max-turns 50
+            --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
 
       - name: Commit and push fixes
         run: |
@@ -102,3 +106,13 @@ jobs:
           gh pr edit "$PR" --remove-label ai-fix || true
           # PAT so the labeled event actually triggers review-analysis.yml for the next cycle.
           GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label ai-review
+
+      # A failed fix run must not leave the PR stuck with a stale `ai-fix` label and no signal.
+      - name: Clean up on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR" --remove-label ai-fix || true
+          gh pr comment "$PR" --body "The automatic fix run **failed** (see the Actions log for this run). Re-add the \`ai-fix\` label to retry, or address the review manually."
