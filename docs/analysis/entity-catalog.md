@@ -72,9 +72,9 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01 | user |
-| `input_number.sc_max_current_a` | config | A | 32 | charger current range, max (C1) | control-cycle, UC01 | user |
+| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01 | user |
 | `sensor.sc_charger_power_w` | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01 | — |
-| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle | — |
+| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01 | — |
 | `number.sc_charger_current` | state (output) | A | 0 or 6–32 | charger current set-point output (C1, NF3) | — | control-cycle |
 
 ### Peak protection

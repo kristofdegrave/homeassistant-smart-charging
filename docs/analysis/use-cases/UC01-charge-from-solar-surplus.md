@@ -25,9 +25,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that smoot
 
 1. **Given** `Solar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no solar-mode cooldown is in effect.
 2. **When** smoothed solar surplus reaches at least the solar start threshold (default 150 W), **then** the System starts charging within one control cycle.
-3. **And** the System sets the charger current to the highest whole ampere that keeps smoothed net grid import at or below 0 W (solar-first), re-converging toward net grid import = 0 W each following control cycle, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
+3. **And** the System sets the charger current to the highest whole ampere that keeps smoothed net grid import at or below 0 W (solar-first), recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
 
 ## Alternate flows
+
+**2a — Blocked by cooldown** — branches from step 2.
+Given a solar-mode cooldown is still running after a previous stop (R11)
+When smoothed solar surplus reaches the start threshold
+Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
 **3a — Grid fallback (surplus below the minimum charging current)** — branches from step 3.
 Given the System is charging in `Solar` mode
@@ -40,11 +45,6 @@ When smoothed solar surplus falls below the start threshold (default 150 W)
 Then the System holds the charger at the minimum charging current for the post-surplus hold period (default 5 minutes)
 And if smoothed surplus returns to at least the start threshold within that period, the System resumes normal solar charging (the hold is cancelled)
 And if the hold period elapses with surplus still below the start threshold, the System stops charging (0 A) and starts the solar-mode cooldown (R11).
-
-**2a — Blocked by cooldown** — branches from step 2.
-Given a solar-mode cooldown is still running after a previous stop (R11)
-When smoothed solar surplus reaches the start threshold
-Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
 ## Exception flows
 
@@ -67,9 +67,11 @@ Then the System stops charging (0 A) and does not resume above that limit until 
 
 ## State model
 
-The set-point rule for the charging states is **incremental convergence**: each cycle the System
-nudges the charger current so that smoothed net grid import trends toward 0 W, flooring at the
-minimum charging current (grid fallback) and capping at the maximum charging current (C1). The
+The set-point rule for the charging states is a **direct per-cycle computation**: each cycle the
+System sets the charger current to the highest whole ampere (rounded down) that keeps smoothed net
+grid import at or below 0 W, flooring at the minimum charging current (grid fallback) and capping at
+the maximum charging current (C1). Recomputing this set-point every cycle re-tracks the available
+surplus as it changes, without holding net import above 0 W beyond a single-cycle transient (R1). The
 `stateDiagram-v2` below is authoritative for the state set. All thresholds/timers are configurable
 (defaults shown). The peak-protection (R3) and grid-supply-ceiling (C4) clamps are applied by the
 coordinator *after* the mode returns its desired current and are not repeated here.
@@ -78,7 +80,7 @@ coordinator *after* the mode returns its desired current and are not repeated he
 | --- | --- | --- |
 | Idle | 0 A | smoothed surplus ≥ start threshold, SOC < active SOC limit, no cooldown → Charging |
 | Charging | highest whole ampere keeping smoothed net import ≤ 0 W (≥ minimum current: grid fallback) | surplus < start threshold → Hold · SOC ≥ active SOC limit → SocReached |
-| Hold | minimum charging current | surplus ≥ start threshold → Charging · hold period (5 min) elapsed → Cooldown |
+| Hold | minimum charging current | surplus ≥ start threshold → Charging · hold period (5 min) elapsed → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging if surplus ≥ start threshold else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
@@ -100,25 +102,27 @@ stateDiagram-v2
     Hold --> Charging: smoothed surplus ≥ start threshold\n(within hold — rides out cloud)
     Hold --> Cooldown: hold period elapsed (5 min)\nsurplus still below threshold
     Charging --> SocReached: SOC ≥ active SOC limit
+    Hold --> SocReached: SOC ≥ active SOC limit\n(minimum current draws from grid)
     Cooldown --> Charging: cooldown elapsed (2 min)\n& surplus ≥ start threshold
     Cooldown --> Idle: cooldown elapsed\n& surplus < start threshold
     SocReached --> Idle: active SOC limit changes,\nor unplug/replug
     note right of Charging
-        Set-point: nudge current so smoothed
-        net import → 0 W; floor = minimum current
-        (grid fallback), cap = maximum current (C1)
+        Set-point: highest whole ampere keeping
+        smoothed net import ≤ 0 W, recomputed each
+        cycle; floor = minimum current (grid
+        fallback), cap = maximum current (C1)
     end note
 ```
 
 ## Requirements satisfied
 
-- **R1** — Solar-first charging (start threshold, convergence to net import ≤ 0 W, grid fallback, post-surplus hold).
+- **R1** — Solar-first charging (start threshold, highest-whole-ampere set-point keeping net import ≤ 0 W, grid fallback, post-surplus hold).
 
 Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current invariant (R11) and the peak-protection (R3) and grid-supply-ceiling (C4) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
 
 ## Relationships
 
 - **Extended by [UC05](UC05-guarantee-ready-by-departure.md)** when the departure deadline is at risk. Under the `Auto` profile this is realized by switching `Solar → Captar` (Auto mode-selection, `resolution-rules.md`); under `Manual` `Solar`, R5 relaxes the cost policy. The deadline logic lives in UC05, not here.
-- **Sibling [UC02](UC02-charge-from-solar-only.md)** (`SolarOnly`) — same convergence rule but no grid fallback and no post-surplus hold; a solar step-up in effect is preserved when switching between the two (R7).
+- **Sibling [UC02](UC02-charge-from-solar-only.md)** (`SolarOnly`) — same highest-whole-ampere set-point rule but no grid fallback and no post-surplus hold; a solar step-up in effect is preserved when switching between the two (R7).
 - **Extended by [UC06](UC06-store-abundant-solar.md)** — while charging in a solar mode, UC06 may step up the active SOC limit to store abundant surplus (R8).
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit rule in `resolution-rules.md`.
