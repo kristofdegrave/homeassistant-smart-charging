@@ -130,6 +130,12 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`grid fallback`** — In Solar mode, charging at the minimum charging current using grid power when solar surplus alone cannot sustain it; permitted in Solar mode, explicitly excluded in SolarOnly mode.
 
+**`solar start threshold`** — The smoothed [solar surplus](#ubiquitous-language) level at or above which a solar mode may start charging (and, in `Solar` mode, below which the post-surplus hold begins). Configured per solar mode by a separate entity each: `input_number.sc_solar_start_threshold_w`, default 150 W in `Solar`; `input_number.sc_solar_only_start_threshold_w`, default 1300 W in `SolarOnly` — the latter chosen so the minimum charging current can be met from solar alone. See R1, R2. Unit: watts (W).
+
+**`post-surplus hold`** — In `Solar` mode, the period (configurable, `input_number.sc_solar_hold_min`, default 5 minutes) for which the charger holds at the minimum charging current after smoothed solar surplus falls below the solar start threshold, riding out brief cloud cover before charging stops; if surplus recovers to the start threshold within the period the hold is cancelled. `SolarOnly` has no such hold — it stops immediately. See R1. Unit: minutes (min).
+
+**`solar-mode cooldown`** — The rapid-cycling cooldown applied after solar charging stops (configurable, `input_number.sc_solar_cooldown_min`, default 2 minutes), shared by `Solar` and `SolarOnly`; charging does not restart until it has fully elapsed. A mode-specific instance of the R11 cooldown. See R11. Unit: minutes (min).
+
 **`charging mode` (mode)** — The concrete behaviour the coordinator executes at a given moment: `Solar`, `SolarOnly`, `Captar`, `Power`, or `Off`. A set provided by the integration; which of them are *available* depends on the installation's capabilities (see `capability`, R18). The coordinator reads the active mode and dispatches to the matching module; it contains no logic for *choosing* the mode (NF1).
 
 **`capability`** — A hardware feature the installation has, declared by configuration, that determines which modes and behaviours are available. This release recognises the **solar capability** (a solar PV installation is present, `input_boolean.sc_solar_available`, default present). When it is absent, the `Solar` and `SolarOnly` modes, the solar SOC step-up, and the solar-reserve cap are all unavailable, and the `Auto` profile never selects a solar mode; `Captar`, `Power`, and `Off` remain. The concept is extensible so further capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on that hardware, without changing existing modes (NF2). See R18.
@@ -145,6 +151,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 **`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) applied while the sun is down when the home-day flag is set and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar; low-tariff grid charging is suppressed while the cap is active.
 
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
+
+**`maximum charging current`** — The highest current the charger may be set to (configurable, default 32 A; reference setup: 32 A), the upper bound of the charger current range; the set-point never exceeds it (C1). Unit: amperes (A).
 
 **`sun is down`** — The condition `sun.sun` state equals `below_horizon`.
 
