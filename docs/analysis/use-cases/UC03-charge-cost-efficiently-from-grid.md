@@ -82,7 +82,7 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | low-tariff flag active & SOC < active SOC limit & no cooldown & cap not suppressing → Charging |
-| Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | low-tariff flag inactive, or solar-reserve cap becomes active → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | low-tariff flag inactive, or solar-reserve cap becomes active → Cooldown · sustained clamp breach at the minimum charging current (R3/C4 stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Captar` cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
@@ -99,6 +99,7 @@ stateDiagram-v2
     [*] --> Idle
     Idle --> Charging: low-tariff flag active & SOC < active SOC limit<br/>& no cooldown & solar-reserve cap not suppressing
     Charging --> Cooldown: low-tariff flag inactive,<br/>or solar-reserve cap becomes active (R9)
+    Charging --> Cooldown: sustained clamp breach at<br/>minimum current (R3/C4 stop → R11 cooldown)
     Charging --> SocReached: SOC ≥ active SOC limit
     Cooldown --> Charging: cooldown elapsed (10 min)<br/>& charging conditions hold
     Cooldown --> Idle: cooldown elapsed<br/>& charging conditions not held
