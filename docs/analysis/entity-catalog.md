@@ -43,7 +43,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, (UC02, UC06, UC07) | user |
+| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, (UC06, UC07) | user |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 
@@ -64,17 +64,17 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | `input_number.sc_grid_safety_offset_a` | config | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user |
 | `input_number.sc_nominal_voltage_v` | config | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
 | `sensor.sc_grid_voltage_v` | sensor | V | grid voltage sensor | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
-| `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01 | — |
+| `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02 | — |
 | `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
 ### Charger
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01 | user |
-| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01 | user |
-| `sensor.sc_charger_power_w` | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01 | — |
-| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01 | — |
+| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02 | user |
+| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02 | user |
+| `sensor.sc_charger_power_w` | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
+| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02 | — |
 | `number.sc_charger_current` | state (output) | A | 0 or 6–32 | charger current set-point output (C1, NF3) | — | control-cycle |
 
 ### Peak protection
@@ -103,7 +103,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
 | `input_number.sc_battery_capacity_kwh` | config | kWh | 75 | EV battery capacity (R15) | — | user |
-| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules, UC01 | — |
+| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules, UC01, UC02 | — |
 | `sensor.sc_battery_capacity_kwh` | sensor | kWh | vehicle capacity sensor (optional, NF3) | EV battery capacity, sensed (R15) | — | — |
 | `binary_sensor.sc_car_home` | sensor | bool | presence / device-tracker | car-at-home presence (R12) | — | — |
 | `number.sc_vehicle_charge_limit` | state (output) | % | mirrors active SOC limit | vehicle charge-limit output wrapper (R6, NF3) | — | (UC09) |
@@ -120,14 +120,14 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_start_threshold_w` | config | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
 | `input_number.sc_solar_hold_min` | config | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
-| `input_number.sc_solar_cooldown_min` | config | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01 | user |
+| `input_number.sc_solar_cooldown_min` | config | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user |
 | `sensor.sc_solar_power_w` | sensor | W | solar production sensor | solar production reading (smoothed per R10; not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w`) | control-cycle | — |
 
 ### `SolarOnly` mode
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_only_start_threshold_w` | config | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | — | user |
+| `input_number.sc_solar_only_start_threshold_w` | config | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user |
 
 Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
 
