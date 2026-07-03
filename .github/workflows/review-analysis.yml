@@ -30,9 +30,14 @@ permissions:
   pull-requests: write
   issues: write
 
+# cancel-in-progress must stay FALSE: this workflow is spawned by EVERY labeled event on a
+# docs PR (the job's `if` filters to ai-review afterward), so with `true` the routing step
+# adding `ai-fix` spawns a sibling run that cancels its own parent mid-flight — and any label
+# added during a review would kill it with no cleanup, leaving the loop stuck. Queued
+# label-noise runs are harmless: their job is skipped by the label guard.
 concurrency:
   group: review-analysis-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   review:
