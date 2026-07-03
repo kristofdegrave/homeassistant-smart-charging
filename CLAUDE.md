@@ -77,8 +77,11 @@ Every **new** analysis document — and every **change** to an existing one (`do
    - **Cross-document consistency** — consistent with all other analysis documents (system-overview, requirements, mechanism docs, other use-cases). Terms match the glossary; requirement IDs match what the document references.
    - **Requirement coverage** — the document satisfies every requirement it claims, and every requirement is reachable from at least one document.
 4. **Address** the review feedback in the draft.
-5. **Commit** once approved, with `docs: review and refine <filename>`.
-6. **Stop and report** — after each committed document, report status and wait before starting the next.
+5. **Manual review** — present the addressed draft to the human partner and get their explicit approval **before** committing. The fresh-agent review does not replace this; **both are always required**.
+6. **Commit** once approved, with `docs: review and refine <filename>`.
+7. **Stop and report** — after each committed document, report status and wait before starting the next.
+
+**Merge policy:** no pull request is ever auto-merged. Every PR — including CI-drafted ones — requires the human partner's **explicit manual approval** before merge (enforced by `CODEOWNERS` + branch protection). CI may draft and review a PR, but never merges or self-approves it, and neither does the assistant.
 
 ---
 

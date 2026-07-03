@@ -36,6 +36,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Use the default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             Review the analysis-document changes in this pull request
             (base: ${{ github.event.pull_request.base.sha }}, head: ${{ github.event.pull_request.head.sha }}).

@@ -38,6 +38,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Use the default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           # The action auto-loads CLAUDE.md, .claude/skills/, and .claude/agents/.
           prompt: |
             A maintainer labeled issue #${{ github.event.issue.number }} `generate-uc` to have a
