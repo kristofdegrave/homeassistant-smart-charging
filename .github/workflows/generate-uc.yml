@@ -1,11 +1,16 @@
 name: Generate use-case from issue label
 
 # Triggered only when the `generate-uc` label is added to an issue.
-# Guards (see SECURITY notes below):
+# Guards:
 #   1. Label must be exactly `generate-uc`.
-#   2. The person who applied the label must be in ALLOWED_TRIGGERERS.
-#   3. The job runs in the `ai` environment, which requires your manual approval
-#      before the ANTHROPIC_API_KEY (an environment secret) is released.
+#   2. The person who applied the label must be in the actor allow-list. Applying a label
+#      requires Triage+ permission, so the label itself is the maintainer's approval —
+#      the `ai` environment only scopes the ANTHROPIC_API_KEY, it no longer pauses for review.
+#
+# After opening the PR this workflow adds the `ai-review` label via WORKFLOW_PAT (the default
+# GITHUB_TOKEN cannot trigger other workflows), which starts the automatic review→fix loop
+# in review-analysis.yml / fix-review.yml (capped at 3 cycles). Merge still requires the
+# maintainer's manual approval.
 
 on:
   issues:
@@ -28,7 +33,7 @@ jobs:
       github.event.label.name == 'generate-uc' &&
       contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
     runs-on: ubuntu-latest
-    # Guard 3: required-reviewer environment holds ANTHROPIC_API_KEY and pauses for approval.
+    # Environment scopes the ANTHROPIC_API_KEY secret (no required-reviewer rule anymore).
     environment: ai
 
     steps:
@@ -62,6 +67,7 @@ jobs:
           claude_args: "--model opus --max-turns 15 --allowed-tools Read,Write,Edit,Glob,Grep"
 
       - name: Open pull request
+        id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -72,8 +78,15 @@ jobs:
 
             Closes #${{ github.event.issue.number }}
 
-            The `review-analysis` workflow will post a fresh-agent review on this PR.
+            The `ai-review` label starts the automatic review→fix loop (max 3 cycles).
             **A maintainer's manual review and approval is required before merge** (per CLAUDE.md).
           branch: "uc/${{ github.event.issue.number }}"
           delete-branch: true
           labels: use-case, needs-review
+
+      - name: Hand off to AI review
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          # PAT, not GITHUB_TOKEN: labels added by GITHUB_TOKEN do not trigger workflows.
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: gh pr edit ${{ steps.cpr.outputs.pull-request-number }} --add-label ai-review
