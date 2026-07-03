@@ -125,3 +125,13 @@ jobs:
               gh pr comment "$PR" --body "Automatic review/fix limit reached (3 cycles) — remaining remarks need a human. Label \`ai-fix\` manually to force one more cycle."
             fi
           fi
+
+      # A failed review run must not leave the PR stuck with a stale `ai-review` label and no signal.
+      - name: Clean up on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR" --remove-label ai-review || true
+          gh pr comment "$PR" --body "The automatic review run **failed** (see the Actions log for this run). Re-add the \`ai-review\` label to retry."
