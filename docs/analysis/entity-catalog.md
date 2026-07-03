@@ -121,7 +121,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | `input_number.sc_solar_start_threshold_w` | config | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
 | `input_number.sc_solar_hold_min` | config | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
 | `input_number.sc_solar_cooldown_min` | config | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01 | user |
-| `sensor.sc_solar_power_w` | sensor | W | solar production sensor | solar power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle | — |
+| `sensor.sc_solar_power_w` | sensor | W | solar production sensor | solar production reading (smoothed per R10; not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w`) | control-cycle | — |
 
 ### `SolarOnly` mode
 
