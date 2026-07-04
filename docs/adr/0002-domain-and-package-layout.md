@@ -12,10 +12,18 @@ package layout under `custom_components/`. This is backfilled from Decision 1 of
 ADR-0001's plan to give each of that doc's decisions its own ADR before #30 merges).
 
 The layout has to accommodate what's already decided elsewhere in that design: a Python
-adapter layer per mapped role, one module per mode (`solar.py`, `captar.py`, ...), and a
-testing strategy (NF2) that requires mode/profile logic to be unit-testable without a
-running Home Assistant instance — i.e. pure logic needs to live somewhere a test can
-import without pulling in HA.
+adapter layer per mapped role, and one module per mode (`solar.py`, `captar.py`, ...).
+NF2 requires each mode and profile to be "implemented in its own self-contained unit with
+no logic belonging to another" — that boundary needs to be structural, not just a
+convention, or a later change can quietly blur it. A useful side effect of enforcing that
+boundary with no direct HA access is that mode/profile logic becomes unit-testable without
+a running Home Assistant instance, which the testing strategy (Decision 7 of the same
+design doc) relies on — but that testability is a consequence of satisfying NF2, not
+something NF2 itself states.
+
+The domain slug (`smart_charging`) is a much smaller decision bundled into the same ADR
+rather than split out: it simply follows the project's existing name, with no real
+alternative debated, so it doesn't warrant its own Considered-options section.
 
 ## Considered options
 
@@ -25,8 +33,9 @@ and adapters as top-level modules or one `helpers.py` grab-bag)
 - Pro: Fewer files and directories; matches the simplest HA custom-integration examples.
 - Con: Mode logic, adapters, and profile logic would sit in the same namespace as
   HA-coupled code (`coordinator.py`, the platform files), making it easy to accidentally
-  import `homeassistant.*` into what's supposed to be pure, unit-testable logic (NF2) —
-  the flat layout doesn't enforce the boundary the testing strategy depends on.
+  import `homeassistant.*` into logic NF2 requires stay self-contained — the flat layout
+  doesn't structurally enforce that boundary, and loses the unit-testability that
+  enforcing it happens to buy.
 
 ### Option B — Modular subpackages (`adapters/`, `modes/`, `profiles/`), platform files
 (`select.py`, `number.py`, ...) at the package root, `tests/` mirroring the structure
@@ -48,8 +57,8 @@ with `adapters/`, `modes/`, `profiles/` subpackages, platform files
 `entity.py` (base classes for owned entities) at the package root, and `coordinator.py`
 driving the control cycle. `tests/` mirrors this structure 1:1. Option B's empty-directory
 cost (Con) is accepted because the alternative (Option A) would have let HA-coupled code
-leak into the pure-logic modules with no structural guard against it — exactly what NF2's
-unit-testability requirement exists to prevent.
+leak into the pure-logic modules with no structural guard against it — exactly the
+self-containment NF2 requires, with easy unit-testing as the side benefit.
 
 ## Consequences
 
@@ -59,6 +68,7 @@ unit-testability requirement exists to prevent.
 - `tests/` structure is dictated by this layout, not decided independently — a new
   `modes/foo.py` implies `tests/modes/test_foo.py`.
 - `docs/` is unaffected; `docs/analysis/` remains the source of truth for behavior.
-- This ADR does not decide anything about entity mapping, adapters' internal behavior, or
-  the coordinator's pipeline — those are ADR-0003 through ADR-0006 (backfilling
-  Decisions 2, 3, 5 of PR #30), all of which build on this layout without changing it.
+- This ADR does not decide anything about entity mapping, adapters' internal behavior, the
+  coordinator's pipeline, error handling, or testing — those are ADR-0003 through ADR-0008
+  (backfilling Decisions 2–7 of PR #30), all of which build on this layout without
+  changing it.
