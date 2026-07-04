@@ -9,6 +9,6 @@ template.
 | --- | --- | --- |
 | [0001](0001-use-architecture-decision-records.md) | Use Architecture Decision Records, with a Nygard+options template | Accepted |
 | [0002](0002-domain-and-package-layout.md) | Domain slug and package layout for the `smart_charging` integration | Accepted |
-| [0005](0005-config-entry-structure-and-interval.md) | Config entry structure and control-cycle interval | Accepted |
+| [0005](0005-config-entry-structure-and-interval.md) | Config entry structure and control interval | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.

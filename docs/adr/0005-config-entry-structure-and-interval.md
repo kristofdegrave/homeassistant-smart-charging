@@ -1,4 +1,4 @@
-# ADR-0005: Config entry structure and control-cycle interval
+# ADR-0005: Config entry structure and control interval
 
 Date: 2026-07-04
 Status: Accepted
@@ -21,12 +21,14 @@ placed into one bucket or the other:
 - Entity-role mappings (which HA entity plays which role, e.g. "EV charger current
   setpoint", "solar production sensor") and state-translation tables (e.g. mapping a
   charger's raw state strings to the integration's own state model) — read by the
-  adapter layer per ADR-0003.
+  adapter layer, expected to be defined by ADR-0003 (not yet accepted at the time of
+  writing; if its final shape differs, that ADR's own Consequences call for revisiting
+  cross-references such as this one).
 - Declared capabilities (R18), e.g. whether solar production is present at all, which
   determines whether solar-dependent modes are even offered.
 - Thresholds and defaults with numeric or enumerated values: start thresholds, safety
   margin, grace periods, the smoothing window size N.
-- The control-cycle interval — how often the coordinator polls and re-evaluates.
+- The control interval — how often the coordinator polls and re-evaluates.
 
 ADR-0004 already decided, for a different but related question, which pieces of
 integration state are exposed as HA-owned entities (`number`, `select`, etc., which the
@@ -34,7 +36,7 @@ user can change from the dashboard without opening Configure) versus which are n
 exposed as entities at all and instead live only in the config entry. That decision
 governs *whether something is an entity*; this decision governs, for the state that
 ADR-0004 leaves *out* of the owned-entity list, where in the config entry it lives
-(data vs. options), plus the specific question of whether the control-cycle interval
+(data vs. options), plus the specific question of whether the control interval
 should have been an owned entity in the first place. The two decisions are adjacent but
 distinct: a setting could in principle be both a config-entry value and mirrored as an
 entity (ADR-0004 rejected that duplication for the settings in scope here), and a
@@ -48,7 +50,7 @@ The forces at play:
   assumes that mapping is stable for the life of a control cycle, and getting it wrong
   (e.g. two roles briefly pointing at the same entity) risks writing to the wrong
   hardware entity, which is a safety-relevant guarantee this integration cannot regress.
-- Thresholds and the control-cycle interval, in contrast, are “turn the dial” tuning
+- Thresholds and the control interval, in contrast, are “turn the dial” tuning
   values a user reasonably expects to adjust repeatedly without re-running setup, similar
   to how most HA polling integrations expose their update interval.
 - HA's own config entry model already distinguishes data from options for exactly this
@@ -57,7 +59,7 @@ The forces at play:
 
 ## Considered options
 
-### Option A — Entity-role mappings, state-translation tables, and declared capabilities in config entry data (reconfigure-flow only); thresholds, defaults, and the control-cycle interval in config entry options (Configure, anytime)
+### Option A — Entity-role mappings, state-translation tables, and declared capabilities in config entry data (reconfigure-flow only); thresholds, defaults, and the control interval in config entry options (Configure, anytime)
 
 - Pro: Matches the risk profile of each value — mapping/capability changes go through a
   reconfigure flow that can re-validate the whole entity graph before committing, while
@@ -86,17 +88,19 @@ The forces at play:
 Option A. Config entry **data** holds entity-role mappings, state-translation tables, and
 declared capabilities (R18) — set at initial setup, changed only via a reconfigure flow.
 Config entry **options** holds thresholds and defaults (start thresholds, safety margin,
-grace periods, smoothing window N) and the control-cycle interval — changeable at any
+grace periods, smoothing window N) and the control interval — changeable at any
 time via Settings -> Integrations -> Configure.
 
-The control-cycle interval specifically is a fixed options-flow setting, not an owned
-entity, for the same reason ADR-0004 kept other integration-tuning values out of its
-owned-entity list: it configures the coordinator's own polling behavior rather than
-describing charging state or a user-facing charging preference, so it has no natural
-place among the `number`/`select` entities ADR-0004 does expose. It is also
-conventional: most HA polling coordinators expose their update interval as an
-options-flow setting rather than an entity, so following that precedent keeps the
-integration unsurprising to HA users and developers already familiar with the pattern.
+The control interval specifically is a fixed options-flow setting, not an owned entity.
+ADR-0004's owned-entity list is scoped to entities that describe charging state or a
+user-facing charging preference (active profile/mode, SoC override, departure time, WFH
+status, diagnostic readouts) — the control interval is neither; it configures the
+coordinator's own polling behavior, so it has no natural place among the `number`/`select`
+entities ADR-0004 lists, and this ADR is the one making that placement decision, not
+ADR-0004. It is also conventional: most HA polling coordinators expose their update
+interval as an options-flow setting rather than an entity, so following that precedent
+keeps the integration unsurprising to HA users and developers already familiar with the
+pattern.
 Changing the interval in options triggers an options-update listener that reloads the
 config entry, restarting the coordinator with the new interval — there is no live
 "change interval without reload" path, since the coordinator's polling loop is
@@ -113,7 +117,7 @@ established at reload time.
   it needs to be called out explicitly in the write-adr/development workflow so a new
   setting isn't dropped into options by default without checking against ADR-0003's
   stability assumption.
-- The options-update listener must call `async_reload` when the control-cycle interval
+- The options-update listener must call `async_reload` when the control interval
   (or any other option) changes, per HA's standard options-flow pattern — this is a
   concrete implementation task for whichever ADR/issue covers the config-flow build-out.
 - This ADR does not decide the config flow's step layout, schema validation details, or
