@@ -98,7 +98,7 @@ Option B. A single `DataUpdateCoordinator` subclass drives the full cycle:
 4. Resolve the active SOC limit (`resolution_rules.active_soc_limit`, scoped in this
    implementation to the default row only).
 5. Resolve the active profile -> active mode (`profiles/manual.py` reads the user's
-   `select.smart_charging_mode`; `profiles/auto.py`, once it exists, runs the flow-selection
+   `input_select.sc_active_mode`; `profiles/auto.py`, once it exists, runs the flow-selection
    logic).
 6. Dispatch smoothed readings + resolved SOC limit + config to the active mode module
    (`modes/*.py`) -> desired current.
