@@ -29,7 +29,7 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 | --- | --- | --- | --- | --- |
 | [UC01](UC01-charge-from-solar-surplus.md) | Charge from solar surplus (incl. grid fallback) | Household energy manager | R1 | Planned |
 | [UC02](UC02-charge-from-solar-only.md) | Charge from solar only | Household energy manager | R2 | Planned |
-| [UC03](UC03-charge-from-grid-within-captar-limit.md) | Charge from the grid within the CapTar limit | Household energy manager | R4 | Planned |
+| [UC03](UC03-charge-from-grid-within-captar-limit.md) | Charge from the grid in Captar mode | Household energy manager | R4 | Planned |
 | [UC04](UC04-charge-at-maximum-power.md) | Charge at maximum power | EV driver | R17 | Planned |
 | [UC05](UC05-guarantee-ready-by-departure.md) | Guarantee the car is ready by departure | EV driver | R5 | Planned |
 | [UC06](UC06-store-abundant-solar.md) | Store abundant solar by stepping up the limit | Household energy manager | R8 | Planned |

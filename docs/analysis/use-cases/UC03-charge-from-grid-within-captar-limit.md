@@ -1,4 +1,4 @@
-# UC03 — Charge from the grid within the CapTar limit
+# UC03 — Charge from the grid in Captar mode
 
 **Primary actor:** Household energy manager
 
@@ -37,7 +37,7 @@ Then the System does not start charging until the cooldown has fully elapsed, th
 **Peak / grid-ceiling clamp bounds or stops the set-point.**
 Given the System has requested a `Captar` set-point
 When the peak-protection clamp (R3) or the grid-supply-ceiling clamp (C4) in `control-cycle.md` would be exceeded on raw readings — for example household load leaves less than the minimum charging current of headroom
-Then the coordinator reduces the charger current — or, on a sustained breach at the minimum charging current, stops it and starts the `Captar` cooldown (R11) — so the clamp decides the set-point this cycle, not the mode.
+Then the coordinator reduces the charger current — or, on a sustained R3 breach at the minimum charging current, stops it and starts the `Captar` cooldown (R11); a C4 breach clamps down (to 0 A if necessary) without starting a cooldown — so the clamp decides the set-point this cycle, not the mode.
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Captar` mode
@@ -79,14 +79,14 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | SOC < active SOC limit & no cooldown → Charging |
-| Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | sustained clamp breach at the minimum charging current (R3/C4 stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | sustained R3 breach at the minimum charging current (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Captar` cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
 ## Domain events produced
 
 - `CaptarChargingStarted` — the System began grid charging in `Captar` mode (Idle/Cooldown → Charging).
-- `CaptarChargingStopped` — a sustained clamp breach forced a stop; the System stopped charging (0 A) and started the `Captar` cooldown (R11).
+- `CaptarChargingStopped` — a sustained R3 breach at the minimum charging current forced a stop; the System stopped charging (0 A) and started the `Captar` cooldown (R11).
 - `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit (R7).
 
 ## Diagram
@@ -95,7 +95,7 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 stateDiagram-v2
     [*] --> Idle
     Idle --> Charging: SOC < active SOC limit & no cooldown
-    Charging --> Cooldown: sustained clamp breach at<br/>minimum current (R3/C4 stop → R11 cooldown)
+    Charging --> Cooldown: sustained R3 breach at<br/>minimum current (stop → R11 cooldown)
     Charging --> SocReached: SOC ≥ active SOC limit
     Cooldown --> Charging: cooldown elapsed (10 min)<br/>& charging conditions hold
     Cooldown --> Idle: cooldown elapsed<br/>& charging conditions not held
