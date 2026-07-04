@@ -229,6 +229,7 @@ def test_defaults_match_entity_catalog():
     assert const.DEFAULT_SOLAR_ONLY_START_THRESHOLD_W == 1300
     assert const.DEFAULT_CAPTAR_COOLDOWN_MIN == 10
     assert const.DEFAULT_POWER_TARGET_CURRENT_A == 10
+    assert const.DEFAULT_POWER_RESPECT_PEAK is True
     assert const.DEFAULT_POWER_COOLDOWN_MIN == 10
     assert const.DEFAULT_ACTIVE_SOC_PERCENT == 80
 ```
@@ -319,6 +320,7 @@ DEFAULT_SOLAR_COOLDOWN_MIN = 2
 DEFAULT_SOLAR_ONLY_START_THRESHOLD_W = 1300
 DEFAULT_CAPTAR_COOLDOWN_MIN = 10
 DEFAULT_POWER_TARGET_CURRENT_A = 10
+DEFAULT_POWER_RESPECT_PEAK = True
 DEFAULT_POWER_COOLDOWN_MIN = 10
 DEFAULT_ACTIVE_SOC_PERCENT = 80
 
@@ -486,9 +488,11 @@ directly against its acceptance criteria.
 
 ```python
 # tests/test_control_cycle.py
+import pytest
+
 from custom_components.smart_charging.control_cycle import (
     SmoothingWindow, resolve_voltage, apply_peak_clamp, apply_grid_ceiling_clamp,
-    enforce_current_invariant,
+    enforce_current_invariant, PeakBreachTracker,
 )
 
 
@@ -525,31 +529,44 @@ def test_nf4_falls_back_to_nominal_when_measured_missing():
 
 
 def test_r3_peak_clamp_reduces_current_to_headroom():
-    # raw net import 3000 W, effective peak limit 4000 W, safety margin 250 W -> target 3750 W
-    # headroom above current draw = 750 W = 3.26 A @ 230V -> floor to 3 A, but floor is min 6 A
-    # so use numbers that land cleanly: desired 20A, raw_net_w=3500, limit=4000, margin=250 -> target=3750
-    # headroom = 3750-3500 = 250W = ~1.08A @230V -> current can only add ~1A -> current draw before + 1
+    # The clamp must solve for the ampere that keeps net import at the target — using the
+    # ampere actually flowing, not subtracting a "reduction" from the *requested* ampere
+    # (that was a bug in an earlier draft: it under-clamped whenever desired_a > the
+    # current already flowing, e.g. Captar requesting 32 A while only 6 A is flowing).
+    # baseline = raw_net_w - raw_charger_w = import from everything EXCEPT the charger
+    #          = 4380 - 1380 = 3000 W (household load, charger currently at 6 A = 1380 W)
+    # target = effective_peak_limit_w - safety_margin_w = 4000 - 250 = 3750 W
+    # max ampere the charger can draw while holding to target = (3750-3000)/230 = 3.26 A
     result = apply_peak_clamp(
-        desired_a=20, raw_net_w=3500, effective_peak_limit_w=4000, safety_margin_w=250,
-        voltage=230, min_a=6, max_a=32,
+        desired_a=32, raw_net_w=4380, raw_charger_w=1380, effective_peak_limit_w=4000,
+        safety_margin_w=250, voltage=230, min_a=6, max_a=32,
     )
-    assert result <= 20
-    assert result >= 6
+    assert result == pytest.approx(3.26, abs=0.05)
 
 
 def test_r3_peak_clamp_no_reduction_when_within_target():
     result = apply_peak_clamp(
-        desired_a=10, raw_net_w=500, effective_peak_limit_w=4000, safety_margin_w=250,
-        voltage=230, min_a=6, max_a=32,
+        desired_a=10, raw_net_w=500, raw_charger_w=0, effective_peak_limit_w=4000,
+        safety_margin_w=250, voltage=230, min_a=6, max_a=32,
     )
     assert result == 10
 
 
 def test_c4_grid_ceiling_clamp_bounds_below_ceiling():
+    # ceiling_w = (40-2)*230 = 8740 W; baseline (excluding the charger's own 32A/7360W
+    # draw) = 9360-7360 = 2000 W -> max ampere for the ceiling = (8740-2000)/230 = 29.3 A
     result = apply_grid_ceiling_clamp(
-        desired_a=32, raw_net_w=8000, ceiling_a=40, safety_offset_a=2, voltage=230,
+        desired_a=32, raw_net_w=9360, raw_charger_w=7360, ceiling_a=40, safety_offset_a=2,
+        voltage=230,
     )
-    assert result < 32
+    assert result == pytest.approx(29.3, abs=0.05)
+
+
+def test_c4_grid_ceiling_clamp_no_reduction_within_ceiling():
+    result = apply_grid_ceiling_clamp(
+        desired_a=10, raw_net_w=500, raw_charger_w=0, ceiling_a=40, safety_offset_a=2, voltage=230,
+    )
+    assert result == 10
 
 
 def test_c1_invariant_zero_or_at_least_minimum():
@@ -557,6 +574,38 @@ def test_c1_invariant_zero_or_at_least_minimum():
     assert enforce_current_invariant(3, min_a=6, max_a=32) == 0  # below min -> 0, never in-between
     assert enforce_current_invariant(6, min_a=6, max_a=32) == 6
     assert enforce_current_invariant(40, min_a=6, max_a=32) == 32  # capped at max
+
+
+def test_r3_peak_breach_tracker_holds_at_minimum_during_grace_then_stops():
+    # R3 AC: "stops (0 A) only when it is already at the minimum charging current and
+    # net import still exceeds the target continuously for a grace period; a momentary
+    # breach does not stop charging." So a below-minimum clamp result holds at the
+    # minimum until the grace period elapses, then forces a stop.
+    clock = [0.0]
+    tracker = PeakBreachTracker(now_fn=lambda: clock[0])
+
+    applied, stopped = tracker.evaluate(clamped_a=3.26, min_a=6, grace_s=120)
+    assert applied == 6 and stopped is False  # momentary breach: hold at minimum
+
+    clock[0] += 60
+    applied, stopped = tracker.evaluate(clamped_a=3.26, min_a=6, grace_s=120)
+    assert applied == 6 and stopped is False  # still within the grace period
+
+    clock[0] += 61  # grace period (120s) now elapsed
+    applied, stopped = tracker.evaluate(clamped_a=3.26, min_a=6, grace_s=120)
+    assert applied == 0 and stopped is True
+
+
+def test_r3_peak_breach_tracker_resets_once_headroom_returns():
+    clock = [0.0]
+    tracker = PeakBreachTracker(now_fn=lambda: clock[0])
+    tracker.evaluate(clamped_a=3.26, min_a=6, grace_s=120)
+    clock[0] += 60
+    applied, stopped = tracker.evaluate(clamped_a=10, min_a=6, grace_s=120)  # headroom returns
+    assert applied == 10 and stopped is False
+    clock[0] += 61  # if the timer hadn't reset, this would now exceed the old grace window
+    applied, stopped = tracker.evaluate(clamped_a=3.26, min_a=6, grace_s=120)
+    assert applied == 6 and stopped is False  # fresh breach, grace restarts
 ```
 
 Run: `pytest tests/test_control_cycle.py -v`
@@ -597,35 +646,38 @@ def resolve_voltage(measured: float | None, nominal: float) -> float:
     return measured if measured is not None else nominal
 
 
-def _watts_to_amps(watts: float, voltage: float) -> float:
-    return watts / voltage
-
-
 def apply_peak_clamp(
-    desired_a: float, raw_net_w: float, effective_peak_limit_w: float,
+    desired_a: float, raw_net_w: float, raw_charger_w: float, effective_peak_limit_w: float,
     safety_margin_w: float, voltage: float, min_a: float, max_a: float,
 ) -> float:
-    """R3 — clamp desired_a so raw net import stays <= effective peak limit - safety margin."""
+    """R3 — the highest ampere that keeps raw net import <= effective peak limit - margin.
+
+    `raw_net_w` already includes the charger's own current draw (`raw_charger_w`), so the
+    clamp must solve for the absolute ampere against the *baseline* (import excluding the
+    charger), not subtract a "reduction" from `desired_a` — desired_a is a *request*
+    (e.g. Captar always requests max_a), not the ampere presently flowing. Subtracting from
+    the request instead of solving from the baseline under-clamps whenever the mode is
+    asking for more current than is actually flowing right now.
+    """
     target_w = effective_peak_limit_w - safety_margin_w
-    headroom_w = target_w - raw_net_w
-    if headroom_w >= 0:
-        return min(desired_a, max_a)
-    # Reduce by the shortfall, converted to amps, floored to a whole ampere.
-    reduction_a = _watts_to_amps(-headroom_w, voltage)
-    clamped = desired_a - reduction_a
-    return max(min(clamped, max_a), 0)
+    baseline_w = raw_net_w - raw_charger_w  # import from everything except the charger itself
+    max_a_for_target = (target_w - baseline_w) / voltage
+    return max(min(desired_a, max_a_for_target, max_a), 0)
 
 
 def apply_grid_ceiling_clamp(
-    desired_a: float, raw_net_w: float, ceiling_a: float, safety_offset_a: float, voltage: float,
+    desired_a: float, raw_net_w: float, raw_charger_w: float, ceiling_a: float,
+    safety_offset_a: float, voltage: float,
 ) -> float:
-    """C4 — hard fuse-protection clamp; applies in every mode, even when R3 is disabled."""
+    """C4 — hard fuse-protection clamp; applies in every mode, even when R3 is disabled.
+
+    Same baseline-relative math as `apply_peak_clamp`, and no grace period — a C4 breach
+    clamps down immediately (UC03/UC04 exception flows: "without starting a cooldown").
+    """
     ceiling_w = (ceiling_a - safety_offset_a) * voltage
-    headroom_w = ceiling_w - raw_net_w
-    if headroom_w >= 0:
-        return desired_a
-    reduction_a = _watts_to_amps(-headroom_w, voltage)
-    return max(desired_a - reduction_a, 0)
+    baseline_w = raw_net_w - raw_charger_w
+    max_a_for_ceiling = (ceiling_w - baseline_w) / voltage
+    return max(min(desired_a, max_a_for_ceiling), 0)
 
 
 def enforce_current_invariant(current_a: float, min_a: float, max_a: float) -> float:
@@ -635,15 +687,43 @@ def enforce_current_invariant(current_a: float, min_a: float, max_a: float) -> f
     if current_a < min_a:
         return 0
     return min(math.floor(current_a), max_a)
+
+
+class PeakBreachTracker:
+    """R3's grace-period stop rule: a clamp result below the minimum current holds at the
+    minimum (accepting the momentary overshoot) until the breach has persisted continuously
+    for the grace period, at which point it reports a stop so the coordinator can call the
+    active mode's `notify_stopped_by_clamp()` and start its cooldown (R11). Resets the timer
+    the moment headroom returns, per "a momentary breach does not stop charging."
+    """
+
+    def __init__(self, now_fn=None) -> None:
+        import time
+
+        self._now = now_fn or time.monotonic
+        self._breach_started_at: float | None = None
+
+    def evaluate(self, clamped_a: float, min_a: float, grace_s: float) -> tuple[float, bool]:
+        if clamped_a >= min_a:
+            self._breach_started_at = None
+            return clamped_a, False
+        if self._breach_started_at is None:
+            self._breach_started_at = self._now()
+        if self._now() - self._breach_started_at >= grace_s:
+            return 0, True
+        return min_a, False
 ```
 
 **Step 3: Run tests, iterate on the peak/ceiling clamp math until they pass**
 
 Run: `pytest tests/test_control_cycle.py -v`
-Expected: PASS. (If the two clamp tests' bounds don't match — these are the first
-peak/ceiling functions built against R3/C4, so tighten the assertions during this step
-rather than treating the numbers above as gospel; the invariant that must hold is
-"never raises current, only reduces it, and rounds via `enforce_current_invariant`".)
+Expected: PASS. The invariant that must hold for both clamps: they solve for the absolute
+ampere against the baseline (`raw_net_w - raw_charger_w`), never subtract from the
+*requested* ampere — verify this explicitly, since a plausible-looking-but-wrong
+implementation (subtracting a shortfall from `desired_a`) passes a test that only checks
+"some reduction happened" but silently breaches the peak whenever a mode requests more
+than is currently flowing (this was caught in review of an earlier draft — see the comment
+in `test_r3_peak_clamp_reduces_current_to_headroom`).
 
 **Step 4: Commit**
 
@@ -761,10 +841,21 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Readings:
-    """Smoothed + raw inputs for one control cycle, plus resolved lookups."""
+    """Smoothed + raw inputs for one control cycle, plus resolved lookups.
+
+    `charger_w` is raw, not smoothed — entity-catalog.md's note on `sc_charger_power_w`
+    is explicit that it "is not an operand of solar surplus" via the smoothed channel;
+    only `net_w` and `solar_w` go through R10's rolling window (control-cycle.md step 2).
+    Solar surplus is `charger_w - net_w` (UC01/UC02, entity-catalog.md line 128) — the
+    charger's own draw is already included in net import, so a mode that computed
+    surplus as `-net_w` alone would see its own charging current pull surplus back down
+    every cycle it charges, oscillating instead of converging (caught in review of an
+    earlier draft of this plan).
+    """
 
     smoothed_net_w: float
     smoothed_solar_w: float
+    charger_w: float
     charger_status: str  # "disconnected" | "connected" | "charging"
     ev_soc_percent: float
     active_soc_limit_percent: float
@@ -779,6 +870,12 @@ from .base import Readings
 
 
 class OffMode:
+    def reset(self) -> None:
+        pass
+
+    def notify_stopped_by_clamp(self) -> None:
+        pass  # already at 0 A; nothing to do
+
     def tick(self, readings: Readings | dict, config: dict) -> float:
         return 0
 ```
@@ -820,9 +917,14 @@ from custom_components.smart_charging.modes.solar import SolarMode
 from custom_components.smart_charging.modes.base import Readings
 
 
-def make_readings(net_w, soc=50, limit=80, status="connected"):
+def make_readings(net_w, charger_w=0, soc=50, limit=80, status="connected"):
+    # Surplus is charger_w - net_w (UC01/entity-catalog.md), not -net_w: charger_w=0
+    # models "not currently charging," so these two formulas coincide for the tests
+    # below that start from a stopped charger. Tests that continue an already-charging
+    # session pass a nonzero charger_w explicitly — see test_r1_grid_fallback_* and
+    # test_r1_post_surplus_hold_then_resumes_if_surplus_returns.
     return Readings(
-        smoothed_net_w=net_w, smoothed_solar_w=0, charger_status=status,
+        smoothed_net_w=net_w, smoothed_solar_w=0, charger_w=charger_w, charger_status=status,
         ev_soc_percent=soc, active_soc_limit_percent=limit,
     )
 
@@ -841,10 +943,8 @@ def test_r1_idle_below_threshold_stays_at_zero():
 def test_r1_starts_charging_at_highest_ampere_keeping_net_import_at_zero():
     clock = [0.0]
     mode = SolarMode(now_fn=lambda: clock[0])
-    # net import 500W positive means charger is drawing 500W from the grid beyond solar;
-    # surplus = -net_w when charging at 0. Model: smoothed_net_w already reflects the
-    # charger's current draw, so "surplus available" = -smoothed_net_w when net_w < 0.
-    readings = make_readings(net_w=-2300)  # 2300W exported = 10A of surplus @230V
+    # charger_w=0 (not yet charging), net_w=-2300 (2300W exported) -> surplus = 0-(-2300) = 2300W = 10A
+    readings = make_readings(net_w=-2300)
     result = mode.tick(readings, CONFIG)
     assert result == 10
 
@@ -852,20 +952,40 @@ def test_r1_starts_charging_at_highest_ampere_keeping_net_import_at_zero():
 def test_r1_grid_fallback_holds_at_minimum_when_surplus_below_minimum_current():
     clock = [0.0]
     mode = SolarMode(now_fn=lambda: clock[0])
-    mode.tick(make_readings(net_w=-2300), CONFIG)  # start charging first
-    readings = make_readings(net_w=-200)  # surplus (200W=~0.87A) below min current (6A) but >= 150W threshold
+    mode.tick(make_readings(net_w=-2300), CONFIG)  # start charging at 10A (2300W)
+    # Now charging at 2300W (charger_w) while solar drops: surplus = 2300-2100 = 200W —
+    # below the minimum current (6A=1380W) but still >= the 150W start threshold.
+    readings = make_readings(net_w=2100, charger_w=2300)
     result = mode.tick(readings, CONFIG)
     assert result == CONFIG["min_a"]
+
+
+def test_r1_surplus_formula_is_closed_loop_stable_across_cycles():
+    # Regression test for a formula bug caught in review: using -net_w alone (ignoring
+    # charger_w) makes the mode see its OWN charging draw as reducing surplus, causing it
+    # to oscillate between 10A and the minimum every cycle instead of holding steady.
+    # Steady state: solar = 2300W, no other household load, charging at 10A (2300W).
+    clock = [0.0]
+    mode = SolarMode(now_fn=lambda: clock[0])
+    # Cycle 1: charger not yet drawing -> net_w = -2300 (all solar exported).
+    assert mode.tick(make_readings(net_w=-2300, charger_w=0), CONFIG) == 10
+    # Cycle 2: charger now draws the 2300W it was just set to -> net_w settles to 0.
+    # Correct surplus = charger_w - net_w = 2300 - 0 = 2300 -> still 10A, not a drop to 6A.
+    assert mode.tick(make_readings(net_w=0, charger_w=2300), CONFIG) == 10
+    # Cycle 3: still steady -> still 10A.
+    assert mode.tick(make_readings(net_w=0, charger_w=2300), CONFIG) == 10
 
 
 def test_r1_post_surplus_hold_then_resumes_if_surplus_returns():
     clock = [0.0]
     mode = SolarMode(now_fn=lambda: clock[0])
-    mode.tick(make_readings(net_w=-2300), CONFIG)  # charging
-    mode.tick(make_readings(net_w=100), CONFIG)  # surplus drops below threshold -> Hold
+    mode.tick(make_readings(net_w=-2300), CONFIG)  # charging at 10A (2300W)
+    # Surplus drops to 100W (below the 150W threshold) while charger_w=2300 -> Hold.
+    mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)
     assert mode.state == "Hold"
     clock[0] += 60  # still within the 300s hold
-    result = mode.tick(make_readings(net_w=-2300), CONFIG)  # surplus returns
+    # Hold requested the minimum (6A=1380W); surplus returns to 2300W while charger_w=1380.
+    result = mode.tick(make_readings(net_w=-920, charger_w=1380), CONFIG)
     assert result == 10
     assert mode.state == "Charging"
 
@@ -874,9 +994,9 @@ def test_r1_post_surplus_hold_elapses_then_stops_and_cooldown_starts():
     clock = [0.0]
     mode = SolarMode(now_fn=lambda: clock[0])
     mode.tick(make_readings(net_w=-2300), CONFIG)
-    mode.tick(make_readings(net_w=100), CONFIG)  # -> Hold
+    mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)  # -> Hold
     clock[0] += 301  # hold period elapses
-    result = mode.tick(make_readings(net_w=100), CONFIG)
+    result = mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)
     assert result == 0
     assert mode.state == "Cooldown"
 
@@ -885,9 +1005,9 @@ def test_r1_cooldown_blocks_restart_until_elapsed():
     clock = [0.0]
     mode = SolarMode(now_fn=lambda: clock[0])
     mode.tick(make_readings(net_w=-2300), CONFIG)
-    mode.tick(make_readings(net_w=100), CONFIG)
+    mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)
     clock[0] += 301
-    mode.tick(make_readings(net_w=100), CONFIG)  # -> Cooldown
+    mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)  # -> Cooldown
     clock[0] += 60  # cooldown is 120s, not yet elapsed
     result = mode.tick(make_readings(net_w=-2300), CONFIG)
     assert result == 0
@@ -909,13 +1029,52 @@ def test_r7_stops_at_active_soc_limit_and_does_not_resume():
     assert result == 0
 
 
+def test_r7_soc_noise_does_not_resume_charging_while_socreached(monkeypatch=None):
+    # A SOC sensor dipping fractionally below the limit due to noise must NOT resume
+    # charging — R7 exits SocReached only when the limit itself changes, or on
+    # unplug/replug, never merely because SOC re-reads below the limit at the same limit.
+    clock = [0.0]
+    mode = SolarMode(now_fn=lambda: clock[0])
+    mode.tick(make_readings(net_w=-2300, soc=80, limit=80), CONFIG)
+    assert mode.state == "SocReached"
+    result = mode.tick(make_readings(net_w=-2300, soc=79.9, limit=80), CONFIG)  # noise dip
+    assert result == 0
+    assert mode.state == "SocReached"
+    # The limit actually changing does clear it.
+    result = mode.tick(make_readings(net_w=-2300, soc=79.9, limit=85), CONFIG)
+    assert result == 10
+
+
+def test_precondition_disconnected_forces_zero_and_resets():
+    clock = [0.0]
+    mode = SolarMode(now_fn=lambda: clock[0])
+    mode.tick(make_readings(net_w=-2300), CONFIG)  # charging
+    result = mode.tick(make_readings(net_w=2200, charger_w=2300, status="disconnected"), CONFIG)
+    assert result == 0
+    assert mode.state == "Idle"  # disconnect fully resets (R7: reset on unplug)
+
+
 def test_r11_switching_mode_resets_timers():
     clock = [0.0]
     mode = SolarMode(now_fn=lambda: clock[0])
     mode.tick(make_readings(net_w=-2300), CONFIG)
-    mode.tick(make_readings(net_w=100), CONFIG)  # -> Hold
+    mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)  # -> Hold
     mode.reset()
     assert mode.state == "Idle"
+
+
+def test_r3_notify_stopped_by_clamp_starts_cooldown():
+    # The coordinator calls this when a sustained R3 peak breach at the minimum current
+    # forces a stop (control-cycle.md step 5 / PeakBreachTracker) — applies to every mode,
+    # not just Captar/Power, since R3 is a coordinator-level invariant.
+    clock = [0.0]
+    mode = SolarMode(now_fn=lambda: clock[0])
+    mode.tick(make_readings(net_w=-2300), CONFIG)  # charging
+    mode.notify_stopped_by_clamp()
+    assert mode.state == "Cooldown"
+    assert mode.tick(make_readings(net_w=-2300), CONFIG) == 0
+    clock[0] += 121
+    assert mode.tick(make_readings(net_w=-2300), CONFIG) == 10
 ```
 
 Run: `pytest tests/modes/test_solar.py -v`
@@ -943,15 +1102,27 @@ class SolarMode:
         self.state = "Idle"
         self._hold_started_at: float | None = None
         self._cooldown_started_at: float | None = None
+        self._limit_at_soc_reached: float | None = None
 
     def reset(self) -> None:
         self.state = "Idle"
         self._hold_started_at = None
         self._cooldown_started_at = None
+        self._limit_at_soc_reached = None
+
+    def notify_stopped_by_clamp(self) -> None:
+        """Coordinator hook: a sustained R3 peak breach at the minimum current forced a
+        stop (control-cycle.md step 5). R3 is a coordinator-level invariant that applies
+        regardless of mode, so this mirrors Captar/Power's cooldown hook (Tasks 9-10)."""
+        self.state = "Cooldown"
+        self._cooldown_started_at = self._now()
 
     def _surplus_w(self, readings: Readings) -> float:
-        # Net import is positive when importing from the grid; surplus is the negative of it.
-        return -readings.smoothed_net_w
+        # charger_w - net_w (UC01/entity-catalog.md) — NOT -net_w. net_w already includes
+        # the charger's own draw, so -net_w alone would make the mode see its own charging
+        # current as reducing surplus, oscillating instead of converging (see the
+        # closed-loop regression test).
+        return readings.charger_w - readings.smoothed_net_w
 
     def _set_point_a(self, readings: Readings, config: dict) -> float:
         surplus_w = self._surplus_w(readings)
@@ -960,15 +1131,25 @@ class SolarMode:
         return max(min(floored, config["max_a"]), config["min_a"])
 
     def tick(self, readings: Readings, config: dict) -> float:
-        if readings.ev_soc_percent >= readings.active_soc_limit_percent:
-            self.state = "SocReached"
+        # Preconditions (UC01): car must be connected/charging; a disconnect (R7) resets
+        # everything and exits to Idle rather than merely returning 0 for one cycle.
+        if readings.charger_status not in ("connected", "charging"):
+            self.reset()
             return 0
 
         if self.state == "SocReached":
-            # R7: never resumes above the limit until it changes or a reconnect (handled
-            # by the coordinator calling reset() on disconnect) — here SOC is still >= limit
-            # so we already returned above; if it dropped back down, fall through to Idle.
-            self.state = "Idle"
+            # R7: exits only when the active SOC limit itself changes, or on
+            # unplug/replug (handled above) — NOT merely because SOC noise dips below
+            # the same limit again, which would otherwise resume charging spuriously.
+            if readings.active_soc_limit_percent != self._limit_at_soc_reached:
+                self.state = "Idle"
+            else:
+                return 0
+
+        if readings.ev_soc_percent >= readings.active_soc_limit_percent:
+            self.state = "SocReached"
+            self._limit_at_soc_reached = readings.active_soc_limit_percent
+            return 0
 
         surplus_w = self._surplus_w(readings)
         threshold_w = config["start_threshold_w"]
@@ -1037,9 +1218,9 @@ from custom_components.smart_charging.modes.base import Readings
 CONFIG = dict(start_threshold_w=1300, cooldown_s=120, min_a=6, max_a=32, voltage=230)
 
 
-def make_readings(net_w, soc=50, limit=80):
+def make_readings(net_w, charger_w=0, soc=50, limit=80, status="connected"):
     return Readings(
-        smoothed_net_w=net_w, smoothed_solar_w=0, charger_status="connected",
+        smoothed_net_w=net_w, smoothed_solar_w=0, charger_w=charger_w, charger_status=status,
         ev_soc_percent=soc, active_soc_limit_percent=limit,
     )
 
@@ -1055,11 +1236,20 @@ def test_r2_starts_and_tracks_surplus():
     assert result == 10
 
 
+def test_r2_surplus_formula_is_closed_loop_stable_across_cycles():
+    # Same regression as Solar (Task 7): surplus is charger_w - net_w, not -net_w.
+    clock = [0.0]
+    mode = SolarOnlyMode(now_fn=lambda: clock[0])
+    assert mode.tick(make_readings(net_w=-2300, charger_w=0), CONFIG) == 10
+    assert mode.tick(make_readings(net_w=0, charger_w=2300), CONFIG) == 10  # holds, no dip
+
+
 def test_r2_no_hold_immediate_stop_and_cooldown():
     clock = [0.0]
     mode = SolarOnlyMode(now_fn=lambda: clock[0])
     mode.tick(make_readings(net_w=-2300), CONFIG)
-    result = mode.tick(make_readings(net_w=-100), CONFIG)  # surplus drops below threshold
+    # surplus drops to 100W while charger_w=2300 (charging) -> below threshold, immediate stop
+    result = mode.tick(make_readings(net_w=2200, charger_w=2300), CONFIG)
     assert result == 0
     assert mode.state == "Cooldown"  # no Hold state exists for SolarOnly
 
@@ -1069,6 +1259,27 @@ def test_r2_never_falls_back_to_grid():
     # surplus of 100W (below min current 6A=1380W) never floors at min_a; must be 0.
     result = mode.tick(make_readings(net_w=-100), CONFIG)
     assert result == 0
+
+
+def test_precondition_disconnected_forces_zero_and_resets():
+    clock = [0.0]
+    mode = SolarOnlyMode(now_fn=lambda: clock[0])
+    mode.tick(make_readings(net_w=-2300), CONFIG)
+    result = mode.tick(make_readings(net_w=2200, charger_w=2300, status="disconnected"), CONFIG)
+    assert result == 0
+    assert mode.state == "Idle"
+
+
+def test_r7_soc_noise_does_not_resume_charging_while_socreached():
+    clock = [0.0]
+    mode = SolarOnlyMode(now_fn=lambda: clock[0])
+    mode.tick(make_readings(net_w=-2300, soc=80, limit=80), CONFIG)
+    assert mode.state == "SocReached"
+    result = mode.tick(make_readings(net_w=-2300, soc=79.9, limit=80), CONFIG)  # noise dip
+    assert result == 0
+    assert mode.state == "SocReached"
+    result = mode.tick(make_readings(net_w=-2300, soc=79.9, limit=85), CONFIG)  # limit changes
+    assert result == 10
 ```
 
 Run: `pytest tests/modes/test_solar_only.py -v`
@@ -1093,13 +1304,22 @@ class SolarOnlyMode:
         self._now = now_fn or time.monotonic
         self.state = "Idle"
         self._cooldown_started_at: float | None = None
+        self._limit_at_soc_reached: float | None = None
 
     def reset(self) -> None:
         self.state = "Idle"
         self._cooldown_started_at = None
+        self._limit_at_soc_reached = None
+
+    def notify_stopped_by_clamp(self) -> None:
+        self.state = "Cooldown"
+        self._cooldown_started_at = self._now()
+
+    def _surplus_w(self, readings: Readings) -> float:
+        return readings.charger_w - readings.smoothed_net_w  # UC02/entity-catalog.md
 
     def _set_point_a(self, readings: Readings, config: dict) -> float:
-        surplus_w = -readings.smoothed_net_w
+        surplus_w = self._surplus_w(readings)
         raw_a = surplus_w / config["voltage"]
         floored = math.floor(raw_a)
         if floored < config["min_a"]:
@@ -1107,13 +1327,22 @@ class SolarOnlyMode:
         return min(floored, config["max_a"])
 
     def tick(self, readings: Readings, config: dict) -> float:
+        if readings.charger_status not in ("connected", "charging"):
+            self.reset()
+            return 0
+
+        if self.state == "SocReached":
+            if readings.active_soc_limit_percent != self._limit_at_soc_reached:
+                self.state = "Idle"
+            else:
+                return 0
+
         if readings.ev_soc_percent >= readings.active_soc_limit_percent:
             self.state = "SocReached"
+            self._limit_at_soc_reached = readings.active_soc_limit_percent
             return 0
-        if self.state == "SocReached":
-            self.state = "Idle"
 
-        surplus_w = -readings.smoothed_net_w
+        surplus_w = self._surplus_w(readings)
         threshold_w = config["start_threshold_w"]
 
         if self.state == "Cooldown":
@@ -1172,9 +1401,9 @@ from custom_components.smart_charging.modes.base import Readings
 CONFIG = dict(cooldown_s=600, max_a=32)
 
 
-def make_readings(soc=50, limit=80):
+def make_readings(soc=50, limit=80, status="connected"):
     return Readings(
-        smoothed_net_w=0, smoothed_solar_w=0, charger_status="connected",
+        smoothed_net_w=0, smoothed_solar_w=0, charger_w=0, charger_status=status,
         ev_soc_percent=soc, active_soc_limit_percent=limit,
     )
 
@@ -1188,6 +1417,22 @@ def test_r4_defaults_to_zero_at_or_above_limit():
     mode = CaptarMode(now_fn=lambda: 0.0)
     assert mode.tick(make_readings(soc=80, limit=80), CONFIG) == 0
     assert mode.state == "SocReached"
+
+
+def test_r7_soc_noise_does_not_resume_charging_while_socreached():
+    mode = CaptarMode(now_fn=lambda: 0.0)
+    mode.tick(make_readings(soc=80, limit=80), CONFIG)
+    assert mode.tick(make_readings(soc=79.9, limit=80), CONFIG) == 0  # noise dip, stays put
+    assert mode.state == "SocReached"
+    assert mode.tick(make_readings(soc=79.9, limit=85), CONFIG) == CONFIG["max_a"]  # limit changed
+
+
+def test_precondition_disconnected_forces_zero_and_resets():
+    mode = CaptarMode(now_fn=lambda: 0.0)
+    mode.tick(make_readings(), CONFIG)  # Charging
+    result = mode.tick(make_readings(status="disconnected"), CONFIG)
+    assert result == 0
+    assert mode.state == "Idle"
 
 
 def test_r11_cooldown_after_coordinator_reports_a_stop():
@@ -1225,10 +1470,12 @@ class CaptarMode:
         self._now = now_fn or time.monotonic
         self.state = "Idle"
         self._cooldown_started_at: float | None = None
+        self._limit_at_soc_reached: float | None = None
 
     def reset(self) -> None:
         self.state = "Idle"
         self._cooldown_started_at = None
+        self._limit_at_soc_reached = None
 
     def notify_stopped_by_clamp(self) -> None:
         """Called by the coordinator on a sustained R3 breach at the minimum current."""
@@ -1236,11 +1483,20 @@ class CaptarMode:
         self._cooldown_started_at = self._now()
 
     def tick(self, readings: Readings, config: dict) -> float:
+        if readings.charger_status not in ("connected", "charging"):
+            self.reset()
+            return 0
+
+        if self.state == "SocReached":
+            if readings.active_soc_limit_percent != self._limit_at_soc_reached:
+                self.state = "Idle"
+            else:
+                return 0
+
         if readings.ev_soc_percent >= readings.active_soc_limit_percent:
             self.state = "SocReached"
+            self._limit_at_soc_reached = readings.active_soc_limit_percent
             return 0
-        if self.state == "SocReached":
-            self.state = "Idle"
 
         if self.state == "Cooldown":
             if self._now() - self._cooldown_started_at < config["cooldown_s"]:
@@ -1286,9 +1542,9 @@ from custom_components.smart_charging.modes.base import Readings
 CONFIG = dict(cooldown_s=600, target_a=10)
 
 
-def make_readings(soc=50, limit=80):
+def make_readings(soc=50, limit=80, status="connected"):
     return Readings(
-        smoothed_net_w=0, smoothed_solar_w=0, charger_status="connected",
+        smoothed_net_w=0, smoothed_solar_w=0, charger_w=0, charger_status=status,
         ev_soc_percent=soc, active_soc_limit_percent=limit,
     )
 
@@ -1302,6 +1558,22 @@ def test_r17_stops_at_active_soc_limit():
     mode = PowerMode(now_fn=lambda: 0.0)
     assert mode.tick(make_readings(soc=80, limit=80), CONFIG) == 0
     assert mode.state == "SocReached"
+
+
+def test_r7_soc_noise_does_not_resume_charging_while_socreached():
+    mode = PowerMode(now_fn=lambda: 0.0)
+    mode.tick(make_readings(soc=80, limit=80), CONFIG)
+    assert mode.tick(make_readings(soc=79.9, limit=80), CONFIG) == 0
+    assert mode.state == "SocReached"
+    assert mode.tick(make_readings(soc=79.9, limit=85), CONFIG) == 10
+
+
+def test_precondition_disconnected_forces_zero_and_resets():
+    mode = PowerMode(now_fn=lambda: 0.0)
+    mode.tick(make_readings(), CONFIG)
+    result = mode.tick(make_readings(status="disconnected"), CONFIG)
+    assert result == 0
+    assert mode.state == "Idle"
 
 
 def test_r11_cooldown_after_coordinator_reports_a_stop():
@@ -1338,21 +1610,32 @@ class PowerMode:
         self._now = now_fn or time.monotonic
         self.state = "Idle"
         self._cooldown_started_at: float | None = None
+        self._limit_at_soc_reached: float | None = None
 
     def reset(self) -> None:
         self.state = "Idle"
         self._cooldown_started_at = None
+        self._limit_at_soc_reached = None
 
     def notify_stopped_by_clamp(self) -> None:
         self.state = "Cooldown"
         self._cooldown_started_at = self._now()
 
     def tick(self, readings: Readings, config: dict) -> float:
+        if readings.charger_status not in ("connected", "charging"):
+            self.reset()
+            return 0
+
+        if self.state == "SocReached":
+            if readings.active_soc_limit_percent != self._limit_at_soc_reached:
+                self.state = "Idle"
+            else:
+                return 0
+
         if readings.ev_soc_percent >= readings.active_soc_limit_percent:
             self.state = "SocReached"
+            self._limit_at_soc_reached = readings.active_soc_limit_percent
             return 0
-        if self.state == "SocReached":
-            self.state = "Idle"
 
         if self.state == "Cooldown":
             if self._now() - self._cooldown_started_at < config["cooldown_s"]:
@@ -1564,13 +1847,17 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_charger_status_map(self, user_input=None):
         if user_input is not None:
-            # user_input maps {raw_state: canonical_state}; invert to {raw: canonical}
+            # The form asks "what's your hardware's raw value for each canonical
+            # state?" — user_input is {canonical_state: raw_value}. EnumAdapter
+            # (Task 3) expects the opposite direction, {raw_value: canonical_state},
+            # so invert it once here at storage time.
+            charger_status_map = {raw: canonical for canonical, raw in user_input.items()}
             return self.async_create_entry(
                 title="Smart Charging",
                 data={
                     CONF_SOLAR_AVAILABLE: self._solar_available,
                     CONF_ROLE_MAPPING: self._role_mapping,
-                    CONF_CHARGER_STATUS_MAP: dict(user_input),
+                    CONF_CHARGER_STATUS_MAP: charger_status_map,
                 },
             )
         schema = vol.Schema(
@@ -1586,12 +1873,11 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return SmartChargingOptionsFlow(config_entry)
 ```
 
-Note: the test expects `result["data"]["charger_status_map"]` keyed by canonical state
-(`{"unplugged": "disconnected", ...}`) — i.e. the form asks "what's your raw value for
-`disconnected`?" and stores `{raw: canonical}` inverted from the form's own field names.
-Reconcile the exact key direction between the form schema and `EnumAdapter`'s expected
-`{raw: canonical}` shape while making this test pass — the test is the executable spec;
-adjust the implementation (not the test's intent) until `EnumAdapter` and the flow agree.
+The form's field names are the canonical states (`disconnected`/`connected`/`charging`);
+the user fills in their hardware's raw value for each (e.g. `disconnected: "unplugged"`).
+Storage inverts that to `{raw: canonical}` — the direction `EnumAdapter` (Task 3) actually
+reads — so the test's expected `{"unplugged": "disconnected", ...}` shape falls straight
+out of the inversion above rather than being reconciled by trial and error.
 
 **Step 3: Run tests, fix the mapping direction until green**
 
@@ -1678,7 +1964,7 @@ _OPTION_DEFAULTS = {
     c.CONF_SOLAR_ONLY_START_THRESHOLD_W: c.DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
     c.CONF_CAPTAR_COOLDOWN_MIN: c.DEFAULT_CAPTAR_COOLDOWN_MIN,
     c.CONF_POWER_TARGET_CURRENT_A: c.DEFAULT_POWER_TARGET_CURRENT_A,
-    c.CONF_POWER_RESPECT_PEAK: True,
+    c.CONF_POWER_RESPECT_PEAK: c.DEFAULT_POWER_RESPECT_PEAK,
     c.CONF_POWER_COOLDOWN_MIN: c.DEFAULT_POWER_COOLDOWN_MIN,
     c.CONF_ACTIVE_SOC_PERCENT: c.DEFAULT_ACTIVE_SOC_PERCENT,
 }
@@ -1730,6 +2016,22 @@ from custom_components.smart_charging.coordinator import SmartChargingCoordinato
 from custom_components.smart_charging import const as c
 
 
+def _configure_entry(mock_config_entry, missing=False):
+    suffix = "missing" if missing else "net"
+    mock_config_entry.data = {
+        c.CONF_SOLAR_AVAILABLE: False,
+        c.CONF_ROLE_MAPPING: {
+            c.Role.NET_POWER: f"sensor.{'missing' if missing else 'net'}",
+            c.Role.CHARGER_POWER: f"sensor.{'missing' if missing else 'charger_power'}",
+            c.Role.CHARGER_STATUS: f"sensor.{'missing' if missing else 'charger_status'}",
+            c.Role.EV_SOC: f"sensor.{'missing' if missing else 'ev_soc'}",
+            c.Role.CHARGER_CURRENT: f"number.{'missing' if missing else 'charger_current'}",
+            c.Role.MONTHLY_PEAK: f"sensor.{'missing' if missing else 'monthly_peak'}",
+        },
+        c.CONF_CHARGER_STATUS_MAP: {} if missing else {"connected": "connected"},
+    }
+
+
 async def test_coordinator_dispatches_to_off_when_mode_is_off(hass, mock_config_entry):
     hass.states.async_set("sensor.net", "0")
     hass.states.async_set("sensor.charger_power", "0")
@@ -1737,20 +2039,12 @@ async def test_coordinator_dispatches_to_off_when_mode_is_off(hass, mock_config_
     hass.states.async_set("sensor.ev_soc", "50")
     hass.states.async_set("number.charger_current", "0")
     hass.states.async_set("sensor.monthly_peak", "1.0")
-    mock_config_entry.data = {
-        c.CONF_SOLAR_AVAILABLE: False,
-        c.CONF_ROLE_MAPPING: {
-            c.Role.NET_POWER: "sensor.net", c.Role.CHARGER_POWER: "sensor.charger_power",
-            c.Role.CHARGER_STATUS: "sensor.charger_status", c.Role.EV_SOC: "sensor.ev_soc",
-            c.Role.CHARGER_CURRENT: "number.charger_current", c.Role.MONTHLY_PEAK: "sensor.monthly_peak",
-        },
-        c.CONF_CHARGER_STATUS_MAP: {"connected": "connected"},
-    }
+    _configure_entry(mock_config_entry)
     calls = []
     hass.services.async_register("number", "set_value", lambda call: calls.append(call.data))
 
     coordinator = SmartChargingCoordinator(hass, mock_config_entry)
-    coordinator.active_mode = "Off"
+    coordinator.set_active_mode("Off")
     await coordinator.async_refresh()
 
     assert calls[-1] == {"entity_id": "number.charger_current", "value": 0}
@@ -1759,20 +2053,61 @@ async def test_coordinator_dispatches_to_off_when_mode_is_off(hass, mock_config_
 async def test_coordinator_sets_fault_status_when_a_required_role_is_unavailable(
     hass, mock_config_entry
 ):
-    mock_config_entry.data = {
-        c.CONF_SOLAR_AVAILABLE: False,
-        c.CONF_ROLE_MAPPING: {
-            c.Role.NET_POWER: "sensor.missing", c.Role.CHARGER_POWER: "sensor.missing",
-            c.Role.CHARGER_STATUS: "sensor.missing", c.Role.EV_SOC: "sensor.missing",
-            c.Role.CHARGER_CURRENT: "number.missing", c.Role.MONTHLY_PEAK: "sensor.missing",
-        },
-        c.CONF_CHARGER_STATUS_MAP: {},
-    }
+    _configure_entry(mock_config_entry, missing=True)
     coordinator = SmartChargingCoordinator(hass, mock_config_entry)
-    coordinator.active_mode = "Off"
+    coordinator.set_active_mode("Off")
     await coordinator.async_refresh()
 
     assert coordinator.status == "Fault"
+
+
+async def test_coordinator_peak_clamp_uses_actual_charger_draw_not_the_request(
+    hass, mock_config_entry
+):
+    # Regression test for the C-2 clamp bug caught in review: Captar requests max_a (32)
+    # while the charger is currently only drawing 6A/1380W. Household load excluding the
+    # charger is 3000W, so raw net = 3000+1380 = 4380W. With a 4000W effective peak limit
+    # (monthly_peak sensor reads 4.0 kW) and a 250W safety margin, target = 3750W, so the
+    # clamp must land near (3750-3000)/230 ~= 3.26A -> held at the minimum (6A) by the
+    # grace-period tracker on this first breaching cycle, NOT left near the 32A request.
+    hass.states.async_set("sensor.net", "4380")
+    hass.states.async_set("sensor.charger_power", "1380")
+    hass.states.async_set("sensor.charger_status", "connected")
+    hass.states.async_set("sensor.ev_soc", "50")
+    hass.states.async_set("number.charger_current", "6")
+    hass.states.async_set("sensor.monthly_peak", "4.0")
+    _configure_entry(mock_config_entry)
+    calls = []
+    hass.services.async_register("number", "set_value", lambda call: calls.append(call.data))
+
+    coordinator = SmartChargingCoordinator(hass, mock_config_entry)
+    coordinator.set_active_mode("Captar")
+    await coordinator.async_refresh()
+
+    assert calls[-1] == {"entity_id": "number.charger_current", "value": 6}
+
+
+async def test_coordinator_switching_mode_resets_the_incoming_modes_state(
+    hass, mock_config_entry
+):
+    hass.states.async_set("sensor.net", "-2300")  # 2300W solar surplus, not yet charging
+    hass.states.async_set("sensor.charger_power", "0")
+    hass.states.async_set("sensor.charger_status", "connected")
+    hass.states.async_set("sensor.ev_soc", "50")
+    hass.states.async_set("number.charger_current", "0")
+    hass.states.async_set("sensor.monthly_peak", "1.0")
+    _configure_entry(mock_config_entry)
+    mock_config_entry.data[c.CONF_SOLAR_AVAILABLE] = True
+    hass.services.async_register("number", "set_value", lambda call: None)
+
+    coordinator = SmartChargingCoordinator(hass, mock_config_entry)
+    coordinator.set_active_mode("Solar")
+    await coordinator.async_refresh()  # Solar starts Charging
+    assert coordinator._modes["Solar"].state == "Charging"
+
+    coordinator.set_active_mode("Off")
+    coordinator.set_active_mode("Solar")  # R11: the incoming mode must start fresh
+    assert coordinator._modes["Solar"].state == "Idle"
 ```
 
 Run: `pytest tests/test_coordinator.py -v`
@@ -1795,7 +2130,7 @@ from . import const as c
 from .adapters import NumericAdapter, EnumAdapter
 from .control_cycle import (
     SmoothingWindow, resolve_voltage, apply_peak_clamp, apply_grid_ceiling_clamp,
-    enforce_current_invariant,
+    enforce_current_invariant, PeakBreachTracker,
 )
 from .resolution_rules import active_soc_limit, effective_peak_limit
 from .modes.base import Readings
@@ -1819,6 +2154,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.active_mode = "Off"
         self.status = "OK"
+        self._peak_breach_tracker = PeakBreachTracker()
 
         mapping = entry.data.get(c.CONF_ROLE_MAPPING, {})
         status_map = entry.data.get(c.CONF_CHARGER_STATUS_MAP, {})
@@ -1847,6 +2183,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator):
             "Captar": CaptarMode(), "Power": PowerMode(),
         }
 
+    def set_active_mode(self, mode: str) -> None:
+        """R11: switching the active mode resets the incoming mode's hold/cooldown
+        timers so it starts fresh, and resets the shared R3 breach-grace timer, which
+        is a coordinator-level (not mode-specific) invariant."""
+        self._modes[mode].reset()
+        self._peak_breach_tracker = PeakBreachTracker()
+        self.active_mode = mode
+
     async def _async_update_data(self):
         opts = self.entry.options
 
@@ -1863,11 +2207,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator):
             return None
         self.status = "OK"
 
-        # Step 2: smoothing (R10).
+        # Step 2: smoothing (R10) — net_w and solar_w only; charger_w is used raw
+        # (entity-catalog.md's note on sc_charger_power_w: "not an operand of solar
+        # surplus" via the smoothed channel).
         self._net_window.push(raw[c.Role.NET_POWER])
         self._solar_window.push(raw.get(c.Role.SOLAR_POWER) or 0)
         smoothed_net_w = self._net_window.value()
         smoothed_solar_w = self._solar_window.value()
+        raw_charger_w = raw[c.Role.CHARGER_POWER]
 
         # Step 3: voltage resolution (NF4).
         voltage = resolve_voltage(
@@ -1878,38 +2225,44 @@ class SmartChargingCoordinator(DataUpdateCoordinator):
         limit = active_soc_limit(opts.get(c.CONF_ACTIVE_SOC_PERCENT, c.DEFAULT_ACTIVE_SOC_PERCENT))
         readings = Readings(
             smoothed_net_w=smoothed_net_w, smoothed_solar_w=smoothed_solar_w,
-            charger_status=raw[c.Role.CHARGER_STATUS], ev_soc_percent=raw[c.Role.EV_SOC],
-            active_soc_limit_percent=limit,
+            charger_w=raw_charger_w, charger_status=raw[c.Role.CHARGER_STATUS],
+            ev_soc_percent=raw[c.Role.EV_SOC], active_soc_limit_percent=limit,
         )
         mode = self._modes[self.active_mode]
+        min_a = opts.get(c.CONF_MIN_CURRENT_A, c.DEFAULT_MIN_CURRENT_A)
+        max_a = opts.get(c.CONF_MAX_CURRENT_A, c.DEFAULT_MAX_CURRENT_A)
         mode_config = self._mode_config(opts, voltage)
         desired_a = mode.tick(readings, mode_config)
 
         # Step 5: peak-protection clamp (R3) — skipped only for Power with peak disabled.
+        # A clamp result below the minimum holds at the minimum until the configured
+        # grace period elapses (PeakBreachTracker), per "a momentary breach does not
+        # stop charging" — only a *sustained* breach at the minimum stops and starts
+        # the active mode's cooldown via notify_stopped_by_clamp().
         skip_peak = self.active_mode == "Power" and not opts.get(c.CONF_POWER_RESPECT_PEAK, True)
         if not skip_peak:
             limit_w = effective_peak_limit(
                 raw[c.Role.MONTHLY_PEAK] * 1000, opts.get(c.CONF_MAX_PEAK_KW, c.DEFAULT_MAX_PEAK_KW) * 1000
             )
-            desired_a = apply_peak_clamp(
-                desired_a, raw[c.Role.NET_POWER], limit_w,
-                opts.get(c.CONF_SAFETY_MARGIN_W, c.DEFAULT_SAFETY_MARGIN_W), voltage,
-                opts.get(c.CONF_MIN_CURRENT_A, c.DEFAULT_MIN_CURRENT_A),
-                opts.get(c.CONF_MAX_CURRENT_A, c.DEFAULT_MAX_CURRENT_A),
+            clamped_a = apply_peak_clamp(
+                desired_a, raw[c.Role.NET_POWER], raw_charger_w, limit_w,
+                opts.get(c.CONF_SAFETY_MARGIN_W, c.DEFAULT_SAFETY_MARGIN_W), voltage, min_a, max_a,
             )
+            grace_s = opts.get(c.CONF_PEAK_GRACE_MIN, c.DEFAULT_PEAK_GRACE_MIN) * 60
+            desired_a, stopped = self._peak_breach_tracker.evaluate(clamped_a, min_a, grace_s)
+            if stopped:
+                mode.notify_stopped_by_clamp()
 
-        # Step 6: grid-supply-ceiling clamp (C4) — always applies.
+        # Step 6: grid-supply-ceiling clamp (C4) — always applies, no grace period; a C4
+        # breach clamps down immediately without starting a cooldown (UC03/UC04).
         desired_a = apply_grid_ceiling_clamp(
-            desired_a, raw[c.Role.NET_POWER],
+            desired_a, raw[c.Role.NET_POWER], raw_charger_w,
             opts.get(c.CONF_GRID_SUPPLY_CEILING_A, c.DEFAULT_GRID_SUPPLY_CEILING_A),
             opts.get(c.CONF_GRID_SAFETY_OFFSET_A, c.DEFAULT_GRID_SAFETY_OFFSET_A), voltage,
         )
 
         # Step 7: invariants (C1). R11 cooldown/hold state lives inside each mode module.
-        final_a = enforce_current_invariant(
-            desired_a, opts.get(c.CONF_MIN_CURRENT_A, c.DEFAULT_MIN_CURRENT_A),
-            opts.get(c.CONF_MAX_CURRENT_A, c.DEFAULT_MAX_CURRENT_A),
-        )
+        final_a = enforce_current_invariant(desired_a, min_a, max_a)
 
         # Step 8: set the charger current.
         await self._adapters[c.Role.CHARGER_CURRENT].write(final_a)
@@ -1927,10 +2280,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator):
         }
 ```
 
-Note: this task's two tests are a minimal smoke test of the wiring, not full coverage of
-every mode/clamp interaction — Tasks 6–10 already cover each mode/clamp in isolation.
-Adjust field names/shapes above as needed to make the tests pass; the point of this task
-is the wiring being correct, not re-deriving the modes' internal logic.
+Note: Captar and Power each have their own `cooldown_s` option
+(`captar_cooldown_min`/`power_cooldown_min`) distinct from the solar modes' shared one —
+`_mode_config` above only wires the solar cooldown for brevity; when implementing, select
+the right cooldown option by `self.active_mode` (or pass all three and let each mode read
+its own key) so Captar/Power don't end up running the solar cooldown by mistake.
+
+These tests are a minimal smoke test of the wiring, not full coverage of every mode/clamp
+interaction — Tasks 6–10 already cover each mode/clamp in isolation, and the C-2 regression
+test above specifically guards against a real bug caught in review (an earlier draft's
+clamp math used the *requested* current as the baseline instead of the current actually
+flowing, which under-clamped Captar/Power and could breach the peak).
 
 **Step 3: Run tests, iterate**
 
@@ -2065,7 +2425,7 @@ class SmartChargingModeSelect(SmartChargingEntity, SelectEntity):
         self._attr_current_option = coordinator.active_mode
 
     async def async_select_option(self, option: str) -> None:
-        self.coordinator.active_mode = option
+        self.coordinator.set_active_mode(option)  # R11: resets the incoming mode's timers
         self._attr_current_option = option
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
