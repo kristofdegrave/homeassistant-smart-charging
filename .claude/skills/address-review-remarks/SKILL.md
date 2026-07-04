@@ -1,6 +1,6 @@
 ---
 name: address-review-remarks
-description: Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI.
+description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
 ---
 
 # Address review remarks
