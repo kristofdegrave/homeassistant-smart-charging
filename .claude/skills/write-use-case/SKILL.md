@@ -11,6 +11,10 @@ reference the shared mechanism docs rather than restating them.
 
 ## The cycle (do every step, in order)
 
+0. **Open (or link) a GitHub issue** describing the intent and scope — a new use-case, or a
+   behavioral change to an existing one (a change to acceptance criteria, a state model, or a
+   set-point rule). Skip this step only for typo-level or pure-wording edits that don't change
+   behavior. Reference the issue in the eventual commit/PR (`Closes #N`).
 1. **Draft** against the template below.
 2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness.
    Confirm **every domain term is already in the `system-overview.md` glossary**; if not, add it to
@@ -19,7 +23,7 @@ reference the shared mechanism docs rather than restating them.
    entity's *Read by* and/or *Written by* column. This is the last content step before review.
 4. **Review** — launch the `analysis-reviewer` agent (fresh, separate Opus; never review inline).
 5. **Address** the feedback.
-6. **Commit** with `docs: review and refine UCnn-<slug>`.
+6. **Commit** with `docs: review and refine UCnn-<slug>`, referencing the issue from step 0.
 7. **Stop and report** status before starting the next document.
 
 ## Template (section order)

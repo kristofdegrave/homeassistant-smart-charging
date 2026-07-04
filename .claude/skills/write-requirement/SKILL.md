@@ -10,6 +10,10 @@ Charging analysis layer. Every requirement describes **what** the system must do
 
 ## The cycle (do every step, in order)
 
+0. **Open (or link) a GitHub issue** describing the intent and scope — a new requirement, or a
+   behavioral change to an existing one's acceptance criteria. Skip this step only for typo-level
+   or pure-wording edits that don't change behavior. Reference the issue in the eventual
+   commit/PR (`Closes #N`).
 1. **Draft** the requirement in `requirements.md` (or the constraint row / glossary term).
 2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness.
    Confirm **every domain term is already in the `system-overview.md` glossary**; if not, add it
@@ -19,7 +23,8 @@ Charging analysis layer. Every requirement describes **what** the system must do
    with defaults matching the requirement) so the whole analysis layer stays consistent.
 4. **Review** — launch the `analysis-reviewer` agent (fresh, separate Opus; never review inline).
 5. **Address** the feedback.
-6. **Commit** (`docs: <concise description>`, or `docs: review and refine <file>` for a doc pass).
+6. **Commit** (`docs: <concise description>`, or `docs: review and refine <file>` for a doc pass),
+   referencing the issue from step 0.
 7. **Stop and report** before the next document.
 
 ## Requirement format

@@ -71,6 +71,7 @@ Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
 
 Every **new** analysis document — and every **change** to an existing one (`docs/analysis/**`) — must go through this cycle before it is committed:
 
+0. **Open (or link) a GitHub issue** describing the intent and scope, before drafting — required for a new document or any change that affects a requirement's acceptance criteria, a use-case's behavior, or a state model. Skip this step only for typo-level or pure-wording edits that don't change behavior. Reference the issue in the eventual commit/PR (`Closes #N`).
 1. **Draft** against the applicable template.
 2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness. Confirm every domain term used already exists in the `system-overview.md` glossary; if not, **add it to the glossary first**.
 3. **Fresh-agent review** — always spin up a dedicated, separate **Opus** agent for the review; **never review inline** in the main session. The review checks:
