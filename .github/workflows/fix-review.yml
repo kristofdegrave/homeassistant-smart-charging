@@ -50,28 +50,14 @@ jobs:
             The fresh-agent review of pull request #${{ github.event.pull_request.number }} found
             remarks that must be addressed. This branch is already checked out at the PR head.
 
-            1. Run `gh pr view ${{ github.event.pull_request.number }} --comments` and find the
-               MOST RECENT comment containing `ai-review-verdict: remarks` — that is the review
-               to address. Ignore older review comments except as context.
-            2. Fix every Critical and Major finding in the files under docs/analysis/, following
-               CLAUDE.md and the `write-use-case` skill. Also fix Minor/Nit findings when the
-               change is trivial and local.
-            3. Keep cross-document consistency: if a fix introduces a domain term, add it to the
-               system-overview.md glossary; keep entity-catalog.md Read by / Written by columns
-               accurate; reference — do not restate — control-cycle.md and resolution-rules.md.
-            4. If you disagree with a finding, leave the document unchanged for that finding —
-               you will explain why in the summary comment below.
-            5. When done, post exactly ONE PR comment via
-               `gh pr comment ${{ github.event.pull_request.number }} --body "<markdown>"`
-               summarizing what you did: start the body with `<!-- ai-fix-summary -->`, then for
-               each finding of the review say whether it was **Fixed** (what changed, with file
-               references), **Skipped** (and why you disagree), or **Partially fixed**. Keep it
-               short — one bullet or table row per finding.
-               CRITICAL: the comment must NOT contain the text "ai-review-verdict" anywhere (not
-               even quoted) — the workflows route and count fix cycles by searching comment
-               bodies for that marker, and a summary containing it would be miscounted as a
-               review and break the cycle limit.
-            6. Do NOT commit or push — the workflow does that in the next step.
+            Follow the `address-review-remarks` skill in .claude/skills/ — it defines how to
+            locate the review, the fix policy, and the exact summary-comment contract
+            (including the marker rules). When fixing a use-case document, it directs you to
+            apply the `write-use-case` skill in full — the same authoring context the draft
+            was written with. CI specifics:
+            - The PR number is ${{ github.event.pull_request.number }}.
+            - You are running in CI: do NOT commit or push — the workflow does that in the
+              next step.
           # NOTE: claude_args is tokenized shell-style, so the --allowed-tools value MUST be
           # quoted — unquoted spaces inside Bash(...) patterns split the list into garbage
           # tokens and every Bash call gets denied.

@@ -24,6 +24,8 @@ reference the shared mechanism docs rather than restating them.
 
 ## Template (section order)
 
+Full template with rationale: `docs/plans/2026-06-25-use-cases-design.md`.
+
 `# UCnn — <goal as active verb phrase>` then:
 Primary actor · Stakeholders & interests · Scope/level · **Preconditions** (testable state, not
 actions) · **Trigger** · **Main success scenario** (Given/When/Then) · **Alternate flows** (numbered
