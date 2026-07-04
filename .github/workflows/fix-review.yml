@@ -51,8 +51,10 @@ jobs:
             remarks that must be addressed. This branch is already checked out at the PR head.
 
             Follow the `address-review-remarks` skill in .claude/skills/ — it defines how to
-            locate the review, the fix policy, cross-document consistency rules, and the exact
-            summary-comment contract (including the marker rules). CI specifics:
+            locate the review, the fix policy, and the exact summary-comment contract
+            (including the marker rules). When fixing a use-case document, it directs you to
+            apply the `write-use-case` skill in full — the same authoring context the draft
+            was written with. CI specifics:
             - The PR number is ${{ github.event.pull_request.number }}.
             - You are running in CI: do NOT commit or push — the workflow does that in the
               next step.

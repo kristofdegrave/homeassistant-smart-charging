@@ -23,13 +23,16 @@ source of truth — the CI workflow (`fix-review.yml`) and local runs both follo
 - If you disagree with a finding, leave the document unchanged for that finding and record why —
   it becomes a **Skipped** entry in the summary. Never half-apply a fix you think is wrong.
 
-## 3. Keep cross-document consistency
+## 3. Fix with the author's context
 
-The same rules as the `write-use-case` skill:
+Fixing is re-authoring — work with the same context the original author had:
 
-- A fix that introduces a domain term → add it to the `system-overview.md` glossary first.
-- Keep `entity-catalog.md` *Read by* / *Written by* columns accurate for every entity touched.
-- Reference — do not restate — `control-cycle.md` and `resolution-rules.md`.
+- **For a use-case (`UCnn-*.md`): apply the `write-use-case` skill in full** — its template,
+  rules (glossary-first, entity-catalog columns, reference-don't-restate, state models for
+  mode UCs), and common-mistakes list define what a correct fix looks like. Those rules are
+  deliberately not restated here.
+- For other analysis docs: follow the flow document standard and review protocol in CLAUDE.md.
+- Run the skill's 6Cs self-check on the sections you changed before writing the summary.
 
 ## 4. Summary (one per run, finding-by-finding)
 
