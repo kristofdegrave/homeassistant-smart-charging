@@ -2,9 +2,11 @@ name: Fix review remarks
 
 # Triggered only when the `ai-fix` label is added to a PR — by review-analysis.yml (via
 # WORKFLOW_PAT, after a "remarks" verdict, max 3 automatic cycles) or by the maintainer
-# manually. Claude addresses the latest review comment's findings, the workflow pushes the
-# fixes to the PR branch, then hands back to review by re-adding `ai-review` (via PAT, so
-# the labeled event actually triggers review-analysis.yml).
+# manually. Claude addresses the latest AI review's findings AND any submitted human review
+# comments not yet acknowledged with an `ai-fix-ack` thread reply (see the
+# address-review-remarks skill), the workflow pushes the fixes to the PR branch, then hands
+# back to review by re-adding `ai-review` (via PAT, so the labeled event actually triggers
+# review-analysis.yml).
 #
 # Guards mirror generate-uc.yml: exact label + actor allow-list (PAT-added labels count as
 # the PAT owner) + same-repo head branch only (never check out fork code with write perms).
@@ -47,8 +49,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # The action auto-loads CLAUDE.md, .claude/skills/, and .claude/agents/.
           prompt: |
-            The fresh-agent review of pull request #${{ github.event.pull_request.number }} found
-            remarks that must be addressed. This branch is already checked out at the PR head.
+            A review of pull request #${{ github.event.pull_request.number }} left remarks that
+            must be addressed — an AI review verdict, human review comments, or both. This
+            branch is already checked out at the PR head.
 
             Follow the `address-review-remarks` skill in .claude/skills/ — it defines how to
             locate the review, the fix policy, and the exact summary-comment contract
@@ -65,9 +68,11 @@ jobs:
           # analysis docs, edits multiple files, and posts a summary — 20 was hit mid-work.
           # Read-only git commands included so inspecting its own edits doesn't burn turns
           # on permission denials.
+          # gh api: the skill reads inline review threads (pulls/N/comments) and posts the
+          # `ai-fix-ack` thread replies with it — capped by the workflow token's permissions.
           claude_args: >-
             --model opus --max-turns 50
-            --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
+            --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
 
       - name: Commit and push fixes
         run: |
