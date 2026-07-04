@@ -64,22 +64,12 @@ jobs:
           prompt: |
             Review the analysis-document changes in pull request #${{ github.event.pull_request.number }}.
             Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis`
-            to see the changed files, then read the ones that changed plus, as needed,
-            system-overview.md (glossary + `sc_` naming), requirements.md (requirement IDs),
-            control-cycle.md, resolution-rules.md, and entity-catalog.md.
+            to see the changed files.
 
-            Check, in one pass:
-            1. Cross-document consistency — every domain term is defined in the system-overview.md
-               glossary (flag any that isn't); every requirement ID exists and is used correctly;
-               entity ids match entity-catalog.md; relationships to other docs are accurate.
-            2. Requirement coverage — the doc satisfies the requirement(s) it claims; nothing
-               contradicts another analysis doc; no requirement is mis-homed.
-            3. Quality — "what, not how" (no code/HA implementation detail); it references, and does
-               not restate, control-cycle.md / resolution-rules.md; for a use-case: testable
-               pre/postconditions, Given/When/Then, alternate flows numbered to the step they branch
-               from, and entity-catalog Read by / Written by updated for entities it touches; for a
-               mode use-case (UC01–UC04): a stateDiagram-v2 whose states/transitions match the
-               scenarios; domain events are past-tense PascalCase.
+            Then apply the full review checklist in .claude/agents/analysis-reviewer.md — it is
+            the single source of truth for what to read first and what to check (cross-document
+            consistency, requirement coverage, document quality). You are already a fresh session,
+            which is the independence that agent definition exists to provide.
 
             Post exactly ONE PR comment via
             `gh pr comment ${{ github.event.pull_request.number }} --body "<markdown>"`,

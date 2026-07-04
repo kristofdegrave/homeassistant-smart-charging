@@ -54,16 +54,14 @@ jobs:
             Issue body:
             ${{ github.event.issue.body }}
 
-            Do the following, using the `write-use-case` skill in .claude/skills/ and the project
-            conventions in CLAUDE.md:
-            1. Draft the use-case at the file slug given in the issue
-               (docs/analysis/use-cases/UCnn-<slug>.md), following the template in
-               docs/plans/2026-06-25-use-cases-design.md.
-            2. Confirm every domain term is already in system-overview.md's glossary; if a term is
-               missing, add it to the glossary first.
-            3. Reference — do not restate — control-cycle.md and resolution-rules.md.
-            4. Update entity-catalog.md's Read by / Written by columns for every entity touched.
-            5. Do NOT commit or open a PR yourself — the workflow does that in the next step.
+            Draft the use-case at the file slug given in the issue
+            (docs/analysis/use-cases/UCnn-<slug>.md) by following the `write-use-case` skill in
+            .claude/skills/ and the project conventions in CLAUDE.md. CI overrides to the skill's
+            cycle:
+            - Do the content steps only (draft, 6Cs self-check, glossary, entity-catalog update).
+            - Skip the skill's review, commit, and stop-and-report steps — the workflow opens the
+              PR and the `ai-review` label runs the fresh review.
+            - Do NOT commit or open a PR yourself — the workflow does that in the next step.
           claude_args: "--model opus --max-turns 15 --allowed-tools Read,Write,Edit,Glob,Grep"
 
       - name: Open pull request
