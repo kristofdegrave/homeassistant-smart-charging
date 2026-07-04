@@ -46,7 +46,7 @@ Then the coordinator reduces the charger current — or, on a sustained R3 breac
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Power` mode
-When state of charge reaches the active SOC limit — whether the plain default, a stepped-up value, or a value `Auto` has lowered via the solar-reserve cap (R9); `Power` is Manual-only (see Relationships) so a step-up cannot itself be in effect, but a prior one may not yet have been cleared
+When state of charge reaches the active SOC limit — the plain default, or a leftover solar step-up or solar-reserve cap (R9) from before `Power` was selected (`Power` is Manual-only, see Relationships, so it cannot itself put either in effect)
 Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
 
 ## Postconditions
@@ -102,10 +102,11 @@ stateDiagram-v2
         sc_power_respect_peak on (default): R3 peak
         clamp fits it (raw) to the peak headroom —
         net import ≤ effective peak limit − safety
-        margin. Off: R3 skipped, only C4 applies.
-        Floor = minimum current, cap = maximum
-        current (C1) either way. Tariff- and
-        solar-independent.
+        margin. sc_power_respect_peak off: R3 is
+        skipped entirely, only the C4 grid-ceiling
+        clamp applies. Floor = minimum current,
+        cap = maximum current (C1) either way.
+        Tariff- and solar-independent.
     end note
 ```
 
@@ -113,7 +114,7 @@ stateDiagram-v2
 
 - **R17** — Power mode (charges at the maximum charging current regardless of solar surplus or the low-tariff flag; the configurable peak-protection option; C1 bounds always hold; the active SOC limit still applies).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07, though `Power` itself is Manual-only), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), and voltage-aware conversion (NF4). R10 sensor smoothing does not shape `Power`'s own set-point rule (it always requests the maximum current, unaffected by smoothed readings), but still governs the raw/smoothed split the R3 clamp relies on.
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07, though `Power` itself is Manual-only), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), and voltage-aware conversion (NF4). R10 sensor smoothing does not shape `Power`'s own set-point rule (it always requests the maximum current, unaffected by smoothed readings), but still governs the raw/smoothed split the R3 clamp relies on. `Power`'s availability regardless of the solar capability (R18, Preconditions) is realized in `entity-catalog.md`'s `sc_active_mode` selector note, not in a mode-specific mechanism doc.
 
 ## Relationships
 
