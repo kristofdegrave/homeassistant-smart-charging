@@ -11,19 +11,27 @@ source of truth — the CI workflow (`fix-review.yml`) and local runs both follo
 
 ## 1. Locate the findings
 
-Findings come from two sources — always gather **both**:
+How you gather findings depends on what you're working against:
 
-- **AI review** — if the caller did not hand you the review text: run `gh pr view <pr> --comments`
-  and take the **most recent** comment containing `ai-review-verdict: remarks` (there may be
-  none). Older review comments are context only.
-- **Human review comments** — run
-  `gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate` and keep every comment that
-  is authored by a human (login does not end in `[bot]`) **and** has no reply in its thread
-  (a comment whose `in_reply_to_id` points to it) containing `ai-fix-ack` — such a reply means
-  an earlier run already handled it. Also check
-  `gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"` for non-empty human review bodies not yet
-  acknowledged in a summary. Treat every human comment as a finding of at least **Major**
-  severity — human input is never skipped silently.
+- **Findings already in hand** — if the caller handed you review text or a findings list
+  directly (e.g. piped from `/code-review`, pasted, or a prior `analysis-reviewer` report),
+  use it as-is. Skip the GitHub lookups below entirely.
+- **A PR exists** — gather **both** of the following:
+  - **AI review** — if the caller did not hand you the review text: run
+    `gh pr view <pr> --comments` and take the **most recent** comment containing
+    `ai-review-verdict: remarks` (there may be none). Older review comments are context only.
+  - **Human review comments** — run
+    `gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate` and keep every comment that
+    is authored by a human (login does not end in `[bot]`) **and** has no reply in its thread
+    (a comment whose `in_reply_to_id` points to it) containing `ai-fix-ack` — such a reply means
+    an earlier run already handled it. Also check
+    `gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"` for non-empty human review bodies not yet
+    acknowledged in a summary. Treat every human comment as a finding of at least **Major**
+    severity — human input is never skipped silently.
+- **No PR** (reviewing an uncommitted local draft) — there's no review thread to read, so
+  produce the findings yourself: run the `analysis-reviewer` agent against the draft, per the
+  fresh-agent review step in CLAUDE.md's review protocol. Its report is the finding set for
+  the rest of this skill; the "human review comments" step above does not apply.
 
 If neither source yields an unaddressed finding, post the summary (section 5) saying so and
 stop — do not invent work.
