@@ -65,7 +65,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | `input_number.sc_nominal_voltage_v` | config | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
 | `sensor.sc_grid_voltage_v` | sensor | V | grid voltage sensor | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
 | `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02 | — |
-| `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules, UC03 | — |
+| `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal (optional; treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
 ### Charger
 

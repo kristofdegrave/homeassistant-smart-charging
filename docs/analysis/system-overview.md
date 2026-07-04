@@ -47,7 +47,7 @@ The smart charging system must charge the car at the lowest possible cost while 
 
 1. **Maximise solar self-consumption** — solar is always the cheapest source and is used before any grid power.
 2. **Keep the monthly peak (CapTar) under control** — avoid raising the billed peak demand through unnecessary charging spikes.
-3. **Charge cost-efficiently from the grid** — when grid power is needed, prefer low-tariff periods (when the low-tariff flag is active) over high-tariff periods.
+3. **Prefer low-tariff timing when the system opportunistically tops up from the grid** — under the `Auto` profile, the system times its own overnight top-up charging to low-tariff periods (when the low-tariff flag is active) over high-tariff periods; a manually selected `Captar` session is the user's own timing choice and charges regardless of tariff (R4), and the deadline-urgency escalation (goal 4) charges regardless of tariff by design.
 4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting high-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
 
 These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee. That guarantee is itself bounded by the effective peak limit — during urgency the limit rises to the configured maximum peak, and charging current escalates up to it (less the safety margin) but never beyond. Its strength is therefore configurable: the maximum peak sets how aggressively the system may chase the deadline, trading CapTar cost against deadline confidence.
@@ -116,7 +116,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`solar step-up`** — The mechanism that raises the active SOC limit by a configurable step (default 5 percentage points, up to `sc_max_solar_soc`) when solar charging is active and SOC comes within a configurable threshold (default 2 %) of the current limit, so abundant solar is stored rather than exported. Unit: percentage points (pp).
 
-**`low-tariff flag`** — A configurable boolean signal the installation provides, indicating that grid energy is currently at the low tariff; used instead of a hard-coded schedule, which keeps the system tariff-agnostic. CapTar-mode grid charging is permitted only while this flag is active.
+**`low-tariff flag`** — An optional, configurable boolean signal the installation provides, indicating that grid energy is currently at the low tariff; used instead of a hard-coded schedule, which keeps the system tariff-agnostic. On a single-tariff installation the signal is omitted and the flag is treated as always active. Consumed by the `Auto` profile's mode selection (R16) to time when it opportunistically runs `Captar` for cost-efficient overnight grid top-up; `Captar` mode itself does not read this flag (R4).
 
 **`urgency`** — Deadline urgency; the condition where the car cannot reach its active SOC limit by the configured departure time at the current charger output, triggering an escalation of charging current (accepting high tariff if needed) up to — but not beyond — the effective peak limit, which itself rises to the maximum peak during urgency. See R5.
 
@@ -148,7 +148,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`home-day flag`** — A boolean flag indicating the car will be home during the next day's daylight hours (e.g. a work-from-home day, weekend, or holiday), so it could absorb solar then. While set it enables the solar-reserve cap. Read via an `sc_` helper and reset each day; its source is configurable — set by the evening prompt (R13) or by an external source such as a calendar or presence sensor.
 
-**`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) applied while the sun is down when the home-day flag is set and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar; low-tariff grid charging is suppressed while the cap is active.
+**`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) applied while the sun is down when the home-day flag is set and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar; grid charging (regardless of tariff) is suppressed while the cap is active.
 
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 

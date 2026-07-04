@@ -95,7 +95,7 @@ escalation and revert happen automatically.
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
 | 2 | Deadline urgency is in effect: the car would miss the active SOC limit by the departure deadline at the current charger output (R5) | `Captar` (carries the R5 override — high tariff and the raised peak limit) |
 | 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
-| 4 | The sun is down, the low-tariff flag is active, and the solar-reserve cap is not suppressing grid charging (R9) | `Captar` (cost-efficient overnight grid top-up) |
+| 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and the solar-reserve cap is not suppressing grid charging (R9) | `Captar` (cost-efficient overnight grid top-up — the tariff preference belongs to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
 
 - **Row 1 compares against the *resolved* active SOC limit.** During a solar session the solar
@@ -108,8 +108,8 @@ escalation and revert happen automatically.
 - **Revert:** when row 2 stops holding, the next cycle falls through to row 3 or 4, returning to
   a solar mode (or `Off`) once grid charging for the deadline is no longer required (R16).
 - **Suppression:** while the solar-reserve cap is active (R9), row 4 does not match, so Auto
-  does not start low-tariff grid charging overnight; row 2 (urgency) can still escalate up to
-  the cap.
+  does not start baseline grid charging overnight (regardless of tariff); row 2 (urgency) can
+  still escalate up to the cap.
 - **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
   matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
   available regardless of capabilities.

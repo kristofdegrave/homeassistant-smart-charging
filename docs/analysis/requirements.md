@@ -52,17 +52,19 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ---
 
-### R4 — Cost-efficient grid charging
+### R4 — Captar mode grid charging
 
 **Priority:** Must
-**What:** When `Captar` mode is active and grid power is needed to charge, the system's baseline policy charges only while the low-tariff flag is active. Deadline urgency can supersede this policy (see R5).
+**What:** When `Captar` mode is active, the system charges the car from the grid up to the effective peak limit whenever the car is connected below the active SOC limit — charging as fast as the grid safely allows, independent of tariff. Preferring low-tariff timing is the concern of the `Auto` profile's mode selection (R16), not of `Captar` mode itself; deadline urgency can supersede this behaviour (see R5). Unlike `Power` mode (R17), which may also ignore tariff and charge at maximum current, `Captar` always defers to solar surplus first and never breaches the CapTar peak limit (R3) — `Power` may optionally do both.
 
 **Acceptance criteria:**
 
-- [ ] Grid charging only occurs when no solar surplus is available to cover the session.
-- [ ] While the low-tariff flag is active, grid charging is permitted up to the effective peak limit minus the safety margin.
-- [ ] While the low-tariff flag is inactive, the baseline policy does not charge from the grid.
-- [ ] When no baseline condition permits charging, the charger defaults to 0 A; the only departure from this is the R5 deadline override.
+- [ ] While `Captar` mode is active, the car is connected below the active SOC limit, no `Captar` cooldown is in effect, and the solar-reserve cap is not suppressing grid charging (R9), grid charging is permitted up to the effective peak limit minus the safety margin.
+- [ ] `Captar` mode's charging behaviour (whether it charges, the set-point, the clamps, the cooldown) does not depend on the low-tariff flag — the mode charges the same way regardless of tariff.
+- [ ] Any solar surplus is netted off first and self-consumed; the grid supplies only the remainder needed to reach the requested current.
+- [ ] Unlike `Power` mode, `Captar` never disables the CapTar peak-protection clamp (R3) — net import always stays at or below the effective peak limit minus the safety margin.
+- [ ] While the solar-reserve cap is suppressing grid charging (R9), the charger stays at 0 A, unless a departure deadline (R5) overrides the suppression.
+- [ ] When no condition above permits charging, the charger defaults to 0 A.
 
 ---
 
@@ -135,7 +137,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 - [ ] The cap activates only when the home-day flag is set for tomorrow — sourced from the evening prompt (R13) or any configured external source such as a calendar sensor (NF3) — and the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh).
 - [ ] While active, the overnight active SOC limit is capped at a configurable value (default 60%) while the sun is down.
-- [ ] Low-tariff grid charging is suppressed while the cap is active.
+- [ ] Grid charging (regardless of tariff) is suppressed while the cap is active.
 - [ ] A departure deadline (R5) may charge up to the cap but never beyond it.
 - [ ] When the sun comes up, the cap lifts and normal solar charging resumes.
 
@@ -237,6 +239,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The active profile is selected via a single profile selector; the built-in profiles are `Manual` and `Auto`. A profile sets the active mode and is not itself a mode.
 - [ ] Under `Manual`, the system makes no automatic mode changes — the active mode is whatever the user or an external source sets (NF1).
 - [ ] Under `Auto`, the system sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, SOC, departure deadline, home-day flag).
+- [ ] Under `Auto`, `Captar` is selected for cost-efficient overnight grid top-up only while the low-tariff flag is active (Auto mode-selection row 4, `resolution-rules.md`); the low-tariff preference belongs to this selection, not to `Captar` mode itself (R4) — a manually selected `Captar` session charges regardless of tariff.
 - [ ] Under `Auto`, a mode that is unavailable given the installation's capabilities (R18) is never selected.
 - [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required.
 - [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
