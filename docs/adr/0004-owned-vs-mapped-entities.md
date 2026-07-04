@@ -57,6 +57,21 @@ ahead of that reword landing. This ADR's owned-entity side (Option B's second po
 is not blocked by #29 either way, since issue #29 explicitly proposes keeping owned
 entities as real HA entities.
 
+**Separate, additional conflict with `entity-catalog.md` (not covered by issue #29).**
+Several of this ADR's owned entities already have catalog rows under different HA
+domains: `input_select.sc_active_profile`, `input_select.sc_active_mode`,
+`input_number.sc_active_soc`, and `input_datetime.sc_departure_<dow>`/`_holiday`/
+`_home_day` are catalogued today as **`input_*` helper entities**, whereas this ADR makes
+them **native platform entities** (`select.smart_charging_profile`,
+`select.smart_charging_mode`, `number.smart_charging_soc_limit_override`,
+`time.smart_charging_departure_*`) owned and created by the integration itself. That is a
+bigger change than the `sc_` → `smart_charging_` prefix noted in Consequences — it swaps
+the entity domain and creation mechanism (user-configured helper vs. integration-owned
+platform entity). The WFH switch and plug-in-reminder binary_sensor, by contrast, are
+genuinely new — `entity-catalog.md` has no row for either today. Both kinds of change need
+`entity-catalog.md` updated to match (renaming/redomaining the existing rows, and adding
+the two new ones); tracked as follow-up in Consequences.
+
 ## Considered options
 
 ### Option A — Single unified entity registry/namespace (integration treats mapped and
@@ -97,7 +112,8 @@ Option B. Two distinct entity populations:
 
 1. **Mapped hardware entities** — the user's existing charger/EV/solar/grid entities,
    referenced by `entity_id`, never modified or renamed by this integration. (Read/write
-   access to these goes through the adapter layer — ADR-0003.)
+   access to these goes through the adapter layer — ADR-0003, once accepted; see the
+   Context note above if it is not yet accepted.)
 2. **Owned control/diagnostic entities** — new entities created by `smart_charging`,
    grouped under one HA device (e.g. "Smart Charging"):
    - `select.smart_charging_profile` (Manual / Auto)
@@ -146,7 +162,11 @@ custom storage is needed for them.
   write-requirement flow, before the mapped-entity side of this ADR is implemented against
   real hardware — it is not blocked on ADR-0003 specifically, but on that requirements
   reword.
-- Owned entities use the `smart_charging_` prefix (matching the domain slug from
-  ADR-0002), not the glossary's older `sc_` prefix — a naming-convention shift that
-  `entity-catalog.md` will also need to reconcile once issue #29's reword lands, since the
-  catalog's rows currently assume `sc_`-prefixed ids throughout.
+- Follow-up: `entity-catalog.md` needs a second, separate update (via the standard
+  write-requirement flow, tracked either as part of issue #29 or a new issue) to reconcile
+  its existing owned-entity rows with this ADR — `input_select.sc_active_profile`,
+  `input_select.sc_active_mode`, `input_number.sc_active_soc`, and
+  `input_datetime.sc_departure_*` move from user-configured `input_*` helpers to native
+  platform entities (`select`/`number`/`time`) owned and created by the integration under
+  the `smart_charging_` prefix; the WFH switch and plug-in-reminder binary_sensor are
+  added as entirely new rows, since the catalog has none today.
