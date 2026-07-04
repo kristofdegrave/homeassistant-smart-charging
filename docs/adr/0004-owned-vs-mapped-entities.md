@@ -41,6 +41,22 @@ by the time this ADR lands, the relationship still holds in prose: the adapter l
 the only code path this integration uses to touch mapped entities; owned entities never go
 through it, since the integration has direct authority over its own.
 
+**Known conflict, tracked in [issue #29](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/29).**
+`requirements.md` (NF3) and `entity-catalog.md` currently read literally — every mapped
+hardware value is read from a concrete `sc_`-prefixed **wrapper entity**, and raw upstream
+entities are "never catalog rows." This ADR's mapped-entity side (Option B, referenced
+directly by `entity_id`, no wrapper entity) conflicts with that literal wording, for the
+same reason Decision 2 of the design doc does. Issue #29 already proposes the resolution
+this ADR assumes: reword NF3/`entity-catalog.md` to describe the wrapper as a code-level
+adapter abstraction for *mapped* entities, while keeping this ADR's owned control/
+diagnostic entities as real HA entities — which is exactly what issue #29 asks to
+preserve. Until #29's reword lands via the standard write-requirement flow, NF3 and
+`entity-catalog.md` remain the authoritative source of truth per this project's
+methodology, and this ADR's mapped-entity side should not be treated as implementable
+ahead of that reword landing. This ADR's owned-entity side (Option B's second population)
+is not blocked by #29 either way, since issue #29 explicitly proposes keeping owned
+entities as real HA entities.
+
 ## Considered options
 
 ### Option A — Single unified entity registry/namespace (integration treats mapped and
@@ -124,3 +140,13 @@ custom storage is needed for them.
   (R5–R13, per ADR-0002's Context) are implemented; this ADR records the split, not the
   final entity inventory — new owned entities don't need a new ADR unless they change the
   two-population boundary itself.
+- Follow-up: issue #29 (reword NF3 and `entity-catalog.md` to describe mapped-entity
+  access as a code-level adapter abstraction, not a literal wrapper entity, while keeping
+  owned control/diagnostic entities as real HA entities) must land, via the standard
+  write-requirement flow, before the mapped-entity side of this ADR is implemented against
+  real hardware — it is not blocked on ADR-0003 specifically, but on that requirements
+  reword.
+- Owned entities use the `smart_charging_` prefix (matching the domain slug from
+  ADR-0002), not the glossary's older `sc_` prefix — a naming-convention shift that
+  `entity-catalog.md` will also need to reconcile once issue #29's reword lands, since the
+  catalog's rows currently assume `sc_`-prefixed ids throughout.
