@@ -58,7 +58,8 @@ jobs:
             locate the review, the fix policy, and the exact summary-comment contract
             (including the marker rules). When fixing a use-case document, it directs you to
             apply the `write-use-case` skill in full — the same authoring context the draft
-            was written with. CI specifics:
+            was written with. When fixing an ADR (`docs/adr/**`), it directs you to apply the
+            `write-adr` skill and respect ADR immutability. CI specifics:
             - The PR number is ${{ github.event.pull_request.number }}.
             - You are running in CI: do NOT commit or push — the workflow does that in the
               next step.

@@ -42,16 +42,17 @@ structural consequence. When in doubt: would a future contributor benefit from k
    - Decision references the options' trade-offs rather than restating them.
    - Consequences names concrete follow-up (issues to open, docs to update), not just
      restating the decision.
+   - `docs/adr/README.md` (the ADL) has a new row for this ADR, and the number matches
+     step 1 — the reviewer checks both and will raise a finding if either is missing.
 4. **Cross-check against existing ADRs and design docs** — does this decision contradict
    an existing `Accepted` ADR? If so, this record supersedes it: set the new ADR's
    Status normally, and edit the *old* ADR's Status line only, to
    `Superseded by ADR-NNNN` — never rewrite the old ADR's Context/Decision/Consequences.
-5. **Review** — spin up a dedicated, separate **Opus** agent (never review inline) to
-   check: internal consistency of the ADR itself (do the stated Consequences actually
-   follow from the Decision?), consistency with other ADRs and with `docs/analysis/**` /
-   `docs/plans/**` docs it touches, and that no option was rejected without a stated Con
-   that justifies it. Use a general-purpose agent, not `analysis-reviewer` — that agent
-   is scoped to `docs/analysis/**` and doesn't cover `docs/adr/**`.
+5. **Review** — launch the `adr-reviewer` agent (fresh, separate Opus; never review
+   inline). It checks template conformance, that every option has a genuine Pro and Con,
+   that the Decision references those trade-offs, that Consequences actually follow, and
+   cross-ADR consistency (including the immutability rule). Don't use `analysis-reviewer`
+   — that agent is scoped to `docs/analysis/**` and doesn't cover `docs/adr/**`.
 6. **Address** the review feedback.
 7. **Manual review** — present the addressed draft to the human partner and get explicit
    approval before committing.
