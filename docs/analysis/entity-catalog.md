@@ -67,6 +67,8 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02 | — |
 | `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal (optional; treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
+> `Read by` lists only behaviours that read a value **directly**. `sc_net_power_w` (and `sc_charger_power_w` below) are read directly by UC01/UC02, whose set-point rule converges the smoothed value toward 0 W. `Captar` (UC03) references net import only through the R3 peak clamp in `control-cycle.md` (already listed), not as a direct read, so UC03 is deliberately absent here.
+
 ### Charger
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |

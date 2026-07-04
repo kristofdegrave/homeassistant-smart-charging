@@ -17,7 +17,7 @@
 
 ## Trigger
 
-A [control cycle](../system-overview.md#ubiquitous-language) observes that `Captar` mode is active while the car is connected at home and state of charge is below the active SOC limit. `Captar` mode does not evaluate the [low-tariff flag](../system-overview.md#ubiquitous-language), nor does it evaluate the home-day flag or solar forecast that can lower the active SOC limit — timing grid charging to the low-tariff period, and reserving capacity for tomorrow's solar, are both concerns of the `Auto` profile's mode selection and SOC-limit coordination (R16, `resolution-rules.md`), not of this use-case (see Relationships). `Captar` only ever sees the already-resolved active SOC limit.
+A [control cycle](../system-overview.md#ubiquitous-language) observes that `Captar` mode is active while the car is connected at home and state of charge is below the active SOC limit.
 
 ## Main success scenario
 
@@ -54,7 +54,8 @@ Then the System stops charging (0 A) and does not resume above that limit until 
 
 `Captar`'s charging law is tariff-independent and reserve-cap-independent: the mode requests the
 maximum charging current whenever its connection, SOC, and cooldown conditions hold — it never
-reads the low-tariff flag, the home-day flag, or the solar forecast. Timing grid charging to
+reads the [low-tariff flag](../system-overview.md#ubiquitous-language), the home-day flag, or the
+solar forecast. Timing grid charging to
 low-tariff periods, and reserving capacity for tomorrow's solar, are entirely the `Auto` profile's
 job (R16, Auto mode-selection row 4 and the active-SOC-limit resolution in `resolution-rules.md`):
 `Auto` chooses *when* to select `Captar` and, independently, what the active SOC limit currently
