@@ -130,6 +130,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`grid fallback`** — In Solar mode, charging at the minimum charging current using grid power when solar surplus alone cannot sustain it; permitted in Solar mode, explicitly excluded in SolarOnly mode.
 
+**`amp-step rounding`** — How the System converts a continuous ideal charging current into a whole-ampere set-point each cycle: **round down** (floor to the highest whole ampere that keeps net import at or below the target, leaving any fractional-amp surplus unused), **round up** (ceiling to the next whole ampere, using all available surplus and accepting a small net grid import — bounded to less than one amp-step — to fill the gap), or **round to nearest** (switch to whichever whole ampere is closer to the ideal value, using a configurable midpoint, default 50%; when the ideal value sits exactly at the midpoint this can toggle the set-point between the two amp steps from one cycle to the next — an accepted "pendel" edge case, not actively dampened). `Solar` mode always rounds up (R1, fixed, not configurable). `SolarOnly` mode's strategy is configurable, default round down (R2).
+
 **`solar start threshold`** — The smoothed [solar surplus](#ubiquitous-language) level at or above which a solar mode may start charging (and, in `Solar` mode, below which the post-surplus hold begins). Configured per solar mode by a separate entity each: `input_number.sc_solar_start_threshold_w`, default 150 W in `Solar`; `input_number.sc_solar_only_start_threshold_w`, default 1300 W in `SolarOnly` — the latter chosen so the minimum charging current can be met from solar alone. See R1, R2. Unit: watts (W).
 
 **`post-surplus hold`** — In `Solar` mode, the period (configurable, `input_number.sc_solar_hold_min`, default 5 minutes) for which the charger holds at the minimum charging current after smoothed solar surplus falls below the solar start threshold, riding out brief cloud cover before charging stops; if surplus recovers to the start threshold within the period the hold is cancelled. `SolarOnly` has no such hold — it stops immediately. See R1. Unit: minutes (min).
@@ -153,6 +155,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 
 **`maximum charging current`** — The highest current the charger may be set to (configurable, default 32 A; reference setup: 32 A), the upper bound of the charger current range; the set-point never exceeds it (C1). Unit: amperes (A).
+
+**`Power target current`** — The user-configured charging current requested while `Power` mode is active (configurable, default 10 A, constrained to the minimum–maximum charging current range); `Power` requests this current directly, irrespective of solar surplus or the low-tariff flag. See R17. Unit: amperes (A).
 
 **`sun is down`** — The condition `sun.sun` state equals `below_horizon`.
 

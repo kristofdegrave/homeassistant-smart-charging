@@ -93,7 +93,9 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_power_respect_peak` | config | — | on | `Power` peak-protection option (R17) | — | user |
+| `input_number.sc_power_target_current_a` | config | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04 | user |
+| `input_boolean.sc_power_respect_peak` | config | — | on | `Power` peak-protection option (R17) | UC04 | user |
+| `input_number.sc_power_cooldown_min` | config | min | 10 | `Power`-mode cooldown (R11) | UC04 | user |
 
 ---
 
@@ -130,6 +132,8 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_only_start_threshold_w` | config | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user |
+| `input_select.sc_solar_only_rounding_strategy` | config | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user |
+| `input_number.sc_solar_only_rounding_midpoint_pct` | config | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user |
 
 Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
 

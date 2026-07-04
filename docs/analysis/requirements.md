@@ -16,10 +16,10 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 150 W) and no stop or cooldown condition applies.
-- [ ] While surplus sustains at least the minimum charging current, the charger current is set to the highest whole ampere (rounded down) that keeps net grid import at or below 0 W.
-- [ ] When smoothed surplus is at or above the start threshold but below the minimum charging current, the charger holds at the minimum charging current and draws the shortfall from the grid (grid fallback), accepting a small positive net import.
+- [ ] While surplus sustains at least the minimum charging current, the charger current is set by rounding up to the next whole ampere (amp-step rounding, round up — fixed for this mode, not configurable), so all available solar surplus is used and a bounded net grid import (less than one amp-step) fills the gap.
+- [ ] When smoothed surplus is at or above the start threshold but below the minimum charging current, the charger holds at the minimum charging current and draws the shortfall from the grid (grid fallback), accepting a positive net import.
 - [ ] When smoothed surplus falls below the start threshold (default 150 W), the charger holds at the minimum charging current for a configurable period (default 5 minutes) before stopping, riding out brief cloud cover.
-- [ ] Except during grid fallback and the post-surplus hold, net grid import does not stay above 0 W for longer than one control cycle while charging in this mode.
+- [ ] Outside grid fallback and the post-surplus hold, net grid import while charging in this mode stays bounded to less than one amp-step (the amp-step rounding gap), except for single-cycle sensor-noise transients.
 
 ---
 
@@ -31,9 +31,9 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 1300 W, chosen so the minimum charging current can be met from solar alone) and no stop or cooldown condition applies.
-- [ ] The charger current is set to the highest value that keeps net grid import at or below 0 W, rounded down to a whole ampere.
+- [ ] The whole-ampere set-point is computed using a configurable amp-step rounding strategy: `round down` (default — the highest whole ampere that keeps net grid import at or below 0 W, no grid import), `round up` (the next whole ampere, accepting a bounded net grid import of less than one amp-step to use all surplus), or `round to nearest` (whichever whole ampere is closer to the ideal value, using a configurable midpoint, default 50 %, which may oscillate between the two amp steps when surplus hovers at the midpoint).
 - [ ] When smoothed solar surplus falls below the start threshold (default 1300 W), the charger stops within one control cycle with no hold period.
-- [ ] The car is never charged from the grid while in this mode; net grid import attributable to charging never exceeds 0 W beyond one control cycle of sensor noise.
+- [ ] Under the default `round down` strategy, the car is never charged from the grid while in this mode; net grid import attributable to charging never exceeds 0 W beyond one control cycle of sensor noise. Under `round up` or `round to nearest`, net grid import attributable to charging stays bounded to less than one amp-step.
 
 ---
 
@@ -250,13 +250,13 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R17 — Power mode
 
 **Priority:** Should
-**What:** When `Power` mode is active, the system charges as fast as possible — at the maximum charging current — ignoring solar surplus and tariff, for when the user simply wants the car charged now.
+**What:** When `Power` mode is active, the system charges at a user-configured [Power target current](system-overview.md#ubiquitous-language), ignoring solar surplus and tariff, for when the user wants direct control over the charging rate rather than the system's cost/solar optimisation.
 
 **Acceptance criteria:**
 
-- [ ] While `Power` mode is active, the charger current is set to the maximum charging current, regardless of solar surplus or the low-tariff flag.
+- [ ] While `Power` mode is active, the charger current is set to the configurable Power target current (default 10 A, user-adjustable within the minimum–maximum charging current range), regardless of solar surplus or the low-tariff flag.
 - [ ] A configurable option determines whether `Power` mode respects CapTar peak protection: when enabled (default), net import stays at or below the effective peak limit minus the safety margin (R3); when disabled, charging may breach the CapTar peak but is still bounded by the grid supply ceiling (C4).
-- [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option.
+- [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option or the configured Power target current.
 - [ ] The active SOC limit (R7) still applies; charging stops when it is reached.
 
 ---

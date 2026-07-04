@@ -124,7 +124,7 @@ escalation and revert happen automatically.
   matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
   available regardless of capabilities.
 - **`SolarOnly` and `Power` are never Auto-selected.** They are deliberate user intents —
-  strictly-no-grid and charge-now — that conflict with Auto's cost/deadline balancing, so they
+  near-zero-grid and charge-now — that conflict with Auto's cost/deadline balancing, so they
   are reachable only under the `Manual` profile.
 - **`Manual` needs no table:** under `Manual` the active mode is whatever the user or an
   external source sets directly (R16, NF1); this rule does not apply.
