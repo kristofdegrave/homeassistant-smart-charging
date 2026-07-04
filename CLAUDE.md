@@ -28,6 +28,12 @@ docs/analysis/
 
 Previous iteration archived at `docs/archive/` — do not use as source of truth.
 
+```text
+docs/adr/
+  template.md            — ADR template (Nygard + Considered options)
+  0001-...md, 0002-...md — one file per architectural decision, sequential, never renumbered
+```
+
 ---
 
 ## Writing order
@@ -42,6 +48,7 @@ Previous iteration archived at `docs/archive/` — do not use as source of truth
 ## Model selection
 
 - **Analysis work** (`docs/analysis/`) → use **Opus**
+- **Architecture decisions** (`docs/adr/`) → use **Opus**
 - **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
 
 ---
@@ -83,6 +90,33 @@ Every **new** analysis document — and every **change** to an existing one (`do
 7. **Stop and report** — after each committed document, report status and wait before starting the next.
 
 **Merge policy:** no pull request is ever auto-merged. Every PR — including CI-drafted ones — requires the human partner's **explicit manual approval** before merge (enforced by `CODEOWNERS` + branch protection). CI may draft and review a PR, but never merges or self-approves it, and neither does the assistant.
+
+---
+
+## Architecture Decision Records (ADRs)
+
+**Every architectural decision must be captured as an ADR before the work that depends on it is committed.** See `docs/adr/0001-use-architecture-decision-records.md` for the rationale and template choice.
+
+An **architectural decision** is a choice about structure that would be expensive to
+reverse or that materially constrains future options — e.g. how integration entities
+map to hardware, where a boundary/abstraction layer sits, the shape of a config-entry
+schema, which library or protocol to depend on, a change to the coordinator/control-loop
+structure. It is **not** an ADR-worthy decision to pick a variable name, a log message,
+or a one-off implementation detail with no lasting structural consequence — when in
+doubt, ask whether a future contributor would benefit from knowing *why*, not just
+*what*.
+
+Use the `write-adr` skill for the full cycle. In short:
+
+0. **Open (or link) a GitHub issue** describing the decision to be made, before drafting.
+1. **Draft** against `docs/adr/template.md`, numbering sequentially and listing every
+   option seriously considered, not just the chosen one.
+2. **Review** — a fresh, separate agent (Opus) checks the ADR against existing ADRs
+   (no silent contradictions; supersede, don't edit, a prior decision) and against the
+   analysis/design docs it touches.
+3. **Manual review** — human partner's explicit approval before commit.
+4. **Commit** (`docs: add ADR-NNNN <slug>`), referencing the issue from step 0.
+5. **Stop and report** — status before starting the next ADR.
 
 ---
 
