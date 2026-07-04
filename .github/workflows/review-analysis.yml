@@ -27,6 +27,7 @@ on:
     types: [labeled]
     paths:
       - "docs/analysis/**"
+      - "docs/adr/**"
 
 permissions:
   contents: read
@@ -66,14 +67,26 @@ jobs:
           # Use the default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Review the analysis-document changes in pull request #${{ github.event.pull_request.number }}.
-            Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis`
+            Review the documentation changes in pull request #${{ github.event.pull_request.number }}.
+            Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis docs/adr`
             to see the changed files.
 
-            Then apply the full review checklist in .claude/agents/analysis-reviewer.md — it is
-            the single source of truth for what to read first and what to check (cross-document
-            consistency, requirement coverage, document quality). You are already a fresh session,
-            which is the independence that agent definition exists to provide.
+            If any changed file is under `docs/adr/`, apply the full review checklist in
+            .claude/agents/adr-reviewer.md for those files.
+            If any changed file is under `docs/analysis/`, apply the full review checklist in
+            .claude/agents/analysis-reviewer.md for those files.
+            A PR can touch both — apply each checklist to its matching files and report both
+            sets of findings in the one comment. Either agent definition is the single source
+            of truth for what to read first and what to check. Read and self-apply it — you
+            are already a fresh, independent session (the same independence a spawned
+            sub-agent would provide), and this runner has no `Task` tool to actually launch one.
+
+            For any changed file under `docs/adr/`: before treating its Status as fixed/settled,
+            run `git show ${{ github.event.pull_request.base.sha }}:<path>` for that file (it
+            will fail with "does not exist" for a brand-new ADR, which is fine — treat that as
+            a draft). Only an ADR whose Status was **already** `Accepted` on the base branch is
+            immutable; a Status introduced or still `Proposed` on this PR's head is a draft the
+            author can still fix normally.
 
             Additionally, run
             `gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments" --paginate`
