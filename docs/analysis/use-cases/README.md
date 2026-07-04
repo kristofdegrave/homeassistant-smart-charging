@@ -43,9 +43,11 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 ## Notes
 
 - **UC05 is a cross-cutting extension (`«extend»`).** It modifies the deadline behaviour of the
-  charging use-cases rather than being a standalone session: UC01, UC02, and UC03 each carry an
-  "Extended by UC05 when the deadline is at risk" relationship, and UC05 documents the urgency
-  escalation once, so the deadline logic is never duplicated.
+  charging use-cases rather than being a standalone session: UC01, UC02, UC03, and UC04 each carry
+  an "Extended by UC05 when the deadline is at risk" relationship, and UC05 documents the urgency
+  escalation once, so the deadline logic is never duplicated. (For UC04, the extension only widens
+  the peak headroom when `Power` mode's peak-protection option is enabled — when disabled, `Power`
+  is already unconstrained by the effective peak limit.)
 - **The `Auto` profile is not a use-case.** Choosing which mode is active is a priority-ordered
   decision with no human pursuing a goal, so it lives as the Auto mode-selection table in
   [`resolution-rules.md`](../resolution-rules.md). The `Manual` profile needs no document — the

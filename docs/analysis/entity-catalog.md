@@ -73,10 +73,10 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03 | user |
-| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03 | user |
+| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user |
+| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user |
 | `sensor.sc_charger_power_w` | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03 | — |
+| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04 | — |
 | `number.sc_charger_current` | state (output) | A | 0 or 6–32 | charger current set-point output (C1, NF3) | — | control-cycle |
 
 ### Peak protection
@@ -93,7 +93,8 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_power_respect_peak` | config | — | on | `Power` peak-protection option (R17) | — | user |
+| `input_boolean.sc_power_respect_peak` | config | — | on | `Power` peak-protection option (R17) | UC04 | user |
+| `input_number.sc_power_cooldown_min` | config | min | 10 | `Power`-mode cooldown (R11) | UC04 | user |
 
 ---
 
@@ -105,7 +106,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
 | `input_number.sc_battery_capacity_kwh` | config | kWh | 75 | EV battery capacity (R15) | — | user |
-| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03 | — |
+| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04 | — |
 | `sensor.sc_battery_capacity_kwh` | sensor | kWh | vehicle capacity sensor (optional, NF3) | EV battery capacity, sensed (R15) | — | — |
 | `binary_sensor.sc_car_home` | sensor | bool | presence / device-tracker | car-at-home presence (R12) | — | — |
 | `number.sc_vehicle_charge_limit` | state (output) | % | mirrors active SOC limit | vehicle charge-limit output wrapper (R6, NF3) | — | (UC09) |
