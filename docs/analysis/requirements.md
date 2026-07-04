@@ -55,7 +55,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R4 — Captar mode grid charging
 
 **Priority:** Must
-**What:** When `Captar` mode is active, the system charges the car from the grid up to the effective peak limit whenever the car is connected below the active SOC limit — charging as fast as the grid safely allows, independent of tariff and of why the active SOC limit is set where it is (e.g. a solar-reserve cap `Auto` may have applied — R9). Preferring low-tariff timing and reserving capacity for solar are concerns of the `Auto` profile's mode selection and SOC-limit coordination (R16), not of `Captar` mode itself; deadline urgency can supersede this behaviour (see R5). Unlike `Power` mode (R17), which may also ignore tariff and charge at maximum current, `Captar` always defers to solar surplus first and never breaches the CapTar peak limit (R3) — `Power` may optionally do both.
+**What:** When `Captar` mode is active, the system charges the car from the grid up to the effective peak limit whenever the car is connected below the active SOC limit — charging as fast as the grid safely allows, independent of tariff and of why the active SOC limit is set where it is (e.g. a solar-reserve cap `Auto` may have applied — R9). Preferring low-tariff timing and reserving capacity for solar are concerns of the `Auto` profile's mode selection and SOC-limit coordination (R16), not of `Captar` mode itself; deadline urgency can supersede this behaviour (see R5). Unlike `Power` mode (R17), which also ignores tariff but charges at a user-chosen target current instead of always the maximum, `Captar` always defers to solar surplus first and never breaches the CapTar peak limit (R3) — `Power` may optionally skip that peak protection too.
 
 **Acceptance criteria:**
 
@@ -250,13 +250,13 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R17 — Power mode
 
 **Priority:** Should
-**What:** When `Power` mode is active, the system charges as fast as possible — at the maximum charging current — ignoring solar surplus and tariff, for when the user simply wants the car charged now.
+**What:** When `Power` mode is active, the system charges at a user-configured [Power target current](system-overview.md#ubiquitous-language), ignoring solar surplus and tariff, for when the user wants direct control over the charging rate rather than the system's cost/solar optimisation.
 
 **Acceptance criteria:**
 
-- [ ] While `Power` mode is active, the charger current is set to the maximum charging current, regardless of solar surplus or the low-tariff flag.
+- [ ] While `Power` mode is active, the charger current is set to the configurable Power target current (default 10 A, user-adjustable within the minimum–maximum charging current range), regardless of solar surplus or the low-tariff flag.
 - [ ] A configurable option determines whether `Power` mode respects CapTar peak protection: when enabled (default), net import stays at or below the effective peak limit minus the safety margin (R3); when disabled, charging may breach the CapTar peak but is still bounded by the grid supply ceiling (C4).
-- [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option.
+- [ ] The charger current always obeys C1 (either 0 A or within the minimum–maximum charging range), regardless of the peak-protection option or the configured Power target current.
 - [ ] The active SOC limit (R7) still applies; charging stops when it is reached.
 
 ---

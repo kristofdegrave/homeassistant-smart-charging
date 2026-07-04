@@ -154,6 +154,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`maximum charging current`** — The highest current the charger may be set to (configurable, default 32 A; reference setup: 32 A), the upper bound of the charger current range; the set-point never exceeds it (C1). Unit: amperes (A).
 
+**`Power target current`** — The user-configured charging current requested while `Power` mode is active (configurable, default 10 A, constrained to the minimum–maximum charging current range); `Power` requests this current directly, irrespective of solar surplus or the low-tariff flag. See R17. Unit: amperes (A).
+
 **`sun is down`** — The condition `sun.sun` state equals `below_horizon`.
 
 ### Entity naming convention
