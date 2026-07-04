@@ -65,16 +65,18 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | `input_number.sc_nominal_voltage_v` | config | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
 | `sensor.sc_grid_voltage_v` | sensor | V | grid voltage sensor | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
 | `sensor.sc_net_power_w` | sensor | W | grid net-power meter | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02 | — |
-| `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
+| `binary_sensor.sc_low_tariff` | sensor | bool | installation tariff signal (optional; treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
+
+> `Read by` lists only behaviours that read a value **directly**. `sc_net_power_w` (and `sc_charger_power_w` below) are read directly by UC01/UC02, whose set-point rule converges the smoothed value toward 0 W. `Captar` (UC03) references net import only through the R3 peak clamp in `control-cycle.md` (already listed), not as a direct read, so UC03 is deliberately absent here.
 
 ### Charger
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02 | user |
-| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02 | user |
+| `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03 | user |
+| `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03 | user |
 | `sensor.sc_charger_power_w` | sensor | W | charger power sensor | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02 | — |
+| `sensor.sc_charger_status` | sensor | enum | charger connection state | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03 | — |
 | `number.sc_charger_current` | state (output) | A | 0 or 6–32 | charger current set-point output (C1, NF3) | — | control-cycle |
 
 ### Peak protection
@@ -85,7 +87,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | `input_number.sc_max_peak_kw` | config | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user |
 | `input_number.sc_peak_grace_min` | config | min | 2 | R3 peak-breach grace period | control-cycle | user |
 | `sensor.sc_monthly_peak_kw` | sensor | kW | derived from `sc_net_power_w` over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `input_number.sc_captar_cooldown_min` | config | min | 10 | `Captar`-mode cooldown (R11) | — | user |
+| `input_number.sc_captar_cooldown_min` | config | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user |
 
 ### `Power` mode
 
@@ -103,7 +105,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
 | `input_number.sc_battery_capacity_kwh` | config | kWh | 75 | EV battery capacity (R15) | — | user |
-| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules, UC01, UC02 | — |
+| `sensor.sc_ev_soc` | sensor | % | vehicle state-of-charge sensor | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03 | — |
 | `sensor.sc_battery_capacity_kwh` | sensor | kWh | vehicle capacity sensor (optional, NF3) | EV battery capacity, sensed (R15) | — | — |
 | `binary_sensor.sc_car_home` | sensor | bool | presence / device-tracker | car-at-home presence (R12) | — | — |
 | `number.sc_vehicle_charge_limit` | state (output) | % | mirrors active SOC limit | vehicle charge-limit output wrapper (R6, NF3) | — | (UC09) |
