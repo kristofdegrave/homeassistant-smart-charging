@@ -30,7 +30,7 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 | [UC01](UC01-charge-from-solar-surplus.md) | Charge from solar surplus (incl. grid fallback) | Household energy manager | R1 | Planned |
 | [UC02](UC02-charge-from-solar-only.md) | Charge from solar only | Household energy manager | R2 | Planned |
 | [UC03](UC03-charge-from-grid-within-captar-limit.md) | Charge from the grid in Captar mode | Household energy manager | R4 | Planned |
-| [UC04](UC04-charge-at-maximum-power.md) | Charge at maximum power | EV driver | R17 | Planned |
+| [UC04](UC04-charge-at-a-user-set-current.md) | Charge at a user-set current | EV driver | R17 | Planned |
 | [UC05](UC05-guarantee-ready-by-departure.md) | Guarantee the car is ready by departure | EV driver | R5 | Planned |
 | [UC06](UC06-store-abundant-solar.md) | Store abundant solar by stepping up the limit | Household energy manager | R8 | Planned |
 | [UC07](UC07-reserve-capacity-for-tomorrow.md) | Reserve capacity for tomorrow's solar | Household energy manager | R9 | Planned |
@@ -45,9 +45,11 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 - **UC05 is a cross-cutting extension (`«extend»`).** It modifies the deadline behaviour of the
   charging use-cases rather than being a standalone session: UC01, UC02, UC03, and UC04 each carry
   an "Extended by UC05 when the deadline is at risk" relationship, and UC05 documents the urgency
-  escalation once, so the deadline logic is never duplicated. (For UC04, the extension only widens
-  the peak headroom when `Power` mode's peak-protection option is enabled — when disabled, `Power`
-  is already unconstrained by the effective peak limit.)
+  escalation once, so the deadline logic is never duplicated. (For UC04, the extension can raise
+  the requested current above the configured Power target current — up to the maximum charging
+  current — regardless of the peak-protection option; it additionally widens the peak headroom
+  only while that option is enabled, since `Power` is otherwise already unconstrained by the
+  effective peak limit.)
 - **The `Auto` profile is not a use-case.** Choosing which mode is active is a priority-ordered
   decision with no human pursuing a goal, so it lives as the Auto mode-selection table in
   [`resolution-rules.md`](../resolution-rules.md). The `Manual` profile needs no document — the

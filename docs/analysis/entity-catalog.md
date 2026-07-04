@@ -93,6 +93,7 @@ device-I/O wrappers, and the domain-level state and outputs the use-cases refere
 
 | Entity id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
+| `input_number.sc_power_target_current_a` | config | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04 | user |
 | `input_boolean.sc_power_respect_peak` | config | — | on | `Power` peak-protection option (R17) | UC04 | user |
 | `input_number.sc_power_cooldown_min` | config | min | 10 | `Power`-mode cooldown (R11) | UC04 | user |
 
