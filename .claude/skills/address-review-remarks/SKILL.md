@@ -1,11 +1,12 @@
 ---
 name: address-review-remarks
-description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
+description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) or ADRs (docs/adr/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
 ---
 
 # Address review remarks
 
-Fix the findings a review raised against analysis documents (`docs/analysis/**`), then account
+Fix the findings a review raised against analysis documents (`docs/analysis/**`) or ADRs
+(`docs/adr/**`), then account
 for every finding in a summary. The fix policy and the summary contract below are the single
 source of truth — the CI workflow (`fix-review.yml`) and local runs both follow them.
 
@@ -43,8 +44,21 @@ Fixing is re-authoring — work with the same context the original author had:
   rules (glossary-first, entity-catalog columns, reference-don't-restate, state models for
   mode UCs), and common-mistakes list define what a correct fix looks like. Those rules are
   deliberately not restated here.
+- **For an ADR (`docs/adr/NNNN-*.md`): apply the `write-adr` skill in full**, with one
+  overriding rule: **never edit an Accepted ADR's Context/Decision/Consequences** to
+  address a finding, even if the finding says the decision itself was wrong. Determine
+  "Accepted" from the **base branch**, not the working tree — run
+  `git show <base-sha-or-ref>:<path>` for the file; if it doesn't exist there, or its
+  Status there isn't already `Accepted`, this PR is still drafting the ADR and normal
+  fixes apply. Only a Status that already read `Accepted` on the base branch is immutable.
+  If a finding argues the *decision* on an already-Accepted ADR is wrong (not just its
+  write-up), that is a **Skipped** entry in the summary — record it as a candidate for a
+  new, superseding ADR and say so, rather than rewriting history. Findings about the ADR's
+  *write-up* (a missing Con, a Decision that doesn't reference its options, a Consequence
+  that doesn't follow) are fixed normally.
 - For other analysis docs: follow the flow document standard and review protocol in CLAUDE.md.
-- Run the skill's 6Cs self-check on the sections you changed before writing the summary.
+- Run the skill's 6Cs self-check on the sections you changed before writing the summary
+  (ADRs are exempt — see `write-adr`'s Self-check, which replaces the 6Cs pass for ADRs).
 
 ## 4. Acknowledge every human comment in its thread
 
