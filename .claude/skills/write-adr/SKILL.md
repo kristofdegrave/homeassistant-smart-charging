@@ -25,7 +25,8 @@ structural consequence. When in doubt: would a future contributor benefit from k
 0. **Open (or link) a GitHub issue** describing the decision to be made, before drafting.
    Skip this step only when the ADR merely documents a decision already approved in an
    issue/PR that exists (link it instead). Reference the issue in the eventual
-   commit/PR (`Closes #N`).
+   commit/PR (`Closes #N`). Branch as `adr/<issue-number>`, per CLAUDE.md's branch-naming
+   convention.
 1. **Number it** — next sequential integer after the highest existing `docs/adr/NNNN-*`,
    zero-padded to 4 digits. Never reuse or renumber; a superseded ADR keeps its number.
 2. **Draft** against `docs/adr/template.md`: Status, Context, **Considered options**

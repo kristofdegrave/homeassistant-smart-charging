@@ -91,6 +91,10 @@ Every **new** analysis document — and every **change** to an existing one (`do
 
 **Merge policy:** no pull request is ever auto-merged. Every PR — including CI-drafted ones — requires the human partner's **explicit manual approval** before merge (enforced by `CODEOWNERS` + branch protection). CI may draft and review a PR, but never merges or self-approves it, and neither does the assistant.
 
+**Branch naming:** `<type>/<issue-number>` — the type matches the artifact, e.g. `uc/<N>` for
+a use-case, `adr/<N>` for an ADR. Extend the same pattern for any future artifact type
+(one issue, one branch, one PR) rather than inventing a new scheme.
+
 ---
 
 ## Architecture Decision Records (ADRs)
