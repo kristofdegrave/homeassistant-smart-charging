@@ -54,6 +54,7 @@ jobs:
           fetch-depth: 0 # full history so the reviewer can diff against the base branch
 
       - name: Fresh-agent review
+        id: claude
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # so `gh pr comment` works in the runner
@@ -98,7 +99,25 @@ jobs:
             --model opus --max-turns 16
             --allowed-tools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(git diff:*)"
 
+      # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
+      # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without
+      # this gate, "Route by verdict" re-reads the last (stale) comment and re-applies a label
+      # regardless, which turns any persistent API failure into an infinite review<->fix loop
+      # (labels ping-pong every ~30s, no new comment ever posted, cycle counter never advances).
+      - name: Check the review actually ran
+        id: check
+        run: |
+          set -euo pipefail
+          file="${{ steps.claude.outputs.execution_file }}"
+          is_error=$( [ -n "$file" ] && [ -f "$file" ] && jq -r 'map(select(.type == "result")) | last | .is_error // true' "$file" || echo true)
+          if [ "$is_error" = "true" ]; then
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Route by verdict (max 3 automatic fix cycles)
+        if: steps.check.outputs.success == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
@@ -140,3 +159,15 @@ jobs:
         run: |
           gh pr edit "$PR" --remove-label ai-review || true
           gh pr comment "$PR" --body "The automatic review run **failed** (see the Actions log for this run). Re-add the \`ai-review\` label to retry."
+
+      # Distinct from "Clean up on failure": the job step above does NOT fail when the Claude
+      # API call itself errors (bad key, no credits, rate limit) — it exits 0 regardless. This
+      # catches that case so it doesn't silently re-trigger ai-fix and loop forever.
+      - name: Clean up on API error
+        if: always() && steps.check.outputs.success == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR" --remove-label ai-review || true
+          gh pr comment "$PR" --body "The automatic review's Claude call **errored** before producing a review (see the \`Fresh-agent review\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a review/fix loop. Fix the underlying issue, then re-add \`ai-review\` to retry."

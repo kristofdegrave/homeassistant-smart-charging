@@ -39,6 +39,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Address review remarks with Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # so `gh pr view` works in the runner
@@ -83,7 +84,24 @@ jobs:
             --model opus --max-turns 50
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
 
+      # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
+      # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without
+      # this gate, "Hand back to AI review" re-adds ai-review unconditionally, which turns any
+      # persistent API failure into an infinite fix<->review loop with no fix ever applied.
+      - name: Check the fix actually ran
+        id: check
+        run: |
+          set -euo pipefail
+          file="${{ steps.claude.outputs.execution_file }}"
+          is_error=$( [ -n "$file" ] && [ -f "$file" ] && jq -r 'map(select(.type == "result")) | last | .is_error // true' "$file" || echo true)
+          if [ "$is_error" = "true" ]; then
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Commit and push fixes
+        if: steps.check.outputs.success == 'true'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -97,6 +115,7 @@ jobs:
           fi
 
       - name: Hand back to AI review
+        if: steps.check.outputs.success == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
@@ -116,3 +135,15 @@ jobs:
         run: |
           gh pr edit "$PR" --remove-label ai-fix || true
           gh pr comment "$PR" --body "The automatic fix run **failed** (see the Actions log for this run). Re-add the \`ai-fix\` label to retry, or address the review manually."
+
+      # Distinct from "Clean up on failure": the job step above does NOT fail when the Claude
+      # API call itself errors (bad key, no credits, rate limit) — it exits 0 regardless. This
+      # catches that case so it doesn't silently re-trigger ai-review and loop forever.
+      - name: Clean up on API error
+        if: always() && steps.check.outputs.success == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR" --remove-label ai-fix || true
+          gh pr comment "$PR" --body "The automatic fix's Claude call **errored** before making any changes (see the \`Address review remarks with Claude Code\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a fix/review loop. Fix the underlying issue, then re-add \`ai-fix\` to retry."
