@@ -1,6 +1,6 @@
 ---
 name: address-review-remarks
-description: Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI.
+description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
 ---
 
 # Address review remarks
@@ -9,12 +9,24 @@ Fix the findings a review raised against analysis documents (`docs/analysis/**`)
 for every finding in a summary. The fix policy and the summary contract below are the single
 source of truth — the CI workflow (`fix-review.yml`) and local runs both follow them.
 
-## 1. Locate the review
+## 1. Locate the findings
 
-- If the caller did not hand you the review text: run `gh pr view <pr> --comments` and take the
-  **most recent** comment containing `ai-review-verdict: remarks`. Older review comments are
-  context only.
-- For a human review (no marker), use the review comment(s) the caller points at.
+Findings come from two sources — always gather **both**:
+
+- **AI review** — if the caller did not hand you the review text: run `gh pr view <pr> --comments`
+  and take the **most recent** comment containing `ai-review-verdict: remarks` (there may be
+  none). Older review comments are context only.
+- **Human review comments** — run
+  `gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate` and keep every comment that
+  is authored by a human (login does not end in `[bot]`) **and** has no reply in its thread
+  (a comment whose `in_reply_to_id` points to it) containing `ai-fix-ack` — such a reply means
+  an earlier run already handled it. Also check
+  `gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"` for non-empty human review bodies not yet
+  acknowledged in a summary. Treat every human comment as a finding of at least **Major**
+  severity — human input is never skipped silently.
+
+If neither source yields an unaddressed finding, post the summary (section 5) saying so and
+stop — do not invent work.
 
 ## 2. Fix policy
 
@@ -34,13 +46,29 @@ Fixing is re-authoring — work with the same context the original author had:
 - For other analysis docs: follow the flow document standard and review protocol in CLAUDE.md.
 - Run the skill's 6Cs self-check on the sections you changed before writing the summary.
 
-## 4. Summary (one per run, finding-by-finding)
+## 4. Acknowledge every human comment in its thread
+
+For each inline human review comment you processed, reply in its thread:
+
+```
+gh api -X POST "repos/<owner>/<repo>/pulls/<pr>/comments/<comment_id>/replies" -f body="<markdown>"
+```
+
+- Start the body with `<!-- ai-fix-ack -->`, then one or two sentences: what changed (with
+  file references) or why you disagree.
+- This marker is how future fix runs and the reviewer know the comment is handled — never
+  omit it, and never put it in any comment that is not a direct answer to a human comment.
+- A human review body (not an inline comment) has no thread — account for it in the summary
+  instead, mentioning the reviewer by `@login`.
+
+## 5. Summary (one per run, finding-by-finding)
 
 Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
 
 - Start the body with `<!-- ai-fix-summary -->`.
-- One bullet or table row per finding of the review: **Fixed** (what changed, with file
-  references), **Skipped** (and why you disagree), or **Partially fixed**. Keep it short.
+- One bullet or table row per finding — AI findings **and** human comments alike: **Fixed**
+  (what changed, with file references), **Skipped** (and why you disagree), or **Partially
+  fixed**. Keep it short.
 - **CRITICAL: the comment must NOT contain the text "ai-review-verdict" anywhere — not even
   quoted.** The workflows route and count fix cycles by searching comment bodies for that
   marker; a summary containing it would be miscounted as a review and break the cycle limit.
@@ -49,7 +77,7 @@ Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
 - If there is no PR (reviewing an uncommitted local draft), report the same summary inline
   instead of commenting.
 
-## 5. Commit — depends on where you run
+## 6. Commit — depends on where you run
 
 - **In CI**: do NOT commit or push — the workflow commits and hands back to review.
 - **Locally**: present the addressed changes to the human partner first (per the CLAUDE.md
