@@ -4,7 +4,7 @@
 
 **Stakeholders & interests:**
 
-- Household energy manager — wants the car charged strictly from solar surplus, with zero grid import attributable to charging, even if that means the car sometimes charges slowly or not at all.
+- Household energy manager — wants the car charged strictly from solar surplus, with zero grid import attributable to charging under the default rounding strategy, even if that means the car sometimes charges slowly or not at all.
 - EV driver — accepts that charging pauses the moment solar can no longer cover it, in exchange for a guaranteed all-solar session.
 
 **Scope / level:** sea-level (single goal: charge the car exclusively from solar surplus while `SolarOnly` mode is active)
@@ -24,7 +24,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that smoot
 
 1. **Given** `SolarOnly` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no solar-mode cooldown is in effect.
 2. **When** smoothed solar surplus reaches at least the solar start threshold (default 1300 W), **then** the System starts charging within one control cycle.
-3. **And** the System sets the charger current to the highest whole ampere that keeps smoothed net grid import at or below 0 W (solar-only, never importing), recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
+3. **And** the System converts the smoothed solar surplus into a whole-ampere set-point using the configured [amp-step rounding](../system-overview.md#ubiquitous-language) strategy — default `round down` (the highest whole ampere that keeps smoothed net grid import at or below 0 W, solar-only, never importing) — recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
 
 ## Alternate flows
 
@@ -39,12 +39,24 @@ When smoothed solar surplus falls below the start threshold (default 1300 W) —
 Then the System stops charging (0 A) within one control cycle and starts the solar-mode cooldown (R11)
 And the System never holds at the minimum charging current on grid power ([grid fallback](../system-overview.md#ubiquitous-language) is excluded in `SolarOnly`) and never runs a [post-surplus hold](../system-overview.md#ubiquitous-language) (which is `Solar`-only) — the two behaviours that distinguish the sibling UC01.
 
+**3b — Round-up strategy configured** — branches from step 3.
+Given the amp-step rounding strategy is configured to `round up`
+When the System computes the set-point
+Then the System rounds up to the next whole ampere so all available solar surplus is used, accepting a bounded net grid import (less than one amp-step) to fill the gap
+And `SolarOnly`'s strict zero-grid-import postcondition does not hold under this configuration — the household energy manager has deliberately traded strict zero-import for full solar utilization.
+
+**3c — Round-to-nearest strategy configured (pendel)** — branches from step 3.
+Given the amp-step rounding strategy is configured to `round to nearest`
+When the smoothed solar surplus sits between two amp steps
+Then the System rounds to whichever whole ampere is closer to the ideal value, using the configured rounding midpoint (default 50 %)
+And if surplus hovers at the midpoint from one cycle to the next, the set-point may oscillate between the two amp steps — an accepted "pendel" edge case, not actively dampened.
+
 ## Exception flows
 
 **Coordinator clamps still bound the set-point.**
 Given the System has computed a solar-only set-point
 When the peak-protection clamp (R3) or the grid-supply-ceiling clamp (C4) in `control-cycle.md` is applied on raw readings
-Then the coordinator may only reduce (never raise) the charger current — but because `SolarOnly` holds net grid import at or below 0 W, neither clamp normally engages, since both act on positive net import.
+Then the coordinator may only reduce (never raise) the charger current — but because `SolarOnly` keeps net grid import at or below 0 W under the default `round down` strategy (or bounded to less than one amp-step under `round up`/`nearest`), neither clamp normally engages, since both act on materially positive net import.
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `SolarOnly` mode
@@ -53,17 +65,21 @@ Then the System stops charging (0 A) and does not resume above that limit until 
 
 ## Postconditions
 
-- While surplus sustains charging, net grid import stays at or below 0 W (apart from a single-cycle transient) — solar is self-consumed, never imported; the car is never charged from the grid (R2).
+- Under the default `round down` strategy, net grid import stays at or below 0 W while surplus sustains charging (apart from a single-cycle transient) — solar is self-consumed, never imported; the car is never charged from the grid (R2).
+- Under `round up` or `round to nearest`, net grid import while surplus sustains charging stays bounded to less than one amp-step — a deliberate, configured trade-off, not the default.
 - There is no grid fallback and no post-surplus hold: when smoothed surplus falls below the start threshold, the System stops within one control cycle.
 - The charger current is only ever 0 A or between the minimum and maximum charging current (C1).
 - Charging never resumes above the active SOC limit (R7).
 
 ## State model
 
-The set-point rule for the charging state is a **direct per-cycle computation**, identical to UC01's:
-each cycle the System sets the charger current to the highest whole ampere (rounded down) that keeps
-smoothed net grid import at or below 0 W, capping at the maximum charging current (C1). It differs
-from UC01 in the two omitted behaviours: there is **no grid fallback** (the floor at the minimum
+The set-point rule for the charging state is a **direct per-cycle computation**: each cycle the
+System converts smoothed surplus into a whole-ampere set-point using the configured amp-step
+rounding strategy (default `round down` — the highest whole ampere that keeps smoothed net grid
+import at or below 0 W; `round up` accepts a bounded grid top-up instead; `round to nearest` can
+toggle between the two nearest amp steps), capping at the maximum charging current (C1). Unlike
+UC01, where rounding is fixed to `round up`, this strategy is configurable here. It differs from
+UC01 in the two omitted behaviours: there is **no grid fallback** (the floor at the minimum
 charging current is sustained only from solar, because the start threshold is chosen to cover it —
 when surplus falls below the threshold the System stops rather than importing) and **no post-surplus
 hold** (the stop is immediate). The `stateDiagram-v2` below is authoritative for the state set. All
@@ -78,7 +94,7 @@ the diagram does not draw a disconnect edge from every state.
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | smoothed surplus ≥ start threshold, SOC < active SOC limit, no cooldown → Charging |
-| Charging | highest whole ampere keeping smoothed net import ≤ 0 W (no grid fallback) | surplus < start threshold → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Charging | whole ampere from configured amp-step rounding strategy (default: highest ampere keeping smoothed net import ≤ 0 W; no grid fallback) | surplus < start threshold → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging if surplus ≥ start threshold else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
@@ -100,22 +116,24 @@ stateDiagram-v2
     Cooldown --> Idle: cooldown elapsed<br/>& surplus < start threshold
     SocReached --> Idle: active SOC limit changes,<br/>or unplug/replug
     note right of Charging
-        Set-point: highest whole ampere keeping
-        smoothed net import ≤ 0 W, recomputed each
-        cycle; cap = maximum current (C1). No grid
-        fallback — stops instead of importing.
+        Set-point: configured amp-step rounding
+        strategy (default: highest whole ampere
+        keeping smoothed net import ≤ 0 W),
+        recomputed each cycle; cap = maximum
+        current (C1). No grid fallback — stops
+        instead of importing.
     end note
 ```
 
 ## Requirements satisfied
 
-- **R2** — Solar-only charging (start threshold default 1300 W, highest-whole-ampere set-point keeping net import ≤ 0 W, immediate stop with no post-surplus hold, never charged from the grid).
+- **R2** — Solar-only charging (start threshold default 1300 W, configurable amp-step rounding strategy — default `round down` keeping net import ≤ 0 W — immediate stop with no post-surplus hold, never charged from the grid under the default strategy).
 
 Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current invariant (R11) and the peak-protection (R3) and grid-supply-ceiling (C4) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
 
 ## Relationships
 
-- **Sibling [UC01](UC01-charge-from-solar-surplus.md)** (`Solar`) — same highest-whole-ampere set-point rule, but UC01 adds grid fallback and the post-surplus hold, whereas `SolarOnly` has neither; a solar step-up in effect is preserved when switching between the two solar modes (R7).
-- **Extended by [UC05](UC05-guarantee-ready-by-departure.md)** when the departure deadline is at risk. The deadline logic lives in UC05, not here. `SolarOnly` is a deliberate `Manual`-only, strictly-no-grid intent — it is never Auto-selected (Auto mode-selection, `resolution-rules.md`) — so a deadline that cannot be met from solar alone is UC05's concern to resolve; this use-case never adds grid charging of its own.
+- **Sibling [UC01](UC01-charge-from-solar-surplus.md)** (`Solar`) — both use amp-step rounding, but `Solar` always rounds up (fixed), whereas `SolarOnly`'s strategy is configurable (default round down); UC01 also adds grid fallback and the post-surplus hold, whereas `SolarOnly` has neither; a solar step-up in effect is preserved when switching between the two solar modes (R7).
+- **Extended by [UC05](UC05-guarantee-ready-by-departure.md)** when the departure deadline is at risk. The deadline logic lives in UC05, not here. `SolarOnly` is a deliberate `Manual`-only, near-zero-grid intent (bounded to less than one amp-step even under the `round up`/`nearest` rounding strategy) — it is never Auto-selected (Auto mode-selection, `resolution-rules.md`) — so a deadline that cannot be met from solar alone is UC05's concern to resolve; this use-case never adds sustained grid charging of its own.
 - **Extended by [UC06](UC06-store-abundant-solar.md)** — while charging in a solar mode, UC06 may step up the active SOC limit to store abundant surplus (R8).
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit rule in `resolution-rules.md`.
