@@ -74,7 +74,8 @@ acceptance criterion they verify (e.g.
 
 Adapter classes are tested against mocked HA state objects covering entity present,
 absent, unavailable, and — for enum roles — an unmapped raw state (the same case the
-error-handling decision treats as equivalent to a missing entity). The coordinator's
+error-handling decision — backfilled separately, not yet drafted at the time of writing —
+treats as equivalent to a missing entity). The coordinator's
 pipeline (ADR-0006) is tested at the integration level: `pytest-homeassistant-custom-component`
 provides the HA test harness, and `MockConfigEntry` drives config-flow and coordinator
 integration tests. Option A's Con is accepted deliberately — plain-pytest tests for mode
