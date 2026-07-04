@@ -110,7 +110,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`control interval`** — The time between consecutive control cycles, configured via `input_number.sc_control_interval_s` (default 10 s); every duration expressed as a number of control cycles resolves to `n × control_interval` seconds at runtime.
 
-**`active SOC limit`** — The charge-limit target in effect at a given moment, resolved in priority order: (1) the solar-reserve cap (configurable, default 60 %) when the home-day flag is set and the sun is below the horizon, (2) the solar step-up value (configurable range, default ceiling `sc_max_solar_soc` 100 %) when a step-up is in effect, otherwise (3) the default `sc_active_soc` (configurable, default 80 %). Unit: percent (%).
+**`active SOC limit`** — The charge-limit target in effect at a given moment, resolved in priority order: (1) the solar-reserve cap (configurable, default 60 %) when the `Auto` profile is active, the home-day flag is set, the sun is below the horizon, and the next-day solar forecast exceeds its threshold (default 12 kWh), (2) the solar step-up value (configurable range, default ceiling `sc_max_solar_soc` 100 %) when a step-up is in effect, otherwise (3) the default `sc_active_soc` (configurable, default 80 %). Row 1 never applies under `Manual`. Unit: percent (%).
 
 **`solar forecast`** — The predicted solar energy yield for the next day, read from a configured forecast sensor (NF3); compared against a configurable threshold to decide whether the solar-reserve cap applies. Unit: kilowatt-hours (kWh).
 
@@ -148,7 +148,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`home-day flag`** — A boolean flag indicating the car will be home during the next day's daylight hours (e.g. a work-from-home day, weekend, or holiday), so it could absorb solar then. While set it enables the solar-reserve cap. Read via an `sc_` helper and reset each day; its source is configurable — set by the evening prompt (R13) or by an external source such as a calendar or presence sensor.
 
-**`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) applied while the sun is down when the home-day flag is set and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar; grid charging (regardless of tariff) is suppressed while the cap is active.
+**`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) that the `Auto` profile applies while the sun is down when the home-day flag is set and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar. This is `Auto`'s own coordination decision (R9, R16): it lowers the active SOC limit and, separately, declines to select a mode for opportunistic overnight grid top-up. It applies only while `Auto` is the active profile — under `Manual` the cap never engages — and the mode `Auto` selects does not itself evaluate the home-day flag or forecast; it simply charges to whichever active SOC limit is currently resolved.
 
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 

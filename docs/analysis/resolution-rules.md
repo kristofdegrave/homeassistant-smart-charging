@@ -17,14 +17,22 @@ result on the next cycle.
 
 Resolves the single [active SOC limit](system-overview.md#ubiquitous-language) in force at any
 moment. Priority order: [solar-reserve cap](system-overview.md#ubiquitous-language) →
-[solar step-up](system-overview.md#ubiquitous-language) → default.
+[solar step-up](system-overview.md#ubiquitous-language) → default. Whichever mode is active simply
+charges to this resolved value — it has no opinion on *why* the limit is where it is.
 
 | Priority | Condition | Active SOC limit |
 | --- | --- | --- |
-| 1 | The [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), and the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh) | The solar-reserve cap (default 60 %) |
+| 1 | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), and the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh) | The solar-reserve cap (default 60 %) |
 | 2 | A solar step-up is in effect (a step has been applied while charging in a solar mode) | The stepped-up value, clamped to `sc_max_solar_soc` (default 100 %) |
 | 3 | Otherwise | The default `input_number.sc_active_soc` (default 80 %) |
 
+- **The solar-reserve cap is an `Auto`-only coordination decision (R9).** Reserving overnight
+  capacity for tomorrow's solar is `Auto` weighing tonight's grid top-up against tomorrow's solar
+  yield — an optimisation, not a hard constraint — so it applies only while `Auto` is the active
+  profile. Under `Manual`, row 1 never matches regardless of the home-day flag or forecast: the
+  user's own mode choice is not second-guessed by this policy (mirrors R16's "no automatic
+  changes under `Manual`"). The mode `Auto` selects (typically `Captar`, row 4 below) does not
+  itself evaluate the home-day flag or forecast; it only ever sees the resolved limit.
 - **Lifecycle and reset are governed by R7** (and applied by UC06): a step-up survives a switch
   between `Solar` and `SolarOnly`, is cleared when the active mode is no longer a solar mode,
   and resets to the default on disconnect. This table resolves the *current* value only.
@@ -95,7 +103,7 @@ escalation and revert happen automatically.
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
 | 2 | Deadline urgency is in effect: the car would miss the active SOC limit by the departure deadline at the current charger output (R5) | `Captar` (carries the R5 override — high tariff and the raised peak limit) |
 | 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
-| 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and the solar-reserve cap is not suppressing grid charging (R9) | `Captar` (cost-efficient overnight grid top-up — the tariff preference belongs to this selection, not to `Captar` mode itself, R4) |
+| 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set and next-day forecast above threshold) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
 
 - **Row 1 compares against the *resolved* active SOC limit.** During a solar session the solar
@@ -107,9 +115,11 @@ escalation and revert happen automatically.
   switches to `Captar` so the deadline can be met from the grid.
 - **Revert:** when row 2 stops holding, the next cycle falls through to row 3 or 4, returning to
   a solar mode (or `Off`) once grid charging for the deadline is no longer required (R16).
-- **Suppression:** while the solar-reserve cap is active (R9), row 4 does not match, so Auto
-  does not start baseline grid charging overnight (regardless of tariff); row 2 (urgency) can
-  still escalate up to the cap.
+- **Reserve:** while `Auto`'s own solar-reserve conditions hold (R9), `Auto` both lowers the
+  active SOC limit (R7 row 1) *and* declines to match row 4, so it does not start baseline grid
+  charging overnight either — two separate effects of the same `Auto` decision, not a rule that
+  `Captar` itself enforces. Row 2 (urgency) can still escalate `Captar` and charge up to the
+  (still-capped) active SOC limit, since deadline urgency never raises that limit (R7).
 - **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
   matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
   available regardless of capabilities.
