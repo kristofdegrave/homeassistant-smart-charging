@@ -5,11 +5,6 @@ Status: Accepted
 
 ## Context
 
-This is backfilled from Decision 4 of `docs/plans/2026-07-04-integration-architecture-design.md`
-(PR #30, still open — see ADR-0001's plan to give each of that doc's decisions its own
-ADR before #30 merges, and ADR-0002's Consequences, which reserves ADR-0005 for this
-decision).
-
 Home Assistant config entries split persisted integration state into two buckets:
 **data** (set at initial setup, changed only via a reconfigure flow, not live-editable
 by the user without going through that flow) and **options** (changeable at any time via

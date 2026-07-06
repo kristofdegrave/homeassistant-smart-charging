@@ -5,10 +5,6 @@ Status: Accepted
 
 ## Context
 
-This is backfilled from Decision 6 of
-`docs/plans/2026-07-04-integration-architecture-design.md`, per ADR-0001's plan to give
-each of that doc's decisions its own ADR.
-
 Entity mappings (ADR-0003) can change through the reconfigure flow, and thresholds can
 change through the options flow, while the integration is running. Either change can happen
 mid-cooldown or mid-hold — the coordinator (ADR-0006) may have an in-progress rapid-cycling

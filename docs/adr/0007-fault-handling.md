@@ -5,10 +5,6 @@ Status: Accepted
 
 ## Context
 
-This is backfilled from Decision 6 of
-`docs/plans/2026-07-04-integration-architecture-design.md`, per ADR-0001's plan to give
-each of that doc's decisions its own ADR.
-
 The coordinator's control cycle (ADR-0006) reads mapped entities through adapters (ADR-0003)
 and feeds them into mode logic to produce a charger current. Several things can go wrong on
 any given cycle: a mapped entity can be missing or unavailable, a charger can report a raw
