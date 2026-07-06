@@ -14,7 +14,11 @@ reference the shared mechanism docs rather than restating them.
 0. **Open (or link) a GitHub issue** describing the intent and scope — a new use-case, or a
    behavioral change to an existing one (a change to acceptance criteria, a state model, or a
    set-point rule). Skip this step only for typo-level or pure-wording edits that don't change
-   behavior. Reference the issue in the eventual commit/PR (`Closes #N`).
+   behavior. Reference the issue in the eventual commit/PR (`Closes #N`). For a new use-case,
+   number it next — next sequential integer after the highest existing `UCnn`, zero-padded to 2
+   digits — and branch as `uc/nn` (this number, not the issue number), per CLAUDE.md's
+   branch-naming convention. For a change to an existing use-case, branch as `uc/nn` using that
+   use-case's existing number.
 1. **Draft** against the template below.
 2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness.
    Confirm **every domain term is already in the `system-overview.md` glossary**; if not, add it to

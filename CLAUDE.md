@@ -91,9 +91,13 @@ Every **new** analysis document — and every **change** to an existing one (`do
 
 **Merge policy:** no pull request is ever auto-merged. Every PR — including CI-drafted ones — requires the human partner's **explicit manual approval** before merge (enforced by `CODEOWNERS` + branch protection). CI may draft and review a PR, but never merges or self-approves it, and neither does the assistant.
 
-**Branch naming:** `<type>/<issue-number>` — the type matches the artifact, e.g. `uc/<N>` for
-a use-case, `adr/<N>` for an ADR. Extend the same pattern for any future artifact type
-(one issue, one branch, one PR) rather than inventing a new scheme.
+**Branch naming:** `<type>/<N>` — the type matches the artifact, and `N` is the artifact's own
+sequential number, not the GitHub issue number: `adr/0003` for ADR-0003, `uc/04` for UC04. Determine
+the number (next sequential integer for that artifact type) before creating the branch, so the
+branch name is stable from the start. For artifact types with no sequential number of their own
+(e.g. a `requirements.md`/`system-overview.md` change spanning several Rnn/Cnn entries), fall back
+to `docs/<issue-number>`. Extend the numbered pattern to any future numbered artifact type (one
+issue, one branch, one PR) rather than inventing a new scheme.
 
 ---
 
