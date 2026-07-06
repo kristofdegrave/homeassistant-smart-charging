@@ -5,10 +5,6 @@ Status: Accepted
 
 ## Context
 
-This is backfilled from Decision 3 of
-`docs/plans/2026-07-04-integration-architecture-design.md` (PR #30, still open — see
-ADR-0001's plan to give each of that doc's decisions its own ADR before #30 merges).
-
 The `smart_charging` integration needs to represent two very different kinds of Home
 Assistant entities:
 
@@ -35,30 +31,24 @@ avoid if HA already provides an adequate mechanism.
 This decision depends on ADR-0002 (domain/package layout), which reserves `entity.py` at
 the package root specifically for "base classes for owned entities" — i.e. ADR-0002
 already assumes the two-population split this ADR now makes explicit and justifies. It
-also relates to ADR-0003 (adapter layer for reading/writing mapped entities), which is
-expected to define how mapped entities are accessed; if ADR-0003 has not yet been accepted
-by the time this ADR lands, the relationship still holds in prose: the adapter layer is
-the only code path this integration uses to touch mapped entities; owned entities never go
-through it, since the integration has direct authority over its own.
+also relates to ADR-0003 (adapter layer for reading/writing mapped entities): the adapter
+layer is the only code path this integration uses to touch mapped entities; owned entities
+never go through it, since the integration has direct authority over its own.
 
-**Known conflict, tracked in [issue #29](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/29).**
-`requirements.md` (NF3) and `entity-catalog.md` currently read literally — every mapped
-hardware value is read from a concrete `sc_`-prefixed **wrapper entity**, and raw upstream
-entities are "never catalog rows." This ADR's mapped-entity side (Option B, referenced
-directly by `entity_id`, no wrapper entity) conflicts with that literal wording, for the
-same reason Decision 2 of the design doc does. Issue #29 already proposes the resolution
-this ADR assumes: reword NF3/`entity-catalog.md` to describe the wrapper as a code-level
-adapter abstraction for *mapped* entities, while keeping this ADR's owned control/
-diagnostic entities as real HA entities — which is exactly what issue #29 asks to
-preserve. Until #29's reword lands via the standard write-requirement flow, NF3 and
-`entity-catalog.md` remain the authoritative source of truth per this project's
-methodology, and this ADR's mapped-entity side should not be treated as implementable
-ahead of that reword landing. This ADR's owned-entity side (Option B's second population)
-is not blocked by #29 either way, since issue #29 explicitly proposes keeping owned
-entities as real HA entities.
+**Formerly a conflict, since resolved.** `requirements.md` (NF3) and `entity-catalog.md`
+used to read literally — every mapped hardware value read from a concrete `sc_`-prefixed
+**wrapper entity**, with raw upstream entities "never catalog rows." This ADR's
+mapped-entity side (Option B, referenced directly by `entity_id`, no wrapper entity)
+conflicted with that literal wording, for the same reason ADR-0003's decision did. Both
+NF3 and `entity-catalog.md` have since been reworded to describe the wrapper as a
+code-level adapter abstraction for *mapped* entities, while keeping this ADR's owned
+control/diagnostic entities as real HA entities, so this ADR's mapped-entity side is now
+consistent with the committed requirements text. This ADR's owned-entity side (Option B's
+second population) was never blocked by this conflict either way, since the reword always
+kept owned entities as real HA entities.
 
-**Separate, additional conflict with `entity-catalog.md` (not covered by issue #29).**
-Several of this ADR's owned entities already have catalog rows under different HA
+**Separate, additional conflict with `entity-catalog.md`, not resolved by the reword
+above.** Several of this ADR's owned entities already have catalog rows under different HA
 domains: `input_select.sc_active_profile`, `input_select.sc_active_mode`,
 `input_number.sc_active_soc`, and `input_datetime.sc_departure_<dow>`/`_holiday`/
 `_home_day` are catalogued today as **`input_*` helper entities**, whereas this ADR makes
@@ -112,8 +102,7 @@ Option B. Two distinct entity populations:
 
 1. **Mapped hardware entities** — the user's existing charger/EV/solar/grid entities,
    referenced by `entity_id`, never modified or renamed by this integration. (Read/write
-   access to these goes through the adapter layer — ADR-0003, once accepted; see the
-   Context note above if it is not yet accepted.)
+   access to these goes through the adapter layer — ADR-0003.)
 2. **Owned control/diagnostic entities** — new entities created by `smart_charging`,
    grouped under one HA device (e.g. "Smart Charging"):
    - `select.smart_charging_profile` (Manual / Auto)
@@ -143,30 +132,21 @@ custom storage is needed for them.
   owned entity is added there and grouped under the "Smart Charging" device, never mixed
   into the adapter layer's mapped-entity handling.
 - Mapped entities are never given `unique_id`s or names by this integration and are never
-  targets of `async_remove`/rename logic — only the adapter layer (ADR-0003, once
-  accepted) reads or writes them, always by the `entity_id` the user configured.
+  targets of `async_remove`/rename logic — only the adapter layer (ADR-0003) reads or
+  writes them, always by the `entity_id` the user configured.
 - Restore-state correctness for owned entities is HA's responsibility (standard
   entity-registry behavior), so this integration does not need its own persistence layer
   for profile/mode/SoC-override/departure-time state — a deliberate scope reduction this
   decision buys.
-- Follow-up: once ADR-0003 is accepted, revisit this ADR's Context note about the adapter
-  layer being "expected to define" mapped-entity access, and update the cross-reference
-  if ADR-0003's final shape differs from what's assumed here.
 - Follow-up: the concrete list of owned entities above will grow as later use-cases
   (R5–R13, per ADR-0002's Context) are implemented; this ADR records the split, not the
   final entity inventory — new owned entities don't need a new ADR unless they change the
   two-population boundary itself.
-- Follow-up: issue #29 (reword NF3 and `entity-catalog.md` to describe mapped-entity
-  access as a code-level adapter abstraction, not a literal wrapper entity, while keeping
-  owned control/diagnostic entities as real HA entities) must land, via the standard
-  write-requirement flow, before the mapped-entity side of this ADR is implemented against
-  real hardware — it is not blocked on ADR-0003 specifically, but on that requirements
-  reword.
-- Follow-up: `entity-catalog.md` needs a second, separate update (via the standard
-  write-requirement flow, tracked either as part of issue #29 or a new issue) to reconcile
-  its existing owned-entity rows with this ADR — `input_select.sc_active_profile`,
-  `input_select.sc_active_mode`, `input_number.sc_active_soc`, and
-  `input_datetime.sc_departure_*` move from user-configured `input_*` helpers to native
-  platform entities (`select`/`number`/`time`) owned and created by the integration under
-  the `smart_charging_` prefix; the WFH switch and plug-in-reminder binary_sensor are
+- Follow-up: `entity-catalog.md` still needs a separate update (via the standard
+  write-requirement flow) to reconcile its existing owned-entity rows with this ADR —
+  `input_select.sc_active_profile`, `input_select.sc_active_mode`,
+  `input_number.sc_active_soc`, and `input_datetime.sc_departure_*` move from
+  user-configured `input_*` helpers to native platform entities (`select`/`number`/
+  `time`) owned and created by the integration under the `smart_charging_` prefix; the
+  WFH switch and plug-in-reminder binary_sensor are
   added as entirely new rows, since the catalog has none today.
