@@ -1,4 +1,4 @@
-# ADR-0008: Testing strategy
+# ADR-0009: Testing strategy
 
 Date: 2026-07-04
 Status: Accepted
