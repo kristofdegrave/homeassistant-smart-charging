@@ -1,4 +1,4 @@
-name: Fix review remarks
+﻿name: Fix review remarks
 
 # Triggered only when the `ai-fix` label is added to a PR — by review-analysis.yml (via
 # WORKFLOW_PAT, after a "remarks" verdict, max 3 automatic cycles) or by the maintainer
@@ -58,7 +58,7 @@ jobs:
             locate the review, the fix policy, and the exact summary-comment contract
             (including the marker rules). When fixing a use-case document, it directs you to
             apply the `write-use-case` skill in full — the same authoring context the draft
-            was written with. When fixing an ADR (`docs/adr/**`), it directs you to apply the
+            was written with. When fixing an ADR (`docs/adl/**`), it directs you to apply the
             `write-adr` skill and respect ADR immutability. CI specifics:
             - The PR number is ${{ github.event.pull_request.number }}.
             - You are running in CI: do NOT commit or push — the workflow does that in the
@@ -139,3 +139,4 @@ jobs:
         run: |
           gh pr edit "$PR" --remove-label ai-fix || true
           gh pr comment "$PR" --body "The automatic fix's Claude call **errored** before making any changes (see the \`Address review remarks with Claude Code\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a fix/review loop. Fix the underlying issue, then re-add \`ai-fix\` to retry."
+

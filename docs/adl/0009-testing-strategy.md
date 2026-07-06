@@ -6,10 +6,9 @@ Status: Accepted
 ## Context
 
 Before any test scaffolding is written, the integration needs a decided testing
-strategy: what gets tested with what harness, and why. This is backfilled from
-Decision 7 of `docs/plans/2026-07-04-integration-architecture-design.md` (PR #30, still
-open — see ADR-0001's plan to give each of that doc's decisions its own ADR before #30
-merges), tracked from [issue #41](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/41).
+strategy: what gets tested with what harness, and why. The decision is driven by the
+need to cover both the HA-free domain logic and the Home Assistant integration wiring
+without relying on a single test approach for everything.
 
 ADR-0002 already decided the package layout — `modes/`, `profiles/`, and the peak
 protection/SOC/deadline logic they call are self-contained, HA-free pure logic, with all

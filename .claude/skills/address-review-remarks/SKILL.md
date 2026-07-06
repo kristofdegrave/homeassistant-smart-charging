@@ -1,12 +1,12 @@
----
+﻿---
 name: address-review-remarks
-description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) or ADRs (docs/adr/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
+description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) or ADRs (docs/adl/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
 ---
 
 # Address review remarks
 
 Fix the findings a review raised against analysis documents (`docs/analysis/**`) or ADRs
-(`docs/adr/**`), then account
+(`docs/adl/**`), then account
 for every finding in a summary. The fix policy and the summary contract below are the single
 source of truth — the CI workflow (`fix-review.yml`) and local runs both follow them.
 
@@ -44,7 +44,7 @@ Fixing is re-authoring — work with the same context the original author had:
   rules (glossary-first, entity-catalog columns, reference-don't-restate, state models for
   mode UCs), and common-mistakes list define what a correct fix looks like. Those rules are
   deliberately not restated here.
-- **For an ADR (`docs/adr/NNNN-*.md`): apply the `write-adr` skill in full**, with one
+- **For an ADR (`docs/adl/NNNN-*.md`): apply the `write-adr` skill in full**, with one
   overriding rule: **never edit an Accepted ADR's Context/Decision/Consequences** to
   address a finding, even if the finding says the decision itself was wrong. Determine
   "Accepted" from the **base branch**, not the working tree — run
@@ -97,3 +97,4 @@ Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
 - **Locally**: present the addressed changes to the human partner first (per the CLAUDE.md
   review protocol), then commit with `docs: address review remarks (#<pr>)` and push to the
   PR branch.
+
