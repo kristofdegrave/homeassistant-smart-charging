@@ -14,19 +14,19 @@ entity — and the integration must be hardware-agnostic (see the project's hard
 agnostic scope: reference hardware is an example, not a hard dependency).
 
 This is backfilled from Decision 2 of
-`docs/plans/2026-07-04-integration-architecture-design.md` (PR #30, still open — see
-ADR-0001's plan to give each of that doc's decisions its own ADR before #30 merges).
+`docs/plans/2026-07-04-integration-architecture-design.md`, per ADR-0001's plan to give
+each of that doc's decisions its own ADR.
 ADR-0002 already assumes an `adapters/` subpackage and an `Adapter` protocol
 (`async def read()`, `async def write(value)`) exist; this ADR is the decision that
 subpackage implements.
 
-**Formerly a conflict — issue #29, resolved.** `requirements.md` NF3 originally read
+**Formerly a conflict, since resolved.** `requirements.md` NF3 originally read
 literally: "every sensor value used by the charging logic is read from an `sc_`-prefixed
 wrapper **entity**," and `entity-catalog.md` operationalized that literally as concrete HA
 entities (`sensor.sc_net_power_w`, `number.sc_charger_current`, etc.), stating raw
 upstream entities are "never catalog rows." The decision recorded below treats the "`sc_`
 wrapper" as a Python-side adapter layer, not new HA entities, which conflicted with that
-wording. Issue #29 has since reworded both NF3 and `entity-catalog.md` to describe an
+wording. Both NF3 and `entity-catalog.md` have since been reworded to describe an
 adapter-role abstraction rather than a literal wrapper entity, so this ADR's decision is
 now consistent with the committed requirements text and implementable.
 
@@ -67,10 +67,11 @@ raw entity_id.
   no staleness window and no automation/template to maintain per installation; matches how
   other hardware-agnostic HA integrations solve the same problem in code.
 - Con: At the time this ADR was drafted, conflicted with NF3 and `entity-catalog.md` as
-  then worded (both described the wrapper as a literal HA entity) — resolved by issue #29's
-  reword; also makes the mapping invisible in the HA entity registry (it lives in config-
-  entry data instead), so debugging "which entity feeds this role" requires opening the
-  integration's config flow or its diagnostics, not just browsing entities.
+  then worded (both described the wrapper as a literal HA entity) — resolved by rewording
+  NF3 and `entity-catalog.md`; also makes the mapping invisible in the HA entity registry
+  (it lives in config-entry data instead), so debugging "which entity feeds this role"
+  requires opening the integration's config flow or its diagnostics, not just browsing
+  entities.
 
 ## Decision
 
@@ -95,16 +96,16 @@ Adapters live in `adapters/`, one class per role, sharing the `Adapter` protocol
 
 Option A's extra state hop and non-idiomatic automation dependency (its Con) outweighs
 its advantage of matching the requirements wording as it stood at draft time (its Pro) —
-that wording gap was a known, tracked defect (issue #29) in the requirement, not a reason
-to build the more fragile design, and has since been fixed by rewording NF3 and
-`entity-catalog.md`. Option B is accepted with its remaining Con (invisible-in-registry
-mapping) explicitly recorded rather than silently worked around.
+that wording gap was a known defect in the requirement, not a reason to build the more
+fragile design, and has since been fixed by rewording NF3 and `entity-catalog.md`.
+Option B is accepted with its remaining Con (invisible-in-registry mapping) explicitly
+recorded rather than silently worked around.
 
 ## Consequences
 
-- Issue #29 (NF3 reworded to describe an adapter abstraction, `entity-catalog.md`'s framing
-  note and hardware-I/O rows updated to describe roles rather than literal entities) has
-  landed, so adapter code may now be scaffolded against this ADR.
+- NF3 has been reworded to describe an adapter abstraction, and `entity-catalog.md`'s
+  framing note and hardware-I/O rows updated to describe roles rather than literal
+  entities, so adapter code may now be scaffolded against this ADR.
 - Debugging "which raw entity feeds role X" now requires the config entry's mapping data
   (or a diagnostics view exposing it), not just the HA entity registry — a diagnostics
   sensor or config-flow "review mapping" step becomes useful follow-up work once
