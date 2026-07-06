@@ -7,18 +7,15 @@ Status: Accepted
 
 Before any scaffolding happens, the integration needs a domain slug (the string Home
 Assistant uses to identify it — config flow, entity unique IDs, `manifest.json`) and a
-package layout under `custom_components/`. This is backfilled from Decision 1 of
-`docs/plans/2026-07-04-integration-architecture-design.md` (PR #30, still open — see
-ADR-0001's plan to give each of that doc's decisions its own ADR before #30 merges).
+package layout under `custom_components/`.
 
-The layout has to accommodate what's already decided elsewhere in that design: a Python
-adapter layer per mapped role, and one module per mode (`solar.py`, `captar.py`, ...).
-NF2 requires each mode and profile to be "implemented in its own self-contained unit with
-no logic belonging to another" — that boundary needs to be structural, not just a
-convention, or a later change can quietly blur it. A useful side effect of enforcing that
-boundary with no direct HA access is that mode/profile logic becomes unit-testable without
-a running Home Assistant instance, which the testing strategy (Decision 7 of the same
-design doc) relies on — but that testability is a consequence of satisfying NF2, not
+The layout has to accommodate a Python adapter layer per mapped role, and one module per
+mode (`solar.py`, `captar.py`, ...). NF2 requires each mode and profile to be "implemented
+in its own self-contained unit with no logic belonging to another" — that boundary needs
+to be structural, not just a convention, or a later change can quietly blur it. A useful
+side effect of enforcing that boundary with no direct HA access is that mode/profile logic
+becomes unit-testable without a running Home Assistant instance, which the testing
+strategy relies on — but that testability is a consequence of satisfying NF2, not
 something NF2 itself states.
 
 The domain slug (`smart_charging`) is a much smaller decision bundled into the same ADR
@@ -69,6 +66,5 @@ self-containment NF2 requires, with easy unit-testing as the side benefit.
   `modes/foo.py` implies `tests/modes/test_foo.py`.
 - `docs/` is unaffected; `docs/analysis/` remains the source of truth for behavior.
 - This ADR does not decide anything about entity mapping, adapters' internal behavior, the
-  coordinator's pipeline, error handling, or testing — those are ADR-0003 through ADR-0008
-  (backfilling Decisions 2–7 of PR #30), all of which build on this layout without
-  changing it.
+  coordinator's pipeline, error handling, or testing — those are ADR-0003 through ADR-0008,
+  all of which build on this layout without changing it.

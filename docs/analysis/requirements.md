@@ -304,17 +304,17 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ---
 
-### NF3 — All device I/O via sc_ wrapper entities
+### NF3 — All device I/O via adapter roles
 
 **Priority:** Must
-**What:** All charging logic reads its inputs and issues its outputs through the integration's own namespaced wrappers rather than raw device entities.
+**What:** All charging logic reads its inputs and issues its outputs through the integration's own internal adapter roles rather than raw device entities.
 
 **Acceptance criteria:**
 
-- [ ] Every sensor value used by the charging logic is read from an `sc_`-prefixed wrapper entity.
-- [ ] Every command the logic issues — setting charger current, starting/stopping charging, writing the vehicle charge limit — goes through an `sc_`-prefixed wrapper (entity or action), not a raw device entity or service.
+- [ ] Every sensor value used by the charging logic is read through an adapter role, not a raw upstream entity.
+- [ ] Every command the logic issues — setting charger current, starting/stopping charging, writing the vehicle charge limit — is issued through an adapter role, not a raw device entity or service.
 - [ ] No charging logic references a raw device or third-party integration entity directly, for input or output.
-- [ ] Replacing the underlying charger or vehicle requires changing only the wrappers, not the charging logic.
+- [ ] Replacing the underlying charger or vehicle requires re-mapping only the affected adapter role, not changing the charging logic.
 
 ---
 
