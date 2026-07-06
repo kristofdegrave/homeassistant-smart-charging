@@ -56,7 +56,7 @@ These goals are ordered by preference but bounded by goal 4: cost optimisation n
 
 ## How it fits together
 
-At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing them, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an `sc_` wrapper entity, which is what keeps the integration hardware-agnostic.
+At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing them, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an adapter role (see `adapter role`, NF3), which is what keeps the integration hardware-agnostic.
 
 This is the orientation map; flow `00-control-cycle.md` details the loop and the per-mode flows detail each mode module.
 
@@ -122,7 +122,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`departure deadline`** — The time by which the car must reach its active SOC limit on a given day, resolved in priority order: an external departure-time sensor, then a public-holiday or home-day override, then the per-day-of-week default. By default weekends, public holidays, and home days have no deadline; a day with no departure time imposes no deadline at all. See R14.
 
-**`charger status`** — The normalised charger connection state exposed via `sensor.sc_charger_status`, mapped to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current).
+**`charger status`** — The normalised charger connection state exposed via the `charger_status` adapter role, translated from the charger's raw states to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current).
 
 **`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w` or `solar_w` — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
 
@@ -160,9 +160,11 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`sun is down`** — The condition `sun.sun` state equals `below_horizon`.
 
+**`adapter role`** — An internal, code-level abstraction through which charging logic reads or writes one piece of hardware I/O (e.g. charger current, EV state of charge, solar power) — not a Home Assistant entity itself. Each role is mapped once, during config flow, to the user's real upstream `entity_id`; charging logic reads and writes only the role, never a raw device or third-party entity directly, so replacing the underlying charger or vehicle requires re-mapping only the affected role. See NF3.
+
 ### Entity naming convention
 
-**`sc_` prefix** — The namespace prefix on every helper and sensor owned by this integration, following `<domain>.sc_<descriptive_name>` (e.g. `input_number.sc_active_soc`); it prevents collisions with unrelated helpers and makes every smart-charging entity findable in the Home Assistant UI. Raw upstream entities (e.g. `sensor.tesla_batterijniveau`) are never referenced directly — they are always wrapped in an `sc_` sensor.
+**`sc_` prefix** — The namespace prefix on every entity this integration owns and creates in Home Assistant — configuration helpers and the control/diagnostic entities it exposes — following `<domain>.sc_<descriptive_name>` (e.g. `input_number.sc_active_soc`); it prevents collisions with unrelated helpers and makes every smart-charging entity findable in the Home Assistant UI. It does not extend to hardware I/O: a raw upstream entity (e.g. `sensor.tesla_batterijniveau`) is never referenced directly by charging logic, but it is reached through an `adapter role`, not a literal `sc_`-prefixed wrapper entity.
 
 ---
 

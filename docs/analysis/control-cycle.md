@@ -18,8 +18,8 @@ interval](system-overview.md#ubiquitous-language): read the sensors, smooth the 
 ask the [active mode](system-overview.md#ubiquitous-language) module for a desired charger
 current, clamp that current with peak protection, and set it. The coordinator executes the
 active mode and never chooses it (NF1); mode choice belongs to the [profile](system-overview.md#ubiquitous-language)
-(see `resolution-rules.md`, Auto mode-selection). All inputs and outputs cross `sc_` wrapper
-entities (NF3); see `entity-catalog.md` for their bindings.
+(see `resolution-rules.md`, Auto mode-selection). All inputs and outputs cross an adapter role
+(NF3); see `entity-catalog.md` for their bindings.
 
 ## Trigger
 
@@ -29,8 +29,8 @@ smoothing window and the rapid-cycling timers, which persist across cycles.
 
 ## Domain events produced
 
-- `SensorsRead` — past-tense — the cycle has captured a fresh raw reading of every input
-  wrapper; signals the start of one cycle's processing.
+- `SensorsRead` — past-tense — the cycle has captured a fresh raw reading through every input
+  adapter role; signals the start of one cycle's processing.
 - `PeakLimitClamped` — the peak-protection step reduced the mode's desired current to keep
   net import at or below the [effective peak limit](system-overview.md#ubiquitous-language)
   minus the [safety margin](system-overview.md#ubiquitous-language); signals that peak
@@ -39,8 +39,8 @@ smoothing window and the rapid-cycling timers, which persist across cycles.
   import below the [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
   [grid safety offset](system-overview.md#ubiquitous-language); signals that the hard
   fuse-protection limit (C4), not the mode or peak protection, decided the set-point.
-- `ChargerCurrentSet` — the cycle has written the final charger current to the charger
-  wrapper; signals the end of one cycle and the value applied.
+- `ChargerCurrentSet` — the cycle has written the final charger current through the charger
+  current adapter role; signals the end of one cycle and the value applied.
 
 ## Diagram
 
@@ -64,7 +64,7 @@ flowchart TD
 
 ## Steps
 
-1. **Read sensors (raw).** The coordinator reads each input through its `sc_` wrapper (NF3):
+1. **Read sensors (raw).** The coordinator reads each input through its adapter role (NF3):
    net grid import, solar power, charger power, the measured grid voltage, charger status, and
    state of charge. These are [raw values](system-overview.md#ubiquitous-language) — the most
    recent, unsmoothed readings (the measured grid voltage is resolved into the
@@ -107,7 +107,7 @@ flowchart TD
    completion. (Start/stop and cooldown durations are mode-specific and defined in each mode
    use-case; the coordinator only upholds the invariant.)
 8. **Set the charger current.** The coordinator writes the final current to the charger
-   through its `sc_` wrapper (NF3) and emits `ChargerCurrentSet`, then waits for the next
+   through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
    interval.
 
 ## Edge cases
@@ -137,6 +137,6 @@ flowchart TD
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
-`requirements.md`; mode choice in `resolution-rules.md`) and **NF3** (all I/O via `sc_`
-wrappers — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4** (grid supply ceiling
+`requirements.md`; mode choice in `resolution-rules.md`) and **NF3** (all I/O via adapter
+roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4** (grid supply ceiling
 clamp, step 6) are enforced as invariants in steps 5–7.
