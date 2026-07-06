@@ -13,6 +13,7 @@ template.
 | [0004](0004-owned-vs-mapped-entities.md) | Owned control/diagnostic entities vs. mapped hardware entities | Accepted |
 | [0005](0005-config-entry-structure-and-interval.md) | Config entry structure and control interval | Accepted |
 | [0006](0006-coordinator-and-data-flow.md) | Coordinator and data flow | Accepted |
-| [0007](0007-error-handling.md) | Error handling | Accepted |
+| [0007](0007-fault-handling.md) | Fault handling for adapter reads, translation failures, and uncaught exceptions | Accepted |
+| [0008](0008-reconfigure-reload-behavior.md) | Config-entry reload on reconfigure and options changes | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
