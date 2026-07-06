@@ -13,9 +13,6 @@ entities — a Tesla's SOC sensor looks nothing like a Zaptec charger's current 
 entity — and the integration must be hardware-agnostic (see the project's hardware-
 agnostic scope: reference hardware is an example, not a hard dependency).
 
-This is backfilled from Decision 2 of
-`docs/plans/2026-07-04-integration-architecture-design.md`, per ADR-0001's plan to give
-each of that doc's decisions its own ADR.
 ADR-0002 already assumes an `adapters/` subpackage and an `Adapter` protocol
 (`async def read()`, `async def write(value)`) exist; this ADR is the decision that
 subpackage implements.
