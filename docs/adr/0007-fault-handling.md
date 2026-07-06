@@ -58,9 +58,10 @@ Option A. An adapter returning `None` for a required role — a mapped entity th
 or unavailable, or, for charger status specifically, a raw state with no translation-table
 entry — is treated as a fault: the coordinator sets `sensor.smart_charging_status` to `Fault`
 and forces 0 A through the same C1/R11 invariants as any other stop. No substitute value is
-ever guessed. Grid voltage is the one documented exception, per NF4: a missing/unavailable
-reading there resolves to the nominal voltage, which is NF4's normal fallback path, not a
-fault. An uncaught exception anywhere in a coordinator cycle is treated identically (force
+ever guessed. Grid voltage is the one documented exception, per NF4: whether no grid-voltage
+entity is mapped at all (the role is optional) or a mapped entity is temporarily unavailable,
+the coordinator resolves the nominal voltage instead, which is NF4's normal fallback path,
+not a fault. An uncaught exception anywhere in a coordinator cycle is treated identically (force
 0 A, set `Fault`) rather than leaving the charger at its last set current, for the reason
 Option B's Con names — `DataUpdateCoordinator`'s backoff/retry does not, on its own,
 guarantee prompt re-evaluation of the current. Each outage logs once at warning level (not
@@ -73,8 +74,9 @@ once per cycle, to avoid log spam); a recovery logs at info level.
   ADR-0006's step order must route every failure mode into it rather than adding
   special-cased short-circuits.
 - Grid-voltage fallback (NF4) must be implemented as a distinct branch from the fault path,
-  not as a special case within it, since a missing voltage reading is explicitly not a
-  fault.
+  not as a special case within it, covering both "no grid-voltage entity mapped" and "mapped
+  but unavailable" — neither is a fault, unlike every other role, where an unmapped or
+  unavailable entity is one.
 - Warning/info-level once-per-outage logging (not per-cycle) needs its own de-duplication
   state (e.g. "was the previous cycle also faulted") — a follow-up implementation detail for
   whichever issue implements the coordinator, tracked once that work starts.
