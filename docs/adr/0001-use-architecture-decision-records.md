@@ -8,13 +8,12 @@ Status: Accepted
 We need to record the architectural decisions made on this project. This is a
 recommendation from the project's human partner (Kristof Degrave), based on prior
 experience using ADRs on another project (see e.g. that project's own ADR-001, "Record
-architecture decisions") — see issue #30 and #32.
+architecture decisions").
 
 Architectural decisions made for this project — e.g. the entity-mapping/adapter-layer
-choice in `docs/plans/2026-07-04-integration-architecture-design.md` — have so far been
-folded into design docs with no durable, indexed record of *why* an alternative was
-rejected. As the integration grows (multi-charger support, three-phase, additional
-config-entry shapes), later contributors — including a future instance of this
+choice — have so far been folded into design docs with no durable, indexed record of *why*
+an alternative was rejected. As the integration grows (multi-charger support, three-phase,
+additional config-entry shapes), later contributors — including a future instance of this
 assistant — need a fast way to answer "why is it built this way, and what else did we
 consider?" without re-reading an entire design doc or PR thread.
 
@@ -75,13 +74,6 @@ that supersedes the old one (old ADR's Status becomes `Superseded by ADR-NNNN`).
 - Every architectural decision going forward gets its own ADR (see the new constraint
   in `CLAUDE.md` and the `write-adr` skill) instead of being buried in a design doc's
   prose.
-- `docs/plans/2026-07-04-integration-architecture-design.md` (PR #30) is still open, so
-  its seven "Decision N" sections are backfilled into individual ADRs — one issue and one
-  PR each — before that PR merges (tracked from issue #32). The design doc is not deleted;
-  it keeps its narrative/context role for now, with each Decision N section linking to its
-  ADR, but it is intended to be phased out once every decision it currently documents has
-  its own ADR. A design doc merged *before* this ADR process existed would not be
-  backfilled this way — the bar is "not yet merged," not "every historical decision."
 - Adds one more artifact type to review before commit (per the project's existing
   issue-first, human-approved review discipline), which is a small but real tax on
   every future architectural decision.
