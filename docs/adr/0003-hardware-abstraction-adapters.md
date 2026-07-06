@@ -84,9 +84,8 @@ canonical charger states already defined in `system-overview.md`'s glossary and
 adapter translates in one direction, raw -> canonical; the coordinator never writes charger
 status back to the hardware. A raw state with no entry in the translation table (e.g. an
 unmapped firmware state) is treated the same as an unavailable entity — the adapter
-returns `None`, which the error-handling decision (ADR-0007, backfilling Decision 6) picks
-up: a mapping the user never provided is treated as missing data, the same as a sensor
-that's actually offline.
+returns `None`, which the error-handling decision (ADR-0007) picks up: a mapping the user
+never provided is treated as missing data, the same as a sensor that's actually offline.
 
 Adapters live in `adapters/`, one class per role, sharing the `Adapter` protocol
 (`async def read()`, `async def write(value)`) already assumed by ADR-0002.
