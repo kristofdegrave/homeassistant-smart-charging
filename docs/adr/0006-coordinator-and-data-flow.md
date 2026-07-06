@@ -11,15 +11,14 @@ peak clamp, apply the C4 grid-supply-ceiling clamp, enforce C1/R11, write the re
 not say how that behavior is implemented as Home Assistant Python — how many coordinator
 objects there are, which reads go through adapters, which values are raw vs. smoothed at each
 clamp, or how mode modules are shaped so NF2's self-containment is structural rather than a
-convention. This is backfilled from Decision 5 of
-`docs/plans/2026-07-04-integration-architecture-design.md` (PR #30, still open — see
-ADR-0001's plan to give each of that doc's decisions its own ADR before #30 merges).
+convention. This decision is also informed by the earlier integration-architecture work that
+shaped this ADR set, and it is documented here as its own decision to make the implementation
+choice explicit.
 
 This decision builds on ADR-0003 (adapters supply the readings in step 1) and ADR-0004/0005
 (owned diagnostic entities and config entries feed steps 4-6); it does not restate or change
-those. It leaves error handling (what happens when an adapter read fails) and testing strategy
-(how mode modules get unit-tested) to ADR-0007 and ADR-0008, which depend on the shape fixed
-here.
+those. The surrounding implementation still needs explicit handling for adapter failures and for
+how mode modules are tested, but those concerns are not part of this decision.
 
 Two forces sharpen the implementation choice beyond what `control-cycle.md` already settled:
 
@@ -78,7 +77,7 @@ independently-scheduled coordinator for diagnostic entities and notification tri
   in this design need the *same* cycle's resolved values (SOC limit, applied current, which
   clamp fired) that steps 1-9 just computed — splitting them means either duplicating that
   state or passing it across coordinators, adding coupling for a cadence difference that
-  R12/R13 (not yet built) haven't shown a need for yet.
+  notification handling has not shown a need for yet.
 
 ## Decision
 
@@ -108,18 +107,17 @@ Option B. A single `DataUpdateCoordinator` subclass drives the full cycle:
    with no opt-out of its own, so it always runs, including when step 7 was skipped.
 9. Apply rapid-cycling prevention (R11) and the C1 floor/cap invariant.
 10. Write the result through the charger-current adapter (skip the write if unchanged), update
-    the owned diagnostic entities, and evaluate notification triggers (R12/R13, once those
-    use-cases exist).
-
+the owned diagnostic entities, and evaluate any notification triggers that are part of the
+surrounding workflow.
 Mode modules (`solar.py`, `solar_only.py`, `captar.py`, `power.py`, `off.py`) are pure
 functions/classes: smoothed readings + config in, desired current out — no direct HA or
 adapter access. This is a rule this decision adds on top of NF2 (which requires only that each
 mode be self-contained, not that it avoid HA access); it is what makes the mode modules
-unit-testable without a running Home Assistant instance, a property ADR-0008 relies on to
-define its testing strategy. NF2 itself states nothing about testability — the self-containment
-it requires is realized structurally by ADR-0002's `adapters/`/`modes/`/`profiles/` package
-layout, and this decision's "no direct HA or adapter access" rule is what makes that
-self-containment strong enough to also buy the testability ADR-0008 depends on.
+unit-testable without a running Home Assistant instance. NF2 itself states nothing about
+testability — the self-containment it requires is realized structurally by ADR-0002's
+`adapters/`/`modes/`/`profiles/` package layout, and this decision's "no direct HA or adapter
+access" rule is what makes that self-containment strong enough to support isolated unit
+testing.
 
 Step 7/8's split is Option B specifically because Option A's single routine would let the R17
 opt-out — a `Power`-mode-only, user-facing toggle — reach into C4 by construction, which
@@ -133,12 +131,13 @@ so the added coordination cost of two coordinators has no offsetting benefit yet
 - `coordinator.py` is the one place the ten-step order lives in code; a change to step order
   or to which reading (raw/smoothed) a step consumes is a change to this ADR (a new ADR
   superseding this one), not a silent refactor.
-- ADR-0007 (error handling) defines what happens when an adapter read in step 1 fails or when
-  the mode module in step 6 raises — this ADR only fixes the happy-path shape it must handle.
-- ADR-0008 (testing strategy) relies on mode modules being pure and adapter-free (this
-  decision's added rule) to unit-test `modes/*.py` without a running Home Assistant instance.
-- If R12/R13 (notifications) later need a different schedule than the control interval, Option
-  C becomes worth revisiting — this decision does not foreclose it, it just isn't justified by
+- The implementation still needs explicit handling for adapter-read failures and for exceptions
+  raised by the mode module in step 6; this ADR only fixes the happy-path shape it must
+  handle.
+- The pure, adapter-free shape of the mode modules is what makes unit testing `modes/*.py`
+  without a running Home Assistant instance feasible.
+- If notification handling later needs a different schedule than the control interval, Option C
+  becomes worth revisiting — this decision does not foreclose it, it just isn't justified by
   anything in scope today.
 - Step 7 and step 8 must remain separate methods/call sites in `coordinator.py`; a future
   change that merges them back into one conditional would reintroduce the Option A failure mode
