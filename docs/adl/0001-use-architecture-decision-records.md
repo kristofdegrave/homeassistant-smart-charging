@@ -1,4 +1,4 @@
-# ADR-0001: Use Architecture Decision Records, with a Nygard+options template
+﻿# ADR-0001: Use Architecture Decision Records, with a Nygard+options template
 
 Date: 2026-07-04
 Status: Accepted
@@ -56,16 +56,16 @@ Two template families are common:
   the record with its trade-off — the specific gap in Option A.
 - Con: Not a single named template from either source; it's a hybrid, so contributors
   familiar with "pure" Nygard or "pure" MADR need the project's own template file
-  (`docs/adr/template.md`) rather than an external reference alone.
+  (`docs/adl/template.md`) rather than an external reference alone.
 
 ## Decision
 
-Option C. `docs/adr/template.md` is the authoritative template: Status / Context /
+Option C. `docs/adl/template.md` is the authoritative template: Status / Context /
 Considered options (with pros/cons) / Decision / Consequences. This keeps ADRs as
 lightweight as the rest of the project's documentation while satisfying the actual
 reason ADRs exist here — a searchable record of rejected alternatives.
 
-ADRs live in `docs/adr/`, numbered sequentially (`NNNN-kebab-case-title.md`, zero-padded
+ADRs live in `docs/adl/`, numbered sequentially (`NNNN-kebab-case-title.md`, zero-padded
 to 4 digits), and are never edited to reverse a decision — a reversal gets a new ADR
 that supersedes the old one (old ADR's Status becomes `Superseded by ADR-NNNN`).
 
@@ -77,3 +77,4 @@ that supersedes the old one (old ADR's Status becomes `Superseded by ADR-NNNN`).
 - Adds one more artifact type to review before commit (per the project's existing
   issue-first, human-approved review discipline), which is a small but real tax on
   every future architectural decision.
+

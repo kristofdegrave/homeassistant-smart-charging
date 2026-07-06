@@ -1,4 +1,4 @@
-name: Review analysis docs
+﻿name: Review analysis docs
 
 # Label-driven fresh Opus review. Runs ONLY when the `ai-review` label is added to a PR —
 # either by the maintainer directly, or via WORKFLOW_PAT by the generate-uc / fix-review
@@ -27,7 +27,7 @@ on:
     types: [labeled]
     paths:
       - "docs/analysis/**"
-      - "docs/adr/**"
+      - "docs/adl/**"
 
 permissions:
   contents: read
@@ -68,10 +68,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             Review the documentation changes in pull request #${{ github.event.pull_request.number }}.
-            Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis docs/adr`
+            Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis docs/adl`
             to see the changed files.
 
-            If any changed file is under `docs/adr/`, apply the full review checklist in
+            If any changed file is under `docs/adl/`, apply the full review checklist in
             .claude/agents/adr-reviewer.md for those files.
             If any changed file is under `docs/analysis/`, apply the full review checklist in
             .claude/agents/analysis-reviewer.md for those files.
@@ -81,7 +81,7 @@ jobs:
             are already a fresh, independent session (the same independence a spawned
             sub-agent would provide), and this runner has no `Task` tool to actually launch one.
 
-            For any changed file under `docs/adr/`: before treating its Status as fixed/settled,
+            For any changed file under `docs/adl/`: before treating its Status as fixed/settled,
             run `git show ${{ github.event.pull_request.base.sha }}:<path>` for that file (it
             will fail with "does not exist" for a brand-new ADR, which is fine — treat that as
             a draft). Only an ADR whose Status was **already** `Accepted` on the base branch is
@@ -188,3 +188,4 @@ jobs:
         run: |
           gh pr edit "$PR" --remove-label ai-review || true
           gh pr comment "$PR" --body "The automatic review's Claude call **errored** before producing a review (see the \`Fresh-agent review\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a review/fix loop. Fix the underlying issue, then re-add \`ai-review\` to retry."
+

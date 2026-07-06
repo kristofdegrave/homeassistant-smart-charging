@@ -1,12 +1,12 @@
----
+﻿---
 name: write-adr
-description: Use when making or changing any architectural decision in the Smart Charging project — a new ADR under docs/adr/, or superseding an existing one.
+description: Use when making or changing any architectural decision in the Smart Charging project — a new ADR under docs/adl/, or superseding an existing one.
 ---
 
 # Write an ADR
 
 Capture an architectural decision as a numbered, immutable Architecture Decision Record
-(`docs/adr/NNNN-kebab-case-title.md`), per `docs/adr/0001-use-architecture-decision-records.md`
+(`docs/adl/NNNN-kebab-case-title.md`), per `docs/adl/0001-use-architecture-decision-records.md`
 (the decision to use ADRs at all, and why the template looks the way it does).
 
 ## Is this decision ADR-worthy?
@@ -26,11 +26,11 @@ structural consequence. When in doubt: would a future contributor benefit from k
    Skip this step only when the ADR merely documents a decision already approved in an
    issue/PR that exists (link it instead). Reference the issue in the eventual
    commit/PR (`Closes #N`).
-1. **Number it** — next sequential integer after the highest existing `docs/adr/NNNN-*`,
+1. **Number it** — next sequential integer after the highest existing `docs/adl/NNNN-*`,
    zero-padded to 4 digits. Never reuse or renumber; a superseded ADR keeps its number.
    Branch as `adr/NNNN` (this number, not the issue number), per CLAUDE.md's branch-naming
    convention.
-2. **Draft** against `docs/adr/template.md`: Status, Context, **Considered options**
+2. **Draft** against `docs/adl/template.md`: Status, Context, **Considered options**
    (every option seriously evaluated, each with Pro/Con — not just the chosen one),
    Decision, Consequences.
 3. **Self-check** (no 6Cs pass — that check is for behavioral requirements/use-cases;
@@ -43,7 +43,7 @@ structural consequence. When in doubt: would a future contributor benefit from k
    - Decision references the options' trade-offs rather than restating them.
    - Consequences names concrete follow-up (issues to open, docs to update), not just
      restating the decision.
-   - `docs/adr/README.md` (the ADL) has a new row for this ADR, and the number matches
+   - `docs/adl/README.md` (the ADL) has a new row for this ADR, and the number matches
      step 1 — the reviewer checks both and will raise a finding if either is missing.
 4. **Cross-check against existing ADRs and design docs** — does this decision contradict
    an existing `Accepted` ADR? If so, this record supersedes it: set the new ADR's
@@ -53,7 +53,7 @@ structural consequence. When in doubt: would a future contributor benefit from k
    inline). It checks template conformance, that every option has a genuine Pro and Con,
    that the Decision references those trade-offs, that Consequences actually follow, and
    cross-ADR consistency (including the immutability rule). Don't use `analysis-reviewer`
-   — that agent is scoped to `docs/analysis/**` and doesn't cover `docs/adr/**`.
+   — that agent is scoped to `docs/analysis/**` and doesn't cover `docs/adl/**`.
 6. **Address** the review feedback.
 7. **Manual review** — present the addressed draft to the human partner and get explicit
    approval before committing.
@@ -79,3 +79,4 @@ structural consequence. When in doubt: would a future contributor benefit from k
 - An option with no genuine Con (usually means the alternative wasn't actually explored).
 - Editing an old ADR's Decision text instead of writing a new ADR that supersedes it.
 - Bundling two independent structural choices into one ADR.
+

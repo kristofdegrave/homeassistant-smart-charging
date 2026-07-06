@@ -1,4 +1,4 @@
-# Smart Charging — Project Guide
+﻿# Smart Charging — Project Guide
 
 ## Methodology: Analysis-first, spec-driven development
 
@@ -29,7 +29,7 @@ docs/analysis/
 Previous iteration archived at `docs/archive/` — do not use as source of truth.
 
 ```text
-docs/adr/
+docs/adl/
   template.md            — ADR template (Nygard + Considered options)
   0001-...md, 0002-...md — one file per architectural decision, sequential, never renumbered
 ```
@@ -48,7 +48,7 @@ docs/adr/
 ## Model selection
 
 - **Analysis work** (`docs/analysis/`) → use **Opus**
-- **Architecture decisions** (`docs/adr/`) → use **Opus**
+- **Architecture decisions** (`docs/adl/`) → use **Opus**
 - **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
 
 ---
@@ -103,7 +103,7 @@ issue, one branch, one PR) rather than inventing a new scheme.
 
 ## Architecture Decision Records (ADRs)
 
-**Every architectural decision must be captured as an ADR before the work that depends on it is committed.** See `docs/adr/0001-use-architecture-decision-records.md` for the rationale and template choice.
+**Every architectural decision must be captured as an ADR before the work that depends on it is committed.** See `docs/adl/0001-use-architecture-decision-records.md` for the rationale and template choice.
 
 An **architectural decision** is a choice about structure that would be expensive to
 reverse or that materially constrains future options — e.g. how integration entities
@@ -117,7 +117,7 @@ doubt, ask whether a future contributor would benefit from knowing *why*, not ju
 Use the `write-adr` skill for the full cycle. In short:
 
 0. **Open (or link) a GitHub issue** describing the decision to be made, before drafting.
-1. **Draft** against `docs/adr/template.md`, numbering sequentially and listing every
+1. **Draft** against `docs/adl/template.md`, numbering sequentially and listing every
    option seriously considered, not just the chosen one.
 2. **Review** — a fresh, separate agent (Opus) checks the ADR against existing ADRs
    (no silent contradictions; supersede, don't edit, a prior decision) and against the
@@ -133,3 +133,4 @@ Use the `write-adr` skill for the full cycle. In short:
 Each flow doc: Purpose → Trigger → **Domain events** → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
 
 Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.
+
