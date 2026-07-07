@@ -27,6 +27,11 @@ The configured evening prompt time is reached (`sc_evening_prompt_time`, default
 
 ## Alternate flows
 
+**1a — External source already set the flag** — branches from step 1 (preconditions).
+Given an external source has already set the home-day flag for tomorrow before the configured prompt time is reached
+When the configured prompt time is reached
+Then the System skips this use-case entirely for the evening — no notification is sent, and the externally-set flag is left as is (not overridden). The goal (the flag being correctly resolved for tomorrow) is still met, just via the other source.
+
 **3a — Driver answers "no"** — branches from step 3.
 Given the notification from step 2 is pending
 When the EV driver answers "no" within the timeout
@@ -38,11 +43,6 @@ Then the System leaves the home-day flag unset for tomorrow.
 Given the notification from step 2 is pending
 When the configured timeout (`sc_prompt_timeout_h`) elapses with no answer
 Then the System treats the lack of an answer as "no" and leaves the home-day flag unset for tomorrow.
-
-**External source already set the flag.**
-Given an external source has already set the home-day flag for tomorrow before the configured prompt time is reached
-When the configured prompt time is reached
-Then the System skips this use-case entirely for the evening — no notification is sent, and the externally-set flag is left as is (not overridden).
 
 ## Postconditions
 
@@ -60,7 +60,7 @@ The prompt lifecycle for a single evening, re-armed at midnight when the home-da
 - **Answered-no** — the EV driver answered "no" within the timeout; the home-day flag stays unset.
 - **Timed-out** — the timeout elapsed with no answer; treated the same as answered-no (flag stays unset).
 
-Answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only when the home-day flag resets at midnight and the next evening's prompt time is reached.
+Not sent (when skipped because an external source already set the flag), answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only when the home-day flag resets at midnight and the next evening's prompt time is reached.
 
 ## Domain events produced
 
@@ -104,3 +104,4 @@ Inherited from the shared mechanism (referenced, not restated): the home-day fla
 - **Sets the home-day flag UC07 consumes.** [UC07](UC07-reserve-capacity-for-tomorrow.md) reads the home-day flag this use-case sets (or leaves unset) to decide, alongside the next-day solar forecast, whether to apply the solar-reserve cap (R9) — this use-case has no visibility into that decision and does not itself evaluate the forecast.
 - **One of two flag sources, and the deferential one (R9).** The home-day flag can also be set by an external source such as a calendar or presence sensor (`home_day_external`, `entity-catalog.md`). When that external source has already set the flag for tomorrow, this use-case skips its prompt entirely for the evening rather than asking redundantly or overriding the external value.
 - Also feeds the departure home-day override (R14, `resolution-rules.md`), which reads the same flag to decide whether a home day's departure-time override applies — a downstream consumer of the flag, not something this use-case coordinates directly.
+- **Midnight reset spans a boundary this use-case does not own.** This use-case sets the flag on the evening it prompts, and the flag resets at midnight (R13). R9's overnight solar-reserve window ("while the sun is down") spans the same midnight boundary between the prompt evening and the home day it describes. Reconciling exactly which midnight ends the flag's validity relative to that overnight window is R9's / `resolution-rules.md`'s concern, not this use-case's — UC08's scope ends at setting (or leaving unset) the flag for tomorrow.
