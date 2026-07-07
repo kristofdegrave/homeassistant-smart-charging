@@ -158,9 +158,9 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | config | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules | user |
-| `input_number.sc_solar_forecast_threshold_kwh` | config | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules | user |
-| `solar_forecast` | adapter role | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules | — |
+| `input_number.sc_solar_reserve_soc` | config | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user |
+| `input_number.sc_solar_forecast_threshold_kwh` | config | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07 | user |
+| `solar_forecast` | adapter role | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07 | — |
 
 ---
 
@@ -192,8 +192,8 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `home_day_external` | adapter role | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules | — |
-| `input_boolean.sc_home_day` | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules | external / (UC08) |
+| `home_day_external` | adapter role | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules, UC07 | — |
+| `input_boolean.sc_home_day` | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC07 | external / (UC08) |
 
 The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14), and is set by the evening prompt (R13, Notification) or an external source.
 
