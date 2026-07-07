@@ -29,6 +29,16 @@ docs/analysis/
 Previous iteration archived at `docs/archive/` — do not use as source of truth.
 
 ```text
+docs/design/
+  system-design.md    — volatility-based service decomposition (Löwy's Method): static + dynamic architecture
+  project-plan.md      — implementation task breakdown derived mechanically from system-design.md
+```
+
+Use cases and flows validate this decomposition — they never drive it. See
+`docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale and the
+`write-system-design` / `write-project-design` skills for the cycle.
+
+```text
 docs/adl/
   template.md            — ADR template (Nygard + Considered options)
   0001-...md, 0002-...md — one file per architectural decision, sequential, never renumbered
@@ -42,12 +52,16 @@ docs/adl/
 2. `requirements.md` (fresh from idea — not from archive)
 3. `flows/` one at a time, starting with `00-control-cycle.md`
 4. Revisit `requirements.md` after flows reveal gaps
+5. Once the relevant use-cases/flows are stable, `design/system-design.md` (volatility-based
+   decomposition), then `design/project-plan.md` — before opening ADRs for the structural
+   decisions the design surfaces
 
 ---
 
 ## Model selection
 
 - **Analysis work** (`docs/analysis/`) → use **Opus**
+- **System/project design** (`docs/design/`) → use **Opus**
 - **Architecture decisions** (`docs/adl/`) → use **Opus**
 - **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
 
