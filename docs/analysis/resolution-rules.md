@@ -66,8 +66,10 @@ no charging and R12 sends no reminder).
   necessarily today's: if today's resolved deadline (above) has not yet passed, it is the next
   departure time. If today's has already passed, or resolved to "no deadline," the next departure
   time is the deadline this same table resolves to for the following day — repeating for
-  subsequent days until one resolves to an actual deadline. This is what the plug-in reminder's
-  [departure window](system-overview.md#ubiquitous-language) tracks.
+  subsequent days, up to 7 days ahead, until one resolves to an actual deadline; if every day in
+  that window resolves to "no deadline," there is no next departure time and R12 sends no reminder.
+  This is what the plug-in reminder's [departure window](system-overview.md#ubiquitous-language)
+  tracks.
 
 **Satisfies:** R14 · **Consumed by:** UC05, UC10.
 
