@@ -16,13 +16,10 @@ Steps → Edge cases → Requirements satisfied**.
 Run the [coordinator](system-overview.md#ubiquitous-language) once per [control
 interval](system-overview.md#ubiquitous-language): read the sensors, smooth the power readings,
 ask the [active mode](system-overview.md#ubiquitous-language) module for a desired charger
-current, raise that current under deadline urgency, clamp it with peak protection, and set it.
-The coordinator executes the active mode and never chooses it (NF1); mode choice belongs to the
-[profile](system-overview.md#ubiquitous-language) (see `resolution-rules.md`, Auto
-mode-selection). The deadline-urgency response (also `resolution-rules.md`) is likewise a
-coordinator-applied, profile-keyed rule rather than mode logic (NF2) — see
-[UC05](use-cases/UC05-guarantee-ready-by-departure.md) for the goal it serves. All inputs and
-outputs cross an adapter role (NF3); see `entity-catalog.md` for their bindings.
+current, clamp that current with peak protection, and set it. The coordinator executes the
+active mode and never chooses it (NF1); mode choice belongs to the [profile](system-overview.md#ubiquitous-language)
+(see `resolution-rules.md`, Auto mode-selection). All inputs and outputs cross an adapter role
+(NF3); see `entity-catalog.md` for their bindings.
 
 ## Trigger
 
@@ -34,27 +31,16 @@ smoothing window and the rapid-cycling timers, which persist across cycles.
 
 - `SensorsRead` — past-tense — the cycle has captured a fresh raw reading through every input
   adapter role; signals the start of one cycle's processing.
-- `DeadlineUrgencyEngaged` / `DeadlineUrgencyReverted` — the deadline-urgency response
-  (`resolution-rules.md`) started or stopped raising the current toward the required current.
-  Emitted by this coordinator (steps 5/9) only under `Manual`, where the dispatched mode never
-  changes; under `Auto` the equivalent transition is Auto mode-selection escalating to or
-  reverting from `Captar` (`resolution-rules.md`), not this coordinator. See
-  [UC05](use-cases/UC05-guarantee-ready-by-departure.md) for the goal this serves and the state
-  model these belong to.
-- `PeakLimitClamped` — the peak-protection step reduced the desired current (the mode's own, or
-  as raised by the deadline-urgency response) to keep net import at or below the [effective peak
-  limit](system-overview.md#ubiquitous-language) minus the
-  [safety margin](system-overview.md#ubiquitous-language); signals that peak protection, not the
-  mode, decided the set-point this cycle.
+- `PeakLimitClamped` — the peak-protection step reduced the mode's desired current to keep
+  net import at or below the [effective peak limit](system-overview.md#ubiquitous-language)
+  minus the [safety margin](system-overview.md#ubiquitous-language); signals that peak
+  protection, not the mode, decided the set-point this cycle.
 - `SupplyCeilingClamped` — the grid-supply-ceiling step reduced the current to keep net grid
   import below the [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
   [grid safety offset](system-overview.md#ubiquitous-language); signals that the hard
   fuse-protection limit (C4), not the mode or peak protection, decided the set-point.
 - `ChargerCurrentSet` — the cycle has written the final charger current through the charger
   current adapter role; signals the end of one cycle and the value applied.
-- `DeadlineUnreachableNotified` — the final current set this cycle is still below the required
-  current (`resolution-rules.md`) even after every clamp; the System notified the user the
-  deadline is unreachable (see UC05).
 
 ## Diagram
 
@@ -65,17 +51,14 @@ flowchart TD
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
     Volt --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
     Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule, smoothed inputs)"]
-    Desired --> Urgency{"Required current > desired current?<br/>(resolution-rules.md — R5)"}
-    Urgency -->|yes| Raise["Raise per the active profile's<br/>deadline-urgency response,<br/>capped at maximum current (C1)<br/>(DeadlineUrgencyEngaged)"]
-    Urgency -->|no| Peak
-    Raise --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped if Power disables it, R17)"}
+    Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
     Peak -->|no| Ceiling
     Clamp --> Ceiling{"Would net import exceed<br/>grid supply ceiling − safety offset?<br/>(raw readings — C4, always)"}
     Ceiling -->|yes| CeilingClamp["Clamp so net import stays below<br/>ceiling − safety offset<br/>(SupplyCeilingClamped)"]
     Ceiling -->|no| Invariant
     CeilingClamp --> Invariant["Enforce invariants:<br/>0 A or ≥ minimum current (C1);<br/>cooldown gating (R11)"]
-    Invariant --> Set["Set charger current<br/>(ChargerCurrentSet; DeadlineUrgencyReverted<br/>if urgency lifted; DeadlineUnreachableNotified<br/>if still short of the required current)"]
+    Invariant --> Set["Set charger current<br/>(ChargerCurrentSet)"]
     Set --> Wait(["Wait for next interval"])
 ```
 
@@ -101,50 +84,38 @@ flowchart TD
    `input_select.sc_active_mode` and calls the matching module, passing the smoothed readings
    and the resolved voltage. The module returns a **desired charger current** using its own
    set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
-   0 A). The coordinator contains no logic that chooses or changes the mode.
-5. **Apply the deadline-urgency response (R5).** The coordinator computes the [required
-   current](system-overview.md#ubiquitous-language) (`resolution-rules.md`) and compares it to
-   the desired current from step 4. Under `Auto`,
-   urgency was already detected and resolved upstream by Auto mode-selection (`resolution-rules.md`,
-   row 2 — evaluated against the non-escalated baseline mode, not the dispatched one), which
-   escalated the active mode to `Captar` before this cycle's dispatch; `Captar`'s own set-point
-   rule already requests the maximum charging current, so this step is a no-op for `Auto` and
-   does not itself detect or emit anything. Under `Manual`, the dispatched mode never changes, so
-   this step performs the detection itself: when the required current exceeds the desired current
-   from step 4, the coordinator raises the desired current directly to the required current,
-   capped at the maximum charging current (C1), and emits `DeadlineUrgencyEngaged`. Either way the
-   raised value is bounded, not decided, by the peak clamp in step 6, and this step never modifies
-   the dispatched mode's own logic (NF2) — it adjusts only the value the mode returned.
-6. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
-   ones, to avoid lag), the coordinator checks whether step 5's current would push net
+   0 A). The coordinator contains no logic that chooses or changes the mode — this includes
+   deadline urgency (R5): under `Auto`, escalating to `Captar` is Auto mode-selection's own
+   decision (`resolution-rules.md`), made before this step reads the active mode; under
+   `Manual` the active mode never changes, and this step never adjusts what a mode requests
+   either (NF2) — see step 5.
+5. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
+   ones, to avoid lag), the coordinator checks whether the desired current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
    cycle, and emits `PeakLimitClamped`. The effective peak limit itself is resolved by
-   `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3). This
-   clamp is active in every mode except when `Power` mode has its peak-protection option disabled
-   (R17); the grid supply ceiling clamp in step 7 still applies in that case.
-7. **Apply the grid supply ceiling clamp (C4).** Regardless of mode — and even when the step 6
+   `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
+   this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
+   mode whose own request was previously clamped (e.g. `Captar`, `Power`) draw more, up to
+   whatever it already requests; it never raises what a mode requests in the first place. This
+   clamp is active in every mode except when `Power` mode has its peak-protection option
+   disabled (R17); the grid supply ceiling clamp in step 6 still applies in that case.
+6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode — and even when the step 5
    peak clamp was skipped — the coordinator reduces the current, using **raw** readings (not
    smoothed, to avoid lag), so that net grid import stays below the
    [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
    [grid safety offset](system-overview.md#ubiquitous-language) (converted to amperes via the
    resolved supply voltage). This is the hard fuse-protection limit and the one clamp `Power`
    mode cannot switch off; it emits `SupplyCeilingClamped` when it engages.
-8. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
+7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
    mode-specific cooldown has fully elapsed, and a cooldown in progress always runs to
    completion. (Start/stop and cooldown durations are mode-specific and defined in each mode
    use-case; the coordinator only upholds the invariant.)
-9. **Set the charger current.** The coordinator writes the final current to the charger
+8. **Set the charger current.** The coordinator writes the final current to the charger
    through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
-   interval. Under `Manual`, if the response in step 5 was raising the current but the required
-   current no longer exceeds the dispatched mode's own desired current, it stops raising the
-   current and this step emits `DeadlineUrgencyReverted` (under `Auto`, the equivalent revert is
-   Auto mode-selection falling through to row 3 or 4 — emitted there, `resolution-rules.md`, not
-   here). Regardless of profile, if the required current (step 5) still exceeds this final
-   current even after every clamp, the System also emits `DeadlineUnreachableNotified` and
-   notifies the user.
+   interval.
 
 ## Edge cases
 
@@ -156,14 +127,9 @@ flowchart TD
   rapid-cycling cooldown then governs any restart (R11).
 - **Mode switched mid-operation.** Switching the active mode resets all hold and cooldown
   timers so the incoming mode starts fresh (R11); the next cycle dispatches to the new module.
-- **Deadline urgency reverts mid-operation.** Because the required current (step 5) is
-  recomputed from scratch every cycle, a change in conditions (SOC catching up, the deadline
-  receding, the deadline resolving to "no deadline") stops the response raising the current on
-  the very next cycle, with no dedicated timer — mirroring the Auto mode-selection revert
-  (`resolution-rules.md`).
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.
-- **Mode requests a current below the minimum.** The invariant in step 8 resolves it to 0 A or
+- **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
@@ -172,17 +138,17 @@ flowchart TD
 
 ## Requirements satisfied
 
-- **R3** — CapTar peak protection (the clamp in step 6, on raw readings).
-- **R5** — Departure deadline guarantee (the response applied in step 5, using the
-  required-current computation in `resolution-rules.md`; the deadline-unreachable notification
-  in step 9).
-- **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 6).
-- **R11** — Rapid-cycling prevention (the cooldown/min-current invariant in step 8).
+- **R3** — CapTar peak protection (the clamp in step 5, on raw readings).
+- **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 5).
+- **R11** — Rapid-cycling prevention (the cooldown/min-current invariant in step 7).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
-`requirements.md`; mode choice in `resolution-rules.md`), **NF2** (the deadline-urgency response
-adjusts only the current a mode returns, under either profile, without altering that mode's own
-logic — homed in `requirements.md`), and **NF3** (all I/O via adapter roles — bindings in
-`entity-catalog.md`). **C1**, **C3**, and **C4** (grid supply ceiling clamp, step 7) are enforced
-as invariants in steps 6–8.
+`requirements.md`; mode choice, including deadline urgency's `Auto` escalation, in
+`resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
+urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
+**NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R5** (departure
+deadline guarantee) is homed in `resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md);
+this document supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from
+normal operation.

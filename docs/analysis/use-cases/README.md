@@ -42,16 +42,17 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 
 ## Notes
 
-- **UC05 is a cross-cutting goal, realized by the coordinator, not by extending a mode.** The
-  charging use-cases (UC01–UC04) stay pure — each computes only its own set-point, never modified
-  by deadline logic (NF2). Deadline urgency is instead a profile-keyed rule in
-  [`resolution-rules.md`](../resolution-rules.md) (the Deadline-urgency response), applied by the
-  coordinator (`control-cycle.md`, step 5) to whichever mode is currently dispatched, so the
-  urgency-escalation logic is never duplicated per mode. (For `Power`, the response can raise the
-  requested current above the configured Power target current — up to the maximum charging
-  current — regardless of the peak-protection option; it additionally widens the peak headroom
-  only while that option is enabled, since `Power` is otherwise already unconstrained by the
-  effective peak limit.)
+- **UC05 is a cross-cutting goal, realized by two existing resolution rules, not by extending a
+  mode or adding a coordinator step.** The charging use-cases (UC01–UC04) stay pure — each
+  computes only its own set-point, never modified by deadline logic (NF2). Deadline urgency
+  instead raises the effective peak limit (`resolution-rules.md`) — the one lever available
+  under every profile, letting a mode whose own request was clamped below the normal ceiling
+  (e.g. `Captar`, `Power` with its peak-protection option on) draw more, up to whatever it
+  already requests; a mode whose request never depended on peak headroom (`Solar`, `SolarOnly`,
+  or `Power` with that option off) draws no differently. Under `Auto` only, a second lever adds:
+  mode-selection escalates to `Captar` (`resolution-rules.md`, Auto mode-selection row 2), whose
+  own set-point rule always requests the maximum charging current — so `Auto` meets far more
+  deadlines than `Manual` can, since `Manual` never gets that second lever.
 - **The `Auto` profile is not a use-case.** Choosing which mode is active is a priority-ordered
   decision with no human pursuing a goal, so it lives as the Auto mode-selection table in
   [`resolution-rules.md`](../resolution-rules.md). The `Manual` profile needs no document — the

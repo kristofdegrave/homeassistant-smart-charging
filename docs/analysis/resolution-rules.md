@@ -71,26 +71,28 @@ no charging and R12 sends no reminder).
 
 Computes the current the System would need to sustain, from now until the departure deadline
 above, to close the projected gap to the [active SOC limit](system-overview.md#ubiquitous-language)
-— the shared input every deadline-urgency response (below) consumes.
+— the shared input the effective-peak-limit rule (below) and Auto mode-selection (below) both
+consume to decide whether [deadline urgency](system-overview.md#ubiquitous-language) (R5)
+applies.
 
 - **Energy needed** = EV battery capacity (R15, sensed or configured) × (active SOC limit −
   current state of charge) ÷ 100.
 - **Time remaining** = the departure deadline above − now. When the departure deadline has
-  resolved to "no deadline," no required current is computed and [deadline
-  urgency](system-overview.md#ubiquitous-language) (R5) never applies.
+  resolved to "no deadline," no required current is computed and deadline urgency never applies.
 - **[Required current](system-overview.md#ubiquitous-language)** = energy needed ÷ time
   remaining, converted to amperes via the resolved supply voltage (NF4).
-- [Deadline urgency](system-overview.md#ubiquitous-language) (R5) is in effect for as long as
-  the required current exceeds the desired current of the **baseline mode** — the mode that
-  would run absent any deadline-driven escalation: under `Manual`, the manually selected mode's
-  own desired current (which this response never changes); under `Auto`, whichever mode
-  Auto mode-selection's rows 3–5 (below) would select on their own. The baseline is evaluated
-  fresh every cycle from rows 3–5 alone, so the comparison is unaffected by `Captar` already
-  being dispatched from a prior escalation — comparing against `Captar`'s own (always-maximum)
-  desired current instead would make urgency look satisfied the instant it engages, reverting
-  and re-escalating every cycle.
+- Deadline urgency is in effect for as long as the required current exceeds the desired current
+  of the **baseline mode** — the mode that would run absent any deadline-driven mode escalation:
+  under `Manual`, the manually selected mode's own desired current (`Manual` never escalates the
+  mode, so this is simply the active mode itself); under `Auto`, whichever mode Auto
+  mode-selection's rows 3–5 (below) would select on their own. The baseline is evaluated fresh
+  every cycle from rows 3–5 alone, so the comparison is unaffected by `Captar` already being
+  dispatched from a prior escalation — comparing against `Captar`'s own (always-maximum) desired
+  current instead would make urgency look satisfied the instant it engages, reverting and
+  re-escalating every cycle.
 
-**Satisfies:** R5, R15 · **Consumed by:** the Deadline-urgency response rule below, UC05.
+**Satisfies:** R5, R15 · **Consumed by:** the effective-peak-limit rule below, Auto mode-selection
+below, UC05.
 
 ---
 
@@ -105,41 +107,26 @@ otherwise it is the lesser of the billed peak and the configured maximum.
 | 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
 | 2 | Otherwise (normal operation) | `min(`[monthly peak demand](system-overview.md#ubiquitous-language)`, maximum peak)` |
 
-- This rule resolves the **ceiling** only. Urgency raises the ceiling to the maximum peak; it
-  does not by itself raise the charger to that level — see the Deadline-urgency response rule
-  below for how the actual delivered current differs by profile, and how the achieved peak never
-  exceeds the maximum peak.
+- This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
+  `Manual`: raising the ceiling never itself raises what a mode requests, but a mode whose own
+  request was previously clamped below the old ceiling (e.g. `Captar` or `Power`) can now draw
+  more, up to whatever it already requests, C1, and C4 — bounded above by the [maximum permitted
+  rate](system-overview.md#ubiquitous-language). A mode whose own request does not depend on
+  peak headroom at all (e.g. `Solar`, `SolarOnly`) draws no differently, so meeting the deadline
+  under `Manual` depends entirely on the active mode's own appetite for current, not on this
+  rule alone. Under `Auto`, this same ceiling raise combines with a second lever — Auto
+  mode-selection escalating to `Captar` (row 2, below), which always requests the maximum
+  charging current — so `Auto` meets far more deadlines than `Manual` can.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
   this limit (`effective peak limit − safety margin`); the margin is applied by the peak clamp
   in `control-cycle.md`, not by this rule.
 - The limit never exceeds the maximum peak, even under urgency (C3).
+- When the required current exceeds the maximum permitted rate even so — regardless of
+  profile — the System delivers the maximum permitted rate and notifies the user that the
+  deadline is unreachable (R5).
 
 **Realizes:** the *effective peak limit* glossary term · **Supports:** R3, R5, C3 ·
-**Consumed by:** `control-cycle.md`, UC03, UC04, the Deadline-urgency response rule below.
-
----
-
-## Deadline-urgency response (R5)
-
-While deadline urgency (above) holds, resolves how the coordinator raises the delivered current
-toward the required current — realized differently by profile, so the dispatched mode's own
-set-point logic (UC01–UC04) is never itself modified (NF2).
-
-| Profile | Response |
-| --- | --- |
-| `Auto` | Auto mode-selection (below, row 2) escalates the active mode to `Captar`, whose own set-point rule already requests the maximum charging current (UC03); the coordinator's peak clamp (`control-cycle.md`) fits that request to the [maximum permitted rate](system-overview.md#ubiquitous-language) under the raised effective peak limit (above). This reliably delivers at least the required current whenever it is at or below the maximum permitted rate, but — because `Captar` always requests the maximum current rather than exactly the required current — does not minimise the achieved peak to the lowest rate that closes the gap. |
-| `Manual` | The coordinator (`control-cycle.md`) raises the dispatched mode's own desired current to exactly the required current, whenever that is at or below the maximum permitted rate — the lowest rate that still closes the gap — without changing which mode is active or altering that mode's own logic. |
-
-- Either way, the effective peak limit is raised to the maximum peak while urgency holds
-  (above), and this response never bypasses the coordinator's peak-protection clamp
-  (`control-cycle.md`, C3) — except while `Power` mode's own peak-protection option is disabled
-  (R17), where that clamp already does not run, by the mode's own configuration.
-- When the required current exceeds the maximum permitted rate even so, the coordinator delivers
-  the maximum permitted rate and the System notifies the user that the deadline is unreachable.
-- This response never raises the active SOC limit (R7) — it only accelerates toward whichever
-  limit is already resolved above.
-
-**Satisfies:** R5 · **Consumed by:** `control-cycle.md`, UC05.
+**Consumed by:** `control-cycle.md`, UC03, UC04, UC05.
 
 ---
 
@@ -153,7 +140,7 @@ escalation and revert happen automatically.
 | Priority | Condition | Active mode |
 | --- | --- | --- |
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
-| 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select) | `Captar` (the `Auto` row of the Deadline-urgency response rule below — high tariff and the raised peak limit) |
+| 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select) | `Captar` (`Auto`'s second urgency lever, alongside the effective-peak-limit raise, above — high tariff and `Captar`'s own maximum-current request) |
 | 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
 | 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set and next-day forecast above threshold) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
@@ -193,14 +180,15 @@ escalation and revert happen automatically.
 
 ## Requirements satisfied
 
-- **R5** — Departure deadline guarantee (the required-current computation and the profile-keyed
-  deadline-urgency response, both above); R15 (EV battery capacity) feeds the former as a
-  configuration parameter, not a behaviour of its own.
+- **R5** — Departure deadline guarantee (the required-current computation above; the
+  effective-peak-limit raise, `Auto`'s and `Manual`'s shared lever; Auto mode-selection row 2,
+  `Auto`'s second lever; the deadline-unreachable notification). R15 (EV battery capacity) feeds
+  the required-current computation as a configuration parameter, not a behaviour of its own.
 - **R7** — Active SOC limit resolution.
 - **R14** — Departure deadline resolution.
 - **R16** — `Auto` profile mode-selection.
 
 Also realizes the *effective peak limit* glossary term (supporting R3, R5, C3). NF1 holds
 throughout: these are lookups the profile and coordinator consume, not mode logic. NF2 holds too:
-under either profile, the deadline-urgency response only ever adjusts the current a mode
-returns, never that mode's own logic.
+neither urgency lever ever touches a mode's own logic — the peak-limit raise only widens an
+existing clamp, and `Auto`'s mode-selection is already NF1's job, not the mode's.
