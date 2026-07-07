@@ -115,10 +115,10 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09 | user, UC09 (manual-change adoption) |
 | `input_number.sc_battery_capacity_kwh` | config | kWh | 75 | EV battery capacity (R15) | resolution-rules | user |
-| `ev_soc` | adapter role | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC09 | — |
+| `ev_soc` | adapter role | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05 | — |
 | `battery_capacity` | adapter role | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules | — |
 | `car_home` | adapter role | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09 | — |
-| `vehicle_charge_limit` | adapter role (write) | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | UC09 | UC09 |
+| `vehicle_charge_limit` | adapter role (read/write) | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | UC09 | UC09 |
 
 ---
 
@@ -211,7 +211,9 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
   one materialized for observability, it would add the row and its references then.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
-  `charger_current` role.
+  `charger_current` role. Unlike `charger_current`, which is write-only, `vehicle_charge_limit` is
+  read/write: UC09 also reads it back to detect a change the user made directly on the vehicle
+  (R6).
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
   `sc_solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
   required, and the `Auto` rule skips the solar mode accordingly.

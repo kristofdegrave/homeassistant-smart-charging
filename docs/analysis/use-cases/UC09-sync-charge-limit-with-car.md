@@ -12,7 +12,7 @@
 ## Preconditions
 
 - The vehicle exposes a settable charge limit (the `vehicle_charge_limit` adapter role is mapped, R6, NF3). When it is not mapped, this use-case does not apply to that vehicle.
-- For a System-initiated write: the car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`, and `car_home` indicates presence) — the joint precondition C2 gates on.
+- For a System-initiated write: the car is connected ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`) and `car_home` indicates the car is at home — the latter is the condition C2 gates on.
 
 ## Trigger
 
@@ -20,7 +20,7 @@ Any of:
 
 1. A [control cycle](../system-overview.md#ubiquitous-language) observes that the resolved [active SOC limit](../system-overview.md#ubiquitous-language) (`resolution-rules.md`) has changed value while the car is connected at home.
 2. The vehicle's charge-limit setting, read through the `vehicle_charge_limit` adapter role, reports a value that is not attributable to the System's own last write to that role.
-3. Charger status transitions to `disconnected`.
+3. Charger status transitions to `disconnected`, from `connected` or `charging` — a transition that, for this single home charger, only ever happens while `car_home` is true, since the vehicle cannot be plugged into it remotely.
 
 ## Main success scenario
 
@@ -34,7 +34,7 @@ Any of:
 
 4. **Given** the car is connected at home and the vehicle's charge-limit setting changes.
 5. **When** the reported change is not attributable to the System's own last write through `vehicle_charge_limit` (i.e. the user changed it directly in the car or its app, rather than the System's step 2 write reflecting back), **then** the System adopts the new value as the default SOC limit (`sc_active_soc`) rather than overwriting it back on the next cycle.
-6. **And** subsequent active-SOC-limit resolution (`resolution-rules.md`) and future System-initiated writes (steps 1–3) use this newly adopted default until the user changes it again, on the vehicle or in the System.
+6. **And** subsequent active-SOC-limit resolution (`resolution-rules.md`) and future System-initiated writes (steps 1–3) use this newly adopted default until the user changes it again, on the vehicle or in the System. When a solar step-up or the solar-reserve cap is in force at the time of the manual change, the *resolved* active SOC limit — not the newly adopted default in isolation — is what the next System-initiated write (step 2) pushes back to the vehicle, since that write always propagates the current row of the Active SOC limit table (`resolution-rules.md`); the manual value is preserved unmodified only while the default itself is the resolved value.
 
 **On disconnect: reset to the default**
 
@@ -44,7 +44,7 @@ Any of:
 ## Alternate flows
 
 **2a — Away from home** — branches from step 2.
-Given the car is connected below (or the charger otherwise reports a state) but `car_home` indicates the car is away from home
+Given the car is connected (charger status `connected` or `charging`) but `car_home` indicates the car is away from home
 When the resolved active SOC limit changes
 Then the System does not write to the vehicle (C2); the currently resolved value is written the next time the car is confirmed both connected and at home (step 2 of the main flow).
 
