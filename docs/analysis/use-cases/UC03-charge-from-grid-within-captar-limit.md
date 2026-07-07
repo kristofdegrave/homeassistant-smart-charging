@@ -5,7 +5,7 @@
 **Stakeholders & interests:**
 
 - Household energy manager — wants grid charging, whenever it runs, to charge as fast as possible without ever raising the billed [monthly peak demand](../system-overview.md#ubiquitous-language); when the timing of that charging is theirs to choose (the `Auto` profile), they also want it to prefer low-tariff periods, but that timing preference is a separate concern from how fast `Captar` itself charges.
-- EV driver — accepts that a manually selected `Captar` session charges immediately at whatever tariff is in effect, trusting the departure deadline (UC05) to override this policy whenever the car would otherwise not be ready in time.
+- EV driver — accepts that a manually selected `Captar` session charges immediately at whatever tariff is in effect, trusting the departure deadline (UC05) to widen the peak-protection ceiling whenever the car would otherwise not be ready in time.
 
 **Scope / level:** sea-level (single goal: charge the car from the grid up to the CapTar-respecting peak limit while `Captar` mode is active)
 
