@@ -78,9 +78,14 @@ otherwise it is the lesser of the billed peak and the configured maximum.
 | 2 | Otherwise (normal operation) | `min(`[monthly peak demand](system-overview.md#ubiquitous-language)`, maximum peak)` |
 
 - This rule resolves the **ceiling** only. Urgency raises the ceiling to the maximum peak; it
-  does not by itself raise the charger to that level. The actual current is the lowest rate that
-  still meets the deadline (R5), clamped below the safety target — so the achieved monthly peak
-  demand is only ever as high as the deadline math requires, never beyond the maximum peak.
+  does not by itself raise the charger to that level. Under UC05's direct-override realization
+  (`Manual`), the actual current is the lowest rate that still meets the deadline (R5), clamped
+  below the safety target, so the achieved monthly peak demand is only as high as the deadline
+  math requires. Under UC05's `Auto` realization — escalating to `Captar`, whose own set-point
+  rule always requests the maximum charging current — the achieved peak instead rises to the full
+  raised ceiling (less the safety margin) for as long as urgency holds, trading that
+  cost-minimality for reusing `Captar`'s existing rule. Either way the achieved peak never exceeds
+  the maximum peak.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
   this limit (`effective peak limit − safety margin`); the margin is applied by the peak clamp
   in `control-cycle.md`, not by this rule.
