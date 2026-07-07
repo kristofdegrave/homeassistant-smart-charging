@@ -70,12 +70,12 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R5 — Departure deadline guarantee
 
 **Priority:** Must
-**What:** As a cross-cutting override above the active mode's normal cost policy (e.g. R4), when the car would otherwise not reach its active SOC limit by the configured departure time, the system relaxes those cost restrictions by raising the peak it is willing to create — and, only under the `Auto` profile, by additionally escalating to grid charging at the maximum charging current. High-tariff charging is accepted throughout. Under `Manual`, raising the peak is the only lever: it never changes what the active mode itself requests, so how much it helps depends entirely on that mode's own appetite for current once unclamped.
+**What:** As a cross-cutting override above the active mode's normal cost policy (e.g. the R3 peak clamp a `Captar` session otherwise respects), when the car would otherwise not reach its active SOC limit by the configured departure time, the system relaxes that restriction by raising the peak it is willing to create — and, only under the `Auto` profile, by additionally escalating current draw to the maximum charging current. High-tariff charging is accepted throughout.
 
 **Acceptance criteria:**
 
 - [ ] When the projected charge at the current rate would fall short of the active SOC limit by departure time, the system raises the effective peak limit it is willing to create, up to the configured maximum peak (default 4 kW) — accepting a higher monthly peak demand. This is the only lever available under the `Manual` profile: it never raises what the active mode itself requests, so meeting the deadline depends on whether that mode's own request, once unclamped, is enough.
-- [ ] Under the `Auto` profile only, the system additionally escalates to grid charging at the maximum charging current for as long as the deadline is at risk, reverting once it is no longer needed.
+- [ ] Under the `Auto` profile only, the system additionally escalates current draw to the maximum charging current for as long as the deadline is at risk, reverting once it is no longer needed.
 - [ ] High-tariff charging is permitted while meeting a deadline — this is R5's primary purpose: cost optimisation yields to the deadline.
 - [ ] The safety margin is always respected: net import stays at or below the effective peak limit in force minus the safety margin, even while meeting a deadline.
 - [ ] The active SOC limit itself is never raised by deadline logic — when a lower limit is in force (e.g. the solar-reserve cap), the system only accelerates toward that lower limit.
