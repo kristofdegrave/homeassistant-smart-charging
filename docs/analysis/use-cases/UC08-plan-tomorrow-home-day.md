@@ -46,7 +46,8 @@ Then the System treats the lack of an answer as "no" and leaves the home-day fla
 
 ## Postconditions
 
-- The home-day flag reflects the EV driver's answer: set if "yes" was given within the timeout, unset if "no" was given, the timeout elapsed with no answer, or the prompt was skipped because an external source had already set it.
+- When this use-case's prompt runs (i.e. no external source had already set the flag), the home-day flag reflects the EV driver's answer: set if "yes" was given within the timeout, unset if "no" was given or the timeout elapsed with no answer.
+- When the prompt is skipped because an external source had already set the flag for tomorrow, the flag is left exactly as that external source resolved it (R9) — this use-case makes no change either way.
 - The home-day flag resets to unset each day at midnight (R13), independently of this use-case, so the prompt starts fresh every evening.
 - Setting the flag has no further effect within this use-case — whether and how the flag changes overnight charging is entirely [UC07](UC07-reserve-capacity-for-tomorrow.md)'s concern (R9).
 
