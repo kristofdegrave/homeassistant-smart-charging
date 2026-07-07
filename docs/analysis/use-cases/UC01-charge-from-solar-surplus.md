@@ -127,7 +127,7 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 ## Relationships
 
-- **Extended by [UC05](UC05-guarantee-ready-by-departure.md)** when the departure deadline is at risk. Under the `Auto` profile this is realized by switching `Solar → Captar` (Auto mode-selection, `resolution-rules.md`); under `Manual` `Solar`, R5 relaxes the cost policy. The deadline logic lives in UC05, not here.
+- **May be superseded by the coordinator's deadline-urgency response** (`resolution-rules.md`, `control-cycle.md` step 5) when the departure deadline is at risk — this mode's own set-point rule above is never itself modified (NF2). Under `Auto` this is realized by switching `Solar → Captar` (Auto mode-selection, `resolution-rules.md`); under `Manual`, the coordinator raises this mode's desired current directly. See [UC05](UC05-guarantee-ready-by-departure.md) for the goal this serves; the response mechanism lives in `resolution-rules.md`, not here.
 - **Sibling [UC02](UC02-charge-from-solar-only.md)** (`SolarOnly`) — both use amp-step rounding, but `Solar` always rounds up (fixed), whereas `SolarOnly`'s strategy is configurable (default round down); `SolarOnly` also has no grid fallback and no post-surplus hold; a solar step-up in effect is preserved when switching between the two (R7).
 - **Extended by [UC06](UC06-store-abundant-solar.md)** — while charging in a solar mode, UC06 may step up the active SOC limit to store abundant surplus (R8).
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit rule in `resolution-rules.md`.

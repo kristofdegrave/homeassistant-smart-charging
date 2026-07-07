@@ -42,11 +42,13 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 
 ## Notes
 
-- **UC05 is a cross-cutting extension (`«extend»`).** It modifies the deadline behaviour of the
-  charging use-cases rather than being a standalone session: UC01, UC02, UC03, and UC04 each carry
-  an "Extended by UC05 when the deadline is at risk" relationship, and UC05 documents the urgency
-  escalation once, so the deadline logic is never duplicated. (For UC04, the extension can raise
-  the requested current above the configured Power target current — up to the maximum charging
+- **UC05 is a cross-cutting goal, realized by the coordinator, not by extending a mode.** The
+  charging use-cases (UC01–UC04) stay pure — each computes only its own set-point, never modified
+  by deadline logic (NF2). Deadline urgency is instead a profile-keyed rule in
+  [`resolution-rules.md`](../resolution-rules.md) (the Deadline-urgency response), applied by the
+  coordinator (`control-cycle.md`, step 5) to whichever mode is currently dispatched, so the
+  urgency-escalation logic is never duplicated per mode. (For `Power`, the response can raise the
+  requested current above the configured Power target current — up to the maximum charging
   current — regardless of the peak-protection option; it additionally widens the peak headroom
   only while that option is enabled, since `Power` is otherwise already unconstrained by the
   effective peak limit.)
