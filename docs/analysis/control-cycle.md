@@ -84,15 +84,22 @@ flowchart TD
    `input_select.sc_active_mode` and calls the matching module, passing the smoothed readings
    and the resolved voltage. The module returns a **desired charger current** using its own
    set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
-   0 A). The coordinator contains no logic that chooses or changes the mode.
+   0 A). The coordinator contains no logic that chooses or changes the mode — this includes
+   deadline urgency (R5): under `Auto`, escalating to `Captar` is Auto mode-selection's own
+   decision (`resolution-rules.md`), made before this step reads the active mode; under
+   `Manual` the active mode never changes, and this step never adjusts what a mode requests
+   either (NF2) — see step 5.
 5. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
    ones, to avoid lag), the coordinator checks whether the desired current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
    cycle, and emits `PeakLimitClamped`. The effective peak limit itself is resolved by
-   `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3). This
-   clamp is active in every mode except when `Power` mode has its peak-protection option disabled
-   (R17); the grid supply ceiling clamp in step 6 still applies in that case.
+   `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
+   this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
+   mode whose own request was previously clamped (e.g. `Captar`, `Power`) draw more, up to
+   whatever it already requests; it never raises what a mode requests in the first place. This
+   clamp is active in every mode except when `Power` mode has its peak-protection option
+   disabled (R17); the grid supply ceiling clamp in step 6 still applies in that case.
 6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode — and even when the step 5
    peak clamp was skipped — the coordinator reduces the current, using **raw** readings (not
    smoothed, to avoid lag), so that net grid import stays below the
@@ -137,6 +144,11 @@ flowchart TD
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
-`requirements.md`; mode choice in `resolution-rules.md`) and **NF3** (all I/O via adapter
-roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4** (grid supply ceiling
-clamp, step 6) are enforced as invariants in steps 5–7.
+`requirements.md`; mode choice, including deadline urgency's `Auto` escalation, in
+`resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
+urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
+**NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R5** (departure
+deadline guarantee) is homed in `resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md);
+this document supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from
+normal operation.

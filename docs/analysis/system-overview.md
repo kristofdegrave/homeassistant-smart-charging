@@ -48,7 +48,7 @@ The smart charging system must charge the car at the lowest possible cost while 
 1. **Maximise solar self-consumption** — solar is always the cheapest source and is used before any grid power.
 2. **Keep the monthly peak (CapTar) under control** — avoid raising the billed peak demand through unnecessary charging spikes.
 3. **Prefer low-tariff timing when the system opportunistically tops up from the grid** — under the `Auto` profile, the system times its own overnight top-up charging to low-tariff periods (when the low-tariff flag is active) over high-tariff periods; a manually selected `Captar` session is the user's own timing choice and charges regardless of tariff (R4), and the deadline-urgency escalation (goal 4) charges regardless of tariff by design.
-4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, escalating charging current (and accepting high-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted current cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak.
+4. **Meet the departure deadline whenever physically possible** — the car reaches its active SOC limit by the configured departure time, raising the peak the system is willing to create (and accepting high-tariff cost) as needed — but only up to the effective peak limit. CapTar peak protection is the hard ceiling: if even the maximum permitted rate cannot make the deadline, the system charges as fast as that ceiling allows rather than breaching the peak. Under `Auto`, the system also escalates current draw to the maximum charging current, so "whenever physically possible" is closest to true there; under `Manual` the raised peak is the only lever, so meeting the deadline depends on how much current the user's own chosen mode already requests.
 
 These goals are ordered by preference but bounded by goal 4: cost optimisation never overrides the deadline guarantee. That guarantee is itself bounded by the effective peak limit — during urgency the limit rises to the configured maximum peak, and charging current escalates up to it (less the safety margin) but never beyond. Its strength is therefore configurable: the maximum peak sets how aggressively the system may chase the deadline, trading CapTar cost against deadline confidence.
 
@@ -58,7 +58,7 @@ These goals are ordered by preference but bounded by goal 4: cost optimisation n
 
 At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing them, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an adapter role (see `adapter role`, NF3), which is what keeps the integration hardware-agnostic.
 
-This is the orientation map; flow `00-control-cycle.md` details the loop and the per-mode flows detail each mode module.
+This is the orientation map; `control-cycle.md` details the loop and the use-cases (`use-cases/`) detail each mode module.
 
 ```mermaid
 flowchart TD
@@ -95,6 +95,10 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 **`effective peak limit`** — The ceiling on net import that charging keeps a safety margin below and must never exceed. Normally `min(monthly_peak_demand, maximum_peak)`, so ordinary charging never raises the billed monthly peak beyond what is already incurred. During deadline urgency the limit rises to the maximum peak, allowing the deadline to push the monthly peak up to — but never beyond — that ceiling (see R5). Unit: kilowatts (kW).
 
 **`peak headroom`** — The additional charging current the charger may draw before net import would reach the safety target (`effective peak limit − safety margin`); expressed in amperes for set-point calculations. Unit: amperes (A).
+
+**`maximum permitted rate`** — The highest charger current deliverable in a control cycle once the coordinator's peak-protection clamp (R3) has fitted the requested current to the peak headroom under whichever effective peak limit is currently in force, further bounded by the minimum/maximum charging current (C1) and the grid-supply-ceiling clamp (C4) — except while `Power` mode's own peak-protection option is disabled, when the peak clamp does not run at all and only C1/C4 bound it. During deadline urgency (R5), raising the effective peak limit to the maximum peak raises this rate; the deadline-unreachable notification (R5) fires when the required current would exceed it. Unit: amperes (A).
+
+**`required current`** — The current the System would need to sustain, from now until the departure deadline, to close the projected gap to the active SOC limit — computed from the EV battery capacity (R15), current state of charge, the active SOC limit, and the time remaining (`resolution-rules.md`). Deadline urgency (R5) is in effect for as long as this exceeds the baseline mode's own desired current; the deadline-unreachable notification (R5) fires when it exceeds the maximum permitted rate. Unit: amperes (A).
 
 **`safety margin`** — A configurable buffer (default 250 W) held in reserve below the effective peak limit; the charger targets `effective peak limit − safety margin` rather than the limit itself, so measurement noise and control-loop response lag cannot push the real 15-minute net import past the billed peak. A larger margin trades a little charging speed for stronger peak-breach protection. Unit: watts (W).
 

@@ -5,7 +5,7 @@
 **Stakeholders & interests:**
 
 - Household energy manager — wants grid charging, whenever it runs, to charge as fast as possible without ever raising the billed [monthly peak demand](../system-overview.md#ubiquitous-language); when the timing of that charging is theirs to choose (the `Auto` profile), they also want it to prefer low-tariff periods, but that timing preference is a separate concern from how fast `Captar` itself charges.
-- EV driver — accepts that a manually selected `Captar` session charges immediately at whatever tariff is in effect, trusting the departure deadline (UC05) to override this policy whenever the car would otherwise not be ready in time.
+- EV driver — accepts that a manually selected `Captar` session charges immediately at whatever tariff is in effect, trusting the departure deadline (UC05) to widen the peak-protection ceiling whenever the car would otherwise not be ready in time.
 
 **Scope / level:** sea-level (single goal: charge the car from the grid up to the CapTar-respecting peak limit while `Captar` mode is active)
 
@@ -117,6 +117,5 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 ## Relationships
 
-- **Extended by [UC05](UC05-guarantee-ready-by-departure.md)** when the departure deadline is at risk. R5 permits high-tariff grid charging and raises the effective peak limit up to the [maximum peak](../system-overview.md#ubiquitous-language) — to the lowest level that still meets the deadline; deadline urgency never raises the active SOC limit (R7), so it still cannot charge beyond a solar-reserve cap `Auto` has applied. Under the `Auto` profile this override is carried by escalating to `Captar` (Auto mode-selection row 2, `resolution-rules.md`). The deadline logic lives in UC05, not here.
 - **Timed and bounded by the `Auto` profile**: `Auto` selects `Captar` for cost-efficient overnight top-up only while the low-tariff flag is active and its own solar-reserve conditions (R9, UC07) do not hold (Auto mode-selection row 4, `resolution-rules.md`), and as the escalation target for deadline urgency (row 2); `Auto` also independently lowers the active SOC limit via the solar-reserve cap when those conditions do hold (R7). Both the timing preference and the reserve coordination live in `Auto`, not in this use-case — once selected, `Captar` charges the same way regardless of who or what selected it, and regardless of why the active SOC limit is set where it is.
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit and effective-peak-limit rules in `resolution-rules.md`.
