@@ -51,7 +51,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, (UC06, UC07) | user |
+| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 
@@ -149,10 +149,10 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_max_solar_soc` | config | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules | user |
-| `input_number.sc_solar_step_pp` | config | pp | 5 | solar step-up size (R8) | — | user |
-| `input_number.sc_solar_step_threshold_pp` | config | pp | 2 | solar step-up trigger gap (R8) | — | user |
-| `input_number.sc_solar_step_interval_min` | config | min | 10 | solar step-up min interval (R8) | — | user |
+| `input_number.sc_max_solar_soc` | config | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user |
+| `input_number.sc_solar_step_pp` | config | pp | 5 | solar step-up size (R8) | UC06 | user |
+| `input_number.sc_solar_step_threshold_pp` | config | pp | 2 | solar step-up trigger gap (R8) | UC06 | user |
+| `input_number.sc_solar_step_interval_min` | config | min | 10 | solar step-up min interval (R8) | UC06 | user |
 
 ### Solar-reserve cap
 
