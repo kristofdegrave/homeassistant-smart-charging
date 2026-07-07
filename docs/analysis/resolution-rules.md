@@ -82,8 +82,8 @@ otherwise it is the lesser of the billed peak and the configured maximum.
   (`Manual`), the actual current is the lowest rate that still meets the deadline (R5), clamped
   below the safety target, so the achieved monthly peak demand is only as high as the deadline
   math requires. Under UC05's `Auto` realization — escalating to `Captar`, whose own set-point
-  rule always requests the maximum charging current — the achieved peak instead rises to the full
-  raised ceiling (less the safety margin) for as long as urgency holds, trading that
+  rule always requests the maximum charging current — the achieved peak instead rises up to the
+  full raised ceiling (less the safety margin) for as long as urgency holds, trading that
   cost-minimality for reusing `Captar`'s existing rule. Either way the achieved peak never exceeds
   the maximum peak.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
