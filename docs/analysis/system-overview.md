@@ -58,7 +58,7 @@ These goals are ordered by preference but bounded by goal 4: cost optimisation n
 
 At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing them, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an adapter role (see `adapter role`, NF3), which is what keeps the integration hardware-agnostic.
 
-This is the orientation map; flow `00-control-cycle.md` details the loop and the per-mode flows detail each mode module.
+This is the orientation map; `control-cycle.md` details the loop and the use-cases (`use-cases/`) detail each mode module.
 
 ```mermaid
 flowchart TD
@@ -97,6 +97,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 **`peak headroom`** — The additional charging current the charger may draw before net import would reach the safety target (`effective peak limit − safety margin`); expressed in amperes for set-point calculations. Unit: amperes (A).
 
 **`maximum permitted rate`** — The highest charger current deliverable in a control cycle once the coordinator's peak-protection clamp (R3) has fitted the requested current to the peak headroom under whichever effective peak limit is currently in force, further bounded by the minimum/maximum charging current (C1) and the grid-supply-ceiling clamp (C4) — except while `Power` mode's own peak-protection option is disabled, when the peak clamp does not run at all and only C1/C4 bound it. During deadline urgency (R5), raising the effective peak limit to the maximum peak raises this rate; the deadline-unreachable notification (R5) fires when the required current would exceed it. Unit: amperes (A).
+
+**`required current`** — The current the System would need to sustain, from now until the departure deadline, to close the projected gap to the active SOC limit — computed from the EV battery capacity (R15), current state of charge, the active SOC limit, and the time remaining (`resolution-rules.md`). Deadline urgency (R5) is in effect for as long as this exceeds the baseline mode's own desired current; the deadline-unreachable notification (R5) fires when it exceeds the maximum permitted rate. Unit: amperes (A).
 
 **`safety margin`** — A configurable buffer (default 250 W) held in reserve below the effective peak limit; the charger targets `effective peak limit − safety margin` rather than the limit itself, so measurement noise and control-loop response lag cannot push the real 15-minute net import past the billed peak. A larger margin trades a little charging speed for stronger peak-breach protection. Unit: watts (W).
 

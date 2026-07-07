@@ -35,9 +35,12 @@ smoothing window and the rapid-cycling timers, which persist across cycles.
 - `SensorsRead` — past-tense — the cycle has captured a fresh raw reading through every input
   adapter role; signals the start of one cycle's processing.
 - `DeadlineUrgencyEngaged` / `DeadlineUrgencyReverted` — the deadline-urgency response
-  (`resolution-rules.md`) started or stopped raising the dispatched mode's own desired current
-  this cycle; see [UC05](use-cases/UC05-guarantee-ready-by-departure.md) for the goal this
-  serves and the state model these belong to.
+  (`resolution-rules.md`) started or stopped raising the current toward the required current.
+  Emitted by this coordinator (steps 5/9) only under `Manual`, where the dispatched mode never
+  changes; under `Auto` the equivalent transition is Auto mode-selection escalating to or
+  reverting from `Captar` (`resolution-rules.md`), not this coordinator. See
+  [UC05](use-cases/UC05-guarantee-ready-by-departure.md) for the goal this serves and the state
+  model these belong to.
 - `PeakLimitClamped` — the peak-protection step reduced the desired current (the mode's own, or
   as raised by the deadline-urgency response) to keep net import at or below the [effective peak
   limit](system-overview.md#ubiquitous-language) minus the
@@ -99,17 +102,19 @@ flowchart TD
    and the resolved voltage. The module returns a **desired charger current** using its own
    set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
    0 A). The coordinator contains no logic that chooses or changes the mode.
-5. **Apply the deadline-urgency response (R5).** The coordinator computes the required current
-   (`resolution-rules.md`) and compares it to the desired current from step 4. When the required
-   current is higher, deadline urgency is in effect: the coordinator raises the desired current
-   per the active profile's deadline-urgency response (`resolution-rules.md`) — under `Auto`
-   this is already reflected in the dispatched mode itself (Auto mode-selection has escalated to
-   `Captar`, whose own set-point rule already requests the maximum charging current); under
-   `Manual` the coordinator raises the desired current directly to the required current. Either
-   way the raised value is capped at the maximum charging current (C1); it is bounded, not
-   decided, by the peak clamp in step 6. Emits `DeadlineUrgencyEngaged` on the cycle urgency
-   begins. This step never modifies the dispatched mode's own logic (NF2) — it adjusts only the
-   value the mode returned.
+5. **Apply the deadline-urgency response (R5).** The coordinator computes the [required
+   current](system-overview.md#ubiquitous-language) (`resolution-rules.md`) and compares it to
+   the desired current from step 4. Under `Auto`,
+   urgency was already detected and resolved upstream by Auto mode-selection (`resolution-rules.md`,
+   row 2 — evaluated against the non-escalated baseline mode, not the dispatched one), which
+   escalated the active mode to `Captar` before this cycle's dispatch; `Captar`'s own set-point
+   rule already requests the maximum charging current, so this step is a no-op for `Auto` and
+   does not itself detect or emit anything. Under `Manual`, the dispatched mode never changes, so
+   this step performs the detection itself: when the required current exceeds the desired current
+   from step 4, the coordinator raises the desired current directly to the required current,
+   capped at the maximum charging current (C1), and emits `DeadlineUrgencyEngaged`. Either way the
+   raised value is bounded, not decided, by the peak clamp in step 6, and this step never modifies
+   the dispatched mode's own logic (NF2) — it adjusts only the value the mode returned.
 6. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
    ones, to avoid lag), the coordinator checks whether step 5's current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
@@ -133,11 +138,13 @@ flowchart TD
    use-case; the coordinator only upholds the invariant.)
 9. **Set the charger current.** The coordinator writes the final current to the charger
    through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
-   interval. If deadline urgency was in effect entering this cycle but the required current
-   (step 5) no longer exceeds the dispatched mode's own desired current, the response in step 5
-   stops raising the current and emits `DeadlineUrgencyReverted`. If deadline urgency is still in
-   effect and this final current remains below the required current even after every clamp, the
-   System also emits `DeadlineUnreachableNotified` and notifies the user.
+   interval. Under `Manual`, if the response in step 5 was raising the current but the required
+   current no longer exceeds the dispatched mode's own desired current, it stops raising the
+   current and this step emits `DeadlineUrgencyReverted` (under `Auto`, the equivalent revert is
+   Auto mode-selection falling through to row 3 or 4 — emitted there, `resolution-rules.md`, not
+   here). Regardless of profile, if the required current (step 5) still exceeds this final
+   current even after every clamp, the System also emits `DeadlineUnreachableNotified` and
+   notifies the user.
 
 ## Edge cases
 

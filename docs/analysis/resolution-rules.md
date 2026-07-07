@@ -78,10 +78,17 @@ above, to close the projected gap to the [active SOC limit](system-overview.md#u
 - **Time remaining** = the departure deadline above − now. When the departure deadline has
   resolved to "no deadline," no required current is computed and [deadline
   urgency](system-overview.md#ubiquitous-language) (R5) never applies.
-- **Required current** = energy needed ÷ time remaining, converted to amperes via the resolved
-  supply voltage (NF4).
-- Deadline urgency (R5) is in effect for as long as the required current exceeds the active
-  mode's own desired current for this cycle.
+- **[Required current](system-overview.md#ubiquitous-language)** = energy needed ÷ time
+  remaining, converted to amperes via the resolved supply voltage (NF4).
+- [Deadline urgency](system-overview.md#ubiquitous-language) (R5) is in effect for as long as
+  the required current exceeds the desired current of the **baseline mode** — the mode that
+  would run absent any deadline-driven escalation: under `Manual`, the manually selected mode's
+  own desired current (which this response never changes); under `Auto`, whichever mode
+  Auto mode-selection's rows 3–5 (below) would select on their own. The baseline is evaluated
+  fresh every cycle from rows 3–5 alone, so the comparison is unaffected by `Captar` already
+  being dispatched from a prior escalation — comparing against `Captar`'s own (always-maximum)
+  desired current instead would make urgency look satisfied the instant it engages, reverting
+  and re-escalating every cycle.
 
 **Satisfies:** R5, R15 · **Consumed by:** the Deadline-urgency response rule below, UC05.
 
@@ -146,7 +153,7 @@ escalation and revert happen automatically.
 | Priority | Condition | Active mode |
 | --- | --- | --- |
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
-| 2 | Deadline urgency is in effect (required current, above, exceeds the active mode's own desired current) | `Captar` (the `Auto` row of the Deadline-urgency response rule below — high tariff and the raised peak limit) |
+| 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select) | `Captar` (the `Auto` row of the Deadline-urgency response rule below — high tariff and the raised peak limit) |
 | 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
 | 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set and next-day forecast above threshold) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
@@ -157,9 +164,15 @@ escalation and revert happen automatically.
   `Off` by design: a step-up extends an active solar session, it does not restart a completed one
   (R7/R8).
 - **Escalation (Solar→Captar):** when row 2 begins to hold during a solar session, Auto
-  switches to `Captar` so the deadline can be met from the grid.
-- **Revert:** when row 2 stops holding, the next cycle falls through to row 3 or 4, returning to
-  a solar mode (or `Off`) once grid charging for the deadline is no longer required (R16).
+  switches to `Captar` so the deadline can be met from the grid — emits
+  `DeadlineUrgencyEngaged` (see UC05).
+- **Revert:** when row 2 stops holding — i.e. the rows-3–5 baseline mode alone would now meet
+  the deadline — the next cycle falls through to row 3 or 4, returning to a solar mode (or
+  `Off`) once grid charging for the deadline is no longer required (R16), and emits
+  `DeadlineUrgencyReverted` (see UC05). Because row 2 always compares the required current
+  against that non-escalated baseline rather than `Captar`'s own (already-maximum) desired
+  current, the decision is stable while genuinely needed rather than reverting the cycle after
+  it engages.
 - **Reserve:** while `Auto`'s own solar-reserve conditions hold (R9), `Auto` both lowers the
   active SOC limit (R7 row 1) *and* declines to match row 4, so it does not start baseline grid
   charging overnight either — two separate effects of the same `Auto` decision, not a rule that
