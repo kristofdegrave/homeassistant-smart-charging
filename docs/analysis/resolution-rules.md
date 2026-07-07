@@ -62,6 +62,12 @@ no charging and R12 sends no reminder).
 
 - If a day is **both** a public holiday and a home day, row 2 wins (public-holiday precedence).
 - The resolved value feeds the deadline guarantee (R5) and the plug-in reminder (R12).
+- **Next departure time (R12).** The plug-in reminder needs the *next* departure time, not
+  necessarily today's: if today's resolved deadline (above) has not yet passed, it is the next
+  departure time. If today's has already passed, or resolved to "no deadline," the next departure
+  time is the deadline this same table resolves to for the following day — repeating for
+  subsequent days until one resolves to an actual deadline. This is what the plug-in reminder's
+  [departure window](system-overview.md#ubiquitous-language) tracks.
 
 **Satisfies:** R14 · **Consumed by:** UC05, UC10.
 
