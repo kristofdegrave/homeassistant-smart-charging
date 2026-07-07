@@ -202,5 +202,5 @@ escalation and revert happen automatically.
 
 Also realizes the *effective peak limit* glossary term (supporting R3, R5, C3). NF1 holds
 throughout: these are lookups the profile and coordinator consume, not mode logic. NF2 holds too:
-the deadline-urgency response is applied by the coordinator to the dispatched mode's own desired
-current without altering that mode's own logic.
+under either profile, the deadline-urgency response only ever adjusts the current a mode
+returns, never that mode's own logic.

@@ -182,7 +182,7 @@ flowchart TD
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
 `requirements.md`; mode choice in `resolution-rules.md`), **NF2** (the deadline-urgency response
-in step 5 raises the dispatched mode's own current without altering that mode's own logic —
-homed in `requirements.md`), and **NF3** (all I/O via adapter roles — bindings in
+adjusts only the current a mode returns, under either profile, without altering that mode's own
+logic — homed in `requirements.md`), and **NF3** (all I/O via adapter roles — bindings in
 `entity-catalog.md`). **C1**, **C3**, and **C4** (grid supply ceiling clamp, step 7) are enforced
 as invariants in steps 6–8.
