@@ -126,6 +126,8 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`departure deadline`** — The time by which the car must reach its active SOC limit on a given day, resolved in priority order: an external departure-time sensor, then a public-holiday or home-day override, then the per-day-of-week default. By default weekends, public holidays, and home days have no deadline; a day with no departure time imposes no deadline at all. See R14.
 
+**`departure window`** — The period a given day's resolved [departure deadline](#ubiquitous-language) covers: from the start of that day until the deadline. Two occurrences of the plug-in reminder (R12) concern the *same* departure window as long as the resolved deadline for the day has not been superseded by a new one (e.g. the next day rolling over); it is what the reminder's de-dup rule re-arms against on a connect/disconnect cycle, rather than against the calendar day alone.
+
 **`charger status`** — The normalised charger connection state exposed via the `charger_status` adapter role, translated from the charger's raw states to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current).
 
 **`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w` or `solar_w` — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
