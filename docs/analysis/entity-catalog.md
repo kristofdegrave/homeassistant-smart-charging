@@ -51,7 +51,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, (UC06, UC07) | user |
+| `input_boolean.sc_solar_available` | config | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 
@@ -84,7 +84,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user |
 | `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user |
 | `charger_power` | adapter role | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `charger_status` | adapter role | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC10 | — |
+| `charger_status` | adapter role | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
 | `charger_current` | adapter role (write) | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | — | control-cycle |
 
 ### Peak protection
@@ -113,12 +113,12 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules | user |
+| `input_number.sc_active_soc` | config | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09 | user, UC09 (manual-change adoption) |
 | `input_number.sc_battery_capacity_kwh` | config | kWh | 75 | EV battery capacity (R15) | resolution-rules | user |
-| `ev_soc` | adapter role | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC10 | — |
+| `ev_soc` | adapter role | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06 | — |
 | `battery_capacity` | adapter role | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules | — |
-| `car_home` | adapter role | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC10 | — |
-| `vehicle_charge_limit` | adapter role (write) | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | — | (UC09) |
+| `car_home` | adapter role | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09 | — |
+| `vehicle_charge_limit` | adapter role (read/write) | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | UC09 | UC09 |
 
 ---
 
@@ -149,18 +149,17 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_max_solar_soc` | config | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules | user |
-| `input_number.sc_solar_step_pp` | config | pp | 5 | solar step-up size (R8) | — | user |
-| `input_number.sc_solar_step_threshold_pp` | config | pp | 2 | solar step-up trigger gap (R8) | — | user |
-| `input_number.sc_solar_step_interval_min` | config | min | 10 | solar step-up min interval (R8) | — | user |
+| `input_number.sc_max_solar_soc` | config | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user |
+| `input_number.sc_solar_step_pp` | config | pp | 5 | solar step-up size (R8) | UC06 | user |
+| `input_number.sc_solar_step_threshold_pp` | config | pp | 2 | solar step-up trigger gap (R8) | UC06 | user |
 
 ### Solar-reserve cap
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | config | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules | user |
-| `input_number.sc_solar_forecast_threshold_kwh` | config | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules | user |
-| `solar_forecast` | adapter role | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules | — |
+| `input_number.sc_solar_reserve_soc` | config | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user |
+| `input_number.sc_solar_forecast_threshold_kwh` | config | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user |
+| `solar_forecast` | adapter role | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08 | — |
 
 ---
 
@@ -170,10 +169,10 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_reminder_lead_h` | config | h | 8 | plug-in reminder lead time (R12) | UC10 | user |
-| `input_boolean.sc_evening_prompt_enabled` | config | — | on | evening home-day prompt enable (R13) | — | user |
-| `input_datetime.sc_evening_prompt_time` | config | time | 18:00 | evening prompt time (R13) | — | user |
 | `input_number.sc_prompt_timeout_h` | config | h | 2 | evening prompt timeout (R13) | — | user |
+| `input_number.sc_reminder_lead_h` | config | h | 8 | plug-in reminder lead time (R12) | UC10 | user |
+| `input_boolean.sc_evening_prompt_enabled` | config | — | on | evening home-day prompt enable (UC08) | UC08 | user |
+| `input_datetime.sc_evening_prompt_time` | config | time | 18:00 | evening prompt time (UC08) | UC08 | user |
 
 ---
 
@@ -192,10 +191,10 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `home_day_external` | adapter role | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules | — |
-| `input_boolean.sc_home_day` | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules | external / (UC08) |
+| `home_day_external` | adapter role | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules, UC08 | — |
+| `input_boolean.sc_home_day` | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC08 | UC08 |
 
-The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14), and is set by the evening prompt (R13, Notification) or an external source.
+The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14). How it is set is deliberately left open (R13) — currently via the evening prompt (UC08) or an external source (NF3).
 
 ---
 
@@ -211,7 +210,9 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
   one materialized for observability, it would add the row and its references then.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
-  `charger_current` role.
+  `charger_current` role. Unlike `charger_current`, which is write-only, `vehicle_charge_limit` is
+  read/write: UC09 also reads it back to detect a change the user made directly on the vehicle
+  (R6).
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
   `sc_solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
   required, and the `Auto` rule skips the solar mode accordingly.
@@ -222,6 +223,6 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
 - The `<dow>` row stands for seven concrete entities (`sc_departure_mon` … `sc_departure_sun`),
   collapsed to keep the table readable.
 - **Cross-area entities.** `car_home` (EV) is also read by the plug-in reminder;
-  the home-day entities (Deadline / urgency) also drive the solar-reserve cap (R9, Solar) and are
-  set by the evening prompt (R13, Notification). They are filed under their primary area to avoid
-  duplicate rows.
+  the home-day entities (Deadline / urgency) also drive the solar-reserve cap (R9, Solar); how they
+  are set is deliberately left open (R13) — currently via the evening prompt (UC08, Notification) or
+  an external source. They are filed under their primary area to avoid duplicate rows.
