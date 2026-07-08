@@ -133,7 +133,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow — sourced from the evening prompt (R13) or any configured external source such as a calendar sensor (NF3) — the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow.
+- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow (R13), the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow.
 - [ ] While active, the overnight active SOC limit resolves to a configurable value (default 60%) while the sun is down (R7).
 - [ ] While active, `Auto` does not select a mode for the sake of opportunistic overnight grid top-up (Auto mode-selection row 4, `resolution-rules.md`).
 - [ ] Under `Manual`, this cap never applies, regardless of the home-day flag or forecast — the active SOC limit resolves as if `Auto` were not coordinating it at all.
@@ -183,17 +183,16 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ---
 
-### R13 — Home-day evening prompt
+### R13 — Home-day indication
 
 **Priority:** Could
-**What:** As one way to set the home-day flag, each evening the system can ask the user whether the car will be home during the next day, so a solar-reserve cap can be planned. (An external source such as a calendar may set the flag instead — R9.)
+**What:** The system provides a way to indicate that the car will be home during the next day, so the solar-reserve cap (R9) and departure-time override (R14) can be planned — independent of the specific mechanism used to set it (e.g. a manual input, a notification prompt, or an external calendar/presence source, NF3).
 
 **Acceptance criteria:**
 
-- [ ] When enabled, an actionable yes/no notification is sent at a configurable time (default 18:00) each evening.
-- [ ] No prompt is sent when an external source has already set the home-day flag for tomorrow.
-- [ ] Answering "yes" sets the home-day flag for tomorrow.
-- [ ] If no answer is given within a configurable timeout (default 2 hours), the system treats the answer as "no".
+- [ ] The home-day flag for tomorrow can be set through at least one configured mechanism, whether a system-provided input or an external source (NF3).
+- [ ] When the home-day flag is set for tomorrow, it feeds the solar-reserve cap (R9) and the departure-time override (R14).
+- [ ] When no configured mechanism has set the flag, tomorrow is treated as not a home day.
 - [ ] The home-day flag resets each day at midnight.
 
 ---
@@ -206,7 +205,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] A default departure time is user-configurable for each day of the week (defaults: 06:00 Mon–Fri; no deadline Sat–Sun).
-- [ ] Public-holiday and home-day (home-day flag, R9) departure times can each be configured and override the day-of-week default; both default to no deadline. If a day is both, the public-holiday override takes precedence.
+- [ ] Public-holiday and home-day (home-day flag, R13) departure times can each be configured and override the day-of-week default; both default to no deadline. If a day is both, the public-holiday override takes precedence.
 - [ ] Public holidays are recognised from a configured source (e.g. a holiday calendar sensor, NF3).
 - [ ] When an external departure-time sensor is configured (NF3), its value takes precedence over all configured values.
 - [ ] Any resolved departure time may be "no deadline", in which case no deadline applies that day and R5 does not force charging.
