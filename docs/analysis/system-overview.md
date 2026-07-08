@@ -168,9 +168,9 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`adapter role`** — An internal, code-level abstraction through which charging logic reads or writes one piece of hardware I/O (e.g. charger current, EV state of charge, solar power) — not a Home Assistant entity itself. Each role is mapped once, during config flow, to the user's real upstream `entity_id`; charging logic reads and writes only the role, never a raw device or third-party entity directly, so replacing the underlying charger or vehicle requires re-mapping only the affected role. See NF3.
 
-**`install-time configuration`** — A `config`-role entity set once during installation and rarely revisited afterward (e.g. the grid supply ceiling, minimum/maximum charging current, capability flags, adapter-role mappings); reachable only through the integration's configuration flow, not through the runtime dashboard (R19).
+**`install-time configuration`** — A `config`-role entity that describes an installation constraint or a fixed policy choice, set once during installation and rarely revisited afterward (e.g. the grid supply ceiling, minimum/maximum charging current, capability flags); reachable only through the integration's configuration flow, not through the runtime dashboard (R19). Distinct from mapping an [adapter role](system-overview.md#ubiquitous-language) to its upstream entity, which also happens once during setup but is a code-level binding, not a catalogued `config` or `state` entity, so it carries no install-time/runtime classification.
 
-**`runtime configuration`** — A `config`-role entity the household energy manager adjusts routinely as circumstances change (e.g. active profile, active mode, default SOC limit, departure-time overrides, home-day flag); every such entity is presented on the runtime dashboard (R19).
+**`runtime configuration`** — A `config`-role entity, or a `state`-role entity the user sets directly (e.g. the active mode selector, the home-day flag), that expresses what the household currently wants and is adjusted routinely as circumstances change (e.g. active profile, active mode, default SOC limit, departure times, home-day flag); every such entity is presented on the runtime dashboard (R19).
 
 ### Entity naming convention
 

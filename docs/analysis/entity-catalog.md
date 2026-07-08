@@ -17,8 +17,11 @@ every row of that concern regardless of role; the **Role** column distinguishes 
   internal, code-level role that reads or writes one piece of hardware I/O; mapped to the user's
   real upstream entity during config flow — not an HA entity itself, NF3), or `state` (a value the
   system itself maintains as a real, `sc_`-prefixed HA entity, e.g. the active mode selector).
-- **Setup** — for a `config` row, whether it is [install-time or runtime configuration](system-overview.md#ubiquitous-language)
-  (R19); `—` for `adapter role` and `state` rows, which are not user-set configuration.
+- **Setup** — whether the row is [install-time or runtime configuration](system-overview.md#ubiquitous-language)
+  (R19): every `config` row gets a classification, as does a `state` row the user sets directly
+  (e.g. the active mode selector, the home-day flag); `—` marks `adapter role` rows (a code-level
+  mapping, not a catalogued entity) and `state` rows that are pure system-computed status
+  (e.g. the monthly peak demand), neither of which carries a runtime/install-time classification.
 - **Id** — for a `config` or `state` row, the real Home Assistant entity id (`sc_`-prefixed); for
   an `adapter role` row, the internal role name — it names a code-level role, not an HA entity.
 - **Default / range / source** — for a `config` row, its default and range; for an `adapter role`
@@ -64,7 +67,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `input_select.sc_active_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | resolution-rules | user |
 | `input_number.sc_control_interval_s` | config | install-time | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user |
 | `input_number.sc_smoothing_window` | config | install-time | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user |
-| `input_select.sc_active_mode` | state | — | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) | control-cycle | user (Manual) / Auto profile (R16) |
+| `input_select.sc_active_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) | control-cycle | user (Manual) / Auto profile (R16) |
 
 ### Installation
 
@@ -159,7 +162,7 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | config | install-time | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user |
+| `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user |
 | `input_number.sc_solar_forecast_threshold_kwh` | config | install-time | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08 | — |
 
@@ -202,6 +205,16 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
 
 ## Notes
 
+- **Runtime vs. install-time judgment calls.** Where a `config` entity isn't a clear-cut match for
+  either of R19's own examples, this catalog draws the line as follows: an SOC **target** the
+  active-SOC-limit resolution can select as the effective limit (`sc_active_soc`,
+  `sc_solar_reserve_soc`) is runtime, since the household changes what SOC it currently wants;
+  an SOC **ceiling/bound** on top of a target (`sc_max_solar_soc`, a step-up ceiling, not itself
+  selectable as the active limit) is install-time, alongside other bounds (`sc_min_current_a`,
+  `sc_max_current_a`). Likewise, a behavioural/algorithm choice that is set once and rarely
+  revisited (`sc_solar_only_rounding_strategy`, `sc_power_respect_peak`,
+  `sc_evening_prompt_enabled`) is install-time, distinct from a value the household dials in for
+  the current session (`sc_power_target_current_a`).
 - **`sun.sun`** is read directly by `resolution-rules.md` (the [sun is down](system-overview.md#ubiquitous-language)
   condition) and is the one exception to the map-everything rule: it is a Home Assistant platform
   entity, not a device, so NF3 does not require an adapter role for it.

@@ -278,15 +278,15 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R19 — Runtime dashboard
 
 **Priority:** Should
-**What:** The system presents a dashboard for day-to-day use, showing current charging status and every [runtime configuration](system-overview.md#ubiquitous-language) input the household energy manager adjusts routinely (e.g. active profile, active mode, default SOC limit, departure-time overrides, home-day flag). [Install-time configuration](system-overview.md#ubiquitous-language) is set up once, through the integration's own configuration flow, and is not part of this dashboard.
+**What:** The system presents a dashboard for day-to-day use, showing current charging status and every [runtime configuration](system-overview.md#ubiquitous-language) input the household adjusts routinely (e.g. active profile, active mode, default SOC limit, departure times, home-day flag). [Install-time configuration](system-overview.md#ubiquitous-language) is set up once, through the integration's own configuration flow, and is not part of this dashboard.
 
 **Acceptance criteria:**
 
 - [ ] The dashboard shows current charging status: charger status (connected/charging/disconnected), active profile, active mode, active SOC limit, and current charger current.
-- [ ] The dashboard shows the current solar surplus and net grid import, so the household energy manager can see whether charging is currently drawing from solar or from the grid.
-- [ ] Every `config`-role entity classified as runtime configuration in `entity-catalog.md` is both visible and settable from the dashboard.
-- [ ] No install-time configuration entity is presented on the dashboard; install-time configuration is reachable only through the integration's configuration flow.
-- [ ] Adding a new `config`-role entity classified as runtime in `entity-catalog.md` requires only that classification for it to appear on the dashboard — no dashboard-specific logic change.
+- [ ] The dashboard shows the current solar surplus and net import, so the household can see whether charging is currently drawing from solar or from the grid.
+- [ ] Every entity classified as runtime configuration in `entity-catalog.md` (`config`-role, or a `state`-role entity the user sets directly, e.g. the active mode selector) is both visible and settable from the dashboard.
+- [ ] No entity classified as install-time configuration is presented on the dashboard; install-time configuration is reachable only through the integration's configuration flow.
+- [ ] Adding a new entity to `entity-catalog.md` and classifying it as runtime requires no dashboard-specific logic change for it to appear.
 
 ---
 
