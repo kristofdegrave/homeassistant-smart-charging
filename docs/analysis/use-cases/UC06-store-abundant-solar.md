@@ -32,6 +32,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that state
 Given a previous step-up was applied less than the configured interval ago (default 10 minutes)
 When state of charge is within the step threshold of the active SOC limit
 Then the System does not apply another step until the interval has elapsed, then applies it on the next qualifying cycle if SOC is still within the threshold.
+The interval exists because the step (default 5 pp) exceeding the threshold (default 2 pp) only rules out a step retriggering from the *same* SOC reading — a car whose SOC is genuinely rising fast (small battery, high surplus) can cross another threshold band within minutes of the previous step. The interval paces those steps so the raised ceiling has time to actually pull in surplus before it is raised again, rather than the limit racing ahead of the session that charges toward it.
 
 **2b — Maximum already reached** — branches from step 2.
 Given the active SOC limit already equals `sc_max_solar_soc` (a prior step clamped to it)
@@ -91,7 +92,7 @@ stateDiagram-v2
         Active SOC limit = default + applied
         steps (5 pp each), clamped to
         sc_max_solar_soc (100%). Preserved
-        across Solar <-> SolarOnly switches.
+        across a Solar/SolarOnly switch.
     end note
 ```
 
@@ -103,5 +104,5 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 ## Relationships
 
-- **Extends [UC01](UC01-charge-from-solar-surplus.md) and [UC02](UC02-charge-from-solar-only.md)** — it does not restart or replace either charging session; it only raises the ceiling an already-running solar session charges toward, while that session's own set-point logic (amp-step rounding, grid fallback, post-surplus hold, etc.) is untouched.
-- Consumes the active-SOC-limit rule in `resolution-rules.md` (R7, priority row 2) and runs alongside the `control-cycle.md` coordinator spine without adding a coordinator step of its own.
+- **Peer to [UC01](UC01-charge-from-solar-surplus.md) and [UC02](UC02-charge-from-solar-only.md), not an extension of either.** "Extends" would imply this use-case inserts optional behaviour into UC01/UC02's own scenario steps; it does not. UC06 is a separate, mode-agnostic policy that writes one row of the shared active-SOC-limit lookup (`resolution-rules.md`, R7 priority row 2). UC01 and UC02 each *read* that resolved value as part of their own set-point rule (e.g. "SOC ≥ active SOC limit → SocReached") the same way they already read the default limit or the solar-reserve cap — UC06 changing which value is currently in that slot is invisible to their own scenario logic. Neither charging use-case's amp-step rounding, grid fallback, or post-surplus hold changes because of UC06.
+- **Neither the coordinator nor a mode module owns this — it lives in the shared resolution-rules.md lookup layer.** `control-cycle.md`'s numbered steps (sensor read, smoothing, dispatch, clamps) never mention the active SOC limit; per its step 4, the active mode module reads and consumes the resolved value as part of its own set-point rule — it has no opinion on why the limit is where it is, the same way UC03/UC04's own set-point rules consult the effective peak limit `resolution-rules.md` resolves for them. UC06 only ever changes what the active-SOC-limit lookup currently returns — like the R7 priority-1 solar-reserve-cap row, it is evaluated fresh every control cycle without being one of the coordinator's own numbered steps or belonging to any single mode module.
