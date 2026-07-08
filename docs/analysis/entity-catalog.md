@@ -84,7 +84,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `input_number.sc_min_current_a` | config | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user |
 | `input_number.sc_max_current_a` | config | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user |
 | `charger_power` | adapter role | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `charger_status` | adapter role | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09 | — |
+| `charger_status` | adapter role | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
 | `charger_current` | adapter role (write) | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | — | control-cycle |
 
 ### Peak protection
@@ -169,7 +169,8 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_reminder_lead_h` | config | h | 8 | plug-in reminder lead time (R12) | — | user |
+| `input_number.sc_prompt_timeout_h` | config | h | 2 | evening prompt timeout (R13) | — | user |
+| `input_number.sc_reminder_lead_h` | config | h | 8 | plug-in reminder lead time (R12) | UC10 | user |
 | `input_boolean.sc_evening_prompt_enabled` | config | — | on | evening home-day prompt enable (UC08) | UC08 | user |
 | `input_datetime.sc_evening_prompt_time` | config | time | 18:00 | evening prompt time (UC08) | UC08 | user |
 
