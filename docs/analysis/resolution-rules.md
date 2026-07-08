@@ -23,7 +23,7 @@ charges to this resolved value — it has no opinion on *why* the limit is where
 
 | Priority | Condition | Active SOC limit |
 | --- | --- | --- |
-| 1 | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), and the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh) | The solar-reserve cap (default 60 %) |
+| 1 | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh), and the departure-deadline rule below, evaluated one day ahead, resolves to "no deadline" for tomorrow | The solar-reserve cap (default 60 %) |
 | 2 | A solar step-up is in effect (a step has been applied while charging in a solar mode) | The stepped-up value, clamped to `sc_max_solar_soc` (default 100 %) |
 | 3 | Otherwise | The default `input_number.sc_active_soc` (default 80 %) |
 
@@ -38,7 +38,10 @@ charges to this resolved value — it has no opinion on *why* the limit is where
   between `Solar` and `SolarOnly`, is cleared when the active mode is no longer a solar mode,
   and resets to the default on disconnect. This table resolves the *current* value only.
 - Deadline urgency (R5) never raises the active SOC limit — it only accelerates toward
-  whichever limit this table returns.
+  whichever limit this table returns. A departure deadline resolved for tomorrow and the
+  solar-reserve cap (row 1) are mutually exclusive (R9): the deadline takes priority, so row 1
+  never matches while one is resolved, and deadline urgency can therefore never coincide with the
+  cap.
 - Without the solar capability (R18), rows 1–2 are inert: no solar mode ever runs (so no
   step-up), and the solar-reserve inputs are not configured, so the table returns the default.
 
@@ -62,8 +65,13 @@ no charging and R12 sends no reminder).
 
 - If a day is **both** a public holiday and a home day, row 2 wins (public-holiday precedence).
 - The resolved value feeds the deadline guarantee (R5) and the plug-in reminder (R12).
+- **The same priority order, evaluated one day ahead** (tomorrow's day-of-week default,
+  tomorrow's public-holiday status, and the home-day flag, which refers to the reserved day for as
+  long as the solar-reserve cap's own trigger conditions are being checked) feeds the solar-reserve
+  cap's precondition (R9, [UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)): the cap only
+  activates, and stays active, while this evaluation resolves to "no deadline" for that day.
 
-**Satisfies:** R14 · **Consumed by:** UC05, UC10.
+**Satisfies:** R14 · **Consumed by:** UC05, UC07, UC10.
 
 ---
 
@@ -142,7 +150,7 @@ escalation and revert happen automatically.
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
 | 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select) | `Captar` (`Auto`'s second urgency lever, alongside the effective-peak-limit raise, above — high tariff and `Captar`'s own maximum-current request) |
 | 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
-| 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set and next-day forecast above threshold) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
+| 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set, next-day forecast above threshold, and no departure deadline resolved for tomorrow) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
 
 - **Row 1 compares against the *resolved* active SOC limit.** During a solar session the solar
@@ -163,8 +171,9 @@ escalation and revert happen automatically.
 - **Reserve:** while `Auto`'s own solar-reserve conditions hold (R9), `Auto` both lowers the
   active SOC limit (R7 row 1) *and* declines to match row 4, so it does not start baseline grid
   charging overnight either — two separate effects of the same `Auto` decision, not a rule that
-  `Captar` itself enforces. Row 2 (urgency) can still escalate `Captar` and charge up to the
-  (still-capped) active SOC limit, since deadline urgency never raises that limit (R7).
+  `Captar` itself enforces. Because one of those conditions is "no departure deadline resolved for
+  tomorrow," row 2 (deadline urgency) can never hold at the same time: the reserve decision and
+  deadline urgency are mutually exclusive (R9, see UC05).
 - **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
   matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
   available regardless of capabilities.
