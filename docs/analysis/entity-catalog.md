@@ -64,10 +64,10 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_select.sc_active_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | resolution-rules | user |
+| `input_select.sc_active_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | resolution-rules, UC11 | user, UC11 |
 | `input_number.sc_control_interval_s` | config | install-time | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user |
 | `input_number.sc_smoothing_window` | config | install-time | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user |
-| `input_select.sc_active_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) | control-cycle | user (Manual) / Auto profile (R16) |
+| `input_select.sc_active_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) | control-cycle, UC11 | user (Manual) / Auto profile (R16), UC11 |
 
 ### Installation
 
@@ -77,7 +77,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `input_number.sc_grid_safety_offset_a` | config | install-time | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user |
 | `input_number.sc_nominal_voltage_v` | config | install-time | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
 | `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
-| `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02 | — |
+| `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02, UC11 | — |
 | `low_tariff` | adapter role | — | bool | mapped to the installation's tariff signal (NF3; optional — treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
 > `Read by` lists only behaviours that read a value **directly**. `net_power` (and `charger_power` below) are read directly by UC01/UC02, whose set-point rule converges the smoothed value toward 0 W. `Captar` (UC03) references net import only through the R3 peak clamp in `control-cycle.md` (already listed), not as a direct read, so UC03 is deliberately absent here.
@@ -88,9 +88,9 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_min_current_a` | config | install-time | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user |
 | `input_number.sc_max_current_a` | config | install-time | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user |
-| `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
-| `charger_current` | adapter role (write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | — | control-cycle |
+| `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02, UC11 | — |
+| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10, UC11 | — |
+| `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
 
 ### Peak protection
 
@@ -106,7 +106,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04 | user |
+| `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11 |
 | `input_boolean.sc_power_respect_peak` | config | install-time | — | on | `Power` peak-protection option (R17) | UC04 | user |
 | `input_number.sc_power_cooldown_min` | config | install-time | min | 10 | `Power`-mode cooldown (R11) | UC04 | user |
 
@@ -118,7 +118,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_active_soc` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09 | user, UC09 (manual-change adoption) |
+| `input_number.sc_active_soc` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11 |
 | `input_number.sc_battery_capacity_kwh` | config | install-time | kWh | 75 | EV battery capacity (R15) | resolution-rules | user |
 | `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06 | — |
 | `battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules | — |
@@ -162,7 +162,7 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user |
+| `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11 |
 | `input_number.sc_solar_forecast_threshold_kwh` | config | install-time | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08 | — |
 
@@ -187,9 +187,9 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_datetime.sc_departure_<dow>` | config | runtime | time | 06:00 Mon–Fri; none Sat–Sun | [departure deadline](system-overview.md#ubiquitous-language) day-of-week default (R14) — seven entities, `mon`…`sun` | resolution-rules | user |
-| `input_datetime.sc_departure_holiday` | config | runtime | time | none | departure public-holiday override (R14) | resolution-rules | user |
-| `input_datetime.sc_departure_home_day` | config | runtime | time | none | departure home-day override (R14) | resolution-rules | user |
+| `input_datetime.sc_departure_<dow>` | config | runtime | time | 06:00 Mon–Fri; none Sat–Sun | [departure deadline](system-overview.md#ubiquitous-language) day-of-week default (R14) — seven entities, `mon`…`sun` | resolution-rules, UC11 | user, UC11 |
+| `input_datetime.sc_departure_holiday` | config | runtime | time | none | departure public-holiday override (R14) | resolution-rules, UC11 | user, UC11 |
+| `input_datetime.sc_departure_home_day` | config | runtime | time | none | departure home-day override (R14) | resolution-rules, UC11 | user, UC11 |
 | `departure_external` | adapter role | — | time | mapped to an external departure-time sensor (NF3) | [departure deadline](system-overview.md#ubiquitous-language) external override (R14) | resolution-rules | — |
 
 ### Home day
@@ -197,7 +197,7 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `home_day_external` | adapter role | — | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules, UC08 | — |
-| `input_boolean.sc_home_day` | state | runtime | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC08 | UC08 |
+| `input_boolean.sc_home_day` | state | runtime | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC08, UC11 | UC08, UC11 |
 
 The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14). How it is set is deliberately left open (R13) — currently via the evening prompt (UC08) or an external source (NF3).
 
@@ -225,9 +225,10 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
   one materialized for observability, it would add the row and its references then.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
-  `charger_current` role. Unlike `charger_current`, which is write-only, `vehicle_charge_limit` is
-  read/write: UC09 also reads it back to detect a change the user made directly on the vehicle
-  (R6).
+  `charger_current` role. Both are read/write: `vehicle_charge_limit` is read back by UC09 to
+  detect a change the user made directly on the vehicle (R6), and `charger_current` is read back
+  by UC11 to display the currently applied set-point on the dashboard (R19) — neither read-back
+  changes the command-only nature of `control-cycle`'s own use of these roles.
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
   `sc_solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
   required, and the `Auto` rule skips the solar mode accordingly.
