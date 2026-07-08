@@ -23,7 +23,7 @@ Each evening, the car is connected at home (`charger_status` is `connected` or `
 
 1. **Given** the evening prompt is enabled, the next-day solar forecast exceeds the threshold, and no external source has already set the home-day flag for tomorrow.
 2. **When** the car is connected at home at or after the configured evening prompt time, and before midnight, **then** the System sends the EV driver an actionable yes/no notification asking whether the car will be home tomorrow.
-3. **And** the EV driver answers "yes" before the earlier of the configured timeout (`sc_prompt_timeout_h`, default 2 hours) or midnight.
+3. **And** the EV driver answers "yes" before midnight.
 4. **Then** the System sets the home-day flag for tomorrow.
 
 ## Alternate flows
@@ -45,19 +45,19 @@ Then the System never sends the notification for that evening; the home-day flag
 
 **3a — Driver answers "no"** — branches from step 3.
 Given the notification from step 2 is pending
-When the EV driver answers "no" before the earlier of the timeout or midnight
+When the EV driver answers "no" before midnight
 Then the System leaves the home-day flag unset for tomorrow.
 
 ## Exception flows
 
-**No answer before the earlier of the timeout or midnight.**
+**No answer before midnight.**
 Given the notification from step 2 is pending
-When the configured timeout (`sc_prompt_timeout_h`) elapses, or midnight arrives first, with no answer
+When midnight arrives with no answer
 Then the System treats the lack of an answer as "no" and leaves the home-day flag unset for tomorrow.
 
 ## Postconditions
 
-- When this use-case's prompt runs (i.e. none of the skip conditions applied), the home-day flag reflects the EV driver's answer: set if "yes" was given before the earlier of the timeout or midnight, unset if "no" was given, the timeout elapsed, or midnight arrived first with no answer.
+- When this use-case's prompt runs (i.e. none of the skip conditions applied), the home-day flag reflects the EV driver's answer: set if "yes" was given before midnight, unset if "no" was given or midnight arrived with no answer.
 - When the prompt is skipped — because an external source had already set the flag, the next-day forecast did not exceed the threshold, or the car never connected before midnight — the flag is left exactly as it already was: as the external source resolved it (R9), or unset if nothing else had set it.
 - The home-day flag resets to unset each day at midnight (R13), independently of this use-case, so the prompt starts fresh every evening.
 - Setting the flag has no further effect within this use-case — whether and how the flag changes overnight charging is entirely [UC07](UC07-reserve-capacity-for-tomorrow.md)'s concern (R9).
@@ -67,19 +67,19 @@ Then the System treats the lack of an answer as "no" and leaves the home-day fla
 The prompt lifecycle for a single evening, re-armed at midnight when the home-day flag resets (R13):
 
 - **Not sent** — the trigger condition (car connected, at or after prompt time) has not yet been reached for this evening; or the prompt was skipped because an external source had already set the flag, the next-day forecast did not exceed the threshold, or the car never connected before midnight.
-- **Pending** — the notification has been sent and the System is waiting for an answer, up to the earlier of the configured timeout or midnight.
-- **Answered-yes** — the EV driver answered "yes" before the earlier of the timeout or midnight; the home-day flag is set for tomorrow.
-- **Answered-no** — the EV driver answered "no" before the earlier of the timeout or midnight; the home-day flag stays unset.
-- **Timed-out** — the timeout elapsed, or midnight arrived first, with no answer; treated the same as answered-no (flag stays unset).
+- **Pending** — the notification has been sent and the System is waiting for an answer, up to midnight.
+- **Answered-yes** — the EV driver answered "yes" before midnight; the home-day flag is set for tomorrow.
+- **Answered-no** — the EV driver answered "no" before midnight; the home-day flag stays unset.
+- **Timed-out** — midnight arrived with no answer; treated the same as answered-no (flag stays unset).
 
 Not sent (whether never triggered, or skipped for any of the reasons above), answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only when the home-day flag resets at midnight and the next evening's trigger condition is evaluated.
 
 ## Domain events produced
 
 - `HomeDayPromptSent` — the notification was sent to the EV driver (Not sent → Pending).
-- `HomeDaySet` — the EV driver answered "yes" before the earlier of the timeout or midnight; the home-day flag is now set for tomorrow (Pending → Answered-yes).
-- `HomeDayPromptDeclined` — the EV driver answered "no" before the earlier of the timeout or midnight; the home-day flag stays unset (Pending → Answered-no).
-- `HomeDayPromptTimedOut` — the timeout elapsed, or midnight arrived first, with no answer; the home-day flag stays unset (Pending → Timed-out).
+- `HomeDaySet` — the EV driver answered "yes" before midnight; the home-day flag is now set for tomorrow (Pending → Answered-yes).
+- `HomeDayPromptDeclined` — the EV driver answered "no" before midnight; the home-day flag stays unset (Pending → Answered-no).
+- `HomeDayPromptTimedOut` — midnight arrived with no answer; the home-day flag stays unset (Pending → Timed-out).
 
 ## Diagram
 
@@ -96,13 +96,13 @@ sequenceDiagram
         Note over System: Prompt skipped — no notification sent
     else Car connected, forecast high enough, no external source has set the flag
         System->>Driver: Actionable yes/no notification<br/>("HomeDayPromptSent")
-        alt Driver answers "yes" before timeout or midnight
+        alt Driver answers "yes" before midnight
             Driver->>System: Yes
             Note over System: Home-day flag set<br/>("HomeDaySet")
-        else Driver answers "no" before timeout or midnight
+        else Driver answers "no" before midnight
             Driver->>System: No
             Note over System: Flag stays unset<br/>("HomeDayPromptDeclined")
-        else Timeout elapses, or midnight arrives first, with no answer
+        else Midnight arrives with no answer
             Note over System: Flag stays unset<br/>("HomeDayPromptTimedOut")
         end
     end
@@ -111,7 +111,7 @@ sequenceDiagram
 
 ## Requirements satisfied
 
-- **R13** — Home-day indication: this use-case is one mechanism that satisfies R13 by offering an actionable yes/no evening prompt as a way to set the home-day flag; skipping when an external source has already acted, the forecast doesn't justify asking, or the car never connects before midnight; setting the flag on "yes"; treating no answer (or midnight arriving first) as "no"; the flag resetting each day at midnight.
+- **R13** — Home-day indication: this use-case is one mechanism that satisfies R13 by offering an actionable yes/no evening prompt as a way to set the home-day flag; skipping when an external source has already acted, the forecast doesn't justify asking, or the car never connects before midnight; setting the flag on "yes"; treating no answer by midnight as "no"; the flag resetting each day at midnight.
 
 Inherited from the shared mechanism (referenced, not restated): the home-day flag's role in the solar-reserve cap (R9, [UC07](UC07-reserve-capacity-for-tomorrow.md)) and in the departure home-day override (R14, `resolution-rules.md`). This use-case also reads R9's forecast sensor and threshold as its own precondition for whether to prompt at all — a separate read from UC07's, evaluated at a different time, so the two can observe different forecast values without being inconsistent.
 
@@ -121,4 +121,4 @@ Inherited from the shared mechanism (referenced, not restated): the home-day fla
 - **One of several flag mechanisms, and the deferential one (R13).** The home-day flag can also be set by an external source such as a calendar or presence sensor (`home_day_external`, `entity-catalog.md`). When that external source has already set the flag for tomorrow, this use-case skips its prompt entirely for the evening rather than asking redundantly or overriding the external value.
 - Also feeds the departure home-day override (R14, `resolution-rules.md`), which reads the same flag to decide whether a home day's departure-time override applies — a downstream consumer of the flag, not something this use-case coordinates directly. **This use-case's forecast gate (Precondition 2) is scoped to R9 alone and does not account for R14.** A home day with a low forecast is never prompted for by this mechanism, so R14's home-day override can only apply that day via an external source; without one, the day-of-week default departure time is used instead. This is a deliberate trade-off (fewer, more relevant prompts) rather than an oversight, but it means this use-case is not a complete substitute for an external home-day source when R14's override matters independently of R9.
 - **Reads R9's forecast threshold independently of UC07.** This use-case gates its own prompt on the same forecast sensor and threshold R9's cap uses (so the driver is not asked when the cap could never activate), but it reads them at prompt time, not at the cap's own evaluation time — the two reads are independent and may disagree if the forecast changes overnight.
-- **Midnight reset bounds this use-case's own answer window.** This use-case never lets a pending prompt survive past midnight — the timeout is capped at midnight (Main success scenario step 3, Exception flows) — precisely so a "yes" or "no" always lands on the same home day it was asked about. How R9's overnight solar-reserve window ("while the sun is down") relates to the flag's set-vs-reset moment at midnight remains `resolution-rules.md`'s concern, not this use-case's.
+- **Midnight is the only answer deadline — no separate configurable timeout.** This use-case never lets a pending prompt survive past midnight (Main success scenario step 3, Exception flows) — there is no separate, configurable timeout duration to reason about, which also means a "yes" or "no" always lands on the same home day it was asked about. How R9's overnight solar-reserve window ("while the sun is down") relates to the flag's set-vs-reset moment at midnight remains `resolution-rules.md`'s concern, not this use-case's.
