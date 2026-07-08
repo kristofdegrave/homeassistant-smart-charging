@@ -152,7 +152,6 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 | `input_number.sc_max_solar_soc` | config | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user |
 | `input_number.sc_solar_step_pp` | config | pp | 5 | solar step-up size (R8) | UC06 | user |
 | `input_number.sc_solar_step_threshold_pp` | config | pp | 2 | solar step-up trigger gap (R8) | UC06 | user |
-| `input_number.sc_solar_step_interval_min` | config | min | 10 | solar step-up min interval (R8) | UC06 | user |
 
 ### Solar-reserve cap
 

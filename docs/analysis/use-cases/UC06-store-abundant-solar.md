@@ -21,20 +21,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that state
 
 ## Main success scenario
 
-1. **Given** a solar mode is charging, no solar step-up interval restriction currently blocks a step (see 2a), and the active SOC limit is below the configured maximum (`sc_max_solar_soc`, default 100%).
+1. **Given** a solar mode is charging and the active SOC limit is below the configured maximum (`sc_max_solar_soc`, default 100%).
 2. **When** state of charge comes within the step threshold (default 2 pp) of the active SOC limit, **then** the System raises the active SOC limit by the configured step (default 5 pp) — a [solar step-up](../system-overview.md#ubiquitous-language).
 3. **And** the raised value is clamped to `sc_max_solar_soc` (default 100%) — a step that would overshoot it clamps to the maximum instead.
 4. **And** the resolved active SOC limit change takes effect on the next control cycle, so the in-progress solar session ([UC01](UC01-charge-from-solar-surplus.md) or [UC02](UC02-charge-from-solar-only.md)) keeps charging toward the new, higher ceiling rather than stopping at the old one.
 
 ## Alternate flows
 
-**2a — Minimum interval not yet elapsed** — branches from step 2.
-Given a previous step-up was applied less than the configured interval ago (default 10 minutes)
-When state of charge is within the step threshold of the active SOC limit
-Then the System does not apply another step until the interval has elapsed, then applies it on the next qualifying cycle if SOC is still within the threshold.
-The interval exists because the step (default 5 pp) exceeding the threshold (default 2 pp) only rules out a step retriggering from the *same* SOC reading — a car whose SOC is genuinely rising fast (small battery, high surplus) can cross another threshold band within minutes of the previous step. The interval paces those steps so the raised ceiling has time to actually pull in surplus before it is raised again, rather than the limit racing ahead of the session that charges toward it.
-
-**2b — Maximum already reached** — branches from step 2.
+**2a — Maximum already reached** — branches from step 2.
 Given the active SOC limit already equals `sc_max_solar_soc` (a prior step clamped to it)
 When state of charge comes within the step threshold of the active SOC limit
 Then the System applies no further step — the limit cannot rise beyond the configured maximum.
@@ -61,17 +55,16 @@ Then the active SOC limit resets to the default limit and the step-up is cleared
 - While a step-up is in effect, the active SOC limit equals the default limit plus the applied steps, clamped to `sc_max_solar_soc`.
 - A step-up persists unchanged across a switch between `Solar` and `SolarOnly` (R7).
 - A step-up is cleared, and the active SOC limit returns to the default limit, the moment the active mode is no longer a solar mode, or on disconnect (R7).
-- Consecutive step-ups are never closer together than the configured interval (default 10 minutes).
 - This use-case never changes the charger current itself — it only changes the ceiling that [UC01](UC01-charge-from-solar-surplus.md)/[UC02](UC02-charge-from-solar-only.md)'s own set-point logic charges toward.
 
 ## State model
 
-A light state model (two states): whether a solar step-up is currently in effect. The `stateDiagram-v2` below is authoritative for the state set. All thresholds/timers are configurable (defaults shown).
+A light state model (two states): whether a solar step-up is currently in effect. The `stateDiagram-v2` below is authoritative for the state set. All thresholds are configurable (defaults shown).
 
 | State | Active SOC limit | Leaves when |
 | --- | --- | --- |
 | Baseline | The default limit (or the solar-reserve cap, R9, if that applies — R7 priority 1) | A solar mode is charging, SOC comes within the step threshold of the limit, and the limit is below `sc_max_solar_soc` → SteppedUp |
-| SteppedUp | Default limit + applied steps, clamped to `sc_max_solar_soc` | Another step applies (self-loop, gated by the minimum interval and the maximum clamp) · active mode is no longer a solar mode → Baseline · disconnect → Baseline |
+| SteppedUp | Default limit + applied steps, clamped to `sc_max_solar_soc` | Another step applies (self-loop, gated by the maximum clamp) · active mode is no longer a solar mode → Baseline · disconnect → Baseline |
 
 A disconnect or a mode change away from a solar mode returns the System to Baseline from SteppedUp at any step count; switching between `Solar` and `SolarOnly` is a self-loop in SteppedUp, not an exit (R7).
 
@@ -86,7 +79,7 @@ A disconnect or a mode change away from a solar mode returns the System to Basel
 stateDiagram-v2
     [*] --> Baseline
     Baseline --> SteppedUp: solar mode charging & SOC within<br/>step threshold (2 pp) of limit<br/>& limit < sc_max_solar_soc
-    SteppedUp --> SteppedUp: SOC again within step threshold<br/>& interval (10 min) elapsed<br/>& limit still < sc_max_solar_soc
+    SteppedUp --> SteppedUp: SOC again within step threshold<br/>& limit still < sc_max_solar_soc
     SteppedUp --> Baseline: active mode no longer a solar mode,<br/>or disconnect
     note right of SteppedUp
         Active SOC limit = default + applied
@@ -98,7 +91,7 @@ stateDiagram-v2
 
 ## Requirements satisfied
 
-- **R8** — Solar SOC step-up (trigger on threshold proximity, step size, maximum clamp, minimum interval between consecutive steps).
+- **R8** — Solar SOC step-up (trigger on threshold proximity, step size, maximum clamp).
 
 Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and lifecycle (R7, `resolution-rules.md`, priority row 2 — this use-case is the one that applies the row-2 value and its reset), the solar-reserve cap's higher priority (R9, R7 priority row 1), and the solar capability gate (R18).
 

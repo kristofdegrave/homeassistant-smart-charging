@@ -123,7 +123,6 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 - [ ] When solar charging is active and the car's SOC reaches within a configurable threshold (default 2 pp) of the active SOC limit, the limit rises by a configurable step (default 5 pp).
 - [ ] The stepped-up limit never exceeds a user-configurable maximum (50–100%, default 100%); a step that would overshoot it clamps to the maximum.
-- [ ] Consecutive step-ups are at least a configurable interval apart (default 10 minutes).
 
 ---
 
