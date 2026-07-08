@@ -24,6 +24,13 @@ the label convention) that would be awkward to unwind later.
 
 Tracking issue: #68.
 
+### Visual mockup
+
+A static HTML mockup of the finalized layout lives at
+[`assets/2026-07-08-runtime-dashboard-mockup.html`](assets/2026-07-08-runtime-dashboard-mockup.html)
+(open it directly in a browser). It renders the section/card structure below with representative
+sample data, including the four extra status readouts added in Decision 4.
+
 ---
 
 ## Requirement recap
@@ -44,7 +51,10 @@ Tracking issue: #68.
 
 Plus the read-only charging-status values UC11 displays: `charger_status`, `sc_active_profile`,
 `sc_active_mode`, `sc_active_soc` (as the resolved active SOC limit), `charger_current`,
-`solar surplus` (`charger_power − net_power`), and `net_power`.
+`solar surplus` (`charger_power − net_power`), and `net_power`. Decision 4 adds four more
+read-only readouts (battery level, time to full, peak headroom, tomorrow's solar forecast) that
+UC11 does not explicitly ask for but round out "current charging status" for the dashboard's actual
+users.
 
 Everything else in `entity-catalog.md` is `install-time` (or an adapter role / pure system status)
 and must never appear here.
@@ -109,8 +119,9 @@ dashboard-side conditional needed.
 
 | Section | Card | Rationale |
 | --- | --- | --- |
-| Charging status | `tile` cards (one per value: charger status, active profile, active mode, active SOC limit, charger current) | Built-in card, no custom-card dependency; a `tile` reads state directly and needs no template for a plain value display. |
+| Charging status | `tile` cards (one per value: charger status, battery level, active profile, active mode, active SOC limit, charger current, time to full, peak headroom) | Built-in card, no custom-card dependency; a `tile` reads state directly and needs no template for a plain value display. |
 | Solar surplus / net import | `tile` cards, `state_content: state` | Same reasoning; both are plain sensor-shaped values (net import is a real adapter-role reading, solar surplus is `charger_power − net_power` — see Decision 3). |
+| Solar forecast outlook | `markdown` card (or a `tile` with a secondary-info template) | The forecast's value alone is less useful than the sentence explaining what it implies for tonight's reserve cap (Decision 4) — a short templated note fits better than a bare number tile. |
 | Runtime settings | `custom:auto-entities` wrapping an `entities` card (Decision 1) | Only card type that supports label-based filtering with zero maintenance per entity. |
 
 No Mushroom cards are used: the reference dashboard shared for UX inspiration (the "Slim Laden"
@@ -149,6 +160,30 @@ since it touches the analysis layer (see Open questions).
 
 ---
 
+## Decision 4 — Four extra status readouts, beyond R19's literal list
+
+Working through the mockup surfaced four values that are not in R19's acceptance criteria but are
+natural companions to what it does require — they answer questions a driver or energy manager asks
+in the same glance ("is it nearly done?", "how much headroom is left before the peak clamps it?",
+"should I expect the reserve cap tonight?"). Each is added to the *Charging status* / *Power flow*
+sections, not to *Runtime settings* — none of the four is user-editable.
+
+| Readout | Entity status | Decision |
+| --- | --- | --- |
+| **Battery level** (state of charge) | Already modeled — `ev_soc` adapter role (`entity-catalog.md`, EV configuration). | No new work. Add `UC11` to `ev_soc`'s *Read by* column, same treatment as the other direct-read display values. |
+| **Tomorrow's solar forecast** | Already modeled — `solar_forecast` adapter role (`entity-catalog.md`, Solar-reserve cap). | No new work beyond adding `UC11` to its *Read by* column. Shown as an "outlook" callout rather than a plain tile, since its purpose on this dashboard is explaining *why* the solar-reserve cap (R9) might apply tonight, not just reporting a number. |
+| **Time to full charge** | Not modeled. No entity or adapter role computes an ETA today. | New derived value, same category as Decision 3's `sensor.sc_solar_surplus_w` — a read-only diagnostic sensor (e.g. `sensor.sc_time_to_full`) computed from EV battery capacity (R15), state of charge, the active SOC limit, and the current charger current. Tracked as an `entity-catalog.md` follow-up (see Open questions), not decided inline here. |
+| **Peak headroom** | Named in the glossary (`peak headroom`, `system-overview.md`) but has no dedicated entity — it is computed inside the R3 peak-protection clamp, not stored. | New derived value, same treatment as solar surplus (Decision 3): expose `sensor.sc_peak_headroom_a`. Tracked as an `entity-catalog.md` follow-up. |
+
+**Why not skip the two new ones and ship only what's free:** battery level and solar forecast were
+trivial to add, but time-to-full and peak headroom are exactly what the mockup exercise was for —
+surfacing gaps in the analysis layer's entity coverage before they're discovered mid-implementation.
+Both follow Decision 3's precedent exactly, so accepting them here is consistent, not scope creep;
+they're listed as open questions rather than made final because — like solar surplus — they change
+`entity-catalog.md`, which this design doc doesn't have authority to do unilaterally.
+
+---
+
 ## Layout
 
 Sections view (per the Decision Matrix in `home-assistant-manager`'s dashboard guidance —
@@ -164,6 +199,8 @@ sections:
       - type: tile
         entity: sensor.sc_charger_status
       - type: tile
+        entity: sensor.ev_soc                # battery level, Decision 4
+      - type: tile
         entity: input_select.sc_active_profile
       - type: tile
         entity: input_select.sc_active_mode
@@ -171,6 +208,10 @@ sections:
         entity: sensor.sc_active_soc_limit   # resolved active SOC limit, R7
       - type: tile
         entity: sensor.sc_charger_current_a
+      - type: tile
+        entity: sensor.sc_time_to_full       # new entity-catalog.md row, Decision 4 / Open questions
+      - type: tile
+        entity: sensor.sc_peak_headroom_a    # new entity-catalog.md row, Decision 4 / Open questions
   - type: grid
     title: Power flow
     cards:
@@ -178,6 +219,14 @@ sections:
         entity: sensor.sc_solar_surplus_w    # new entity-catalog.md row, Decision 3 / Open questions
       - type: tile
         entity: sensor.sc_net_power_w
+      - type: markdown                        # solar-forecast outlook, Decision 4
+        content: >-
+          🔮 **{{ states('sensor.solar_forecast_tomorrow') }} kWh** forecast for tomorrow —
+          {% if states('sensor.solar_forecast_tomorrow') | float(0) > states('input_number.sc_solar_forecast_threshold_kwh') | float(12) %}
+          above the reserve threshold; the overnight solar-reserve cap (R9) is likely to apply tonight.
+          {% else %}
+          below the reserve threshold; no overnight cap expected.
+          {% endif %}
   - type: grid
     title: Runtime settings
     cards:
@@ -204,9 +253,15 @@ this design.
 - **`sensor.sc_solar_surplus_w` as a new `entity-catalog.md` row.** Recommended, but is an analysis
   change — take it through `write-requirement`'s propagation step (or a lighter catalog-only edit,
   since no requirement's wording changes) before implementation, rather than deciding it here.
+- **`sensor.sc_time_to_full` and `sensor.sc_peak_headroom_a` as new `entity-catalog.md` rows**
+  (Decision 4) — same category as solar surplus: read-only diagnostic sensors, no requirement
+  wording change, but a catalog addition this doc doesn't decide unilaterally.
 - **Exposing the resolved active SOC limit and read-back charger current as concrete sensors** for
   the status tiles — same category as above: a small `entity-catalog.md` addition, not decided by
   this doc.
+- **Adding `UC11` to the *Read by* column of `ev_soc` and `solar_forecast`** in `entity-catalog.md`
+  (Decision 4) — a small, uncontroversial traceability update, but still an `entity-catalog.md`
+  edit outside this doc's own file.
 - **Mushroom vs. built-in `tile`/`auto-entities`** — this design deliberately avoids a HACS
   dependency; revisit only if the built-in cards prove visually insufficient once a real dashboard
   is built and reviewed against the "Slim Laden" reference for UX parity.
