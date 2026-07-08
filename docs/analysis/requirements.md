@@ -205,7 +205,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] A default departure time is user-configurable for each day of the week (defaults: 06:00 Mon–Fri; no deadline Sat–Sun).
-- [ ] Public-holiday and home-day (home-day flag, R9) departure times can each be configured and override the day-of-week default; both default to no deadline. If a day is both, the public-holiday override takes precedence.
+- [ ] Public-holiday and home-day (home-day flag, R13) departure times can each be configured and override the day-of-week default; both default to no deadline. If a day is both, the public-holiday override takes precedence.
 - [ ] Public holidays are recognised from a configured source (e.g. a holiday calendar sensor, NF3).
 - [ ] When an external departure-time sensor is configured (NF3), its value takes precedence over all configured values.
 - [ ] Any resolved departure time may be "no deadline", in which case no deadline applies that day and R5 does not force charging.
