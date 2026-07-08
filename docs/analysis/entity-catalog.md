@@ -170,9 +170,9 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_reminder_lead_h` | config | h | 8 | plug-in reminder lead time (R12) | — | user |
-| `input_boolean.sc_evening_prompt_enabled` | config | — | on | evening home-day prompt enable (R13) | — | user |
-| `input_datetime.sc_evening_prompt_time` | config | time | 18:00 | evening prompt time (R13) | — | user |
-| `input_number.sc_prompt_timeout_h` | config | h | 2 | evening prompt timeout (R13) | — | user |
+| `input_boolean.sc_evening_prompt_enabled` | config | — | on | evening home-day prompt enable (UC08) | — | user |
+| `input_datetime.sc_evening_prompt_time` | config | time | 18:00 | evening prompt time (UC08) | — | user |
+| `input_number.sc_prompt_timeout_h` | config | h | 2 | evening prompt timeout (UC08) | — | user |
 
 ---
 
@@ -191,10 +191,10 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- |
-| `home_day_external` | adapter role | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules | — |
+| `home_day_external` | adapter role | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9) | resolution-rules | — |
 | `input_boolean.sc_home_day` | state | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC07 | external / (UC08) |
 
-The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14), and is set by the evening prompt (R13, Notification) or an external source.
+The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14), and is set directly by the user (R13, via the evening prompt in UC08) or an external source.
 
 ---
 
@@ -222,5 +222,5 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
   collapsed to keep the table readable.
 - **Cross-area entities.** `car_home` (EV) is also read by the plug-in reminder;
   the home-day entities (Deadline / urgency) also drive the solar-reserve cap (R9, Solar) and are
-  set by the evening prompt (R13, Notification). They are filed under their primary area to avoid
-  duplicate rows.
+  set by the user directly (R13) via the evening prompt (UC08, Notification). They are filed under
+  their primary area to avoid duplicate rows.

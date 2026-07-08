@@ -133,7 +133,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow — sourced from the evening prompt (R13) or any configured external source such as a calendar sensor (NF3) — the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow.
+- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow — sourced from a direct user input (R13) or any configured external source such as a calendar sensor (NF3) — the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow.
 - [ ] While active, the overnight active SOC limit resolves to a configurable value (default 60%) while the sun is down (R7).
 - [ ] While active, `Auto` does not select a mode for the sake of opportunistic overnight grid top-up (Auto mode-selection row 4, `resolution-rules.md`).
 - [ ] Under `Manual`, this cap never applies, regardless of the home-day flag or forecast — the active SOC limit resolves as if `Auto` were not coordinating it at all.
@@ -183,17 +183,16 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ---
 
-### R13 — Home-day evening prompt
+### R13 — User-settable home-day flag
 
 **Priority:** Could
-**What:** As one way to set the home-day flag, each evening the system can ask the user whether the car will be home during the next day, so a solar-reserve cap can be planned. (An external source such as a calendar may set the flag instead — R9.)
+**What:** The system provides a way for the user to directly set the home-day flag for tomorrow, so a home day can be indicated without depending on an external source (R9, R14).
 
 **Acceptance criteria:**
 
-- [ ] When enabled, an actionable yes/no notification is sent at a configurable time (default 18:00) each evening.
-- [ ] No prompt is sent when an external source has already set the home-day flag for tomorrow.
-- [ ] Answering "yes" sets the home-day flag for tomorrow.
-- [ ] If no answer is given within a configurable timeout (default 2 hours), the system treats the answer as "no".
+- [ ] The user has a system-provided way to set the home-day flag for tomorrow that does not require any external source (R9, NF3) to be configured.
+- [ ] Setting the flag through this input marks tomorrow as a home day for the solar-reserve cap (R9) and the departure-time override (R14).
+- [ ] When no external source is configured and the user has not set the flag, tomorrow is treated as not a home day.
 - [ ] The home-day flag resets each day at midnight.
 
 ---
