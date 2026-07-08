@@ -78,7 +78,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Under the `Auto` profile only, the system additionally escalates current draw to the maximum charging current for as long as the deadline is at risk, reverting once it is no longer needed.
 - [ ] High-tariff charging is permitted while meeting a deadline — this is R5's primary purpose: cost optimisation yields to the deadline.
 - [ ] The safety margin is always respected: net import stays at or below the effective peak limit in force minus the safety margin, even while meeting a deadline.
-- [ ] The active SOC limit itself is never raised by deadline logic — when a lower limit is in force (e.g. the solar-reserve cap), the system only accelerates toward that lower limit.
+- [ ] The active SOC limit itself is never raised by deadline logic — when a lower limit is in force (e.g. a solar step-up not yet reset), the system only accelerates toward that lower limit. This never involves the solar-reserve cap (R9): a departure deadline and that cap are mutually exclusive.
 - [ ] When even charging at the maximum permitted rate cannot meet the deadline, the system charges at that maximum and sends the user a notification that the deadline is unreachable.
 
 ---
@@ -130,16 +130,16 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R9 — Solar-reserve overnight cap
 
 **Priority:** Should
-**What:** When the `Auto` profile is active and, for the next day, the home-day flag is set and the solar forecast is high enough, `Auto` caps the overnight active SOC limit so the next day's solar energy can be used instead, and does not itself opportunistically top up from the grid overnight. This is `Auto`'s own coordination decision (R16) — it does not apply under `Manual`, and it is not a rule the modes `Auto` selects (e.g. `Captar`, R4) enforce themselves; they simply charge to whichever active SOC limit is currently resolved (R7).
+**What:** When the `Auto` profile is active and, for the next day, the home-day flag is set, the solar forecast is high enough, and no departure deadline is resolved for that day, `Auto` caps the overnight active SOC limit so the next day's solar energy can be used instead, and does not itself opportunistically top up from the grid overnight. A departure deadline resolved for the next day takes priority over the cap (R14) — the two are mutually exclusive. This is `Auto`'s own coordination decision (R16) — it does not apply under `Manual`, and it is not a rule the modes `Auto` selects (e.g. `Captar`, R4) enforce themselves; they simply charge to whichever active SOC limit is currently resolved (R7).
 
 **Acceptance criteria:**
 
-- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow — sourced from the evening prompt (R13) or any configured external source such as a calendar sensor (NF3) — and the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh).
+- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow — sourced from the evening prompt (R13) or any configured external source such as a calendar sensor (NF3) — the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow.
 - [ ] While active, the overnight active SOC limit resolves to a configurable value (default 60%) while the sun is down (R7).
 - [ ] While active, `Auto` does not select a mode for the sake of opportunistic overnight grid top-up (Auto mode-selection row 4, `resolution-rules.md`).
 - [ ] Under `Manual`, this cap never applies, regardless of the home-day flag or forecast — the active SOC limit resolves as if `Auto` were not coordinating it at all.
-- [ ] A departure deadline (R5) may still charge up to the (capped) active SOC limit but never beyond it, since deadline urgency never raises that limit (R7).
-- [ ] When the sun comes up, or `Auto` is no longer active, the cap lifts and the active SOC limit resolves normally.
+- [ ] A departure deadline resolved for tomorrow (R14) takes priority over the cap: the cap does not activate, and if it was already active when such a deadline appears, it lifts on the next control cycle — a deadline and this cap are mutually exclusive.
+- [ ] When the sun comes up, `Auto` is no longer active, or a departure deadline becomes resolved for tomorrow, the cap lifts and the active SOC limit resolves normally.
 
 ---
 
@@ -212,6 +212,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] When an external departure-time sensor is configured (NF3), its value takes precedence over all configured values.
 - [ ] Any resolved departure time may be "no deadline", in which case no deadline applies that day and R5 does not force charging.
 - [ ] The active departure time is resolved in priority order — external sensor, then public-holiday / home-day override, then day-of-week default — and feeds the deadline guarantee (R5) and plug-in reminder (R12).
+- [ ] The same resolution, evaluated one day ahead (tomorrow's day-of-week, holiday status, and home-day flag), feeds the solar-reserve cap's precondition (R9): a deadline resolved for tomorrow takes priority over the cap.
 
 ---
 
