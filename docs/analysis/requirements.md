@@ -186,11 +186,11 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R13 — User-settable home-day flag
 
 **Priority:** Could
-**What:** The system provides a way for the user to directly set the home-day flag for tomorrow, so a home day can be indicated without depending on an external source (R9, R14).
+**What:** The system provides a way for the user to directly set the home-day flag for tomorrow, so a home day can be indicated for the solar-reserve cap (R9) and departure-time override (R14) without depending on an external source.
 
 **Acceptance criteria:**
 
-- [ ] The user has a system-provided way to set the home-day flag for tomorrow that does not require any external source (R9, NF3) to be configured.
+- [ ] The user has a system-provided way to set the home-day flag for tomorrow that does not require any external source (NF3) to be configured.
 - [ ] Setting the flag through this input marks tomorrow as a home day for the solar-reserve cap (R9) and the departure-time override (R14).
 - [ ] When no external source is configured and the user has not set the flag, tomorrow is treated as not a home day.
 - [ ] The home-day flag resets each day at midnight.
