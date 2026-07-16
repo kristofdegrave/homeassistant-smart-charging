@@ -121,7 +121,7 @@ cycle. The solar step-up (UC06) and the solar-reserve cap (UC07) are the SOC-Tar
 rows 1–2 of the active-SOC-limit lookup. All three "happen" inside the one cycle the Coordinator
 already runs.
 
-### Engines — reusable, pure policy scoped to one volatility (never orchestrate)
+### Engines — reusable policy scoped to one volatility (never orchestrate, never do I/O)
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
@@ -212,7 +212,7 @@ flowchart TD
         NM["Notification Manager"]
     end
 
-    subgraph Engines["Engines (pure, leaf)"]
+    subgraph Engines["Engines (no I/O; some stateful, state threaded by Manager)"]
         SC["Signal-Conditioning"]
         SOC["SOC-Target"]
         DL["Deadline"]
@@ -297,7 +297,7 @@ that lives in the mode/coordinator).
 
 ## 5. Dynamic architecture
 
-One sequence per major workflow, showing the Manager orchestrating pure Engines and Resource Access
+One sequence per major workflow, showing the Manager orchestrating Engines and Resource Access
 in the order the corresponding flow document specifies.
 
 ### 5.1 Control cycle (realizes UC01–UC04, and UC05–UC07 in passing)
