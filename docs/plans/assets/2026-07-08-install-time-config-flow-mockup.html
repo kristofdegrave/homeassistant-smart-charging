@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Smart Charging — Install-Time Config Flow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --dialog: #ffffff;
+    --surface-2: #f4f6f8;
+    --border: #dbe0e6;
+    --text: #1c1e21;
+    --text-muted: #6a7280;
+    --primary: #03a9f4;
+    --primary-soft: #03a9f41a;
+    --good: #2e8b46;
+    --good-soft: #2e8b4618;
+    --divider: #e4e7eb;
+    --radius: 14px;
+    --shadow: 0 8px 28px rgba(20, 24, 30, 0.16), 0 2px 6px rgba(20, 24, 30, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418;
+      --dialog: #1c2025;
+      --surface-2: #23282e;
+      --border: #333a42;
+      --text: #e8eaed;
+      --text-muted: #9aa3ad;
+      --primary: #58c4f5;
+      --primary-soft: #58c4f522;
+      --good: #59c07a;
+      --good-soft: #59c07a22;
+      --divider: #2c323a;
+      --shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111418; --dialog: #1c2025; --surface-2: #23282e; --border: #333a42;
+    --text: #e8eaed; --text-muted: #9aa3ad; --primary: #58c4f5; --primary-soft: #58c4f522;
+    --good: #59c07a; --good-soft: #59c07a22; --divider: #2c323a;
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+  :root[data-theme="light"] {
+    --bg: #f0f2f5; --dialog: #ffffff; --surface-2: #f4f6f8; --border: #dbe0e6;
+    --text: #1c1e21; --text-muted: #6a7280; --primary: #03a9f4; --primary-soft: #03a9f41a;
+    --good: #2e8b46; --good-soft: #2e8b4618; --divider: #e4e7eb;
+    --shadow: 0 8px 28px rgba(20, 24, 30, 0.16), 0 2px 6px rgba(20, 24, 30, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Roboto", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+
+  .page { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+  .intro { max-width: 68ch; margin: 0 auto 26px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .intro h1 { color: var(--text); font-size: 19px; margin: 0 0 6px; font-weight: 650; }
+
+  .screens {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 22px;
+    align-items: start;
+  }
+  .screen-label {
+    font-size: 11px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0 0 8px 4px;
+  }
+
+  /* ---- Dialog chrome ---- */
+  .dialog {
+    background: var(--dialog);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .dialog-header {
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--divider);
+  }
+  .dialog-header .eyebrow {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+  .dialog-header h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .dialog-body { padding: 16px 22px; flex: 1; }
+  .dialog-footer {
+    padding: 12px 22px;
+    border-top: 1px solid var(--divider);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: default;
+  }
+  .btn.text { background: transparent; color: var(--primary); }
+  .btn.filled { background: var(--primary); color: #fff; }
+
+  /* ---- Menu screen ---- */
+  .menu-list { display: flex; flex-direction: column; gap: 2px; }
+  .menu-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 8px;
+    border-radius: 8px;
+  }
+  .menu-row.open { background: var(--primary-soft); }
+  .menu-row .m-icon {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex: none;
+  }
+  .menu-row .m-icon.done { background: var(--good-soft); color: var(--good); }
+  .menu-row .m-icon.pending { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+  .menu-row .m-info { flex: 1; min-width: 0; }
+  .menu-row .m-name { font-size: 13.5px; font-weight: 560; }
+  .menu-row .m-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+  .menu-row .m-chevron { color: var(--text-muted); font-size: 15px; }
+  .menu-row.disabled { opacity: 0.45; }
+  .menu-row.disabled .m-sub { font-style: italic; }
+  .menu-divider { height: 1px; background: var(--divider); margin: 6px 4px; }
+  .menu-note {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 9px 11px;
+  }
+
+  /* ---- Sections within a step ---- */
+  .fsection { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .fsection:last-child { margin-bottom: 0; }
+  .fsection-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    font-size: 12.5px;
+    font-weight: 650;
+  }
+  .fsection-head .car { color: var(--text-muted); font-size: 12px; }
+  .fsection-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11.5px; color: var(--text-muted); }
+  .field .hint { font-size: 10.5px; color: var(--text-muted); }
+  .input {
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 13px;
+    background: var(--dialog);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .input .unit { color: var(--text-muted); font-size: 11.5px; }
+
+  .picker {
+    border: 1px dashed var(--primary);
+    background: var(--primary-soft);
+    border-radius: 7px;
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+  }
+  .picker .p-icon {
+    width: 20px; height: 20px; border-radius: 5px;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex: none;
+  }
+  .picker .p-id { font-size: 11px; color: var(--text-muted); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .toggle-field {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 0;
+  }
+  .toggle-field .t-label { font-size: 12.5px; }
+  .switch {
+    width: 34px; height: 20px; border-radius: 999px; background: var(--border); position: relative; flex: none;
+  }
+  .switch.on { background: var(--primary); }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: var(--dialog);
+  }
+  .switch.on::after { left: 16px; }
+
+  .map-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .map-table th, .map-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--divider); }
+  .map-table th { color: var(--text-muted); font-weight: 600; font-size: 11px; }
+  .map-select {
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 11.5px;
+    background: var(--surface-2); display: inline-block;
+  }
+
+  .stepper-dots { display: flex; gap: 5px; align-items: center; }
+  .stepper-dots .d { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+  .stepper-dots .d.on { background: var(--primary); width: 16px; border-radius: 4px; }
+
+  .caption {
+    max-width: 900px;
+    margin: 26px auto 0;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .caption code {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 5px; font-size: 11px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="intro">
+    <h1>Smart Charging — install-time config flow</h1>
+    Home Assistant's native <span class="mono">config_flow</span> / <span class="mono">options_flow</span>
+    dialog, not a custom Lovelace card — this is where every install-time field from
+    <code class="mono">entity-catalog.md</code> lives, structurally kept off the runtime dashboard (R19).
+  </div>
+
+  <div class="screens">
+
+    <!-- SCREEN 1: Menu -->
+    <div>
+      <div class="screen-label">1 · Menu step (config_flow &amp; options_flow, same layout)</div>
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="eyebrow">Smart Charging · Configure</div>
+          <h2>Choose a section to set up</h2>
+        </div>
+        <div class="dialog-body">
+          <div class="menu-list">
+            <div class="menu-row">
+              <div class="m-icon done">✓</div>
+              <div class="m-info"><div class="m-name">Capabilities</div><div class="m-sub">Solar capability — on</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon done">✓</div>
+              <div class="m-info"><div class="m-name">Core &amp; coordinator</div><div class="m-sub">Control interval, smoothing window</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row open">
+              <div class="m-icon pending">3</div>
+              <div class="m-info"><div class="m-name">Installation &amp; metering</div><div class="m-sub">Grid ceiling, safety offset, meter entities</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">4</div>
+              <div class="m-info"><div class="m-name">Charger</div><div class="m-sub">Current limits, charger entities, status mapping</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">5</div>
+              <div class="m-info"><div class="m-name">Peak protection</div><div class="m-sub">Safety margin, max peak, grace period</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">6</div>
+              <div class="m-info"><div class="m-name">Power mode</div><div class="m-sub">Respect-peak option, cooldown</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">7</div>
+              <div class="m-info"><div class="m-name">EV</div><div class="m-sub">Battery capacity, vehicle entities</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">8</div>
+              <div class="m-info"><div class="m-name">Solar</div><div class="m-sub">Thresholds, rounding, step-up, reserve cap</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">9</div>
+              <div class="m-info"><div class="m-name">Notifications</div><div class="m-sub">Prompt timeout, reminder lead time</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-row">
+              <div class="m-icon pending">10</div>
+              <div class="m-info"><div class="m-name">Deadline &amp; home day</div><div class="m-sub">External departure / home-day sources</div></div>
+              <div class="m-chevron">›</div>
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-row disabled">
+              <div class="m-icon pending">✕</div>
+              <div class="m-info"><div class="m-name">Battery storage</div><div class="m-sub">Hidden — capability not present (R18)</div></div>
+            </div>
+          </div>
+          <div class="menu-note">
+            First-time setup: <strong>Finish setup</strong> appears once every required section above
+            is done (✓). Later, from <em>Settings → Devices &amp; services → Configure</em>, this same
+            menu opens directly to any one section — no need to step through the others.
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn text">Finish setup</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Installation & metering step -->
+    <div>
+      <div class="screen-label">2 · Detail step — "Installation &amp; metering" (sectioned)</div>
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="eyebrow">Smart Charging · Configure</div>
+          <h2>Installation &amp; metering</h2>
+        </div>
+        <div class="dialog-body">
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Grid parameters</span><span class="car">⌄</span></div>
+            <div class="fsection-body">
+              <div class="row2">
+                <div class="field">
+                  <label>Grid supply ceiling</label>
+                  <div class="input"><span class="mono">40</span><span class="unit">A</span></div>
+                </div>
+                <div class="field">
+                  <label>Grid safety offset</label>
+                  <div class="input"><span class="mono">2</span><span class="unit">A</span></div>
+                </div>
+              </div>
+              <div class="field">
+                <label>Nominal supply voltage <span class="hint">(fallback when no voltage sensor is mapped)</span></label>
+                <div class="input"><span class="mono">230</span><span class="unit">V</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Metering sources</span><span class="car">⌄</span></div>
+            <div class="fsection-body">
+              <div class="field">
+                <label>Grid net-power meter</label>
+                <div class="picker"><span class="p-icon">⌁</span><span>Fronius Meter — Power</span><span class="p-id mono">sensor.fronius_meter_power</span></div>
+              </div>
+              <div class="field">
+                <label>Grid voltage sensor <span class="hint">(optional)</span></label>
+                <div class="picker"><span class="p-icon">⌁</span><span>Not selected — using 230 V fallback</span></div>
+              </div>
+              <div class="field">
+                <label>Low-tariff signal <span class="hint">(optional — treated as always on if unset)</span></label>
+                <div class="picker"><span class="p-icon">⌁</span><span>Not selected</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="dialog-footer">
+          <button class="btn text">Back to menu</button>
+          <button class="btn filled">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Charger step with status mapping -->
+    <div>
+      <div class="screen-label">3 · Detail step — "Charger" (entity selectors + status-mapping table)</div>
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="eyebrow">Smart Charging · Configure</div>
+          <h2>Charger</h2>
+        </div>
+        <div class="dialog-body">
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Current limits</span><span class="car">⌄</span></div>
+            <div class="fsection-body">
+              <div class="row2">
+                <div class="field">
+                  <label>Minimum charging current <span class="hint">(IEC 61851 floor)</span></label>
+                  <div class="input"><span class="mono">6</span><span class="unit">A</span></div>
+                </div>
+                <div class="field">
+                  <label>Maximum charging current</label>
+                  <div class="input"><span class="mono">32</span><span class="unit">A</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Charger entities</span><span class="car">⌄</span></div>
+            <div class="fsection-body">
+              <div class="field">
+                <label>Charger power sensor</label>
+                <div class="picker"><span class="p-icon">🔌</span><span>Wallbox — Power</span><span class="p-id mono">sensor.wallbox_power</span></div>
+              </div>
+              <div class="field">
+                <label>Charger current set-point <span class="hint">(read/write)</span></label>
+                <div class="picker"><span class="p-icon">🔌</span><span>Wallbox — Current limit</span><span class="p-id mono">number.wallbox_current_limit</span></div>
+              </div>
+              <div class="field">
+                <label>Charger connection-state entity</label>
+                <div class="picker"><span class="p-icon">🔌</span><span>Wallbox — Status</span><span class="p-id mono">sensor.wallbox_status</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Status mapping</span><span class="car">⌄</span></div>
+            <div class="fsection-body">
+              <table class="map-table">
+                <thead><tr><th>Charger status (this integration)</th><th>Maps from upstream state</th></tr></thead>
+                <tbody>
+                  <tr><td>disconnected</td><td><span class="map-select">"Available" ▾</span></td></tr>
+                  <tr><td>connected</td><td><span class="map-select">"Preparing" / "Finishing" ▾</span></td></tr>
+                  <tr><td>charging</td><td><span class="map-select">"Charging" ▾</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+        <div class="dialog-footer">
+          <button class="btn text">Back to menu</button>
+          <button class="btn filled">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Solar step, showing multi-section density -->
+    <div>
+      <div class="screen-label">4 · Detail step — "Solar" (largest step, 5 sections; hidden entirely if the solar capability is off)</div>
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="eyebrow">Smart Charging · Configure</div>
+          <h2>Solar</h2>
+        </div>
+        <div class="dialog-body">
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Solar mode thresholds</span><span class="car">⌄</span></div>
+            <div class="fsection-body">
+              <div class="row2">
+                <div class="field"><label>Solar start threshold</label><div class="input"><span class="mono">150</span><span class="unit">W</span></div></div>
+                <div class="field"><label>Post-surplus hold</label><div class="input"><span class="mono">5</span><span class="unit">min</span></div></div>
+              </div>
+              <div class="field"><label>Solar-mode cooldown <span class="hint">(shared with SolarOnly)</span></label><div class="input"><span class="mono">2</span><span class="unit">min</span></div></div>
+            </div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>SolarOnly rounding</span><span class="car">›</span></div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>SOC step-up</span><span class="car">›</span></div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Solar-reserve cap</span><span class="car">›</span></div>
+          </div>
+
+          <div class="fsection">
+            <div class="fsection-head"><span>Solar entities</span><span class="car">›</span></div>
+          </div>
+
+        </div>
+        <div class="dialog-footer">
+          <button class="btn text">Back to menu</button>
+          <button class="btn filled">Save</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="caption">
+    Collapsed sections (<code>›</code>) illustrate that only one section is open at a time — the
+    installer expands the one they came for rather than scrolling past all twelve Solar fields at
+    once. Screens 2–4 are example detail steps; the remaining six menu entries follow the same
+    section-per-subgroup pattern from <code>entity-catalog.md</code>.
+  </div>
+
+</div>
+</body>
+</html>
