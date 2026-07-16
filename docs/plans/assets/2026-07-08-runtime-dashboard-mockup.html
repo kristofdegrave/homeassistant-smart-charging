@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Smart Charging — Runtime Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #f3f6f7;
+    --surface: #ffffff;
+    --surface-2: #eef2f3;
+    --border: #dbe3e6;
+    --text: #16212a;
+    --text-muted: #5b6b76;
+    --accent: #0f9c8c;
+    --accent-soft: #0f9c8c1a;
+    --accent-solar: #c97a12;
+    --accent-solar-soft: #c97a121a;
+    --good: #1f9d55;
+    --good-soft: #1f9d5518;
+    --warn: #b4790f;
+    --crit: #c2373f;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(20, 30, 35, 0.06), 0 1px 1px rgba(20, 30, 35, 0.04);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1417;
+      --surface: #171d22;
+      --surface-2: #1c232a;
+      --border: #2a333c;
+      --text: #e7edf2;
+      --text-muted: #8695a3;
+      --accent: #3fcab8;
+      --accent-soft: #3fcab822;
+      --accent-solar: #f2a53f;
+      --accent-solar-soft: #f2a53f22;
+      --good: #4ade80;
+      --good-soft: #4ade8022;
+      --warn: #f5b942;
+      --crit: #f2545b;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1417;
+    --surface: #171d22;
+    --surface-2: #1c232a;
+    --border: #2a333c;
+    --text: #e7edf2;
+    --text-muted: #8695a3;
+    --accent: #3fcab8;
+    --accent-soft: #3fcab822;
+    --accent-solar: #f2a53f;
+    --accent-solar-soft: #f2a53f22;
+    --good: #4ade80;
+    --good-soft: #4ade8022;
+    --warn: #f5b942;
+    --crit: #f2545b;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f6f7;
+    --surface: #ffffff;
+    --surface-2: #eef2f3;
+    --border: #dbe3e6;
+    --text: #16212a;
+    --text-muted: #5b6b76;
+    --accent: #0f9c8c;
+    --accent-soft: #0f9c8c1a;
+    --accent-solar: #c97a12;
+    --accent-solar-soft: #c97a121a;
+    --good: #1f9d55;
+    --good-soft: #1f9d5518;
+    --warn: #b4790f;
+    --crit: #c2373f;
+    --shadow: 0 1px 2px rgba(20, 30, 35, 0.06), 0 1px 1px rgba(20, 30, 35, 0.04);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono {
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 28px 20px 64px;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .wordmark .bolt {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+  }
+  .wordmark h1 {
+    font-size: 17px;
+    font-weight: 650;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .wordmark .sub {
+    color: var(--text-muted);
+    font-size: 12.5px;
+  }
+  .clock {
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .clock .mono { color: var(--text); }
+
+  h2.section-title {
+    font-size: 12px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin: 0 0 10px 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  section + section { margin-top: 30px; }
+
+  /* ---- Status tiles ---- */
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 78px;
+    justify-content: center;
+  }
+  .tile .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+  .tile .value {
+    font-size: 18px;
+    font-weight: 650;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .dot.charging { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+
+  /* ---- Power flow ---- */
+  .flow-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 18px 20px;
+  }
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .flow-metric { flex: 1; min-width: 150px; }
+  .flow-metric .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .flow-metric .value {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .flow-metric.solar .value { color: var(--accent-solar); }
+  .flow-metric.grid .value { color: var(--text); }
+  .flow-metric .unit {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 3px;
+  }
+  .flow-path {
+    flex: 2;
+    min-width: 200px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 12.5px;
+  }
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    width: 58px;
+  }
+  .node .icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    border: 1px solid var(--border);
+  }
+  .node.solar .icon { background: var(--accent-solar-soft); color: var(--accent-solar); }
+  .node.grid .icon { background: var(--surface-2); color: var(--text-muted); }
+  .node.charger .icon { background: var(--accent-soft); color: var(--accent); }
+  .link { flex: 1; height: 2px; background: var(--border); position: relative; min-width: 24px; }
+  .link.active { background: var(--accent-solar); }
+  .link.active::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid var(--accent-solar);
+    border-top: 2px solid var(--accent-solar);
+    transform: translateY(-50%) rotate(45deg);
+  }
+  .link.trickle::after {
+    border-color: var(--text-muted);
+  }
+  .flow-note {
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    border-top: 1px dashed var(--border);
+    padding-top: 10px;
+  }
+  .flow-note .mono { color: var(--text); }
+
+  .outlook {
+    margin-top: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 13px;
+    border-radius: 8px;
+    background: var(--accent-solar-soft);
+    border: 1px solid var(--accent-solar-soft);
+  }
+  .outlook .icon {
+    font-size: 15px;
+    line-height: 1.3;
+    flex: none;
+  }
+  .outlook .text {
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .outlook .text strong { color: var(--accent-solar); }
+  .outlook .text .mono { color: var(--text); }
+
+  /* ---- Runtime settings ---- */
+  .runtime-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .runtime-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    max-width: 40ch;
+    text-align: right;
+  }
+  .runtime-note code {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 11px;
+  }
+
+  .group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-top: 14px;
+  }
+  .group-title {
+    font-size: 11.5px;
+    font-weight: 650;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 10px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: var(--surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    flex: none;
+  }
+  .row .info { flex: 1; min-width: 0; }
+  .row .name { font-size: 13.5px; font-weight: 560; }
+  .row .id {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+  .row .control { flex: none; display: flex; align-items: center; gap: 10px; }
+
+  .tag {
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  /* controls */
+  .seg {
+    display: flex;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 2px;
+    font-size: 12px;
+  }
+  .seg span {
+    padding: 4px 9px;
+    border-radius: 5px;
+    color: var(--text-muted);
+    cursor: default;
+  }
+  .seg span.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    font-weight: 600;
+  }
+
+  .switch {
+    width: 34px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--border);
+    position: relative;
+    flex: none;
+  }
+  .switch.on { background: var(--accent); }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--surface);
+    transition: left 0.15s ease;
+  }
+  .switch.on::after { left: 16px; }
+
+  .sliderwrap { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+  .sliderwrap .track {
+    width: 90px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border);
+    position: relative;
+  }
+  .sliderwrap .fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  .sliderwrap .fill.solar { background: var(--accent-solar); }
+  .sliderwrap .thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    transform: translate(-50%, -50%);
+  }
+  .sliderwrap .thumb.solar { border-color: var(--accent-solar); }
+  .sliderwrap .num {
+    font-size: 13px;
+    font-weight: 650;
+    min-width: 34px;
+    text-align: right;
+  }
+
+  .time-chip {
+    font-size: 12.5px;
+    font-weight: 600;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+  }
+  .time-chip.muted { color: var(--text-muted); font-weight: 500; }
+
+  .dow-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    flex: 1;
+  }
+  .dow-cell {
+    text-align: center;
+    font-size: 11px;
+  }
+  .dow-cell .d { color: var(--text-muted); margin-bottom: 4px; letter-spacing: 0.03em; }
+  .dow-cell .t {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 2px;
+    font-weight: 600;
+  }
+  .dow-cell.off .t { color: var(--text-muted); font-weight: 500; }
+
+  footer.excluded {
+    margin-top: 26px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 16px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-size: 12.5px;
+  }
+  footer.excluded .icon { flex: none; margin-top: 1px; }
+  footer.excluded strong { color: var(--text); font-weight: 620; }
+
+  @media (max-width: 520px) {
+    .dow-grid { grid-template-columns: repeat(7, minmax(0,1fr)); }
+    .runtime-header { flex-direction: column; align-items: flex-start; }
+    .runtime-note { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="topbar">
+    <div class="wordmark">
+      <span class="bolt">⚡</span>
+      <div>
+        <h1>Smart Charging</h1>
+        <div class="sub">Runtime dashboard — UC11 / R19</div>
+      </div>
+    </div>
+    <div class="clock">Updated <span class="mono">10s</span> ago · control cycle live</div>
+  </div>
+
+  <!-- Charging status -->
+  <section>
+    <h2 class="section-title">Charging status</h2>
+    <div class="tile-grid">
+      <div class="tile">
+        <div class="label">Charger status</div>
+        <div class="value"><span class="dot charging"></span>Charging</div>
+      </div>
+      <div class="tile">
+        <div class="label">Battery level</div>
+        <div class="value mono">62<span class="unit">%</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">Active profile</div>
+        <div class="value">Auto</div>
+      </div>
+      <div class="tile">
+        <div class="label">Active mode</div>
+        <div class="value">Solar</div>
+      </div>
+      <div class="tile">
+        <div class="label">Active SOC limit</div>
+        <div class="value mono">80<span class="unit">%</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">Charger current</div>
+        <div class="value mono">14<span class="unit">A</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">Time to full</div>
+        <div class="value mono">1h 42m</div>
+      </div>
+      <div class="tile">
+        <div class="label">Peak headroom</div>
+        <div class="value mono">+18<span class="unit">A</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Power flow -->
+  <section>
+    <h2 class="section-title">Power flow</h2>
+    <div class="flow-card">
+      <div class="flow-row">
+        <div class="flow-metric solar">
+          <div class="label">Solar surplus</div>
+          <div class="value mono">2,180<span class="unit">W</span></div>
+        </div>
+        <div class="flow-path" aria-hidden="true">
+          <div class="node solar"><div class="icon">☀</div>PV</div>
+          <div class="link active"></div>
+          <div class="node charger"><div class="icon">🔌</div>Charger</div>
+          <div class="link trickle"></div>
+          <div class="node grid"><div class="icon">⌁</div>Grid</div>
+        </div>
+        <div class="flow-metric grid">
+          <div class="label">Net import</div>
+          <div class="value mono">40<span class="unit">W</span></div>
+        </div>
+      </div>
+      <div class="flow-note">
+        Charging is drawing mostly from solar surplus, with a bounded <span class="mono">&lt;1&nbsp;A-step</span>
+        top-up from the grid (amp-step rounding, R1) — the small trickle link above reflects that gap.
+      </div>
+      <div class="outlook">
+        <span class="icon">🔮</span>
+        <div class="text">
+          <strong>14.2 kWh</strong> solar forecast for tomorrow — above the
+          <span class="mono">12 kWh</span> reserve threshold, so the overnight solar-reserve cap
+          (60%, R9) is likely to apply tonight.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Runtime settings -->
+  <section>
+    <div class="runtime-header">
+      <h2 class="section-title" style="margin-bottom:0">Runtime settings</h2>
+      <div class="runtime-note">
+        Populated from every entity carrying the <code>sc_runtime</code> label — add one to
+        <code>entity-catalog.md</code> and it appears here with no dashboard edit.
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Mode &amp; profile</div>
+      <div class="row">
+        <div class="icon">◐</div>
+        <div class="info">
+          <div class="name">Active profile</div>
+          <div class="id mono">input_select.sc_active_profile</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <div class="seg"><span>Manual</span><span class="active">Auto</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="icon">⚙</div>
+        <div class="info">
+          <div class="name">Active mode</div>
+          <div class="id mono">input_select.sc_active_mode</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <div class="seg">
+            <span class="active">Solar</span><span>SolarOnly</span><span>Captar</span><span>Power</span><span>Off</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Charging targets</div>
+      <div class="row">
+        <div class="icon">%</div>
+        <div class="info">
+          <div class="name">Default SOC limit</div>
+          <div class="id mono">input_number.sc_active_soc</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <div class="sliderwrap">
+            <div class="track"><div class="fill" style="width:60%"></div><div class="thumb" style="left:60%"></div></div>
+            <span class="num mono">80%</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="icon">☀</div>
+        <div class="info">
+          <div class="name">Solar-reserve overnight cap</div>
+          <div class="id mono">input_number.sc_solar_reserve_soc</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <div class="sliderwrap">
+            <div class="track"><div class="fill solar" style="width:20%"></div><div class="thumb solar" style="left:20%"></div></div>
+            <span class="num mono">60%</span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="icon">A</div>
+        <div class="info">
+          <div class="name">Power target current</div>
+          <div class="id mono">input_number.sc_power_target_current_a</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <div class="sliderwrap">
+            <div class="track"><div class="fill" style="width:15%"></div><div class="thumb" style="left:15%"></div></div>
+            <span class="num mono">10 A</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">Departure &amp; home day</div>
+      <div class="row">
+        <div class="icon">🕐</div>
+        <div class="info">
+          <div class="name">Weekday departure</div>
+          <div class="id mono">input_datetime.sc_departure_&lt;dow&gt;</div>
+        </div>
+        <div class="control" style="min-width: 260px;">
+          <span class="tag">sc_runtime</span>
+          <div class="dow-grid">
+            <div class="dow-cell"><div class="d">Mon</div><div class="t mono">06:00</div></div>
+            <div class="dow-cell"><div class="d">Tue</div><div class="t mono">06:00</div></div>
+            <div class="dow-cell"><div class="d">Wed</div><div class="t mono">06:00</div></div>
+            <div class="dow-cell"><div class="d">Thu</div><div class="t mono">06:00</div></div>
+            <div class="dow-cell"><div class="d">Fri</div><div class="t mono">06:00</div></div>
+            <div class="dow-cell off"><div class="d">Sat</div><div class="t mono">—</div></div>
+            <div class="dow-cell off"><div class="d">Sun</div><div class="t mono">—</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="icon">🎌</div>
+        <div class="info">
+          <div class="name">Public-holiday override</div>
+          <div class="id mono">input_datetime.sc_departure_holiday</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <span class="time-chip muted">no deadline</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="icon">🏠</div>
+        <div class="info">
+          <div class="name">Home-day override</div>
+          <div class="id mono">input_datetime.sc_departure_home_day</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <span class="time-chip muted">no deadline</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="icon">📅</div>
+        <div class="info">
+          <div class="name">Home day tomorrow</div>
+          <div class="id mono">input_boolean.sc_home_day</div>
+        </div>
+        <div class="control">
+          <span class="tag">sc_runtime</span>
+          <div class="switch"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="excluded">
+    <span class="icon">⛔</span>
+    <div>
+      <strong>Install-time configuration is never shown here.</strong>
+      Grid supply ceiling, min/max charging current, capability flags, and other one-time setup
+      stay in the integration's own configuration flow — no <code class="mono">sc_runtime</code>
+      label, no row on this dashboard (R19).
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
