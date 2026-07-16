@@ -325,7 +325,7 @@ sequenceDiagram
     SC-->>C: smoothed readings + supply voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
-    C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline)
+    C->>SOC: resolve active SOC limit (R7: cap→step-up→default, cap row uses tomorrow's deadline)
     SOC-->>C: active SOC limit
     C->>DL: required current & urgency? (R5/R15, using active SOC limit)
     DL-->>C: urgency flag + required current
@@ -335,7 +335,7 @@ sequenceDiagram
     P-->>C: active mode
     C->>M: desired current (smoothed readings, SOC limit, config)
     M-->>C: desired current
-    C->>B: peak clamp on raw (skip iff Power+R17 off); effective peak limit (raised iff urgency)
+    C->>B: peak clamp on raw (skip iff Power+R17 off) · effective peak limit (raised iff urgency)
     B-->>C: peak-clamped current
     C->>G: grid-supply-ceiling clamp on raw (C4, always)
     G-->>C: ceiling-clamped current
@@ -402,7 +402,7 @@ sequenceDiagram
         N->>R: send plug-in reminder (de-dup on departure window)
     else UC08: prompt enabled & forecast > threshold & connected at prompt time & flag not externally set
         N->>R: send actionable home-day prompt
-        R-->>N: response (yes → set home-day flag; no/timeout → leave unset)
+        R-->>N: response (yes → set home-day flag, no/timeout → leave unset)
         N->>S: write home-day flag on "yes" (owned entity)
     else R5 delivery
         N->>R: send deadline-unreachable notice
