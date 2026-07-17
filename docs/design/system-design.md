@@ -33,9 +33,10 @@ then ADRs for the structural decisions it surfaces.* Here that order is inverted
 were written before this design existed. This document therefore doubles as a **validation pass**
 over those nine ADRs against the Method. The reconciliation is in [§8](#8-adr-reconciliation);
 in summary, every existing ADR's structural boundary **aligns** with this decomposition (each
-names a boundary this design derives independently), and this design opens **no** superseding ADR —
-though ADR-0004 carries a pre-existing, still-open entity-naming conflict with `entity-catalog.md`
-that this design surfaces but does not resolve. Two structural
+names a boundary this design derives independently), and this design opens **no** superseding ADR.
+The entity-naming question ADR-0004 once left open is now **resolved**: `entity-catalog.md` conforms
+to ADR-0004's native-entity naming (the "keep native naming" path), so ADR-0004 stands and none is
+superseded. Two structural
 decisions this design makes explicit for the first time — treating the profile as a pure
 mode-selection Engine invoked by the Coordinator, and modeling cross-Manager coordination as
 domain-event publish/subscribe rather than direct calls — are candidates for their own ADRs
@@ -101,7 +102,7 @@ reason — it is a Client rendering owned entities and adapter-role read-backs (
 dashboard-specific logic per new entity" is a direct consequence).
 
 Separately from the *user-set* control entities above, the integration also owns **diagnostic
-output entities** the Coordinator *writes* (never the user): `sensor.sc_monthly_peak_kw`, the
+output entities** the Coordinator *writes* (never the user): `sensor.smart_charging_monthly_peak_kw`, the
 Fault/OK status sensor (ADR-0007), and any resolved-value read-outs the dashboard surfaces
 (e.g. active mode, effective peak limit). These are owned entities written through the Store, not
 Clients — the dashboard consumes them read-only.
@@ -130,7 +131,7 @@ already runs.
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
 | **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, and what it is willing to spend (R5/R14/R15) |
 | **Billing-Protection Engine** | V6 | Effective peak limit and the R3 peak clamp (skippable only by `Power`'s R17 opt-out) |
-| **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.sc_monthly_peak_kw`) |
+| **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle |
 | **Signal-Conditioning Engine** | V8 | Smoothed `net_w`/`solar_w` (R10) and resolved supply voltage (NF4) |
 | **Cycle-Invariant Engine** | V9 | The final current after R11 cooldown/hold gating and the C1 floor/cap |
@@ -148,7 +149,7 @@ job (it reads once, then feeds each engine) — see the call rules in [§4](#4-s
   in isolation. Three engines are stateful: **Signal-Conditioning** (the R10 smoothing window),
   **Cycle-Invariant** (the R11 cooldown/hold timers), and the **Peak-Demand Tracker** (the running
   [monthly peak demand](../analysis/system-overview.md#ubiquitous-language)). The Tracker's result
-  is surfaced as the owned `sensor.sc_monthly_peak_kw`, but that *write* is the Coordinator's, via
+  is surfaced as the owned `sensor.smart_charging_monthly_peak_kw`, but that *write* is the Coordinator's, via
   the Store — the engine only computes the new value.
 
 This two-kind split is what keeps the ADR-0009 test strategy honest: pure and stateful engines
@@ -159,8 +160,8 @@ the smoothing state is still the Coordinator's, threaded into a conditioning rou
 
 **Capability gating (R18) has two realizations, only one of which is the Engine.** At *runtime* the
 Coordinator calls the Capability-Gate Engine to constrain `Auto`'s mode-selection and to gate
-solar-dependent behaviors. But the **manual mode selector's option list** (`sc_active_mode` offering
-only available modes, per `entity-catalog.md`) is not a runtime Client→Engine call — Clients may
+solar-dependent behaviors. But the **manual mode selector's option list** (`select.smart_charging_mode`
+offering only available modes, per `entity-catalog.md`) is not a runtime Client→Engine call — Clients may
 only call Managers (rule 1). It is fixed when the owned selector entity is *created*, at setup and
 on reload, from the declared capabilities in config-entry **data** (ADR-0005/0008). The same
 capability facts drive both; the entity-definition path avoids a forbidden Client→Engine edge.
@@ -180,8 +181,8 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
   tables, capabilities) and **options** (tunable thresholds, control interval), and reads **and
   writes** owned-entity state via HA's entity registry (ADR-0004/0005): the dashboard/config-flow
   Clients edit runtime entities through it, the Coordinator writes diagnostic outputs
-  (`sensor.sc_monthly_peak_kw`, the Fault/OK status sensor per ADR-0007) through it, and the
-  Vehicle-Limit and Notification Managers write owned entities (`sc_active_soc`, the home-day flag)
+  (`sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor per ADR-0007) through it, and the
+  Vehicle-Limit and Notification Managers write owned entities (`number.smart_charging_soc_limit_override`, the home-day flag)
   through it. No custom persistence layer — HA's restore-state carries owned-entity values.
 
 ### Resources — the external things reached
@@ -370,7 +371,7 @@ sequenceDiagram
         SOC-->>V: limit
         V->>A: write vehicle_charge_limit (guarded against own echo)
     else vehicle-side change not attributable to own write
-        V->>S: adopt as default SOC limit (write sc_active_soc — owned entity)
+        V->>S: adopt as default SOC limit (write number.smart_charging_soc_limit_override — owned entity)
     else disconnected
         V->>A: write default SOC limit to vehicle (R7 reset)
     end
@@ -468,16 +469,16 @@ Every requirement is reachable from at least one service:
 
 This design was derived independently of ADRs 0001–0009 and then checked against them. Result:
 every ADR's *structural boundary* aligns with a boundary this decomposition arrives at on its own,
-and **none is superseded**. One ADR (0004) carries a **pre-existing, still-open naming conflict**
-with `entity-catalog.md` that this design surfaces but does not resolve (see its row and the note
-below). Two decisions this design makes explicit are candidates for *new* ADRs.
+and **none is superseded**. The entity-naming question ADR-0004 once left open is now **resolved**:
+`entity-catalog.md` conforms to ADR-0004's native-entity naming (see its row below), so ADR-0004
+stands unchanged. Two decisions this design makes explicit are candidates for *new* ADRs.
 
 | ADR | Subject | Verdict | Mapping to this design |
 | --- | --- | --- | --- |
 | 0001 | Use ADRs | Aligns | Process, not structure. |
 | 0002 | Package layout (`adapters/`, `modes/`, `profiles/`, `entity.py`, `coordinator.py`) | **Aligns** | `adapters/` = Resource-Access (V1); `modes/` = Charging-Mode Engines (V2); `profiles/` = Profile Engines (V3); `coordinator.py` = the Charging Coordinator Manager; `entity.py` = owned-entity Clients. The remaining Engines (SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker) need a home — see follow-up below. |
 | 0003 | Config-flow entity mapping + Python adapters | **Aligns** | Exactly the Resource-Access layer for V1; one class per role, `Adapter` protocol, translation table = access mechanics with no policy. |
-| 0004 | Owned vs mapped entities | **Aligns; open naming conflict** | Structurally exact: mapped = Resources reached via adapters; owned = Client control entities + coordinator-written diagnostic sensors over the Store (V13/V14). **But** ADR-0004 decided owned entities are *native platform entities* under the `smart_charging_` prefix (e.g. `select.smart_charging_profile`, `number.smart_charging_soc_limit_override`), explicitly migrating the `input_*`/`sc_`-prefixed helper rows in `entity-catalog.md` — a reconciliation ADR-0004 itself records as an unresolved follow-up. This design cites the **catalog** names throughout (`sc_active_soc`, `sensor.sc_monthly_peak_kw`) because the catalog is the committed source of truth today; it neither resolves nor deepens that conflict. |
+| 0004 | Owned vs mapped entities | **Aligns; naming resolved** | Structurally exact: mapped = Resources reached via adapters; owned = Client control entities + coordinator-written diagnostic sensors over the Store (V13/V14). ADR-0004 decided owned entities are *native platform entities* under the `smart_charging_` prefix (e.g. `select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, `select.smart_charging_mode`, `sensor.smart_charging_monthly_peak_kw`), and `entity-catalog.md` now conforms to that naming — so this design cites the **native** names throughout and there is no remaining conflict to resolve. (The install-time/tuning `sc_`-prefixed *helper* rows are a separate concern, deferred to a future catalog reconciliation; they are not owned control/diagnostic entities and are untouched here.) |
 | 0005 | Config-entry data vs options; interval placement | **Aligns** | The Store's two buckets (V13); the control interval configures the Timer Client, not an Engine. |
 | 0006 | Coordinator & data flow; two distinct clamps | **Aligns (load-bearing)** | The Charging Coordinator Manager; its ten steps = the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence; two clamps = the separate Billing-Protection (V6) and Grid-Safety (V7) Engines; "mode modules are pure, no HA access" = this design's Engine-purity rule. |
 | 0007 | Fault handling (force 0 A + Fault) | **Aligns** | The Coordinator routes an adapter `None`/exception into the Cycle-Invariant Engine's C1/R11 stop path; grid-voltage fallback stays in Signal-Conditioning (NF4), not the fault path. |
@@ -515,10 +516,11 @@ Both are recorded as follow-ups per the write-adr cycle; this design does not op
   acknowledged and justified, not hidden.
 - **Glossary.** No new *domain* term is introduced; all domain terms link to
   `system-overview.md`. Method terms are design vocabulary, defined in the preamble.
-- **ADRs.** All nine structurally align; none superseded; ADR-0004's pre-existing catalog-naming
-  conflict is surfaced (not resolved); two follow-up ADRs flagged, not decided
-  ([§8](#8-adr-reconciliation)).
+- **ADRs.** All nine structurally align; none superseded; ADR-0004's entity-naming question is now
+  resolved (`entity-catalog.md` conforms to its native naming); two follow-up ADRs flagged, not
+  decided ([§8](#8-adr-reconciliation)).
 
 Once approved, `write-project-design` consumes this document to produce the implementation task
-breakdown (`docs/design/project-plan.md`), and the pre-existing scaffolding plan (PR #31, authored
-before this phase) is reconciled against that breakdown.
+breakdown (`docs/design/project-plan.md`), and the pre-existing scaffolding plan
+(`docs/plans/2026-07-04-smart-charging-scaffolding.md`, authored before this phase) is reconciled
+against that breakdown.
