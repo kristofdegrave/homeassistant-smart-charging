@@ -22,8 +22,12 @@ the architecture, not who does each task.
   by an ADR before a given task starts**.
 - Behavior stays owned by the analysis docs: `control-cycle.md` for the order of operations in one
   cycle, `resolution-rules.md` for the priority-ordered lookups, `entity-catalog.md` for
-  entity/role bindings, `requirements.md`/UC01–UC11 for acceptance criteria. This plan cites them,
-  it does not restate them.
+  entity/role bindings, `requirements.md`/UC01–UC11 for acceptance criteria. This plan cites those
+  documents as the source of truth and does not re-derive their behavior. Where a task names a
+  specific formula, threshold, or rule (e.g. the surplus formula, the clamp baseline, an R-number),
+  it does so as a **test anchor** — the concrete thing that task's test must reproduce, attributed
+  to its owning doc — not as a restatement that this plan owns. If an anchor and its source doc ever
+  disagree, the source doc wins.
 - If executing this plan reveals a gap in `system-design.md`, the gap is fixed **there first**
   (re-running the `write-system-design` review cycle), then this plan resumes — the derivation must
   stay mechanical.
@@ -65,14 +69,15 @@ smoke-test earlier (e.g. the config flow), that is called out as a checkpoint, n
 
 Three structural decisions `system-design.md` surfaces are **not yet decided** and each **blocks**
 specific tasks. Per CLAUDE.md and the `write-adr` cycle, the ADR is opened and approved **before**
-the first task that depends on it — never retrofitted. Two of the three (ADR-0010, ADR-0011) already
-have tracking issues (#75, #76); ADR-0004′ has none yet and must be opened before task C2.
+the first task that depends on it — never retrofitted. Each gate is identified by the ADR number it
+will carry; opening it (via `write-adr`, with its own tracking issue) is itself the first step of
+the phase that would otherwise be blocked.
 
-| Gate | Decision | Blocks | Tracking |
-| --- | --- | --- | --- |
-| **G-ADR-0010** | *Package home for the eight cross-cutting Engines* — an `engines/` subpackage vs top-level modules. ADR-0002 gives `adapters/`, `modes/`, `profiles/` homes but no home for SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker (system-design §8 follow-up). | Tasks **E3–E9** (the cross-cutting Engines; the eight engines map to E3–E9 because E5 bundles Billing-Protection + the Peak-Demand Tracker). Does **not** block E1 (`modes/`) or E2 (`profiles/`) — those already have ADR-0002 homes. | [#75](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/75) |
-| **G-ADR-0011** | *Cross-Manager coordination via domain events* — fix the publish/subscribe pattern (no direct Manager→Manager calls) and decide, per trigger, between publishing a new domain event and re-deriving the condition per cycle (system-design §4 rule 5). | Tasks **M2** (Vehicle-Limit Manager) and **M3** (Notification Manager), and the event-publish step of **M1** (Coordinator). | [#76](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/76) |
-| **G-ADR-0004′** | *Resolve the pre-existing owned-entity naming conflict.* ADR-0004 makes owned entities **native platform entities** under the `smart_charging_` prefix (`select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, …), explicitly migrating the `input_*`/`sc_`-prefixed helper rows still catalogued in `entity-catalog.md`. system-design §8 surfaces this as unresolved and cites the **catalog** names as today's committed source of truth. The conflict must be settled (a reconciliation ADR superseding the relevant part of ADR-0004, **or** an `entity-catalog.md` update) before owned entities are created. | Tasks **C2** (owned control entities), **C3** (diagnostic output entities), and the owned-entity write path of **RA3** (Store). Adapters/mapped entities are unaffected. | new — open before C2 |
+| Gate | Decision | Blocks |
+| --- | --- | --- |
+| **G-ADR-0010** | *Package home for the eight cross-cutting Engines* — an `engines/` subpackage vs top-level modules. ADR-0002 gives `adapters/`, `modes/`, `profiles/` homes but no home for SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker (system-design §8 follow-up). | Tasks **E3–E9** (the cross-cutting Engines; the eight engines map to E3–E9 because E5 bundles Billing-Protection + the Peak-Demand Tracker). Does **not** block E1 (`modes/`) or E2 (`profiles/`) — those already have ADR-0002 homes. |
+| **G-ADR-0011** | *Cross-Manager coordination via domain events* — fix the publish/subscribe pattern (no direct Manager→Manager calls) and decide, per trigger, between publishing a new domain event and re-deriving the condition per cycle (system-design §4 rule 5). | Tasks **M2** (Vehicle-Limit Manager) and **M3** (Notification Manager), and the event-publish step of **M1** (Coordinator). |
+| **G-ADR-0004′** | *Resolve the pre-existing owned-entity naming conflict.* ADR-0004 makes owned entities **native platform entities** under the `smart_charging_` prefix (`select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, …), explicitly migrating the `input_*`/`sc_`-prefixed helper rows still catalogued in `entity-catalog.md`. system-design §8 surfaces this as unresolved and cites the **catalog** names as today's committed source of truth. The conflict must be settled (a reconciliation ADR superseding the relevant part of ADR-0004, **or** an `entity-catalog.md` update) before owned entities are created. | Tasks **C2** (owned control entities), **C3** (diagnostic output entities), and the owned-entity write path of **RA3** (Store). Adapters/mapped entities are unaffected. |
 
 > **Note on the naming gate.** Until G-ADR-0004′ is resolved, every task below cites owned entities
 > by their **catalog** names (`sc_active_soc`, `sensor.sc_monthly_peak_kw`, `sc_active_mode`), matching
@@ -105,9 +110,9 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 ### Phase 0 — Structural-decision gate
 
 - **G-ADR-0010 — Engines package home.** Run `write-adr`; decide `engines/` subpackage vs top-level
-  modules extending ADR-0002. *Blocks E3–E9.* Issue #75.
+  modules extending ADR-0002. *Blocks E3–E9.*
 - **G-ADR-0011 — Cross-Manager domain events.** Run `write-adr`; fix the pub/sub pattern and the
-  per-trigger event-vs-rederive decision. *Blocks M1 (publish step), M2, M3.* Issue #76.
+  per-trigger event-vs-rederive decision. *Blocks M1 (publish step), M2, M3.*
 - **G-ADR-0004′ — Owned-entity naming.** Run `write-adr` (reconciliation, superseding the disputed
   part of ADR-0004) **or** update `entity-catalog.md` to ADR-0004's native-entity names via the
   analysis review cycle. *Blocks C2, C3, RA3 owned-write path.*
@@ -179,7 +184,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Service:** Engine, V2. Home: `modes/` (ADR-0002 — no new ADR).
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per mode (NF2); `Off` → 0 A. `Solar`/`SolarOnly` surplus is
-  `charger_w − net_w`, not `−net_w` (see [§6 PR #31 reconciliation](#6-reconciliation-with-pr-31-the-scaffolding-plan)).
+  `charger_w − net_w`, not `−net_w` (see [§6 scaffolding-plan reconciliation](#6-reconciliation-with-the-scaffolding-plan)).
 - **Depends on:** the shape of conditioned readings (E8 output) and resolved SOC limit (E3) — as
   plain data types; no runtime dependency (Engines don't call Engines).
 - **ADR gate:** none (ADR-0002 home). *Independently testable per mode.*
@@ -224,7 +229,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Builds:** effective peak limit and the R3 peak clamp, skippable **only** by `Power`'s R17 opt-out
   (C3); and the Tracker accumulating monthly peak demand from net import, reset monthly, surfaced as
   `sensor.sc_monthly_peak_kw`. The clamp solves from the baseline actually flowing
-  (`raw_net_w − raw_charger_w`), not the requested current (see [§6](#6-reconciliation-with-pr-31-the-scaffolding-plan)).
+  (`raw_net_w − raw_charger_w`), not the requested current (see [§6](#6-reconciliation-with-the-scaffolding-plan)).
   R3's grace period ("stop only after a *sustained* breach at minimum") lives here.
 - **Depends on:** ADR-0010; the Tracker's running state is threaded by M1 (never HA-held in the
   Engine). The Tracker's *write* to `sensor.sc_monthly_peak_kw` is M1's via the Store, not the Engine's.
@@ -407,36 +412,38 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 
 ---
 
-## 6. Reconciliation with PR #31 (the scaffolding plan)
+## 6. Reconciliation with the scaffolding plan
 
-PR #31 (`docs/plans/2026-07-04-smart-charging-scaffolding.md`) is a 16-task TDD scaffolding plan
-authored **2026-07-04**, before this design phase existed. It references the ADRs directly rather
-than a project plan, is organized **functionally** (config flow → adapters → coordinator → the five
-modes → `Manual` profile → owned entities), and is scoped to UC01–UC04 (`Off`/`Solar`/`SolarOnly`/
-`Captar`/`Power` + `Manual`), deferring `Auto`, R5, R6, R8, R9, R12/R13 with `TODO(UCnn)` markers.
+The pre-existing scaffolding plan `docs/plans/2026-07-04-smart-charging-scaffolding.md` is a 16-task
+TDD plan authored **2026-07-04**, before this design phase existed. It references the ADRs directly
+rather than a project plan, is organized **functionally** (config flow → adapters → coordinator →
+the five modes → `Manual` profile → owned entities), and is scoped to UC01–UC04 (`Off`/`Solar`/
+`SolarOnly`/`Captar`/`Power` + `Manual`), deferring `Auto`, R5, R6, R8, R9, R12/R13 with
+`TODO(UCnn)` markers.
 
-**Decision: this project plan supersedes PR #31 as the authoritative build sequence; PR #31's
-task-level *content* is folded into the matching tasks here as implementation reference.** Rationale:
+**Decision: this project plan supersedes the scaffolding plan as the authoritative build sequence;
+the scaffolding plan's task-level *content* is folded into the matching tasks here as implementation
+reference.** Rationale:
 
-- PR #31's functional ordering is not wrong, but it is not *derived from* the volatility
-  decomposition — this plan's phase order (Resource Access → Engines → Managers → Clients) is, and it
-  makes the ADR gates and cross-Manager event boundary explicit, which PR #31 predates.
-- PR #31's substantive corrections are **retained** and mapped onto tasks here, so no review value is
-  lost:
+- The scaffolding plan's functional ordering is not wrong, but it is not *derived from* the
+  volatility decomposition — this plan's phase order (Resource Access → Engines → Managers → Clients)
+  is, and it makes the ADR gates and cross-Manager event boundary explicit, which the scaffolding
+  plan predates.
+- The scaffolding plan's substantive corrections are **retained** and mapped onto tasks here, so no
+  review value is lost:
   - the `charger_w − net_w` surplus formula and the closed-loop no-oscillation regression → **E1**;
   - the baseline-solved (`raw_net_w − raw_charger_w`) clamp math and worked-example tests → **E5/E6**;
   - the R3 grace-period `PeakBreachTracker` → **E5**; the C4-after-grace, no-cooldown distinction → **E6**;
   - `set_active_mode` timer reset (R11) and the `SocReached`-noise guard (R7) → **E8/E3**;
   - `charger_status` gating on every mode → **E1**; the config-flow status-map key fix → **C4/RA1**.
-- PR #31's UC01–UC04-only scope maps cleanly onto a **first implementation slice** of this plan:
+- Its UC01–UC04-only scope maps cleanly onto a **first implementation slice** of this plan:
   RA1 + E1(`Off`/`Solar`/`SolarOnly`/`Captar`/`Power`) + E2(`Manual`) + E5/E6/E7/E8 + M1 + C2/C4.
-  `Auto` (E2), E3/E4/E9, M2, M3, and C3/C5/C6 are the later slices, matching PR #31's deferrals.
+  `Auto` (E2), E3/E4/E9, M2, M3, and C3/C5/C6 are the later slices, matching its deferrals.
 
-**Action on #31:** close PR #31 with a comment pointing to this plan as the superseding artifact and
-listing the content-fold mapping above, **or** (human's call at manual review) repurpose its branch
-as the first implementation slice (RA1→M1). Either way its corrections are preserved here; it is not
-merged as-is. *Recommendation: close with the mapping comment* — its file is a plan, not code, and
-this document now carries the authoritative sequence.
+**Disposition:** the scaffolding plan is retired in favor of this document, which now carries the
+authoritative sequence; its corrections survive via the mapping above. Its open review branch is
+either closed with a pointer to this plan or repurposed as the first implementation slice (RA1→M1) —
+a VCS housekeeping choice recorded in that branch's own thread, not here. It is not merged as-is.
 
 ---
 
