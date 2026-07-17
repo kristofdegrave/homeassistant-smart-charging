@@ -77,9 +77,9 @@ the phase that would otherwise be blocked.
 | --- | --- | --- |
 | **G-ADR-0010** | *Package home for the eight cross-cutting Engines* — an `engines/` subpackage vs top-level modules. ADR-0002 gives `adapters/`, `modes/`, `profiles/` homes but no home for SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker (system-design §8 follow-up). | Tasks **E3–E9** (the cross-cutting Engines; the eight engines map to E3–E9 because E5 bundles Billing-Protection + the Peak-Demand Tracker). Does **not** block E1 (`modes/`) or E2 (`profiles/`) — those already have ADR-0002 homes. |
 | **G-ADR-0011** | *Cross-Manager coordination via domain events* — fix the publish/subscribe pattern (no direct Manager→Manager calls) and decide, per trigger, between publishing a new domain event and re-deriving the condition per cycle (system-design §4 rule 5). | Tasks **M2** (Vehicle-Limit Manager) and **M3** (Notification Manager), and the event-publish step of **M1** (Coordinator). |
-| **G-ADR-0004′** | *Resolve the pre-existing owned-entity naming conflict.* ADR-0004 makes owned entities **native platform entities** under the `smart_charging_` prefix (`select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, …), explicitly migrating the `input_*`/`sc_`-prefixed helper rows still catalogued in `entity-catalog.md`. system-design §8 surfaces this as unresolved and cites the **catalog** names as today's committed source of truth. The conflict must be settled (a reconciliation ADR superseding the relevant part of ADR-0004, **or** an `entity-catalog.md` update) before owned entities are created. | Tasks **C2** (owned control entities), **C3** (diagnostic output entities), and the owned-entity write path of **RA3** (Store). Adapters/mapped entities are unaffected. |
+| **G-NAMING** | *Resolve the pre-existing owned-entity naming conflict.* ADR-0004 makes owned entities **native platform entities** under the `smart_charging_` prefix (`select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, …), explicitly migrating the `input_*`/`sc_`-prefixed helper rows still catalogued in `entity-catalog.md`. system-design §8 surfaces this as unresolved and cites the **catalog** names as today's committed source of truth. **ADR-0004 is immutable.** The conflict is therefore settled one of two ways, never by editing ADR-0004: (a) if the resolution **keeps** ADR-0004's native-entity naming, only an `entity-catalog.md` update (via the analysis review cycle) conforms the catalog to it — no new ADR; or (b) if the resolution **overturns** that naming, a **new, superseding ADR** (the next sequential number) records the change and marks ADR-0004 Superseded. Either way, settled before owned entities are created. | Tasks **C2** (owned control entities), **C3** (diagnostic output entities), and the owned-entity write path of **RA3** (Store). Adapters/mapped entities are unaffected. |
 
-> **Note on the naming gate.** Until G-ADR-0004′ is resolved, every task below cites owned entities
+> **Note on the naming gate.** Until G-NAMING is resolved, every task below cites owned entities
 > by their **catalog** names (`sc_active_soc`, `sensor.sc_monthly_peak_kw`, `sc_active_mode`), matching
 > `system-design.md`. Whichever way the conflict is settled, those references rename in lockstep — a
 > mechanical find-replace, not a behavior change.
@@ -90,11 +90,11 @@ the phase that would otherwise be blocked.
 
 | Phase | Services (system-design §3) | Gate | Tasks |
 | --- | --- | --- | --- |
-| **0 — Gate** | — | Open/approve ADR-0010, ADR-0011, ADR-0004′ | G-ADR-0010, G-ADR-0011, G-ADR-0004′ |
+| **0 — Gate** | — | Open/approve ADR-0010, ADR-0011; settle the owned-entity naming conflict | G-ADR-0010, G-ADR-0011, G-NAMING |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — | RA1, RA2, RA3, RA4 |
 | **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | E3–E9 need ADR-0010 | E1, E2, E3, E4, E5, E6, E7, E8, E9 |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | M2/M3 (and M1's publish step) need ADR-0011 | M1, M2, M3 |
-| **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | C2/C3 need ADR-0004′ | C1, C2, C3, C4, C5, C6 |
+| **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | C2/C3 need G-NAMING | C1, C2, C3, C4, C5, C6 |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
 before the next phase depends on it.
@@ -113,9 +113,10 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
   modules extending ADR-0002. *Blocks E3–E9.*
 - **G-ADR-0011 — Cross-Manager domain events.** Run `write-adr`; fix the pub/sub pattern and the
   per-trigger event-vs-rederive decision. *Blocks M1 (publish step), M2, M3.*
-- **G-ADR-0004′ — Owned-entity naming.** Run `write-adr` (reconciliation, superseding the disputed
-  part of ADR-0004) **or** update `entity-catalog.md` to ADR-0004's native-entity names via the
-  analysis review cycle. *Blocks C2, C3, RA3 owned-write path.*
+- **G-NAMING — Owned-entity naming.** Settle the conflict without editing ADR-0004 (immutable):
+  **either** conform `entity-catalog.md` to ADR-0004's native-entity names via the analysis review
+  cycle (ADR-0004 stands, no new ADR), **or**, if the decision overturns that naming, run `write-adr`
+  for a new superseding ADR that marks ADR-0004 Superseded. *Blocks C2, C3, RA3 owned-write path.*
 
 ### Phase 1 — Resource Access
 
@@ -151,9 +152,9 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Builds:** reads of config-entry **data** (role mappings, translation tables, capabilities) and
   **options** (tunable thresholds, control interval, ADR-0005); reads **and writes** of owned-entity
   state via HA's entity/restore-state registry (ADR-0004). No custom persistence layer.
-- **Depends on:** RA1 (data shape). **The owned-entity write path depends on G-ADR-0004′** for the
+- **Depends on:** RA1 (data shape). **The owned-entity write path depends on G-NAMING** for the
   entity names/platform; the config/options **read** path does not and can proceed first.
-- **ADR gate:** G-ADR-0004′ (owned-write path only).
+- **ADR gate:** G-NAMING (owned-write path only).
 - **Testable on its own:** HA harness — data/options reads; owned-entity round-trip
   (write → restore-state → read) once names are fixed.
 - **Integration checkpoint:** ⎔ Coordinator (M1) and the Clients read config/options and (post-gate)
@@ -170,7 +171,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 
 > **⎔ Phase 1 checkpoint:** every Resource-Access class reachable through its factory/Store; no
 > logic layer references a raw upstream entity directly (NF3 guard). Owned-write path may still be
-> pending G-ADR-0004′.
+> pending G-NAMING.
 
 ### Phase 2 — Engines
 
@@ -295,7 +296,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
   UC05–UC07 in passing. **Publishes** `ChargerCurrentSet` / `ActiveSocLimitReached` /
   `DeadlineUnreachableNotified` — the publish step is gated on **G-ADR-0011**.
 - **Depends on:** RA1, RA3 (read + diagnostic write), all Engines E1–E9. Reads owned control-entity
-  values through the Store — stubbable until C2, so M1 does not wait on G-ADR-0004′.
+  values through the Store — stubbable until C2, so M1 does not wait on G-NAMING.
 - **ADR gate:** G-ADR-0011 (event-publish step only; the compute pipeline is unblocked).
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
   UC01–UC04; the two-distinct-clamps ordering (ADR-0006); fault → force-0A + Fault sensor (ADR-0007);
@@ -351,13 +352,13 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Integration checkpoint:** ⎔ a tick triggers exactly one M1 cycle.
 
 **C2 — Owned control entities**
-- **Service:** Client, V14. **ADR gate: G-ADR-0004′** (names/platform).
+- **Service:** Client, V14. **ADR gate: G-NAMING** (names/platform).
 - **Builds:** the user-set entities — active profile/mode, default SOC limit, `Power` target current,
   departure times, home-day flag (`entity.py` base classes, ADR-0002; platform files
   `select`/`number`/`time`/`switch`). The `sc_active_mode` selector's option list is fixed at
   creation from declared capabilities (the E9-facts entity-definition path, **not** a runtime
   Client→Engine call).
-- **Depends on:** RA3 (Store owned-write path), and G-ADR-0004′. M1 reads these through the Store.
+- **Depends on:** RA3 (Store owned-write path), and G-NAMING. M1 reads these through the Store.
 - **Testable on its own:** HA harness — entity creation, restore-state round-trip, capability-limited
   option list.
 - **Integration checkpoint:** ⎔ M1 reads owned values through the Store (replacing C2 stubs used in M1's tests).
@@ -365,12 +366,12 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 **C3 — Diagnostic output entities**
 - **Service:** owned entities the Coordinator **writes** (not the user), V13/V14. system-design §3
   classifies these as *owned entities written through the Store, **not Clients***; they are listed
-  under Phase 4 for **build-order** reasons only (they depend on M1 the writer and on G-ADR-0004′),
-  not reclassified as Clients. **ADR gate: G-ADR-0004′.**
+  under Phase 4 for **build-order** reasons only (they depend on M1 the writer and on G-NAMING),
+  not reclassified as Clients. **ADR gate: G-NAMING.**
 - **Builds:** `sensor.sc_monthly_peak_kw`, the Fault/OK status sensor (ADR-0007), and resolved
   read-outs the dashboard surfaces (active mode, effective peak limit). Written by M1 via the Store,
   consumed read-only by the dashboard.
-- **Depends on:** M1 (writer), RA3 (Store), G-ADR-0004′ (names).
+- **Depends on:** M1 (writer), RA3 (Store), G-NAMING (names).
 - **Testable on its own:** HA harness — M1 write appears on the entity; Fault sensor reflects the
   ADR-0007 path.
 - **Integration checkpoint:** ⎔ dashboard (C5) reads these read-only.
@@ -391,7 +392,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
   runtime-classified entity and edits them in place, touching **only the Store** and adapter
   read-backs — no dashboard-specific logic per new entity (R19).
 - **Depends on:** C2 (owned control entities), C3 (diagnostics), RA1/RA2 (read-backs), RA3 (Store).
-- **ADR gate:** none (inherits C2/C3's G-ADR-0004′ names).
+- **ADR gate:** none (inherits C2/C3's G-NAMING names).
 - **Testable on its own:** HA harness / Lovelace config — edits flow to the same entities other UCs
   consume; renders read-backs read-only.
 - **Integration checkpoint:** ⎔ an edit in the dashboard changes an owned entity that M1 then reads.
@@ -454,7 +455,7 @@ a VCS housekeeping choice recorded in that branch's own thread, not here. It is 
   own to exist first. Engines depend on no lower layer (§4 rule 4); Managers depend on no other
   Manager (§4 rule 5) — reflected in M1/M2/M3 having no mutual ordering edge.
 - **Every ADR-worthy decision has a task line before its dependent.** G-ADR-0010 precedes E3–E9;
-  G-ADR-0011 precedes M1's publish step, M2, M3, C6; G-ADR-0004′ precedes C2, C3, and RA3's
+  G-ADR-0011 precedes M1's publish step, M2, M3, C6; G-NAMING precedes C2, C3, and RA3's
   owned-write path. None retrofitted.
 - **Every service in `system-design.md` §3 appears in exactly one task, none duplicated:**
   Adapters V1 → RA1/RA2 (+RA1-VL in M2); Notification access V11 → RA4; Store V13 → RA3;
