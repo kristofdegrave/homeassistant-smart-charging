@@ -33,13 +33,13 @@ Any of:
 **Vehicle → System: adopt a manual change**
 
 4. **Given** the car is connected at home and the vehicle's charge-limit setting changes.
-5. **When** the reported change is not attributable to the System's own last write through `vehicle_charge_limit` (i.e. the user changed it directly in the car or its app, rather than the System's step 2 write reflecting back), **then** the System adopts the new value as the default SOC limit (`sc_active_soc`) rather than overwriting it back on the next cycle.
+5. **When** the reported change is not attributable to the System's own last write through `vehicle_charge_limit` (i.e. the user changed it directly in the car or its app, rather than the System's step 2 write reflecting back), **then** the System adopts the new value as the default SOC limit (`number.smart_charging_soc_limit_override`) rather than overwriting it back on the next cycle.
 6. **And** subsequent active-SOC-limit resolution (`resolution-rules.md`) and future System-initiated writes (steps 1–3) use this newly adopted default until the user changes it again, on the vehicle or in the System. When a solar step-up or the solar-reserve cap is in force at the time of the manual change, the *resolved* active SOC limit — not the newly adopted default in isolation — is what the next System-initiated write (step 2) pushes back to the vehicle, since that write always propagates the current row of the Active SOC limit table (`resolution-rules.md`); the manual value is preserved unmodified only while the default itself is the resolved value.
 
 **On disconnect: reset to the default**
 
 7. **Given** the car is connected at home.
-8. **When** charger status transitions to `disconnected`, **then** the System writes the default SOC limit (`sc_active_soc`, default 80%) to the vehicle through `vehicle_charge_limit` — mirroring the active-SOC-limit reset the disconnect already triggers (R7).
+8. **When** charger status transitions to `disconnected`, **then** the System writes the default SOC limit (`number.smart_charging_soc_limit_override`, default 80%) to the vehicle through `vehicle_charge_limit` — mirroring the active-SOC-limit reset the disconnect already triggers (R7).
 
 ## Alternate flows
 
@@ -100,7 +100,7 @@ flowchart TD
         direction TB
         VehicleReport(["vehicle_charge_limit reports a value"]) --> Attributable{"Attributable to the<br/>System's own last write?"}
         Attributable -->|"yes"| Ignore["Ignore -- already in sync<br/>(no ManualChargeLimitAdopted)"]
-        Attributable -->|"no"| Adopt["Adopt as new default SOC limit<br/>(sc_active_soc)<br/>(ManualChargeLimitAdopted)"]
+        Attributable -->|"no"| Adopt["Adopt as new default SOC limit<br/>(number.smart_charging_soc_limit_override)<br/>(ManualChargeLimitAdopted)"]
     end
 ```
 
