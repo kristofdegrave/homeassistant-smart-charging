@@ -1,44 +1,31 @@
-﻿name: Fix review remarks
+name: AI fix (reusable)
 
-# Triggered only when the `ai-fix` label is added to a PR — by review-analysis.yml (via
-# WORKFLOW_PAT, after a "remarks" verdict, max 3 automatic cycles) or by the maintainer
-# manually. Claude addresses the latest AI review's findings AND any submitted human review
-# comments not yet acknowledged with an `ai-fix-ack` thread reply (see the
-# address-review-remarks skill), the workflow pushes the fixes to the PR branch, then hands
-# back to review by re-adding `ai-review` (via PAT, so the labeled event actually triggers
-# review-analysis.yml).
-#
-# Guards mirror generate-uc.yml: exact label + actor allow-list (PAT-added labels count as
-# the PAT owner) + same-repo head branch only (never check out fork code with write perms).
-# Merge still requires the maintainer's manual approval (CODEOWNERS + branch protection).
+# Reusable worker for the `fix` task — called by ai-pipeline.yml when a doc PR gets
+# `needs-work`. Claude addresses the latest AI review's findings AND any submitted human
+# review comments not yet acknowledged with an `ai-fix-ack` thread reply (see the
+# address-review-remarks skill), the workflow pushes the fixes, then re-adds `needs-review`.
+# The caller guards same-repo head only, so this never checks out fork code with write perms.
 
 on:
-  pull_request:
-    types: [labeled]
-
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-
-concurrency:
-  group: fix-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: number
+      head_ref:
+        description: The PR head branch to check out and push fixes to.
+        required: true
+        type: string
 
 jobs:
   fix:
-    if: >
-      github.event.label.name == 'ai-fix' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
     runs-on: ubuntu-latest
-    # Environment scopes the ANTHROPIC_API_KEY secret (no required-reviewer rule anymore).
     environment: ai
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ inputs.head_ref }}
 
       - name: Address review remarks with Claude Code
         id: claude
@@ -50,7 +37,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # The action auto-loads CLAUDE.md, .claude/skills/, and .claude/agents/.
           prompt: |
-            A review of pull request #${{ github.event.pull_request.number }} left remarks that
+            A review of pull request #${{ inputs.pr_number }} left remarks that
             must be addressed — an AI review verdict, human review comments, or both. This
             branch is already checked out at the PR head.
 
@@ -60,7 +47,7 @@ jobs:
             apply the `write-use-case` skill in full — the same authoring context the draft
             was written with. When fixing an ADR (`docs/adl/**`), it directs you to apply the
             `write-adr` skill and respect ADR immutability. CI specifics:
-            - The PR number is ${{ github.event.pull_request.number }}.
+            - The PR number is ${{ inputs.pr_number }}.
             - You are running in CI: do NOT commit or push — the workflow does that in the
               next step.
           # NOTE: claude_args is tokenized shell-style, so the --allowed-tools value MUST be
@@ -78,7 +65,7 @@ jobs:
 
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
       # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without
-      # this gate, "Hand back to AI review" re-adds ai-review unconditionally, which turns any
+      # this gate, "Hand back to AI review" re-adds needs-review unconditionally, which turns any
       # persistent API failure into an infinite fix<->review loop with no fix ever applied.
       - name: Check the fix actually ran
         id: check
@@ -102,7 +89,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit (review remarks produced no edits)."
           else
-            git commit -m "docs: address AI review remarks (#${{ github.event.pull_request.number }})"
+            git commit -m "docs: address AI review remarks (#${{ inputs.pr_number }})"
             git push
           fi
 
@@ -111,32 +98,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr_number }}
         run: |
           set -euo pipefail
-          gh pr edit "$PR" --remove-label ai-fix || true
-          # PAT so the labeled event actually triggers review-analysis.yml for the next cycle.
-          GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label ai-review
+          gh pr edit "$PR" --remove-label needs-work || true
+          # PAT so the labeled event actually triggers the review job for the next cycle.
+          GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-review
 
-      # A failed fix run must not leave the PR stuck with a stale `ai-fix` label and no signal.
+      # A failed fix run must not leave the PR stuck with a stale `needs-work` label and no signal.
       - name: Clean up on failure
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr_number }}
         run: |
-          gh pr edit "$PR" --remove-label ai-fix || true
-          gh pr comment "$PR" --body "The automatic fix run **failed** (see the Actions log for this run). Re-add the \`ai-fix\` label to retry, or address the review manually."
+          gh pr edit "$PR" --remove-label needs-work || true
+          gh pr comment "$PR" --body "The automatic fix run **failed** (see the Actions log for this run). Re-add the \`needs-work\` label to retry, or address the review manually."
 
       # Distinct from "Clean up on failure": the job step above does NOT fail when the Claude
       # API call itself errors (bad key, no credits, rate limit) — it exits 0 regardless. This
-      # catches that case so it doesn't silently re-trigger ai-review and loop forever.
+      # catches that case so it doesn't silently re-trigger needs-review and loop forever.
       - name: Clean up on API error
         if: always() && steps.check.outputs.success == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr_number }}
         run: |
-          gh pr edit "$PR" --remove-label ai-fix || true
-          gh pr comment "$PR" --body "The automatic fix's Claude call **errored** before making any changes (see the \`Address review remarks with Claude Code\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a fix/review loop. Fix the underlying issue, then re-add \`ai-fix\` to retry."
-
+          gh pr edit "$PR" --remove-label needs-work || true
+          gh pr comment "$PR" --body "The automatic fix's Claude call **errored** before making any changes (see the \`Address review remarks with Claude Code\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a fix/review loop. Fix the underlying issue, then re-add \`needs-work\` to retry."

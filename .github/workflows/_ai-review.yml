@@ -1,54 +1,28 @@
-﻿name: Review analysis docs
+name: AI review (reusable)
 
-# Label-driven fresh Opus review. Runs ONLY when the `ai-review` label is added to a PR —
-# either by the maintainer directly, or via WORKFLOW_PAT by the generate-uc / fix-review
-# workflows (labels added with the default GITHUB_TOKEN would NOT trigger this workflow).
-# Adding the label requires Triage+ permission, and the actor allow-list below is checked
-# on top of that, so the label itself is the maintainer's approval to spend the API key —
-# the `ai` environment no longer needs a required-reviewer rule.
-#
-# After the review the workflow removes `ai-review` and routes by the verdict marker Claude
-# embeds in its comment:
-#   clean                     → stop; ready for the maintainer's manual review
-#   remarks (cycles 1–3)      → add `ai-fix` (via PAT) so fix-review.yml addresses them
-#   remarks (4th time)        → add `needs-human` and stop (max 3 automatic fix cycles)
-#
+# Reusable worker for the `review` task — called by ai-pipeline.yml when a doc PR gets
+# `needs-review`. Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
+#   clean                -> stop; ready for the maintainer's manual review
+#   remarks (cycles 1-3) -> add `needs-work` (via PAT) so _ai-fix.yml addresses them
+#   remarks (4th time)   -> add `needs-approval` and stop (max 3 automatic fix cycles)
 # Submitted human review comments without an `ai-fix-ack` thread reply count as remarks, so
 # maintainer feedback enters the same loop instead of being silently skipped.
-#
-# A maintainer's manual approval is still required before merge (CODEOWNERS + branch
-# protection); this loop only drafts and polishes.
-#
-# Uses `pull_request` (NOT pull_request_target): fork PRs run WITHOUT secrets, so an
-# external PR cannot spend the API key.
 
 on:
-  pull_request:
-    types: [labeled]
-    paths:
-      - "docs/analysis/**"
-      - "docs/adl/**"
-
-permissions:
-  contents: read
-  pull-requests: write
-  issues: write
-
-# cancel-in-progress must stay FALSE: this workflow is spawned by EVERY labeled event on a
-# docs PR (the job's `if` filters to ai-review afterward), so with `true` the routing step
-# adding `ai-fix` spawns a sibling run that cancels its own parent mid-flight — and any label
-# added during a review would kill it with no cleanup, leaving the loop stuck. Queued
-# label-noise runs are harmless: their job is skipped by the label guard.
-concurrency:
-  group: review-analysis-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: number
+      base_sha:
+        required: true
+        type: string
+      head_sha:
+        required: true
+        type: string
 
 jobs:
   review:
-    # Guard 1 (label) + Guard 2 (actor allow-list). PAT-added labels count as the PAT owner.
-    if: >
-      github.event.label.name == 'ai-review' &&
-      contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
     runs-on: ubuntu-latest
     environment: ai
 
@@ -64,11 +38,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # so `gh pr comment` works in the runner
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Use the default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
-            Review the documentation changes in pull request #${{ github.event.pull_request.number }}.
-            Run `git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/analysis docs/adl`
+            Review the documentation changes in pull request #${{ inputs.pr_number }}.
+            Run `git diff ${{ inputs.base_sha }}...${{ inputs.head_sha }} -- docs/analysis docs/adl`
             to see the changed files.
 
             If any changed file is under `docs/adl/`, apply the full review checklist in
@@ -82,14 +55,14 @@ jobs:
             sub-agent would provide), and this runner has no `Task` tool to actually launch one.
 
             For any changed file under `docs/adl/`: before treating its Status as fixed/settled,
-            run `git show ${{ github.event.pull_request.base.sha }}:<path>` for that file (it
+            run `git show ${{ inputs.base_sha }}:<path>` for that file (it
             will fail with "does not exist" for a brand-new ADR, which is fine — treat that as
             a draft). Only an ADR whose Status was **already** `Accepted` on the base branch is
             immutable; a Status introduced or still `Proposed` on this PR's head is a draft the
             author can still fix normally.
 
             Additionally, run
-            `gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments" --paginate`
+            `gh api "repos/${{ github.repository }}/pulls/${{ inputs.pr_number }}/comments" --paginate`
             and collect every inline review comment by a human author (login not ending in
             `[bot]`) that has no reply in its thread (a comment whose `in_reply_to_id` points to
             it) containing `ai-fix-ack`. List each one under a dedicated **Human review comments**
@@ -98,7 +71,7 @@ jobs:
             it up.
 
             Post exactly ONE PR comment via
-            `gh pr comment ${{ github.event.pull_request.number }} --body "<markdown>"`,
+            `gh pr comment ${{ inputs.pr_number }} --body "<markdown>"`,
             with findings grouped by severity (Critical / Major / Minor / Nit), each with a file/line
             reference, ending with a ready-to-merge recommendation. Do not edit any files.
 
@@ -119,8 +92,7 @@ jobs:
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
       # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without
       # this gate, "Route by verdict" re-reads the last (stale) comment and re-applies a label
-      # regardless, which turns any persistent API failure into an infinite review<->fix loop
-      # (labels ping-pong every ~30s, no new comment ever posted, cycle counter never advances).
+      # regardless, which turns any persistent API failure into an infinite review<->fix loop.
       - name: Check the review actually ran
         id: check
         run: |
@@ -138,7 +110,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WORKFLOW_PAT: ${{ secrets.WORKFLOW_PAT }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr_number }}
         run: |
           set -euo pipefail
           comments=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate)
@@ -148,44 +120,43 @@ jobs:
             | jq -r '[.[] | select(.body | contains("<!-- ai-review-verdict:"))] | last.body // ""' \
             | grep -oE 'ai-review-verdict: (remarks|clean)' | awk '{print $2}' || true)
 
-          # Cycle counter: every past "remarks" verdict on this PR is one review→fix cycle.
+          # Cycle counter: every past "remarks" verdict on this PR is one review->fix cycle.
           remarks_count=$(echo "$comments" \
             | jq '[.[] | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
           echo "verdict=${verdict:-none}, remarks verdicts so far (incl. this one)=${remarks_count}"
 
           # Removal never needs to trigger anything, so the default token is fine here.
-          gh pr edit "$PR" --remove-label ai-review || true
+          gh pr edit "$PR" --remove-label needs-review || true
 
           if [ "${verdict:-}" = "remarks" ]; then
             if [ "$remarks_count" -le 3 ]; then
-              # PAT so the labeled event actually triggers fix-review.yml.
-              GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label ai-fix
+              # PAT so the labeled event actually triggers the fix job.
+              GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
             else
-              gh pr edit "$PR" --add-label needs-human
-              gh pr comment "$PR" --body "Automatic review/fix limit reached (3 cycles) — remaining remarks need a human. Label \`ai-fix\` manually to force one more cycle."
+              gh pr edit "$PR" --add-label needs-approval
+              gh pr comment "$PR" --body "Automatic review/fix limit reached (3 cycles) — remaining remarks need a human. Label \`needs-work\` manually to force one more cycle."
             fi
           fi
 
-      # A failed review run must not leave the PR stuck with a stale `ai-review` label and no signal.
+      # A failed review run must not leave the PR stuck with a stale `needs-review` label and no signal.
       - name: Clean up on failure
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr_number }}
         run: |
-          gh pr edit "$PR" --remove-label ai-review || true
-          gh pr comment "$PR" --body "The automatic review run **failed** (see the Actions log for this run). Re-add the \`ai-review\` label to retry."
+          gh pr edit "$PR" --remove-label needs-review || true
+          gh pr comment "$PR" --body "The automatic review run **failed** (see the Actions log for this run). Re-add the \`needs-review\` label to retry."
 
       # Distinct from "Clean up on failure": the job step above does NOT fail when the Claude
       # API call itself errors (bad key, no credits, rate limit) — it exits 0 regardless. This
-      # catches that case so it doesn't silently re-trigger ai-fix and loop forever.
+      # catches that case so it doesn't silently re-trigger needs-work and loop forever.
       - name: Clean up on API error
         if: always() && steps.check.outputs.success == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr_number }}
         run: |
-          gh pr edit "$PR" --remove-label ai-review || true
-          gh pr comment "$PR" --body "The automatic review's Claude call **errored** before producing a review (see the \`Fresh-agent review\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a review/fix loop. Fix the underlying issue, then re-add \`ai-review\` to retry."
-
+          gh pr edit "$PR" --remove-label needs-review || true
+          gh pr comment "$PR" --body "The automatic review's Claude call **errored** before producing a review (see the \`Fresh-agent review\` step's execution log for this run — often an API key/credits/rate-limit issue). No labels were changed automatically to avoid a review/fix loop. Fix the underlying issue, then re-add \`needs-review\` to retry."

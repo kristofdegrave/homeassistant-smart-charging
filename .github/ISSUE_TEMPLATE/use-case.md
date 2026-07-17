@@ -2,15 +2,19 @@
 name: Use-case analysis
 about: Request a Smart Charging use-case document to be drafted by the CI runner
 title: "UCnn — <goal as an active verb phrase>"
-labels: generate-uc
+labels: uc, needs-draft
 assignees: ""
 ---
 
 <!--
-Adding the `generate-uc` label triggers the generation workflow. The runner drafts
-docs/analysis/use-cases/<slug>.md following the write-use-case skill, updates the
-entity-catalog, and opens a PR that Closes this issue. A reviewer runs on the PR;
-you give the final manual approval and merge.
+This template applies two labels: `uc` (context — what to draft) and `needs-draft` (the
+go-signal). Together they trigger the AI documentation pipeline's `draft` job: the runner
+drafts docs/analysis/use-cases/<slug>.md following the write-use-case skill, updates the
+entity-catalog, and opens a PR that Closes this issue. The PR gets `needs-review`, which
+runs the fresh review; you give the final manual approval and merge.
+
+To file a use-case without drafting it yet, remove the `needs-draft` label — `uc` alone
+just categorizes the issue. Add `needs-draft` later to start the drafter.
 -->
 
 ## Use-case
