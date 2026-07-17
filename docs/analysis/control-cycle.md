@@ -80,9 +80,11 @@ flowchart TD
    cycle: the measured grid voltage when a healthy reading is available, otherwise the
    configurable nominal voltage (default 230 V). Using the live value keeps current-derived
    thresholds (e.g. the minimum charging current) correct as grid voltage drifts.
-4. **Dispatch to the active mode module (NF1).** The coordinator reads the active mode from
-   `input_select.sc_active_mode` and calls the matching module, passing the smoothed readings
-   and the resolved voltage. The module returns a **desired charger current** using its own
+4. **Dispatch to the active mode module (NF1).** The coordinator determines the resolved active
+   mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
+   (`resolution-rules.md`) under `Auto` — calls the matching module, passing the smoothed readings
+   and the resolved voltage, and surfaces the resolved value read-only as
+   `sensor.smart_charging_active_mode`. The module returns a **desired charger current** using its own
    set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
    0 A). The coordinator contains no logic that chooses or changes the mode — this includes
    deadline urgency (R5): under `Auto`, escalating to `Captar` is Auto mode-selection's own

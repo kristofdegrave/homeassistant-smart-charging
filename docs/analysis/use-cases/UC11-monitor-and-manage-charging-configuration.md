@@ -18,7 +18,7 @@
 *what* the charging behaviour should be. It only surfaces state that other use-cases already
 compute (charger status, active SOC limit, solar surplus, net import) and forwards an edit to the
 same [runtime configuration](../system-overview.md#ubiquitous-language) entity a user could set
-directly (e.g. `input_select.sc_active_mode`); whichever use-case reacts to that entity changing
+directly (e.g. `select.smart_charging_mode`); whichever use-case reacts to that entity changing
 (UC01–UC10, `resolution-rules.md`) is unaffected by whether the edit came from this dashboard or
 from elsewhere. Cross-cutting: it spans every configuration area in `entity-catalog.md`, not one
 mode.
@@ -145,4 +145,4 @@ that a runtime edit here ultimately feeds; the solar-capability gating of runtim
   by whichever of UC01–UC10 or `resolution-rules.md` reads that entity. This use-case neither
   computes charging behaviour nor overrides it.
 - Gated by the solar capability (R18) for solar-dependent runtime entities, the same gating
-  `sc_active_mode`'s selector already applies (`entity-catalog.md`).
+  `select.smart_charging_mode`'s selector already applies (`entity-catalog.md`).

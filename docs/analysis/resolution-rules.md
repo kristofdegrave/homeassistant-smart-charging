@@ -25,7 +25,7 @@ charges to this resolved value — it has no opinion on *why* the limit is where
 | --- | --- | --- |
 | 1 | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh), and the departure-deadline rule below, evaluated one day ahead, resolves to "no deadline" for tomorrow | The solar-reserve cap (default 60 %) |
 | 2 | A solar step-up is in effect (a step has been applied while charging in a solar mode) | The stepped-up value, clamped to `sc_max_solar_soc` (default 100 %) |
-| 3 | Otherwise | The default `input_number.sc_active_soc` (default 80 %) |
+| 3 | Otherwise | The default `number.smart_charging_soc_limit_override` (default 80 %) |
 
 - **The solar-reserve cap is an `Auto`-only coordination decision (R9).** Reserving overnight
   capacity for tomorrow's solar is `Auto` weighing tonight's grid top-up against tomorrow's solar
