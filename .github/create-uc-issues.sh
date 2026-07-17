@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
 # One-time helper: create the backlog issues for the remaining use-cases (UC02–UC10).
 #
-# Issues are created with the `use-case` label only — NOT `generate-uc` — so they sit as a
-# backlog. To start drafting one, add the `generate-uc` label to that issue yourself; the
-# generate-uc workflow then runs (pausing for your approval in the `ai` environment).
+# Issues are created with the `uc` context label only — NOT `needs-draft` — so they sit as a
+# backlog. To start drafting one, add the `needs-draft` label to that issue yourself; the AI
+# documentation pipeline's `draft` job then runs (the `ai` environment scopes the API key).
 #
 # Prerequisites: `gh` installed and authenticated (gh auth login), run from the repo root.
+# Labels must already exist — run bash .github/setup-labels.sh once first.
 # Run once: bash .github/create-uc-issues.sh
 
 set -euo pipefail
 
-# Ensure the labels exist (ignore errors if they already do).
-gh label create use-case   --color 1d76db --description "Use-case analysis document" 2>/dev/null || true
-gh label create generate-uc --color 0e8a16 --description "Trigger the CI use-case drafter" 2>/dev/null || true
-
 create() {
   local title="$1" actor="$2" req="$3" slug="$4" mode="$5" notes="$6"
-  gh issue create --label use-case --title "$title" --body "$(cat <<EOF
+  gh issue create --label uc --title "$title" --body "$(cat <<EOF
 ## Use-case
 
 - **Goal:** ${title#*— }
@@ -94,4 +91,4 @@ create "UC10 — Remind me to plug in" \
   "light state model (reminder de-dup)" \
   "- Single reminder within the lead time of departure (resolved via R14); de-dup until reconnect/disconnect."
 
-echo "Created UC02–UC10 backlog issues (label: use-case). Add the 'generate-uc' label to start one."
+echo "Created UC02–UC10 backlog issues (label: uc). Add the 'needs-draft' label to start one."

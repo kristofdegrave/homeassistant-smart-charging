@@ -8,7 +8,7 @@ description: "Use when addressing review findings on Smart Charging analysis doc
 Fix the findings a review raised against analysis documents (`docs/analysis/**`) or ADRs
 (`docs/adl/**`), then account
 for every finding in a summary. The fix policy and the summary contract below are the single
-source of truth — the CI workflow (`fix-review.yml`) and local runs both follow them.
+source of truth — the CI workflow (`_ai-fix.yml`) and local runs both follow them.
 
 ## 1. Locate the findings
 

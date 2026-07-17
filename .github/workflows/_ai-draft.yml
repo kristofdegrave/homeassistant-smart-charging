@@ -1,0 +1,158 @@
+name: AI draft (reusable)
+
+# Reusable worker for the `draft` task — called by ai-pipeline.yml when an issue gets
+# `needs-draft` plus one context label. Resolves the artifact type from the context label,
+# has Claude draft it, opens a PR, and hands off to review with `needs-review`.
+# `specs` / `development` are reserved: it explains that and clears the trigger.
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: number
+      issue_title:
+        required: true
+        type: string
+      issue_body:
+        required: false
+        type: string
+        default: ""
+      labels_json:
+        description: JSON array of the issue's label names.
+        required: true
+        type: string
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    # Scopes the ANTHROPIC_API_KEY secret.
+    environment: ai
+
+    steps:
+      - name: Resolve artifact type from the issue's context label
+        id: kind
+        env:
+          LABELS_JSON: ${{ inputs.labels_json }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          context_labels="uc requirement adr specs development"
+
+          present=""
+          for l in $context_labels; do
+            if printf '%s' "$LABELS_JSON" | jq -e --arg l "$l" 'any(.[]; . == $l)' >/dev/null; then
+              present="$present $l"
+            fi
+          done
+          present=$(echo $present | xargs || true)
+          count=$(printf '%s' "$present" | wc -w | tr -d ' ')
+
+          emit() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
+          if [ "$count" -eq 0 ]; then
+            emit proceed false
+            emit reason "No context label found. Add exactly one of: uc, requirement, adr, specs, development (alongside needs-draft)."
+            exit 0
+          fi
+          if [ "$count" -gt 1 ]; then
+            emit proceed false
+            emit reason "Multiple context labels ($present). Keep exactly one so the drafter knows what to write."
+            exit 0
+          fi
+
+          case "$present" in
+            uc)          skill=write-use-case;    artifact="use-case";;
+            requirement) skill=write-requirement; artifact="requirement or constraint";;
+            adr)          skill=write-adr;         artifact="Architecture Decision Record (ADR)";;
+            *)
+              emit proceed false
+              emit reason "Drafting for \`$present\` is not wired up yet (the label is reserved). Draft it manually for now."
+              exit 0
+              ;;
+          esac
+
+          emit proceed true
+          emit type "$present"
+          emit skill "$skill"
+          emit artifact "$artifact"
+          emit branch "$present/$ISSUE_NUMBER"
+
+      # Not draftable (no / multiple context labels, or a reserved type): say why and clear the
+      # trigger so a corrected re-label starts a fresh run.
+      - name: Explain and clear the trigger
+        if: steps.kind.outputs.proceed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ inputs.issue_number }}
+          REASON: ${{ steps.kind.outputs.reason }}
+        run: |
+          set -euo pipefail
+          gh issue comment "$ISSUE" --body "🤖 $REASON"
+          gh issue edit "$ISSUE" --remove-label needs-draft || true
+
+      - name: Checkout
+        if: steps.kind.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+
+      - name: Draft the artifact with Claude Code
+        if: steps.kind.outputs.proceed == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # The action auto-loads CLAUDE.md, .claude/skills/, and .claude/agents/.
+          prompt: |
+            A maintainer labeled issue #${{ inputs.issue_number }} `needs-draft` with the
+            context label `${{ steps.kind.outputs.type }}` to have a Smart Charging
+            ${{ steps.kind.outputs.artifact }} drafted.
+
+            Issue title: ${{ inputs.issue_title }}
+            Issue body:
+            ${{ inputs.issue_body }}
+
+            Draft it by following the `${{ steps.kind.outputs.skill }}` skill in .claude/skills/
+            and the project conventions in CLAUDE.md — the skill defines the file location,
+            template, and format. CI overrides to the skill's cycle:
+            - Do the content steps only (draft, self-checks, glossary/entity-catalog updates).
+            - Skip the skill's review, commit, and stop-and-report steps — the workflow opens the
+              PR and the `needs-review` label runs the fresh review.
+            - Do NOT commit or open a PR yourself — the workflow does that in the next step.
+          claude_args: "--model opus --max-turns 15 --allowed-tools Read,Write,Edit,Glob,Grep"
+
+      - name: Open pull request
+        id: cpr
+        if: steps.kind.outputs.proceed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: draft ${{ inputs.issue_title }} (CI, #${{ inputs.issue_number }})"
+          title: "${{ inputs.issue_title }}"
+          body: |
+            Automated first draft for #${{ inputs.issue_number }}.
+
+            Closes #${{ inputs.issue_number }}
+
+            The `needs-review` label starts the automatic review->fix loop (max 3 cycles).
+            **A maintainer's manual review and approval is required before merge** (per CLAUDE.md).
+          branch: "${{ steps.kind.outputs.branch }}"
+          delete-branch: true
+          # create-pull-request auto-creates the context label if missing; the action label is
+          # added separately below so it triggers the review job.
+          labels: ${{ steps.kind.outputs.type }}
+
+      - name: Hand off to AI review
+        if: steps.kind.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number
+        env:
+          # PAT, not GITHUB_TOKEN: a label added by GITHUB_TOKEN would not trigger the review job.
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: gh pr edit ${{ steps.cpr.outputs.pull-request-number }} --add-label needs-review
+
+      # One-shot trigger: clear needs-draft so re-adding it retries a fresh draft.
+      - name: Clear the trigger
+        if: steps.kind.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ inputs.issue_number }}
+        run: gh issue edit "$ISSUE" --remove-label needs-draft || true

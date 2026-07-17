@@ -1,0 +1,105 @@
+name: AI documentation pipeline
+
+# Single label-driven entry point for the three AI doc tasks. This file is only a router:
+# it matches the label + actor, then delegates the actual work to a reusable workflow so each
+# task's steps live in their own file.
+#
+#   ISSUE  + needs-draft (+ a context label) -> _ai-draft.yml   : draft the artifact, open a PR
+#   PR     + needs-review                     -> _ai-review.yml  : fresh Opus review, route on verdict
+#   PR     + needs-work                       -> _ai-fix.yml     : address remarks, hand back to review
+#
+# Labels
+#   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
+#   Context/type : uc | requirement | adr | specs | development
+# A context label says WHAT to draft and gives the reviewer context; the action label is the
+# go-signal. `specs` / `development` are reserved — the draft job explains they are not wired
+# yet and stops. Review picks its checklist from the changed file paths, not the label.
+# Run .github/setup-labels.sh once so every label exists (gh --add-label won't create them).
+#
+# Guards on every AI job: exact label + actor allow-list. Applying a label needs Triage+, so
+# the label itself is the maintainer's approval; the `ai` environment (declared inside each
+# reusable workflow) only scopes the API key. PAT-added labels count as the PAT owner. Merge
+# always needs the maintainer's manual approval (CODEOWNERS + branch protection).
+#
+# pull_request (NOT pull_request_target): fork PRs run without secrets, so an external PR can
+# never spend the API key. The path filter scopes PR jobs to the doc trees this pipeline knows
+# how to review; extend it when `specs` / `development` get wired to their own trees.
+#
+# Permissions live on the calling jobs below (the token passed to a reusable workflow is
+# governed by the caller). Concurrency keys also live here, where the event context is richest.
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+    paths:
+      - "docs/analysis/**"
+      - "docs/adl/**"
+
+# Conservative default; each calling job widens to exactly what its reusable workflow needs.
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    if: >
+      github.event_name == 'issues' &&
+      github.event.label.name == 'needs-draft' &&
+      contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    concurrency:
+      group: ai-draft-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/_ai-draft.yml
+    secrets: inherit
+    with:
+      issue_number: ${{ github.event.issue.number }}
+      issue_title: ${{ github.event.issue.title }}
+      issue_body: ${{ github.event.issue.body }}
+      labels_json: ${{ toJSON(github.event.issue.labels.*.name) }}
+
+  review:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'needs-review' &&
+      contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    # Must stay FALSE: this job is spawned by every labeled event on a doc PR (the `if` filters
+    # to needs-review afterward), so with `true` the review's own routing (which adds needs-work)
+    # would spawn a sibling run that cancels its parent mid-flight. Queued label-noise runs are
+    # harmless — their job is skipped by the label guard.
+    concurrency:
+      group: ai-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/_ai-review.yml
+    secrets: inherit
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      base_sha: ${{ github.event.pull_request.base.sha }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+
+  fix:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'needs-work' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["kristofdegrave"]'), github.event.sender.login)
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    concurrency:
+      group: ai-fix-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/_ai-fix.yml
+    secrets: inherit
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      head_ref: ${{ github.event.pull_request.head.ref }}
