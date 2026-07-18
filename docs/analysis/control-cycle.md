@@ -88,28 +88,26 @@ flowchart TD
    cycle: the measured grid voltage when a healthy reading is available, otherwise the
    configurable nominal voltage (default 230 V). Using the live value keeps current-derived
    thresholds (e.g. the minimum charging current) correct as grid voltage drifts.
-4. **Resolve and materialize the active SOC limit (R7).** The coordinator resolves the
-   [active SOC limit](system-overview.md#ubiquitous-language) in force this cycle via
-   `resolution-rules.md`'s Active SOC limit table (solar-reserve cap → solar step-up → default),
-   composing that resolution with the active mode and the step-up/reserve context it threads
-   across cycles (UC06/UC07). It surfaces the resolved value read-only as
-   `sensor.smart_charging_active_soc_limit` and, when that value differs from the prior cycle's,
-   emits `ActiveSocLimitChanged`. The resolution itself is homed in `resolution-rules.md` (R7);
-   this step only fixes *when* in the cycle it is resolved, materialized, and change-detected. The
-   resolved value is the target the dispatched mode charges toward and the threshold Auto
-   mode-selection's row 1 compares against (step 5).
-5. **Dispatch to the active mode module (NF1).** The coordinator determines the resolved active
-   mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
-   (`resolution-rules.md`) under `Auto` — calls the matching module, passing the smoothed readings
-   and the resolved voltage, and surfaces the resolved value read-only as
-   `sensor.smart_charging_active_mode`. The module returns a **desired charger current** using its own
-   set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
-   0 A). The coordinator contains no logic that chooses or changes the mode — this includes
-   deadline urgency (R5): under `Auto`, escalating to `Captar` is Auto mode-selection's own
-   decision (`resolution-rules.md`), made before this step reads the active mode; under
-   `Manual` the active mode never changes, and this step never adjusts what a mode requests
-   either (NF2) — see step 6.
-6. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
+4. **Resolve the active SOC limit, then dispatch to the active mode module (R7, NF1).** First the
+   coordinator resolves the [active SOC limit](system-overview.md#ubiquitous-language) in force
+   this cycle via `resolution-rules.md`'s Active SOC limit table (solar-reserve cap → solar
+   step-up → default), composing that resolution with the active profile and the step-up/reserve
+   context it threads across cycles (UC06/UC07); it surfaces the resolved value read-only as
+   `sensor.smart_charging_active_soc_limit` and emits `ActiveSocLimitChanged` when it differs from
+   the prior cycle's (consumed by [UC09](use-cases/UC09-sync-charge-limit-with-car.md)). That
+   resolution is homed in `resolution-rules.md` (R7); this step only fixes *when* in the cycle it
+   is resolved, materialized, and change-detected. Then the coordinator determines the resolved
+   active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
+   (`resolution-rules.md`, whose row 1 compares against this resolved active SOC limit) under
+   `Auto` — calls the matching module, passing the smoothed readings and the resolved voltage, and
+   surfaces the resolved value read-only as `sensor.smart_charging_active_mode`. The module returns
+   a **desired charger current** using its own set-point rule (defined in the mode use-case —
+   UC01–UC04; e.g. the `Off` module returns 0 A). The coordinator contains no logic that chooses
+   or changes the mode — this includes deadline urgency (R5): under `Auto`, escalating to `Captar`
+   is Auto mode-selection's own decision (`resolution-rules.md`), made before this step reads the
+   active mode; under `Manual` the active mode never changes, and this step never adjusts what a
+   mode requests either (NF2) — see step 5.
+5. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
    ones, to avoid lag), the coordinator checks whether the desired current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
@@ -119,21 +117,21 @@ flowchart TD
    mode whose own request was previously clamped (e.g. `Captar`, `Power`) draw more, up to
    whatever it already requests; it never raises what a mode requests in the first place. This
    clamp is active in every mode except when `Power` mode has its peak-protection option
-   disabled (R17); the grid supply ceiling clamp in step 7 still applies in that case.
-7. **Apply the grid supply ceiling clamp (C4).** Regardless of mode — and even when the step 6
+   disabled (R17); the grid supply ceiling clamp in step 6 still applies in that case.
+6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode — and even when the step 5
    peak clamp was skipped — the coordinator reduces the current, using **raw** readings (not
    smoothed, to avoid lag), so that net grid import stays below the
    [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
    [grid safety offset](system-overview.md#ubiquitous-language) (converted to amperes via the
    resolved supply voltage). This is the hard fuse-protection limit and the one clamp `Power`
    mode cannot switch off; it emits `SupplyCeilingClamped` when it engages.
-8. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
+7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
    mode-specific cooldown has fully elapsed, and a cooldown in progress always runs to
    completion. (Start/stop and cooldown durations are mode-specific and defined in each mode
    use-case; the coordinator only upholds the invariant.)
-9. **Set the charger current.** The coordinator writes the final current to the charger
+8. **Set the charger current.** The coordinator writes the final current to the charger
    through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
    interval.
 
@@ -149,7 +147,7 @@ flowchart TD
   timers so the incoming mode starts fresh (R11); the next cycle dispatches to the new module.
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.
-- **Mode requests a current below the minimum.** The invariant in step 8 resolves it to 0 A or
+- **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
@@ -158,20 +156,20 @@ flowchart TD
 
 ## Requirements satisfied
 
-- **R3** — CapTar peak protection (the clamp in step 6, on raw readings).
-- **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 6).
-- **R11** — Rapid-cycling prevention (the cooldown/min-current invariant in step 8).
+- **R3** — CapTar peak protection (the clamp in step 5, on raw readings).
+- **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 5).
+- **R11** — Rapid-cycling prevention (the cooldown/min-current invariant in step 7).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
 `requirements.md`; mode choice, including deadline urgency's `Auto` escalation, in
 `resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
-urgency's `Manual` lever only widens the peak clamp in step 6 — homed in `requirements.md`), and
+urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
 **NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
-(grid supply ceiling clamp, step 7) are enforced as invariants in steps 6–8. **R7** (active SOC
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R7** (active SOC
 limit) is homed in `resolution-rules.md` (the resolution table) and applied by
 [UC09](use-cases/UC09-sync-charge-limit-with-car.md); this document only fixes *when* in the cycle
 the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, step 4) and
 change-detected to emit `ActiveSocLimitChanged`. **R5** (departure deadline guarantee) is homed in
 `resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md); this document
-supplies the peak clamp (step 6) that realizes its `Manual` lever, unchanged from normal operation.
+supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from normal operation.
