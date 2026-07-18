@@ -101,8 +101,8 @@ Every **new** analysis document — and every **change** to an existing one (`do
 
    The reviewer agent is read-only and only returns findings. Once it returns, **the main session posts those findings to the PR as a native review** — inline comments on the exact lines, same surface CI uses — by following the `submit-pr-review` skill in **local mode** (no verdict marker; a local review is human-identity feedback, not an automatic fix cycle). This requires the PR to already exist, which the interactive-review workflow guarantees (branch pushed and PR opened before the review). If there is no PR yet (an uncommitted local draft), report the findings inline in the session instead.
 4. **Address** the review feedback in the draft.
-5. **Manual review** — present the addressed draft to the human partner and get their explicit approval **before** committing. The fresh-agent review does not replace this; **both are always required**.
-6. **Commit** once approved, with `docs: review and refine <filename>`.
+5. **Commit and push** the addressed draft to the PR branch with `docs: review and refine <filename>` — commit and push freely; there is no pre-commit approval gate.
+6. **Manual approval gates the merge** — the human partner's explicit approval is required before the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit. The fresh-agent review does not replace this; **both are always required** before merge.
 7. **Stop and report** — after each committed document, report status and wait before starting the next.
 
 **Merge policy:** no pull request is ever auto-merged. Every PR — including CI-drafted ones — requires the human partner's **explicit manual approval** before merge (enforced by `CODEOWNERS` + branch protection). CI may draft and review a PR, but never merges or self-approves it, and neither does the assistant.
@@ -140,8 +140,8 @@ Use the `write-adr` skill for the full cycle. In short:
    analysis/design docs it touches. The agent only returns findings; the main session then
    posts them to the PR as a native review via the `submit-pr-review` skill in **local mode**
    (no verdict marker), exactly as the analysis review protocol's step 3 describes.
-3. **Manual review** — human partner's explicit approval before commit.
-4. **Commit** (`docs: add ADR-NNNN <slug>`), referencing the issue from step 0.
+3. **Commit and push** (`docs: add ADR-NNNN <slug>`), referencing the issue from step 0 — commit and push freely; there is no pre-commit approval gate.
+4. **Manual approval gates the merge** — the human partner's explicit approval is required before the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
 5. **Stop and report** — status before starting the next ADR.
 
 ---

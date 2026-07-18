@@ -55,10 +55,12 @@ structural consequence. When in doubt: would a future contributor benefit from k
    cross-ADR consistency (including the immutability rule). Don't use `analysis-reviewer`
    — that agent is scoped to `docs/analysis/**` and doesn't cover `docs/adl/**`.
 6. **Address** the review feedback.
-7. **Manual review** — present the addressed draft to the human partner and get explicit
-   approval before committing.
-8. **Commit** (`docs: add ADR-NNNN <slug>`, or `docs: supersede ADR-000X with ADR-NNNN`),
-   referencing the issue from step 0.
+7. **Commit and push** (`docs: add ADR-NNNN <slug>`, or `docs: supersede ADR-000X with
+   ADR-NNNN`), referencing the issue from step 0 — commit and push freely; there is no
+   pre-commit approval gate.
+8. **Manual approval gates the merge** — the human partner's explicit approval is required
+   before the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before
+   each commit.
 9. **Stop and report** status before starting the next document.
 
 ## Rules

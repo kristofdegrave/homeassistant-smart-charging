@@ -37,10 +37,10 @@ step collapses into a single sequenced, independently-testable task list — the
 6. **Review** — launch the `system-design-reviewer` agent (fresh, separate Opus; never review
    inline). It re-reads `system-design.md` alongside this plan to check consistency.
 7. **Address** the review feedback.
-8. **Manual review** — present the addressed draft to the human partner and get explicit approval
-   before committing.
-9. **Commit** (`docs: add project plan` or `docs: revise project plan`), referencing the issue
-   from step 0.
+8. **Commit and push** (`docs: add project plan` or `docs: revise project plan`), referencing the
+   issue from step 0 — commit and push freely; there is no pre-commit approval gate.
+9. **Manual approval gates the merge** — the human partner's explicit approval is required before
+   the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
 10. **Stop and report** status. The approved task list feeds `writing-plans`/implementation work
     under `custom_components/`.
 
