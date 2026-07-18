@@ -17,5 +17,6 @@ template.
 | [0008](0008-reconfigure-reload-behavior.md) | Config-entry reload on reconfigure and options changes | Accepted |
 | [0009](0009-testing-strategy.md) | Testing strategy | Accepted |
 | [0010](0010-engines-package-home.md) | Package home for the cross-cutting engines | Accepted |
+| [0011](0011-cross-manager-coordination-via-domain-events.md) | Cross-Manager coordination via domain events | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
