@@ -74,5 +74,9 @@ comment — the review must be posted.
   head SHA, and base SHA. It runs as the workflow bot, so it uses CI mode (with the marker).
 - **Locally**: the reviewer agents (`analysis-reviewer`, `adr-reviewer`, `system-design-reviewer`)
   are read-only — they return findings, they do not post. After one returns, the main session
-  posts them here in local mode (no marker), following the CLAUDE.md review protocol
-  (PR pushed first, then the fresh-agent review posted to it).
+  posts them here in local mode (no marker). This is the posting step of the CLAUDE.md review
+  protocol (analysis: step 3; ADR: step 2), which pushes the branch and opens the PR *before* the
+  fresh-agent review, so there is a PR to attach the native review to. Anchor each reviewer
+  finding that carries a file path + new-version line as an inline comment; put the rest in the
+  body. If there is no PR (an uncommitted local draft), report the findings in the session
+  instead of posting.

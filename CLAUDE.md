@@ -98,6 +98,8 @@ Every **new** analysis document — and every **change** to an existing one (`do
 3. **Fresh-agent review** — always spin up a dedicated, separate **Opus** agent for the review; **never review inline** in the main session. The review checks:
    - **Cross-document consistency** — consistent with all other analysis documents (system-overview, requirements, mechanism docs, other use-cases). Terms match the glossary; requirement IDs match what the document references.
    - **Requirement coverage** — the document satisfies every requirement it claims, and every requirement is reachable from at least one document.
+
+   The reviewer agent is read-only and only returns findings. Once it returns, **the main session posts those findings to the PR as a native review** — inline comments on the exact lines, same surface CI uses — by following the `submit-pr-review` skill in **local mode** (no verdict marker; a local review is human-identity feedback, not an automatic fix cycle). This requires the PR to already exist, which the interactive-review workflow guarantees (branch pushed and PR opened before the review). If there is no PR yet (an uncommitted local draft), report the findings inline in the session instead.
 4. **Address** the review feedback in the draft.
 5. **Manual review** — present the addressed draft to the human partner and get their explicit approval **before** committing. The fresh-agent review does not replace this; **both are always required**.
 6. **Commit** once approved, with `docs: review and refine <filename>`.
@@ -135,7 +137,9 @@ Use the `write-adr` skill for the full cycle. In short:
    option seriously considered, not just the chosen one.
 2. **Review** — a fresh, separate agent (Opus) checks the ADR against existing ADRs
    (no silent contradictions; supersede, don't edit, a prior decision) and against the
-   analysis/design docs it touches.
+   analysis/design docs it touches. The agent only returns findings; the main session then
+   posts them to the PR as a native review via the `submit-pr-review` skill in **local mode**
+   (no verdict marker), exactly as the analysis review protocol's step 3 describes.
 3. **Manual review** — human partner's explicit approval before commit.
 4. **Commit** (`docs: add ADR-NNNN <slug>`), referencing the issue from step 0.
 5. **Stop and report** — status before starting the next ADR.
