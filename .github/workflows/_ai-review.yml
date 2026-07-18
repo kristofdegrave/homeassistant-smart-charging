@@ -20,11 +20,27 @@ on:
       head_sha:
         required: true
         type: string
+      model:
+        description: "Anthropic model id for the review (Opus per CLAUDE.md for docs)."
+        required: false
+        type: string
+        default: opus
+      max_turns:
+        description: "Max Claude Code iterations (cost ceiling)."
+        required: false
+        type: number
+        default: 16
+      timeout_minutes:
+        description: "Hard wall-clock cap for the review job."
+        required: false
+        type: number
+        default: 20
 
 jobs:
   review:
     runs-on: ubuntu-latest
     environment: ai
+    timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +102,7 @@ jobs:
           # gh api: read-only use — fetching inline review threads (pulls/N/comments) to spot
           # unacknowledged human feedback; the token's permissions cap what it can write.
           claude_args: >-
-            --model opus --max-turns 16
+            --model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}
             --allowed-tools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(gh api:*),Bash(git diff:*)"
 
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
