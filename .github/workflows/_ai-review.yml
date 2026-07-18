@@ -101,24 +101,30 @@ jobs:
             unaddressed human feedback alone makes the verdict `remarks`, so the fix cycle picks
             it up.
 
-            Post exactly ONE PR comment via
-            `gh pr comment ${{ inputs.pr_number }} --body "<markdown>"`,
-            with findings grouped by severity (Critical / Major / Minor / Nit), each with a file/line
-            reference, ending with a ready-to-merge recommendation. Do not edit any files.
-
-            The VERY LAST line of the comment must be exactly one of these two machine-readable
-            markers (the workflow routes on it):
-            - `<!-- ai-review-verdict: remarks -->` if there is at least one Critical or Major
-              finding that must be addressed before merge
-            - `<!-- ai-review-verdict: clean -->` otherwise (Minor/Nit findings alone are clean)
+            Post your findings by following the `submit-pr-review` skill in
+            .claude/skills/submit-pr-review/SKILL.md — it defines the review payload, the
+            `gh api .../pulls/N/reviews` submission, the inline-comment anchoring rules, and the
+            422 fallback. Use its **CI mode**, with:
+            - repo `${{ github.repository }}`, PR `${{ inputs.pr_number }}`,
+              `commit_id` = `${{ inputs.head_sha }}`;
+            - inline comments anchored against this diff:
+              `git diff ${{ inputs.base_sha }}...${{ inputs.head_sha }}`;
+            - the **Human review comments** section (from the step above) in the summary body;
+            - the VERY LAST line of the review body set to the verdict marker —
+              `<!-- ai-review-verdict: remarks -->` if there is at least one Critical or Major
+              finding that must be addressed before merge, otherwise
+              `<!-- ai-review-verdict: clean -->` (Minor/Nit findings alone are clean).
+            Do NOT edit any repository file; the review payload JSON is the only file you create.
           # NOTE: claude_args is tokenized shell-style, so the --allowed-tools value MUST be
           # quoted — unquoted spaces inside Bash(...) patterns split the list into garbage
           # tokens and every Bash call gets denied.
-          # gh api: read-only use — fetching inline review threads (pulls/N/comments) to spot
-          # unacknowledged human feedback; the token's permissions cap what it can write.
+          # gh api: fetches inline review threads (pulls/N/comments) to spot unacknowledged human
+          # feedback, and POSTs the review itself (pulls/N/reviews); the token's permissions cap
+          # what it can write. Write: only to compose the review payload JSON — the prompt forbids
+          # editing repo files and there is no push step, so it can't alter the PR's contents.
           claude_args: >-
             --model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}
-            --allowed-tools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(gh api:*),Bash(git diff:*)"
+            --allowed-tools "Read,Write,Glob,Grep,Bash(gh api:*),Bash(git diff:*)"
 
       # Cost/turns/token visibility in the job summary. always() so it reports even when the
       # Claude call errored (it degrades to a short note when no execution file was produced).
@@ -133,7 +139,7 @@ jobs:
 
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
       # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without
-      # this gate, "Route by verdict" re-reads the last (stale) comment and re-applies a label
+      # this gate, "Route by verdict" re-reads the last (stale) review and re-applies a label
       # regardless, which turns any persistent API failure into an infinite review<->fix loop.
       - name: Check the review actually ran
         id: check
@@ -155,18 +161,20 @@ jobs:
           PR: ${{ inputs.pr_number }}
         run: |
           set -euo pipefail
-          comments=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate)
+          # The verdict now lives in the body of a native PR review (pulls/N/reviews), not an
+          # issue comment. --paginate merges the array pages into one JSON array.
+          reviews=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews" --paginate)
 
-          # Latest verdict marker posted by the review above.
-          verdict=$(echo "$comments" \
+          # Latest verdict marker from a review body posted by the review step above.
+          verdict=$(echo "$reviews" \
             | jq -r '[.[] | select(.body | contains("<!-- ai-review-verdict:"))] | last.body // ""' \
             | grep -oE 'ai-review-verdict: (remarks|clean)' | awk '{print $2}' || true)
 
-          # Cycle counter: every past "remarks" verdict on this PR is one review->fix cycle.
-          remarks_count=$(echo "$comments" \
+          # Cycle counter: every past "remarks" review on this PR is one review->fix cycle.
+          remarks_count=$(echo "$reviews" \
             | jq '[.[] | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
-          echo "verdict=${verdict:-none}, remarks verdicts so far (incl. this one)=${remarks_count}"
+          echo "verdict=${verdict:-none}, remarks reviews so far (incl. this one)=${remarks_count}"
 
           # Removal never needs to trigger anything, so the default token is fine here.
           gh pr edit "$PR" --remove-label needs-review || true
