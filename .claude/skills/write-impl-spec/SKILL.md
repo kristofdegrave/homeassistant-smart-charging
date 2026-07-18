@@ -45,9 +45,10 @@ review cycle), then resume.
 6. **Review** — launch the `impl-spec-reviewer` agent (fresh, separate Opus; never review inline).
    Post its findings to the PR via the `submit-pr-review` skill in **local mode**.
 7. **Address** the review feedback.
-8. **Manual review** — present the addressed spec to the human partner and get explicit approval
-   before committing.
-9. **Commit** (`docs: add <slice> implementation spec` / `... plan`), referencing the issue.
+8. **Commit and push** (`docs: add <slice> implementation spec` / `... plan`), referencing the
+   issue — commit and push freely; there is no pre-commit approval gate.
+9. **Manual approval gates the merge** — the human partner's explicit approval is required before
+   the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
 10. **Stop and report** status. Once approved, the `develop-task` skill consumes the plan
     task-by-task to write the code.
 
