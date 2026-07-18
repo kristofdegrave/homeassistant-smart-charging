@@ -111,7 +111,15 @@ jobs:
         if: steps.kind.outputs.proceed == 'true'
         uses: actions/checkout@v4
 
+      # Cheap pre-flight: fail on a bad key / no credits / rate limit BEFORE the Opus run spins up.
+      - name: Smoke-test the Anthropic API
+        if: steps.kind.outputs.proceed == 'true'
+        uses: ./.github/actions/anthropic-smoke-test
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
       - name: Draft the artifact with Claude Code
+        id: claude
         if: steps.kind.outputs.proceed == 'true'
         uses: anthropics/claude-code-action@v1
         with:
@@ -136,6 +144,17 @@ jobs:
               PR and the `needs-review` label runs the fresh review.
             - Do NOT commit or open a PR yourself — the workflow does that in the next step.
           claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }} --allowed-tools Read,Write,Edit,Glob,Grep"
+
+      # Cost/turns/token visibility in the job summary. always() (scoped to the draftable path)
+      # so it reports even when the Claude call errored.
+      - name: Log draft cost
+        if: always() && steps.kind.outputs.proceed == 'true'
+        uses: ./.github/actions/ai-cost-summary
+        with:
+          execution_file: ${{ steps.claude.outputs.execution_file }}
+          label: Draft
+          model: ${{ inputs.model }}
+          max_turns: ${{ inputs.max_turns }}
 
       - name: Open pull request
         id: cpr

@@ -1,0 +1,86 @@
+name: AI run cost summary
+description: >-
+  Read a claude-code-action execution file and write model / cost / turns / duration / token
+  usage to the job summary, warning when the turn ceiling was reached (truncation risk).
+  Safe to call with if: always() — a missing or resultless file degrades to a short note
+  instead of failing the job.
+
+inputs:
+  execution_file:
+    description: Path to the claude-code-action `execution_file` output (a JSON array).
+    required: false
+    default: ""
+  label:
+    description: Human label for this run, used as the summary heading (e.g. "Review", "Fix", "Draft").
+    required: true
+  model:
+    description: The model id the real run used (the workers know it; the result record may not carry it).
+    required: false
+    default: n/a
+  max_turns:
+    description: The max-turns ceiling the run was configured with, to warn on truncation. Optional.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Write cost summary
+      shell: bash
+      env:
+        FILE: ${{ inputs.execution_file }}
+        LABEL: ${{ inputs.label }}
+        MODEL: ${{ inputs.model }}
+        MAX_TURNS: ${{ inputs.max_turns }}
+      run: |
+        set -euo pipefail
+        {
+          echo "### 🤖 AI ${LABEL} — run cost"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ -z "${FILE:-}" ] || [ ! -f "$FILE" ]; then
+          echo "No execution file was produced — the Claude step likely errored before returning a result (see its step log)." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        # The result record is the same one the workers' is_error gate reads.
+        r=$(jq -c 'map(select(.type == "result")) | last // {}' "$FILE")
+        get() { jq -r "$1 // \"n/a\"" <<<"$r"; }
+
+        cost=$(get '.total_cost_usd')
+        turns=$(get '.num_turns')
+        dur_ms=$(get '.duration_ms')
+        in=$(get '.usage.input_tokens')
+        out=$(get '.usage.output_tokens')
+        cread=$(get '.usage.cache_read_input_tokens')
+        cwrite=$(get '.usage.cache_creation_input_tokens')
+        err=$(get '.is_error')
+
+        dur="n/a"
+        if [[ "$dur_ms" =~ ^[0-9]+$ ]]; then dur="$(( dur_ms / 1000 ))s"; fi
+
+        turns_cell="$turns"
+        if [ -n "${MAX_TURNS:-}" ]; then turns_cell="${turns} / ${MAX_TURNS}"; fi
+
+        {
+          echo "| metric | value |"
+          echo "| --- | --- |"
+          echo "| model | ${MODEL} |"
+          echo "| cost (USD) | ${cost} |"
+          echo "| turns | ${turns_cell} |"
+          echo "| duration | ${dur} |"
+          echo "| input tokens | ${in} |"
+          echo "| output tokens | ${out} |"
+          echo "| cache read tokens | ${cread} |"
+          echo "| cache write tokens | ${cwrite} |"
+          echo "| errored | ${err} |"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        # Warn on truncation: turns at (or above) the ceiling means the run may have been cut off mid-work.
+        if [ -n "${MAX_TURNS:-}" ] && [ "$turns" != "n/a" ] && [ "$turns" -ge "$MAX_TURNS" ] 2>/dev/null; then
+          {
+            echo ""
+            echo "> ⚠️ **Turn ceiling reached (${turns}/${MAX_TURNS}).** The run may have been truncated mid-work — consider raising \`max_turns\` for this job."
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
