@@ -30,7 +30,7 @@ in a different state:
    Vehicle-Limit Manager needs it to write the new [active SOC limit](../analysis/system-overview.md#ubiquitous-language)
    to the vehicle when it changes while connected at home (UC09, `VehicleChargeLimitSynced`).
    The resolved value is computed inside the Coordinator's cycle by composing the (pure)
-   SOC-Target Engine with the active mode and the step-up/reserve context the Coordinator
+   SOC-Target Engine with the active profile and the step-up/reserve context the Coordinator
    threads (UC06/UC07).
 
 For each trigger the structural choice is the same: **publish a new domain event** — which
@@ -55,7 +55,7 @@ Three forces constrain the choice:
   resolution is owned by the SOC-Target Engine as composed by the Coordinator. The SOC-Target
   Engine is pure and already a shared edge any Manager may call (system-design §3/§4); what a
   second Manager cannot obtain without duplication is not the engine call but the Coordinator's
-  *input composition* — the active mode plus the step-up/reserve context threaded across cycles
+  *input composition* — the active profile plus the step-up/reserve context threaded across cycles
   (UC06/UC07) — and the per-cycle change-detection over it.
 
 ## Considered options
@@ -90,7 +90,7 @@ both observe `charger_status` / `vehicle_charge_limit` through their own adapter
 - Con: For the resolved active SOC limit, re-deriving does *not* mean merely re-calling the
   pure SOC-Target Engine (that edge is shared and already allowed — system-design §5.2 shows
   the Vehicle-Limit Manager doing exactly that). It means **reconstructing the Coordinator's
-  input composition** — the active mode (from the Profile Engine) plus the step-up/reserve
+  input composition** — the active profile (from the Profile Engine) plus the step-up/reserve
   context the Coordinator threads across cycles (UC06/UC07) — and running the per-cycle
   change-detection over it, inside a second Manager. That spreads the ownership of one
   computed decision across two services, the single-ownership smear NF1's principle argues
@@ -130,14 +130,14 @@ Applied to the four triggers:
 | **`DeadlineUnreachableNotified`** (UC05) | Coordinator → Notification Manager | **Keep the published event** | Genuine integration-computed transition (the Deadline Engine's urgency determination) with notify-once semantics; the consumer cannot re-derive it without re-running that determination. Confirmed unchanged. |
 | **`charger_status` connect/disconnect** | *charger (external)* → Vehicle-Limit + Notification | **Re-derive** (observe the adapter) | Not a Manager→Manager edge at all — the producer is the charger, an external state reached through the `charger_status` adapter (NF3) and already broadcast by HA. The adapter's raw→canonical translation is mechanics, not an integration-computed domain transition (system-design §4). Each Manager observes the transition through its own read; a `ChargerDisconnected` event would only re-wrap that reading. |
 | **`vehicle_charge_limit` change** | *vehicle (external)* → Vehicle-Limit | **Re-derive** (observe the adapter) | Likewise external, reached through the `vehicle_charge_limit` adapter, and consumed by a **single** Manager observing its own resource (with the existing echo-guard); not cross-Manager, so no event is warranted. |
-| **"resolved active SOC limit changed"** | Coordinator → Vehicle-Limit Manager | **Publish a new event `ActiveSocLimitChanged`** | The decisive case: the resolved value is an integration-computed composition (the pure SOC-Target Engine fed the active mode and the Coordinator-threaded step-up/reserve context, UC06/UC07). The Vehicle-Limit Manager can call SOC-Target (a shared edge) but cannot reconstruct that Coordinator-owned input composition and change-detection without duplicating it (Option B's cost); a single unifying event gives one clean trigger, independent of which rule caused the change. |
+| **"resolved active SOC limit changed"** | Coordinator → Vehicle-Limit Manager | **Publish a new event `ActiveSocLimitChanged`** | The decisive case: the resolved value is an integration-computed composition (the pure SOC-Target Engine fed the active profile and the Coordinator-threaded step-up/reserve context, UC06/UC07). The Vehicle-Limit Manager can call SOC-Target (a shared edge) but cannot reconstruct that Coordinator-owned input composition and change-detection without duplicating it (Option B's cost); a single unifying event gives one clean trigger, independent of which rule caused the change. |
 
 Option C is chosen over Option A because A's uniformity is bought by minting
 `ChargerDisconnected` / `VehicleChargeLimitChanged` events that own no integration-computed
 transition — pass-through re-wraps of adapter reads that the DDD convention (event = domain
 *transition*) and NF3 (external state crosses an adapter) both argue against. It is chosen
 over Option B because B's "no new events" is bought by reconstructing the Coordinator's
-active-SOC-limit input composition (active mode + threaded step-up/reserve context) and its
+active-SOC-limit input composition (active profile + threaded step-up/reserve context) and its
 change-detection inside the Vehicle-Limit Manager — the cross-service smear of one decision's
 ownership that NF1's single-ownership principle argues against — and by throwing away the
 already-defined `DeadlineUnreachableNotified`, forcing the Notification Manager to re-run the
