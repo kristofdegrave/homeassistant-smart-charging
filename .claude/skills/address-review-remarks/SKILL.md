@@ -14,9 +14,16 @@ source of truth — the CI workflow (`_ai-fix.yml`) and local runs both follow t
 
 Findings come from two sources — always gather **both**:
 
-- **AI review** — if the caller did not hand you the review text: run `gh pr view <pr> --comments`
-  and take the **most recent** comment containing `ai-review-verdict: remarks` (there may be
-  none). Older review comments are context only.
+- **AI review** — the reviewer submits a native PR *review* (not an issue comment), with the
+  summary in the review body and per-line findings as inline comments. Run
+  `gh api "repos/<owner>/<repo>/pulls/<pr>/reviews" --paginate` and take the **most recent**
+  review by a bot author (login ends in `[bot]`) whose body contains `ai-review-verdict: remarks`
+  (there may be none). That review's `body` is the grouped summary; note its `id`. Then run
+  `gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate` and take the inline comments
+  whose `pull_request_review_id` equals that `id` — those are the AI's per-line findings.
+  **Scope strictly to that one review id**: inline comments from earlier review cycles were
+  already addressed — do not re-fix them. If the latest bot review's verdict is `clean`, there
+  are no AI findings (human comments below may still exist). Older reviews are context only.
 - **Human review comments** — run
   `gh api "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate` and keep every comment that
   is authored by a human (login does not end in `[bot]`) **and** has no reply in its thread
