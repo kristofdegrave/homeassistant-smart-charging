@@ -90,7 +90,7 @@ both observe `charger_status` / `vehicle_charge_limit` through their own adapter
 - Con: For the resolved active SOC limit, re-deriving does *not* mean merely re-calling the
   pure SOC-Target Engine (that edge is shared and already allowed — system-design §5.2 shows
   the Vehicle-Limit Manager doing exactly that). It means **reconstructing the Coordinator's
-  input composition** — the active profile (from the Profile Engine) plus the step-up/reserve
+  input composition** — the active profile plus the step-up/reserve
   context the Coordinator threads across cycles (UC06/UC07) — and running the per-cycle
   change-detection over it, inside a second Manager. That spreads the ownership of one
   computed decision across two services, the single-ownership smear NF1's principle argues
