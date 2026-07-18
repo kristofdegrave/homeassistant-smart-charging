@@ -130,6 +130,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_active_mode` | state | — | — | resolved active mode: equals `select.smart_charging_mode` under `Manual`, `Auto`'s selection under `Auto` | [active mode](system-overview.md#ubiquitous-language) — the resolved value in effect | UC11 | control-cycle (resolved from the `Manual` selector or `Auto` selection) |
 | `sensor.smart_charging_desired_current` | state | — | A | the active mode module's desired charger current, before the peak/grid clamps | desired charger current (control-cycle step 4) | (UC11) | control-cycle |
 | `sensor.smart_charging_effective_peak_limit` | state | — | kW | `min(monthly_peak_demand, maximum_peak)`, raised to the maximum peak during urgency (R5); resolved per `resolution-rules.md` | [effective peak limit](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
+| `sensor.smart_charging_active_soc_limit` | state | — | % | resolved active SOC limit per `resolution-rules.md` (Active SOC limit table): solar-reserve cap → solar step-up → default; the entity `ActiveSocLimitChanged` fires on (ADR-0011) | [active SOC limit](system-overview.md#ubiquitous-language) — the resolved value in effect | UC09, (UC11) | control-cycle |
 | `sensor.smart_charging_status` | state | — | — | `OK` / `Fault` (ADR-0007) | integration health status (ADR-0007) | (UC11) | control-cycle |
 
 ---
@@ -244,15 +245,19 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
 - **`sun.sun`** is read directly by `resolution-rules.md` (the [sun is down](system-overview.md#ubiquitous-language)
   condition) and is the one exception to the map-everything rule: it is a Home Assistant platform
   entity, not a device, so NF3 does not require an adapter role for it.
-- **The `effective peak limit` is now surfaced as a diagnostic sensor, but is still computed
-  every cycle; the resolved `active SOC limit` and resolved `departure deadline` still have no
-  entity.** Each is resolved every cycle by a rule in `resolution-rules.md` (the effective peak
-  limit from `sc_max_peak_kw`/`sensor.smart_charging_monthly_peak_kw`, the active SOC limit from
-  the active-SOC-limit inputs, the departure deadline from the departure inputs); they are computed
-  values, not stored helpers. The effective peak limit's computed value is exposed read-only for
-  observability as `sensor.smart_charging_effective_peak_limit` (Diagnostic outputs) — a readout of
-  the computation, not a stored input. If a future use-case needs the resolved active SOC limit or
-  departure deadline materialized likewise, it would add the row and its references then.
+- **The `effective peak limit` and the resolved `active SOC limit` are each now surfaced as a
+  diagnostic sensor, but are still computed every cycle; the resolved `departure deadline` still
+  has no entity.** Each is resolved every cycle by a rule in `resolution-rules.md` (the effective
+  peak limit from `sc_max_peak_kw`/`sensor.smart_charging_monthly_peak_kw`, the active SOC limit
+  from the active-SOC-limit inputs, the departure deadline from the departure inputs); they are
+  computed values, not stored helpers. The effective peak limit's and the active SOC limit's
+  computed values are exposed read-only for observability as
+  `sensor.smart_charging_effective_peak_limit` and `sensor.smart_charging_active_soc_limit`
+  (Diagnostic outputs) — readouts of the computation, not stored inputs. The active SOC limit's
+  readout additionally serves as the entity the `ActiveSocLimitChanged` domain event fires on
+  (ADR-0011), the single cross-cycle change signal [UC09](use-cases/UC09-sync-charge-limit-with-car.md)
+  consumes to sync the vehicle. If a future use-case needs the resolved departure deadline
+  materialized likewise, it would add the row and its references then.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
   `charger_current` role. Both are read/write: `vehicle_charge_limit` is read back by UC09 to

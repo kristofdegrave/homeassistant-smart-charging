@@ -31,6 +31,13 @@ smoothing window and the rapid-cycling timers, which persist across cycles.
 
 - `SensorsRead` — past-tense — the cycle has captured a fresh raw reading through every input
   adapter role; signals the start of one cycle's processing.
+- `ActiveSocLimitChanged` — the resolved [active SOC limit](system-overview.md#ubiquitous-language)
+  (`resolution-rules.md`, Active SOC limit table) differs from the value resolved on the prior
+  cycle; the coordinator materializes the resolved value read-only as
+  `sensor.smart_charging_active_soc_limit` and emits this event when it changes. Consumed by
+  [UC09](use-cases/UC09-sync-charge-limit-with-car.md) as the single trigger to sync the vehicle's
+  own charge limit; it subsumes the cause-specific step-up / solar-reserve transitions into one
+  consumer contract (ADR-0011).
 - `PeakLimitClamped` — the peak-protection step reduced the mode's desired current to keep
   net import at or below the [effective peak limit](system-overview.md#ubiquitous-language)
   minus the [safety margin](system-overview.md#ubiquitous-language); signals that peak
@@ -49,7 +56,8 @@ flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC"]
     Read --> Smooth["Smooth net_w & solar_w<br/>(rolling mean, N cycles — R10)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
-    Volt --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
+    Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
+    SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
     Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule, smoothed inputs)"]
     Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
@@ -80,17 +88,25 @@ flowchart TD
    cycle: the measured grid voltage when a healthy reading is available, otherwise the
    configurable nominal voltage (default 230 V). Using the live value keeps current-derived
    thresholds (e.g. the minimum charging current) correct as grid voltage drifts.
-4. **Dispatch to the active mode module (NF1).** The coordinator determines the resolved active
-   mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
-   (`resolution-rules.md`) under `Auto` — calls the matching module, passing the smoothed readings
-   and the resolved voltage, and surfaces the resolved value read-only as
-   `sensor.smart_charging_active_mode`. The module returns a **desired charger current** using its own
-   set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
-   0 A). The coordinator contains no logic that chooses or changes the mode — this includes
-   deadline urgency (R5): under `Auto`, escalating to `Captar` is Auto mode-selection's own
-   decision (`resolution-rules.md`), made before this step reads the active mode; under
-   `Manual` the active mode never changes, and this step never adjusts what a mode requests
-   either (NF2) — see step 5.
+4. **Resolve the active SOC limit, then dispatch to the active mode module (R7, NF1).** First the
+   coordinator resolves the [active SOC limit](system-overview.md#ubiquitous-language) in force
+   this cycle via `resolution-rules.md`'s Active SOC limit table (solar-reserve cap → solar
+   step-up → default), which keys on the active profile and the step-up/reserve context the
+   coordinator threads across cycles (UC06/UC07); it surfaces the resolved value read-only as
+   `sensor.smart_charging_active_soc_limit` and emits `ActiveSocLimitChanged` when it differs from
+   the prior cycle's (consumed by [UC09](use-cases/UC09-sync-charge-limit-with-car.md)). That
+   resolution is homed in `resolution-rules.md` (R7); this step only fixes *when* in the cycle it
+   is resolved, materialized, and change-detected. Then the coordinator determines the resolved
+   active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
+   (`resolution-rules.md`, whose row 1 compares against this resolved active SOC limit) under
+   `Auto` — calls the matching module, passing the smoothed readings and the resolved voltage, and
+   surfaces the resolved value read-only as `sensor.smart_charging_active_mode`. The module returns
+   a **desired charger current** using its own set-point rule (defined in the mode use-case —
+   UC01–UC04; e.g. the `Off` module returns 0 A). The coordinator contains no logic that chooses
+   or changes the mode — this includes deadline urgency (R5): under `Auto`, escalating to `Captar`
+   is Auto mode-selection's own decision (`resolution-rules.md`), made before this step reads the
+   active mode; under `Manual` the active mode never changes, and this step never adjusts what a
+   mode requests either (NF2) — see step 5.
 5. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
    ones, to avoid lag), the coordinator checks whether the desired current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
@@ -150,7 +166,10 @@ Upholds but does not home: **NF1** (coordinator executes, never chooses the mode
 `resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
 urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
 **NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
-(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R5** (departure
-deadline guarantee) is homed in `resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md);
-this document supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from
-normal operation.
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R7** (active SOC
+limit) is homed in `resolution-rules.md` (the resolution table) and applied by
+[UC09](use-cases/UC09-sync-charge-limit-with-car.md); this document only fixes *when* in the cycle
+the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, step 4) and
+change-detected to emit `ActiveSocLimitChanged`. **R5** (departure deadline guarantee) is homed in
+`resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md); this document
+supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from normal operation.

@@ -18,7 +18,7 @@
 
 Any of:
 
-1. A [control cycle](../system-overview.md#ubiquitous-language) observes that the resolved [active SOC limit](../system-overview.md#ubiquitous-language) (`resolution-rules.md`) has changed value while the car is connected at home.
+1. The `ActiveSocLimitChanged` domain event fires — a [control cycle](../system-overview.md#ubiquitous-language) resolved a new [active SOC limit](../system-overview.md#ubiquitous-language) value (`resolution-rules.md`, materialized as `sensor.smart_charging_active_soc_limit`) — while the car is connected at home.
 2. The vehicle's charge-limit setting, read through the `vehicle_charge_limit` adapter role, reports a value that is not attributable to the System's own last write to that role.
 3. Charger status transitions to `disconnected`, from `connected` or `charging` — a transition that, for this single home charger, only ever happens while `car_home` is true, since the vehicle cannot be plugged into it remotely.
 
@@ -114,4 +114,5 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 - **Realizes the write-side of whichever value [UC06](UC06-store-abundant-solar.md) or [UC07](UC07-reserve-capacity-for-tomorrow.md) resolve as the active SOC limit.** UC09 does not compute the active SOC limit — it propagates whichever value the Active SOC limit table in `resolution-rules.md` currently resolves to, and applies that same table's disconnect reset (R7) to the vehicle's own setting.
 - Consumes the Active SOC limit table in `resolution-rules.md` for both the value it writes to the vehicle and the default it resets to on disconnect.
+- **Consumes the `ActiveSocLimitChanged` domain event** (produced by the control cycle, `control-cycle.md`, and firing on `sensor.smart_charging_active_soc_limit`) as the single cross-cycle trigger for a System→vehicle write — one contract that subsumes the cause-specific step-up ([UC06](UC06-store-abundant-solar.md)) and solar-reserve ([UC07](UC07-reserve-capacity-for-tomorrow.md)) transitions, so UC09 subscribes once rather than to every cause (ADR-0011).
 - Distinct from [UC01](UC01-charge-from-solar-surplus.md)–[UC05](UC05-guarantee-ready-by-departure.md): those use-cases stop charging by controlling charger current when SOC reaches the active SOC limit; this use-case additionally makes the vehicle itself stop at that SOC, independently of charger-current control (R6).
