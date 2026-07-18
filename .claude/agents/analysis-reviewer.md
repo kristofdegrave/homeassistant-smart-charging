@@ -14,7 +14,7 @@ you only report findings.**
 Always read, in `docs/analysis/`:
 - The file under review.
 - `system-overview.md` — the authoritative **Ubiquitous Language glossary** and `sc_` naming convention.
-- `requirements.md` — the authoritative requirement IDs (R1–R18, NF1–NF4, C1–C4) and their acceptance criteria.
+- `requirements.md` — the authoritative source of truth for which requirement IDs (Rnn / NFnn / Cnn) exist and their acceptance criteria. Judge every referenced ID against this file, not a memorized range.
 - `control-cycle.md`, `resolution-rules.md`, `entity-catalog.md` — the mechanism docs the file may reference.
 - Any sibling use-cases in `use-cases/` the file relates to.
 
