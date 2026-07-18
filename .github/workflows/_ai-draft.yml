@@ -22,12 +22,28 @@ on:
         description: JSON array of the issue's label names.
         required: true
         type: string
+      model:
+        description: "Anthropic model id for the draft (Opus per CLAUDE.md for docs)."
+        required: false
+        type: string
+        default: opus
+      max_turns:
+        description: "Max Claude Code iterations (cost ceiling)."
+        required: false
+        type: number
+        default: 15
+      timeout_minutes:
+        description: "Hard wall-clock cap for the draft job."
+        required: false
+        type: number
+        default: 20
 
 jobs:
   draft:
     runs-on: ubuntu-latest
     # Scopes the ANTHROPIC_API_KEY secret.
     environment: ai
+    timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
       - name: Resolve artifact type from the issue's context label
@@ -119,7 +135,7 @@ jobs:
             - Skip the skill's review, commit, and stop-and-report steps — the workflow opens the
               PR and the `needs-review` label runs the fresh review.
             - Do NOT commit or open a PR yourself — the workflow does that in the next step.
-          claude_args: "--model opus --max-turns 15 --allowed-tools Read,Write,Edit,Glob,Grep"
+          claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }} --allowed-tools Read,Write,Edit,Glob,Grep"
 
       - name: Open pull request
         id: cpr

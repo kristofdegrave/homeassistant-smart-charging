@@ -16,11 +16,27 @@ on:
         description: The PR head branch to check out and push fixes to.
         required: true
         type: string
+      model:
+        description: "Anthropic model id for the fix pass (Opus per CLAUDE.md for docs)."
+        required: false
+        type: string
+        default: opus
+      max_turns:
+        description: "Max Claude Code iterations (cost ceiling)."
+        required: false
+        type: number
+        default: 50
+      timeout_minutes:
+        description: "Hard wall-clock cap for the fix job."
+        required: false
+        type: number
+        default: 30
 
 jobs:
   fix:
     runs-on: ubuntu-latest
     environment: ai
+    timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +76,7 @@ jobs:
           # gh api: the skill reads inline review threads (pulls/N/comments) and posts the
           # `ai-fix-ack` thread replies with it — capped by the workflow token's permissions.
           claude_args: >-
-            --model opus --max-turns 50
+            --model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
 
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
