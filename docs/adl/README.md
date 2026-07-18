@@ -16,5 +16,6 @@ template.
 | [0007](0007-fault-handling.md) | Fault handling for adapter reads, translation failures, and uncaught exceptions | Accepted |
 | [0008](0008-reconfigure-reload-behavior.md) | Config-entry reload on reconfigure and options changes | Accepted |
 | [0009](0009-testing-strategy.md) | Testing strategy | Accepted |
+| [0010](0010-engines-package-home.md) | Package home for the cross-cutting engines | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
