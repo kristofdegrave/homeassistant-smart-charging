@@ -16,7 +16,8 @@ invent behavior.
 `project-plan.md` owns the build sequence, and the `docs/analysis/` docs own the behavior. This spec
 turns one slice of that into concrete files, functions, and tests — citing those sources, never
 restating or overriding them. If you find yourself inventing a service or a behavioral rule, stop:
-fix it in the owning doc first (via its own review cycle), then resume.
+open a GitHub issue against the owning doc and fix it there first (via its own issue-first
+review cycle), then resume.
 
 ## The cycle (do every step, in order)
 
@@ -26,8 +27,9 @@ fix it in the owning doc first (via its own review cycle), then resume.
 1. **Identify the slice** from `docs/design/project-plan.md`: which tasks/services it covers, in
    what build order, and which ADR gates apply. List them — this is what the plan's sequence must
    obey, not something to renegotiate for convenience.
-2. **Scope it** with the `brainstorming` skill: nail the MVP/slice boundary, the minimal config
-   surface, and the explicit deferrals **before** writing. Get the human partner's decisions on any
+2. **Scope it** with the `brainstorming` skill: nail the slice boundary (the same discipline
+   applies to any slice, MVP or post-MVP), the minimal config surface, and the explicit
+   deferrals **before** writing. Get the human partner's decisions on any
    real fork (a safety-relevant omission, a config field, an entity's home).
 3. **Write the design doc** (`...-<slice>-design.md`): success criteria, install-time config, the
    control flow, a table **mapping every piece to its named service** in `system-design.md`,
