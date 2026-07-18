@@ -91,8 +91,8 @@ flowchart TD
 4. **Resolve the active SOC limit, then dispatch to the active mode module (R7, NF1).** First the
    coordinator resolves the [active SOC limit](system-overview.md#ubiquitous-language) in force
    this cycle via `resolution-rules.md`'s Active SOC limit table (solar-reserve cap → solar
-   step-up → default), composing that resolution with the active profile and the step-up/reserve
-   context it threads across cycles (UC06/UC07); it surfaces the resolved value read-only as
+   step-up → default), which keys on the active profile and the step-up/reserve context the
+   coordinator threads across cycles (UC06/UC07); it surfaces the resolved value read-only as
    `sensor.smart_charging_active_soc_limit` and emits `ActiveSocLimitChanged` when it differs from
    the prior cycle's (consumed by [UC09](use-cases/UC09-sync-charge-limit-with-car.md)). That
    resolution is homed in `resolution-rules.md` (R7); this step only fixes *when* in the cycle it
