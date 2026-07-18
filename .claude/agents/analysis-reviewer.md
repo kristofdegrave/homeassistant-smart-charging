@@ -47,3 +47,9 @@ Report issues grouped by severity: **Critical / Major / Minor / Nit**, each with
 or row reference. Confirm the things you checked that are sound. If the document is sound, say so
 clearly. End with a one-line recommendation (ready to commit / address items first). **Do not edit
 any file.**
+
+So the caller can post each finding as an inline PR comment via the `submit-pr-review` skill,
+give every line-specific finding the repo-relative **file path** and the **line number in the
+file's new version**. A finding that does not map to a single changed line (a missing section, a
+cross-document concern) has no line anchor — say so, and it goes in the review body instead of
+inline.
