@@ -1,0 +1,47 @@
+name: Anthropic API smoke test
+description: >-
+  Cheap pre-flight check that the Anthropic API key actually works, run BEFORE the expensive
+  claude-code-action step. A bad key / no credits / rate limit fails fast on a haiku "ping"
+  instead of after the real (Opus) run has spun up. Complements — does not replace — the
+  is_error gate the workers apply to the real run's execution file afterward.
+
+inputs:
+  anthropic_api_key:
+    description: Anthropic API key to validate. Pass the secret from the caller.
+    required: true
+  model:
+    description: Cheap model id to ping with. Defaults to a Haiku id so the probe stays negligible.
+    required: false
+    default: claude-haiku-4-5-20251001
+
+runs:
+  using: composite
+  steps:
+    - name: Ping the Anthropic API
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        set -euo pipefail
+        if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+          echo "::error::ANTHROPIC_API_KEY is empty — the 'ai' environment secret is not reaching this job."
+          exit 1
+        fi
+        # max_tokens:1 keeps the probe as close to free as an API call gets.
+        code=$(curl -sS -o /tmp/anthropic-smoke.json -w '%{http_code}' \
+          https://api.anthropic.com/v1/messages \
+          -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -H "content-type: application/json" \
+          -d "{\"model\":\"${MODEL}\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}" \
+          || echo 000)
+        if [ "$code" != "200" ]; then
+          echo "::error::Anthropic API smoke test failed (HTTP ${code}) — likely a bad key, no credits, or a rate limit. Not spending on the real model."
+          # Surface a trimmed hint only; the raw body can contain arbitrary text we don't want to echo verbatim.
+          echo "Response (first 400 chars):"
+          head -c 400 /tmp/anthropic-smoke.json 2>/dev/null || true
+          echo
+          exit 1
+        fi
+        echo "Anthropic API smoke test OK (HTTP 200, probe model ${MODEL})."
