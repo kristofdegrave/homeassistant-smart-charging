@@ -101,45 +101,20 @@ jobs:
             unaddressed human feedback alone makes the verdict `remarks`, so the fix cycle picks
             it up.
 
-            Submit exactly ONE pull request *review* (event `COMMENT`) — not a plain issue
-            comment — so findings render in the Files changed tab and land on the exact diff lines:
-
-            1. Write the review payload to a scratch JSON file (this is the ONLY file you may
-               create — do NOT edit any repository file). Shape:
-               {
-                 "commit_id": "${{ inputs.head_sha }}",
-                 "event": "COMMENT",
-                 "body": "<grouped-findings summary markdown; see below>",
-                 "comments": [
-                   { "path": "<repo-relative path>", "line": <line in the file's new version>,
-                     "side": "RIGHT", "body": "<severity>: <finding>" }
-                 ]
-               }
-            2. Submit it with
-               `gh api "repos/${{ github.repository }}/pulls/${{ inputs.pr_number }}/reviews" --input <file>`.
-
-            Inline `comments` rules — the reviews API is strict about anchoring:
-            - Each inline comment MUST anchor to a line that is part of THIS diff
-              (`git diff ${{ inputs.base_sha }}...${{ inputs.head_sha }}`). `line` is the line
-              number in the file's new version; `side` is `RIGHT` (use `LEFT` only to comment on a
-              removed line). A single out-of-range anchor makes the WHOLE submission fail (HTTP 422).
-            - Put every Critical/Major/Minor finding that maps to a specific changed line inline.
-            - A finding that does NOT map to a changed line (e.g. "a required section is missing",
-              a cross-file concern) goes in the summary body instead — never invent a line just to
-              place it inline.
-            - If the submission still 422s on an anchor, resubmit with that one comment removed from
-              `comments` and its text appended to the summary body. Do NOT fall back to a plain
-              issue comment — the review must be posted.
-
-            The summary `body`:
-            - Groups findings by severity (Critical / Major / Minor / Nit), each with a file/line
-              reference, includes the **Human review comments** section described above, and ends
-              with a ready-to-merge recommendation.
-            - Its VERY LAST line must be exactly one of these two machine-readable markers (the
-              workflow routes on it):
-              - `<!-- ai-review-verdict: remarks -->` if there is at least one Critical or Major
-                finding that must be addressed before merge
-              - `<!-- ai-review-verdict: clean -->` otherwise (Minor/Nit findings alone are clean)
+            Post your findings by following the `submit-pr-review` skill in
+            .claude/skills/submit-pr-review/SKILL.md — it defines the review payload, the
+            `gh api .../pulls/N/reviews` submission, the inline-comment anchoring rules, and the
+            422 fallback. Use its **CI mode**, with:
+            - repo `${{ github.repository }}`, PR `${{ inputs.pr_number }}`,
+              `commit_id` = `${{ inputs.head_sha }}`;
+            - inline comments anchored against this diff:
+              `git diff ${{ inputs.base_sha }}...${{ inputs.head_sha }}`;
+            - the **Human review comments** section (from the step above) in the summary body;
+            - the VERY LAST line of the review body set to the verdict marker —
+              `<!-- ai-review-verdict: remarks -->` if there is at least one Critical or Major
+              finding that must be addressed before merge, otherwise
+              `<!-- ai-review-verdict: clean -->` (Minor/Nit findings alone are clean).
+            Do NOT edit any repository file; the review payload JSON is the only file you create.
           # NOTE: claude_args is tokenized shell-style, so the --allowed-tools value MUST be
           # quoted — unquoted spaces inside Bash(...) patterns split the list into garbage
           # tokens and every Bash call gets denied.
