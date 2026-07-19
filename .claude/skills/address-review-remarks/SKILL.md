@@ -101,7 +101,7 @@ Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
 ## 6. Commit — depends on where you run
 
 - **In CI**: do NOT commit or push — the workflow commits and hands back to review.
-- **Locally**: present the addressed changes to the human partner first (per the CLAUDE.md
-  review protocol), then commit with `docs: address review remarks (#<pr>)` and push to the
-  PR branch.
+- **Locally**: commit with `docs: address review remarks (#<pr>)` and push to the PR branch.
+  No separate pre-commit approval is needed — the human partner's explicit approval gates the
+  **PR merge**, not each commit or push.
 

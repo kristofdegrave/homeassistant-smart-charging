@@ -49,10 +49,10 @@ phrase, stop — that is functional decomposition wearing this method's vocabula
 8. **Review** — launch the `system-design-reviewer` agent (fresh, separate Opus; never review
    inline).
 9. **Address** the review feedback.
-10. **Manual review** — present the addressed draft to the human partner and get explicit
-    approval before committing.
-11. **Commit** (`docs: add system design` or `docs: revise system design`), referencing the issue
-    from step 0.
+10. **Commit and push** (`docs: add system design` or `docs: revise system design`), referencing
+    the issue from step 0 — commit and push freely; there is no pre-commit approval gate.
+11. **Manual approval gates the merge** — the human partner's explicit approval is required before
+    the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
 12. **Stop and report** status. Once `system-design.md` is approved, the `write-project-design`
     skill consumes it to produce the implementation task breakdown.
 
