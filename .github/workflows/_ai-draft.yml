@@ -81,6 +81,7 @@ jobs:
             uc)          skill=write-use-case;    artifact="use-case";;
             requirement) skill=write-requirement; artifact="requirement or constraint";;
             adr)          skill=write-adr;         artifact="Architecture Decision Record (ADR)";;
+            specs)       skill=write-impl-spec;   artifact="implementation spec (design + TDD plan)";;
             *)
               emit proceed false
               emit reason "Drafting for \`$present\` is not wired up yet (the label is reserved). Draft it manually for now."
@@ -142,6 +143,9 @@ jobs:
             - Do the content steps only (draft, self-checks, glossary/entity-catalog updates).
             - Skip the skill's review, commit, and stop-and-report steps — the workflow opens the
               PR and the `needs-review` label runs the fresh review.
+            - If the skill has an interactive scoping/brainstorming step, do NOT try to ask the
+              human: make reasonable default scoping choices and record any open scoping question
+              in the draft itself for the reviewer, rather than blocking on a decision.
             - Do NOT commit or open a PR yourself — the workflow does that in the next step.
           claude_args: "--model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }} --allowed-tools Read,Write,Edit,Glob,Grep"
 

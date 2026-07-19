@@ -1,0 +1,71 @@
+name: CI
+
+# Build/validate + test gate for the integration code. Scoped by path so it stays idle on
+# docs-only and tooling-only PRs and activates once integration code exists (the first code PR
+# adds custom_components/, manifest.json, pyproject.toml, requirements-test.txt). Realizes the
+# dev-tooling CI that ADR-0009 deferred (pytest for logic, HA harness for adapters/coordinator).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "custom_components/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements-test.txt"
+      - "hacs.json"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "custom_components/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements-test.txt"
+      - "hacs.json"
+      - ".github/workflows/ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-test.txt
+      - run: pytest -q
+
+  hassfest:
+    # Validates manifest.json / integration structure against Home Assistant's own checks.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    # Validates the repo is installable as a HACS custom integration.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration

@@ -36,6 +36,7 @@ on:
     paths:
       - "docs/analysis/**"
       - "docs/adl/**"
+      - "docs/plans/**"
 
 # Conservative default; each calling job widens to exactly what its reusable workflow needs.
 permissions:
