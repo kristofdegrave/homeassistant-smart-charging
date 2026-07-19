@@ -56,8 +56,11 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 - **Harness by layer, no exceptions.** Pure logic → plain pytest (no HA import); HA-coupled → HA
   harness. A pure-logic test that imports `homeassistant` defeats the package boundary.
 - **Name for traceability, structure for behavior.** Should-When-Then names — a reviewer reads
-  coverage from names alone — with Arrange / Act / Assert bodies. One behavior (one action in
-  `# Act`) per test.
+  coverage from names alone — with Arrange / Act / Assert bodies.
+- **One behavior per test.** A test verifies exactly one behavior: one action in `# Act`, and every
+  assertion under `# Assert` checks that same behavior. If you're tempted to test a second behavior
+  (a second `# Act`, or asserts about an unrelated outcome), split it into another test. This keeps
+  each Should-When-Then name honest and a failure pointing at a single cause.
 - **All four adapter cases, every role.** Present / absent / unavailable / unmapped-raw.
 - **Tests must fail without the code.** If a test passes against an empty implementation, it isn't
   testing anything.
