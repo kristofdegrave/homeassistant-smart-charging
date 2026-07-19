@@ -41,3 +41,13 @@ def test_c4_negative_headroom_when_baseline_exceeds_ceiling():
         ceiling_a=25.0, offset_a=2.0,
     )
     assert result <= 0.0
+
+
+def test_c4_net_export_increases_headroom_beyond_ceiling():
+    # Household exporting 2000 W (net negative), no charger draw: baseline = -2000 W = -8.69 A.
+    # Headroom = (25 - 2) - (-8.69) = 31.69 A -> floored to 31 A; well above the request.
+    result = clamp_to_ceiling(
+        desired_current=16.0, net_w=-2000.0, charger_w=0.0, voltage=230.0,
+        ceiling_a=25.0, offset_a=2.0,
+    )
+    assert result == 16.0
