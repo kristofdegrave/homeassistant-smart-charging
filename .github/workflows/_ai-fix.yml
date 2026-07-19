@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.head_ref }}
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Address review remarks with Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@af0559ee4f514d1ef21826982bed13f7edc3c35e # v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # so `gh pr view` works in the runner
         with:
