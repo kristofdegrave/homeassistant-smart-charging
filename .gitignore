@@ -219,3 +219,8 @@ __marimo__/
 
 # Claude Code temporary agent worktrees
 .claude/worktrees/
+
+# Claude Code personal settings — permission rules here are local-only by design:
+# the committed .claude/settings.json also applies to CI (claude-code-action),
+# so broad/destructive allow rules must never be tracked.
+.claude/settings.local.json
