@@ -1,0 +1,30 @@
+# Dependabot configuration.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Note: per the repo merge policy (CLAUDE.md), Dependabot PRs are never
+# auto-merged — they require explicit manual approval like any other PR.
+
+version: 2
+updates:
+  # GitHub Actions used in .github/workflows/
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Python test/tooling dependencies (requirements-test.txt)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # homeassistant and pytest-homeassistant-custom-component must be
+      # bumped together — phcc tracks HA releases (see requirements-test.txt).
+      home-assistant:
+        patterns:
+          - "homeassistant"
+          - "pytest-homeassistant-custom-component"
