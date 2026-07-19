@@ -23,10 +23,9 @@ Always read, in `docs/adl/`:
   against the full log, not just its immediate neighbors.
 
 If the ADR references a requirement, use-case, or design doc (`R7`, `UC03`,
-`docs/plans/*.md`), read that too, when available on this branch — a backfill ADR (see
-ADR-0001's PR #30 backfill plan) may cite a doc that only exists on a different, still-open
-branch; treat that as expected, not a broken reference, and judge the ADR on internal
-merit instead.
+`docs/plans/*.md`), read that too, when available on this branch — a backfill ADR may cite
+a doc that only exists on a different, still-open branch; treat that as expected, not a
+broken reference, and judge the ADR on internal merit instead.
 
 ## Review checklist
 
