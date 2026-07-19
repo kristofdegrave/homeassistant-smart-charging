@@ -1,4 +1,4 @@
-﻿---
+---
 name: address-review-remarks
 description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) or ADRs (docs/adl/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
 ---

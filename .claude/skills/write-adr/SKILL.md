@@ -1,4 +1,4 @@
-﻿---
+---
 name: write-adr
 description: Use when making or changing any architectural decision in the Smart Charging project — a new ADR under docs/adl/, or superseding an existing one.
 ---
