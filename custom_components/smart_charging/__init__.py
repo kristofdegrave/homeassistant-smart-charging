@@ -28,13 +28,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Mappings/translation live in data; thresholds/defaults + interval in options (ADR-0005).
     adapters = build_adapters(hass, entry.data)
     opts = entry.options
+    min_current = opts[CONF_MIN_CURRENT]
+    max_current = opts[CONF_MAX_CURRENT]
+    default_target_current = opts[CONF_DEFAULT_TARGET_CURRENT]
     config = {
-        "min_current": opts[CONF_MIN_CURRENT],
-        "max_current": opts[CONF_MAX_CURRENT],
+        "min_current": min_current,
+        "max_current": max_current,
         "grid_ceiling_a": opts[CONF_GRID_CEILING_A],
         "grid_safety_offset_a": opts.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
         "nominal_voltage": opts[CONF_NOMINAL_VOLTAGE],
-        "default_target_current": opts[CONF_DEFAULT_TARGET_CURRENT],
     }
     interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
 
@@ -42,22 +44,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, adapters=adapters, config=config, interval_s=interval_s
     )
 
+    # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "coordinator": coordinator,
-        "min_current": config["min_current"],
-        "max_current": config["max_current"],
-        "default_target_current": config["default_target_current"],
+        CONF_MIN_CURRENT: min_current,
+        CONF_MAX_CURRENT: max_current,
+        CONF_DEFAULT_TARGET_CURRENT: default_target_current,
     }
 
     # First refresh AFTER platforms so the number entity can seed target_current on add.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await coordinator.async_config_entry_first_refresh()
 
-    entry.async_on_unload(entry.add_update_listener(_async_reload_on_options))
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
 
-async def _async_reload_on_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    # Fires on any entry update, not only options — a reconfigure (data) update also lands
+    # here in addition to its own reload, which is harmless since HA serializes reloads.
     await hass.config_entries.async_reload(entry.entry_id)
 
 
