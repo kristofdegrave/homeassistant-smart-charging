@@ -1,6 +1,7 @@
 """HA-harness tests for numeric adapters (ADR-0003/0009)."""
 
-from homeassistant.const import STATE_UNAVAILABLE
+import pytest
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
 from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
@@ -23,6 +24,18 @@ async def test_read_unavailable_returns_none(hass):
     hass.states.async_set("sensor.net_power", STATE_UNAVAILABLE)
     adapter = NumericReadAdapter(hass, "sensor.net_power")
     assert await adapter.read() is None
+
+
+async def test_read_unknown_returns_none(hass):
+    hass.states.async_set("sensor.net_power", STATE_UNKNOWN)
+    adapter = NumericReadAdapter(hass, "sensor.net_power")
+    assert await adapter.read() is None
+
+
+async def test_read_only_write_raises_not_implemented(hass):
+    adapter = NumericReadAdapter(hass, "sensor.net_power")
+    with pytest.raises(NotImplementedError):
+        await adapter.write(10.0)
 
 
 async def test_read_non_numeric_returns_none(hass):
