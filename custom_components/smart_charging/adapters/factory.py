@@ -1,6 +1,7 @@
 """Adapter factory: instantiate one adapter per role from config-entry data (ADR-0003)."""
 
 from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -12,16 +13,17 @@ from ..const import (
     CONF_NET_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
 )
+from .base import Adapter
 from .numeric import NumericReadAdapter, NumericReadWriteAdapter
 from .status import StatusAdapter
 
 
-def build_adapters(hass: HomeAssistant, data: Mapping) -> dict[str, object]:
+def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Adapter]:
     """Build the control-cycle adapter set from config-entry data.
 
     grid_voltage is optional (NF4); every other role is required.
     """
-    adapters: dict[str, object] = {
+    adapters: dict[str, Adapter] = {
         "charger_current": NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
         "charger_status": StatusAdapter(
             hass, data[CONF_CHARGER_STATUS_ENTITY], dict(data[CONF_STATUS_TRANSLATION])

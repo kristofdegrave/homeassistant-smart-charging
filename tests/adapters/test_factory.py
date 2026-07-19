@@ -1,5 +1,7 @@
 """HA-harness tests for the adapter factory (ADR-0003)."""
 
+import pytest
+
 from custom_components.smart_charging.adapters.factory import build_adapters
 from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
@@ -29,11 +31,22 @@ def _data():
 
 async def test_factory_builds_expected_roles(hass):
     adapters = build_adapters(hass, _data())
+
     assert isinstance(adapters["charger_current"], NumericReadWriteAdapter)
+    assert adapters["charger_current"]._entity_id == "number.charger_current"
+
     assert isinstance(adapters["charger_status"], StatusAdapter)
+    assert adapters["charger_status"]._entity_id == "sensor.evse"
+    assert adapters["charger_status"]._translation == {"Charging": "charging"}
+
     assert isinstance(adapters["net_power"], NumericReadAdapter)
+    assert adapters["net_power"]._entity_id == "sensor.net_power"
+
     assert isinstance(adapters["charger_power"], NumericReadAdapter)
+    assert adapters["charger_power"]._entity_id == "sensor.charger_power"
+
     assert isinstance(adapters["grid_voltage"], NumericReadAdapter)
+    assert adapters["grid_voltage"]._entity_id == "sensor.grid_voltage"
 
 
 async def test_grid_voltage_optional(hass):
@@ -41,3 +54,17 @@ async def test_grid_voltage_optional(hass):
     del data[CONF_GRID_VOLTAGE_ENTITY]
     adapters = build_adapters(hass, data)
     assert "grid_voltage" not in adapters
+
+
+async def test_grid_voltage_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_GRID_VOLTAGE_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert "grid_voltage" not in adapters
+
+
+async def test_missing_required_role_raises_key_error(hass):
+    data = _data()
+    del data[CONF_CHARGER_CURRENT_ENTITY]
+    with pytest.raises(KeyError):
+        build_adapters(hass, data)
