@@ -35,8 +35,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: python -m pip install --upgrade ruff
@@ -46,8 +46,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip
@@ -60,17 +60,15 @@ jobs:
     # Validates manifest.json / integration structure against Home Assistant's own checks.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      # Pinned SHA of master — Dependabot keeps it fresh; hassfest has no version tags.
-      - uses: home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c # master
+      - uses: actions/checkout@v7
+      - uses: home-assistant/actions/hassfest@master
 
   hacs:
     # Validates the repo is installable as a HACS custom integration.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      # Pinned SHA of main — Dependabot keeps it fresh; hacs/action has no version tags.
-      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
+      - uses: actions/checkout@v7
+      - uses: hacs/action@main
         with:
           category: integration
           # brands requires the integration to be listed in home-assistant/brands,

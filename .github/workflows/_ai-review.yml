@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history so the reviewer can diff against the base branch
 
