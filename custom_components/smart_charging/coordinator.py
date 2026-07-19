@@ -20,6 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class CycleResult:
+    """Outcome of one control cycle: the amps actually written and whether it faulted."""
+
     commanded_current: float
     fault: bool
 
