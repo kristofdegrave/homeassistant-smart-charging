@@ -52,7 +52,9 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements-test.txt
-      - run: pytest -q
+      # Exit 5 = "no tests collected"; tolerated during scaffolding before the
+      # first tests land (Phase 1). Any real failure (exit 1) still fails the job.
+      - run: pytest -q || [ $? -eq 5 ]
 
   hassfest:
     # Validates manifest.json / integration structure against Home Assistant's own checks.
@@ -69,3 +71,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # brands requires the integration to be listed in home-assistant/brands,
+          # which only happens at publish time. Ignore it during pre-publish dev.
+          ignore: brands
