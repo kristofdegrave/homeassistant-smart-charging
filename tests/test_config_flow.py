@@ -1,9 +1,13 @@
 """HA-harness config-flow tests (ADR-0005)."""
 
+import pytest
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
+    CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
@@ -111,3 +115,77 @@ async def test_options_flow_round_trip_updates_options_not_data(hass):
     assert entry.options[CONF_GRID_SAFETY_OFFSET_A] == 3.5
     assert entry.options[CONF_CONTROL_INTERVAL_S] == 15
     assert dict(entry.data) == original_data
+
+
+async def test_options_flow_rejects_a_data_key(hass):
+    """The options flow's schema is thresholds/interval only — a data key (entity-role
+    mapping) submitted to it is rejected, not silently accepted (ADR-0005: only the
+    reconfigure flow may change entity-role mappings)."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_CHARGER_CURRENT_ENTITY: "number.charger_current", CONF_STATUS_TRANSLATION: {}},
+        options={
+            "nominal_voltage": 230.0,
+            "min_current": 6.0,
+            "max_current": 16.0,
+            CONF_GRID_CEILING_A: 25.0,
+            CONF_GRID_SAFETY_OFFSET_A: 2.0,
+            "default_target_current": 10.0,
+            CONF_CONTROL_INTERVAL_S: DEFAULT_CONTROL_INTERVAL_S,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    tampered_options = dict(entry.options)
+    tampered_options[CONF_CHARGER_CURRENT_ENTITY] = "number.some_other_charger"
+
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.options.async_configure(
+            options_result["flow_id"], tampered_options
+        )
+    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
+
+
+async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
+    """async_step_reconfigure is the only sanctioned path to remap entity roles
+    (ADR-0005) — it must replace data, leave options untouched, and reload the entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+            "charger_status_entity": "sensor.evse",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_STATUS_TRANSLATION: {"Connected": "connected", "Charging": "charging"},
+        },
+        options={
+            CONF_GRID_SAFETY_OFFSET_A: 2.0,
+            CONF_CONTROL_INTERVAL_S: DEFAULT_CONTROL_INTERVAL_S,
+        },
+    )
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    new_mapping = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.new_charger_current",
+        "charger_status_entity": "sensor.new_evse",
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+        "net_power_entity": "sensor.net_power",
+        "charger_power_entity": "sensor.charger_power",
+    }
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
+    assert entry.data[CONF_STATUS_TRANSLATION] == {"Connected": "connected", "Charging": "charging"}
+    assert dict(entry.options) == original_options
