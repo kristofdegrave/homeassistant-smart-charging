@@ -24,7 +24,9 @@ class TargetCurrentNumber(SmartChargingEntity, RestoreNumber):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_native_step = 1.0
 
-    def __init__(self, entry_id, coordinator, min_a, max_a, default) -> None:
+    def __init__(
+        self, entry_id: str, coordinator, min_a: float, max_a: float, default: float
+    ) -> None:
         super().__init__(entry_id)
         self._coordinator = coordinator
         self._attr_unique_id = f"{entry_id}_target_current"
@@ -36,7 +38,10 @@ class TargetCurrentNumber(SmartChargingEntity, RestoreNumber):
         await super().async_added_to_hass()
         last = await self.async_get_last_number_data()
         if last is not None and last.native_value is not None:
-            self._attr_native_value = last.native_value
+            self._attr_native_value = min(
+                max(last.native_value, self._attr_native_min_value),
+                self._attr_native_max_value,
+            )
         # Seed the coordinator with the (restored or default) value.
         self._coordinator.target_current = self._attr_native_value
 
