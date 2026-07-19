@@ -16,6 +16,14 @@ def test_below_min_becomes_zero_not_min():
     assert apply_floor_cap(4.0, min_a=6.0, max_a=16.0) == 0.0
 
 
+def test_at_min_passes_through():
+    assert apply_floor_cap(6.0, min_a=6.0, max_a=16.0) == 6.0
+
+
+def test_at_max_passes_through():
+    assert apply_floor_cap(16.0, min_a=6.0, max_a=16.0) == 16.0
+
+
 def test_negative_becomes_zero():
     assert apply_floor_cap(-5.0, min_a=6.0, max_a=16.0) == 0.0
 
