@@ -33,9 +33,10 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
      the name reads as a spec sentence and still traces to the requirement / UC / ADR criterion it
      verifies (e.g. `test_should_clamp_to_remaining_headroom_when_target_exceeds_grid_limit`,
      `test_should_force_zero_and_fault_when_status_is_none`). Coverage stays checkable by name.
-   - **Structure the body** in **Given / When / Then** blocks (BDD): `# Given` sets up state,
-     `# When` performs the single action under test, `# Then` asserts the outcome. One behavior per
-     test — exactly one `When`, and assertions only under `Then`.
+   - **Structure the body** in three blocks — **Arrange / Act / Assert** — with `# Arrange`,
+     `# Act`, `# Assert` comments: `# Arrange` sets up state, `# Act` performs the single action
+     under test, `# Assert` checks the outcome. One behavior per test — exactly one action in `# Act`,
+     and assertions only under `# Assert`.
 3. **Cover the mandated cases:**
    - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
      unmapped raw state (all four; ADR-0009).
@@ -55,7 +56,8 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 - **Harness by layer, no exceptions.** Pure logic → plain pytest (no HA import); HA-coupled → HA
   harness. A pure-logic test that imports `homeassistant` defeats the package boundary.
 - **Name for traceability, structure for behavior.** Should-When-Then names — a reviewer reads
-  coverage from names alone — with Given / When / Then bodies. One behavior (one `When`) per test.
+  coverage from names alone — with Arrange / Act / Assert bodies. One behavior (one action in
+  `# Act`) per test.
 - **All four adapter cases, every role.** Present / absent / unavailable / unmapped-raw.
 - **Tests must fail without the code.** If a test passes against an empty implementation, it isn't
   testing anything.
@@ -69,5 +71,5 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 - Vacuous asserts or asserting on a mock's return value — green against no implementation.
 - Test names that describe mechanics (`test_function_returns`) instead of the behavior they trace
   to — use Should-When-Then, not the function's name.
-- A test body with no Given / When / Then structure, or with more than one `When` (asserting several
-  behaviors at once) so a failure no longer points at a single scenario.
+- A test body with no Arrange / Act / Assert structure, or with more than one action in `# Act`
+  (asserting several behaviors at once) so a failure no longer points at a single scenario.
