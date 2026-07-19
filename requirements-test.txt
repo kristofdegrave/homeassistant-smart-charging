@@ -1,0 +1,6 @@
+# Pinned after first resolve (Task 0.1). homeassistant and
+# pytest-homeassistant-custom-component must stay compatible — phcc tracks HA releases.
+homeassistant==2026.2.3
+pytest
+pytest-homeassistant-custom-component==0.13.316
+ruff
