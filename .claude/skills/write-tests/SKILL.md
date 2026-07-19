@@ -28,9 +28,14 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 
 0. **Open (or link) the issue / task** the tests belong to; work on its feature branch.
 1. **Identify the unit and its layer** — pure logic vs HA-coupled — and pick the harness above.
-2. **Write the test names for traceability**: each references the requirement / UC / ADR criterion
-   it verifies (e.g. `test_grid_safety_clamps_to_remaining_headroom`,
-   `test_status_none_is_fault_and_forces_zero`), so coverage is checkable by name.
+2. **Name and structure each test as a behavior spec:**
+   - **Name** in **Should-When-Then** form — `test_should_<expected behavior>_when_<condition>` — so
+     the name reads as a spec sentence and still traces to the requirement / UC / ADR criterion it
+     verifies (e.g. `test_should_clamp_to_remaining_headroom_when_target_exceeds_grid_limit`,
+     `test_should_force_zero_and_fault_when_status_is_none`). Coverage stays checkable by name.
+   - **Structure the body** in **Given / When / Then** blocks (BDD): `# Given` sets up state,
+     `# When` performs the single action under test, `# Then` asserts the outcome. One behavior per
+     test — exactly one `When`, and assertions only under `Then`.
 3. **Cover the mandated cases:**
    - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
      unmapped raw state (all four; ADR-0009).
@@ -49,7 +54,8 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 
 - **Harness by layer, no exceptions.** Pure logic → plain pytest (no HA import); HA-coupled → HA
   harness. A pure-logic test that imports `homeassistant` defeats the package boundary.
-- **Name for traceability.** A reviewer should read coverage from test names alone.
+- **Name for traceability, structure for behavior.** Should-When-Then names — a reviewer reads
+  coverage from names alone — with Given / When / Then bodies. One behavior (one `When`) per test.
 - **All four adapter cases, every role.** Present / absent / unavailable / unmapped-raw.
 - **Tests must fail without the code.** If a test passes against an empty implementation, it isn't
   testing anything.
@@ -61,5 +67,7 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 - Missing one of an adapter role's four state cases.
 - Clamp-math tests with no worked example (just "it returns a number").
 - Vacuous asserts or asserting on a mock's return value — green against no implementation.
-- Test names that describe mechanics (`test_function_returns`) instead of the requirement they trace
-  to.
+- Test names that describe mechanics (`test_function_returns`) instead of the behavior they trace
+  to — use Should-When-Then, not the function's name.
+- A test body with no Given / When / Then structure, or with more than one `When` (asserting several
+  behaviors at once) so a failure no longer points at a single scenario.
