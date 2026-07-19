@@ -25,6 +25,6 @@ label requirement 0052cc "Requirement / constraint / glossary change"
 label adr         5319e7 "Architecture Decision Record"
 label specs       006b75 "Specification work (reserved — drafter not wired yet)"
 label development c5def5 "Implementation work (reserved — drafter not wired yet)"
-label testing     c2e0c6 "Testing work (reserved — drafter not wired yet)"
+label testing     bfd4f2 "Test-authoring work (reserved — drafter not wired yet)"
 
 echo "Labels created/updated."

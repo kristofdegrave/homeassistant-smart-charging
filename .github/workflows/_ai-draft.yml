@@ -3,7 +3,7 @@ name: AI draft (reusable)
 # Reusable worker for the `draft` task — called by ai-pipeline.yml when an issue gets
 # `needs-draft` plus one context label. Resolves the artifact type from the context label,
 # has Claude draft it, opens a PR, and hands off to review with `needs-review`.
-# `specs` / `development` are reserved: it explains that and clears the trigger.
+# `specs` / `development` / `testing` are reserved: it explains that and clears the trigger.
 
 on:
   workflow_call:
@@ -53,7 +53,7 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
-          context_labels="uc requirement adr specs development"
+          context_labels="uc requirement adr specs development testing"
 
           present=""
           for l in $context_labels; do
@@ -68,7 +68,7 @@ jobs:
 
           if [ "$count" -eq 0 ]; then
             emit proceed false
-            emit reason "No context label found. Add exactly one of: uc, requirement, adr, specs, development (alongside needs-draft)."
+            emit reason "No context label found. Add exactly one of: uc, requirement, adr, specs, development, testing (alongside needs-draft)."
             exit 0
           fi
           if [ "$count" -gt 1 ]; then

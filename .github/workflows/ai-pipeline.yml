@@ -10,11 +10,10 @@ name: AI documentation pipeline
 #
 # Labels
 #   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
-#   Context/type : uc | requirement | adr | specs | development
+#   Context/type : uc | requirement | adr | specs | development | testing
 # A context label says WHAT to draft and gives the reviewer context; the action label is the
-# go-signal. `specs` drafts an implementation spec under docs/plans/; `development` is reserved —
-# the draft job explains it is not wired yet and stops. Review picks its checklist from the
-# changed file paths, not the label.
+# go-signal. `specs` / `development` / `testing` are reserved — the draft job explains they are
+# not wired yet and stops. Review picks its checklist from the changed file paths, not the label.
 # Run .github/setup-labels.sh once so every label exists (gh --add-label won't create them).
 #
 # Guards on every AI job: exact label + actor allow-list. Applying a label needs Triage+, so
@@ -24,7 +23,7 @@ name: AI documentation pipeline
 #
 # pull_request (NOT pull_request_target): fork PRs run without secrets, so an external PR can
 # never spend the API key. The path filter scopes PR jobs to the doc trees this pipeline knows
-# how to review; extend it when `development` gets wired to its own tree.
+# how to review; extend it when `specs` / `development` / `testing` get wired to their own trees.
 #
 # Permissions live on the calling jobs below (the token passed to a reusable workflow is
 # governed by the caller). Concurrency keys also live here, where the event context is richest.
