@@ -7,8 +7,8 @@ from homeassistant.core import HomeAssistant
 class StatusAdapter:
     """Reads a status entity and maps its raw state to a canonical charger state.
 
-    Returns None when the entity is missing/unavailable OR when the raw state has
-    no entry in the translation table — both are the ADR-0007 fault signal.
+    Returns None when the entity is missing/unavailable/unknown OR when the raw
+    state has no entry in the translation table — both are the ADR-0007 fault signal.
     """
 
     def __init__(self, hass: HomeAssistant, entity_id: str, translation: dict[str, str]) -> None:
@@ -22,5 +22,5 @@ class StatusAdapter:
             return None
         return self._translation.get(state.state)
 
-    async def write(self, value) -> None:
+    async def write(self, value: str) -> None:
         raise NotImplementedError("status is read-only")
