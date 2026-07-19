@@ -48,7 +48,7 @@ The config flow collects only what `Power` mode + grid safety require. Every fie
 | **Nominal voltage** | config value | Default **230 V**. Used for the NF4 fallback and power↔current conversion. |
 | **Min / max current** | floor/cap bounds | Explicit A. Clamp bounds for the commanded current. |
 | **Grid supply ceiling** | C4 limit | Max current importable from the grid (typically the main-fuse rating) — enforced by the grid-safety clamp. |
-| **Grid-safety offset** | C4 safety margin | `sc_grid_safety_offset_a`, default **2 A**. Subtracted from the ceiling so the enforced limit sits *below* the fuse rating (protects against measurement lag / transient household load). |
+| **Grid-safety offset** | C4 safety margin | config-entry key `grid_safety_offset_a` (the `sc_grid_safety_offset_a` concept from `entity-catalog.md`), default **2 A**. Subtracted from the ceiling so the enforced limit sits *below* the fuse rating (protects against measurement lag / transient household load). |
 | **Default target current** | seeds the owned entity | Initial value of `number.smart_charging_target_current`. |
 
 **Storage (ADR-0005):** the entity-role mappings + the derived status-translation table live in
@@ -91,7 +91,7 @@ read target_current (number entity)
 if canonical ∈ {connected, charging}:
     desired = target_current                           # Power engine — E1
     baseline_w = net_w − charger_w                     # non-charger household load
-    headroom_a = floor((ceiling − offset − baseline_w) / voltage)   # grid-safety, E6 (whole A)
+    headroom_a = floor((ceiling − offset) − baseline_w / voltage)   # grid-safety, E6 (whole A)
     desired = min(desired, headroom_a)                 # grid-safety ceiling — E6, no opt-out
     desired = clamp(desired, min, max)                 # floor/cap invariant — E8, applied last
 else:
@@ -108,9 +108,12 @@ Notes:
   current is always `0` or within `[min, max]`) holds. The coordinator in the implementation plan
   runs this same E1 → E6 → E8 order.
 - The grid-safety headroom is computed against **`ceiling − offset`** (the C4 safety margin, default
-  2 A), not the raw ceiling, so the enforced net-import limit sits below the fuse rating. The result
-  is floored to a **whole ampere** (`requirements.md` R-clamp / `control-cycle.md`) so an EVSE that
-  rounds up cannot overshoot the headroom.
+  2 A), not the raw ceiling, so the enforced net-import limit sits below the fuse rating. The
+  **headroom** is floored to a whole ampere so an EVSE that rounds a setpoint up cannot overshoot it —
+  this is an MVP-added conservative choice for the C4 clamp (no requirement mandates a whole-ampere
+  C4 command; the whole-ampere rule in `control-cycle.md` is stated for the R3 peak clamp). It floors
+  the *ceiling-bound* result; a fractional **target** below the headroom passes through unchanged
+  (the `number` entity's step is 1 A, so this only arises from an out-of-band service call).
 - The grid-safety clamp solves from the **actual baseline flowing** (`net_w − charger_w`), not from
   the requested current — matching the clamp math in `project-plan.md` §6 / system-design.
 - The clamp has **no opt-out** and runs **every cycle** (ADR-0006). In `Power` mode the peak clamp
@@ -158,6 +161,18 @@ deferred above. MVP `Power` therefore effectively runs **as if peak protection i
 billed monthly peak (R3/C3, a cost concern R17 lets `Power` waive) is unprotected in v1. The
 safety-relevant grid ceiling (C4) is retained; only the cost-side peak clamp is absent.
 
+Note on the SOC limit: UC04's preconditions assume the SOC is below the active SOC limit, and R7
+stops charging at it. Deferring E3/E4 (above) means MVP `Power` reads no EV-SOC signal and gates
+only on charger status — so **it charges to the target current regardless of SOC and will not stop
+at the SOC limit**. This is a known v1 deviation from UC04, acceptable because SOC/deadline handling
+is an explicit later slice; it is called out here rather than left implicit.
+
+Note on the entity-catalog binding: `entity-catalog.md` still binds the Power target current to an
+`input_number.sc_power_target_current_a` helper and defers its promotion to an owned entity to a
+separate catalog reconciliation. Creating owned `number.smart_charging_target_current` here realizes
+that pending reconciliation for this one row (it follows cleanly from system-design §3 / ADR-0004 /
+R17); the catalog row should be updated when that reconciliation lands.
+
 The **grid-safety ceiling clamp is included** (not deferred): with it, the MVP cannot command a
 current that breaches the configured supply, so v1 is safe as a real HACS release rather than a
 test-only install.
@@ -198,6 +213,7 @@ hacs.json              # repo root — custom-repo install metadata
 ## 9. Next step
 
 This design feeds the `writing-plans` skill to produce the ordered, test-driven implementation plan.
-Build order follows `project-plan.md`: adapters (RA1 subset) → engines (E1/E6/E7/E8 subset) →
-coordinator (M1) → clients (C1/C2/C4). No `custom_components/` code is written until that plan exists
-and is approved.
+Build order follows `project-plan.md`: the pure engines (E1/E6/E7/E8 subset) and the adapters (RA1
+subset) are independent and can be built in either order — the paired plan builds engines first, then
+adapters — before the coordinator (M1) that composes them, then the clients (C1/C2/C4). No
+`custom_components/` code is written until that plan exists and is approved.
