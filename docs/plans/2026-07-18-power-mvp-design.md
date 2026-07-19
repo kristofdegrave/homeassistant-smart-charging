@@ -58,7 +58,7 @@ target current) live in **options**, editable anytime via *Configure* — ADR-00
 margin" explicitly as an options value. The install form collects both in one screen and splits them
 on submit.
 
-**Control interval** is not asked at install: it defaults to **30 s** and is tunable later in the
+**Control interval** is not asked at install: it defaults to **10 s** and is tunable later in the
 options flow (ADR-0005).
 
 The config surface is intentionally small; if implementation reveals a genuinely required field, it
