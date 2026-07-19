@@ -3,8 +3,8 @@ name: AI review (reusable)
 # Reusable worker for the `review` task — called by ai-pipeline.yml when a doc PR gets
 # `needs-review`. Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
 #   clean                -> stop; ready for the maintainer's manual review
-#   remarks (cycles 1-3) -> add `needs-work` (via PAT) so _ai-fix.yml addresses them
-#   remarks (4th time)   -> add `needs-approval` and stop (max 3 automatic fix cycles)
+#   remarks (cycles 1-2) -> add `needs-work` (via PAT) so _ai-fix.yml addresses them
+#   remarks (3rd time)   -> add `needs-approval` and stop (max 2 automatic fix cycles)
 # Submitted human review comments without an `ai-fix-ack` thread reply count as remarks, so
 # maintainer feedback enters the same loop instead of being silently skipped.
 
@@ -155,7 +155,7 @@ jobs:
             echo "success=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Route by verdict (max 3 automatic fix cycles)
+      - name: Route by verdict (max 2 automatic fix cycles)
         if: steps.check.outputs.success == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -182,12 +182,12 @@ jobs:
           gh pr edit "$PR" --remove-label needs-review || true
 
           if [ "${verdict:-}" = "remarks" ]; then
-            if [ "$remarks_count" -le 3 ]; then
+            if [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
             else
               gh pr edit "$PR" --add-label needs-approval
-              gh pr comment "$PR" --body "Automatic review/fix limit reached (3 cycles) — remaining remarks need a human. Label \`needs-work\` manually to force one more cycle."
+              gh pr comment "$PR" --body "Automatic review/fix limit reached (2 cycles) — remaining remarks need a human. Label \`needs-work\` manually to force one more cycle."
             fi
           fi
 

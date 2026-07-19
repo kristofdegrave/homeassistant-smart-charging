@@ -173,7 +173,7 @@ jobs:
 
             Closes #${{ inputs.issue_number }}
 
-            The `needs-review` label starts the automatic review->fix loop (max 3 cycles).
+            The `needs-review` label starts the automatic review->fix loop (max 2 cycles).
             **A maintainer's manual review and approval is required before merge** (per CLAUDE.md).
           branch: "${{ steps.kind.outputs.branch }}"
           delete-branch: true
