@@ -43,25 +43,35 @@ def _entry_options():
     }
 
 
-async def test_end_to_end_commands_target_current(hass):
-    # The real `number` platform (loaded via PLATFORMS) registers its own set_value
-    # service handler on setup, so a fake `async_register` gets clobbered; listen for
-    # the call_service event instead — it fires for every call regardless of handler.
-    calls = []
-    hass.bus.async_listen(
-        "call_service",
-        lambda event: (
-            calls.append(event.data["service_data"])
-            if event.data["service"] == "set_value"
-            else None
-        ),
-    )
+def _capture_charger_current_writes(hass):
+    """Capture number.set_value calls targeting the charger-current entity.
 
+    The real `number` platform (loaded via PLATFORMS) registers its own set_value
+    service handler on setup, so a fake `hass.services.async_register` stand-in gets
+    clobbered; listen for the call_service event instead — it fires for every call
+    regardless of which handler is installed.
+    """
+    calls = []
+
+    def _record(event):
+        if event.data["domain"] == "number" and event.data["service"] == "set_value":
+            calls.append(event.data["service_data"])
+
+    hass.bus.async_listen("call_service", _record)
+    return calls
+
+
+def _seed_states(hass, *, status: str) -> None:
     hass.states.async_set("number.charger_current", "0.0")
-    hass.states.async_set("sensor.evse", "Charging")
+    hass.states.async_set("sensor.evse", status)
     hass.states.async_set("sensor.net_power", "0.0")
     hass.states.async_set("sensor.charger_power", "0.0")
     hass.states.async_set("sensor.grid_voltage", "230.0")
+
+
+async def test_end_to_end_commands_target_current(hass):
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging")
 
     entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
     entry.add_to_hass(hass)
@@ -72,32 +82,21 @@ async def test_end_to_end_commands_target_current(hass):
     # strings.json translations for _attr_translation_key)...
     assert hass.states.get("number.smart_charging") is not None
     # ...and the first cycle wrote the target current to the charger.
-    assert calls and calls[-1]["value"] == 10.0
+    assert calls and calls[-1]["entity_id"] == "number.charger_current"
+    assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
     assert hass.states.get("sensor.smart_charging").state == "OK"
 
 
 async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
-    calls = []
-    hass.bus.async_listen(
-        "call_service",
-        lambda event: (
-            calls.append(event.data["service_data"])
-            if event.data["service"] == "set_value"
-            else None
-        ),
-    )
-
-    hass.states.async_set("number.charger_current", "0.0")
-    hass.states.async_set("sensor.evse", "Unplugged")  # unmapped raw state -> None (ADR-0003/0007)
-    hass.states.async_set("sensor.net_power", "0.0")
-    hass.states.async_set("sensor.charger_power", "0.0")
-    hass.states.async_set("sensor.grid_voltage", "230.0")
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Unplugged")  # unmapped raw state -> None (ADR-0003/0007)
 
     entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert calls and calls[-1]["value"] == 0.0
+    assert calls and calls[-1]["entity_id"] == "number.charger_current"
+    assert calls[-1]["value"] == 0.0
     assert hass.states.get("sensor.smart_charging").state == "Fault"
