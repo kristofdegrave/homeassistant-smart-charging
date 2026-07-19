@@ -9,7 +9,7 @@ from .const import DOMAIN
 
 
 class SmartChargingEntity(Entity):
-    """Common device grouping + unique-id prefixing for owned entities."""
+    """Common device grouping for owned entities; subclasses set their own unique_id."""
 
     _attr_has_entity_name = True
 
