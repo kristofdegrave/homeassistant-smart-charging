@@ -110,7 +110,7 @@ jobs:
 
       - name: Checkout
         if: steps.kind.outputs.proceed == 'true'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@v4
 
       # Cheap pre-flight: fail on a bad key / no credits / rate limit BEFORE the Opus run spins up.
       - name: Smoke-test the Anthropic API
@@ -122,7 +122,7 @@ jobs:
       - name: Draft the artifact with Claude Code
         id: claude
         if: steps.kind.outputs.proceed == 'true'
-        uses: anthropics/claude-code-action@af0559ee4f514d1ef21826982bed13f7edc3c35e # v1
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Default workflow token for GitHub ops (no Claude GitHub App / OIDC needed).
@@ -173,7 +173,7 @@ jobs:
       - name: Open pull request
         id: cpr
         if: steps.kind.outputs.proceed == 'true'
-        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6
+        uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "docs: draft ${{ inputs.issue_title }} (CI, #${{ inputs.issue_number }})"
