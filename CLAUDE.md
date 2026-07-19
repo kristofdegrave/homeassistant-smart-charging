@@ -152,3 +152,14 @@ Each flow doc: Purpose → Trigger → **Domain events** → Mermaid diagram →
 
 Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.
 
+---
+
+## Authoring AI artifacts (skills, agents, CI worker prompts)
+
+When writing or changing a skill (`.claude/skills/`), an agent definition
+(`.claude/agents/`), or a CI worker prompt (`.github/workflows/_ai-*.yml`), follow
+[docs/reference/ai-authoring-token-efficiency.md](docs/reference/ai-authoring-token-efficiency.md) —
+the per-artifact checklists that keep these lean by construction (single source of truth per
+fact, scoped reads, bound the loop not the turn). Quality and review-integrity rules above
+always win over any token saving.
+
