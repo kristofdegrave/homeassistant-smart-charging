@@ -19,8 +19,8 @@ DEFAULT_CONTROL_INTERVAL_S = 10
 #     which role mid-cycle is safety-relevant (ADR-0005 Decision; ADR-0003). ---
 CONF_CHARGER_CURRENT_ENTITY = "charger_current_entity"
 CONF_CHARGER_STATUS_ENTITY = "charger_status_entity"
-CONF_CONNECTED_STATES = "connected_states"   # user input: raw states meaning "connected"
-CONF_CHARGING_STATES = "charging_states"     # user input: raw states meaning "charging"
+CONF_CONNECTED_STATES = "connected_states"  # user input: raw states meaning "connected"
+CONF_CHARGING_STATES = "charging_states"  # user input: raw states meaning "charging"
 CONF_STATUS_TRANSLATION = "status_translation"  # derived {raw: canonical} stored in data
 CONF_NET_POWER_ENTITY = "net_power_entity"
 CONF_CHARGER_POWER_ENTITY = "charger_power_entity"
