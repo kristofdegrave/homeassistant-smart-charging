@@ -7,7 +7,7 @@ from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
     NumericReadWriteAdapter,
 )
-from custom_components.smart_charging.adapters.status import StatusAdapter
+from custom_components.smart_charging.adapters.status import StatusReadAdapter
 from custom_components.smart_charging.const import (
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
@@ -35,7 +35,7 @@ async def test_factory_builds_expected_roles(hass):
     assert isinstance(adapters["charger_current"], NumericReadWriteAdapter)
     assert adapters["charger_current"]._entity_id == "number.charger_current"
 
-    assert isinstance(adapters["charger_status"], StatusAdapter)
+    assert isinstance(adapters["charger_status"], StatusReadAdapter)
     assert adapters["charger_status"]._entity_id == "sensor.evse"
     assert adapters["charger_status"]._translation == {"Charging": "charging"}
 

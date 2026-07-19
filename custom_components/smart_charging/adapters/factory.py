@@ -15,7 +15,7 @@ from ..const import (
 )
 from .base import Adapter
 from .numeric import NumericReadAdapter, NumericReadWriteAdapter
-from .status import StatusAdapter
+from .status import StatusReadAdapter
 
 
 def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Adapter]:
@@ -25,7 +25,7 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     """
     adapters: dict[str, Adapter] = {
         "charger_current": NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
-        "charger_status": StatusAdapter(
+        "charger_status": StatusReadAdapter(
             hass, data[CONF_CHARGER_STATUS_ENTITY], dict(data[CONF_STATUS_TRANSLATION])
         ),
         "net_power": NumericReadAdapter(hass, data[CONF_NET_POWER_ENTITY]),

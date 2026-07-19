@@ -4,7 +4,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 
 
-class StatusAdapter:
+class StatusReadAdapter:
     """Reads a status entity and maps its raw state to a canonical charger state.
 
     Returns None when the entity is missing/unavailable/unknown OR when the raw
