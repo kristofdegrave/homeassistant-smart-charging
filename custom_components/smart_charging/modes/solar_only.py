@@ -10,27 +10,19 @@ module's.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from ._amp_step import round_amp_step
-
-
-class SolarOnlyPhase(StrEnum):
-    """The SolarOnly mode's own phases (UC02), minus SocReached -- see modes/solar.py."""
-
-    IDLE = "idle"
-    CHARGING = "charging"
-    COOLDOWN = "cooldown"
+from ._phase import Phase
 
 
 @dataclass(frozen=True)
 class SolarOnlyState:
-    phase: SolarOnlyPhase
+    phase: Phase
     phase_started_at: float = 0.0
 
     @classmethod
     def idle(cls) -> SolarOnlyState:
-        return cls(phase=SolarOnlyPhase.IDLE)
+        return cls(phase=Phase.IDLE)
 
 
 def step(
@@ -51,20 +43,18 @@ def step(
     """
     ideal_a = surplus_w / voltage
 
-    if state.phase in (SolarOnlyPhase.IDLE, SolarOnlyPhase.COOLDOWN):
+    if state.phase in (Phase.IDLE, Phase.COOLDOWN):
         elapsed = now - state.phase_started_at
-        cooldown_done = state.phase == SolarOnlyPhase.IDLE or elapsed >= cooldown_minutes * 60
+        cooldown_done = state.phase == Phase.IDLE or elapsed >= cooldown_minutes * 60
         if surplus_w >= start_threshold_w and cooldown_done:
-            return round_amp_step(ideal_a, strategy, midpoint), SolarOnlyState(
-                SolarOnlyPhase.CHARGING, now
-            )
-        if state.phase == SolarOnlyPhase.COOLDOWN and cooldown_done:
+            return round_amp_step(ideal_a, strategy, midpoint), SolarOnlyState(Phase.CHARGING, now)
+        if state.phase == Phase.COOLDOWN and cooldown_done:
             return 0.0, SolarOnlyState.idle()
         return 0.0, state
 
-    if state.phase == SolarOnlyPhase.CHARGING:
+    if state.phase == Phase.CHARGING:
         if surplus_w < start_threshold_w:
-            return 0.0, SolarOnlyState(SolarOnlyPhase.COOLDOWN, now)  # immediate -- no hold
+            return 0.0, SolarOnlyState(Phase.COOLDOWN, now)  # immediate -- no hold
         return round_amp_step(ideal_a, strategy, midpoint), state
 
     raise ValueError(f"unknown SolarOnlyState.phase: {state.phase!r}")

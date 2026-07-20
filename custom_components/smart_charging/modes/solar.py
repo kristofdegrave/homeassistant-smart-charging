@@ -13,28 +13,19 @@ nothing itself; `now` (seconds, monotonic) is always injected.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from ._amp_step import ROUND_UP, round_amp_step
-
-
-class SolarPhase(StrEnum):
-    """The Solar mode's own phases (UC01), minus SocReached -- see module docstring."""
-
-    IDLE = "idle"
-    CHARGING = "charging"
-    HOLD = "hold"
-    COOLDOWN = "cooldown"
+from ._phase import Phase
 
 
 @dataclass(frozen=True)
 class SolarState:
-    phase: SolarPhase
+    phase: Phase
     phase_started_at: float = 0.0
 
     @classmethod
     def idle(cls) -> SolarState:
-        return cls(phase=SolarPhase.IDLE)
+        return cls(phase=Phase.IDLE)
 
 
 def step(
@@ -59,25 +50,25 @@ def step(
     """
     ideal_a = surplus_w / voltage
 
-    if state.phase in (SolarPhase.IDLE, SolarPhase.COOLDOWN):
+    if state.phase in (Phase.IDLE, Phase.COOLDOWN):
         elapsed = now - state.phase_started_at
-        cooldown_done = state.phase == SolarPhase.IDLE or elapsed >= cooldown_minutes * 60
+        cooldown_done = state.phase == Phase.IDLE or elapsed >= cooldown_minutes * 60
         if surplus_w >= start_threshold_w and cooldown_done:
-            return _charging_setpoint(ideal_a, min_a), SolarState(SolarPhase.CHARGING, now)
-        if state.phase == SolarPhase.COOLDOWN and cooldown_done:
+            return _charging_setpoint(ideal_a, min_a), SolarState(Phase.CHARGING, now)
+        if state.phase == Phase.COOLDOWN and cooldown_done:
             return 0.0, SolarState.idle()
         return 0.0, state
 
-    if state.phase == SolarPhase.CHARGING:
+    if state.phase == Phase.CHARGING:
         if surplus_w < start_threshold_w:
-            return min_a, SolarState(SolarPhase.HOLD, now)
+            return min_a, SolarState(Phase.HOLD, now)
         return _charging_setpoint(ideal_a, min_a), state
 
-    if state.phase == SolarPhase.HOLD:
+    if state.phase == Phase.HOLD:
         if surplus_w >= start_threshold_w:
-            return _charging_setpoint(ideal_a, min_a), SolarState(SolarPhase.CHARGING, now)
+            return _charging_setpoint(ideal_a, min_a), SolarState(Phase.CHARGING, now)
         if now - state.phase_started_at >= hold_minutes * 60:
-            return 0.0, SolarState(SolarPhase.COOLDOWN, now)
+            return 0.0, SolarState(Phase.COOLDOWN, now)
         return min_a, state
 
     raise ValueError(f"unknown SolarState.phase: {state.phase!r}")

@@ -2,7 +2,8 @@
 
 import pytest
 
-from custom_components.smart_charging.modes.solar import SolarPhase, SolarState, step
+from custom_components.smart_charging.modes._phase import Phase
+from custom_components.smart_charging.modes.solar import SolarState, step
 
 DEFAULTS = dict(
     start_threshold_w=150.0,
@@ -15,7 +16,7 @@ DEFAULTS = dict(
 def test_idle_stays_idle_below_start_threshold():
     desired, state = step(surplus_w=100.0, state=SolarState.idle(), now=0.0, **DEFAULTS)
     assert desired == 0.0
-    assert state.phase == SolarPhase.IDLE
+    assert state.phase == Phase.IDLE
 
 
 def test_starts_charging_at_start_threshold_rounding_up():
@@ -23,7 +24,7 @@ def test_starts_charging_at_start_threshold_rounding_up():
     # by this engine's own grid-fallback rule (R1's set-point rule, not E8's separate
     # upper-bound clamp -- see _charging_setpoint).
     desired, state = step(surplus_w=150.0, state=SolarState.idle(), now=0.0, **DEFAULTS)
-    assert state.phase == SolarPhase.CHARGING
+    assert state.phase == Phase.CHARGING
     assert desired == 6.0
 
 
@@ -50,16 +51,16 @@ def test_grid_fallback_below_minimum_current():
     _, state = step(surplus_w=200.0, state=state, now=0.0, **DEFAULTS)
     desired, state = step(surplus_w=200.0, state=state, now=10.0, **DEFAULTS)
     assert desired == DEFAULTS["min_a"]
-    assert state.phase == SolarPhase.CHARGING  # grid fallback is a set-point condition, not a state
+    assert state.phase == Phase.CHARGING  # grid fallback is a set-point condition, not a state
 
 
 def test_post_surplus_hold_then_resume_within_period():
     state = SolarState.idle()
     _, state = step(surplus_w=2300.0, state=state, now=0.0, **DEFAULTS)  # -> charging
     _, state = step(surplus_w=50.0, state=state, now=10.0, **DEFAULTS)  # -> hold
-    assert state.phase == SolarPhase.HOLD
+    assert state.phase == Phase.HOLD
     desired, state = step(surplus_w=2300.0, state=state, now=60.0, **DEFAULTS)  # within 5 min
-    assert state.phase == SolarPhase.CHARGING
+    assert state.phase == Phase.CHARGING
     assert desired > 0.0
 
 
@@ -69,7 +70,7 @@ def test_post_surplus_hold_elapses_into_cooldown_then_idle():
     _, state = step(surplus_w=50.0, state=state, now=10.0, **DEFAULTS)  # -> hold @ t=10
     desired, state = step(surplus_w=50.0, state=state, now=10.0 + 5 * 60, **DEFAULTS)
     assert desired == 0.0
-    assert state.phase == SolarPhase.COOLDOWN
+    assert state.phase == Phase.COOLDOWN
 
 
 def test_cooldown_blocks_restart_until_elapsed():
@@ -80,11 +81,11 @@ def test_cooldown_blocks_restart_until_elapsed():
     cooldown_start = 10.0 + 5 * 60
     desired, state = step(surplus_w=2300.0, state=state, now=cooldown_start + 30, **DEFAULTS)
     assert desired == 0.0
-    assert state.phase == SolarPhase.COOLDOWN  # still within the 2 min cooldown
+    assert state.phase == Phase.COOLDOWN  # still within the 2 min cooldown
     desired, state = step(
         surplus_w=2300.0, state=state, now=cooldown_start + 2 * 60 + 1, **DEFAULTS
     )
-    assert state.phase == SolarPhase.CHARGING
+    assert state.phase == Phase.CHARGING
 
 
 def test_cooldown_elapses_into_idle_without_qualifying_surplus():
@@ -95,7 +96,7 @@ def test_cooldown_elapses_into_idle_without_qualifying_surplus():
     cooldown_start = 10.0 + 5 * 60
     desired, state = step(surplus_w=50.0, state=state, now=cooldown_start + 2 * 60 + 1, **DEFAULTS)
     assert desired == 0.0
-    assert state.phase == SolarPhase.IDLE
+    assert state.phase == Phase.IDLE
 
 
 def test_non_default_voltage_changes_ideal_current():
