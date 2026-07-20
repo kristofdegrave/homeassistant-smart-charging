@@ -78,14 +78,13 @@ async def test_end_to_end_commands_target_current(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # The number entity exists (object_id is just the device name until Task 6.3 adds
-    # strings.json translations for _attr_translation_key)...
-    assert hass.states.get("number.smart_charging") is not None
+    # The number entity exists, its object_id suffixed per strings.json translations...
+    assert hass.states.get("number.smart_charging_target_current") is not None
     # ...and the first cycle wrote the target current to the charger.
     assert calls and calls[-1]["entity_id"] == "number.charger_current"
     assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
-    assert hass.states.get("sensor.smart_charging").state == "OK"
+    assert hass.states.get("sensor.smart_charging_status").state == "OK"
 
 
 async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
@@ -99,4 +98,4 @@ async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
 
     assert calls and calls[-1]["entity_id"] == "number.charger_current"
     assert calls[-1]["value"] == 0.0
-    assert hass.states.get("sensor.smart_charging").state == "Fault"
+    assert hass.states.get("sensor.smart_charging_status").state == "Fault"

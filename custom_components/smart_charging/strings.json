@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Smart Charging",
+        "description": "Map the entities that represent your charger and grid, and set the initial thresholds. All fields except the grid voltage entity are required.",
+        "data": {
+          "charger_current_entity": "Charger current control entity",
+          "charger_status_entity": "Charger status entity",
+          "connected_states": "States meaning \"connected\" (comma-separated)",
+          "charging_states": "States meaning \"charging\" (comma-separated)",
+          "net_power_entity": "Net grid power entity",
+          "charger_power_entity": "Charger power entity",
+          "grid_voltage_entity": "Grid voltage entity (optional)",
+          "nominal_voltage": "Nominal grid voltage (V)",
+          "min_current": "Minimum charging current (A)",
+          "max_current": "Maximum charging current (A)",
+          "grid_ceiling_a": "Grid ceiling (A)",
+          "grid_safety_offset_a": "Grid safety offset (A)",
+          "default_target_current": "Default target current (A)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Smart Charging",
+        "description": "Update which entities play each role. Changes are re-validated and reload the integration.",
+        "data": {
+          "charger_current_entity": "Charger current control entity",
+          "charger_status_entity": "Charger status entity",
+          "connected_states": "States meaning \"connected\" (comma-separated)",
+          "charging_states": "States meaning \"charging\" (comma-separated)",
+          "net_power_entity": "Net grid power entity",
+          "charger_power_entity": "Charger power entity",
+          "grid_voltage_entity": "Grid voltage entity (optional)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Charging options",
+        "description": "Tune thresholds and defaults at any time.",
+        "data": {
+          "nominal_voltage": "Nominal grid voltage (V)",
+          "min_current": "Minimum charging current (A)",
+          "max_current": "Maximum charging current (A)",
+          "grid_ceiling_a": "Grid ceiling (A)",
+          "grid_safety_offset_a": "Grid safety offset (A)",
+          "default_target_current": "Default target current (A)",
+          "control_interval_s": "Control interval (s)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "target_current": {
+        "name": "Target current"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "OK": "OK",
+          "Fault": "Fault"
+        }
+      }
+    }
+  }
+}
