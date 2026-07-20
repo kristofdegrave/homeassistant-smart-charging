@@ -228,9 +228,9 @@ def test_round_nearest_at_configured_midpoint_rounds_up():
 
 
 def test_round_nearest_custom_midpoint():
-    # A 30% midpoint means anything above ideal-floor+0.3 rounds up.
-    assert round_amp_step(10.2, strategy="round_nearest", midpoint=0.3) == 11.0
-    assert round_amp_step(10.29, strategy="round_nearest", midpoint=0.3) == 10.0
+    # A 30% midpoint means anything below ideal-floor+0.3 rounds down, at/above rounds up.
+    assert round_amp_step(10.2, strategy="round_nearest", midpoint=0.3) == 10.0
+    assert round_amp_step(10.4, strategy="round_nearest", midpoint=0.3) == 11.0
 ```
 
 **Step 2: Run** → `ImportError`.
@@ -295,7 +295,6 @@ from custom_components.smart_charging.modes.solar import SolarState, step
 DEFAULTS = dict(
     start_threshold_w=150.0,
     min_a=6.0,
-    max_a=16.0,
     hold_minutes=5.0,
     cooldown_minutes=2.0,
 )
@@ -317,11 +316,14 @@ def test_starts_charging_at_start_threshold_rounding_up():
     assert desired >= 1.0
 
 
-def test_closed_loop_no_oscillation_when_own_draw_is_in_net_w():
-    # Regression E1 calls for: a mode must hold steady, not oscillate, when its own
-    # charging draw is itself part of the net_w the surplus formula reads. Feeding a
-    # *constant* surplus across cycles (as a stabilized closed loop would present it)
-    # must yield the same set-point every cycle, not drift.
+def test_deterministic_given_identical_inputs():
+    # A per-call sanity check only: step() is a pure function, so identical inputs at
+    # two different `now`s (mid-charging, no phase transition in between) yield the
+    # same output. This is NOT the closed-loop no-oscillation regression E1 calls for
+    # (a mode must hold steady when its own draw is part of the net_w it reads back) --
+    # that needs a feedback model (commanded current -> charger_w -> net_w -> next
+    # surplus_w) and lives in the Task 6.2 end-to-end suite instead, where the real
+    # adapter/coordinator wiring makes that feedback loop meaningful to construct.
     state = SolarState.idle()
     desired1, state = step(surplus_w=2300.0, state=state, now=0.0, **DEFAULTS)
     desired2, state = step(surplus_w=2300.0, state=state, now=10.0, **DEFAULTS)
@@ -374,15 +376,17 @@ def test_cooldown_blocks_restart_until_elapsed():
     assert state.phase == "charging"
 
 
-def test_soc_reached_forces_stop_and_latches():
-    # SOC-gating itself is the coordinator's job (it doesn't call step() at all once
-    # reached), but SolarState exposes an explicit soc_reached() transition so the
-    # coordinator can latch the phase for the active_mode sensor / next-cycle logic.
-    state = SolarState.idle()
-    _, state = step(surplus_w=2300.0, state=state, now=0.0, **DEFAULTS)
-    state = state.soc_reached()
-    assert state.phase == "soc_reached"
 ```
+
+**No SOC-related phase or test here.** SOC-gating is entirely the coordinator's responsibility (M1,
+Task 5.1) — per R7's own framing, a mode "has no opinion on *why* the limit is where it is," so
+`SolarState` only ever has `idle`/`charging`/`hold`/`cooldown`. The coordinator forces a gated mode's
+state back to `idle()` for as long as the SOC gate holds and simply stops calling `step()` at all;
+the mode never sees the reason. This also means both of R7's resume conditions (the limit rising, or
+unplug/replug) are exercised at the coordinator level (Task 5.1's tests), not here — see the design
+doc §5's "Where the SOC gate itself lives" note for the reasoning. (An earlier draft of this task had
+a mode-level `soc_reached()` phase with no way back out of it, which could never resume charging
+after a limit increase or a reconnect — removed for that reason.)
 
 **Step 2: Run** → `ImportError`.
 
@@ -391,9 +395,14 @@ def test_soc_reached_forces_stop_and_latches():
 ```python
 """Solar charging-mode engine (E1 -- UC01). Pure -- no HA imports (ADR-0006/0009).
 
-State machine: Idle -> Charging -> Hold -> Cooldown -> SocReached, per UC01's state
-model. State is a small frozen dataclass threaded by the coordinator (M1) -- this
-module holds nothing itself; `now` (seconds, monotonic) is always injected.
+State machine: Idle -> Charging -> Hold -> Cooldown, per UC01's state model, MINUS
+the SocReached phase UC01's own diagram draws -- that transition is entirely the
+coordinator's responsibility (M1), not this module's (see design doc §5's "Where
+the SOC gate itself lives"): a mode "has no opinion on why the limit is where it
+is" (R7), so it is never told SOC was reached at all -- the coordinator simply
+stops calling step() and holds this state at idle() for as long as the gate holds.
+State is a small frozen dataclass threaded by the coordinator -- this module holds
+nothing itself; `now` (seconds, monotonic) is always injected.
 """
 
 from __future__ import annotations
@@ -405,15 +414,12 @@ from ._amp_step import round_amp_step
 
 @dataclass(frozen=True)
 class SolarState:
-    phase: str  # "idle" | "charging" | "hold" | "cooldown" | "soc_reached"
+    phase: str  # "idle" | "charging" | "hold" | "cooldown"
     phase_started_at: float = 0.0
 
     @classmethod
     def idle(cls) -> "SolarState":
         return cls(phase="idle")
-
-    def soc_reached(self) -> "SolarState":
-        return SolarState(phase="soc_reached")
 
 
 def step(
@@ -422,22 +428,20 @@ def step(
     now: float,
     start_threshold_w: float,
     min_a: float,
-    max_a: float,
     hold_minutes: float,
     cooldown_minutes: float,
     voltage: float = 230.0,
 ) -> tuple[float, SolarState]:
     """Return (desired_current, next_state) for one control cycle (UC01).
 
-    `min_a`/`max_a` are used only to decide grid-fallback vs. hold/stop transitions
-    (R1's own set-point rule reads the minimum); the floor/cap invariant itself is
-    still applied once, downstream, by the coordinator's E8 stage -- this function
-    does not re-clamp to `max_a` beyond what `round_amp_step` already returns from a
-    bounded ideal.
+    `min_a` is used to decide grid-fallback vs. hold/stop transitions (R1's own
+    set-point rule reads the minimum); the floor/cap invariant itself is still
+    applied once, downstream, by the coordinator's E8 stage. There is no `max_a`
+    parameter: this function never produces a value above the maximum on its own
+    (the ideal current is bounded by the surplus itself, not clamped here), and E8
+    remains the single place the upper bound is enforced -- avoiding a second,
+    redundant clamp site for the same invariant.
     """
-    if state.phase == "soc_reached":
-        return 0.0, state
-
     ideal_a = surplus_w / voltage
 
     if state.phase in ("idle", "cooldown"):
@@ -497,11 +501,26 @@ from custom_components.smart_charging.modes.solar_only import SolarOnlyState, st
 DEFAULTS = dict(
     start_threshold_w=1300.0,
     min_a=6.0,
-    max_a=16.0,
     cooldown_minutes=2.0,
     strategy="round_down",
     midpoint=0.5,
 )
+
+# NOTE (reconciling with the design doc's minor finding): at nominal 230 V, 1300 W is
+# 5.65 A -- below the 6 A minimum (which needs 1380 W). Surplus in 1300-1379 W therefore
+# enters "charging" per this threshold but is floored to 0 A by the coordinator's E8
+# stage downstream, in slight tension with UC02's "threshold chosen so the minimum can
+# be met from solar alone." The boundary test below pins this down explicitly rather
+# than leaving it implicit; if this executor pass or the review after it decides the gap
+# is worth closing, the fix is raising the default threshold to 1380 W (E8's floor stays
+# the actual invariant either way -- this is a threshold-tuning question, not a bug).
+
+
+def test_at_exactly_the_default_threshold_ideal_current_is_below_minimum():
+    # Documents the 1300 W vs 1380 W boundary gap above rather than hiding it.
+    desired, state = step(surplus_w=1300.0, state=SolarOnlyState.idle(), now=0.0, **DEFAULTS)
+    assert state.phase == "charging"
+    assert desired < DEFAULTS["min_a"]  # E8 (coordinator, unchanged) floors this to 0 A
 
 
 def test_idle_below_threshold():
@@ -544,13 +563,10 @@ def test_cooldown_blocks_restart_until_elapsed():
     assert state.phase == "charging"
 
 
-def test_soc_reached_latches():
-    state = SolarOnlyState.idle()
-    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)
-    state = state.soc_reached()
-    desired, state = step(surplus_w=1400.0, state=state, now=1.0, **DEFAULTS)
-    assert desired == 0.0 and state.phase == "soc_reached"
 ```
+
+**No SOC-related phase or test here** — same reasoning as `Solar` (Task 1.4): SOC-gating is the
+coordinator's job (Task 5.1), so `SolarOnlyState` only has `idle`/`charging`/`cooldown`.
 
 **Step 2: Run** → `ImportError`.
 
@@ -559,9 +575,11 @@ def test_soc_reached_latches():
 ```python
 """SolarOnly charging-mode engine (E1 -- UC02). Pure -- no HA imports.
 
-Simpler than Solar: Idle -> Charging -> Cooldown -> SocReached. No Hold, no grid
-fallback -- surplus below the start threshold stops immediately (UC02's defining
-difference from its sibling UC01).
+Simpler than Solar: Idle -> Charging -> Cooldown. No Hold, no grid fallback --
+surplus below the start threshold stops immediately (UC02's defining difference
+from its sibling UC01). No SOC-related phase either -- see Solar's module
+docstring (modes/solar.py) for why that's the coordinator's job, not this
+module's.
 """
 
 from __future__ import annotations
@@ -573,15 +591,12 @@ from ._amp_step import round_amp_step
 
 @dataclass(frozen=True)
 class SolarOnlyState:
-    phase: str  # "idle" | "charging" | "cooldown" | "soc_reached"
+    phase: str  # "idle" | "charging" | "cooldown"
     phase_started_at: float = 0.0
 
     @classmethod
     def idle(cls) -> "SolarOnlyState":
         return cls(phase="idle")
-
-    def soc_reached(self) -> "SolarOnlyState":
-        return SolarOnlyState(phase="soc_reached")
 
 
 def step(
@@ -590,16 +605,16 @@ def step(
     now: float,
     start_threshold_w: float,
     min_a: float,
-    max_a: float,
     cooldown_minutes: float,
     strategy: str,
     midpoint: float = 0.5,
     voltage: float = 230.0,
 ) -> tuple[float, SolarOnlyState]:
-    """Return (desired_current, next_state) for one control cycle (UC02)."""
-    if state.phase == "soc_reached":
-        return 0.0, state
+    """Return (desired_current, next_state) for one control cycle (UC02).
 
+    No `max_a` parameter, for the same reason as `Solar.step()` -- E8 remains the
+    single place the upper-bound invariant is enforced.
+    """
     ideal_a = surplus_w / voltage
 
     if state.phase in ("idle", "cooldown"):
@@ -641,16 +656,31 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `custom_components/smart_charging/adapters/factory.py`
 - Modify: `tests/adapters/test_factory.py`
 
+`ev_soc` is **optional at the factory level** — the same pattern `grid_voltage` already uses —
+**not** an unconditionally-required role like `net_power`/`charger_power`. This is what lets an
+existing Power-MVP config entry (which has no `ev_soc_entity` in its data) load unchanged with no
+migration (design doc §8/§9): the role is simply absent from the built adapter set, which only
+matters once `Solar`/`SolarOnly` is selected (Task 5.1 makes a *missing* `ev_soc` role a fault only
+while one of those two modes is active — unlike `grid_voltage`, whose absence is never a fault at
+all, NF4).
+
 **Step 1: Failing test** — extend the existing factory test:
 
 ```python
 # Add to tests/adapters/test_factory.py
 
-async def test_factory_builds_ev_soc_role(hass):
+async def test_factory_builds_ev_soc_role_when_configured(hass):
     data = _data()
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
     adapters = build_adapters(hass, data)
     assert isinstance(adapters["ev_soc"], NumericReadAdapter)
+
+
+async def test_ev_soc_role_absent_when_not_configured(hass):
+    # An existing Power-MVP entry predates this field entirely (design doc §8/§9) --
+    # build_adapters must not KeyError on it.
+    adapters = build_adapters(hass, _data())
+    assert "ev_soc" not in adapters
 ```
 
 (Add `CONF_EV_SOC_ENTITY` to the test's imports.)
@@ -665,9 +695,11 @@ CONF_EV_SOC_ENTITY = "ev_soc_entity"
 ```
 
 ```python
-# adapters/factory.py -- add to build_adapters, required role (no None-safe .get; a
-# missing ev_soc reading is the ADR-0007 fault signal like any other required role)
-"ev_soc": NumericReadAdapter(hass, data[CONF_EV_SOC_ENTITY]),
+# adapters/factory.py -- add to build_adapters, OPTIONAL like grid_voltage (not required
+# at the factory level -- Task 5.1 makes its absence a fault only when Solar/SolarOnly is
+# the active mode, not unconditionally at setup)
+if data.get(CONF_EV_SOC_ENTITY):
+    adapters["ev_soc"] = NumericReadAdapter(hass, data[CONF_EV_SOC_ENTITY])
 ```
 
 **Step 4: Run** → PASS. **Step 5: Commit**
@@ -680,7 +712,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 2 checkpoint:** `pytest tests/adapters -v` green; `ev_soc` resolves through the factory
-> like every other required role.
+> when configured, and is cleanly absent (no `KeyError`) when it isn't — unlike the always-required
+> roles, this one's requiredness is conditional on the active mode (Task 5.1), not on the factory.
 
 ---
 
@@ -735,6 +768,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 `CONF_EV_SOC_ENTITY: "sensor.ev_soc"` to the submitted `user_input`, assert it lands in `data`), plus:
 
 ```python
+async def test_ev_soc_is_optional_in_the_install_form(hass):
+    # Design doc §3/§8: ev_soc is optional so an install without it -- or an eventual
+    # reconfigure that omits it -- still produces a valid entry; only selecting
+    # Solar/SolarOnly without it faults at runtime (Task 5.1), not at config time.
+    result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_EV_SOC_ENTITY not in result["data"]
+
+
 async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
     # ... run the user flow with the new fields omitted from user_input where they have
     # defaults (e.g. leave solar_only_strategy unset) ...
@@ -754,10 +796,11 @@ async def test_options_flow_edits_solar_thresholds(hass):
 
 **Step 2: Run** → FAIL (fields don't exist yet).
 
-**Step 3: Implement** — add `vol.Required(CONF_EV_SOC_ENTITY): _entity("sensor")` to
-`MAPPING_SCHEMA`; add the eight new options fields (with their `DEFAULT_*` constants) to
-`OPTION_KEYS` and `_threshold_schema()`; `CONF_SOLAR_ONLY_STRATEGY` uses
-`vol.In(["round_up", "round_down", "round_nearest"])`.
+**Step 3: Implement** — add `vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor")` to
+`MAPPING_SCHEMA` (optional, not required — §3/Task 2.1's reasoning: existing entries and a
+solar-less installation both need a valid entry without it); add the eight new options fields
+(with their `DEFAULT_*` constants) to `OPTION_KEYS` and `_threshold_schema()`;
+`CONF_SOLAR_ONLY_STRATEGY` uses `vol.In(["round_up", "round_down", "round_nearest"])`.
 
 **Step 4: Run** → PASS. **Step 5: Commit**
 
@@ -768,13 +811,20 @@ git commit --author="Claude <noreply@anthropic.com>" -m "feat: extend config/opt
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-> **⎔ Phase 3 checkpoint:** a full install flow produces an entry with `ev_soc` in data and every new
-> threshold + `default_soc_limit` in options; the options flow round-trips each new field without
-> touching data.
+> **⎔ Phase 3 checkpoint:** a full install flow produces a valid entry whether or not `ev_soc` is
+> mapped, with every new threshold + `default_soc_limit` seeded into options; the options flow
+> round-trips each new field without touching data; no migration is needed for an entry that
+> predates these fields (options reads fall back to their `DEFAULT_*` constant).
 
 ---
 
 ## Phase 4 — Owned entities (C2 extension)
+
+> **Forward reference, same as the Power MVP's precedent (`TargetCurrentNumber`/coordinator):**
+> these entities read/write `coordinator.active_mode` and `coordinator.soc_limit_override` before
+> Task 5.1 (Phase 5) actually implements that contract on the coordinator. The unit tests below
+> stub it out (`_StubCoordinator`), so this ordering is safe — but keep the attribute names
+> (`active_mode`, `soc_limit_override`) identical to what Task 5.1 defines.
 
 ### Task 4.1: `select.smart_charging_mode`
 
@@ -952,8 +1002,32 @@ async def test_dispatches_to_solar_when_selected(hass, ...):
 async def test_dispatches_to_solar_only_when_selected(hass, ...):
     """Same shape for SolarOnly."""
 
-async def test_soc_at_or_above_limit_forces_zero_regardless_of_mode(hass, ...):
-    """ev_soc >= soc_limit_override -> 0 A even with ample surplus."""
+async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(hass, ...):
+    """ev_soc >= soc_limit_override -> 0 A even with ample surplus, for both Solar and
+    SolarOnly; the mode's threaded state is held at idle() while the gate holds (not a
+    latched "soc_reached" phase -- there is no such phase, see modes/solar.py)."""
+
+async def test_resumes_when_the_soc_limit_rises_above_current_soc(hass, ...):
+    """R7 resume condition 1: with active_mode="Solar" gated at 0 A (ev_soc >= limit),
+    raising soc_limit_override above the current ev_soc lets the NEXT cycle dispatch to
+    solar.step() again from idle() -- charging resumes once surplus qualifies, without a
+    mode switch or a disconnect."""
+
+async def test_resumes_after_disconnect_and_reconnect_while_still_at_the_limit(hass, ...):
+    """R7 resume condition 2: gated at the limit, then charger_status leaves
+    connected/charging and comes back -- every mode's state resets to idle() on the
+    disconnect (existing R11 reset path), so a reconnect re-arms fresh even though
+    soc_limit_override never changed."""
+
+async def test_power_and_off_ignore_soc_entirely(hass, ...):
+    """With active_mode="Power" (or "Off") and no ev_soc configured at all (factory
+    omits the role -- Task 2.1), the cycle runs normally -- ev_soc is read/required only
+    while Solar/SolarOnly is active. Power's existing MVP behavior (charges regardless
+    of SOC) is unchanged (success-criterion 6)."""
+
+async def test_missing_ev_soc_faults_only_while_a_solar_mode_is_selected(hass, ...):
+    """active_mode="Solar" with the ev_soc role unmapped (or reading None) -> fault, 0 A;
+    the same missing role under active_mode="Power" does not fault."""
 
 async def test_mode_switch_resets_the_incoming_modes_state(hass, ...):
     """Solar's Hold/Cooldown state does not leak into a fresh Solar selection after
@@ -968,7 +1042,11 @@ async def test_power_mode_behavior_unchanged(hass, ...):
 
 **Step 2: Run** → FAIL (dispatch doesn't exist yet).
 
-**Step 3: Implement** — sketch (full code follows the existing `_run_cycle` structure):
+**Step 3: Implement** — sketch (full code follows the existing `_run_cycle` structure). The SOC gate
+lives here, in the coordinator, **not** inside `Solar`/`SolarOnly`'s state machines (design doc §5)
+— those modes have no SOC-related phase at all, so "resuming" is just the coordinator resuming its
+own dispatch, which needs no special-case logic beyond holding the mode's state at `idle()` while
+gated:
 
 ```python
 # coordinator.py -- additions
@@ -977,47 +1055,68 @@ from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import resolve_active_soc_limit
 from .modes import power, solar, solar_only
 
-# __init__: add self._net_window: tuple[float, ...] = (); self._mode_state = {}
-#   (dict keyed by mode name, e.g. {"Solar": SolarState.idle(), "SolarOnly": SolarOnlyState.idle()})
-# and self.active_mode: str = "Off"; self.soc_limit_override: float = DEFAULT_SOC_LIMIT;
+_SOLAR_MODES = ("Solar", "SolarOnly")
+
+# __init__: add self._net_window: tuple[float, ...] = (); self._mode_state = {
+#   "Solar": solar.SolarState.idle(), "SolarOnly": solar_only.SolarOnlyState.idle(),
+# }; self.active_mode: str = "Off"; self.soc_limit_override: float = DEFAULT_SOC_LIMIT;
 # self._last_active_mode: str | None = None (to detect a switch).
 
-# In _run_cycle, after reading status/net_w/charger_w/voltage as today, add:
-ev_soc = await self._adapters["ev_soc"].read()
-if ev_soc is None:
-    # required role -> fault, same as any other (ADR-0007)
-    ...
-
-smoothed_net_w, self._net_window = smooth_net_power(
-    net_w, self._net_window, size=self._config["smoothing_window"]
-)
-active_soc_limit = resolve_active_soc_limit(self.soc_limit_override)
+# In _run_cycle, after reading status/net_w/charger_w/voltage as today:
 
 if self.active_mode != self._last_active_mode:
-    self._mode_state = {  # R11: switching mode resets timers -- fresh state for the new mode
+    # R11: switching mode resets timers -- fresh state for both solar modes, whether or
+    # not the incoming mode is one of them (simplest correct behavior: a state nobody
+    # is dispatching to is inert either way).
+    self._mode_state = {
         "Solar": solar.SolarState.idle(),
         "SolarOnly": solar_only.SolarOnlyState.idle(),
     }
     self._last_active_mode = self.active_mode
 
+# ev_soc is read -- and its absence is a fault -- ONLY while a solar mode is selected
+# (success-criterion 6 / S2: Power/Off must not regress to needing an SOC sensor).
+ev_soc = None
+if self.active_mode in _SOLAR_MODES:
+    ev_soc = await self._adapters["ev_soc"].read() if "ev_soc" in self._adapters else None
+    if ev_soc is None:
+        self._log_fault("ev_soc required while a solar mode is active but missing/None")
+        await self._write(0.0)
+        return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
+
+smoothed_net_w, self._net_window = smooth_net_power(
+    net_w, self._net_window, size=self._config["smoothing_window"]
+)
+active_soc_limit = resolve_active_soc_limit(self.soc_limit_override)
 now = self.hass.loop.time()  # injected, not read inside modes/engines
 
-if status not in CHARGEABLE_STATES or ev_soc >= active_soc_limit:
+if status not in CHARGEABLE_STATES:
     desired = 0.0
-    if ev_soc >= active_soc_limit:
-        for key, state in self._mode_state.items():
-            if hasattr(state, "soc_reached"):
-                self._mode_state[key] = state.soc_reached()
+    # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and,
+    # for a solar mode, also ends any SOC gate (resume condition 2: unplug/replug).
+    self._mode_state = {
+        "Solar": solar.SolarState.idle(),
+        "SolarOnly": solar_only.SolarOnlyState.idle(),
+    }
 elif self.active_mode == "Off":
     desired = 0.0
 elif self.active_mode == "Power":
-    desired = power.desired_current(self.target_current, status)
+    desired = power.desired_current(self.target_current, status)  # unchanged -- no SOC gate
+elif self.active_mode in _SOLAR_MODES and ev_soc >= active_soc_limit:
+    # R7: don't resume until the gate clears. Holding the state at idle() (rather than
+    # dispatching into step()) means the NEXT cycle where this branch stops matching --
+    # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
+    # idle(), re-checking the start threshold normally. No latch, no separate phase.
+    desired = 0.0
+    self._mode_state[self.active_mode] = (
+        solar.SolarState.idle() if self.active_mode == "Solar" else solar_only.SolarOnlyState.idle()
+    )
 elif self.active_mode == "Solar":
     surplus_w = charger_w - smoothed_net_w
     desired, self._mode_state["Solar"] = solar.step(
         surplus_w, self._mode_state["Solar"], now,
         start_threshold_w=self._config["solar_start_threshold_w"],
-        min_a=self._config["min_current"], max_a=self._config["max_current"],
+        min_a=self._config["min_current"],
         hold_minutes=self._config["solar_hold_min"],
         cooldown_minutes=self._config["solar_cooldown_min"], voltage=voltage,
     )
@@ -1026,7 +1125,7 @@ elif self.active_mode == "SolarOnly":
     desired, self._mode_state["SolarOnly"] = solar_only.step(
         surplus_w, self._mode_state["SolarOnly"], now,
         start_threshold_w=self._config["solar_only_start_threshold_w"],
-        min_a=self._config["min_current"], max_a=self._config["max_current"],
+        min_a=self._config["min_current"],
         cooldown_minutes=self._config["solar_cooldown_min"],
         strategy=self._config["solar_only_strategy"],
         midpoint=self._config["solar_only_midpoint"], voltage=voltage,
@@ -1035,6 +1134,10 @@ elif self.active_mode == "SolarOnly":
 # ... unchanged from here: clamp_to_ceiling (E6), apply_floor_cap (E8), write, return.
 # CycleResult gains an `active_mode: str` field so sensor.py's ActiveModeSensor can read it.
 ```
+
+Note the disconnect branch's mode-state reset is written twice above (the explicit mode-switch check,
+and the disconnect branch) — that duplication is intentional and small enough to leave inline rather
+than extracting a helper for two call sites; if a third reset path appears later, factor it out then.
 
 **Step 4: Run** → PASS. **Step 5: Commit**
 

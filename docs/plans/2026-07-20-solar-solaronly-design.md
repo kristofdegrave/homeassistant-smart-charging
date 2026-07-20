@@ -60,7 +60,10 @@ vehicle-limit sync, capability gating — none of which UC01/UC02 need to run co
    (higher, default 1300 W) threshold stops charging immediately.
 5. Switching the mode selector resets the incoming mode's hold/cooldown state (R11); the C4 grid
    ceiling clamp (already shipped) still bounds the output every cycle, unconditionally.
-6. `Power` mode's own behavior (Power MVP) is unchanged.
+6. `Power` mode's own behavior (Power MVP) is unchanged — including its existing v1 deviation of
+   charging regardless of SOC (`2026-07-18-power-mvp-design.md` §6). The SOC gate added by this
+   slice (§6 below) applies **only** to `Solar`/`SolarOnly`; `ev_soc` is read every cycle but is a
+   required (fault-on-`None`) role only while one of those two modes is active.
 
 ---
 
@@ -71,7 +74,7 @@ thresholds/defaults in **options**).
 
 | Field | Bucket | Role/Notes |
 | --- | --- | --- |
-| **EV state-of-charge entity** (r) | data — new adapter role `ev_soc` | RA1 extension. A `None` reading is the ADR-0007 fault signal like any other required role (SOC gating cannot be evaluated blind). |
+| **EV state-of-charge entity** (r) | data — new adapter role `ev_soc`, **optional** at the factory level (mirrors `grid_voltage`'s pattern) | RA1 extension. Not configuring it leaves `ev_soc` absent from the built adapter set — harmless for `Off`/`Power` (unchanged), but selecting `Solar`/`SolarOnly` without it is a fault every cycle (missing role for a mode that needs it), surfaced via the existing status sensor. This also means an **existing Power-MVP config entry loads unchanged** without a migration (§9 note) — it simply has no `ev_soc` role until reconfigured. |
 | **Smoothing window size** *N* | options | Default **4** samples (R10). Reused by any future smoothed input; this slice is its first consumer. |
 | **Solar start threshold** | options | `Solar`'s start/resume threshold, default **150 W** (R1). |
 | **SolarOnly start threshold** | options | `SolarOnly`'s start/resume threshold, default **1300 W** (R2). |
@@ -120,9 +123,18 @@ So for the system as it exists after this slice (`Manual`-only, no step-up mecha
 entire resolution** — `resolve_active_soc_limit()` is a true, complete implementation of R7 for the
 current system state, not a stub. Its only input is
 `number.smart_charging_soc_limit_override`'s current value; there is no ADR-0010 gate concern (E3 was
-never blocked in the first place — see the `docs/fix-e1-dependency-citation` correction — but even if
-it had been, it is now Accepted). Rows 1–2 are added when UC06/UC07/E2 are built, as a change to this
-one function, not a new service.
+never blocked by it in the first place — E1/E2 already had ADR-0002 homes — and per `project-plan.md`'s
+corrected gate table, ADR-0010 is Accepted regardless). Rows 1–2 are added when UC06/UC07/E2 are
+built, as a change to this one function, not a new service.
+
+**Where the SOC gate itself lives.** R7's own framing — "whichever mode is active simply charges to
+this resolved value ... it has no opinion on *why* the limit is where it is" — means the gate belongs
+in the coordinator (M1), not inside `Solar`'s/`SolarOnly`'s own state machine. §6 reflects this: the
+mode engines carry no SOC-related phase at all; M1 compares `ev_soc` against the resolved limit each
+cycle and only calls a mode's `step()` when charging is actually permitted, forcing that mode's state
+back to `idle()` for as long as the limit holds — which is also how both of R7's resume conditions
+(the limit changing, or unplug/replug) end up satisfied for free: the very next cycle where the gate
+no longer holds re-enters `step()` from `idle()`, re-checking the start threshold fresh.
 
 ---
 
@@ -132,22 +144,29 @@ Extends the Power MVP's cycle (`coordinator.py`, M1). New/changed steps in **bol
 
 ```text
 read charger_status (raw) → translate to canonical
-read net_power, charger_power, grid_voltage, **ev_soc**
+read net_power, charger_power, grid_voltage
+**read ev_soc — only if active_mode ∈ {Solar, SolarOnly}; a None reading there is the ADR-0007
+  fault signal for THIS cycle only (Off/Power never read it, so its absence never faults them)**
 **smooth net_power over the last N raw samples (R10) → smoothed_net_w**
 resolve voltage (grid_voltage None → nominal, NF4)
 **resolve active SOC limit ← number.smart_charging_soc_limit_override (E3, §5)**
 **surplus_w = charger_power (raw) − smoothed_net_w**   # per UC01/UC02: charger_w stays raw, only net_w is smoothed
-**read active mode ← select.smart_charging_mode; dispatch + thread that mode's own state**
+**read active mode ← select.smart_charging_mode**
 
-if canonical ∈ {connected, charging} and ev_soc < active_soc_limit:
-    match active_mode:
-        Off      → desired = 0                                          # unchanged
-        Power    → desired = target_current                            # unchanged (E1, Power MVP)
-        Solar    → desired, state = solar.step(surplus_w, state, now)   # E1, new — UC01
-        SolarOnly→ desired, state = solar_only.step(surplus_w, state, now)  # E1, new — UC02
-else:
+if canonical ∉ {connected, charging}:
     desired = 0
-    state = state.reset()   # SOC-reached or disconnected also ends any hold/cooldown (R7/R11)
+    **reset every mode's threaded state to idle() — disconnect ends any hold/cooldown (R7/R11)**
+elif active_mode == Off:
+    desired = 0                                                          # unchanged
+elif active_mode == Power:
+    desired = target_current                                            # unchanged (E1, Power MVP)
+elif active_mode in (Solar, SolarOnly):
+    **if ev_soc is None: desired = 0   # fault (this cycle's required-role check, above)**
+    **elif ev_soc >= active_soc_limit:**
+        **desired = 0**
+        **state[active_mode] = idle()   # R7: don't resume until the gate clears -- see below**
+    **else:**
+        **desired, state[active_mode] = (solar if Solar else solar_only).step(surplus_w, state[active_mode], now)**  # E1, new — UC01/UC02
 
 baseline_w = net_w (raw) − charger_w (raw)                              # unchanged
 headroom_a = floor((ceiling − offset) − baseline_w / voltage)           # grid-safety, E6 — unchanged
@@ -157,6 +176,16 @@ desired = clamp(desired, min, max)                                      # floor/
 write charger_current ← desired
 materialize sensor.smart_charging_active_mode ← active_mode
 ```
+
+**How this satisfies both of R7's resume conditions.** Forcing `state[active_mode] = idle()` every
+cycle the SOC gate holds means the *next* cycle where it no longer holds — because the limit rose
+(`number.smart_charging_soc_limit_override` changed) or because a disconnect/reconnect already reset
+everything to `idle()` — re-enters `step()` fresh from `idle()`, re-checking the start threshold as
+normal. Neither the mode engines nor a separate "SocReached" phase need to know why charging resumed;
+the coordinator's own re-evaluation each cycle (`control-cycle.md`'s "every rule is re-evaluated every
+control cycle" convention) is what R7 actually asks for. `Solar`/`SolarOnly`'s state machines
+therefore have **no SOC-related phase at all** — only `idle`/`charging`/`hold` (`Solar`
+only)/`cooldown`.
 
 - **Smoothing (R10) applies only to `net_power`** this slice. `solar_power` is not read at all: the
   surplus formula is `charger_w − net_w` (both use-cases, and the entity-catalog note that
@@ -223,22 +252,35 @@ Out of scope for this slice, each a later slice of `project-plan.md` — none is
   yet (UC09/M2 out of scope).
 - **Vehicle-limit sync (M2, UC09), notifications (M3, UC08/UC10)**, the runtime dashboard (C5, UC11).
 - **`solar_power` adapter role and its smoothing** — not consumed by anything built this slice (§6).
+- **A formal config-entry migration (`async_migrate_entry`/`VERSION` bump).** Not needed: `ev_soc` is
+  an **optional** adapter role (§3) exactly like `grid_voltage` already is, so an existing Power-MVP
+  entry loads unchanged with `ev_soc` simply absent (Off/Power are unaffected; selecting `Solar`/
+  `SolarOnly` without it faults every cycle until reconfigured). The eight new **options** keys are
+  read with their `DEFAULT_*` fallback (`options.get(KEY, DEFAULT_...)`), the same pattern already
+  used for every existing option — an old entry that predates these keys simply gets the defaults.
 
 ---
 
 ## 9. Testing
 
 - **Plain pytest** (no HA) for the pure pieces: `Solar`'s and `SolarOnly`'s state-machine `step()`
-  functions (including the closed-loop no-oscillation regression control-cycle.md/E1 calls for — a
-  mode must hold steady, not oscillate, when its own draw is in `net_w`), the shared amp-step helper
-  (all three strategies incl. the `round_nearest` "pendel" case), the net-import smoothing window
-  (window-not-yet-full at startup; a single-cycle spike vs. a sustained change), and
-  `resolve_active_soc_limit`'s row-3 lookup.
-- **HA harness** for the HA-coupled pieces: the `ev_soc` adapter's edge cases (missing/unavailable);
-  `select.smart_charging_mode` and `number.smart_charging_soc_limit_override` restore-state and bounds;
-  the coordinator dispatching to each mode, gating on SOC, resetting state on a mode switch, and
-  `sensor.smart_charging_active_mode` reflecting the resolved mode; a full-cycle regression per
-  UC01/UC02 (start / grid-fallback-or-immediate-stop / hold-where-applicable / cooldown / SOC-reached)
+  functions — a per-call determinism check (identical inputs → identical output) at this layer; the
+  shared amp-step helper (all three strategies incl. the `round_nearest` "pendel" case); the
+  net-import smoothing window (window-not-yet-full at startup; how a single-cycle spike moves the
+  mean by `1/N` rather than tracking it fully — R10 dampens, it does not reject, a single-cycle spike);
+  and `resolve_active_soc_limit`'s row-3 lookup.
+- **HA harness** for the HA-coupled pieces: the `ev_soc` adapter's edge cases (missing/unavailable,
+  and its absence being harmless for `Off`/`Power` but a fault for `Solar`/`SolarOnly`); an existing
+  Power-MVP config entry loading unchanged with no `ev_soc` role configured; `select.smart_charging_mode`
+  and `number.smart_charging_soc_limit_override` restore-state and bounds; the coordinator dispatching
+  to each mode, gating on SOC (including both R7 resume paths — the limit rising, and unplug/replug —
+  each re-entering `step()` from `idle()`), resetting state on a mode switch, and
+  `sensor.smart_charging_active_mode` reflecting the resolved mode; **the genuine closed-loop
+  no-oscillation regression** control-cycle.md/E1 calls for — a mode must hold steady, not oscillate,
+  when its own charging draw is itself part of the `net_w` the surplus formula reads back — driven
+  through a feedback model (commanded current → `charger_w` → `net_w` → next cycle's `surplus_w`),
+  not just a repeated constant input; a full-cycle regression per UC01/UC02 (start /
+  grid-fallback-or-immediate-stop / hold-where-applicable / cooldown / SOC-gated-stop-and-resume)
   against a mocked hardware state; the existing grid-ceiling and floor/cap tests continuing to pass
   unchanged.
 
