@@ -43,7 +43,7 @@ def test_single_cycle_spike_does_not_move_full_window_much():
     # which already includes it by construction of this function's contract (returns the
     # window WITH the new sample folded in). The "single spike doesn't move the set-point"
     # requirement is a property of the mode's amp-step rounding tolerance, not of this
-    # function -- covered by the mode-level closed-loop regression (Task 1.4/1.5), not here.
+    # function -- covered by the end-to-end closed-loop regression (Task 6.2), not here.
     assert smoothed == 2000.0
 
 
