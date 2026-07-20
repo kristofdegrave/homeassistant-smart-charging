@@ -1,11 +1,13 @@
 {
   "domain": "smart_charging",
   "name": "Smart Charging",
-  "codeowners": ["@kristofdegrave"],
+  "codeowners": [
+    "@kristofdegrave"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/kristofdegrave/homeassistant-smart-charging",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/kristofdegrave/homeassistant-smart-charging/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
