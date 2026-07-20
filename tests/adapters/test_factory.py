@@ -76,10 +76,18 @@ async def test_factory_builds_ev_soc_role_when_configured(hass):
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
     adapters = build_adapters(hass, data)
     assert isinstance(adapters["ev_soc"], NumericReadAdapter)
+    assert adapters["ev_soc"]._entity_id == "sensor.ev_soc"
 
 
 async def test_ev_soc_role_absent_when_not_configured(hass):
     # An existing Power-MVP entry predates this field entirely (design doc §8/§9) --
     # build_adapters must not KeyError on it.
     adapters = build_adapters(hass, _data())
+    assert "ev_soc" not in adapters
+
+
+async def test_ev_soc_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_EV_SOC_ENTITY] = ""
+    adapters = build_adapters(hass, data)
     assert "ev_soc" not in adapters
