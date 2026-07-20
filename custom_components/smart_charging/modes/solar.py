@@ -42,10 +42,10 @@ def step(
     `min_a` is used to decide grid-fallback vs. hold/stop transitions (R1's own
     set-point rule reads the minimum); the floor/cap invariant itself is still
     applied once, downstream, by the coordinator's E8 stage. There is no `max_a`
-    parameter: this function never produces a value above the maximum on its own
-    (the ideal current is bounded by the surplus itself, not clamped here), and E8
-    remains the single place the upper bound is enforced -- avoiding a second,
-    redundant clamp site for the same invariant.
+    parameter: this function does not clamp the upper bound at all (a large
+    surplus yields a large ideal current, uncapped here) -- E8 remains the single
+    place the upper bound is enforced, avoiding a second, redundant clamp site for
+    the same invariant.
     """
     ideal_a = surplus_w / voltage
 
@@ -54,9 +54,9 @@ def step(
         cooldown_done = state.phase == "idle" or elapsed >= cooldown_minutes * 60
         if surplus_w >= start_threshold_w and cooldown_done:
             return _charging_setpoint(ideal_a, min_a), SolarState("charging", now)
-        if state.phase == "idle":
-            return 0.0, state
-        return 0.0, state  # still cooling down
+        if state.phase == "cooldown" and cooldown_done:
+            return 0.0, SolarState.idle()
+        return 0.0, state
 
     if state.phase == "charging":
         if surplus_w < start_threshold_w:

@@ -1,5 +1,7 @@
 """Plain-pytest tests for the Solar mode engine (E1 -- UC01)."""
 
+import pytest
+
 from custom_components.smart_charging.modes.solar import SolarState, step
 
 DEFAULTS = dict(
@@ -17,13 +19,12 @@ def test_idle_stays_idle_below_start_threshold():
 
 
 def test_starts_charging_at_start_threshold_rounding_up():
-    # 150 W @ 230 V = 0.652 A -> rounds UP (fixed) to 1 A, then floored to min_a by
-    # the coordinator's E8 stage -- this engine returns its own ideal-to-amp-step
-    # result unclamped by min/max (that stays E8's job per the design's control-flow
-    # ordering); here we assert the mode's own arithmetic only.
+    # 150 W @ 230 V = 0.652 A -> rounds UP (fixed) to 1 A, then floored to min_a=6.0
+    # by this engine's own grid-fallback rule (R1's set-point rule, not E8's separate
+    # upper-bound clamp -- see _charging_setpoint).
     desired, state = step(surplus_w=150.0, state=SolarState.idle(), now=0.0, **DEFAULTS)
     assert state.phase == "charging"
-    assert desired >= 1.0
+    assert desired == 6.0
 
 
 def test_deterministic_given_identical_inputs():
@@ -37,7 +38,9 @@ def test_deterministic_given_identical_inputs():
     state = SolarState.idle()
     desired1, state = step(surplus_w=2300.0, state=state, now=0.0, **DEFAULTS)
     desired2, state = step(surplus_w=2300.0, state=state, now=10.0, **DEFAULTS)
-    assert desired1 == desired2
+    # 2300 W @ 230 V = 10.0 A ideal, comfortably above min_a=6.0 -> the grid-fallback
+    # floor doesn't mask the round-up arithmetic here, unlike the threshold test above.
+    assert desired1 == desired2 == 10.0
 
 
 def test_grid_fallback_below_minimum_current():
@@ -82,3 +85,28 @@ def test_cooldown_blocks_restart_until_elapsed():
         surplus_w=2300.0, state=state, now=cooldown_start + 2 * 60 + 1, **DEFAULTS
     )
     assert state.phase == "charging"
+
+
+def test_cooldown_elapses_into_idle_without_qualifying_surplus():
+    state = SolarState.idle()
+    _, state = step(surplus_w=2300.0, state=state, now=0.0, **DEFAULTS)  # -> charging
+    _, state = step(surplus_w=50.0, state=state, now=10.0, **DEFAULTS)  # -> hold
+    _, state = step(surplus_w=50.0, state=state, now=10.0 + 5 * 60, **DEFAULTS)  # -> cooldown
+    cooldown_start = 10.0 + 5 * 60
+    desired, state = step(surplus_w=50.0, state=state, now=cooldown_start + 2 * 60 + 1, **DEFAULTS)
+    assert desired == 0.0
+    assert state.phase == "idle"
+
+
+def test_non_default_voltage_changes_ideal_current():
+    # 3220 W @ 460 V = 7.0 A ideal, above min_a=6.0 -> the grid-fallback floor
+    # doesn't mask the voltage division.
+    desired, state = step(
+        surplus_w=3220.0, state=SolarState.idle(), now=0.0, voltage=460.0, **DEFAULTS
+    )
+    assert desired == 7.0
+
+
+def test_unknown_phase_raises_value_error():
+    with pytest.raises(ValueError, match="unknown SolarState.phase"):
+        step(surplus_w=0.0, state=SolarState("bogus"), now=0.0, **DEFAULTS)
