@@ -38,7 +38,8 @@ sets the initial thresholds:
 
 Entity-role mappings can be changed later via **Reconfigure** (this re-validates
 and reloads the integration). Thresholds and the control interval can be changed
-anytime via **Configure**, without a reload requiring re-validation of the mappings.
+anytime via **Configure**; this also reloads the integration, but does not
+re-validate the entity mappings.
 
 The integration exposes `number.smart_charging_target_current` — set it to
 your desired charging current; the control loop clamps it to the configured
@@ -79,7 +80,7 @@ A few terms recur throughout the documentation (all defined authoritatively in t
 - **Active SOC limit** — the charge target in force, resolved from the configured
   default, an optional solar step-up, and the solar-reserve overnight cap.
 - **Configurable & sensor-driven** — values are configurable with sensible defaults,
-  and inputs/outputs flow through the integration's own `sc_`-prefixed wrapper
+  and inputs/outputs flow through the integration's own native `smart_charging_`-prefixed
   entities, so any charger, EV, or solar setup can be swapped in.
 
 ## Documentation

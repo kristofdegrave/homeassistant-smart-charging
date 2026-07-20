@@ -60,11 +60,7 @@
     },
     "sensor": {
       "status": {
-        "name": "Status",
-        "state": {
-          "OK": "OK",
-          "Fault": "Fault"
-        }
+        "name": "Status"
       }
     }
   }
