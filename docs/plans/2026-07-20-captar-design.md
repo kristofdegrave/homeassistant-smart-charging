@@ -35,15 +35,13 @@ Power MVP yet:
 | `select.smart_charging_mode` (the option list and restore-state entity) | C2 |
 | `resolve_active_soc_limit` (SOC-Target Engine, row-3-only scope) | E3 |
 | The coordinator's mode-dispatch/state-reset scaffolding (the `elif active_mode == ...` chain, per-mode state dict, mode-switch reset) | M1 |
-| `ev_soc` adapter role (optional at the factory level) | RA1 |
+| `ev_soc` adapter role (optional at the factory level; required by the options flow once either mode-family's capability toggle is on) | RA1 |
 
 As of this writing **neither slice has shipped code** — only Solar/SolarOnly has a written spec
-(`2026-07-20-solar-solaronly-design.md` / `-solar-solaronly.md`), not yet implemented, and **not yet
-merged to `main`** — it lives on the unmerged `feature/solar-solaronly` branch (issue #191). This
-document is authored from `main`, so those files are not present in this branch's working tree; the
-signatures cited below (`resolve_active_soc_limit`, `ModeSelect`/`MODE_OPTIONS`) were confirmed against
-`feature/solar-solaronly`'s actual doc content at authoring time, not assumed. **If that branch's spec
-changes before either epic is implemented, the two specs' shared signatures must be re-diffed** — this
+(`2026-07-20-solar-solaronly-design.md` / `-solar-solaronly.md`, merged to `main` via #197), not yet
+implemented. The signatures cited below (`resolve_active_soc_limit`, `ModeSelect`/`MODE_OPTIONS`) were
+confirmed against that spec's actual content at authoring time, not assumed. **If that spec changes
+before either epic is implemented, the two specs' shared signatures must be re-diffed** — this
 document does not itself keep them in sync. Per the project's direction: **this design stays
 independent of Solar/SolarOnly** (it does not assume that spec's tasks ran first, and does not block on
 issue #191/#192) **but must not duplicate the shared pieces** — whichever epic's implementation
@@ -54,8 +52,12 @@ Concretely, every task below that touches a shared piece is written as **"extend
 if it doesn't"**:
 
 - **`select.smart_charging_mode`** — if `select.py` already exists (Solar/SolarOnly landed first), add
-  `"Captar"` to its existing `MODE_OPTIONS` list. If not, this slice creates the entity with
-  `MODE_OPTIONS = ["Off", "Power", "Captar"]`, and Solar/SolarOnly's implementer extends the list
+  `"Captar"` to its existing option-assembly logic, gated by this slice's own `CONF_CAPTAR_AVAILABLE`
+  toggle (§3/§4) — mirroring how Solar/SolarOnly's `CONF_SOLAR_INSTALLED` gates `Solar`/`SolarOnly`,
+  the two toggles are independent and compose (e.g. an install with neither present only ever offers
+  `Off`/`Power`). If `select.py` doesn't exist yet, this slice creates it with
+  `BASE_MODE_OPTIONS = ["Off", "Power"]` plus `["Captar"]` appended when `CONF_CAPTAR_AVAILABLE` is
+  `True`, and Solar/SolarOnly's implementer extends the same assembly logic with their own toggle
   later.
 - **`resolve_active_soc_limit` (E3)** — if `engines/soc_target.py` already exists, this slice imports
   it unchanged (`Captar`'s SOC gate needs the identical row-3-only resolution UC03 §"State model"
@@ -72,7 +74,11 @@ if it doesn't"**:
   implementer then adds their branches and state-dict entries to the general scaffolding this slice
   built, instead of writing a parallel one.
 - **`ev_soc` adapter role (RA1)** — same "optional at the factory level" extension either slice would
-  add; whichever lands first adds the constant/factory wiring, the other reuses it unchanged.
+  add; whichever lands first adds the constant/factory wiring, the other reuses it unchanged. Each
+  slice's own capability toggle (`CONF_SOLAR_INSTALLED` / `CONF_CAPTAR_AVAILABLE`) independently
+  requires it at the options-flow level once that toggle is on — both guards can coexist on the same
+  field without conflict (either one being `True` is enough to require it; both being `False` is the
+  only case where it stays optional).
 
 **Whichever epic's implementation task is picked up first must post a comment on the other epic's
 mode-engine implementation task** (issue #194 for Captar, #192 for Solar/SolarOnly) noting which
@@ -97,15 +103,17 @@ Billing-Protection Engine + Peak-Demand Tracker (E5), and the R17 `Power`-mode i
 | `Power`'s R17 peak-protection opt-out | Doesn't exist (Power MVP never had a peak clamp to opt out of) | **In scope** — E5's clamp becomes active for `Power` too, gated by the existing `sc_power_respect_peak` catalog entry (default on) — an intentional, R17-mandated behavior change to already-shipped `Power` mode, not a regression (§6) |
 
 §9 lists what is still explicitly deferred — `Auto`/profiles, the Deadline Engine and deadline-urgency
-peak-limit raise (R5/UC05), capability gating, notifications, vehicle-limit sync — none of which UC03
-needs to run correctly under `Manual`.
+peak-limit raise (R5/UC05), automatic capability *detection*, notifications, vehicle-limit sync — none
+of which UC03 needs to run correctly under `Manual`. The manual CapTar-capability *toggle* itself
+(R18, scoped the same way Solar/SolarOnly's `CONF_SOLAR_INSTALLED` scopes R18 for solar — issue #215)
+is in scope this slice (§3/§4).
 
 ---
 
 ## 2. Success criteria (what "works" means)
 
-1. `select.smart_charging_mode` offers `Captar` (alongside whatever options already exist per §0) and
-   is adjustable from the HA UI.
+1. `select.smart_charging_mode` offers `Captar` (alongside whatever options already exist per §0) when
+   `CONF_CAPTAR_AVAILABLE` is `True` (§3/§4, R18 scoped, issue #215), and is adjustable from the HA UI.
 2. With `Captar` active, the car connected, and SOC below the active SOC limit, and no `Captar`
    cooldown in effect: charging starts within one control cycle, requesting the maximum charging
    current (C1) — not a surplus-derived amount.
@@ -138,22 +146,26 @@ fields today — that wiring is this slice's job, not new catalog entries.
 
 | Field | Bucket | Role/Notes |
 | --- | --- | --- |
+| **CapTar available** (toggle) | data — new boolean, `CONF_CAPTAR_AVAILABLE`, default **`True`** (`entity-catalog.md`'s `sc_captar_available`; R18's "defaulting to present") | R18, scoped (issue #215) — mirrors `CONF_SOLAR_INSTALLED`'s pattern. Gates `select.smart_charging_mode`'s `"Captar"` option (§4). Flipping it `True` requires `ev_soc` in the same options-flow save (config-flow validation, not a runtime fault) — identical guard to `CONF_SOLAR_INSTALLED`'s, since `Captar`'s SOC gate (§5) needs `ev_soc` exactly as much as `Solar`/`SolarOnly` do (UC03's state model; ADR-0007 fault-on-`None` in §8 otherwise leaves a default install offering `Captar` with no way to satisfy its SOC gate). |
 | **Safety margin** (`sc_safety_margin_w`) | options | Default **250 W** (R3, glossary). |
 | **Maximum peak** (`sc_max_peak_kw`) | options | Default **4 kW** (glossary "maximum peak"; upper operand of the effective peak limit). |
 | **Peak-breach grace period** (`sc_peak_grace_min`) | options | Default **2 min** (R3). |
-| **`Captar` cooldown** (`sc_captar_cooldown_min`) | options | Default **10 min** (R11). |
+| **`Captar` cooldown** (`sc_captar_cooldown_min`) | options — always has a `DEFAULT_*` fallback, so never flow-required regardless of CapTar available; `entity-catalog.md` notes it "conditional" only in the sense that it's meaningless (unread) when `Captar` isn't offered | Default **10 min** (R11). |
 | **`Power` respects peak protection** (`sc_power_respect_peak`) | options | Default **on** (R17). Already catalogued but unused until this slice's E5 exists — wired here. |
-| **`ev_soc` entity** (data, optional) | — see §0 — only added here if Solar/SolarOnly's implementation didn't already add it. |
+| **`ev_soc` entity** (data, **required whenever CapTar available is `True`**) | — see §0 — only added here if Solar/SolarOnly's implementation didn't already add it; if it did, this slice adds its own `required_when_captar_available` validation guard alongside the existing `required_when_solar_installed` one on the same field. |
 
-No new **data**-bucket capability flag: R18 (capability gating) is deferred (§9) — `Captar` is
-unconditionally offered in the selector (it always is, regardless of capabilities, per
-`entity-catalog.md`'s note: "`Captar`, `Power`, and `Off` are always offered").
+This is a **scoped** slice of R18, not the full capability-gating Engine (E9, §9): the gate is a single
+manual toggle the installer sets, not automatic detection of what billing the installation actually
+has — same scoping Solar/SolarOnly's `CONF_SOLAR_INSTALLED` already applies (issue #215's follow-up on
+#198).
 
 ---
 
 ## 4. Runtime surface (owned entities)
 
-- **`select.smart_charging_mode`** — extend/create per §0; adds the `"Captar"` option.
+- **`select.smart_charging_mode`** — extend/create per §0; adds the `"Captar"` option, offered only
+  when `CONF_CAPTAR_AVAILABLE` is `True` (§3, R18 scoped, issue #215) — composes independently with
+  Solar/SolarOnly's `CONF_SOLAR_INSTALLED` gate on the same entity's option list.
 - **`sensor.smart_charging_monthly_peak_kw`** — new (C3-shaped: system-written, not user-set).
   Read-only, kW, the Peak-Demand Tracker's running value; must restore across a restart (§7).
 - **`sensor.smart_charging_effective_peak_limit`** — new (C3-shaped), read-only, kW, `resolve_effective_peak_limit`'s
@@ -511,8 +523,12 @@ opposite of a deferral — it is the safety behavior UC03/R3 mandate):
   `Captar` is reachable only via `Manual` this slice, exactly like `SolarOnly`/`Power`.
 - **Deadline Engine (E4), R5** and the effective-peak-limit's row-1 urgency raise (§6.1) — its own
   epic; `resolve_effective_peak_limit` is row-2-only until E4 exists.
-- **Capability gating (E9, R18)** — `Captar` is always offered regardless of capabilities per
-  `entity-catalog.md`, so this changes nothing about the selector's option list this slice adds.
+- **Automatic capability detection (E9, R18 beyond this slice's toggle).** This slice resolves R18
+  only for `Captar` via the manual `CONF_CAPTAR_AVAILABLE` toggle (§3/§4, issue #215) — same scoping
+  Solar/SolarOnly already applies for `Solar`/`SolarOnly`. Automatically detecting whether an
+  installation actually bills against a capacity tariff (rather than asking the installer) is deferred
+  to the full capability-gating Engine (E9); a wrong manual answer here just means the wrong static
+  option list, not a runtime fault.
 - **`Solar`/`SolarOnly` modes** — their own epic, #189; §0 records the shared-scaffolding obligation
   between the two epics.
 - **`sensor.smart_charging_active_soc_limit`, `ActiveSocLimitChanged`, vehicle-limit sync (M2, UC09),
@@ -558,11 +574,11 @@ opposite of a deferral — it is the safety behavior UC03/R3 mandate):
 
 ```text
 custom_components/smart_charging/
-  const.py              # + peak-protection/Captar-cooldown/power-respect-peak CONF keys
+  const.py              # + CONF_CAPTAR_AVAILABLE (data) + peak-protection/Captar-cooldown/power-respect-peak CONF keys (options)
   coordinator.py         # M1 — Captar dispatch, peak-clamp wiring, R17 opt-out, tracker wiring
-  select.py              # C2 — extend MODE_OPTIONS with "Captar" (create if it doesn't exist, §0)
+  select.py              # C2 — extend option-assembly with "Captar" gated by CONF_CAPTAR_AVAILABLE (create if it doesn't exist, §0)
   sensor.py              # C3 — + monthly_peak_kw, effective_peak_limit sensors (RestoreSensor)
-  config_flow.py         # C4 — + peak-protection options, power_respect_peak, ev_soc (if needed)
+  config_flow.py         # C4 — + peak-protection options, power_respect_peak, CONF_CAPTAR_AVAILABLE + its required_when_captar_available guard on ev_soc (if needed)
   engines/
     signal_conditioning.py # E7 — + smooth_net_power if it doesn't already exist (§6.4; shared with R10)
     soc_target.py           # E3 — reuse if it exists, else create per §0/§5
