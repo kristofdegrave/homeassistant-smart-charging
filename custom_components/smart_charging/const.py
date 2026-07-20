@@ -1,5 +1,7 @@
 """Constants for the Smart Charging integration."""
 
+from .modes._amp_step import ROUND_DOWN
+
 DOMAIN = "smart_charging"
 
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
@@ -38,14 +40,14 @@ CONF_GRID_CEILING_A = "grid_ceiling_a"
 CONF_GRID_SAFETY_OFFSET_A = "grid_safety_offset_a"  # C4 safety margin below the fuse rating
 CONF_DEFAULT_TARGET_CURRENT = "default_target_current"
 CONF_CONTROL_INTERVAL_S = "control_interval_s"
-CONF_SMOOTHING_WINDOW = "smoothing_window"
-CONF_SOLAR_START_THRESHOLD_W = "solar_start_threshold_w"
-CONF_SOLAR_ONLY_START_THRESHOLD_W = "solar_only_start_threshold_w"
-CONF_SOLAR_HOLD_MIN = "solar_hold_min"
-CONF_SOLAR_COOLDOWN_MIN = "solar_cooldown_min"
-CONF_SOLAR_ONLY_STRATEGY = "solar_only_strategy"  # "round_up" | "round_down" | "round_nearest"
-CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"
-CONF_DEFAULT_SOC_LIMIT = "default_soc_limit"
+CONF_SMOOTHING_WINDOW = "smoothing_window"  # R10 rolling-window sample count
+CONF_SOLAR_START_THRESHOLD_W = "solar_start_threshold_w"  # R1 (Solar)
+CONF_SOLAR_ONLY_START_THRESHOLD_W = "solar_only_start_threshold_w"  # R2 (SolarOnly)
+CONF_SOLAR_HOLD_MIN = "solar_hold_min"  # R1 post-surplus hold duration
+CONF_SOLAR_COOLDOWN_MIN = "solar_cooldown_min"  # R1/R2 cooldown duration
+CONF_SOLAR_ONLY_STRATEGY = "solar_only_strategy"  # R2: "round_up" | "round_down" | "round_nearest"
+CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"  # R2 round_nearest fractional threshold
+CONF_DEFAULT_SOC_LIMIT = "default_soc_limit"  # R6/R7 default active SOC limit
 
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4
@@ -53,6 +55,6 @@ DEFAULT_SOLAR_START_THRESHOLD_W = 150.0
 DEFAULT_SOLAR_ONLY_START_THRESHOLD_W = 1300.0
 DEFAULT_SOLAR_HOLD_MIN = 5.0
 DEFAULT_SOLAR_COOLDOWN_MIN = 2.0
-DEFAULT_SOLAR_ONLY_STRATEGY = "round_down"
-DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5
-DEFAULT_SOC_LIMIT = 80.0
+DEFAULT_SOLAR_ONLY_STRATEGY = ROUND_DOWN
+DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a percent
+DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by config_flow/number entity
