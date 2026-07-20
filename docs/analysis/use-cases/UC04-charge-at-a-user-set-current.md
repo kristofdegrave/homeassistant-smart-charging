@@ -11,7 +11,7 @@
 
 ## Preconditions
 
-- `Power` is the [active mode](../system-overview.md#ubiquitous-language). (`Power` is available regardless of the solar [capability](../system-overview.md#ubiquitous-language) — R18.)
+- `Power` is the [active mode](../system-overview.md#ubiquitous-language). (`Power` is available regardless of either the solar or CapTar [capability](../system-overview.md#ubiquitous-language) — R18.)
 - The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`).
 - State of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`).
 
@@ -46,7 +46,7 @@ Then the coordinator reduces the charger current — or, on a sustained R3 breac
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Power` mode
-When state of charge reaches the active SOC limit — the plain default, or a leftover solar step-up or solar-reserve cap (R9) from before `Power` was selected (`Power` is Manual-only, see Relationships, so it cannot itself put either in effect)
+When state of charge reaches the active SOC limit — the plain default, or a leftover solar step-up or solar-reserve cap (R9) from before `Power` was selected (see Relationships: `Power`'s own logic never puts either in effect, whether selected under `Manual` or via `Auto`'s deadline-urgency exception)
 Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
 
 ## Postconditions
@@ -69,7 +69,9 @@ grid-supply-ceiling clamp (C4) and the C1 floor/cap always apply regardless of t
 neither clamp — nor the target current itself — can ever exceed the maximum charging current.
 Choosing to run `Power` at all, what target current to set, and whether to accept its cost/peak
 impact are entirely the user's own intent: `Power` is reachable only under the `Manual` profile
-(`resolution-rules.md`, Auto mode-selection) and is never selected by `Auto`. The `stateDiagram-v2`
+and is otherwise never selected by `Auto` (`resolution-rules.md`, Auto mode-selection), except
+for the deliberate deadline-urgency carve-out when the CapTar capability is absent
+([UC05](UC05-guarantee-ready-by-departure.md), R5, R18). The `stateDiagram-v2`
 below is authoritative for the state set. All thresholds/timers are configurable (defaults shown).
 The peak-protection (R3) and grid-supply-ceiling (C4) clamps and the effective-peak-limit
 resolution are applied by the shared mechanism and are referenced, not repeated, here.
@@ -121,9 +123,9 @@ stateDiagram-v2
 
 - **R17** — Power mode (charges at the configurable Power target current — default 10 A — regardless of solar surplus or the low-tariff flag; the configurable peak-protection option; C1 bounds always hold; the active SOC limit still applies).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07, though `Power` itself is Manual-only), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), and voltage-aware conversion (NF4). R10 sensor smoothing does not shape `Power`'s own set-point rule (it always requests the configured target current, unaffected by smoothed readings), but still governs the raw/smoothed split the R3 clamp relies on. `Power`'s availability regardless of the solar capability (R18, Preconditions) is realized in `entity-catalog.md`'s `select.smart_charging_mode` selector note, not in a mode-specific mechanism doc.
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07, though `Power` itself is Manual-only), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), and voltage-aware conversion (NF4). R10 sensor smoothing does not shape `Power`'s own set-point rule (it always requests the configured target current, unaffected by smoothed readings), but still governs the raw/smoothed split the R3 clamp relies on. `Power`'s availability regardless of either capability (R18, Preconditions) is realized in `entity-catalog.md`'s `select.smart_charging_mode` selector note, not in a mode-specific mechanism doc.
 
 ## Relationships
 
-- **Manual-only**: `Power` is a deliberate, user-directed charging-rate choice that conflicts with `Auto`'s cost/deadline balancing, so it is reachable only under the `Manual` profile — `Auto` never selects it (Auto mode-selection, `resolution-rules.md`).
+- **Manual-only, with one deadline-driven exception**: `Power` is a deliberate, user-directed charging-rate choice that conflicts with `Auto`'s cost/deadline balancing, so it is reachable only under the `Manual` profile and `Auto` otherwise never selects it (Auto mode-selection, `resolution-rules.md`) — except as a best-effort deadline-urgency escalation when the CapTar capability is absent ([UC05](UC05-guarantee-ready-by-departure.md), R5, R18).
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit and effective-peak-limit rules in `resolution-rules.md`.
