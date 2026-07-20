@@ -67,17 +67,17 @@ smoke-test earlier (e.g. the config flow), that is called out as a checkpoint, n
 
 ## 3. Structural-decision gate (ADRs before build)
 
-Three structural decisions `system-design.md` surfaces bear on build order. Two — **G-ADR-0010** and
-**G-ADR-0011** — are **not yet decided** and each **blocks** specific tasks; per CLAUDE.md and the
-`write-adr` cycle, the ADR is opened and approved **before** the first task that depends on it —
-never retrofitted, with opening it (via `write-adr`, with its own tracking issue) the first step of
-the phase that would otherwise be blocked. The third, **G-NAMING**, is now **resolved** (see its row)
-and blocks nothing further.
+Three structural decisions `system-design.md` surfaces bear on build order. All three are now
+**resolved** — **G-ADR-0010** and **G-ADR-0011** were decided via `docs/adl/0010-engines-package-home.md`
+and `docs/adl/0011-cross-manager-coordination-via-domain-events.md` (both **Status: Accepted**;
+ADR-0010 records "this ADR closes the G-ADR-0010 gate"), and **G-NAMING** was settled without a new
+ADR (see its row). No structural-decision gate blocks any task below any longer; the table is kept
+as a record of which tasks passed through which gate.
 
-| Gate | Decision | Blocks |
+| Gate | Decision | Blocked (until resolved) |
 | --- | --- | --- |
-| **G-ADR-0010** | *Package home for the eight cross-cutting Engines* — an `engines/` subpackage vs top-level modules. ADR-0002 gives `adapters/`, `modes/`, `profiles/` homes but no home for SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker (system-design §8 follow-up). | Tasks **E3–E9** (the cross-cutting Engines; the eight engines map to E3–E9 because E5 bundles Billing-Protection + the Peak-Demand Tracker). Does **not** block E1 (`modes/`) or E2 (`profiles/`) — those already have ADR-0002 homes. |
-| **G-ADR-0011** | *Cross-Manager coordination via domain events* — fix the publish/subscribe pattern (no direct Manager→Manager calls) and decide, per trigger, between publishing a new domain event and re-deriving the condition per cycle (system-design §4 rule 5). | Tasks **M2** (Vehicle-Limit Manager) and **M3** (Notification Manager), and the event-publish step of **M1** (Coordinator). |
+| **G-ADR-0010** *(resolved — ADR-0010, Accepted)* | *Package home for the eight cross-cutting Engines* — an `engines/` subpackage vs top-level modules. ADR-0002 gave `adapters/`, `modes/`, `profiles/` homes but no home for SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker (system-design §8 follow-up). Decided: a single `engines/` subpackage, one module per engine (Option A). | Tasks **E3–E9** (the cross-cutting Engines; the eight engines map to E3–E9 because E5 bundles Billing-Protection + the Peak-Demand Tracker) — now unblocked. Never blocked E1 (`modes/`) or E2 (`profiles/`) — those already had ADR-0002 homes. |
+| **G-ADR-0011** *(resolved — ADR-0011, Accepted)* | *Cross-Manager coordination via domain events* — fixes the publish/subscribe pattern (no direct Manager→Manager calls) and the per-trigger event-vs-rederive decision (system-design §4 rule 5). | Tasks **M2** (Vehicle-Limit Manager) and **M3** (Notification Manager), and the event-publish step of **M1** (Coordinator) — now unblocked. |
 | **G-NAMING** *(resolved)* | *Owned-entity naming — settled.* ADR-0004 makes owned entities **native platform entities** under the `smart_charging_` prefix (`select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, `select.smart_charging_mode`, `sensor.smart_charging_monthly_peak_kw`, …). The conflict is now resolved the "keep native naming" way: `entity-catalog.md` was conformed to ADR-0004's native names via the analysis review cycle, so **ADR-0004 stands unchanged and no new ADR was needed**. The tasks below cite those native names directly. (The install-time/tuning `sc_`-prefixed *helper* rows are a separate concern deferred to a future catalog reconciliation — not owned control/diagnostic entities, out of scope for this gate.) | **Nothing — resolved.** C2 (owned control entities), C3 (diagnostic output entities), and RA3's owned-entity write path now build against the settled native names. |
 
 ---
@@ -86,10 +86,10 @@ and blocks nothing further.
 
 | Phase | Services (system-design §3) | Gate | Tasks |
 | --- | --- | --- | --- |
-| **0 — Gate** | — | Open/approve ADR-0010, ADR-0011 (owned-entity naming already settled via G-NAMING) | G-ADR-0010, G-ADR-0011 |
+| **0 — Gate** *(done)* | — | ADR-0010, ADR-0011 both Accepted (owned-entity naming already settled via G-NAMING) | G-ADR-0010, G-ADR-0011 |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — | RA1, RA2, RA3, RA4 |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | E3–E9 need ADR-0010 | E1, E2, E3, E4, E5, E6, E7, E8, E9 |
-| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | M2/M3 (and M1's publish step) need ADR-0011 | M1, M2, M3 |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 |
+| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011 resolved) | M1, M2, M3 |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING resolved) | C1, C2, C3, C4, C5, C6 |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
@@ -103,12 +103,15 @@ Each task states: **Service** (system-design §3 role + volatility) · **Builds*
 (what must exist/be stubbed first) · **ADR gate** · **Testable on its own** (the unit boundary,
 per ADR-0009) · **Integration checkpoint** (what proves it is wired to its callers).
 
-### Phase 0 — Structural-decision gate
+### Phase 0 — Structural-decision gate *(done — all three resolved)*
 
-- **G-ADR-0010 — Engines package home.** Run `write-adr`; decide `engines/` subpackage vs top-level
-  modules extending ADR-0002. *Blocks E3–E9.*
-- **G-ADR-0011 — Cross-Manager domain events.** Run `write-adr`; fix the pub/sub pattern and the
-  per-trigger event-vs-rederive decision. *Blocks M1 (publish step), M2, M3.*
+- **G-ADR-0010 — Engines package home (resolved).** Decided via `write-adr`:
+  `docs/adl/0010-engines-package-home.md` (Accepted) — a single `engines/` subpackage, one module
+  per engine, extending ADR-0002. *Was blocking E3–E9; now released.*
+- **G-ADR-0011 — Cross-Manager domain events (resolved).** Decided via `write-adr`:
+  `docs/adl/0011-cross-manager-coordination-via-domain-events.md` (Accepted) — fixes the pub/sub
+  pattern and the per-trigger event-vs-rederive decision. *Was blocking M1 (publish step), M2, M3;
+  now released.*
 - **G-NAMING — Owned-entity naming (resolved).** Settled the "keep native naming" way:
   `entity-catalog.md` was conformed to ADR-0004's native-entity names via the analysis review cycle,
   so ADR-0004 stands unchanged and no new ADR was needed. C2, C3, and RA3's owned-write path build
@@ -183,7 +186,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per mode (NF2); `Off` → 0 A. `Solar`/`SolarOnly` surplus is
   `charger_w − net_w`, not `−net_w` (see [§6 scaffolding-plan reconciliation](#6-reconciliation-with-the-scaffolding-plan)).
-- **Depends on:** the shape of conditioned readings (E8 output) and resolved SOC limit (E3) — as
+- **Depends on:** the shape of conditioned readings (E7 output) and resolved SOC limit (E3) — as
   plain data types; no runtime dependency (Engines don't call Engines).
 - **ADR gate:** none (ADR-0002 home). *Independently testable per mode.*
 - **Testable on its own:** plain pytest per mode, incl. the closed-loop surplus regression (a mode
@@ -452,9 +455,11 @@ a VCS housekeeping choice recorded in that branch's own thread, not here. It is 
   call directions (Resource Access/Engines → Managers → Clients); no task requires a caller of its
   own to exist first. Engines depend on no lower layer (§4 rule 4); Managers depend on no other
   Manager (§4 rule 5) — reflected in M1/M2/M3 having no mutual ordering edge.
-- **Every ADR-worthy decision has a task line before its dependent.** G-ADR-0010 precedes E3–E9;
-  G-ADR-0011 precedes M1's publish step, M2, M3, C6; G-NAMING (now resolved) was settled before
-  C2, C3, and RA3's owned-write path build against the native names. None retrofitted.
+- **Every ADR-worthy decision has a task line before its dependent.** G-ADR-0010 (resolved via
+  ADR-0010) precedes E3–E9; G-ADR-0011 (resolved via ADR-0011) precedes M1's publish step, M2, M3,
+  C6; G-NAMING (resolved without a new ADR) was settled before C2, C3, and RA3's owned-write path
+  build against the native names. None retrofitted; all three gates are now closed, so no task
+  below is currently blocked by a structural-decision gate.
 - **Every service in `system-design.md` §3 appears in exactly one task, none duplicated:**
   Adapters V1 → RA1/RA2 (+RA1-VL in M2); Notification access V11 → RA4; Store V13 → RA3;
   5 Charging-Mode Engines → E1; 2 Profile Engines → E2; SOC-Target → E3; Deadline → E4;
