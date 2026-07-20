@@ -1,5 +1,7 @@
 # homeassistant-smart-charging
 
+<img src="custom_components/smart_charging/brand/logo@2x.png" alt="Smart Charging logo" width="96" height="96" align="right" />
+
 Smart EV charging integration for Home Assistant — solar-first and
 capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 (three-phase later).
