@@ -54,6 +54,13 @@ Always read:
 **(4) Code health**
 - DRY / YAGNI; matches surrounding style and idioms; no dead code, no speculative generality, no
   commented-out blocks. Logging follows the once-per-outage rule (ADR-0007), not per-cycle spam.
+- **No magic strings/numbers:** a fixed set of states/phases/modes compared or assigned as bare
+  string literals (e.g. a dataclass field like `phase: str` checked against `"idle"`/`"charging"`)
+  belongs in an enum (`enum.StrEnum` when the value must still compare/serialize as a plain str) or
+  a named constant — never repeated literals. Exception: a value that must round-trip through HA
+  config-entry storage or `vol.In(...)` as a bare str can use module-level string constants instead
+  of an enum (see `modes/_amp_step.py`'s `ROUND_UP`/`ROUND_DOWN`/`ROUND_NEAREST`) — flag repeated
+  bare literals either way, just not the choice of constants over enum in that specific case.
 
 **(5) Safety not weakened**
 - No clamp, floor/cap, or fault behavior is loosened, short-circuited, or made skippable beyond what
