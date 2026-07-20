@@ -123,8 +123,10 @@ otherwise it is the lesser of the billed peak and the configured maximum.
   peak headroom at all (e.g. `Solar`, `SolarOnly`) draws no differently, so meeting the deadline
   under `Manual` depends entirely on the active mode's own appetite for current, not on this
   rule alone. Under `Auto`, this same ceiling raise combines with a second lever — Auto
-  mode-selection escalating to `Captar` (row 2, below), which always requests the maximum
-  charging current — so `Auto` meets far more deadlines than `Manual` can.
+  mode-selection escalating to `Captar` when the CapTar capability is present, or to `Power` when
+  it is absent (row 2, below, R18) — so `Auto` meets far more deadlines than `Manual` can.
+  `Captar` always requests the maximum charging current, a guarantee; `Power` requests only its
+  configured target current, a best-effort substitute when `Captar` is unavailable.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
   this limit (`effective peak limit − safety margin`); the margin is applied by the peak clamp
   in `control-cycle.md`, not by this rule.
@@ -148,7 +150,7 @@ escalation and revert happen automatically.
 | Priority | Condition | Active mode |
 | --- | --- | --- |
 | 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
-| 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select) | `Captar` (`Auto`'s second urgency lever, alongside the effective-peak-limit raise, above — high tariff and `Captar`'s own maximum-current request) |
+| 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select) | `Captar` (`Auto`'s second urgency lever, alongside the effective-peak-limit raise, above — high tariff and `Captar`'s own maximum-current request); `Power` instead when the CapTar capability is absent (R18, see below) |
 | 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
 | 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set, next-day forecast above threshold, and no departure deadline resolved for tomorrow) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
@@ -175,11 +177,23 @@ escalation and revert happen automatically.
   tomorrow," row 2 (deadline urgency) can never hold at the same time: the reserve decision and
   deadline urgency are mutually exclusive (R9, see UC05).
 - **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
-  matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
-  available regardless of capabilities.
-- **`SolarOnly` and `Power` are never Auto-selected.** They are deliberate user intents —
-  near-zero-grid and charge-now — that conflict with Auto's cost/deadline balancing, so they
-  are reachable only under the `Manual` profile.
+  matches, so Auto falls through to `Captar`/`Off`. `Power` and `Off` are always available
+  regardless of capabilities; `Captar` additionally requires the CapTar capability. When it is
+  absent, row 4 (overnight top-up) never matches — there is no deadline forcing a grid session,
+  so Auto simply forgoes the opportunistic top-up and falls through to row 5 (`Off`), same as
+  when the low-tariff flag itself does not hold. Row 2 (deadline urgency) is the one exception:
+  see the `Power` carve-out below.
+- **Deadline-urgency carve-out: `Auto` selects `Power` when `Captar` is unavailable (R5, R16,
+  R18).** `SolarOnly` and `Power` are otherwise never Auto-selected — they are deliberate user
+  intents (near-zero-grid and charge-now) that conflict with `Auto`'s cost/deadline balancing, so
+  they are normally reachable only under the `Manual` profile. Row 2 is the sole exception: when
+  deadline urgency holds and the CapTar capability is absent, `Auto` has no grid mode left that
+  can request more than its baseline desired current, so it selects `Power` instead of falling
+  through to `Off` — requesting the configured [Power target current](system-overview.md#ubiquitous-language)
+  is a best-effort measure, not a guarantee: unlike `Captar`'s maximum-current request, it does
+  not adapt to how urgent the deadline is and may still leave it unmet, in which case R5's
+  unreachable-deadline notification still applies. Reverts the same way row 2 always does, once
+  urgency no longer holds.
 - **`Manual` needs no table:** under `Manual` the active mode is whatever the user or an
   external source sets directly (R16, NF1); this rule does not apply.
 

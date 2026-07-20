@@ -68,6 +68,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_boolean.sc_solar_available` | config | install-time | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user |
+| `input_boolean.sc_captar_available` | config | install-time | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 
@@ -267,12 +268,15 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
   `sc_solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
   required, and the `Auto` rule skips the solar mode accordingly.
+- **Captar-dependent entities are conditional on the CapTar capability (R18).** When
+  `sc_captar_available` is off, `sc_captar_cooldown_min` is not required, and the `Auto` rule skips
+  `Captar` accordingly.
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
-  manual selection; `Captar`, `Power`, and `Off` are always offered. This is where R18's
-  manual-availability criterion is realized (the `Manual` profile itself needs no rule — the user
-  sets the mode directly, and `sensor.smart_charging_active_mode` reflects that selection as the
-  resolved active mode).
+  manual selection; without the CapTar capability, `Captar` is not offered for manual selection.
+  `Power` and `Off` are always offered. This is where R18's manual-availability criterion is
+  realized (the `Manual` profile itself needs no rule — the user sets the mode directly, and
+  `sensor.smart_charging_active_mode` reflects that selection as the resolved active mode).
 - The `<dow>` row stands for seven concrete entities
   (`time.smart_charging_departure_mon` … `time.smart_charging_departure_sun`),
   collapsed to keep the table readable.
@@ -285,7 +289,7 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
   (per ADR-0004) moved only the integration's owned **control and diagnostic** entities to native
   `smart_charging_` platform entities (the `select`/`number`/`time`/`switch`/`sensor`/`binary_sensor`
   rows above). Every install-time / tuning threshold and the capability flag are **unchanged here**
-  and stay as `input_*.sc_*` helpers (e.g. `sc_solar_available`, `sc_control_interval_s`,
+  and stay as `input_*.sc_*` helpers (e.g. `sc_solar_available`, `sc_captar_available`, `sc_control_interval_s`,
   `sc_grid_supply_ceiling_a`, `sc_max_peak_kw`, `sc_min_current_a`/`sc_max_current_a`, the
   `sc_solar_*` thresholds, `sc_prompt_timeout_h`, `sc_reminder_lead_h`, `sc_evening_prompt_*`).
   A few runtime user-set values also intentionally stay `sc_` for now because ADR-0004 does not
