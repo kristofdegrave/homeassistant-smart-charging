@@ -175,8 +175,9 @@ escalation and revert happen automatically.
   tomorrow," row 2 (deadline urgency) can never hold at the same time: the reserve decision and
   deadline urgency are mutually exclusive (R9, see UC05).
 - **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
-  matches, so Auto falls through to `Captar`/`Off`; `Captar`, `Power`, and `Off` are always
-  available regardless of capabilities.
+  matches, so Auto falls through to `Captar`/`Off`. `Power` and `Off` are always available
+  regardless of capabilities; `Captar` additionally requires the CapTar capability, and when it
+  is absent Auto falls through to `Off` instead.
 - **`SolarOnly` and `Power` are never Auto-selected.** They are deliberate user intents —
   near-zero-grid and charge-now — that conflict with Auto's cost/deadline balancing, so they
   are reachable only under the `Manual` profile.

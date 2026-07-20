@@ -241,7 +241,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Under `Auto`, `Captar` is selected for cost-efficient overnight grid top-up only while the low-tariff flag is active (Auto mode-selection row 4, `resolution-rules.md`); the low-tariff preference belongs to this selection, not to `Captar` mode itself (R4) — a manually selected `Captar` session charges regardless of tariff.
 - [ ] Under `Auto`, when its own solar-reserve conditions hold (R9), `Auto` also lowers the active SOC limit (R7) and declines to select a mode for opportunistic overnight top-up — coordinating the limit alongside the mode is `Auto`'s job, not a rule the selected mode enforces; under `Manual` this coordination never happens.
 - [ ] Under `Auto`, a mode that is unavailable given the installation's capabilities (R18) is never selected.
-- [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required.
+- [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required. When the CapTar capability is absent, `Auto` has no grid mode to escalate to and a deadline may be missed (R18) — the household must use `Manual`/`Power` to charge from the grid on such an installation.
 - [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
 
 ---
@@ -263,15 +263,17 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R18 — Configurable installation capabilities
 
 **Priority:** Should
-**What:** The available charging modes and the solar-dependent behaviours adapt to the hardware the installation actually has, declared as configurable capabilities, so the system is fully usable on an installation without a solar array.
+**What:** The available charging modes and the solar-dependent behaviours adapt to the hardware and billing arrangement the installation actually has, declared as configurable capabilities, so the system remains usable under `Manual` on an installation without a solar array or without capacity-tariff billing. Without the solar capability the system remains fully usable, including under `Auto` (a grid mode, `Captar`, is still reachable). Without the CapTar capability, `Auto`'s grid-charging escalation (R5, R16) is unavailable — the household falls back to `Manual`/`Power` to charge from the grid on such an installation.
 
 **Acceptance criteria:**
 
 - [ ] The presence of a solar installation (the solar capability) is user-configurable, defaulting to present.
-- [ ] When the solar capability is absent, the `Solar` and `SolarOnly` modes are not offered for manual selection and are never chosen by the `Auto` profile (R16); the `Captar`, `Power`, and `Off` modes remain available.
+- [ ] When the solar capability is absent, the `Solar` and `SolarOnly` modes are not offered for manual selection and are never chosen by the `Auto` profile (R16); the `Captar` (subject to the CapTar capability), `Power`, and `Off` modes remain available.
 - [ ] When the solar capability is absent, the solar SOC step-up (R8) and the solar-reserve overnight cap (R9) do not apply, and the solar-specific inputs (solar power, solar forecast) are not required to be configured.
+- [ ] Whether the installation bills against a capacity tariff (the CapTar capability) is user-configurable, defaulting to present.
+- [ ] When the CapTar capability is absent, the `Captar` mode is not offered for manual selection and is never chosen by the `Auto` profile (R16); the `Solar` (subject to the solar capability), `SolarOnly` (subject to the solar capability), `Power`, and `Off` modes remain available. `Auto` then has no grid mode to escalate to under deadline urgency (R5) or for overnight top-up; the household must use `Manual`/`Power` to charge from the grid.
 - [ ] Changing a capability takes effect within the next control cycle.
-- [ ] The capability model is extensible: additional hardware capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on that hardware, without altering existing modes (NF2). Capabilities beyond solar are out of scope this release.
+- [ ] The capability model is extensible: additional hardware or billing capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on it, without altering existing modes (NF2). Capabilities beyond solar and CapTar are out of scope this release.
 
 ---
 
