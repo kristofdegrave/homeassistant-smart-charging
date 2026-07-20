@@ -11,11 +11,18 @@ from custom_components.smart_charging.const import (
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
+    CONF_DEFAULT_SOC_LIMIT,
+    CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
+    CONF_SOLAR_INSTALLED,
+    CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_START_THRESHOLD_W,
     CONF_STATUS_TRANSLATION,
     DEFAULT_CONTROL_INTERVAL_S,
+    DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_ONLY_STRATEGY,
     DOMAIN,
 )
 
@@ -27,6 +34,7 @@ USER_INPUT = {
     "net_power_entity": "sensor.net_power",
     "charger_power_entity": "sensor.charger_power",
     "grid_voltage_entity": "sensor.grid_voltage",
+    CONF_EV_SOC_ENTITY: "sensor.ev_soc",
     "nominal_voltage": 230.0,
     "min_current": 6.0,
     "max_current": 16.0,
@@ -34,6 +42,26 @@ USER_INPUT = {
     CONF_GRID_SAFETY_OFFSET_A: 2.0,
     "default_target_current": 10.0,
 }
+
+
+async def _run_user_flow(hass, overrides=None, omit=None):
+    user_input = dict(USER_INPUT)
+    user_input.update(overrides or {})
+    for key in omit or ():
+        user_input.pop(key, None)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    return await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+
+
+async def _create_entry(hass, overrides=None):
+    result = await _run_user_flow(hass, overrides=overrides)
+    return result["result"]
+
+
+def _current_options(entry):
+    return dict(entry.options)
 
 
 async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
@@ -58,6 +86,8 @@ async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
     assert result["options"][CONF_GRID_CEILING_A] == 25.0
     assert result["options"][CONF_GRID_SAFETY_OFFSET_A] == 2.0
     assert result["options"][CONF_CONTROL_INTERVAL_S] == DEFAULT_CONTROL_INTERVAL_S
+    # ev_soc is a DATA field (RA1 extension) -- lands alongside the other role mappings.
+    assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
 
 
 async def test_overlapping_state_charging_wins(hass):
@@ -189,3 +219,58 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
     assert entry.data[CONF_STATUS_TRANSLATION] == {"Connected": "connected", "Charging": "charging"}
     assert dict(entry.options) == original_options
+
+
+async def test_ev_soc_is_optional_when_solar_not_installed(hass):
+    # Design doc §3/§8: with the Solar-installed toggle left False (its default), ev_soc
+    # is optional -- an install without it still produces a valid entry.
+    result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_EV_SOC_ENTITY not in result["data"]
+    assert result["data"][CONF_SOLAR_INSTALLED] is False
+
+
+async def test_solar_installed_true_requires_ev_soc(hass):
+    # Design doc §3: flipping Solar installed to True without mapping ev_soc must be
+    # rejected by the flow itself (config-time guard), not deferred to a runtime fault.
+    result = await _run_user_flow(
+        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_EV_SOC_ENTITY]
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
+
+
+async def test_solar_installed_true_with_ev_soc_succeeds(hass):
+    result = await _run_user_flow(
+        hass,
+        overrides={CONF_SOLAR_INSTALLED: True, CONF_EV_SOC_ENTITY: "sensor.ev_soc"},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_SOLAR_INSTALLED] is True
+    assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
+
+
+async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
+    # An entry created before this task predates CONF_SOLAR_INSTALLED entirely --
+    # reading it must default to False, not KeyError (design doc §8).
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={k: v for k, v in USER_INPUT.items() if k not in (CONF_SOLAR_INSTALLED,)},
+        options={},
+    )
+    assert entry.data.get(CONF_SOLAR_INSTALLED, False) is False
+
+
+async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
+    result = await _run_user_flow(hass)
+    assert result["options"][CONF_SOLAR_ONLY_STRATEGY] == DEFAULT_SOLAR_ONLY_STRATEGY
+    assert result["options"][CONF_DEFAULT_SOC_LIMIT] == DEFAULT_SOC_LIMIT
+
+
+async def test_options_flow_edits_solar_thresholds(hass):
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**_current_options(entry), CONF_SOLAR_START_THRESHOLD_W: 200.0}
+    )
+    assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
