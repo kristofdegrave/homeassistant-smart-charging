@@ -63,7 +63,9 @@ docs/adl/
 - **Analysis work** (`docs/analysis/`) → use **Opus**
 - **System/project design** (`docs/design/`) → use **Opus**
 - **Architecture decisions** (`docs/adl/`) → use **Opus**
+- **Implementation specs / TDD plans** (`docs/plans/`) → use **Opus**
 - **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
+- **All review agents** (`*-reviewer`, e.g. analysis-reviewer, adr-reviewer, system-design-reviewer, impl-spec-reviewer, test-reviewer, code-reviewer) → use **Opus**, regardless of the artifact type being reviewed
 
 ---
 
