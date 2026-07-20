@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.2.0...v0.2.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **ci:** let release-please own tagging + Release creation ([#184](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/184)) ([#185](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/185)) ([b3ff5e9](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/b3ff5e96296776a9307c126bf132555def62b8f6))
+
 ## [0.2.0](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.1.0...v0.2.0) (2026-07-20)
 
 
