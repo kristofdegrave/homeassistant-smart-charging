@@ -183,7 +183,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per mode (NF2); `Off` → 0 A. `Solar`/`SolarOnly` surplus is
   `charger_w − net_w`, not `−net_w` (see [§6 scaffolding-plan reconciliation](#6-reconciliation-with-the-scaffolding-plan)).
-- **Depends on:** the shape of conditioned readings (E8 output) and resolved SOC limit (E3) — as
+- **Depends on:** the shape of conditioned readings (E7 output) and resolved SOC limit (E3) — as
   plain data types; no runtime dependency (Engines don't call Engines).
 - **ADR gate:** none (ADR-0002 home). *Independently testable per mode.*
 - **Testable on its own:** plain pytest per mode, incl. the closed-loop surplus regression (a mode
