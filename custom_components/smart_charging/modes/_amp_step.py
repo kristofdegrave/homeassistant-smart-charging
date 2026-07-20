@@ -17,11 +17,11 @@ def round_amp_step(ideal_a: float, strategy: str, midpoint: float = 0.5) -> floa
     fractional threshold at/above which the value rounds up (R2, "pendel" case).
     """
     if strategy == "round_up":
-        return math.ceil(ideal_a)
+        return float(math.ceil(ideal_a))
     if strategy == "round_down":
-        return math.floor(ideal_a)
+        return float(math.floor(ideal_a))
     if strategy == "round_nearest":
         floor_a = math.floor(ideal_a)
         fraction = ideal_a - floor_a
-        return floor_a + 1.0 if fraction >= midpoint else floor_a
+        return float(floor_a + 1) if fraction >= midpoint else float(floor_a)
     raise ValueError(f"unknown amp-step rounding strategy: {strategy!r}")

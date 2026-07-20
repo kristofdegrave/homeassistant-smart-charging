@@ -1,5 +1,7 @@
 """Plain-pytest tests for the shared amp-step rounding helper."""
 
+import pytest
+
 from custom_components.smart_charging.modes._amp_step import round_amp_step
 
 
@@ -34,3 +36,14 @@ def test_round_nearest_custom_midpoint():
     # A 30% midpoint means anything below ideal-floor+0.3 rounds down, at/above rounds up.
     assert round_amp_step(10.2, strategy="round_nearest", midpoint=0.3) == 10.0
     assert round_amp_step(10.4, strategy="round_nearest", midpoint=0.3) == 11.0
+
+
+def test_whole_number_ideal_is_unchanged_by_every_strategy():
+    assert round_amp_step(10.0, strategy="round_up") == 10.0
+    assert round_amp_step(10.0, strategy="round_down") == 10.0
+    assert round_amp_step(10.0, strategy="round_nearest", midpoint=0.5) == 10.0
+
+
+def test_unknown_strategy_raises():
+    with pytest.raises(ValueError):
+        round_amp_step(10.4, strategy="bogus")
