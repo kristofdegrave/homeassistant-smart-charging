@@ -1,8 +1,8 @@
 """Signal-Conditioning engine (E7). Pure — no HA imports.
 
-MVP slice: NF4 supply-voltage resolution only. Missing/unhealthy grid voltage is
-NOT a fault (ADR-0007) — it falls back to the configured nominal voltage.
-R10 smoothing of net/solar power is deferred to a later slice.
+NF4 supply-voltage resolution, plus R10 net-import smoothing. `smooth_net_power`
+smooths `net_w` only; `solar_power` smoothing is deferred to whichever later slice
+first consumes that role (see design doc §6).
 """
 
 
@@ -11,3 +11,16 @@ def resolve_voltage(measured: float | None, nominal: float) -> float:
     if measured is None or measured <= 0:
         return nominal
     return measured
+
+
+def smooth_net_power(
+    raw_w: float, window: tuple[float, ...], size: int
+) -> tuple[float, tuple[float, ...]]:
+    """Fold `raw_w` into a rolling window and return (smoothed_mean, new_window) (R10).
+
+    Averages over however many samples are collected so far when the window isn't
+    yet full (start-up/restart edge case). The window is a plain parameter -- the
+    caller (M1) threads it across cycles; this function holds no state itself.
+    """
+    new_window = (*window, raw_w)[-size:]
+    return sum(new_window) / len(new_window), new_window
