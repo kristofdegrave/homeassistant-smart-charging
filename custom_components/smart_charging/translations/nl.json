@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Charging instellen",
+        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en stel de initiële drempelwaarden in. Alle velden zijn verplicht, behalve de netspanning-entiteit.",
+        "data": {
+          "charger_current_entity": "Stroomregeling-entiteit van de lader",
+          "charger_status_entity": "Statusentiteit van de lader",
+          "connected_states": "Statussen die \"verbonden\" betekenen (kommagescheiden)",
+          "charging_states": "Statussen die \"aan het laden\" betekenen (kommagescheiden)",
+          "net_power_entity": "Netto vermogen-entiteit",
+          "charger_power_entity": "Vermogen-entiteit van de lader",
+          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
+          "nominal_voltage": "Nominale netspanning (V)",
+          "min_current": "Minimale laadstroom (A)",
+          "max_current": "Maximale laadstroom (A)",
+          "grid_ceiling_a": "Netgrens (A)",
+          "grid_safety_offset_a": "Veiligheidsmarge net (A)",
+          "default_target_current": "Standaard doelstroom (A)"
+        }
+      },
+      "reconfigure": {
+        "title": "Smart Charging herconfigureren",
+        "description": "Werk bij welke entiteit welke rol vervult. Wijzigingen worden opnieuw gevalideerd en herladen de integratie.",
+        "data": {
+          "charger_current_entity": "Stroomregeling-entiteit van de lader",
+          "charger_status_entity": "Statusentiteit van de lader",
+          "connected_states": "Statussen die \"verbonden\" betekenen (kommagescheiden)",
+          "charging_states": "Statussen die \"aan het laden\" betekenen (kommagescheiden)",
+          "net_power_entity": "Netto vermogen-entiteit",
+          "charger_power_entity": "Vermogen-entiteit van de lader",
+          "grid_voltage_entity": "Netspanning-entiteit (optioneel)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Charging-opties",
+        "description": "Pas drempelwaarden en standaardinstellingen op elk moment aan.",
+        "data": {
+          "nominal_voltage": "Nominale netspanning (V)",
+          "min_current": "Minimale laadstroom (A)",
+          "max_current": "Maximale laadstroom (A)",
+          "grid_ceiling_a": "Netgrens (A)",
+          "grid_safety_offset_a": "Veiligheidsmarge net (A)",
+          "default_target_current": "Standaard doelstroom (A)",
+          "control_interval_s": "Regelinterval (s)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "number": {
+      "target_current": {
+        "name": "Doelstroom"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status"
+      }
+    }
+  }
+}
