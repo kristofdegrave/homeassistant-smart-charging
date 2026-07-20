@@ -50,10 +50,11 @@ Use-cases plug into two shared mechanism documents rather than restating them:
   under every profile, letting a mode whose own request was clamped below the normal ceiling
   (e.g. `Captar`, `Power` with its peak-protection option on) draw more, up to whatever it
   already requests; a mode whose request never depended on peak headroom (`Solar`, `SolarOnly`,
-  or `Power` with that option off) draws no differently. Under `Auto` only, a second lever adds:
-  mode-selection escalates to `Captar` (`resolution-rules.md`, Auto mode-selection row 2), whose
-  own set-point rule always requests the maximum charging current — so `Auto` meets far more
-  deadlines than `Manual` can, since `Manual` never gets that second lever.
+  or `Power` with that option off) draws no differently. Under `Auto`, a second lever adds:
+  mode-selection escalates to `Captar` when the CapTar capability is present, or to `Power`
+  (a best-effort exception to `Power` otherwise never being Auto-selected) when it is absent
+  (`resolution-rules.md`, Auto mode-selection row 2, R18) — so `Auto` meets far more deadlines
+  than `Manual` can, since `Manual` never gets that second lever.
 - **The `Auto` profile is not a use-case.** Choosing which mode is active is a priority-ordered
   decision with no human pursuing a goal, so it lives as the Auto mode-selection table in
   [`resolution-rules.md`](../resolution-rules.md). The `Manual` profile needs no document — the

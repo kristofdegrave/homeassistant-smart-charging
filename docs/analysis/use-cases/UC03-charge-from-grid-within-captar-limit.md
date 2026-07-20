@@ -11,7 +11,7 @@
 
 ## Preconditions
 
-- `Captar` is the [active mode](../system-overview.md#ubiquitous-language). (`Captar` is available regardless of the solar [capability](../system-overview.md#ubiquitous-language) — R18.)
+- `Captar` is the [active mode](../system-overview.md#ubiquitous-language). (`Captar` is available regardless of the solar [capability](../system-overview.md#ubiquitous-language), but requires the CapTar capability to be present — R18.)
 - The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`).
 - State of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`).
 

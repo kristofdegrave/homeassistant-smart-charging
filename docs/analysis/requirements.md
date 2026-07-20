@@ -75,7 +75,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] When the projected charge at the current rate would fall short of the active SOC limit by departure time, the system raises the effective peak limit it is willing to create, up to the configured maximum peak (default 4 kW) — accepting a higher monthly peak demand. This is the only lever available under the `Manual` profile: it never raises what the active mode itself requests, so meeting the deadline depends on whether that mode's own request, once unclamped, is enough.
-- [ ] Under the `Auto` profile only, the system additionally escalates current draw to the maximum charging current for as long as the deadline is at risk, reverting once it is no longer needed.
+- [ ] Under the `Auto` profile only, and when the CapTar capability is present (R18), the system additionally escalates current draw to the maximum charging current for as long as the deadline is at risk, reverting once it is no longer needed. When the CapTar capability is absent, `Auto` instead escalates to the `Power` mode's configured target current (R17) — a best-effort measure, not a guarantee, since it does not adapt to how urgent the deadline is; if that is still insufficient, the unreachable-deadline notification below applies.
 - [ ] High-tariff charging is permitted while meeting a deadline — this is R5's primary purpose: cost optimisation yields to the deadline.
 - [ ] The safety margin is always respected: net import stays at or below the effective peak limit in force minus the safety margin, even while meeting a deadline.
 - [ ] The active SOC limit itself is never raised by deadline logic — when a lower limit is in force (e.g. a solar step-up not yet reset), the system only accelerates toward that lower limit. This never involves the solar-reserve cap (R9): a departure deadline and that cap are mutually exclusive.
@@ -237,11 +237,11 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 - [ ] The active profile is selected via a single profile selector; the built-in profiles are `Manual` and `Auto`. A profile sets the active mode and is not itself a mode.
 - [ ] Under `Manual`, the system makes no automatic mode changes — the active mode is whatever the user or an external source sets (NF1).
-- [ ] Under `Auto`, the system sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, SOC, departure deadline, home-day flag).
+- [ ] Under `Auto`, the system sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, CapTar availability, SOC, departure deadline, home-day flag).
 - [ ] Under `Auto`, `Captar` is selected for cost-efficient overnight grid top-up only while the low-tariff flag is active (Auto mode-selection row 4, `resolution-rules.md`); the low-tariff preference belongs to this selection, not to `Captar` mode itself (R4) — a manually selected `Captar` session charges regardless of tariff.
 - [ ] Under `Auto`, when its own solar-reserve conditions hold (R9), `Auto` also lowers the active SOC limit (R7) and declines to select a mode for opportunistic overnight top-up — coordinating the limit alongside the mode is `Auto`'s job, not a rule the selected mode enforces; under `Manual` this coordination never happens.
 - [ ] Under `Auto`, a mode that is unavailable given the installation's capabilities (R18) is never selected.
-- [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required.
+- [ ] Under `Auto`, the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required. When the CapTar capability is absent, `Auto` escalates to `Power` instead (R18) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — and still reverts once the deadline is no longer at risk.
 - [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
 
 ---
@@ -263,15 +263,17 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R18 — Configurable installation capabilities
 
 **Priority:** Should
-**What:** The available charging modes and the solar-dependent behaviours adapt to the hardware the installation actually has, declared as configurable capabilities, so the system is fully usable on an installation without a solar array.
+**What:** The available charging modes and the solar-dependent behaviours adapt to the hardware and billing arrangement the installation actually has, declared as configurable capabilities, so the system remains fully usable, under both `Manual` and `Auto`, on an installation without a solar array or without capacity-tariff billing. Without the solar capability alone, a grid mode (`Captar`) is still reachable under `Auto`, since the CapTar capability is unaffected. Without the CapTar capability, `Auto`'s deadline-urgency escalation (R5) falls back to `Power` instead of `Captar` (R16) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — while `Auto`'s opportunistic overnight top-up (R16 row 4) simply does not occur, since there is no deadline forcing it; this also applies when both capabilities are absent.
 
 **Acceptance criteria:**
 
 - [ ] The presence of a solar installation (the solar capability) is user-configurable, defaulting to present.
-- [ ] When the solar capability is absent, the `Solar` and `SolarOnly` modes are not offered for manual selection and are never chosen by the `Auto` profile (R16); the `Captar`, `Power`, and `Off` modes remain available.
+- [ ] When the solar capability is absent, the `Solar` and `SolarOnly` modes are not offered for manual selection and are never chosen by the `Auto` profile (R16); the `Captar` (subject to the CapTar capability), `Power`, and `Off` modes remain available.
 - [ ] When the solar capability is absent, the solar SOC step-up (R8) and the solar-reserve overnight cap (R9) do not apply, and the solar-specific inputs (solar power, solar forecast) are not required to be configured.
+- [ ] Whether the installation bills against a capacity tariff (the CapTar capability) is user-configurable, defaulting to present.
+- [ ] When the CapTar capability is absent, the `Captar` mode is not offered for manual selection; the `Solar` (subject to the solar capability), `SolarOnly` (subject to the solar capability), `Power`, and `Off` modes remain available for manual selection. `Auto` never chooses `Captar` for opportunistic overnight top-up in this case (R16 row 4 simply does not occur), but does select `Power` — otherwise never an `Auto`-chosen mode — as a best-effort deadline-urgency escalation (R5, R16).
 - [ ] Changing a capability takes effect within the next control cycle.
-- [ ] The capability model is extensible: additional hardware capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on that hardware, without altering existing modes (NF2). Capabilities beyond solar are out of scope this release.
+- [ ] The capability model is extensible: additional hardware or billing capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on it, without altering existing modes (NF2). Capabilities beyond solar and CapTar are out of scope this release.
 
 ---
 
