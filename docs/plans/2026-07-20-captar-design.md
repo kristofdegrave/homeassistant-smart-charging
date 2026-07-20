@@ -38,11 +38,17 @@ Power MVP yet:
 | `ev_soc` adapter role (optional at the factory level) | RA1 |
 
 As of this writing **neither slice has shipped code** — only Solar/SolarOnly has a written spec
-(`2026-07-20-solar-solaronly-design.md` / `-solar-solaronly.md`), not yet implemented. Per the
-project's direction: **this design stays independent of Solar/SolarOnly** (it does not assume that
-spec's tasks ran first, and does not block on issue #191/#192) **but must not duplicate the shared
-pieces** — whichever epic's implementation actually lands first creates them; the second reuses and
-extends what already exists rather than re-authoring it.
+(`2026-07-20-solar-solaronly-design.md` / `-solar-solaronly.md`), not yet implemented, and **not yet
+merged to `main`** — it lives on the unmerged `feature/solar-solaronly` branch (issue #191). This
+document is authored from `main`, so those files are not present in this branch's working tree; the
+signatures cited below (`resolve_active_soc_limit`, `ModeSelect`/`MODE_OPTIONS`) were confirmed against
+`feature/solar-solaronly`'s actual doc content at authoring time, not assumed. **If that branch's spec
+changes before either epic is implemented, the two specs' shared signatures must be re-diffed** — this
+document does not itself keep them in sync. Per the project's direction: **this design stays
+independent of Solar/SolarOnly** (it does not assume that spec's tasks ran first, and does not block on
+issue #191/#192) **but must not duplicate the shared pieces** — whichever epic's implementation
+actually lands first creates them; the second reuses and extends what already exists rather than
+re-authoring it.
 
 Concretely, every task below that touches a shared piece is written as **"extend if it exists, create
 if it doesn't"**:
@@ -182,9 +188,11 @@ the limit is where it is" (R7).
 
 ## 6. Billing-Protection Engine + Peak-Demand Tracker (E5)
 
-The core, non-shared deliverable of this epic. Two pure/stateful pieces, one module
-(`engines/billing_protection.py`, per ADR-0010's "one module per engine" — `system-design.md` §3 files
-both under the single V6 service).
+The core, non-shared deliverable of this epic. Two pieces, **two sibling modules** — ADR-0010's
+Decision is explicit that "the V6 pair (Billing-Protection + Peak-Demand Tracker) stays two sibling
+modules in `engines/`; their relationship is recorded by project-plan task E5 bundling them, not by a
+directory": `engines/billing_protection.py` (the effective-peak-limit resolution and the R3 clamp,
+§6.1–§6.2) and `engines/peak_demand_tracker.py` (§6.4), both named directly in ADR-0010's file list.
 
 ### 6.1 Effective peak limit (`resolve_effective_peak_limit`)
 
@@ -217,10 +225,14 @@ def apply_peak_clamp(
 ) -> tuple[float, "PeakBreachTracker", bool]:
     """Return (clamped_current, new_tracker, force_stop).
 
-    `force_stop=True` only once the clamped current has been held at (or forced below)
+    `force_stop=True` only once the MODE'S OWN REQUEST has been at least `min_a`
+    (it is actually trying to charge) while the available headroom stayed below
     `min_a` continuously for `grace_period_s` (R3's grace period) -- the coordinator
-    then commands 0 A and drives Captar's own state to cooldown (see 6.3); a momentary
-    breach only returns a reduced current, force_stop=False, same cycle.
+    then commands 0 A and drives Captar's own state to cooldown (see 6.3). A `desired_current`
+    already below `min_a` (Off, an idle/cooldown/SOC-gated mode, or a disconnect --
+    all of which request 0 A) never starts or extends the grace timer, regardless of
+    headroom -- R3's own wording is explicit that the stop condition requires the
+    charger to be "already at the minimum charging current," not merely idle.
     """
 ```
 
@@ -236,17 +248,24 @@ headroom_a = floor(((effective_peak_limit_kw * 1000) - safety_margin_w - baselin
 clamped    = min(desired_current, headroom_a)
 ```
 
-where `baseline_w = net_w - charger_w` (the same raw baseline E6 already solves from). If
-`clamped < min_a`:
-- and `tracker.breached_since is None` → start the grace timer (`breached_since = now`); this cycle
-  still returns whatever `clamped` resolves to (E8 downstream floors it to 0 A this cycle regardless —
-  the *grace period* only governs whether the *cooldown* engages, not whether this cycle's current is
-  reduced, per R3's own "momentary breach does not stop charging" wording — a reduction is not a stop).
-- and `now - tracker.breached_since >= grace_period_s` → `force_stop=True`, `clamped=0.0`, tracker
+where `baseline_w = net_w - charger_w` (the same raw baseline E6 already solves from). The breach
+timer is gated on the **request**, not the clamped result: only when `desired_current >= min_a` (the
+mode wants to charge, not merely idling) **and** `headroom_a < min_a` (there isn't room to honor even
+the minimum) does a breach start/continue —
+
+- if `tracker.breached_since is None` → start the grace timer (`breached_since = now`); this cycle
+  still returns `clamped` (E8 downstream floors it to 0 A this cycle regardless — the *grace period*
+  only governs whether the *cooldown* engages, not whether this cycle's current is reduced, per R3's
+  own "momentary breach does not stop charging" wording — a reduction is not a stop).
+- if `now - tracker.breached_since >= grace_period_s` → `force_stop=True`, `clamped=0.0`, tracker
   resets (`breached_since=None`) — the coordinator forces `Captar`'s own state to `cooldown(now)`.
 
-If `clamped >= min_a` at any point, the tracker resets (`breached_since=None`) — the breach did not
-persist.
+Otherwise (the mode isn't requesting at least `min_a`, or headroom is sufficient) the tracker resets
+(`breached_since=None`). This request-gated framing is also what keeps a disconnect or an SOC-gated
+stop from ever tripping `force_stop`: both branches set `desired_current = 0` before this clamp runs, so
+the breach condition's first half (`desired_current >= min_a`) never holds — the coordinator's own
+`idle()`/disconnect reset (§8) is never fought by a stray breach timer left over from a prior charging
+cycle.
 
 ### 6.3 `Captar` mode engine (E1 — UC03)
 
@@ -289,59 +308,84 @@ def step(
     return max_a, state  # "charging" -- coordinator overrides to cooldown on a forced stop
 ```
 
-### 6.4 Peak-Demand Tracker (`update_monthly_peak_demand`)
+### 6.4 Peak-Demand Tracker (`engines/peak_demand_tracker.py`)
 
 The glossary is explicit that `monthly peak demand` is "the highest **15-minute average** net import,"
 not an instantaneous raw reading — a materially larger, differently-purposed rolling window than R10's
-smoothing window (default *N*=4 cycles, ≈40 s, for charging-rate responsiveness). Per §0's shared-piece
-convention, this reuses R10's `smooth_net_power(raw_w, window, size)` helper from
-`engines/signal_conditioning.py` (E7) if Solar/SolarOnly's implementation already added it — with its
-own, much larger `size` (≈`900 / control_interval_s` samples, e.g. 90 at the default 10 s interval) —
-rather than duplicating a rolling-mean implementation; if that helper doesn't exist yet, this slice adds
-it to E7 directly (same function, same file — E7 already exists, shipping only NF4 voltage resolution
-so far), and Solar/SolarOnly's implementer reuses it for R10 instead of writing their own.
+smoothing window (default *N*=4 cycles, ≈40 s, for charging-rate responsiveness).
+
+**No engine calls another engine** (`system-design.md` §4 rule 4; ADR-0010: "no engine imports …
+another Engine"), so this module does **not** import E7's `smooth_net_power` itself. Instead the
+coordinator (M1) — which already owns and threads E7's smoothing window as a parameter — calls
+`smooth_net_power` a **second time**, with its own, much larger `size` (≈`900 / control_interval_s`
+samples, e.g. 90 at the default 10 s interval) and its **own** window parameter, distinct from R10's
+short window, and passes the already-smoothed kilowatt value into the tracker below. Reusing the E7
+*helper function* across two Manager-owned call sites (one per window size) is not an engine→engine
+call — it is M1 calling E7 twice, exactly as it already calls E7 once for R10; per §0, this reuses
+`smooth_net_power` if Solar/SolarOnly's implementation already added it to
+`engines/signal_conditioning.py`, or this slice adds it there if not.
 
 ```python
 def update_monthly_peak_demand(
-    net_w: float,
-    window: tuple[float, ...],
+    smoothed_kw: float,
     current_month: tuple[int, int],
     tracked_kw: float,
     tracked_month: tuple[int, int] | None,
-    window_size: int,
-) -> tuple[float, tuple[float, ...], tuple[int, int]]:
-    """Return (monthly_peak_kw, new_window, new_tracked_month).
+) -> tuple[float, tuple[int, int]]:
+    """Return (monthly_peak_kw, new_tracked_month).
 
-    `current_month` is `(year, month)`, computed by the coordinator from real wall-clock
-    time (this function stays pure -- it never calls `datetime.now()` itself, per the
-    project's "now is injected" convention). A month change resets the running peak to
-    this cycle's own smoothed value (not to 0), since a fresh month starts accumulating
-    immediately, not from an artificial floor.
+    Takes the ALREADY-SMOOTHED (15-minute-average) net import in kW -- the
+    coordinator (M1) is responsible for calling `signal_conditioning.smooth_net_power`
+    with its own dedicated window before calling this function (see above); this
+    module never touches a raw watt reading or a smoothing window itself, keeping
+    it a trivial, engine-purity-respecting running-max. `current_month` is
+    `(year, month)`, computed by the coordinator from real wall-clock time (this
+    function stays pure -- it never calls `datetime.now()` itself, per the
+    project's "now is injected" convention). A month change resets the running
+    peak to this cycle's own smoothed value (not to 0), since a fresh month starts
+    accumulating immediately, not from an artificial floor.
     """
-    smoothed_w, new_window = smooth_net_power(net_w, window, size=window_size)
-    smoothed_kw = smoothed_w / 1000.0
     if tracked_month != current_month:
-        return smoothed_kw, new_window, current_month
-    return max(tracked_kw, smoothed_kw), new_window, current_month
+        return smoothed_kw, current_month
+    return max(tracked_kw, smoothed_kw), current_month
 ```
 
+**Month rollover also resets the smoothing window, not just the tracked value.** Because the 15-minute
+window is threaded by the coordinator (not this module), M1 is responsible for resetting its dedicated
+peak-tracking window to `()` in the same cycle it detects `current_month != tracked_month`, **before**
+calling `smooth_net_power` — otherwise the "reset" would still be a 15-minute average partly built from
+the *previous* month's raw samples, contradicting the "resets at the start of each month" glossary
+wording. §8's control-cycle sketch and the paired plan's Task 5.1 both call this out explicitly at the
+coordinator call site, since it is a coordinator responsibility, not something this pure function can
+enforce on its own.
+
 **Bootstrap edge case, named rather than hidden:** on a brand-new install (or the first cycle of a new
-month), `monthly_peak_demand` starts at that cycle's own smoothed reading, not an arbitrary floor —
-so the effective peak limit tracks the household's actual baseline from cycle one instead of clamping
-everything to 0 A until a peak "accrues." This differs from initializing at 0 kW (which would make R3
-maximally restrictive for however long it takes the household's own baseline load to be sampled) and
-matches the glossary's "peak demand" framing: the *first* sample already establishes a peak.
-Because the R3 clamp itself always keeps charging at or below `effective_peak_limit − safety_margin`,
-controlled charging structurally cannot be the cause of a new recorded peak except when household
-baseline load alone already exceeds the previous one — the tracker needs no charging-aware
-special-casing to keep this invariant (R3's own acceptance criteria, §"Requirements satisfied").
+month), `monthly_peak_demand` starts at that cycle's own smoothed reading rather than an arbitrary
+floor — closer to the glossary's "peak demand" framing (the *first* sample already establishes a peak)
+than initializing at 0 kW would be. This is **not** the same as guaranteeing charging starts
+immediately on a fresh install: with a flat household baseline, `effective_peak_limit ≈ baseline`, and
+subtracting the safety margin can still leave zero or negative headroom until either a genuinely higher
+peak accrues (from a household appliance, not from clamped charging — see below) or the baseline itself
+dips. Guaranteeing the "starts within one cycle" UC03 success criterion under a cold-start,
+already-at-baseline peak is what the deadline-urgency raise to `maximum_peak` would provide (R5/UC05,
+deferred, §9) — this slice does not claim to solve that bootstrap case, only to avoid the strictly worse
+0 kW floor. Because the R3 clamp itself always keeps charging at or below
+`effective_peak_limit − safety_margin`, controlled charging structurally cannot be the cause of a new
+recorded peak except when household baseline load alone already exceeds the previous one — the tracker
+needs no charging-aware special-casing to keep this invariant (R3's own acceptance criteria,
+§"Requirements satisfied").
 
 **Persistence.** `sensor.smart_charging_monthly_peak_kw` must survive an HA restart mid-month (§2.4).
 Per the `RestoreSensor` pattern the other owned entities already use, the sensor restores its last
 native value **and** a `period_month` extra-state-attribute (`"YYYY-MM"`) on `async_added_to_hass`,
 feeding both back into the coordinator's tracker state as the initial `(tracked_kw, tracked_month)` —
 the same "state is a parameter, never HA-held" rule E7's smoothing window and the per-mode state
-dataclasses already follow, just seeded from restore-state instead of a hardcoded initial value.
+dataclasses already follow, just seeded from restore-state instead of a hardcoded initial value. The
+15-minute smoothing *window* itself is **not** persisted (the same known limitation R10's own window
+already has after a restart — `2026-07-20-solar-solaronly-design.md` §6's "smoothing window not yet
+full" edge case): a post-restart cycle rebuilds it from scratch, so a spike in the first ~15 minutes
+after a restart is under-smoothed relative to steady-state — an accepted, pre-existing limitation of
+the rolling-mean approach, not a new gap this slice introduces.
 
 ---
 
@@ -394,7 +438,11 @@ read net_power, charger_power, grid_voltage
   a None reading there is the ADR-0007 fault signal for THIS cycle only**
 resolve voltage (grid_voltage None → nominal, NF4)
 **resolve active SOC limit ← number.smart_charging_soc_limit_override (E3, §5)**
-**update the Peak-Demand Tracker ← net_power (raw), current (year, month) (E5 §6.4);
+**current_month = (now.year, now.month); if current_month != peak_tracked_month:
+  reset the dedicated 15-min peak window to () (§6.4's month-rollover reset)**
+**smooth net_power into the dedicated 15-min peak window (E7's smooth_net_power, its
+  own window/size -- distinct from R10's short window) → smoothed_peak_kw**
+**update the Peak-Demand Tracker ← smoothed_peak_kw, current_month (E5 §6.4);
   materialize sensor.smart_charging_monthly_peak_kw**
 **resolve effective peak limit ← monthly_peak_kw, sc_max_peak_kw (E5 §6.1);
   materialize sensor.smart_charging_effective_peak_limit**
@@ -416,6 +464,10 @@ elif active_mode == Captar:
 
 **if not (active_mode == "Power" and not power_respect_peak):                 # §7, R17**
     **desired, peak_tracker, force_stop = apply_peak_clamp(desired, ..., peak_tracker, now)   # E5 §6.2**
+    **# force_stop can only be True when `desired` (the mode's own request, above) was**
+    **# already >= min_a -- Off/idle/cooldown/SOC-gated/disconnected branches all set**
+    **# desired = 0 before this point, so they can never trip force_stop (§6.2's**
+    **# request-gated framing) -- no extra guard needed here beyond the mode check below.**
     **if force_stop and active_mode == "Captar":**
         **desired = 0.0; state["Captar"] = CaptarState("cooldown", now)**
 
@@ -425,7 +477,6 @@ desired = min(desired, headroom_a)
 desired = clamp(desired, min, max)                                      # floor/cap invariant — E8, unchanged
 
 write charger_current ← desired
-materialize sensor.smart_charging_active_mode ← active_mode             # if not already added by §0
 ```
 
 - **The Peak-Demand Tracker and effective-peak-limit resolution run every cycle, regardless of active
@@ -440,6 +491,12 @@ materialize sensor.smart_charging_active_mode ← active_mode             # if n
   note). There is no mode-switch-away-and-back test needed beyond the existing per-mode state-dict
   pattern (§0) — switching away from `Captar` and back finds `CaptarState.idle()` if the dict was
   reset, same as `Solar`/`SolarOnly`.
+- **A disconnect can never be spuriously overridden back into cooldown by the peak clamp.** The
+  disconnect branch sets `desired = 0` before E5 runs; per §6.2's request-gated breach condition
+  (`desired_current >= min_a`), a request of `0` can never start or extend the grace timer, so
+  `force_stop` cannot fire on the same cycle a disconnect already reset `Captar` to `idle()` — the two
+  branches cannot fight each other. The same reasoning covers the SOC-gated-stop branch, which also
+  sets `desired = 0` before E5 runs.
 
 ---
 
@@ -509,15 +566,17 @@ custom_components/smart_charging/
   engines/
     signal_conditioning.py # E7 — + smooth_net_power if it doesn't already exist (§6.4; shared with R10)
     soc_target.py           # E3 — reuse if it exists, else create per §0/§5
-    billing_protection.py   # E5 — new: resolve_effective_peak_limit, apply_peak_clamp,
-                             #      PeakBreachTracker, update_monthly_peak_demand
+    billing_protection.py   # E5 (part 1/2) — new: resolve_effective_peak_limit, apply_peak_clamp,
+                             #      PeakBreachTracker (ADR-0010 names this module directly)
+    peak_demand_tracker.py  # E5 (part 2/2) — new: update_monthly_peak_demand (ADR-0010: a
+                             #      sibling module, not folded into billing_protection.py)
   modes/
     captar.py              # E1 — new: CaptarState, step()
 ```
 
 `tests/` mirrors 1:1 per ADR-0002/0009 (`tests/engines/test_billing_protection.py`,
-`tests/modes/test_captar.py`, plus HA-harness additions to `test_coordinator.py`,
-`test_config_flow.py`, `test_select.py`/`test_sensor.py`).
+`tests/engines/test_peak_demand_tracker.py`, `tests/modes/test_captar.py`, plus HA-harness additions to
+`test_coordinator.py`, `test_config_flow.py`, `test_select.py`/`test_sensor.py`).
 
 ---
 
