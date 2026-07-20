@@ -1,9 +1,12 @@
 name: release-please
 
 # Opens/updates a release PR from conventional commits on main (version bump in
-# manifest.json + CHANGELOG.md). On merge, tags the release but does not publish
-# a GitHub Release itself (skip-github-release in release-please-config.json) —
-# the tag push triggers release.yml (#131), which validates and publishes.
+# manifest.json + CHANGELOG.md). On merge, tags the release and publishes the
+# GitHub Release itself — skip-github-release was tried (#132) so release.yml
+# (#131) would own publishing, but that option leaves release-please unable to
+# ever mark the merged PR as tagged (googleapis/release-please#1561), which
+# permanently blocks all future release PRs (#184). release.yml now only
+# guards the release retroactively instead of creating it.
 
 on:
   push:

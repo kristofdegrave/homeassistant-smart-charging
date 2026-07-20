@@ -1,10 +1,13 @@
 name: Release
 
-# Publishes the GitHub Release HACS distributes from. Triggered by any version
-# tag push (whether created by release-please (#132) or pushed manually).
-# Gates on CI (#128) having passed for the tagged commit — main has no
+# Guards the GitHub Release HACS distributes from. Triggered by any version tag
+# push (release-please (#132) now tags AND publishes the Release itself — see
+# release-please.yml and #184 for why it must own publishing). This workflow
+# gates on CI (#128) having passed for the tagged commit — main has no
 # required-status-check branch protection, so this is the enforcement point —
-# then validates manifest.json's version matches the tag before publishing.
+# and validates manifest.json's version matches the tag. If either check
+# fails, it deletes the Release release-please just published so a broken
+# build is never left distributable via HACS.
 
 on:
   push:
@@ -15,45 +18,52 @@ permissions:
   contents: write
 
 jobs:
-  publish:
+  guard:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - name: Verify CI passed for this commit
+      - name: Verify CI passed and manifest version matches tag
+        id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           required_jobs="lint test hassfest hacs"
           conclusions=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
             --jq '.check_runs[] | select(.name=="lint" or .name=="test" or .name=="hassfest" or .name=="hacs") | "\(.name)=\(.conclusion)"')
 
+          failed=0
           for job in $required_jobs; do
             line=$(echo "$conclusions" | grep "^${job}=" || true)
             if [ -z "$line" ]; then
               echo "CI job '$job' has not run for ${{ github.sha }}" >&2
-              exit 1
-            fi
-            if [ "${line#*=}" != "success" ]; then
+              failed=1
+            elif [ "${line#*=}" != "success" ]; then
               echo "CI job '$job' did not succeed for ${{ github.sha }}: $line" >&2
-              exit 1
+              failed=1
             fi
           done
-          echo "All CI jobs succeeded for ${{ github.sha }}."
 
-      - name: Validate manifest.json version matches tag
-        run: |
-          set -euo pipefail
           tag_version="${GITHUB_REF_NAME#v}"
           manifest_version=$(python3 -c "import json; print(json.load(open('custom_components/smart_charging/manifest.json'))['version'])")
           if [ "$tag_version" != "$manifest_version" ]; then
             echo "Tag ${GITHUB_REF_NAME} does not match manifest.json version ${manifest_version}" >&2
-            exit 1
+            failed=1
           fi
-          echo "Tag ${GITHUB_REF_NAME} matches manifest.json version ${manifest_version}."
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
+          if [ "$failed" != "0" ]; then
+            echo "failed=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "All CI jobs succeeded and manifest.json matches ${GITHUB_REF_NAME}."
+          fi
+
+      - name: Delete Release published from a failing commit
+        if: steps.check.outputs.failed == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete "${GITHUB_REF_NAME}" --yes --cleanup-tag
+          echo "Deleted Release/tag ${GITHUB_REF_NAME}: failed CI-gate or manifest-version check." >&2
+          exit 1
