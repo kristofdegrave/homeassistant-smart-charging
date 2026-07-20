@@ -274,3 +274,53 @@ async def test_options_flow_edits_solar_thresholds(hass):
         result["flow_id"], {**_current_options(entry), CONF_SOLAR_START_THRESHOLD_W: 200.0}
     )
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
+
+
+async def test_solar_installed_error_preserves_previously_entered_values(hass):
+    # The re-shown form on the required_when_solar_installed rejection must not drop
+    # what the user already typed -- otherwise flipping the toggle back on and refilling
+    # every mapping is the only way to recover (a real UX regression, not just cosmetic).
+    result = await _run_user_flow(
+        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_EV_SOC_ENTITY]
+    )
+    assert result["type"] == FlowResultType.FORM
+
+    suggested = {key.schema: key.description for key in result["data_schema"].schema}
+    assert suggested[CONF_CHARGER_CURRENT_ENTITY]["suggested_value"] == "number.charger_current"
+    assert suggested[CONF_SOLAR_INSTALLED]["suggested_value"] is True
+
+
+async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
+    # Design doc §3: the config-time guard must hold on reconfigure too -- otherwise a
+    # user can bypass it entirely by flipping the toggle through Reconfigure instead of
+    # the initial install form.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+            "charger_status_entity": "sensor.evse",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_STATUS_TRANSLATION: {"Connected": "connected", "Charging": "charging"},
+        },
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    new_mapping = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+        "charger_status_entity": "sensor.evse",
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+        "net_power_entity": "sensor.net_power",
+        "charger_power_entity": "sensor.charger_power",
+        CONF_SOLAR_INSTALLED: True,
+    }
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
