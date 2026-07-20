@@ -4,12 +4,14 @@
 
 **Goal:** Add `Solar` and `SolarOnly` as selectable, working charging modes alongside the existing
 `Power` mode — smoothed-surplus-driven charging (UC01/UC02), gated by an active SOC limit, selectable
-via a new `select.smart_charging_mode` entity.
+via a new `select.smart_charging_mode` entity whose option list is itself gated by a new
+**Solar installed** config-time toggle (R18, scoped — design doc §3/§4).
 
 **Architecture:** Extends the Power-mode MVP's coordinator (M1) with: net-import smoothing (E7
 extension), an SOC-Target resolver scoped to the current `Manual`-only system (E3, new), two new
 stateful mode engines (`modes/solar.py`, `modes/solar_only.py` — E1), a shared amp-step rounding
-helper, a new `ev_soc` adapter role (RA1 extension), and two new owned entities
+helper, a new `ev_soc` adapter role (RA1 extension), a new `CONF_SOLAR_INSTALLED` data-bucket toggle
+that gates `ev_soc`'s requiredness and the mode selector's options, and two new owned entities
 (`select.smart_charging_mode`, `number.smart_charging_soc_limit_override` — C2 extension) plus a
 read-only `sensor.smart_charging_active_mode`. Grid-safety (E6) and floor/cap (E8) are reused
 unchanged. See the design doc: [`2026-07-20-solar-solaronly-design.md`](2026-07-20-solar-solaronly-design.md).
@@ -728,6 +730,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```python
 # --- DATA addition ---
 # CONF_EV_SOC_ENTITY already added in Task 2.1.
+CONF_SOLAR_INSTALLED = "solar_installed"  # bool, default False -- design doc §3, R18 scoped
 
 # --- OPTIONS additions ---
 CONF_SMOOTHING_WINDOW = "smoothing_window"
@@ -768,13 +771,40 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 `CONF_EV_SOC_ENTITY: "sensor.ev_soc"` to the submitted `user_input`, assert it lands in `data`), plus:
 
 ```python
-async def test_ev_soc_is_optional_in_the_install_form(hass):
-    # Design doc §3/§8: ev_soc is optional so an install without it -- or an eventual
-    # reconfigure that omits it -- still produces a valid entry; only selecting
-    # Solar/SolarOnly without it faults at runtime (Task 5.1), not at config time.
+async def test_ev_soc_is_optional_when_solar_not_installed(hass):
+    # Design doc §3/§8: with the Solar-installed toggle left False (its default), ev_soc
+    # is optional -- an install without it still produces a valid entry.
     result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_EV_SOC_ENTITY not in result["data"]
+    assert result["data"][CONF_SOLAR_INSTALLED] is False
+
+
+async def test_solar_installed_true_requires_ev_soc(hass):
+    # Design doc §3: flipping Solar installed to True without mapping ev_soc must be
+    # rejected by the flow itself (config-time guard), not deferred to a runtime fault.
+    result = await _run_user_flow(
+        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_EV_SOC_ENTITY]
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
+
+
+async def test_solar_installed_true_with_ev_soc_succeeds(hass):
+    result = await _run_user_flow(
+        hass,
+        overrides={CONF_SOLAR_INSTALLED: True, CONF_EV_SOC_ENTITY: "sensor.ev_soc"},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_SOLAR_INSTALLED] is True
+    assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
+
+
+async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
+    # An entry created before this task predates CONF_SOLAR_INSTALLED entirely --
+    # reading it must default to False, not KeyError (design doc §8).
+    entry = MockConfigEntry(domain=DOMAIN, data=_data(), options=_options())
+    assert entry.data.get(CONF_SOLAR_INSTALLED, False) is False
 
 
 async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
@@ -796,25 +826,31 @@ async def test_options_flow_edits_solar_thresholds(hass):
 
 **Step 2: Run** → FAIL (fields don't exist yet).
 
-**Step 3: Implement** — add `vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor")` to
-`MAPPING_SCHEMA` (optional, not required — §3/Task 2.1's reasoning: existing entries and a
-solar-less installation both need a valid entry without it); add the eight new options fields
-(with their `DEFAULT_*` constants) to `OPTION_KEYS` and `_threshold_schema()`;
-`CONF_SOLAR_ONLY_STRATEGY` uses `vol.In(["round_up", "round_down", "round_nearest"])`.
+**Step 3: Implement** — add `vol.Optional(CONF_SOLAR_INSTALLED, default=False): bool` and
+`vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor")` to `MAPPING_SCHEMA`; in the flow's
+`async_step_user` validation (same place the existing required-role checks live), reject the
+submission with `errors[CONF_EV_SOC_ENTITY] = "required_when_solar_installed"` when
+`user_input[CONF_SOLAR_INSTALLED]` is `True` and `CONF_EV_SOC_ENTITY` is missing/blank — `ev_soc`
+itself stays optional at the schema level (§3/Task 2.1's reasoning: existing entries and a
+solar-less installation both need a valid entry without it); the toggle is what turns that into a
+hard requirement, not the schema. Add the eight new options fields (with their `DEFAULT_*`
+constants) to `OPTION_KEYS` and `_threshold_schema()`; `CONF_SOLAR_ONLY_STRATEGY` uses
+`vol.In(["round_up", "round_down", "round_nearest"])`.
 
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
 git add custom_components/smart_charging/config_flow.py tests/test_config_flow.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: extend config/options flow with ev_soc + Solar/SolarOnly settings
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: extend config/options flow with Solar-installed toggle, ev_soc + Solar/SolarOnly settings
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 3 checkpoint:** a full install flow produces a valid entry whether or not `ev_soc` is
-> mapped, with every new threshold + `default_soc_limit` seeded into options; the options flow
-> round-trips each new field without touching data; no migration is needed for an entry that
-> predates these fields (options reads fall back to their `DEFAULT_*` constant).
+> mapped, provided `Solar installed` stays `False`; flipping it `True` without `ev_soc` is rejected
+> by the form itself; every new threshold + `default_soc_limit` seeds into options; the options
+> flow round-trips each new field without touching data; no migration is needed for an entry that
+> predates these fields (`data`/`options` reads fall back to their default).
 
 ---
 
@@ -851,7 +887,7 @@ class _StubCoordinator:
 
 async def test_select_option_pushes_to_coordinator_and_resets_state(hass):
     coord = _StubCoordinator()
-    entity = ModeSelect(entry_id="abc", coordinator=coord)
+    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
     await entity.async_select_option("Solar")
     assert coord.active_mode == "Solar"
     assert coord.refreshed is True
@@ -862,6 +898,18 @@ async def test_restores_last_selection(hass):
     # Simulate a restored state of "SolarOnly" via async_get_last_state -- follow the
     # RestoreEntity pattern used by TargetCurrentNumber (number.py) for a select entity.
     ...
+
+
+def test_options_are_off_power_only_when_solar_not_installed():
+    # Design doc §3/§4: Solar installed defaults to False, so the selector must not
+    # offer Solar/SolarOnly at all until the toggle is flipped.
+    entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=False)
+    assert entity.options == ["Off", "Power"]
+
+
+def test_options_include_solar_modes_when_solar_installed():
+    entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=True)
+    assert entity.options == ["Off", "Power", "Solar", "SolarOnly"]
 ```
 
 **Step 2: Run** → `ImportError`.
@@ -879,28 +927,32 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import CONF_SOLAR_INSTALLED, DOMAIN
 from .entity import SmartChargingEntity
 
-MODE_OPTIONS = ["Off", "Power", "Solar", "SolarOnly"]
+BASE_MODE_OPTIONS = ["Off", "Power"]
+SOLAR_MODE_OPTIONS = ["Solar", "SolarOnly"]
 
 
 class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
-    """User-set active charging mode. Static option list this slice (R18 deferred)."""
+    """User-set active charging mode. Option list is gated by Solar installed (design doc §3/§4,
+    R18 scoped) -- Solar/SolarOnly are only offered when that config-time toggle is True."""
 
     _attr_translation_key = "mode"
-    _attr_options = MODE_OPTIONS
 
-    def __init__(self, entry_id: str, coordinator) -> None:
+    def __init__(self, entry_id: str, coordinator, solar_installed: bool) -> None:
         super().__init__(entry_id)
         self._coordinator = coordinator
         self._attr_unique_id = f"{entry_id}_mode"
+        self._attr_options = (
+            BASE_MODE_OPTIONS + SOLAR_MODE_OPTIONS if solar_installed else list(BASE_MODE_OPTIONS)
+        )
         self._attr_current_option = "Off"
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
-        if last is not None and last.state in MODE_OPTIONS:
+        if last is not None and last.state in self._attr_options:
             self._attr_current_option = last.state
         self._coordinator.active_mode = self._attr_current_option
 
@@ -915,14 +967,17 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    async_add_entities([ModeSelect(entry_id=entry.entry_id, coordinator=coordinator)])
+    solar_installed = entry.data.get(CONF_SOLAR_INSTALLED, False)
+    async_add_entities(
+        [ModeSelect(entry_id=entry.entry_id, coordinator=coordinator, solar_installed=solar_installed)]
+    )
 ```
 
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
 git add custom_components/smart_charging/select.py tests/test_select.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add select.smart_charging_mode entity (C2)
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: add select.smart_charging_mode entity, gated by Solar installed (C2)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```

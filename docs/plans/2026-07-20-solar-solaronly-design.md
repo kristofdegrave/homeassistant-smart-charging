@@ -35,18 +35,21 @@ explicitly deferred:
 | *Smoothed* net import (R10) — the trigger and set-point both key on smoothed surplus, not raw | `engines/signal_conditioning.py` (E7) does voltage (NF4) only; its own docstring defers R10 | **In scope** — add net-import smoothing to E7 |
 | An active SOC limit to stop at (R7) | Doesn't exist; Power MVP charges regardless of SOC (documented v1 deviation) | **In scope** — add E3, scoped to what R7 actually reduces to under `Manual` (see §5) |
 | A way to pick `Solar`/`SolarOnly` as the active mode | No selector; coordinator hardcodes `Power` | **In scope** — add a minimal `select.smart_charging_mode` |
+| Gating `Solar`/`SolarOnly`'s availability so a solar-less install never sees them (R18) | No capability concept exists at all | **In scope, scoped** — a manual install-time toggle (§3/§4); automatic capability detection stays deferred (§8) |
 
 Picking these up now (rather than re-deferring them again) is what makes this slice a **working**
-mode instead of another set of pure functions nothing calls. §6 lists what is still explicitly
+mode instead of another set of pure functions nothing calls. §8 lists what is still explicitly
 deferred — Auto/profiles, deadline, peak/billing beyond the existing grid ceiling, notifications,
-vehicle-limit sync, capability gating — none of which UC01/UC02 need to run correctly under `Manual`.
+vehicle-limit sync, automatic capability detection — none of which UC01/UC02 need to run correctly
+under `Manual`.
 
 ---
 
 ## 2. Success criteria (what "works" means)
 
-1. A `select.smart_charging_mode` entity appears with options `Off`, `Power`, `Solar`, `SolarOnly`
-   (restore-state; `Off` if never set) and is adjustable from the HA UI.
+1. A `select.smart_charging_mode` entity appears (restore-state; `Off` if never set) and is
+   adjustable from the HA UI, with options `Off`, `Power`, `Solar`, `SolarOnly` when **Solar
+   installed** (§3) is `True`, or just `Off`, `Power` when it is `False` (criterion 7).
 2. A `number.smart_charging_soc_limit_override` entity appears (restore-state, 50–100%, default 80%,
    per R6) and is adjustable anytime.
 3. With `Solar` active, a car connected, and SOC below the override: charging starts within one
@@ -64,6 +67,11 @@ vehicle-limit sync, capability gating — none of which UC01/UC02 need to run co
    charging regardless of SOC (`2026-07-18-power-mvp-design.md` §6). The SOC gate added by this
    slice (§6 below) applies **only** to `Solar`/`SolarOnly`; `ev_soc` is read every cycle but is a
    required (fault-on-`None`) role only while one of those two modes is active.
+7. With the **Solar installed** toggle (§3) `False` (the default for both new and existing config
+   entries — §8), `select.smart_charging_mode` only ever offers `Off`/`Power`, `ev_soc` and every
+   solar-specific options field are hidden in the options flow, and none of criteria 3–6 apply
+   because `Solar`/`SolarOnly` can never become the active mode. Flipping it to `True` reveals those
+   fields and appends `Solar`/`SolarOnly` to the selector's options on the next options-flow save.
 
 ---
 
@@ -74,7 +82,8 @@ thresholds/defaults in **options**).
 
 | Field | Bucket | Role/Notes |
 | --- | --- | --- |
-| **EV state-of-charge entity** (r) | data — new adapter role `ev_soc`, **optional** at the factory level (mirrors `grid_voltage`'s pattern) | RA1 extension. Not configuring it leaves `ev_soc` absent from the built adapter set — harmless for `Off`/`Power` (unchanged), but selecting `Solar`/`SolarOnly` without it is a fault every cycle (missing role for a mode that needs it), surfaced via the existing status sensor. This also means an **existing Power-MVP config entry loads unchanged** without a migration (§9 note) — it simply has no `ev_soc` role until reconfigured. |
+| **Solar installed** (toggle) | data — new boolean, `CONF_SOLAR_INSTALLED`, default **`False`** | R18, scoped. Gates everything else in this table: while `False`, the options flow hides `ev_soc` and every solar-specific field below, and `select.smart_charging_mode` never offers `Solar`/`SolarOnly` (§4). Flipping it `True` requires `ev_soc` in the same options-flow save (config-flow validation, not a runtime fault) and reveals the rest of this table. |
+| **EV state-of-charge entity** (r) | data — new adapter role `ev_soc`, **optional** at the factory level (mirrors `grid_voltage`'s pattern), but **required by the options flow whenever Solar installed is `True`** | RA1 extension. The factory-level optionality is defense-in-depth (e.g. the mapped entity later becomes unavailable), not the primary guard — the options flow is what actually prevents saving `Solar installed = True` with no `ev_soc` mapped. `Off`/`Power` never read the role regardless of the toggle. |
 | **Smoothing window size** *N* | options | Default **4** samples (R10). Reused by any future smoothed input; this slice is its first consumer. |
 | **Solar start threshold** | options | `Solar`'s start/resume threshold, default **150 W** (R1). |
 | **SolarOnly start threshold** | options | `SolarOnly`'s start/resume threshold, default **1300 W** (R2). |
@@ -84,16 +93,19 @@ thresholds/defaults in **options**).
 | **SolarOnly rounding midpoint** | options | Only meaningful for `round_nearest`, default **50%** (R2). |
 | **Default SOC limit** | seeds the owned entity | Initial value of `number.smart_charging_soc_limit_override`, default **80%**, range 50–100% (R6). |
 
-No new **data**-bucket capability flag: R18 (capability gating) is deferred (§6) — `Solar`/`SolarOnly`
-are unconditionally offered in the selector this slice.
+This is a **scoped** slice of R18, not the full capability-gating Engine (E9, §8): the gate is a
+single manual toggle the installer sets, not automatic detection of what hardware is present.
 
 ---
 
 ## 4. Runtime surface (owned entities)
 
-- **`select.smart_charging_mode`** — new (C2). Options `Off`, `Power`, `Solar`, `SolarOnly`
-  (capability-gated option list is deferred — see §6; the list is static this slice). Restore-state.
-  Replaces the coordinator's hardcoded Power dispatch.
+- **`select.smart_charging_mode`** — new (C2). Options are always `Off`, `Power`; `Solar` and
+  `SolarOnly` are appended only when **Solar installed** (§3) is `True` — the option list is derived
+  from config-entry data at entity setup, not runtime-adjustable, so changing the toggle takes effect
+  on the next options-flow save/reload (the existing config-flow reload pattern). Restore-state.
+  Replaces the coordinator's hardcoded Power dispatch. (Automatic — as opposed to toggle-driven —
+  capability detection is still deferred; see §8.)
 - **`number.smart_charging_soc_limit_override`** — new (C2), mirrors the existing
   `number.smart_charging_target_current` pattern (restore-state, bounds 50–100, default from options).
 - **`sensor.smart_charging_active_mode`** — new, read-only (C3-shaped; `control-cycle.md` step 4
@@ -211,6 +223,10 @@ only)/`cooldown`.
   it fixed to `round_up`; `SolarOnly` calls it with the configured strategy. Sharing the arithmetic
   doesn't couple the two modes' state machines (NF2 — each mode module is still independently
   testable and swappable).
+- **Mode availability (R18) is gated at config/entity-setup time, not in this control cycle.** When
+  **Solar installed** is `False`, `active_mode` read from `select.smart_charging_mode` can only ever
+  be `Off`/`Power` — the `elif active_mode in (Solar, SolarOnly)` branch above is simply unreachable,
+  by construction of the selector's option list (§4), not by an extra runtime check here.
 
 ---
 
@@ -218,6 +234,7 @@ only)/`cooldown`.
 
 | Component | Full-design service | Test boundary (ADR-0009) |
 | --- | --- | --- |
+| **Solar installed** toggle (§3) | **C4** (extension) | HA harness |
 | `ev_soc` adapter role | Adapters — **RA1** (extension) | HA harness |
 | net-import smoothing (R10) | Signal-Conditioning — **E7** (extension; voltage slice already shipped) | plain pytest |
 | resolve active SOC limit (§5) | SOC-Target — **E3** (new, scoped to row 3) | plain pytest |
@@ -244,9 +261,12 @@ Out of scope for this slice, each a later slice of `project-plan.md` — none is
 - **Solar step-up (R8, UC06)** — R7 rows 1–2 in general (§5 explains why row-3-only is not a hack
   given what else is/isn't built).
 - **Deadline Engine (E4), R5** and the `Manual`-lever peak-limit raise — UC05.
-- **Capability gating (E9, R18)** — the mode selector's option list is static; a solar-less
-  installation still sees `Solar`/`SolarOnly` offered. Acceptable because R18 is `Should`, not `Must`,
-  and the default installation has solar.
+- **Automatic capability detection (E9, R18 beyond this slice's toggle).** This slice resolves R18
+  for the "does the installer say solar is present" case with one manual toggle (§3/§4). What's still
+  deferred is *deriving* that fact automatically — e.g. from whether a solar-surplus-relevant entity
+  is mapped, or gating other future modes (`Captar`) the same way — which would need an actual E9
+  capability-registry concept, not a single boolean. Acceptable to defer because R18 is `Should`, not
+  `Must`, and a manual toggle already prevents a solar-less install from seeing non-functional modes.
 - **`Captar` mode and the peak/billing Engine (E5)** — its own epic, #190.
 - **`sensor.smart_charging_active_soc_limit` and `ActiveSocLimitChanged`** (§4) — no consumer exists
   yet (UC09/M2 out of scope).
@@ -258,6 +278,9 @@ Out of scope for this slice, each a later slice of `project-plan.md` — none is
   `SolarOnly` without it faults every cycle until reconfigured). The eight new **options** keys are
   read with their `DEFAULT_*` fallback (`options.get(KEY, DEFAULT_...)`), the same pattern already
   used for every existing option — an old entry that predates these keys simply gets the defaults.
+  `CONF_SOLAR_INSTALLED` is read the same way from **data** (`data.get(CONF_SOLAR_INSTALLED, False)`);
+  an existing Power-MVP entry predates the key entirely, so it reads as `False` — the selector stays
+  `Off`/`Power`-only, matching that entry's current (hardcoded-`Power`) behavior exactly.
 
 ---
 
@@ -269,7 +292,10 @@ Out of scope for this slice, each a later slice of `project-plan.md` — none is
   net-import smoothing window (window-not-yet-full at startup; how a single-cycle spike moves the
   mean by `1/N` rather than tracking it fully — R10 dampens, it does not reject, a single-cycle spike);
   and `resolve_active_soc_limit`'s row-3 lookup.
-- **HA harness** for the HA-coupled pieces: the `ev_soc` adapter's edge cases (missing/unavailable,
+- **HA harness** for the HA-coupled pieces: the **Solar installed** toggle — options-flow validation
+  rejecting `True` with no `ev_soc` mapped, an existing pre-toggle config entry defaulting to `False`,
+  and `select.smart_charging_mode`'s option list reflecting the toggle (`Off`/`Power` only when
+  `False`; all four options when `True`); the `ev_soc` adapter's edge cases (missing/unavailable,
   and its absence being harmless for `Off`/`Power` but a fault for `Solar`/`SolarOnly`); an existing
   Power-MVP config entry loading unchanged with no `ev_soc` role configured; `select.smart_charging_mode`
   and `number.smart_charging_soc_limit_override` restore-state and bounds; the coordinator dispatching
@@ -290,12 +316,12 @@ Out of scope for this slice, each a later slice of `project-plan.md` — none is
 
 ```text
 custom_components/smart_charging/
-  const.py              # + ev_soc CONF key, new options keys
+  const.py              # + CONF_SOLAR_INSTALLED, ev_soc CONF key, new options keys
   coordinator.py         # M1 — mode dispatch, SOC gate, state reset, smoothing wiring
-  select.py              # C2 — select.smart_charging_mode (new platform file)
+  select.py              # C2 — select.smart_charging_mode, options list from CONF_SOLAR_INSTALLED (new platform file)
   number.py              # C2 — + soc_limit_override entity
   sensor.py               # C2/C3 — + active_mode sensor
-  config_flow.py          # C4 — + ev_soc mapping, new options fields
+  config_flow.py          # C4 — + solar_installed toggle, ev_soc mapping (required iff toggle True), new options fields
   adapters/               # RA1 — + ev_soc role (no new file; factory extension)
   engines/
     signal_conditioning.py # E7 — + net_w smoothing (extends existing module)
