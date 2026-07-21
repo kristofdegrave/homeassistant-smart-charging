@@ -7,6 +7,8 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
+    CONF_CAPTAR_AVAILABLE,
+    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
@@ -16,11 +18,20 @@ from custom_components.smart_charging.const import (
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
+    CONF_MAX_PEAK_KW,
+    CONF_PEAK_GRACE_MIN,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_STATUS_TRANSLATION,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
+    DEFAULT_MAX_PEAK_KW,
+    DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_ONLY_STRATEGY,
     DOMAIN,
@@ -211,6 +222,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
         CONF_CHARGING_STATES: "Charging",
         "net_power_entity": "sensor.net_power",
         "charger_power_entity": "sensor.charger_power",
+        CONF_CAPTAR_AVAILABLE: False,
     }
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.ABORT
@@ -223,8 +235,11 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
 
 async def test_ev_soc_is_optional_when_solar_not_installed(hass):
     # Design doc §3/§8: with the Solar-installed toggle left False (its default), ev_soc
-    # is optional -- an install without it still produces a valid entry.
-    result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
+    # is optional -- an install without it still produces a valid entry. CapTar available
+    # must also be turned off, since its own guard requires ev_soc otherwise (Captar T3.2).
+    result = await _run_user_flow(
+        hass, overrides={CONF_CAPTAR_AVAILABLE: False}, omit=[CONF_EV_SOC_ENTITY]
+    )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_EV_SOC_ENTITY not in result["data"]
     assert result["data"][CONF_SOLAR_INSTALLED] is False
@@ -324,3 +339,65 @@ async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
+
+
+async def test_captar_available_defaults_true(hass):
+    # Design doc §3: R18 ("defaulting to present") / entity-catalog.md's sc_captar_available.
+    result = await _run_user_flow(hass)
+    assert result["data"][CONF_CAPTAR_AVAILABLE] is True
+
+
+async def test_captar_available_true_requires_ev_soc(hass):
+    # Design doc §3: flipping CapTar available to True (or leaving its default) without
+    # mapping ev_soc must be rejected by the flow itself, exactly like CONF_SOLAR_INSTALLED's
+    # guard on the same field.
+    result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_captar_available"
+
+
+async def test_captar_available_false_does_not_require_ev_soc(hass):
+    result = await _run_user_flow(
+        hass, overrides={CONF_CAPTAR_AVAILABLE: False}, omit=[CONF_EV_SOC_ENTITY]
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_CAPTAR_AVAILABLE] is False
+    assert CONF_EV_SOC_ENTITY not in result["data"]
+
+
+async def test_pre_toggle_entry_defaults_captar_available_true(hass):
+    # An entry created before this task predates CONF_CAPTAR_AVAILABLE entirely -- reading
+    # it must default to True (design doc §3), not KeyError.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={k: v for k, v in USER_INPUT.items() if k != CONF_CAPTAR_AVAILABLE},
+        options={},
+    )
+    assert entry.data.get(CONF_CAPTAR_AVAILABLE, True) is True
+
+
+async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass):
+    result = await _run_user_flow(hass)
+    assert result["options"][CONF_MAX_PEAK_KW] == DEFAULT_MAX_PEAK_KW
+    assert result["options"][CONF_POWER_RESPECT_PEAK] == DEFAULT_POWER_RESPECT_PEAK
+    assert result["options"][CONF_SAFETY_MARGIN_W] == DEFAULT_SAFETY_MARGIN_W
+    assert result["options"][CONF_PEAK_GRACE_MIN] == DEFAULT_PEAK_GRACE_MIN
+    assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
+
+
+async def test_options_flow_edits_peak_protection_thresholds(hass):
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**_current_options(entry), CONF_MAX_PEAK_KW: 5.0}
+    )
+    assert entry.options[CONF_MAX_PEAK_KW] == 5.0
+
+
+async def test_power_respect_peak_can_be_turned_off(hass):
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**_current_options(entry), CONF_POWER_RESPECT_PEAK: False}
+    )
+    assert entry.options[CONF_POWER_RESPECT_PEAK] is False
