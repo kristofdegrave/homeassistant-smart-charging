@@ -1,5 +1,6 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
@@ -8,6 +9,7 @@ from custom_components.smart_charging.const import (
     CONF_CHARGER_STATUS_ENTITY,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
@@ -15,8 +17,11 @@ from custom_components.smart_charging.const import (
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_SOLAR_INSTALLED,
     CONF_STATUS_TRANSLATION,
     DOMAIN,
+    MODE_POWER,
+    MODE_SOLAR,
 )
 
 
@@ -82,7 +87,14 @@ async def test_end_to_end_commands_target_current(hass):
 
     # The number entity exists, its object_id suffixed per strings.json translations...
     assert hass.states.get("number.smart_charging_target_current") is not None
-    # ...and the first cycle wrote the target current to the charger.
+    # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1) --
+    # select Power explicitly, same as a real install's first manual step.
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator.active_mode = MODE_POWER
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # ...and that cycle wrote the target current to the charger.
     assert calls and calls[-1]["entity_id"] == "number.charger_current"
     assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
@@ -117,3 +129,51 @@ async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
     assert calls and calls[-1]["entity_id"] == "number.charger_current"
     assert calls[-1]["value"] == 0.0
     assert hass.states.get("sensor.smart_charging_status").state == "Fault"
+
+
+async def test_select_entity_is_registered_on_setup(hass):
+    """T6.1: the select platform must be forwarded alongside number/sensor. Looked up by
+    unique_id, not entity_id -- the "_mode"-suffixed entity_id depends on the select.mode
+    translation entry that T6.3 (strings/translations) adds, not this task."""
+    _seed_states(hass, status="Charging")
+    data = _entry_data()
+    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    hass.states.async_set("sensor.ev_soc", "50.0")
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("select", DOMAIN, f"{entry.entry_id}_mode")
+    assert entity_id is not None
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly"]
+
+
+async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
+    """T6.1: the new Solar/SolarOnly options must be threaded into the coordinator's
+    config dict -- without it, dispatching to Solar mode KeyErrors on
+    CONF_SOLAR_START_THRESHOLD_W (coordinator.py reads it unconditionally, no default)."""
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging")
+    hass.states.async_set("sensor.charger_power", "2300.0")  # ample surplus
+    data = _entry_data()
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    hass.states.async_set("sensor.ev_soc", "50.0")
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator.active_mode = MODE_SOLAR
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert calls[-1]["value"] > 0.0
