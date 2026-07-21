@@ -85,6 +85,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `custom_components/smart_charging/engines/soc_target.py`
+- Modify: `custom_components/smart_charging/coordinator.py` (update the one existing call site —
+  see Step 3 below; this keeps the coordinator suite green in this same commit rather than red until
+  Task 5.1 rewires it for real)
 - Modify: `tests/engines/test_soc_target.py`
 
 **Step 1: Failing tests**
@@ -222,10 +225,17 @@ def test_reserve_inactive_while_sun_is_up():
 **Step 2: Run** → `ImportError`. **Step 3: Implement** per design doc §5 (import `PROFILE_AUTO` from
 `const.py` — add it alongside `PROFILE_MANUAL` in the same task, see Task 4.1's constants note; both
 constants are needed here and by `profiles/auto.py`, Task 1.6, so define them once in `const.py` as
-part of this task). **Step 4: Run** → PASS. **Step 5: Commit**
+part of this task). `resolve_active_soc_limit`'s new required parameters mean `coordinator.py`'s one
+existing call site (`resolve_active_soc_limit(self.soc_limit_override)`) no longer type-checks —
+update it in this same commit to
+`resolve_active_soc_limit(self.soc_limit_override, solar_reserve_active=False, solar_reserve_soc=0.0,
+step_up_state=self._step_up_state)` (`self._step_up_state = SolarStepUpState()` added to `__init__`)
+as a placeholder that reproduces today's row-3-only behavior; Task 5.1 replaces the placeholder
+arguments with the real resolved values. **Step 4: Run** → PASS (existing coordinator tests
+unaffected; new engine tests green). **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/engines/soc_target.py custom_components/smart_charging/const.py tests/engines/test_soc_target.py
+git add custom_components/smart_charging/engines/soc_target.py custom_components/smart_charging/const.py custom_components/smart_charging/coordinator.py tests/engines/test_soc_target.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: complete SOC-Target engine -- full three-row resolution (E3, R7/R8/R9)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -339,6 +349,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 from datetime import datetime, time
 
+import pytest
+
 from custom_components.smart_charging.engines.deadline import resolve_required_current
 
 NOW = datetime(2026, 7, 21, 22, 0)  # 22:00
@@ -412,6 +424,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `custom_components/smart_charging/engines/billing_protection.py`
+- Modify: `custom_components/smart_charging/coordinator.py` (update the one existing call site —
+  see Step 3 below; design doc §9 requires this in the same task, not deferred to Phase 5)
 - Modify: `tests/engines/test_billing_protection.py`
 
 **Step 1: Failing tests**
@@ -437,12 +451,16 @@ Every existing call to `resolve_effective_peak_limit` in `tests/engines/test_bil
 now needs `urgent=False` added — a required keyword, not defaulted, so no call site can silently
 skip the new row (design doc §9).
 
-**Step 2: Run** → `TypeError` (missing argument) on every existing call site. **Step 3: Implement**
-per design doc §9; update every existing test call with `urgent=False`. **Step 4: Run** → PASS.
-**Step 5: Commit**
+**Step 2: Run** → `TypeError` (missing argument) on every existing call site, including
+`coordinator.py:167`'s `resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw)`. **Step 3:
+Implement** per design doc §9; update every existing test call with `urgent=False`; update
+`coordinator.py`'s call site to `resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw,
+urgent=False)` as a placeholder that reproduces today's row-2-only behavior — Task 5.3 replaces the
+placeholder with the real resolved `urgent` value. **Step 4: Run** → PASS (existing coordinator
+tests unaffected; new engine tests green). **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/engines/billing_protection.py tests/engines/test_billing_protection.py
+git add custom_components/smart_charging/engines/billing_protection.py custom_components/smart_charging/coordinator.py tests/engines/test_billing_protection.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: add row-1 (deadline-urgency raise) to the effective-peak-limit rule (E5, R5)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -463,7 +481,7 @@ from custom_components.smart_charging.const import MODE_CAPTAR, MODE_OFF, MODE_P
 from custom_components.smart_charging.profiles.auto import select_mode
 
 BASE = dict(
-    soc=50.0, active_soc_limit=80.0, urgent=False, unreachable=False,
+    soc=50.0, active_soc_limit=80.0, urgent=False,
     solar_capability_present=True, sun_is_up=False, solar_surplus_sufficient=False,
     sun_is_down=True, low_tariff_active=True, solar_reserve_active=False,
 )
@@ -481,11 +499,6 @@ def test_row2_urgent_escalates_to_captar_when_available():
 def test_row2_urgent_falls_back_to_power_when_captar_unavailable():
     modes = frozenset({MODE_OFF, MODE_POWER})
     assert select_mode(**{**BASE, "urgent": True}, available_modes=modes) == MODE_POWER
-
-
-def test_row2_unreachable_also_escalates():
-    modes = frozenset({MODE_OFF, MODE_POWER, MODE_CAPTAR})
-    assert select_mode(**{**BASE, "unreachable": True}, available_modes=modes) == MODE_CAPTAR
 
 
 def test_row3_solar_surplus_selects_solar():
@@ -540,14 +553,20 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 1 checkpoint:** `pytest tests/engines tests/profiles -v` all green; grep-confirm no
-> `import homeassistant` and no cross-engine import under `engines/`/`profiles/`. Every R7/R8/R9/R14/
-> R15/R16/R18 acceptance criterion has a corresponding test above.
+> `import homeassistant` and no cross-engine import under `engines/`/`profiles/`. Every R5/R7/R8/R9/
+> R14/R15/R16/R18 acceptance criterion has a corresponding test above.
 
 ---
 
-## Phase 2 — Adapters (HA harness, RA1 extension)
+## Phase 2 — Adapters (HA harness, RA1/RA2 extension)
 
-### Task 2.1: `battery_capacity`, `departure_external`, `home_day_external`, `solar_forecast` adapter roles
+### Task 2.1: `battery_capacity` (RA1), `departure_external`/`home_day_external`/`solar_forecast` (RA2) adapter roles
+
+Per `project-plan.md`, `battery_capacity` is an RA1 (core adapter) extension; `departure_external`,
+`home_day_external`, and `solar_forecast` belong to RA2. All four follow the identical
+optional-at-the-factory-level pattern regardless of which RA task-line owns them, so this task
+still builds all four together — only the commit message/task title distinguishes ownership for
+traceability.
 
 **Files:**
 - Modify: `custom_components/smart_charging/const.py` (four new `ROLE_*` + `CONF_*_ENTITY` constants,
@@ -587,7 +606,7 @@ PR. **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
 git add custom_components/smart_charging/const.py custom_components/smart_charging/adapters/factory.py tests/adapters/test_factory.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add battery_capacity, departure_external, home_day_external, solar_forecast adapter roles (RA1 extension)
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: add battery_capacity (RA1), departure_external/home_day_external/solar_forecast (RA2) adapter roles
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -602,10 +621,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:** Modify `custom_components/smart_charging/const.py`
 
-**Step 1: Append** every `CONF_*`/`DEFAULT_*` constant from design doc §3 (`CONF_SOLAR_FORECAST_ENTITY`
-into DATA; `CONF_BATTERY_CAPACITY_KWH`, `CONF_MAX_SOLAR_SOC`, `CONF_SOLAR_STEP_PP`,
-`CONF_SOLAR_STEP_THRESHOLD_PP`, `CONF_SOLAR_RESERVE_SOC`, `CONF_SOLAR_FORECAST_THRESHOLD_KWH` into
-OPTIONS, each with its `DEFAULT_*`). **Step 2: Commit**
+**Step 1: Append** every remaining `CONF_*`/`DEFAULT_*` OPTIONS constant from design doc §3 —
+`CONF_BATTERY_CAPACITY_KWH`, `CONF_MAX_SOLAR_SOC`, `CONF_SOLAR_STEP_PP`,
+`CONF_SOLAR_STEP_THRESHOLD_PP`, `CONF_SOLAR_RESERVE_SOC`, `CONF_SOLAR_FORECAST_THRESHOLD_KWH`, each
+with its `DEFAULT_*`. `CONF_SOLAR_FORECAST_ENTITY` (DATA) already exists from Task 2.1 — this task
+does not re-add it. **Step 2: Commit**
 
 ```bash
 git add custom_components/smart_charging/const.py
@@ -634,6 +654,26 @@ async def test_solar_forecast_not_required_when_solar_not_installed(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
 
 
+async def test_battery_capacity_entity_can_be_mapped(hass):
+    result = await _run_user_flow(hass, overrides={CONF_BATTERY_CAPACITY_ENTITY: "sensor.ev_battery_capacity"})
+    assert result["data"][CONF_BATTERY_CAPACITY_ENTITY] == "sensor.ev_battery_capacity"
+
+
+async def test_battery_capacity_entity_is_optional(hass):
+    result = await _run_user_flow(hass, omit=[CONF_BATTERY_CAPACITY_ENTITY])
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_BATTERY_CAPACITY_ENTITY not in result["data"]
+
+
+async def test_departure_external_and_home_day_external_entities_can_be_mapped(hass):
+    result = await _run_user_flow(hass, overrides={
+        CONF_DEPARTURE_EXTERNAL_ENTITY: "sensor.departure_time",
+        CONF_HOME_DAY_EXTERNAL_ENTITY: "binary_sensor.home_day",
+    })
+    assert result["data"][CONF_DEPARTURE_EXTERNAL_ENTITY] == "sensor.departure_time"
+    assert result["data"][CONF_HOME_DAY_EXTERNAL_ENTITY] == "binary_sensor.home_day"
+
+
 async def test_new_thresholds_seeded_with_defaults(hass):
     result = await _run_user_flow(hass)
     assert result["options"][CONF_BATTERY_CAPACITY_KWH] == DEFAULT_BATTERY_CAPACITY_KWH
@@ -653,12 +693,19 @@ async def test_options_flow_edits_the_new_thresholds(hass):
     assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
 ```
 
-**Step 2: Run** → FAIL. **Step 3: Implement** — add `vol.Optional(CONF_SOLAR_FORECAST_ENTITY):
-_entity("sensor")` to `MAPPING_SCHEMA`; extend the existing `_ev_soc_missing_error`-style guard
-function (or add a sibling `_solar_forecast_missing_error`, composed the same way) so
-`CONF_SOLAR_INSTALLED=True` without `CONF_SOLAR_FORECAST_ENTITY` is rejected with
-`required_when_solar_installed`, reusing that same error key `CONF_EV_SOC_ENTITY`'s own
-`required_when_solar_installed` case already established. Add the six new options fields (with
+**Step 2: Run** → FAIL. **Step 3: Implement** — add all four new roles to `MAPPING_SCHEMA`:
+`vol.Optional(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor")`,
+`vol.Optional(CONF_BATTERY_CAPACITY_ENTITY): _entity("sensor")`,
+`vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor")`,
+`vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"])` — all
+four all-optional except `solar_forecast`, which alone carries a conditional guard. Extend the
+existing `_ev_soc_missing_error`-style guard function (or add a sibling
+`_solar_forecast_missing_error`, composed the same way) so `CONF_SOLAR_INSTALLED=True` without
+`CONF_SOLAR_FORECAST_ENTITY` is rejected with `required_when_solar_installed`, reusing that same
+error key `CONF_EV_SOC_ENTITY`'s own `required_when_solar_installed` case already established.
+`battery_capacity`/`departure_external`/`home_day_external` need no such guard — all three stay
+optional regardless of any capability toggle (R15's fallback and R14/R13's own "at least one
+mechanism" wording never make an external role mandatory). Add the six new OPTIONS fields (with
 `DEFAULT_*`) to `OPTION_KEYS` and `_threshold_schema()`. **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
@@ -759,8 +806,8 @@ async def test_user_can_set_a_departure_time(hass, ...):
 ```
 
 **Step 2: Run** → `ImportError`. **Step 3: Implement** — a single `SmartChargingDepartureTime(
-SmartChargingEntity, TimeEntity)` class parameterized by id-suffix and default, instantiated ten
-times (seven `_dow` + `_holiday` + `_home_day`... eight total, per catalog) in `async_setup_entry`.
+SmartChargingEntity, TimeEntity)` class parameterized by id-suffix and default, instantiated nine
+times (seven `_dow` + `_holiday` + `_home_day`, per catalog) in `async_setup_entry`.
 Add `Platform.TIME` to `PLATFORMS` in `__init__.py`. **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
@@ -899,14 +946,31 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, ..
 async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass, ...):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
     mutual-exclusivity clause)."""
+
+async def test_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, ...):
+    """R15: with `battery_capacity` role mapped and reading 60.0 kWh, the required-current
+    computation uses 60.0, not CONF_BATTERY_CAPACITY_KWH's configured default."""
+
+async def test_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass, ...):
+    """R15: with the role mapped but currently reading None (or the role unmapped
+    entirely), the required-current computation falls back to CONF_BATTERY_CAPACITY_KWH."""
+
+async def test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate(hass, ...):
+    """R5/ADR-0011: DeadlineUnreachableNotified is published every cycle
+    resolve_required_current's `unreachable` flag is True -- including re-firing on a
+    later cycle that is still Unreachable, not only on the Normal/Urgent -> Unreachable
+    transition edge (UC05's domain-events section)."""
 ```
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — call `resolve_departure_deadline` twice per cycle
-(today's inputs, and tomorrow's per design doc §10 step 2); under `Auto`, compute the baseline mode
-by calling `select_mode` (Task 1.6) with `urgent=False`/`unreachable=False` first, get that mode's
-own desired current from the same dispatch table (without actually charging on it), then call
-`resolve_required_current` with that baseline current; under `Manual`, the baseline is simply the
-manually selected mode's own desired current for this cycle (already computed). **Step 4: Run** →
+(today's inputs, and tomorrow's per design doc §10 step 2); resolve the effective battery capacity as
+`battery_capacity` role reading if the role is configured and its reading is not `None`, else
+`CONF_BATTERY_CAPACITY_KWH` (R15); under `Auto`, compute the baseline mode by calling `select_mode`
+(Task 1.6) with `urgent=False` first, get that mode's own desired current from the same dispatch
+table (without actually charging on it), then call `resolve_required_current` with that baseline
+current; under `Manual`, the baseline is simply the manually selected mode's own desired current for
+this cycle (already computed). Publish `DeadlineUnreachableNotified` (ADR-0011, unconditional on
+profile) whenever `resolve_required_current`'s `unreachable` is `True` this cycle. **Step 4: Run** →
 PASS. **Step 5: Commit**
 
 ```bash
@@ -944,8 +1008,11 @@ async def test_manual_selector_unaffected_by_available_modes_gate_already_true_t
 ```
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — call `resolve_available_modes` (E9) each cycle;
-under `Auto`, dispatch the resolved mode via `select_mode` (E2) using the real `urgent`/`unreachable`
-result from Task 5.2 instead of the manual selector; pass `urgent` into `resolve_effective_peak_limit`
+under `Auto`, dispatch the resolved mode via `select_mode` (E2), passing
+`urgent=(result.urgent or result.unreachable)` from Task 5.2's `RequiredCurrentResult` (Unreachable
+still requests the same escalated mode per UC05's Postconditions — this `or` makes that explicit even
+though `unreachable` implies `urgent` by construction, per the required-current formula) instead of
+dispatching via the manual selector; pass the same `urgent` value into `resolve_effective_peak_limit`
 (Task 1.5) before the R3 clamp call. **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash

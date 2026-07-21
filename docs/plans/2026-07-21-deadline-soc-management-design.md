@@ -344,11 +344,15 @@ def select_mode(
     soc: float,
     active_soc_limit: float,
     available_modes: frozenset[str],
-    urgent: bool,
-    unreachable: bool,  # unreachable still requests the escalated mode (UC05 Postconditions) —
-                         # carried only so callers that need to notify can detect it (§11)
+    urgent: bool,  # resolution-rules.md row 2's own condition; UC05's Unreachable state is still
+                   # `urgent=True` from this function's point of view (the caller's `unreachable`
+                   # flag only changes what the delivered current clamps to and whether M1 notifies,
+                   # §11 -- it never changes which mode row 2 selects, so this function needs no
+                   # separate `unreachable` parameter)
     solar_capability_present: bool,
-    sun_is_up: bool,
+    sun_is_up: bool,  # mutually exclusive with sun_is_down by construction (both derived from the
+                      # same sun.sun reading) -- the caller passes one boolean pair, not two
+                      # independent sources of truth
     solar_surplus_sufficient: bool,  # UC01's own start condition, evaluated by the caller
     sun_is_down: bool,
     low_tariff_active: bool,
@@ -356,7 +360,7 @@ def select_mode(
 ) -> str:
     """resolution-rules.md's Auto mode-selection table, rows 1-5, first match wins:
     1. soc >= active_soc_limit -> Off
-    2. urgent (or unreachable) -> Captar if MODE_CAPTAR in available_modes else Power
+    2. urgent -> Captar if MODE_CAPTAR in available_modes else Power
     3. solar_capability_present and sun_is_up and solar_surplus_sufficient -> Solar
     4. sun_is_down and low_tariff_active and not solar_reserve_active -> Captar
        (only reachable when MODE_CAPTAR in available_modes -- R18: absent CapTar,
@@ -418,9 +422,17 @@ below match that doc):
    before applying the R3 clamp — unchanged clamp call otherwise.
 5. **(steps 6–8, unchanged)** Grid ceiling, invariants, write.
 
-New coordinator state threaded across cycles: `self._step_up_state: SolarStepUpState` (E3, reset to
-`SolarStepUpState()` on the same mode-switch-away-from-solar/disconnect events that already reset
-per-mode state, per UC06's exception flow — no separate reset path). `self.active_profile: str`
+New coordinator state threaded across cycles: `self._step_up_state: SolarStepUpState` (E3). Its
+clearing is **not** wired to the coordinator's generic per-mode-switch reset (that reset also fires
+on a `Solar`↔`SolarOnly` switch, which R7/UC06 alternate-flow 4a requires to *preserve* an in-effect
+step-up). Instead, `resolve_solar_step_up` (§5) is called every cycle with
+`is_solar_mode_charging = active_mode in (MODE_SOLAR, MODE_SOLAR_ONLY)` computed fresh from the
+**resolved** active mode this cycle (under `Auto`, this is necessarily the *prior* cycle's resolved
+mode, since step 3 below resolves the step-up before selecting this cycle's mode — one cycle of lag,
+matching R8's own "next control cycle" framing); its own `False`-when-not-solar branch is what clears
+`self._step_up_state`, on both a non-solar mode *and* a disconnect (the coordinator passes
+`is_solar_mode_charging=False` whenever `charger_status` is not in `CHARGEABLE_STATES` too). No
+separate reset call is added to the mode-switch/disconnect branches. `self.active_profile: str`
 (seeded `Manual`, written by `select.smart_charging_profile`, mirrors `self.active_mode`).
 
 `sensor.smart_charging_active_soc_limit` and `ActiveSocLimitChanged`'s emission (change-detected
@@ -429,14 +441,20 @@ against the prior cycle's resolved value, per `control-cycle.md` step 4) are add
 the event and surfaces the sensor, per ADR-0011's publish-step gate, which already covers this event
 name (no new ADR gate).
 
+`DeadlineUnreachableNotified` is also emitted here (same ADR-0011 publish-step gate), fired every
+cycle `resolve_required_current`'s (E4, §6) `unreachable` flag is `True` (UC05: "re-fires while
+remaining in Unreachable," not only on the transition edge) — delivery to the user is M3's job
+(deferred, §11); this slice only publishes the event.
+
 ---
 
 ## 11. Deliberately deferred
 
 - **M2 (Vehicle-Limit Manager) and M3 (Notification Manager)** — separate epics (#256, #257).
-  `ActiveSocLimitChanged`/`DeadlineUnreachableNotified` are emitted (per ADR-0011, already gated) but
-  have no subscriber yet; this is the same "publish now, subscribe later" pattern the project-plan
-  already prescribes for M1's other domain events.
+  `ActiveSocLimitChanged`/`DeadlineUnreachableNotified` are emitted by this slice (§10, per
+  ADR-0011's already-accepted publish-step gate) but have no subscriber yet; this is the same
+  "publish now, subscribe later" pattern the project-plan already prescribes for M1's other domain
+  events.
 - **The evening home-day prompt (UC08)** — M3's job. `switch.smart_charging_home_day` exists and is
   user-settable directly (its own acceptance criterion, R13: "at least one configured mechanism");
   the automated prompt is simply a second way to set the same switch, added later without changing
