@@ -39,6 +39,7 @@ from .const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_STATUS_TRANSLATION,
+    DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_GRID_SAFETY_OFFSET_A,
@@ -206,7 +207,9 @@ def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
     same way. Both must be False for ev_soc to stay optional."""
     if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_EV_SOC_ENTITY):
         return {CONF_EV_SOC_ENTITY: "required_when_solar_installed"}
-    if user_input.get(CONF_CAPTAR_AVAILABLE) and not user_input.get(CONF_EV_SOC_ENTITY):
+    if user_input.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE) and not user_input.get(
+        CONF_EV_SOC_ENTITY
+    ):
         return {CONF_EV_SOC_ENTITY: "required_when_captar_available"}
     return None
 

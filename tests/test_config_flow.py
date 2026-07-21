@@ -8,6 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
+    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
@@ -18,14 +19,19 @@ from custom_components.smart_charging.const import (
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_PEAK_KW,
+    CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_STATUS_TRANSLATION,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_MAX_PEAK_KW,
+    DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_ONLY_STRATEGY,
     DOMAIN,
@@ -374,6 +380,9 @@ async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass
     result = await _run_user_flow(hass)
     assert result["options"][CONF_MAX_PEAK_KW] == DEFAULT_MAX_PEAK_KW
     assert result["options"][CONF_POWER_RESPECT_PEAK] == DEFAULT_POWER_RESPECT_PEAK
+    assert result["options"][CONF_SAFETY_MARGIN_W] == DEFAULT_SAFETY_MARGIN_W
+    assert result["options"][CONF_PEAK_GRACE_MIN] == DEFAULT_PEAK_GRACE_MIN
+    assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
 
 
 async def test_options_flow_edits_peak_protection_thresholds(hass):
