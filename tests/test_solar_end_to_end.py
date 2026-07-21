@@ -7,6 +7,7 @@ machines in isolation; this file proves the coordinator wiring (Task 5.1/6.1) di
 them correctly through a real config entry.
 """
 
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
@@ -93,6 +94,15 @@ def _seed_states(hass, *, status: str, net_w: float = 0.0, charger_w: float = 0.
     hass.states.async_set("sensor.ev_soc", "50.0")  # below the default 80% SOC limit throughout
 
 
+def _seed_ample_peak_headroom(coordinator, kw=100.0):
+    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
+    (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
+    predates peak protection and never seeded any tracked history of its own."""
+    now_dt = dt_util.now()
+    coordinator._peak_tracked_month = (now_dt.year, now_dt.month)
+    coordinator._peak_tracked_kw = kw
+
+
 async def _setup(hass, **option_overrides):
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging")
@@ -103,6 +113,7 @@ async def _setup(hass, **option_overrides):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    _seed_ample_peak_headroom(coordinator)
     return coordinator, calls
 
 

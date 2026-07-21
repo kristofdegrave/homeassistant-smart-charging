@@ -1,6 +1,7 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
@@ -77,6 +78,15 @@ def _seed_states(hass, *, status: str) -> None:
     hass.states.async_set("sensor.grid_voltage", "230.0")
 
 
+def _seed_ample_peak_headroom(coordinator, kw=100.0):
+    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
+    (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
+    predates peak protection and never seeded any tracked history of its own."""
+    now_dt = dt_util.now()
+    coordinator._peak_tracked_month = (now_dt.year, now_dt.month)
+    coordinator._peak_tracked_kw = kw
+
+
 async def test_end_to_end_commands_target_current(hass):
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging")
@@ -94,6 +104,7 @@ async def test_end_to_end_commands_target_current(hass):
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     assert coordinator.active_mode == MODE_OFF
     assert calls[-1]["value"] == 0.0
+    _seed_ample_peak_headroom(coordinator)
     coordinator.active_mode = MODE_POWER
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -178,6 +189,7 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     await hass.async_block_till_done()
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    _seed_ample_peak_headroom(coordinator)
     coordinator.active_mode = MODE_SOLAR
     await coordinator.async_refresh()
     await hass.async_block_till_done()
