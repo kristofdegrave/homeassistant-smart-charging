@@ -28,7 +28,7 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         self._attr_options = (
             BASE_MODE_OPTIONS + SOLAR_MODE_OPTIONS if solar_installed else list(BASE_MODE_OPTIONS)
         )
-        self._attr_current_option = "Off"
+        self._attr_current_option = BASE_MODE_OPTIONS[0]
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -47,14 +47,13 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     async_add_entities(
         [
             ModeSelect(
                 entry_id=entry.entry_id,
                 coordinator=coordinator,
-                solar_installed=data[CONF_SOLAR_INSTALLED],
+                solar_installed=entry.data.get(CONF_SOLAR_INSTALLED, False),
             )
         ]
     )

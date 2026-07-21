@@ -18,7 +18,7 @@ class _StubCoordinator:
         self.refreshed = True
 
 
-async def test_select_option_pushes_to_coordinator_and_resets_state(hass):
+async def test_select_option_pushes_to_coordinator(hass):
     coord = _StubCoordinator()
     entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
     platform = MockEntityPlatform(hass, domain="select")
@@ -39,6 +39,32 @@ async def test_restores_last_selection(hass):
     await platform.async_add_entities([entity])
     assert entity.current_option == "SolarOnly"
     assert coord.active_mode == "SolarOnly"
+
+
+async def test_restore_rejects_solar_option_when_solar_not_installed(hass):
+    entity_id = "select.smart_charging_mode"
+    mock_restore_cache(hass, (State(entity_id, "SolarOnly"),))
+    coord = _StubCoordinator()
+    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=False)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    assert entity.current_option == "Off"
+    assert coord.active_mode == "Off"
+
+
+async def test_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
+    coord = _StubCoordinator()
+    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    assert entity.current_option == "Off"
+    assert coord.active_mode == "Off"
+
+
+def test_init_seeds_unique_id():
+    entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=True)
+    assert entity.unique_id == "abc_mode"
 
 
 def test_options_are_off_power_only_when_solar_not_installed():
