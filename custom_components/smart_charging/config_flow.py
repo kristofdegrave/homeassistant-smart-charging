@@ -14,7 +14,9 @@ from .const import (
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
+    CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
@@ -22,14 +24,31 @@ from .const import (
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_INSTALLED,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
+    CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_START_THRESHOLD_W,
     CONF_STATUS_TRANSLATION,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_GRID_SAFETY_OFFSET_A,
     DEFAULT_NOMINAL_VOLTAGE,
+    DEFAULT_SMOOTHING_WINDOW,
+    DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_COOLDOWN_MIN,
+    DEFAULT_SOLAR_HOLD_MIN,
+    DEFAULT_SOLAR_ONLY_MIDPOINT,
+    DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
+    DEFAULT_SOLAR_ONLY_STRATEGY,
+    DEFAULT_SOLAR_START_THRESHOLD_W,
     DOMAIN,
     STATE_CHARGING,
     STATE_CONNECTED,
 )
+from .modes._amp_step import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
 
 # Threshold/default keys stored in config-entry OPTIONS (ADR-0005), not data.
 OPTION_KEYS = (
@@ -39,6 +58,14 @@ OPTION_KEYS = (
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_START_THRESHOLD_W,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_DEFAULT_SOC_LIMIT,
 )
 
 
@@ -68,6 +95,8 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
         vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
         vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_SOLAR_INSTALLED, default=False): bool,
+        vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor"),
     }
 )
 
@@ -94,12 +123,53 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_DEFAULT_TARGET_CURRENT, default=d.get(CONF_DEFAULT_TARGET_CURRENT, 10.0)
             ): vol.Coerce(float),
+            vol.Required(
+                CONF_SMOOTHING_WINDOW,
+                default=d.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
+            ): vol.Coerce(int),
+            vol.Required(
+                CONF_SOLAR_START_THRESHOLD_W,
+                default=d.get(CONF_SOLAR_START_THRESHOLD_W, DEFAULT_SOLAR_START_THRESHOLD_W),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_ONLY_START_THRESHOLD_W,
+                default=d.get(
+                    CONF_SOLAR_ONLY_START_THRESHOLD_W, DEFAULT_SOLAR_ONLY_START_THRESHOLD_W
+                ),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_HOLD_MIN, default=d.get(CONF_SOLAR_HOLD_MIN, DEFAULT_SOLAR_HOLD_MIN)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_COOLDOWN_MIN,
+                default=d.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_ONLY_STRATEGY,
+                default=d.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
+            ): vol.In([ROUND_UP, ROUND_DOWN, ROUND_NEAREST]),
+            vol.Required(
+                CONF_SOLAR_ONLY_MIDPOINT,
+                default=d.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_DEFAULT_SOC_LIMIT, default=d.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
+            ): vol.Coerce(float),
         }
     )
 
 
 # Install form = mappings + thresholds in one screen; split into data/options on submit.
 USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
+
+
+def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
+    """R18/design §3: Solar installed=True requires ev_soc mapped -- a config-time
+    guard, not a runtime fault. Shared by the install and reconfigure steps so
+    flipping the toggle through either path is rejected the same way."""
+    if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_EV_SOC_ENTITY):
+        return {CONF_EV_SOC_ENTITY: "required_when_solar_installed"}
+    return None
 
 
 def _split_data(user_input: dict) -> dict:
@@ -124,6 +194,14 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=USER_SCHEMA)
 
+        errors = _ev_soc_missing_error(user_input)
+        if errors:
+            return self.async_show_form(
+                step_id="user",
+                data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
+                errors=errors,
+            )
+
         data = _split_data(user_input)
         options = {k: user_input[k] for k in OPTION_KEYS}
         options[CONF_CONTROL_INTERVAL_S] = DEFAULT_CONTROL_INTERVAL_S
@@ -134,6 +212,15 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         if user_input is None:
             return self.async_show_form(step_id="reconfigure", data_schema=MAPPING_SCHEMA)
+
+        errors = _ev_soc_missing_error(user_input)
+        if errors:
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=self.add_suggested_values_to_schema(MAPPING_SCHEMA, user_input),
+                errors=errors,
+            )
+
         return self.async_update_reload_and_abort(entry, data=_split_data(user_input))
 
     @staticmethod
