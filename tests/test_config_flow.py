@@ -35,6 +35,8 @@ from custom_components.smart_charging.const import (
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_ONLY_STRATEGY,
     DOMAIN,
+    STATE_CHARGING,
+    STATE_CONNECTED,
 )
 
 USER_INPUT = {
@@ -87,10 +89,10 @@ async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
     # Mappings + derived translation land in DATA (ADR-0005).
     translation = result["data"][CONF_STATUS_TRANSLATION]
     assert translation == {
-        "Connected": "connected",
-        "Cable": "connected",
-        "Charging": "charging",
-        "SuspendedEV": "charging",
+        "Connected": STATE_CONNECTED,
+        "Cable": STATE_CONNECTED,
+        "Charging": STATE_CHARGING,
+        "SuspendedEV": STATE_CHARGING,
     }
     # Thresholds/defaults (incl. the safety margin) + interval land in OPTIONS, not data.
     assert CONF_GRID_CEILING_A not in result["data"]
@@ -112,7 +114,7 @@ async def test_overlapping_state_charging_wins(hass):
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_STATUS_TRANSLATION]["Charging"] == "charging"
+    assert result["data"][CONF_STATUS_TRANSLATION]["Charging"] == STATE_CHARGING
 
 
 async def test_no_grid_voltage_still_creates_entry(hass):
@@ -198,7 +200,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
             "charger_status_entity": "sensor.evse",
             "net_power_entity": "sensor.net_power",
             "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": "connected", "Charging": "charging"},
+            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
         },
         options={
             CONF_GRID_SAFETY_OFFSET_A: 2.0,
@@ -229,7 +231,10 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     assert result["reason"] == "reconfigure_successful"
 
     assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
-    assert entry.data[CONF_STATUS_TRANSLATION] == {"Connected": "connected", "Charging": "charging"}
+    assert entry.data[CONF_STATUS_TRANSLATION] == {
+        "Connected": STATE_CONNECTED,
+        "Charging": STATE_CHARGING,
+    }
     assert dict(entry.options) == original_options
 
 
@@ -316,7 +321,7 @@ async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
             "charger_status_entity": "sensor.evse",
             "net_power_entity": "sensor.net_power",
             "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": "connected", "Charging": "charging"},
+            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
         },
         options={},
     )
