@@ -2,7 +2,9 @@
 
 import pytest
 
+from custom_components.smart_charging.const import MODE_OFF, MODE_POWER, MODE_SOLAR, MODE_SOLAR_ONLY
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
+from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 
 
 class _FakeNumeric:
@@ -33,14 +35,19 @@ class _RaisingNumeric:
         raise AssertionError("should not be called by a raising read")
 
 
-def _adapters(status="charging", net_w=0.0, charger_w=0.0, voltage=230.0):
-    return {
+def _adapters(
+    status="charging", net_w=0.0, charger_w=0.0, voltage=230.0, ev_soc_role=True, ev_soc=50.0
+):
+    adapters = {
         "charger_current": _FakeNumeric(0.0),
         "charger_status": _FakeStatus(status),
         "net_power": _FakeNumeric(net_w),
         "charger_power": _FakeNumeric(charger_w),
         "grid_voltage": _FakeNumeric(voltage),
     }
+    if ev_soc_role:
+        adapters["ev_soc"] = _FakeNumeric(ev_soc)
+    return adapters
 
 
 def _config():
@@ -50,12 +57,31 @@ def _config():
         "grid_ceiling_a": 25.0,
         "grid_safety_offset_a": 2.0,
         "nominal_voltage": 230.0,
+        "smoothing_window": 1,
+        "solar_start_threshold_w": 100.0,
+        "solar_only_start_threshold_w": 100.0,
+        "solar_hold_min": 5.0,
+        "solar_cooldown_min": 2.0,
+        "solar_only_strategy": ROUND_DOWN,
+        "solar_only_midpoint": 0.5,
     }
 
 
 async def _run(hass, adapters, config, target):
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER  # M1's original default before mode selection existed (Task 5.1)
     coord.target_current = target
+    result = await coord._async_update_data()
+    return coord, result
+
+
+async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0, coord=None):
+    if coord is None:
+        coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    else:
+        coord._adapters = adapters
+    coord.active_mode = active_mode
+    coord.soc_limit_override = soc_limit_override
     result = await coord._async_update_data()
     return coord, result
 
@@ -137,3 +163,152 @@ async def test_nf4_grid_voltage_unmapped_is_not_fault(hass):
     _coord, result = await _run(hass, adapters, _config(), target=10.0)
     assert result.fault is False
     assert result.commanded_current == 10.0
+
+
+async def test_dispatches_to_solar_when_selected(hass):
+    # surplus = charger_w(2760=12A) - net_w(0) = 2760W = 12A ideal, round-up -> 12A.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    _coord, result = await _run_mode(hass, adapters, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    assert result.fault is False
+    assert result.commanded_current == 12.0
+    assert result.active_mode == MODE_SOLAR
+
+
+async def test_dispatches_to_solar_only_when_selected(hass):
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    _coord, result = await _run_mode(
+        hass, adapters, _config(), MODE_SOLAR_ONLY, soc_limit_override=80.0
+    )
+    assert result.fault is False
+    assert result.commanded_current == 12.0
+    assert result.active_mode == MODE_SOLAR_ONLY
+
+
+@pytest.mark.parametrize("mode", [MODE_SOLAR, MODE_SOLAR_ONLY])
+async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(hass, mode):
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=80.0)
+    coord, result = await _run_mode(hass, adapters, _config(), mode, soc_limit_override=80.0)
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[mode].phase == "idle"
+
+
+async def test_resumes_when_the_soc_limit_rises_above_current_soc(hass):
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=80.0)
+    coord, result = await _run_mode(hass, adapters, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    assert result.commanded_current == 0.0  # gated: ev_soc >= limit
+
+    # R7 resume condition 1: the limit rises above the current SOC, same mode, no reconnect.
+    coord, result = await _run_mode(
+        hass, adapters, _config(), MODE_SOLAR, soc_limit_override=90.0, coord=coord
+    )
+    assert result.commanded_current == 12.0
+
+
+async def test_resumes_after_disconnect_and_reconnect_while_still_at_the_limit(hass):
+    config = _config()
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=85.0)
+
+    # Gated at the limit.
+    coord, result = await _run_mode(hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0)
+    assert result.commanded_current == 0.0
+
+    # Disconnect -> every mode's state resets to idle (existing R11 reset path).
+    adapters = _adapters(status="disconnected", net_w=0.0, charger_w=2760.0, ev_soc=85.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == "idle"
+
+    # Reconnect while still at the limit -- gate still holds, no stuck Hold/Cooldown either.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=85.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0
+
+    # SOC finally drops below the limit -- resumes immediately, proving nothing was left
+    # latched by the disconnect/reconnect cycle.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=70.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 12.0
+
+
+@pytest.mark.parametrize("mode", [MODE_POWER, MODE_OFF])
+async def test_power_and_off_ignore_soc_entirely(hass, mode):
+    # No ev_soc role configured at all -- Power/Off must not regress to needing one.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc_role=False)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=_config(), interval_s=30)
+    coord.active_mode = mode
+    coord.soc_limit_override = 80.0
+    coord.target_current = 10.0
+    result = await coord._async_update_data()
+    assert result.fault is False
+    assert result.commanded_current == (10.0 if mode == MODE_POWER else 0.0)
+
+
+async def test_missing_ev_soc_faults_only_while_a_solar_mode_is_selected(hass):
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc_role=False)
+    _coord, result = await _run_mode(hass, adapters, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    assert result.fault is True
+    assert result.commanded_current == 0.0
+
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc_role=False)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=_config(), interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    result = await coord._async_update_data()
+    assert result.fault is False
+
+
+async def test_mode_switch_resets_the_incoming_modes_state(hass):
+    config = _config()
+    config["solar_hold_min"] = 0.0  # Hold -> Cooldown transitions on the very next cycle
+    config["solar_cooldown_min"] = 5.0  # long enough that real test wall-clock never clears it
+
+    ample = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    idle_surplus = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc=50.0)
+
+    coord, result = await _run_mode(hass, ample, config, MODE_SOLAR, soc_limit_override=80.0)
+    assert result.commanded_current == 12.0  # charging
+
+    coord, result = await _run_mode(
+        hass, idle_surplus, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 6.0  # hold, floored at min_a
+
+    coord, result = await _run_mode(
+        hass, idle_surplus, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0  # cooldown
+    assert coord._mode_state[MODE_SOLAR].phase == "cooldown"
+
+    # Switch away and back -- both transitions reset _mode_state (R11).
+    coord, result = await _run_mode(
+        hass, ample, config, MODE_OFF, soc_limit_override=80.0, coord=coord
+    )
+    coord, result = await _run_mode(
+        hass, ample, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 12.0  # fresh idle -> charges immediately, no cooldown wait
+
+
+async def test_grid_ceiling_still_clamps_a_solar_request(hass):
+    config = _config()
+    config["grid_ceiling_a"] = 2.0
+    config["grid_safety_offset_a"] = 2.0  # ceiling - offset == 0
+    # surplus = 2645W = 11.5A ideal; Solar rounds up -> 12A pre-clamp.
+    # headroom = floor(0 + 11.5) = 11A -> clamped from 12A to 11A.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2645.0, ev_soc=50.0)
+    _coord, result = await _run_mode(hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0)
+    assert result.commanded_current == 11.0
+
+
+async def test_power_mode_behavior_unchanged(hass):
+    adapters = _adapters(status="charging")
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.fault is False
+    assert result.commanded_current == 10.0
+    assert result.active_mode == MODE_POWER
