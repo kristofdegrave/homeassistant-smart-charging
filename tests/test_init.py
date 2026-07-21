@@ -5,9 +5,12 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
+    CONF_CAPTAR_AVAILABLE,
+    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
+    CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_EV_SOC_ENTITY,
@@ -15,12 +18,18 @@ from custom_components.smart_charging.const import (
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_CURRENT,
+    CONF_MAX_PEAK_KW,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_PEAK_GRACE_MIN,
+    CONF_PEAK_WINDOW_SIZE,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SOLAR_INSTALLED,
     CONF_STATUS_TRANSLATION,
     DOMAIN,
+    MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
@@ -197,3 +206,73 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     assert hass.states.get("sensor.smart_charging_status").state == "OK"
     assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_SOLAR
     assert calls[-1]["value"] == 11.0
+
+
+async def test_setup_threads_captar_and_peak_protection_options_into_coordinator_config(hass):
+    """T6.1: setup must wire the Captar-cooldown/peak-protection/R17 options (Phase 3's config
+    keys, consumed via `self._config.get(...)` in coordinator.py's Task 5.1 wiring) into the
+    coordinator's config dict as non-default overrides, plus a `peak_window_size` derived from
+    `control_interval_s` -- not just fall back to the coordinator's own internal defaults."""
+    _seed_states(hass, status="Charging")
+    data = _entry_data()
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    hass.states.async_set("sensor.ev_soc", "50.0")
+
+    options = _entry_options()
+    options[CONF_CONTROL_INTERVAL_S] = 60
+    options[CONF_SAFETY_MARGIN_W] = 500.0
+    options[CONF_MAX_PEAK_KW] = 7.5
+    options[CONF_PEAK_GRACE_MIN] = 3.0
+    options[CONF_CAPTAR_COOLDOWN_MIN] = 15.0
+    options[CONF_POWER_RESPECT_PEAK] = False
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    config = coordinator._config
+    assert config[CONF_SAFETY_MARGIN_W] == 500.0
+    assert config[CONF_MAX_PEAK_KW] == 7.5
+    assert config[CONF_PEAK_GRACE_MIN] == 3.0
+    assert config[CONF_CAPTAR_COOLDOWN_MIN] == 15.0
+    assert config[CONF_POWER_RESPECT_PEAK] is False
+    # 900s (15-minute) window / 60s control interval -- design doc Sec 6.4.
+    assert config[CONF_PEAK_WINDOW_SIZE] == 15
+
+
+async def test_select_offers_captar_when_available(hass):
+    """T6.1: select.smart_charging_mode must offer Captar (default CONF_CAPTAR_AVAILABLE=True,
+    design doc §3), independent of Solar being installed."""
+    _seed_states(hass, status="Charging")
+    data = _entry_data()
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    hass.states.async_set("sensor.ev_soc", "50.0")
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("select", DOMAIN, f"{entry.entry_id}_mode")
+    state = hass.states.get(entity_id)
+    assert MODE_CAPTAR in state.attributes["options"]
+
+
+async def test_select_omits_captar_when_unavailable(hass):
+    """T6.1: CONF_CAPTAR_AVAILABLE=False must withhold Captar from the mode selector."""
+    _seed_states(hass, status="Charging")
+    data = _entry_data()
+    data[CONF_CAPTAR_AVAILABLE] = False
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("select", DOMAIN, f"{entry.entry_id}_mode")
+    state = hass.states.get(entity_id)
+    assert MODE_CAPTAR not in state.attributes["options"]
