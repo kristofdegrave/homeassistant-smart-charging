@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Smart Charging instellen",
-        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en stel de initiële drempelwaarden in. Alle velden zijn verplicht, behalve de netspanning-entiteit.",
+        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en stel de initiële drempelwaarden in. Alleen de netspanning-entiteit en de EV-laadniveau-entiteit zijn optioneel (de laatste is verplicht wanneer Zonne-energie is geïnstalleerd).",
         "data": {
           "charger_current_entity": "Stroomregeling-entiteit van de lader",
           "charger_status_entity": "Statusentiteit van de lader",
@@ -12,12 +12,22 @@
           "net_power_entity": "Netto vermogen-entiteit",
           "charger_power_entity": "Vermogen-entiteit van de lader",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
+          "solar_installed": "Zonne-energie geïnstalleerd",
+          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
           "grid_ceiling_a": "Netgrens (A)",
           "grid_safety_offset_a": "Veiligheidsmarge net (A)",
-          "default_target_current": "Standaard doelstroom (A)"
+          "default_target_current": "Standaard doelstroom (A)",
+          "smoothing_window": "Afvlakvenster (samples)",
+          "solar_start_threshold_w": "Startdrempel Zon (W)",
+          "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
+          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
+          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
+          "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
+          "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
+          "default_soc_limit": "Standaard laadlimiet (%)"
         }
       },
       "reconfigure": {
@@ -30,9 +40,14 @@
           "charging_states": "Statussen die \"aan het laden\" betekenen (kommagescheiden)",
           "net_power_entity": "Netto vermogen-entiteit",
           "charger_power_entity": "Vermogen-entiteit van de lader",
-          "grid_voltage_entity": "Netspanning-entiteit (optioneel)"
+          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
+          "solar_installed": "Zonne-energie geïnstalleerd",
+          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd)"
         }
       }
+    },
+    "error": {
+      "required_when_solar_installed": "Verplicht wanneer Zonne-energie is geïnstalleerd"
     }
   },
   "options": {
@@ -47,6 +62,14 @@
           "grid_ceiling_a": "Netgrens (A)",
           "grid_safety_offset_a": "Veiligheidsmarge net (A)",
           "default_target_current": "Standaard doelstroom (A)",
+          "smoothing_window": "Afvlakvenster (samples)",
+          "solar_start_threshold_w": "Startdrempel Zon (W)",
+          "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
+          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
+          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
+          "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
+          "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
+          "default_soc_limit": "Standaard laadlimiet (%)",
           "control_interval_s": "Regelinterval (s)"
         }
       }
@@ -59,6 +82,11 @@
       },
       "soc_limit_override": {
         "name": "Standaard laadlimiet"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Modus"
       }
     },
     "sensor": {
