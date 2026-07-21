@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Smart Charging instellen",
-        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en stel de initiële drempelwaarden in. Alleen de netspanning-entiteit en de EV-laadniveau-entiteit zijn optioneel (de laatste is verplicht wanneer Zonne-energie is geïnstalleerd).",
+        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en stel de initiële drempelwaarden in. Alleen de netspanning-entiteit en de EV-laadniveau-entiteit zijn optioneel (de laatste is verplicht wanneer Zonne-energie is geïnstalleerd of CapTar beschikbaar is).",
         "data": {
           "charger_current_entity": "Stroomregeling-entiteit van de lader",
           "charger_status_entity": "Statusentiteit van de lader",
@@ -13,7 +13,8 @@
           "charger_power_entity": "Vermogen-entiteit van de lader",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
           "solar_installed": "Zonne-energie geïnstalleerd",
-          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
+          "captar_available": "CapTar beschikbaar",
+          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
@@ -27,7 +28,12 @@
           "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
           "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
           "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
-          "default_soc_limit": "Standaard laadlimiet (%)"
+          "default_soc_limit": "Standaard laadlimiet (%)",
+          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
+          "max_peak_kw": "CapTar maximale piek (kW)",
+          "peak_grace_min": "CapTar respijtperiode piek (min)",
+          "captar_cooldown_min": "Afkoelduur Captar (min)",
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
         }
       },
       "reconfigure": {
@@ -42,12 +48,14 @@
           "charger_power_entity": "Vermogen-entiteit van de lader",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
           "solar_installed": "Zonne-energie geïnstalleerd",
-          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd)"
+          "captar_available": "CapTar beschikbaar",
+          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)"
         }
       }
     },
     "error": {
-      "required_when_solar_installed": "Verplicht wanneer Zonne-energie is geïnstalleerd"
+      "required_when_solar_installed": "Verplicht wanneer Zonne-energie is geïnstalleerd",
+      "required_when_captar_available": "Verplicht wanneer CapTar beschikbaar is"
     }
   },
   "options": {
@@ -70,6 +78,11 @@
           "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
           "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
           "default_soc_limit": "Standaard laadlimiet (%)",
+          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
+          "max_peak_kw": "CapTar maximale piek (kW)",
+          "peak_grace_min": "CapTar respijtperiode piek (min)",
+          "captar_cooldown_min": "Afkoelduur Captar (min)",
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "control_interval_s": "Regelinterval (s)"
         }
       }
@@ -95,6 +108,12 @@
       },
       "active_mode": {
         "name": "Actieve modus"
+      },
+      "monthly_peak_kw": {
+        "name": "Maandelijkse piek"
+      },
+      "effective_peak_limit": {
+        "name": "Effectieve piekgrens"
       }
     }
   }
