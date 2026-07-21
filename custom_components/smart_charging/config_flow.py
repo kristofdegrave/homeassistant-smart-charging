@@ -8,6 +8,8 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CAPTAR_AVAILABLE,
+    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
@@ -21,9 +23,13 @@ from .const import (
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_CURRENT,
+    CONF_MAX_PEAK_KW,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_PEAK_GRACE_MIN,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
@@ -33,9 +39,14 @@ from .const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_STATUS_TRANSLATION,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_GRID_SAFETY_OFFSET_A,
+    DEFAULT_MAX_PEAK_KW,
     DEFAULT_NOMINAL_VOLTAGE,
+    DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_COOLDOWN_MIN,
@@ -66,6 +77,11 @@ OPTION_KEYS = (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_DEFAULT_SOC_LIMIT,
+    CONF_SAFETY_MARGIN_W,
+    CONF_MAX_PEAK_KW,
+    CONF_PEAK_GRACE_MIN,
+    CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_POWER_RESPECT_PEAK,
 )
 
 
@@ -96,6 +112,7 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
         vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
         vol.Optional(CONF_SOLAR_INSTALLED, default=False): bool,
+        vol.Optional(CONF_CAPTAR_AVAILABLE, default=True): bool,
         vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor"),
     }
 )
@@ -155,6 +172,25 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_DEFAULT_SOC_LIMIT, default=d.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
             ): vol.Coerce(float),
+            vol.Required(
+                CONF_SAFETY_MARGIN_W,
+                default=d.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_PEAK_KW, default=d.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_PEAK_GRACE_MIN,
+                default=d.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_CAPTAR_COOLDOWN_MIN,
+                default=d.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_POWER_RESPECT_PEAK,
+                default=d.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
+            ): bool,
         }
     )
 
@@ -164,11 +200,14 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 
 
 def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
-    """R18/design §3: Solar installed=True requires ev_soc mapped -- a config-time
-    guard, not a runtime fault. Shared by the install and reconfigure steps so
-    flipping the toggle through either path is rejected the same way."""
+    """R18/design §3: Solar installed=True or CapTar available=True requires ev_soc
+    mapped -- a config-time guard, not a runtime fault. Shared by the install and
+    reconfigure steps so flipping either toggle through either path is rejected the
+    same way. Both must be False for ev_soc to stay optional."""
     if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_EV_SOC_ENTITY):
         return {CONF_EV_SOC_ENTITY: "required_when_solar_installed"}
+    if user_input.get(CONF_CAPTAR_AVAILABLE) and not user_input.get(CONF_EV_SOC_ENTITY):
+        return {CONF_EV_SOC_ENTITY: "required_when_captar_available"}
     return None
 
 
