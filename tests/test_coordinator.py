@@ -2,7 +2,20 @@
 
 import pytest
 
-from custom_components.smart_charging.const import MODE_OFF, MODE_POWER, MODE_SOLAR, MODE_SOLAR_ONLY
+from custom_components.smart_charging.const import (
+    CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
+    CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_START_THRESHOLD_W,
+    MODE_OFF,
+    MODE_POWER,
+    MODE_SOLAR,
+    MODE_SOLAR_ONLY,
+    ROLE_EV_SOC,
+)
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
@@ -47,7 +60,7 @@ def _adapters(
         "grid_voltage": _FakeNumeric(voltage),
     }
     if ev_soc_role:
-        adapters["ev_soc"] = _FakeNumeric(ev_soc)
+        adapters[ROLE_EV_SOC] = _FakeNumeric(ev_soc)
     return adapters
 
 
@@ -58,13 +71,13 @@ def _config():
         "grid_ceiling_a": 25.0,
         "grid_safety_offset_a": 2.0,
         "nominal_voltage": 230.0,
-        "smoothing_window": 1,
-        "solar_start_threshold_w": 100.0,
-        "solar_only_start_threshold_w": 100.0,
-        "solar_hold_min": 5.0,
-        "solar_cooldown_min": 2.0,
-        "solar_only_strategy": ROUND_DOWN,
-        "solar_only_midpoint": 0.5,
+        CONF_SMOOTHING_WINDOW: 1,
+        CONF_SOLAR_START_THRESHOLD_W: 100.0,
+        CONF_SOLAR_ONLY_START_THRESHOLD_W: 100.0,
+        CONF_SOLAR_HOLD_MIN: 5.0,
+        CONF_SOLAR_COOLDOWN_MIN: 2.0,
+        CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
+        CONF_SOLAR_ONLY_MIDPOINT: 0.5,
     }
 
 
@@ -340,8 +353,8 @@ async def test_mode_switch_resets_the_incoming_modes_state(hass):
     """Multi-cycle by nature (a reset is only observable by comparing state across a
     switch); each phase below is its own Arrange/Act/Assert."""
     config = _config()
-    config["solar_hold_min"] = 0.0  # Hold -> Cooldown transitions on the very next cycle
-    config["solar_cooldown_min"] = 5.0  # long enough that real test wall-clock never clears it
+    config[CONF_SOLAR_HOLD_MIN] = 0.0  # Hold -> Cooldown transitions on the very next cycle
+    config[CONF_SOLAR_COOLDOWN_MIN] = 5.0  # long enough that real test wall-clock never clears it
 
     ample = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     idle_surplus = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc=50.0)

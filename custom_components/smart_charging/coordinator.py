@@ -11,6 +11,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     CHARGEABLE_STATES,
+    CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
+    CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
     DOMAIN,
@@ -18,6 +25,7 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    ROLE_EV_SOC,
 )
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.grid_safety import clamp_to_ceiling
@@ -109,7 +117,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # sensor also goes unavailable on unplug, per UC01/R7).
         ev_soc = None
         if self.active_mode in _SOLAR_MODES and status in CHARGEABLE_STATES:
-            ev_soc = await self._adapters["ev_soc"].read() if "ev_soc" in self._adapters else None
+            ev_soc = (
+                await self._adapters[ROLE_EV_SOC].read() if ROLE_EV_SOC in self._adapters else None
+            )
             if ev_soc is None:
                 self._log_fault("ev_soc required while a solar mode is active but missing/None")
                 await self._write(0.0)
@@ -117,7 +127,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # .get(): the smoothing-window option is only wired into the config entry once Task 6.1
         # threads it through __init__.py; smoothing runs every cycle regardless of mode.
-        smoothing_window = self._config.get("smoothing_window", DEFAULT_SMOOTHING_WINDOW)
+        smoothing_window = self._config.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW)
         smoothed_net_w, self._net_window = smooth_net_power(
             net_w, self._net_window, size=smoothing_window
         )
@@ -153,10 +163,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 surplus_w,
                 self._mode_state[MODE_SOLAR],
                 now,
-                start_threshold_w=self._config["solar_start_threshold_w"],
+                start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
                 min_a=self._config["min_current"],
-                hold_minutes=self._config["solar_hold_min"],
-                cooldown_minutes=self._config["solar_cooldown_min"],
+                hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
+                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
                 voltage=voltage,
             )
         else:  # MODE_SOLAR_ONLY
@@ -165,11 +175,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 surplus_w,
                 self._mode_state[MODE_SOLAR_ONLY],
                 now,
-                start_threshold_w=self._config["solar_only_start_threshold_w"],
+                start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
                 min_a=self._config["min_current"],
-                cooldown_minutes=self._config["solar_cooldown_min"],
-                strategy=self._config["solar_only_strategy"],
-                midpoint=self._config["solar_only_midpoint"],
+                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
+                strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
+                midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
                 voltage=voltage,
             )
 
