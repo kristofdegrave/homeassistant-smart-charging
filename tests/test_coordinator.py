@@ -7,6 +7,7 @@ from custom_components.smart_charging.const import (
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_MAX_PEAK_KW,
     CONF_PEAK_GRACE_MIN,
+    CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -92,7 +93,7 @@ def _config():
         CONF_PEAK_GRACE_MIN: 2.0,
         CONF_CAPTAR_COOLDOWN_MIN: 5.0,
         CONF_POWER_RESPECT_PEAK: True,
-        "peak_window_size": 1,
+        CONF_PEAK_WINDOW_SIZE: 1,
     }
 
 
@@ -510,6 +511,29 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     result = await coord._async_update_data()
 
     assert result.commanded_current == 10.0
+    assert result.fault is False
+
+
+async def test_peak_clamp_reduces_solar_below_headroom(hass):
+    """R3 now applies to Solar too -- no opt-out (only Power has one, R17). A tight peak
+    budget (below the safety margin) reduces Solar's surplus-based request even though
+    the surplus itself is ample, proving R3 isn't Captar-only."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 0.1  # 100 W -- deliberately below the 250 W safety margin
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    # surplus = charger_w(2760) - net_w(0) = 2760 W -> round up -> 12 A ideal.
+    # headroom = floor((100 - 250 - (0 - 2760)) / 230) = floor(2610 / 230) = 11 A.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 0.1
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 11.0
     assert result.fault is False
 
 

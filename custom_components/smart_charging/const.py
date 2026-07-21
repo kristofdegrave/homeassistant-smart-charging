@@ -55,6 +55,7 @@ CONF_GRID_SAFETY_OFFSET_A = "grid_safety_offset_a"  # C4 safety margin below the
 CONF_DEFAULT_TARGET_CURRENT = "default_target_current"
 CONF_CONTROL_INTERVAL_S = "control_interval_s"
 CONF_SMOOTHING_WINDOW = "smoothing_window"  # R10 rolling-window sample count
+CONF_PEAK_WINDOW_SIZE = "peak_window_size"  # E5 15-min window sample count, derived at setup
 CONF_SOLAR_START_THRESHOLD_W = "solar_start_threshold_w"  # R1 (Solar)
 CONF_SOLAR_ONLY_START_THRESHOLD_W = "solar_only_start_threshold_w"  # R2 (SolarOnly)
 CONF_SOLAR_HOLD_MIN = "solar_hold_min"  # R1 post-surplus hold duration

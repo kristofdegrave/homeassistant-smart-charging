@@ -15,6 +15,7 @@ from .const import (
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_MAX_PEAK_KW,
     CONF_PEAK_GRACE_MIN,
+    CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -58,6 +59,16 @@ _SOC_GATED_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR)
 _PEAK_WINDOW_SECONDS = 900  # 15 minutes (design doc Sec 6.4)
 
 
+def _fresh_mode_state() -> dict:
+    """R7/R11: the idle state every mode with one resets to -- disconnect, mode switch,
+    and the SOC gate all rebuild from this same shape."""
+    return {
+        MODE_SOLAR: solar.SolarState.idle(),
+        MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
+        MODE_CAPTAR: captar.CaptarState.idle(),
+    }
+
+
 @dataclass
 class CycleResult:
     """Outcome of one control cycle: the amps actually written and whether it faulted."""
@@ -93,11 +104,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
         self._last_active_mode: str | None = None
         self._net_window: tuple[float, ...] = ()
-        self._mode_state = {
-            MODE_SOLAR: solar.SolarState.idle(),
-            MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
-            MODE_CAPTAR: captar.CaptarState.idle(),
-        }
+        self._mode_state = _fresh_mode_state()
         self._was_faulted = False
         # M1's OWN 15-minute window (E5, Task 1.3), distinct from R10's `_net_window` above --
         # a MonthlyPeakSensor restore may seed `_peak_tracked_kw`/`_peak_tracked_month` before
@@ -145,7 +152,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # raw samples (design doc Sec 6.4's month-rollover note).
             self._peak_window = ()
         peak_window_size = self._config.get(
-            "peak_window_size", max(1, round(_PEAK_WINDOW_SECONDS / self._interval_s))
+            CONF_PEAK_WINDOW_SIZE, max(1, round(_PEAK_WINDOW_SECONDS / self._interval_s))
         )
         smoothed_peak_w, self._peak_window = smooth_net_power(
             net_w, self._peak_window, size=peak_window_size
@@ -165,11 +172,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # R11: switching mode resets timers -- fresh state for every mode with one, whether
             # or not the incoming mode is one of them (a state nobody is dispatching to is inert
             # either way).
-            self._mode_state = {
-                MODE_SOLAR: solar.SolarState.idle(),
-                MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
-                MODE_CAPTAR: captar.CaptarState.idle(),
-            }
+            self._mode_state = _fresh_mode_state()
             self._last_active_mode = self.active_mode
 
         # ev_soc is read -- and its absence is a fault -- ONLY while a solar mode or Captar is
@@ -184,7 +187,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if ev_soc is None:
                 self._log_fault("ev_soc required while a solar mode is active but missing/None")
                 await self._write(0.0)
-                return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
+                return CycleResult(
+                    commanded_current=0.0,
+                    fault=True,
+                    active_mode=self.active_mode,
+                    monthly_peak_kw=monthly_peak_kw,
+                    effective_peak_limit_kw=effective_peak_limit_kw,
+                )
 
         # .get(): the smoothing-window option is only wired into the config entry once Task 6.1
         # threads it through __init__.py; smoothing runs every cycle regardless of mode.
@@ -199,11 +208,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             desired = 0.0
             # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
             # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
-            self._mode_state = {
-                MODE_SOLAR: solar.SolarState.idle(),
-                MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
-                MODE_CAPTAR: captar.CaptarState.idle(),
-            }
+            self._mode_state = _fresh_mode_state()
         elif self.active_mode == MODE_OFF:
             desired = 0.0
         elif self.active_mode == MODE_POWER:
