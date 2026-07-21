@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up Smart Charging",
-        "description": "Map the entities that represent your charger and grid, and set the initial thresholds. Only the grid voltage entity and the EV state-of-charge entity are optional (the latter is required when Solar is installed).",
+        "description": "Map the entities that represent your charger and grid, and set the initial thresholds. Only the grid voltage entity and the EV state-of-charge entity are optional (the latter is required when Solar is installed or CapTar is available).",
         "data": {
           "charger_current_entity": "Charger current control entity",
           "charger_status_entity": "Charger status entity",
@@ -13,7 +13,8 @@
           "charger_power_entity": "Charger power entity",
           "grid_voltage_entity": "Grid voltage entity (optional)",
           "solar_installed": "Solar installed",
-          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed)",
+          "captar_available": "CapTar available",
+          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)",
@@ -27,7 +28,12 @@
           "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
           "solar_only_strategy": "SolarOnly amp-step rounding strategy",
           "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
-          "default_soc_limit": "Default charge limit (%)"
+          "default_soc_limit": "Default charge limit (%)",
+          "safety_margin_w": "CapTar peak safety margin (W)",
+          "max_peak_kw": "CapTar maximum peak (kW)",
+          "peak_grace_min": "CapTar peak grace period (min)",
+          "captar_cooldown_min": "Captar cooldown duration (min)",
+          "power_respect_peak": "Power mode respects the peak limit"
         }
       },
       "reconfigure": {
@@ -42,12 +48,14 @@
           "charger_power_entity": "Charger power entity",
           "grid_voltage_entity": "Grid voltage entity (optional)",
           "solar_installed": "Solar installed",
-          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed)"
+          "captar_available": "CapTar available",
+          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)"
         }
       }
     },
     "error": {
-      "required_when_solar_installed": "Required when Solar is installed"
+      "required_when_solar_installed": "Required when Solar is installed",
+      "required_when_captar_available": "Required when CapTar is available"
     }
   },
   "options": {
@@ -70,6 +78,11 @@
           "solar_only_strategy": "SolarOnly amp-step rounding strategy",
           "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
           "default_soc_limit": "Default charge limit (%)",
+          "safety_margin_w": "CapTar peak safety margin (W)",
+          "max_peak_kw": "CapTar maximum peak (kW)",
+          "peak_grace_min": "CapTar peak grace period (min)",
+          "captar_cooldown_min": "Captar cooldown duration (min)",
+          "power_respect_peak": "Power mode respects the peak limit",
           "control_interval_s": "Control interval (s)"
         }
       }
@@ -95,6 +108,12 @@
       },
       "active_mode": {
         "name": "Active mode"
+      },
+      "monthly_peak_kw": {
+        "name": "Monthly peak"
+      },
+      "effective_peak_limit": {
+        "name": "Effective peak limit"
       }
     }
   }
