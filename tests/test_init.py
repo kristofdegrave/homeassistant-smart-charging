@@ -155,7 +155,9 @@ async def test_select_entity_is_registered_on_setup(hass):
     assert entity_id is not None
     state = hass.states.get(entity_id)
     assert state is not None
-    assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly"]
+    # CONF_CAPTAR_AVAILABLE predates this entry's data too -- defaults to True (design doc
+    # §3), so Captar is offered alongside Solar/SolarOnly without being set explicitly.
+    assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly", "Captar"]
 
 
 async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):

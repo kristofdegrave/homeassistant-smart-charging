@@ -1,5 +1,6 @@
 """HA-harness test for the mode selector (C2)."""
 
+import pytest
 from homeassistant.core import State
 from pytest_homeassistant_custom_component.common import (
     MockEntityPlatform,
@@ -75,3 +76,22 @@ def test_options_are_off_power_only_when_solar_not_installed():
 def test_options_include_solar_modes_when_solar_installed():
     entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=True)
     assert entity.options == ["Off", "Power", "Solar", "SolarOnly"]
+
+
+@pytest.mark.parametrize(
+    ("solar_installed", "captar_available", "expected"),
+    [
+        (False, False, ["Off", "Power"]),
+        (True, False, ["Off", "Power", "Solar", "SolarOnly"]),
+        (False, True, ["Off", "Power", "Captar"]),
+        (True, True, ["Off", "Power", "Solar", "SolarOnly", "Captar"]),
+    ],
+)
+def test_mode_options_compose_independently(solar_installed, captar_available, expected):
+    entity = ModeSelect(
+        entry_id="abc",
+        coordinator=_StubCoordinator(),
+        solar_installed=solar_installed,
+        captar_available=captar_available,
+    )
+    assert entity.options == expected
