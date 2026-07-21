@@ -19,11 +19,13 @@ MODE_SOLAR = "Solar"
 MODE_SOLAR_ONLY = "SolarOnly"
 MODE_CAPTAR = "Captar"
 
-# Adapter role key (the coordinator's/factory's per-role dict; RA1 extension). Named here as
-# it's introduced fresh by this task -- the five pre-existing roles (charger_current,
-# charger_status, net_power, charger_power, grid_voltage) are still bare strings pending a
-# follow-up that converts all of them together (see issue tracking that cleanup).
+# Adapter role keys (the coordinator's/factory's per-role dict; RA1 extension for ROLE_EV_SOC).
 ROLE_EV_SOC = "ev_soc"
+ROLE_CHARGER_CURRENT = "charger_current"
+ROLE_CHARGER_STATUS = "charger_status"
+ROLE_NET_POWER = "net_power"
+ROLE_CHARGER_POWER = "charger_power"
+ROLE_GRID_VOLTAGE = "grid_voltage"
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
