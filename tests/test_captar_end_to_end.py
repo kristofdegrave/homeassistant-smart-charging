@@ -7,6 +7,7 @@ already covers the state machine in isolation; this file proves the coordinator 
 peak clamp (Billing-Protection Engine, E5) and the SOC gate.
 """
 
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -108,6 +109,16 @@ def _seed_ample_peak_headroom(coordinator, kw=100.0):
     coordinator._peak_tracked_kw = kw
 
 
+def _effective_peak_limit_state(hass):
+    """Look up the diagnostic EffectivePeakLimitSensor by unique_id, not entity_id -- its
+    friendly-name-derived entity_id depends on the select.mode-style translation entry T6.3
+    (translations/strings) adds, not this task (see tests/test_init.py's identical note)."""
+    entry_id = next(iter(hass.data[DOMAIN]))
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_effective_peak_limit")
+    return hass.states.get(entity_id)
+
+
 async def _setup(hass, **option_overrides):
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Connected")
@@ -150,6 +161,11 @@ async def test_uc03_main_success_starts_at_max_current_within_headroom(hass):
     assert calls[-1]["value"] == 16.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
     assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_CAPTAR
+    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    # C3: the effective-peak-limit sensor reflects the configured max_peak_kw this cycle
+    # (min(monthly_peak_kw, max_peak_kw) with the ample seeded peak) -- ties this set-point
+    # to the clamp bound that produced it, the whole point of this suite.
+    assert _effective_peak_limit_state(hass).state == "4.0"
 
 
 async def test_uc03_2a_cooldown_blocks_restart_until_it_elapses(hass):
@@ -184,7 +200,13 @@ async def test_uc03_peak_clamp_reduces_set_point_within_headroom(hass):
     """UC03 exception flow: the R3 peak clamp fits the max-current request (raw) to the
     available peak headroom when household load leaves less than the maximum -- but still
     at least the minimum -- charging current of headroom, reducing (not stopping) the
-    set-point this cycle."""
+    set-point this cycle.
+
+    (UC03's exception flow also names the C4 grid-supply-ceiling clamp as a second way the
+    set-point can be reduced/stopped -- that clamp is mode-agnostic and already covered at
+    engine level by `tests/engines/test_grid_safety.py`, so it is deferred there rather than
+    duplicated here, the same call the sibling `test_solar_end_to_end.py` makes for its own
+    out-of-scope alternates.)"""
     coordinator, calls = await _setup(hass, **{CONF_MAX_PEAK_KW: 4.0, CONF_SAFETY_MARGIN_W: 250.0})
 
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
