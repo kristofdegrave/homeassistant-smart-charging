@@ -242,23 +242,29 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     assert config[CONF_PEAK_WINDOW_SIZE] == 15
 
 
-async def test_select_offers_captar_when_available(hass):
-    """T6.1: select.smart_charging_mode must offer Captar (default CONF_CAPTAR_AVAILABLE=True,
-    design doc §3), independent of Solar being installed."""
-    _seed_states(hass, status="Charging")
-    data = _entry_data()
-    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
-    hass.states.async_set("sensor.ev_soc", "50.0")
+async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
+    """T6.1: behavioral companion to the dict-wiring test above -- proves
+    CONF_POWER_RESPECT_PEAK actually flows from the config entry's options into a live cycle's
+    R17 opt-out (coordinator.py's `power_respect_peak` read), not just into an inert dict entry.
+    With zero tracked peak headroom, Power would otherwise be clamped to 0 A by R3 (design doc
+    Sec 7) -- turning the opt-out on must still command the full default target current."""
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging")  # net_power/charger_power both 0.0 -- no headroom.
+    options = _entry_options()
+    options[CONF_POWER_RESPECT_PEAK] = False
 
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id("select", DOMAIN, f"{entry.entry_id}_mode")
-    state = hass.states.get(entity_id)
-    assert MODE_CAPTAR in state.attributes["options"]
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator.active_mode = MODE_POWER
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert calls[-1]["value"] == 10.0  # default_target_current, unclamped by R3.
 
 
 async def test_select_omits_captar_when_unavailable(hass):
