@@ -41,6 +41,7 @@ CONF_CHARGER_POWER_ENTITY = "charger_power_entity"
 CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
 CONF_SOLAR_INSTALLED = "solar_installed"  # bool, default False -- design doc §3, R18 scoped
+CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped (#215)
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names
@@ -64,6 +65,11 @@ CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"  # R2 round_nearest fractional 
 # config-time default; the entity is the runtime value that solar step-up/reserve-cap (R7)
 # sit on top of.
 CONF_DEFAULT_SOC_LIMIT = "default_soc_limit"
+CONF_SAFETY_MARGIN_W = "safety_margin_w"  # Captar peak-protection margin (design doc §3, E5)
+CONF_MAX_PEAK_KW = "max_peak_kw"  # Captar billing-protection peak limit (design doc §3, E5)
+CONF_PEAK_GRACE_MIN = "peak_grace_min"  # Captar grace period before peak enforcement (design §3)
+CONF_CAPTAR_COOLDOWN_MIN = "captar_cooldown_min"  # Captar mode cooldown duration (design doc §3)
+CONF_POWER_RESPECT_PEAK = "power_respect_peak"  # R17 opt-out: Power mode honors the peak limit
 
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4
@@ -74,3 +80,9 @@ DEFAULT_SOLAR_COOLDOWN_MIN = 2.0
 DEFAULT_SOLAR_ONLY_STRATEGY = ROUND_DOWN
 DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a percent
 DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by config_flow/number entity
+DEFAULT_CAPTAR_AVAILABLE = True
+DEFAULT_SAFETY_MARGIN_W = 250.0
+DEFAULT_MAX_PEAK_KW = 4.0
+DEFAULT_PEAK_GRACE_MIN = 2.0
+DEFAULT_CAPTAR_COOLDOWN_MIN = 10.0
+DEFAULT_POWER_RESPECT_PEAK = True
