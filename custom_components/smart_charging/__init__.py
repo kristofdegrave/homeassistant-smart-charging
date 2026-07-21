@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from .adapters.factory import build_adapters
 from .const import (
     CONF_CONTROL_INTERVAL_S,
+    CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
@@ -31,6 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     min_current = opts[CONF_MIN_CURRENT]
     max_current = opts[CONF_MAX_CURRENT]
     default_target_current = opts[CONF_DEFAULT_TARGET_CURRENT]
+    default_soc_limit = opts[CONF_DEFAULT_SOC_LIMIT]
     config = {
         "min_current": min_current,
         "max_current": max_current,
@@ -50,6 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_MIN_CURRENT: min_current,
         CONF_MAX_CURRENT: max_current,
         CONF_DEFAULT_TARGET_CURRENT: default_target_current,
+        CONF_DEFAULT_SOC_LIMIT: default_soc_limit,
     }
 
     # First refresh AFTER platforms so the number entity can seed target_current on add.

@@ -6,6 +6,7 @@ from custom_components.smart_charging.const import (
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
+    CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
@@ -40,6 +41,7 @@ def _entry_options():
         CONF_GRID_CEILING_A: 25.0,
         CONF_GRID_SAFETY_OFFSET_A: 2.0,
         CONF_DEFAULT_TARGET_CURRENT: 10.0,
+        CONF_DEFAULT_SOC_LIMIT: 80.0,
     }
 
 
