@@ -23,6 +23,7 @@ from custom_components.smart_charging.const import (
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_INSTALLED,
@@ -112,6 +113,45 @@ async def _cycle(
     _seed_states(hass, status=status, net_w=net_w, charger_w=charger_w)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+
+
+async def _cycle_from_feedback(hass, coordinator, calls, *, solar_w: float, voltage: float = 230.0):
+    """Model one real feedback cycle: the charger draws exactly what was last commanded
+    (`charger_w`), and the net-import meter (`net_w`) reflects that same draw against a
+    fixed solar production (`net_w = charger_w - solar_w`) -- so `surplus_w = charger_w -
+    net_w` reduces back to the constant `solar_w`, as it does on real hardware. Exercises
+    the closed loop `tests/modes/test_solar.py` defers to this suite (commanded current ->
+    charger_w -> net_w -> next surplus_w), proving the mode holds its set-point steady
+    rather than oscillating once its own draw feeds back into the readings it reacts to."""
+    last_current = calls[-1]["value"]
+    charger_w = last_current * voltage
+    net_w = charger_w - solar_w
+    await _cycle(hass, coordinator, charger_w=charger_w, net_w=net_w)
+
+
+async def test_uc01_closed_loop_holds_steady_once_charging_started(hass):
+    """UC01 postcondition: net grid import stays bounded once surplus sustains charging --
+    the mode must not oscillate once its own commanded current starts showing up in the
+    next cycle's `charger_w`/`net_w` readings (see `_cycle_from_feedback`)."""
+    # smoothing_window=1: this test's feedback formula cancels charger_w's own contribution
+    # to net_w on each raw reading -- the default 4-sample rolling average (R10) would blend
+    # in stale pre-charging readings and mask that cancellation, unrelated to what's under test.
+    coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 1})
+    coordinator.active_mode = MODE_SOLAR
+
+    # solar_w = 2645 W = 11.5 A ideal -> round up (fixed, R1) -> 12 A, same as the main
+    # success test, so a real charger drawing 12 A (2760 W) against 2645 W of solar
+    # production leaves a 115 W net import -- comfortably under one amp-step (230 W).
+    await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
+    assert calls[-1]["value"] == 12.0
+
+    # Two more cycles with the charger now drawing its own commanded current: the
+    # set-point must hold at 12 A rather than hunting, since the formula cancels the
+    # charger's own contribution back out of the surplus it computes.
+    await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
+    assert calls[-1]["value"] == 12.0
+    await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
+    assert calls[-1]["value"] == 12.0
 
 
 async def test_uc01_main_success_starts_and_recomputes_each_cycle(hass):
@@ -236,7 +276,11 @@ async def test_uc02_main_success_starts_and_recomputes_with_round_down_default(h
 async def test_uc02_3a_surplus_below_threshold_stops_immediately_no_hold_no_fallback(hass):
     """UC02 alternate 3a: surplus falling below the start threshold stops charging (0 A)
     within one cycle -- no hold, and no grid fallback to the minimum current, unlike the
-    sibling UC01."""
+    sibling UC01.
+
+    (UC02's alternate 2a -- cooldown blocks a restart -- has no dedicated end-to-end test
+    here: it's the same idle/cooldown-gate code path already proven end-to-end by UC01's
+    2a test above, plus `tests/modes/test_solar_only.py`'s own cooldown coverage.)"""
     coordinator, calls = await _setup(hass)
     coordinator.active_mode = MODE_SOLAR_ONLY
 
@@ -265,8 +309,9 @@ async def test_uc02_3b_round_up_strategy_accepts_bounded_grid_import(hass):
 async def test_uc02_3c_round_nearest_strategy_pendel_behavior(hass):
     """UC02 alternate 3c: with the amp-step rounding strategy configured to round to
     nearest, the set-point rounds to whichever whole ampere is closer to the ideal value
-    using the configured midpoint, so it can toggle between two amp steps as surplus
-    hovers near that midpoint (the "pendel" edge case)."""
+    using the configured midpoint rounding boundary -- crossing it flips the outcome
+    between the two nearest amp steps, which is how surplus hovering near that boundary
+    across cycles produces the "pendel" edge case (not exercised cycle-to-cycle here)."""
     coordinator, calls = await _setup(
         hass, **{CONF_SOLAR_ONLY_STRATEGY: ROUND_NEAREST, CONF_SOLAR_ONLY_MIDPOINT: 0.5}
     )
