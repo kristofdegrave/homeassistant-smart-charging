@@ -5,6 +5,7 @@ import pytest
 from custom_components.smart_charging.const import MODE_OFF, MODE_POWER, MODE_SOLAR, MODE_SOLAR_ONLY
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
+from custom_components.smart_charging.modes._phase import Phase
 
 
 class _FakeNumeric:
@@ -189,7 +190,7 @@ async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(
     adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=80.0)
     coord, result = await _run_mode(hass, adapters, _config(), mode, soc_limit_override=80.0)
     assert result.commanded_current == 0.0
-    assert coord._mode_state[mode].phase == "idle"
+    assert coord._mode_state[mode].phase == Phase.IDLE
 
 
 async def test_resumes_when_the_soc_limit_rises_above_current_soc(hass):
@@ -218,7 +219,7 @@ async def test_resumes_after_disconnect_and_reconnect_while_still_at_the_limit(h
         hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
     )
     assert result.commanded_current == 0.0
-    assert coord._mode_state[MODE_SOLAR].phase == "idle"
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
 
     # Reconnect while still at the limit -- gate still holds, no stuck Hold/Cooldown either.
     adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=85.0)
@@ -263,6 +264,16 @@ async def test_missing_ev_soc_faults_only_while_a_solar_mode_is_selected(hass):
     assert result.fault is False
 
 
+async def test_disconnect_with_unavailable_ev_soc_is_a_clean_stop_not_a_fault(hass):
+    """A disconnected car is always a clean idle stop (UC01/R7), even when its own SOC
+    sensor also goes unavailable on unplug -- ev_soc is only required while the car is
+    both connected and a solar mode is active."""
+    adapters = _adapters(status="disconnected", net_w=0.0, charger_w=0.0, ev_soc_role=False)
+    _coord, result = await _run_mode(hass, adapters, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    assert result.fault is False
+    assert result.commanded_current == 0.0
+
+
 async def test_mode_switch_resets_the_incoming_modes_state(hass):
     config = _config()
     config["solar_hold_min"] = 0.0  # Hold -> Cooldown transitions on the very next cycle
@@ -283,7 +294,7 @@ async def test_mode_switch_resets_the_incoming_modes_state(hass):
         hass, idle_surplus, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
     )
     assert result.commanded_current == 0.0  # cooldown
-    assert coord._mode_state[MODE_SOLAR].phase == "cooldown"
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
 
     # Switch away and back -- both transitions reset _mode_state (R11).
     coord, result = await _run_mode(

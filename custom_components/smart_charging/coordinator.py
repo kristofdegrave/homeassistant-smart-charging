@@ -36,7 +36,7 @@ class CycleResult:
 
     commanded_current: float
     fault: bool
-    active_mode: str = MODE_OFF
+    active_mode: str
 
 
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
@@ -103,10 +103,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             }
             self._last_active_mode = self.active_mode
 
-        # ev_soc is read -- and its absence is a fault -- ONLY while a solar mode is selected
-        # (success-criterion 6 / S2: Power/Off must not regress to needing an SOC sensor).
+        # ev_soc is read -- and its absence is a fault -- ONLY while a solar mode is selected AND
+        # the car is connected (success-criterion 6 / S2: Power/Off must not regress to needing
+        # an SOC sensor; a disconnected car is a clean idle stop, not a fault, even if its SOC
+        # sensor also goes unavailable on unplug, per UC01/R7).
         ev_soc = None
-        if self.active_mode in _SOLAR_MODES:
+        if self.active_mode in _SOLAR_MODES and status in CHARGEABLE_STATES:
             ev_soc = await self._adapters["ev_soc"].read() if "ev_soc" in self._adapters else None
             if ev_soc is None:
                 self._log_fault("ev_soc required while a solar mode is active but missing/None")
