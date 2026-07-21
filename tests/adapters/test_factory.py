@@ -12,6 +12,7 @@ from custom_components.smart_charging.const import (
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
+    CONF_EV_SOC_ENTITY,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
@@ -68,3 +69,25 @@ async def test_missing_required_role_raises_key_error(hass):
     del data[CONF_CHARGER_CURRENT_ENTITY]
     with pytest.raises(KeyError):
         build_adapters(hass, data)
+
+
+async def test_factory_builds_ev_soc_role_when_configured(hass):
+    data = _data()
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters["ev_soc"], NumericReadAdapter)
+    assert adapters["ev_soc"]._entity_id == "sensor.ev_soc"
+
+
+async def test_ev_soc_role_absent_when_not_configured(hass):
+    # An existing Power-MVP entry predates this field entirely (design doc §8/§9) --
+    # build_adapters must not KeyError on it.
+    adapters = build_adapters(hass, _data())
+    assert "ev_soc" not in adapters
+
+
+async def test_ev_soc_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_EV_SOC_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert "ev_soc" not in adapters

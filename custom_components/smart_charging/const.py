@@ -25,6 +25,7 @@ CONF_STATUS_TRANSLATION = "status_translation"  # derived {raw: canonical} store
 CONF_NET_POWER_ENTITY = "net_power_entity"
 CONF_CHARGER_POWER_ENTITY = "charger_power_entity"
 CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
+CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names
