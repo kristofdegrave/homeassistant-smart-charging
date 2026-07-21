@@ -33,6 +33,8 @@ from custom_components.smart_charging.const import (
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
+    STATE_CHARGING,
+    STATE_CONNECTED,
 )
 
 
@@ -41,7 +43,7 @@ def _entry_data():
     return {
         CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
         CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
-        CONF_STATUS_TRANSLATION: {"Charging": "charging", "Connected": "connected"},
+        CONF_STATUS_TRANSLATION: {"Charging": STATE_CHARGING, "Connected": STATE_CONNECTED},
         CONF_NET_POWER_ENTITY: "sensor.net_power",
         CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
         CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
