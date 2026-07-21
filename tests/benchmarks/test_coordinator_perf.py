@@ -12,13 +12,23 @@ import time
 import tracemalloc
 
 from custom_components.smart_charging.const import (
+    CONF_GRID_CEILING_A,
+    CONF_GRID_SAFETY_OFFSET_A,
+    CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MIN_CURRENT,
+    CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     MODE_POWER,
+    ROLE_CHARGER_CURRENT,
+    ROLE_CHARGER_POWER,
+    ROLE_CHARGER_STATUS,
+    ROLE_GRID_VOLTAGE,
+    ROLE_NET_POWER,
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 
@@ -48,21 +58,21 @@ class _FakeStatus:
 
 def _adapters():
     return {
-        "charger_current": _FakeNumeric(0.0),
-        "charger_status": _FakeStatus("charging"),
-        "net_power": _FakeNumeric(2000.0),
-        "charger_power": _FakeNumeric(3000.0),
-        "grid_voltage": _FakeNumeric(230.0),
+        ROLE_CHARGER_CURRENT: _FakeNumeric(0.0),
+        ROLE_CHARGER_STATUS: _FakeStatus("charging"),
+        ROLE_NET_POWER: _FakeNumeric(2000.0),
+        ROLE_CHARGER_POWER: _FakeNumeric(3000.0),
+        ROLE_GRID_VOLTAGE: _FakeNumeric(230.0),
     }
 
 
 def _config():
     return {
-        "min_current": 6.0,
-        "max_current": 16.0,
-        "grid_ceiling_a": 25.0,
-        "grid_safety_offset_a": 2.0,
-        "nominal_voltage": 230.0,
+        CONF_MIN_CURRENT: 6.0,
+        CONF_MAX_CURRENT: 16.0,
+        CONF_GRID_CEILING_A: 25.0,
+        CONF_GRID_SAFETY_OFFSET_A: 2.0,
+        CONF_NOMINAL_VOLTAGE: 230.0,
         CONF_SMOOTHING_WINDOW: 5,
         CONF_MAX_PEAK_KW: 100.0,
         CONF_SAFETY_MARGIN_W: 250.0,

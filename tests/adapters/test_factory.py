@@ -16,7 +16,12 @@ from custom_components.smart_charging.const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
+    ROLE_CHARGER_CURRENT,
+    ROLE_CHARGER_POWER,
+    ROLE_CHARGER_STATUS,
     ROLE_EV_SOC,
+    ROLE_GRID_VOLTAGE,
+    ROLE_NET_POWER,
 )
 
 
@@ -34,35 +39,35 @@ def _data():
 async def test_factory_builds_expected_roles(hass):
     adapters = build_adapters(hass, _data())
 
-    assert isinstance(adapters["charger_current"], NumericReadWriteAdapter)
-    assert adapters["charger_current"]._entity_id == "number.charger_current"
+    assert isinstance(adapters[ROLE_CHARGER_CURRENT], NumericReadWriteAdapter)
+    assert adapters[ROLE_CHARGER_CURRENT]._entity_id == "number.charger_current"
 
-    assert isinstance(adapters["charger_status"], StatusReadAdapter)
-    assert adapters["charger_status"]._entity_id == "sensor.evse"
-    assert adapters["charger_status"]._translation == {"Charging": "charging"}
+    assert isinstance(adapters[ROLE_CHARGER_STATUS], StatusReadAdapter)
+    assert adapters[ROLE_CHARGER_STATUS]._entity_id == "sensor.evse"
+    assert adapters[ROLE_CHARGER_STATUS]._translation == {"Charging": "charging"}
 
-    assert isinstance(adapters["net_power"], NumericReadAdapter)
-    assert adapters["net_power"]._entity_id == "sensor.net_power"
+    assert isinstance(adapters[ROLE_NET_POWER], NumericReadAdapter)
+    assert adapters[ROLE_NET_POWER]._entity_id == "sensor.net_power"
 
-    assert isinstance(adapters["charger_power"], NumericReadAdapter)
-    assert adapters["charger_power"]._entity_id == "sensor.charger_power"
+    assert isinstance(adapters[ROLE_CHARGER_POWER], NumericReadAdapter)
+    assert adapters[ROLE_CHARGER_POWER]._entity_id == "sensor.charger_power"
 
-    assert isinstance(adapters["grid_voltage"], NumericReadAdapter)
-    assert adapters["grid_voltage"]._entity_id == "sensor.grid_voltage"
+    assert isinstance(adapters[ROLE_GRID_VOLTAGE], NumericReadAdapter)
+    assert adapters[ROLE_GRID_VOLTAGE]._entity_id == "sensor.grid_voltage"
 
 
 async def test_grid_voltage_optional(hass):
     data = _data()
     del data[CONF_GRID_VOLTAGE_ENTITY]
     adapters = build_adapters(hass, data)
-    assert "grid_voltage" not in adapters
+    assert ROLE_GRID_VOLTAGE not in adapters
 
 
 async def test_grid_voltage_empty_string_treated_as_absent(hass):
     data = _data()
     data[CONF_GRID_VOLTAGE_ENTITY] = ""
     adapters = build_adapters(hass, data)
-    assert "grid_voltage" not in adapters
+    assert ROLE_GRID_VOLTAGE not in adapters
 
 
 async def test_missing_required_role_raises_key_error(hass):

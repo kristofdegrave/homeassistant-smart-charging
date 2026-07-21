@@ -13,7 +13,12 @@ from ..const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
+    ROLE_CHARGER_CURRENT,
+    ROLE_CHARGER_POWER,
+    ROLE_CHARGER_STATUS,
     ROLE_EV_SOC,
+    ROLE_GRID_VOLTAGE,
+    ROLE_NET_POWER,
 )
 from .base import Adapter
 from .numeric import NumericReadAdapter, NumericReadWriteAdapter
@@ -28,15 +33,15 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     5.1's job) -- the factory itself never requires it.
     """
     adapters: dict[str, Adapter] = {
-        "charger_current": NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
-        "charger_status": StatusReadAdapter(
+        ROLE_CHARGER_CURRENT: NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
+        ROLE_CHARGER_STATUS: StatusReadAdapter(
             hass, data[CONF_CHARGER_STATUS_ENTITY], dict(data[CONF_STATUS_TRANSLATION])
         ),
-        "net_power": NumericReadAdapter(hass, data[CONF_NET_POWER_ENTITY]),
-        "charger_power": NumericReadAdapter(hass, data[CONF_CHARGER_POWER_ENTITY]),
+        ROLE_NET_POWER: NumericReadAdapter(hass, data[CONF_NET_POWER_ENTITY]),
+        ROLE_CHARGER_POWER: NumericReadAdapter(hass, data[CONF_CHARGER_POWER_ENTITY]),
     }
     if data.get(CONF_GRID_VOLTAGE_ENTITY):
-        adapters["grid_voltage"] = NumericReadAdapter(hass, data[CONF_GRID_VOLTAGE_ENTITY])
+        adapters[ROLE_GRID_VOLTAGE] = NumericReadAdapter(hass, data[CONF_GRID_VOLTAGE_ENTITY])
     if data.get(CONF_EV_SOC_ENTITY):
         adapters[ROLE_EV_SOC] = NumericReadAdapter(hass, data[CONF_EV_SOC_ENTITY])
     return adapters

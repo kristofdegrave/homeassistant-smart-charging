@@ -66,11 +66,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # coordinator.py's own fallback (PEAK_WINDOW_SECONDS, shared).
     peak_window_size = max(1, round(PEAK_WINDOW_SECONDS / interval_s))
     config = {
-        "min_current": min_current,
-        "max_current": max_current,
-        "grid_ceiling_a": opts[CONF_GRID_CEILING_A],
-        "grid_safety_offset_a": opts.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
-        "nominal_voltage": opts[CONF_NOMINAL_VOLTAGE],
+        CONF_MIN_CURRENT: min_current,
+        CONF_MAX_CURRENT: max_current,
+        CONF_GRID_CEILING_A: opts[CONF_GRID_CEILING_A],
+        CONF_GRID_SAFETY_OFFSET_A: opts.get(
+            CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A
+        ),
+        CONF_NOMINAL_VOLTAGE: opts[CONF_NOMINAL_VOLTAGE],
         CONF_SMOOTHING_WINDOW: opts.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
         CONF_PEAK_WINDOW_SIZE: peak_window_size,
         CONF_SOLAR_START_THRESHOLD_W: opts.get(

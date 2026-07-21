@@ -13,7 +13,12 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CHARGEABLE_STATES,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_GRID_CEILING_A,
+    CONF_GRID_SAFETY_OFFSET_A,
+    CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MIN_CURRENT,
+    CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
@@ -39,7 +44,12 @@ from .const import (
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
     PEAK_WINDOW_SECONDS,
+    ROLE_CHARGER_CURRENT,
+    ROLE_CHARGER_POWER,
+    ROLE_CHARGER_STATUS,
     ROLE_EV_SOC,
+    ROLE_GRID_VOLTAGE,
+    ROLE_NET_POWER,
 )
 from .engines.billing_protection import (
     PeakBreachTracker,
@@ -124,15 +134,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
     async def _run_cycle(self) -> CycleResult:
-        status = await self._adapters["charger_status"].read()
-        net_w = await self._adapters["net_power"].read()
-        charger_w = await self._adapters["charger_power"].read()
+        status = await self._adapters[ROLE_CHARGER_STATUS].read()
+        net_w = await self._adapters[ROLE_NET_POWER].read()
+        charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
 
         # Grid voltage is the one role where None is NOT a fault (NF4).
         measured_v = None
-        if "grid_voltage" in self._adapters:
-            measured_v = await self._adapters["grid_voltage"].read()
-        voltage = resolve_voltage(measured_v, self._config["nominal_voltage"])
+        if ROLE_GRID_VOLTAGE in self._adapters:
+            measured_v = await self._adapters[ROLE_GRID_VOLTAGE].read()
+        voltage = resolve_voltage(measured_v, self._config[CONF_NOMINAL_VOLTAGE])
 
         # Any required role missing -> fault (ADR-0007).
         if status is None or net_w is None or charger_w is None:
@@ -234,7 +244,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 self._mode_state[MODE_SOLAR],
                 now,
                 start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
-                min_a=self._config["min_current"],
+                min_a=self._config[CONF_MIN_CURRENT],
                 hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
                 cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
                 voltage=voltage,
@@ -246,7 +256,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 self._mode_state[MODE_SOLAR_ONLY],
                 now,
                 start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
-                min_a=self._config["min_current"],
+                min_a=self._config[CONF_MIN_CURRENT],
                 cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
                 strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
                 midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
@@ -256,7 +266,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             desired, self._mode_state[MODE_CAPTAR] = captar.step(
                 self._mode_state[MODE_CAPTAR],
                 now,
-                max_a=self._config["max_current"],
+                max_a=self._config[CONF_MAX_CURRENT],
                 cooldown_minutes=self._config.get(
                     CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
                 ),
@@ -276,7 +286,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 voltage=voltage,
                 effective_peak_limit_kw=effective_peak_limit_kw,
                 safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
-                min_a=self._config["min_current"],
+                min_a=self._config[CONF_MIN_CURRENT],
                 grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
                 tracker=self._peak_tracker,
                 now=now,
@@ -290,11 +300,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             net_w=net_w,
             charger_w=charger_w,
             voltage=voltage,
-            ceiling_a=self._config["grid_ceiling_a"],
-            offset_a=self._config["grid_safety_offset_a"],
+            ceiling_a=self._config[CONF_GRID_CEILING_A],
+            offset_a=self._config[CONF_GRID_SAFETY_OFFSET_A],
         )
         desired = apply_floor_cap(  # E8 invariant last
-            desired, min_a=self._config["min_current"], max_a=self._config["max_current"]
+            desired, min_a=self._config[CONF_MIN_CURRENT], max_a=self._config[CONF_MAX_CURRENT]
         )
 
         await self._write(desired)
@@ -310,7 +320,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
 
     async def _write(self, value: float) -> None:
-        await self._adapters["charger_current"].write(value)
+        await self._adapters[ROLE_CHARGER_CURRENT].write(value)
 
     async def _safe_write_zero(self) -> None:
         try:
