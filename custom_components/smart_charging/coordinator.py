@@ -8,9 +8,15 @@ from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CHARGEABLE_STATES,
+    CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_MAX_PEAK_KW,
+    CONF_PEAK_GRACE_MIN,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
@@ -18,24 +24,38 @@ from .const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
+    DEFAULT_MAX_PEAK_KW,
+    DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
     DOMAIN,
+    MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
     ROLE_EV_SOC,
 )
+from .engines.billing_protection import (
+    PeakBreachTracker,
+    apply_peak_clamp,
+    resolve_effective_peak_limit,
+)
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.grid_safety import clamp_to_ceiling
+from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import resolve_active_soc_limit
-from .modes import power, solar, solar_only
+from .modes import captar, power, solar, solar_only
+from .modes._phase import Phase
 
 _LOGGER = logging.getLogger(__name__)
 
-_SOLAR_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY)
+_SOC_GATED_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR)
+_PEAK_WINDOW_SECONDS = 900  # 15 minutes (design doc Sec 6.4)
 
 
 @dataclass
@@ -45,6 +65,8 @@ class CycleResult:
     commanded_current: float
     fault: bool
     active_mode: str
+    monthly_peak_kw: float = 0.0
+    effective_peak_limit_kw: float = 0.0
 
 
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
@@ -59,6 +81,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         self._adapters = adapters
         self._config = config
+        self._interval_s = interval_s
         # Single source of truth for the setpoint is the number entity, which seeds this on
         # add (restored value, else configured default). 0 A is the safe default for cycle 0.
         self.target_current: float = 0.0
@@ -73,8 +96,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._mode_state = {
             MODE_SOLAR: solar.SolarState.idle(),
             MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
+            MODE_CAPTAR: captar.CaptarState.idle(),
         }
         self._was_faulted = False
+        # M1's OWN 15-minute window (E5, Task 1.3), distinct from R10's `_net_window` above --
+        # a MonthlyPeakSensor restore may seed `_peak_tracked_kw`/`_peak_tracked_month` before
+        # the first cycle (Task 4.2); the window itself is deliberately never persisted (design
+        # doc Sec 6.4), so it always starts empty here.
+        self._peak_window: tuple[float, ...] = ()
+        self._peak_tracked_kw: float = 0.0
+        self._peak_tracked_month: tuple[int, int] | None = None
+        self._peak_tracker = PeakBreachTracker()
 
     async def _async_update_data(self) -> CycleResult:
         try:
@@ -101,22 +133,51 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             await self._write(0.0)
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
+        # Peak-Demand Tracker (E5, Task 1.3) + effective-peak-limit resolution (E5, Task 1.2) --
+        # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
+        # real wall-clock (dt_util.now()) for month rollover, distinct from the monotonic `now`
+        # the mode state machines use below.
+        now_dt = dt_util.now()
+        current_month = (now_dt.year, now_dt.month)
+        if current_month != self._peak_tracked_month:
+            # Month rollover resets the SMOOTHING WINDOW too, not just the tracked value --
+            # otherwise this cycle's "smoothed" reading would still partly reflect last month's
+            # raw samples (design doc Sec 6.4's month-rollover note).
+            self._peak_window = ()
+        peak_window_size = self._config.get(
+            "peak_window_size", max(1, round(_PEAK_WINDOW_SECONDS / self._interval_s))
+        )
+        smoothed_peak_w, self._peak_window = smooth_net_power(
+            net_w, self._peak_window, size=peak_window_size
+        )
+        monthly_peak_kw, self._peak_tracked_month = update_monthly_peak_demand(
+            smoothed_peak_w / 1000.0,
+            current_month,
+            self._peak_tracked_kw,
+            self._peak_tracked_month,
+        )
+        self._peak_tracked_kw = monthly_peak_kw
+        effective_peak_limit_kw = resolve_effective_peak_limit(
+            monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
+        )
+
         if self.active_mode != self._last_active_mode:
-            # R11: switching mode resets timers -- fresh state for both solar modes, whether or
-            # not the incoming mode is one of them (a state nobody is dispatching to is inert
+            # R11: switching mode resets timers -- fresh state for every mode with one, whether
+            # or not the incoming mode is one of them (a state nobody is dispatching to is inert
             # either way).
             self._mode_state = {
                 MODE_SOLAR: solar.SolarState.idle(),
                 MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
+                MODE_CAPTAR: captar.CaptarState.idle(),
             }
             self._last_active_mode = self.active_mode
 
-        # ev_soc is read -- and its absence is a fault -- ONLY while a solar mode is selected AND
-        # the car is connected (success-criterion 6 / S2: Power/Off must not regress to needing
-        # an SOC sensor; a disconnected car is a clean idle stop, not a fault, even if its SOC
-        # sensor also goes unavailable on unplug, per UC01/R7).
+        # ev_soc is read -- and its absence is a fault -- ONLY while a solar mode or Captar is
+        # selected AND the car is connected (success-criterion 6 / S2: Power/Off must not regress
+        # to needing an SOC sensor; a disconnected car is a clean idle stop, not a fault, even if
+        # its SOC sensor also goes unavailable on unplug, per UC01/R7).
         ev_soc = None
-        if self.active_mode in _SOLAR_MODES and status in CHARGEABLE_STATES:
+        if self.active_mode in _SOC_GATED_MODES and status in CHARGEABLE_STATES:
             ev_soc = (
                 await self._adapters[ROLE_EV_SOC].read() if ROLE_EV_SOC in self._adapters else None
             )
@@ -137,26 +198,30 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if status not in CHARGEABLE_STATES:
             desired = 0.0
             # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
-            # a solar mode, also ends any SOC gate (resume condition 2: unplug/replug).
+            # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
             self._mode_state = {
                 MODE_SOLAR: solar.SolarState.idle(),
                 MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
+                MODE_CAPTAR: captar.CaptarState.idle(),
             }
         elif self.active_mode == MODE_OFF:
             desired = 0.0
         elif self.active_mode == MODE_POWER:
             desired = power.desired_current(self.target_current, status)  # unchanged, no SOC gate
-        elif self.active_mode in _SOLAR_MODES and ev_soc >= active_soc_limit:
+        elif self.active_mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
             # R7: don't resume until the gate clears. Holding the state at idle() (rather than
             # dispatching into step()) means the next cycle where this branch stops matching --
             # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
             # idle(), re-checking the start threshold normally. No latch, no separate phase.
             desired = 0.0
-            self._mode_state[self.active_mode] = (
-                solar.SolarState.idle()
-                if self.active_mode == MODE_SOLAR
-                else solar_only.SolarOnlyState.idle()
-            )
+            if self.active_mode == MODE_CAPTAR:
+                self._mode_state[MODE_CAPTAR] = captar.CaptarState.idle()
+            else:
+                self._mode_state[self.active_mode] = (
+                    solar.SolarState.idle()
+                    if self.active_mode == MODE_SOLAR
+                    else solar_only.SolarOnlyState.idle()
+                )
         elif self.active_mode == MODE_SOLAR:
             surplus_w = charger_w - smoothed_net_w
             desired, self._mode_state[MODE_SOLAR] = solar.step(
@@ -169,7 +234,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
                 voltage=voltage,
             )
-        else:  # MODE_SOLAR_ONLY
+        elif self.active_mode == MODE_SOLAR_ONLY:
             surplus_w = charger_w - smoothed_net_w
             desired, self._mode_state[MODE_SOLAR_ONLY] = solar_only.step(
                 surplus_w,
@@ -182,6 +247,38 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
                 voltage=voltage,
             )
+        else:  # MODE_CAPTAR
+            desired, self._mode_state[MODE_CAPTAR] = captar.step(
+                self._mode_state[MODE_CAPTAR],
+                now,
+                max_a=self._config["max_current"],
+                cooldown_minutes=self._config.get(
+                    CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
+                ),
+            )
+
+        # R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
+        # Sec 7). `desired` here is the already-computed mode request from dispatch above --
+        # apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
+        # disconnect/Off/SOC-gated branches above (all `desired = 0.0`) can never trip
+        # force_stop this cycle, regardless of headroom.
+        power_respect_peak = self._config.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK)
+        if not (self.active_mode == MODE_POWER and not power_respect_peak):
+            desired, self._peak_tracker, force_stop = apply_peak_clamp(
+                desired,
+                net_w=net_w,
+                charger_w=charger_w,
+                voltage=voltage,
+                effective_peak_limit_kw=effective_peak_limit_kw,
+                safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+                min_a=self._config["min_current"],
+                grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
+                tracker=self._peak_tracker,
+                now=now,
+            )
+            if force_stop and self.active_mode == MODE_CAPTAR:
+                desired = 0.0
+                self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
 
         desired = clamp_to_ceiling(  # E6 (before E8)
             desired,
@@ -199,7 +296,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if self._was_faulted:
             _LOGGER.info("smart_charging recovered from fault")
             self._was_faulted = False
-        return CycleResult(commanded_current=desired, fault=False, active_mode=self.active_mode)
+        return CycleResult(
+            commanded_current=desired,
+            fault=False,
+            active_mode=self.active_mode,
+            monthly_peak_kw=monthly_peak_kw,
+            effective_peak_limit_kw=effective_peak_limit_kw,
+        )
 
     async def _write(self, value: float) -> None:
         await self._adapters["charger_current"].write(value)

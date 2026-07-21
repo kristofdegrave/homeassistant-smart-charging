@@ -1,8 +1,14 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
 import pytest
+from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
+    CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_MAX_PEAK_KW,
+    CONF_PEAK_GRACE_MIN,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
@@ -10,6 +16,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
+    MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
@@ -19,6 +26,8 @@ from custom_components.smart_charging.const import (
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
+
+_AMPLE_PEAK_HEADROOM_KW = 100.0  # keeps R3's clamp out of the way of tests that don't test it
 
 
 class _FakeNumeric:
@@ -78,13 +87,29 @@ def _config():
         CONF_SOLAR_COOLDOWN_MIN: 2.0,
         CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
         CONF_SOLAR_ONLY_MIDPOINT: 0.5,
+        CONF_MAX_PEAK_KW: 100.0,
+        CONF_SAFETY_MARGIN_W: 250.0,
+        CONF_PEAK_GRACE_MIN: 2.0,
+        CONF_CAPTAR_COOLDOWN_MIN: 5.0,
+        CONF_POWER_RESPECT_PEAK: True,
+        "peak_window_size": 1,
     }
+
+
+def _seed_ample_peak_headroom(coord, kw=_AMPLE_PEAK_HEADROOM_KW):
+    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
+    (the same shape a MonthlyPeakSensor restore would seed, Task 4.2) -- keeps R3's clamp
+    out of the way of tests that exercise unrelated behavior, not R3 itself."""
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = kw
 
 
 async def _run(hass, adapters, config, target):
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_POWER  # M1's original default before mode selection existed (Task 5.1)
     coord.target_current = target
+    _seed_ample_peak_headroom(coord)
     result = await coord._async_update_data()
     return coord, result
 
@@ -96,6 +121,7 @@ async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0
         coord._adapters = adapters
     coord.active_mode = active_mode
     coord.soc_limit_override = soc_limit_override
+    _seed_ample_peak_headroom(coord)
     result = await coord._async_update_data()
     return coord, result
 
@@ -207,7 +233,7 @@ async def test_dispatches_to_solar_only_when_selected(hass):
     assert result.active_mode == MODE_SOLAR_ONLY
 
 
-@pytest.mark.parametrize("mode", [MODE_SOLAR, MODE_SOLAR_ONLY])
+@pytest.mark.parametrize("mode", [MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR])
 async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(hass, mode):
     # Arrange: ev_soc at the configured limit, with ample surplus that would otherwise charge.
     adapters = _adapters(status="charging", net_w=0.0, charger_w=2760.0, ev_soc=80.0)
@@ -299,6 +325,7 @@ async def test_power_and_off_ignore_soc_entirely(hass, mode):
     coord.active_mode = mode
     coord.soc_limit_override = 80.0
     coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
 
     # Act
     result = await coord._async_update_data()
@@ -420,3 +447,199 @@ async def test_power_mode_behavior_unchanged(hass):
     assert result.fault is False
     assert result.commanded_current == 10.0
     assert result.active_mode == MODE_POWER
+
+
+async def test_dispatches_to_captar_when_selected(hass):
+    # Arrange: ample R3 headroom (auto-seeded by _run_mode) and ample grid-ceiling headroom.
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc=50.0)
+
+    # Act
+    _coord, result = await _run_mode(
+        hass, adapters, _config(), MODE_CAPTAR, soc_limit_override=80.0
+    )
+
+    # Assert: Captar always requests max_current -- no downstream clamp reduces it here.
+    assert result.fault is False
+    assert result.commanded_current == 16.0
+    assert result.active_mode == MODE_CAPTAR
+
+
+async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass):
+    """R3's bookkeeping is not Captar-specific -- Off/Power update it too. Bypasses the
+    ample-headroom test helpers deliberately, to observe the tracker's own cold-start
+    behavior (design doc Sec 6.4)."""
+    adapters = _adapters(status="disconnected", net_w=3400.0, charger_w=0.0)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=_config(), interval_s=30)
+    coord.active_mode = MODE_OFF
+
+    result = await coord._async_update_data()
+
+    assert result.monthly_peak_kw == pytest.approx(3.4)
+
+
+async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(hass):
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 4.0
+    adapters = _adapters(status="disconnected", net_w=0.0, charger_w=0.0)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_OFF
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 3.0  # already-tracked peak is the lesser of the two
+
+    result = await coord._async_update_data()
+
+    assert result.effective_peak_limit_kw == 3.0
+
+
+async def test_peak_clamp_reduces_captar_below_headroom(hass):
+    """A high household baseline load reduces Captar's requested max-current down to the
+    available headroom -- a momentary reduction (still above min_a), not a stop."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    # effective_peak_limit(3.56 kW) - margin(250W) - baseline(1000W) = 2310W = 10.04A -> 10A.
+    adapters = _adapters(status="charging", net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 3.56
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 10.0
+    assert result.fault is False
+
+
+async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown(hass):
+    """Grace period 0 -- the very first breaching cycle already exceeds it -- forces 0 A
+    and CaptarState -> cooldown; the cooldown then blocks a restart until it elapses (R11)."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 1.0
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    config[CONF_PEAK_GRACE_MIN] = 0.0
+    config[CONF_CAPTAR_COOLDOWN_MIN] = 5.0
+    # effective_peak_limit(1.0 kW) - margin(250W) - baseline(600W) = 150W = 0.65A -> 0A < min_a.
+    breaching = _adapters(status="charging", net_w=600.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(hass, adapters=breaching, config=config, interval_s=30)
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 1.0
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
+
+    # A second cycle, even with ample headroom restored, stays blocked until the
+    # cooldown (5 minutes) elapses -- essentially no wall-clock time has passed.
+    ample = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord._adapters = ample
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
+
+
+async def test_captar_cooldown_resets_on_mode_switch(hass):
+    """Switching away from Captar and back clears its cooldown state (R11)."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 1.0
+    config[CONF_PEAK_GRACE_MIN] = 0.0
+    breaching = _adapters(status="charging", net_w=600.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(hass, adapters=breaching, config=config, interval_s=30)
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 1.0
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
+
+    # Switch away and back -- both transitions reset _mode_state (R11), same as Solar's.
+    # Also restore ample peak headroom so only the cooldown reset is under test here.
+    ample = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord._adapters = ample
+    coord._config = {**config, CONF_MAX_PEAK_KW: _AMPLE_PEAK_HEADROOM_KW}
+    coord._peak_tracked_kw = _AMPLE_PEAK_HEADROOM_KW
+    coord.active_mode = MODE_OFF
+    await coord._async_update_data()
+    coord.active_mode = MODE_CAPTAR
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 16.0  # fresh idle -> charges immediately, no cooldown wait
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
+
+
+async def test_captar_resets_on_disconnect(hass):
+    """A disconnect resets Captar's state to idle() -- not a cooldown -- per UC03's state model."""
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    _coord, result = await _run_mode(
+        hass, adapters, _config(), MODE_CAPTAR, soc_limit_override=80.0
+    )
+    assert result.commanded_current == 16.0  # confirm it was charging first
+
+    disconnected = _adapters(status="disconnected", net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord, result = await _run_mode(
+        hass, disconnected, _config(), MODE_CAPTAR, soc_limit_override=80.0, coord=_coord
+    )
+
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.IDLE
+
+
+async def test_power_respects_peak_by_default(hass):
+    """Power's own target(16A) would normally be commanded outright (existing MVP
+    behavior); with power_respect_peak left at its default (True), R17 now ALSO
+    bounds it by the R3 clamp -- a deliberate behavior change (design doc Sec 7)."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    # Same headroom math as test_peak_clamp_reduces_captar_below_headroom: 10A available.
+    adapters = _adapters(status="charging", net_w=1000.0, charger_w=0.0)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 16.0
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 3.56
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 10.0
+
+
+async def test_power_can_opt_out_of_peak_protection(hass):
+    """sc_power_respect_peak=False skips the R3 clamp (E5), but the C4 grid-ceiling
+    clamp (E6) still applies -- distinct call sites (ADR-0006)."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    config[CONF_POWER_RESPECT_PEAK] = False
+    adapters = _adapters(status="charging", net_w=1000.0, charger_w=0.0)
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 16.0
+    now_dt = dt_util.now()
+    coord._peak_tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_tracked_kw = 3.56
+
+    result = await coord._async_update_data()
+
+    # R3 skipped entirely -- E6's grid-ceiling headroom (18A) is the only bound left.
+    assert result.commanded_current == 16.0
+
+
+async def test_grid_ceiling_still_clamps_a_captar_request(hass):
+    """E6 (unchanged) still reduces a Captar-mode request that would breach the ceiling,
+    even with ample R3 headroom (auto-seeded by _run_mode)."""
+    config = _config()
+    config["grid_ceiling_a"] = 2.0
+    config["grid_safety_offset_a"] = 2.0  # ceiling - offset == 0
+    adapters = _adapters(status="charging", net_w=0.0, charger_w=2645.0, ev_soc=50.0)
+
+    _coord, result = await _run_mode(hass, adapters, config, MODE_CAPTAR, soc_limit_override=80.0)
+
+    assert result.commanded_current == 11.0
