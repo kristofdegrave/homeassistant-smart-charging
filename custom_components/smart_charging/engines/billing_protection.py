@@ -52,9 +52,13 @@ def apply_peak_clamp(
     start or extend the timer, regardless of headroom -- R3's own wording
     requires the charger to be "already at the minimum charging current" before
     a sustained shortfall counts as a stop condition. `force_stop=True` only
-    once that request-gated breach has held continuously for `grace_period_s`
-    -- a momentary breach only reduces the current this cycle (R3: "a momentary
-    breach does not stop charging").
+    once that request-gated breach has held continuously for `grace_period_s`.
+    Until then, a momentary breach holds at `min_a` rather than the (sub-`min_a`,
+    possibly negative) floored headroom -- E8's floor/cap stage turns anything
+    below `min_a` into an immediate stop, so returning the raw headroom here
+    would zero the charger out every breaching cycle and the grace period would
+    never have a chance to elapse (R3: "a momentary breach does not stop
+    charging").
     """
     baseline_w = net_w - charger_w
     target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
@@ -66,6 +70,6 @@ def apply_peak_clamp(
         breached_since = tracker.breached_since if tracker.breached_since is not None else now
         if now - breached_since >= grace_period_s:
             return 0.0, PeakBreachTracker(breached_since=None), True
-        return clamped, PeakBreachTracker(breached_since=breached_since), False
+        return min_a, PeakBreachTracker(breached_since=breached_since), False
 
     return clamped, PeakBreachTracker(breached_since=None), False
