@@ -39,6 +39,13 @@ async def test_active_mode_defaults_to_off_when_no_data_yet(hass):
     assert sensor.native_value == "Off"
 
 
+async def test_active_mode_defaults_to_off_when_coordinator_data_lacks_field(hass):
+    """Today's CycleResult has no active_mode field yet (added in Task 5.1)."""
+    coord = SimpleNamespace(data=SimpleNamespace())
+    sensor = ActiveModeSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == "Off"
+
+
 def test_active_mode_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = ActiveModeSensor(entry_id="abc", coordinator=coord)

@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, MODE_OFF
 from .entity import SmartChargingEntity
 
 
@@ -44,8 +44,8 @@ class ActiveModeSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
     def native_value(self) -> str:
         data = self.coordinator.data
         if data is not None:
-            return getattr(data, "active_mode", "Off")
-        return "Off"
+            return getattr(data, "active_mode", MODE_OFF)
+        return MODE_OFF
 
 
 async def async_setup_entry(

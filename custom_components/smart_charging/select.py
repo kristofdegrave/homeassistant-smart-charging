@@ -8,11 +8,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CONF_SOLAR_INSTALLED, DOMAIN
+from .const import CONF_SOLAR_INSTALLED, DOMAIN, MODE_OFF, MODE_POWER, MODE_SOLAR, MODE_SOLAR_ONLY
 from .entity import SmartChargingEntity
 
-BASE_MODE_OPTIONS = ["Off", "Power"]
-SOLAR_MODE_OPTIONS = ["Solar", "SolarOnly"]
+BASE_MODE_OPTIONS = [MODE_OFF, MODE_POWER]
+SOLAR_MODE_OPTIONS = [MODE_SOLAR, MODE_SOLAR_ONLY]
 
 
 class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
