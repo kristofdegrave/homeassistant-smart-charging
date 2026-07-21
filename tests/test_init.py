@@ -20,6 +20,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_INSTALLED,
     CONF_STATUS_TRANSLATION,
     DOMAIN,
+    MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
 )
@@ -87,9 +88,12 @@ async def test_end_to_end_commands_target_current(hass):
 
     # The number entity exists, its object_id suffixed per strings.json translations...
     assert hass.states.get("number.smart_charging_target_current") is not None
-    # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1) --
-    # select Power explicitly, same as a real install's first manual step.
+    # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1),
+    # so the setup cycle wrote 0 A -- pin that down before selecting Power explicitly, same
+    # as a real install's first manual step.
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    assert coordinator.active_mode == MODE_OFF
+    assert calls[-1]["value"] == 0.0
     coordinator.active_mode = MODE_POWER
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -160,7 +164,8 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     CONF_SOLAR_START_THRESHOLD_W (coordinator.py reads it unconditionally, no default)."""
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging")
-    hass.states.async_set("sensor.charger_power", "2300.0")  # ample surplus
+    hass.states.async_set("sensor.charger_power", "2400.0")  # 10.43 A ideal -> round_up -> 11 A,
+    # distinguishable from Power mode's unrelated 10.0 A default target current.
     data = _entry_data()
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
     hass.states.async_set("sensor.ev_soc", "50.0")
@@ -176,4 +181,5 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     await hass.async_block_till_done()
 
     assert hass.states.get("sensor.smart_charging_status").state == "OK"
-    assert calls[-1]["value"] > 0.0
+    assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_SOLAR
+    assert calls[-1]["value"] == 11.0
