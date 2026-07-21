@@ -17,6 +17,7 @@ MODE_OFF = "Off"
 MODE_POWER = "Power"
 MODE_SOLAR = "Solar"
 MODE_SOLAR_ONLY = "SolarOnly"
+MODE_CAPTAR = "Captar"
 
 # Adapter role key (the coordinator's/factory's per-role dict; RA1 extension). Named here as
 # it's introduced fresh by this task -- the five pre-existing roles (charger_current,
