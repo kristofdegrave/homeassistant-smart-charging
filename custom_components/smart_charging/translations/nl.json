@@ -56,6 +56,9 @@
     "number": {
       "target_current": {
         "name": "Doelstroom"
+      },
+      "soc_limit_override": {
+        "name": "Standaard laadlimiet"
       }
     },
     "sensor": {

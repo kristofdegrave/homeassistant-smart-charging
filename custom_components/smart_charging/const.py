@@ -47,7 +47,11 @@ CONF_SOLAR_HOLD_MIN = "solar_hold_min"  # R1 post-surplus hold duration
 CONF_SOLAR_COOLDOWN_MIN = "solar_cooldown_min"  # R1/R2 cooldown duration
 CONF_SOLAR_ONLY_STRATEGY = "solar_only_strategy"  # R2: "round_up" | "round_down" | "round_nearest"
 CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"  # R2 round_nearest fractional threshold
-CONF_DEFAULT_SOC_LIMIT = "default_soc_limit"  # R6/R7 default active SOC limit
+# Config-flow-time default for the "Default charge limit" number entity's initial value
+# (SocLimitOverrideNumber). The two are kept independently overridable (R6): this is the
+# config-time default; the entity is the runtime value that solar step-up/reserve-cap (R7)
+# sit on top of.
+CONF_DEFAULT_SOC_LIMIT = "default_soc_limit"
 
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4

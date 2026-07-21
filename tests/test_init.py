@@ -6,6 +6,7 @@ from custom_components.smart_charging.const import (
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
+    CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
@@ -40,6 +41,7 @@ def _entry_options():
         CONF_GRID_CEILING_A: 25.0,
         CONF_GRID_SAFETY_OFFSET_A: 2.0,
         CONF_DEFAULT_TARGET_CURRENT: 10.0,
+        CONF_DEFAULT_SOC_LIMIT: 80.0,
     }
 
 
@@ -85,6 +87,22 @@ async def test_end_to_end_commands_target_current(hass):
     assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
     assert hass.states.get("sensor.smart_charging_status").state == "OK"
+
+
+async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
+    """A config entry created before this option existed must still set up (no migration)."""
+    _seed_states(hass, status="Charging")
+    options = _entry_options()
+    del options[CONF_DEFAULT_SOC_LIMIT]
+
+    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("number.smart_charging_default_charge_limit")
+    assert state is not None
+    assert float(state.state) == 80.0
 
 
 async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
