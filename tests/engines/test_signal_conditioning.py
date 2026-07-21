@@ -51,3 +51,13 @@ def test_window_slides_oldest_sample_out_once_full():
     window = (1000.0, 1000.0, 1000.0, 1000.0)
     _, window = smooth_net_power(5000.0, window, size=4)
     assert window == (1000.0, 1000.0, 1000.0, 5000.0)
+
+
+def test_supports_a_much_larger_window_for_the_peak_tracker():
+    # 90 samples ~= 15 min at the default 10 s control interval -- proves the helper
+    # generalizes to Captar's 15-minute peak-demand window (#218), not just R10's short one.
+    window = ()
+    for sample in [1000.0] * 89 + [10000.0]:
+        smoothed, window = smooth_net_power(sample, window, size=90)
+    assert len(window) == 90
+    assert smoothed == (1000.0 * 89 + 10000.0) / 90
