@@ -56,6 +56,29 @@ jobs:
       # first tests land (Phase 1). Any real failure (exit 1) still fails the job.
       - run: pytest -q || [ $? -eq 5 ]
 
+  perf:
+    # CPU/memory tripwire for the M1 control cycle (issue #266), separate from the
+    # functional gate above. continue-on-error: advisory-only until a real baseline
+    # exists -- a ceiling breach is visible in the run but never blocks merge.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-test.txt
+      - run: pytest tests/benchmarks -q
+        env:
+          PERF_RESULTS_DIR: ${{ runner.temp }}/perf-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: ${{ runner.temp }}/perf-results
+          if-no-files-found: ignore
+
   hassfest:
     # Validates manifest.json / integration structure against Home Assistant's own checks.
     runs-on: ubuntu-latest
