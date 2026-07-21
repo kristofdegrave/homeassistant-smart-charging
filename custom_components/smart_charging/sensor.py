@@ -1,4 +1,4 @@
-"""Charging status sensor (Fault/OK) — ADR-0007."""
+"""Charging status sensor (Fault/OK, ADR-0007) and active-mode diagnostic sensor."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, MODE_OFF
 from .entity import SmartChargingEntity
 
 
@@ -30,8 +30,31 @@ class ChargingStatusSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity)
         return "OK"
 
 
+class ActiveModeSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
+    """Reports the resolved active mode from the last cycle (Task 4.3, plan §5.1)."""
+
+    _attr_translation_key = "active_mode"
+
+    def __init__(self, entry_id: str, coordinator) -> None:
+        SmartChargingEntity.__init__(self, entry_id)
+        CoordinatorEntity.__init__(self, coordinator)
+        self._attr_unique_id = f"{entry_id}_active_mode"
+
+    @property
+    def native_value(self) -> str:
+        data = self.coordinator.data
+        if data is not None:
+            return getattr(data, "active_mode", MODE_OFF)
+        return MODE_OFF
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    async_add_entities([ChargingStatusSensor(entry.entry_id, coordinator)])
+    async_add_entities(
+        [
+            ChargingStatusSensor(entry.entry_id, coordinator),
+            ActiveModeSensor(entry.entry_id, coordinator),
+        ]
+    )

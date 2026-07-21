@@ -12,6 +12,12 @@ STATE_CHARGING = "charging"
 # The canonical states in which commanding current is appropriate.
 CHARGEABLE_STATES = (STATE_CONNECTED, STATE_CHARGING)
 
+# Charging mode names (select.mode options; also the coordinator's active_mode values).
+MODE_OFF = "Off"
+MODE_POWER = "Power"
+MODE_SOLAR = "Solar"
+MODE_SOLAR_ONLY = "SolarOnly"
+
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
 DEFAULT_CONTROL_INTERVAL_S = 10

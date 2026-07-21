@@ -64,6 +64,9 @@
     "sensor": {
       "status": {
         "name": "Status"
+      },
+      "active_mode": {
+        "name": "Actieve modus"
       }
     }
   }
