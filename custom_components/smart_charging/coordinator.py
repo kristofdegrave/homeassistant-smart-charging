@@ -38,6 +38,7 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    PEAK_WINDOW_SECONDS,
     ROLE_EV_SOC,
 )
 from .engines.billing_protection import (
@@ -56,7 +57,6 @@ from .modes._phase import Phase
 _LOGGER = logging.getLogger(__name__)
 
 _SOC_GATED_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR)
-_PEAK_WINDOW_SECONDS = 900  # 15 minutes (design doc Sec 6.4)
 
 
 def _fresh_mode_state() -> dict:
@@ -152,7 +152,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # raw samples (design doc Sec 6.4's month-rollover note).
             self._peak_window = ()
         peak_window_size = self._config.get(
-            CONF_PEAK_WINDOW_SIZE, max(1, round(_PEAK_WINDOW_SECONDS / self._interval_s))
+            CONF_PEAK_WINDOW_SIZE, max(1, round(PEAK_WINDOW_SECONDS / self._interval_s))
         )
         smoothed_peak_w, self._peak_window = smooth_net_power(
             net_w, self._peak_window, size=peak_window_size
