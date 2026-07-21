@@ -54,6 +54,18 @@ async def test_restore_rejects_solar_option_when_solar_not_installed(hass):
     assert coord.active_mode == "Off"
 
 
+async def test_restore_rejects_captar_option_when_captar_not_available(hass):
+    entity_id = "select.smart_charging_mode"
+    mock_restore_cache(hass, (State(entity_id, "Captar"),))
+    coord = _StubCoordinator()
+    entity = ModeSelect(entry_id="abc", coordinator=coord, captar_available=False)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    assert entity.current_option == "Off"
+    assert coord.active_mode == "Off"
+
+
 async def test_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
     coord = _StubCoordinator()
     entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
