@@ -28,6 +28,9 @@ ROLE_EV_SOC = "ev_soc"
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
 DEFAULT_CONTROL_INTERVAL_S = 10
+# E5 15-minute averaging window (design doc Sec 6.4), shared by coordinator.py's own fallback
+# and __init__.py's setup-time CONF_PEAK_WINDOW_SIZE derivation so the two can't drift apart.
+PEAK_WINDOW_SECONDS = 900
 
 # --- Config entry DATA — entity-role mappings + state-translation only.
 #     Changed only via the reconfigure flow, because remapping which entity plays

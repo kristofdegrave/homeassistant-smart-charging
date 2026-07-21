@@ -8,14 +8,20 @@ from homeassistant.core import HomeAssistant
 
 from .adapters.factory import build_adapters
 from .const import (
+    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
+    CONF_MAX_PEAK_KW,
     CONF_MIN_CURRENT,
     CONF_NOMINAL_VOLTAGE,
+    CONF_PEAK_GRACE_MIN,
+    CONF_PEAK_WINDOW_SIZE,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
@@ -23,8 +29,13 @@ from .const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_GRID_SAFETY_OFFSET_A,
+    DEFAULT_MAX_PEAK_KW,
+    DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_COOLDOWN_MIN,
@@ -34,6 +45,7 @@ from .const import (
     DEFAULT_SOLAR_ONLY_STRATEGY,
     DEFAULT_SOLAR_START_THRESHOLD_W,
     DOMAIN,
+    PEAK_WINDOW_SECONDS,
 )
 from .coordinator import SmartChargingCoordinator
 
@@ -48,6 +60,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     max_current = opts[CONF_MAX_CURRENT]
     default_target_current = opts[CONF_DEFAULT_TARGET_CURRENT]
     default_soc_limit = opts.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
+    interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
+    # E5's 15-minute averaging window expressed in cycle counts (design doc Sec 6.4) -- derived
+    # here, once, from the same control interval the coordinator ticks on, so it can't drift from
+    # coordinator.py's own fallback (PEAK_WINDOW_SECONDS, shared).
+    peak_window_size = max(1, round(PEAK_WINDOW_SECONDS / interval_s))
     config = {
         "min_current": min_current,
         "max_current": max_current,
@@ -55,6 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "grid_safety_offset_a": opts.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
         "nominal_voltage": opts[CONF_NOMINAL_VOLTAGE],
         CONF_SMOOTHING_WINDOW: opts.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
+        CONF_PEAK_WINDOW_SIZE: peak_window_size,
         CONF_SOLAR_START_THRESHOLD_W: opts.get(
             CONF_SOLAR_START_THRESHOLD_W, DEFAULT_SOLAR_START_THRESHOLD_W
         ),
@@ -65,8 +83,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SOLAR_COOLDOWN_MIN: opts.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
         CONF_SOLAR_ONLY_STRATEGY: opts.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
         CONF_SOLAR_ONLY_MIDPOINT: opts.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),
+        CONF_SAFETY_MARGIN_W: opts.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+        CONF_MAX_PEAK_KW: opts.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
+        CONF_PEAK_GRACE_MIN: opts.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
+        CONF_CAPTAR_COOLDOWN_MIN: opts.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
+        CONF_POWER_RESPECT_PEAK: opts.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
     }
-    interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
 
     coordinator = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=interval_s
