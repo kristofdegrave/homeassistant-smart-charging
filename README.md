@@ -6,14 +6,16 @@ Smart EV charging integration for Home Assistant — solar-first and
 capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 (three-phase later).
 
-> **Status: Power-mode MVP.** This project follows an analysis-first,
+> **Status: Power/Solar/SolarOnly modes.** This project follows an analysis-first,
 > spec-driven methodology — the documents under [`docs/analysis/`](docs/analysis/)
-> are the source of truth for the full design. The current code implements only
-> the **Power mode MVP**: a manual target-current control loop with grid-safety
-> clamping (never exceed the configured grid ceiling). `Solar`/`SolarOnly`/
-> `Captar` modes, the `Auto` profile, SOC-target/deadline management, and
-> notifications are **not implemented yet** — see [Deferred](#deferred-not-in-this-mvp)
-> below. See [CLAUDE.md](CLAUDE.md) for the working method.
+> are the source of truth for the full design. The current code implements the
+> **Power**, **Solar**, and **SolarOnly** modes, selected manually via
+> `select.smart_charging_mode`: a target-current control loop with grid-safety
+> clamping (never exceed the configured grid ceiling), and solar-surplus-driven
+> charging with start/hold/cooldown behaviour. `Captar` mode, the `Auto` profile,
+> deadline management, and notifications are **not implemented yet** — see
+> [Deferred](#deferred-not-in-this-mvp) below. See [CLAUDE.md](CLAUDE.md) for the
+> working method.
 
 ## Installation (HACS custom repository)
 
@@ -36,24 +38,34 @@ sets the initial thresholds:
 | Net grid power entity | `sensor` for net grid import/export power |
 | Charger power entity | `sensor` for the charger's current power draw |
 | Grid voltage entity (optional) | `sensor` for live grid voltage; falls back to the configured nominal voltage when unset |
+| Solar installed | Toggle that offers `Solar`/`SolarOnly` in the mode selector; requires the EV SOC entity to be mapped |
+| EV state-of-charge entity (required if Solar installed) | `sensor` for the EV's state of charge (%) |
 | Nominal grid voltage, min/max current, grid ceiling, grid safety offset, default target current | Thresholds, editable anytime afterwards via **Configure** |
+| Smoothing window | Rolling-window sample count for surplus smoothing (R10) |
+| Solar start threshold, SolarOnly start threshold | Surplus power (W) required to start charging in each mode |
+| Solar post-surplus hold duration, cooldown duration | Minutes charging holds after surplus drops, and before a mode may restart |
+| SolarOnly amp-step rounding strategy, round-nearest midpoint fraction | How SolarOnly rounds ideal current to a whole amp |
+| Default charge limit | Config-time default (%) for `number.smart_charging_soc_limit_override` |
 
 Entity-role mappings can be changed later via **Reconfigure** (this re-validates
 and reloads the integration). Thresholds and the control interval can be changed
 anytime via **Configure**; this also reloads the integration, but does not
 re-validate the entity mappings.
 
-The integration exposes `number.smart_charging_target_current` — set it to
-your desired charging current; the control loop clamps it to the configured
-min/max and to the grid-safety ceiling, and writes 0 A whenever the charger is
-disconnected or faulted. `sensor.smart_charging_status` reports `Fault`/`OK`.
+`select.smart_charging_mode` chooses the active mode: `Off`/`Power` always
+available, `Solar`/`SolarOnly` offered only when Solar installed is enabled.
+In `Power` mode, `number.smart_charging_target_current` sets the desired
+charging current; the control loop clamps it to the configured min/max and to
+the grid-safety ceiling, and writes 0 A whenever the charger is disconnected or
+faulted. In `Solar`/`SolarOnly` mode, the control loop derives the target
+current from solar surplus instead. `sensor.smart_charging_status` reports
+`Fault`/`OK`; `sensor.smart_charging_active_mode` reports the mode in effect.
 
 ## Deferred (not in this MVP)
 
-`Off`/`Solar`/`SolarOnly`/`Captar` modes and the `Auto` profile; peak clamp and
-peak-demand tracking; SOC-target/deadline management; notifications; vehicle
-charge-limit sync; smoothing and cooldown/hold behaviour; the runtime
-dashboard. These are later slices of [`docs/design/project-plan.md`](docs/design/project-plan.md).
+`Captar` mode and the `Auto` profile; peak clamp and peak-demand tracking;
+SOC-target/deadline management; notifications; vehicle charge-limit sync; the
+runtime dashboard. These are later slices of [`docs/design/project-plan.md`](docs/design/project-plan.md).
 
 ## What it does
 

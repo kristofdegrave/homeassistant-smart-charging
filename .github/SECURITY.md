@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Smart Charging is in pre-1.0 development (Power-mode MVP). Only the **latest
+Smart Charging is in pre-1.0 development (Power/Solar/SolarOnly modes). Only the **latest
 release** receives security fixes — please update to the newest version before
 reporting an issue.
 
