@@ -63,9 +63,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # add (restored value, else configured default). 0 A is the safe default for cycle 0.
         self.target_current: float = 0.0
         # Single source of truth for these is their owning entity (select/number), which seeds
-        # them on add (restored value, else configured default). Defaults to Power (not Off) so
-        # that a config entry set up before the select platform is registered (Task 6.1) keeps
-        # its pre-existing Power-mode MVP behavior rather than going idle.
+        # them on add (restored value, else configured default) before the first refresh --
+        # this MODE_POWER default only matters for a coordinator instance never wired to a
+        # select entity (e.g. a unit test constructing one directly).
         self.active_mode: str = MODE_POWER
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
         self._last_active_mode: str | None = None
