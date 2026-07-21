@@ -51,7 +51,7 @@ sets the initial thresholds:
 | Default charge limit | Config-time default (%) for `number.smart_charging_soc_limit_override` |
 | CapTar peak safety margin (W) | Margin subtracted below the effective peak limit before Captar clamps the target current |
 | CapTar maximum peak (kW) | Configurable ceiling on the billed monthly peak; the effective peak limit never exceeds this |
-| CapTar peak grace period (min) | How long a peak breach must persist before Captar clamps/stops charging (avoids reacting to brief spikes) |
+| CapTar peak grace period (min) | How long a peak breach must persist before Captar force-stops charging (the headroom clamp itself applies every cycle; avoids stopping on brief spikes) |
 | Captar cooldown duration (min) | Minutes Captar must wait after a sustained-breach stop before it may restart |
 | Power mode respects the peak limit | Opt-out (default on, R17): when enabled, `Power` mode also clamps to the effective peak limit instead of only the grid ceiling |
 
@@ -69,9 +69,10 @@ grid-safety ceiling — and, when "Power mode respects the peak limit" is
 enabled, to the effective peak limit too — and writes 0 A whenever the charger
 is disconnected or faulted. In `Solar`/`SolarOnly` mode, the control loop
 derives the target current from solar surplus instead. In `Captar` mode, the
-control loop tracks the rolling monthly peak and clamps/stops charging to stay
-under the effective peak limit (CapTar maximum peak minus the safety margin),
-after the configured grace period, with its own cooldown before restarting.
+control loop tracks the rolling monthly peak and clamps the target current to
+stay a safety margin below the effective peak limit (`min(monthly peak, CapTar
+maximum peak)`); a sustained breach past the configured grace period forces a
+stop, with its own cooldown before restarting.
 `sensor.smart_charging_status` reports `Fault`/`OK`;
 `sensor.smart_charging_active_mode` reports the mode in effect;
 `sensor.smart_charging_monthly_peak_kw` reports the tracked rolling monthly

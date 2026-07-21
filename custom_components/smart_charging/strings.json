@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up Smart Charging",
-        "description": "Map the entities that represent your charger and grid, and set the initial thresholds. Only the grid voltage entity and the EV state-of-charge entity are optional (the latter is required when Solar is installed).",
+        "description": "Map the entities that represent your charger and grid, and set the initial thresholds. Only the grid voltage entity and the EV state-of-charge entity are optional (the latter is required when Solar is installed or CapTar is available).",
         "data": {
           "charger_current_entity": "Charger current control entity",
           "charger_status_entity": "Charger status entity",
