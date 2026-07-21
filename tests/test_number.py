@@ -143,3 +143,55 @@ async def test_soc_limit_override_added_to_hass_restores_previous_value_and_seed
     await platform.async_add_entities([entity])
     assert entity.native_value == 95.0
     assert coord.soc_limit_override == 95.0
+
+
+async def test_soc_limit_override_added_to_hass_clamps_restored_value_above_max(hass):
+    entity_id = "number.soc_limit_override_over"
+    mock_restore_cache_with_extra_data(
+        hass,
+        (
+            (
+                State(entity_id, "150.0"),
+                NumberExtraStoredData(
+                    native_max_value=100.0,
+                    native_min_value=50.0,
+                    native_step=1.0,
+                    native_unit_of_measurement="%",
+                    native_value=150.0,
+                ).as_dict(),
+            ),
+        ),
+    )
+    coord = _StubCoordinator()
+    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="number")
+    await platform.async_add_entities([entity])
+    assert entity.native_value == 100.0
+    assert coord.soc_limit_override == 100.0
+
+
+async def test_soc_limit_override_added_to_hass_clamps_restored_value_below_min(hass):
+    entity_id = "number.soc_limit_override_under"
+    mock_restore_cache_with_extra_data(
+        hass,
+        (
+            (
+                State(entity_id, "10.0"),
+                NumberExtraStoredData(
+                    native_max_value=100.0,
+                    native_min_value=50.0,
+                    native_step=1.0,
+                    native_unit_of_measurement="%",
+                    native_value=10.0,
+                ).as_dict(),
+            ),
+        ),
+    )
+    coord = _StubCoordinator()
+    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="number")
+    await platform.async_add_entities([entity])
+    assert entity.native_value == 50.0
+    assert coord.soc_limit_override == 50.0

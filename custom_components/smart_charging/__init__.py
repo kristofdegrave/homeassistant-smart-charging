@@ -18,6 +18,7 @@ from .const import (
     CONF_NOMINAL_VOLTAGE,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_GRID_SAFETY_OFFSET_A,
+    DEFAULT_SOC_LIMIT,
     DOMAIN,
 )
 from .coordinator import SmartChargingCoordinator
@@ -32,7 +33,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     min_current = opts[CONF_MIN_CURRENT]
     max_current = opts[CONF_MAX_CURRENT]
     default_target_current = opts[CONF_DEFAULT_TARGET_CURRENT]
-    default_soc_limit = opts[CONF_DEFAULT_SOC_LIMIT]
+    default_soc_limit = opts.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
     config = {
         "min_current": min_current,
         "max_current": max_current,
