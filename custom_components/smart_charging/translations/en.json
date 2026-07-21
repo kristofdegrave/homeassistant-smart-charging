@@ -58,7 +58,7 @@
         "name": "Target current"
       },
       "soc_limit_override": {
-        "name": "SOC limit override"
+        "name": "Default charge limit"
       }
     },
     "sensor": {

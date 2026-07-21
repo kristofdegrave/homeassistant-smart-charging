@@ -54,7 +54,8 @@ class TargetCurrentNumber(SmartChargingEntity, RestoreNumber):
 
 
 class SocLimitOverrideNumber(SmartChargingEntity, RestoreNumber):
-    """User-set active SOC limit override (R6/R7)."""
+    """Runtime "Default charge limit" (R6/R7): the car charges up to this SOC% unless
+    a solar step-up or the overnight solar-reserve cap is temporarily raising/lowering it."""
 
     _attr_translation_key = "soc_limit_override"
     _attr_native_unit_of_measurement = PERCENTAGE

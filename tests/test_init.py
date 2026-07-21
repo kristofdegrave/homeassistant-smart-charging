@@ -100,7 +100,7 @@ async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("number.smart_charging_soc_limit_override")
+    state = hass.states.get("number.smart_charging_default_charge_limit")
     assert state is not None
     assert float(state.state) == 80.0
 

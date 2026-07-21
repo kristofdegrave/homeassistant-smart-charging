@@ -58,7 +58,7 @@
         "name": "Doelstroom"
       },
       "soc_limit_override": {
-        "name": "SOC-limiet override"
+        "name": "Standaard laadlimiet"
       }
     },
     "sensor": {
