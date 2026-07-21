@@ -13,6 +13,7 @@ from ..const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
+    ROLE_EV_SOC,
 )
 from .base import Adapter
 from .numeric import NumericReadAdapter, NumericReadWriteAdapter
@@ -37,5 +38,5 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     if data.get(CONF_GRID_VOLTAGE_ENTITY):
         adapters["grid_voltage"] = NumericReadAdapter(hass, data[CONF_GRID_VOLTAGE_ENTITY])
     if data.get(CONF_EV_SOC_ENTITY):
-        adapters["ev_soc"] = NumericReadAdapter(hass, data[CONF_EV_SOC_ENTITY])
+        adapters[ROLE_EV_SOC] = NumericReadAdapter(hass, data[CONF_EV_SOC_ENTITY])
     return adapters
