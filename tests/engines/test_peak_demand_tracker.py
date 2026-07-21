@@ -46,3 +46,25 @@ def test_resets_on_a_month_change_to_the_new_months_own_reading():
     )
     assert kw == 0.8  # NOT 0 kW and NOT the carried-over 3.5 kW
     assert month == (2026, 8)
+
+
+def test_resets_on_a_month_change_even_when_the_new_reading_is_higher():
+    kw, month = update_monthly_peak_demand(
+        smoothed_kw=5.0,
+        current_month=(2026, 8),
+        tracked_kw=3.5,
+        tracked_month=(2026, 7),
+    )
+    assert kw == 5.0  # a month change always adopts this cycle's own reading
+    assert month == (2026, 8)
+
+
+def test_seeds_from_a_restored_value_within_the_same_month():
+    kw, month = update_monthly_peak_demand(
+        smoothed_kw=1.0,
+        current_month=(2026, 7),
+        tracked_kw=2.5,  # restored from a prior HA restart
+        tracked_month=(2026, 7),
+    )
+    assert kw == 2.5  # the restored peak is not lost to a lower reading
+    assert month == (2026, 7)
