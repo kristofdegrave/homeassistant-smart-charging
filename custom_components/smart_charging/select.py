@@ -1,0 +1,60 @@
+"""Mode selector entity (C2). ADR-0004 native naming."""
+
+from __future__ import annotations
+
+from homeassistant.components.select import SelectEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+
+from .const import CONF_SOLAR_INSTALLED, DOMAIN
+from .entity import SmartChargingEntity
+
+BASE_MODE_OPTIONS = ["Off", "Power"]
+SOLAR_MODE_OPTIONS = ["Solar", "SolarOnly"]
+
+
+class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
+    """User-set active charging mode. Option list is gated by Solar installed (design doc §3/§4,
+    R18 scoped) -- Solar/SolarOnly are only offered when that config-time toggle is True."""
+
+    _attr_translation_key = "mode"
+
+    def __init__(self, entry_id: str, coordinator, solar_installed: bool) -> None:
+        super().__init__(entry_id)
+        self._coordinator = coordinator
+        self._attr_unique_id = f"{entry_id}_mode"
+        self._attr_options = (
+            BASE_MODE_OPTIONS + SOLAR_MODE_OPTIONS if solar_installed else list(BASE_MODE_OPTIONS)
+        )
+        self._attr_current_option = "Off"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in self._attr_options:
+            self._attr_current_option = last.state
+        self._coordinator.active_mode = self._attr_current_option
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self._coordinator.active_mode = option  # coordinator resets mode-state (M1, Task 5.1)
+        await self._coordinator.async_request_refresh()
+        self.async_write_ha_state()
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    data = hass.data[DOMAIN][entry.entry_id]
+    coordinator = data["coordinator"]
+    async_add_entities(
+        [
+            ModeSelect(
+                entry_id=entry.entry_id,
+                coordinator=coordinator,
+                solar_installed=data[CONF_SOLAR_INSTALLED],
+            )
+        ]
+    )
