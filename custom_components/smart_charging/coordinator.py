@@ -214,6 +214,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         smoothed_net_w, self._net_window = smooth_net_power(
             net_w, self._net_window, size=smoothing_window
         )
+        # solar_reserve_active/solar_reserve_soc are placeholders (row 1 always inactive) --
+        # Task 5.1 replaces them with the real resolve_solar_reserve_active/CONF_SOLAR_RESERVE_SOC
+        # values; self._step_up_state is likewise only reset here, never populated by
+        # resolve_solar_step_up until that same task wires it in.
         active_soc_limit = resolve_active_soc_limit(
             self.soc_limit_override,
             solar_reserve_active=False,
