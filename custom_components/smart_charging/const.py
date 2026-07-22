@@ -48,6 +48,13 @@ CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
 CONF_SOLAR_INSTALLED = "solar_installed"  # bool, default False -- design doc §3, R18 scoped
 CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped (#215)
+# Deadline & SOC management slice (design doc §3, #319) -- defensive duplicates of #317/#318's
+# additions, added here so this task's own config-flow code/tests have something to import against;
+# harmless once #317/#318 land (same names/values, deduplicated on merge/rebase).
+CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"  # optional (NF3) -- RA1 extension
+CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"  # optional (NF3) -- RA2
+CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"  # optional (NF3) -- RA2
+CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"  # required when solar installed (R9) -- RA2
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names
@@ -77,6 +84,15 @@ CONF_MAX_PEAK_KW = "max_peak_kw"  # Captar billing-protection peak limit (design
 CONF_PEAK_GRACE_MIN = "peak_grace_min"  # Captar grace period before peak enforcement (design §3)
 CONF_CAPTAR_COOLDOWN_MIN = "captar_cooldown_min"  # Captar mode cooldown duration (design doc §3)
 CONF_POWER_RESPECT_PEAK = "power_respect_peak"  # R17 opt-out: Power mode honors the peak limit
+# Deadline & SOC management slice (design doc §3, #319) -- defensive duplicates of #318's
+# additions, added here so this task's own config-flow code/tests have something to import against;
+# harmless once #318 lands (same names/values, deduplicated on merge/rebase).
+CONF_EV_BATTERY_CAPACITY_KWH = "ev_battery_capacity_kwh"  # R15, default 75
+CONF_MAX_SOLAR_SOC = "max_solar_soc"  # R8 ceiling, default 100
+CONF_SOLAR_STEP_PP = "solar_step_pp"  # R8 step size, default 5
+CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"  # R8 trigger gap, default 2
+CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"  # R9 cap, default 60 (runtime, R7-priority-1)
+CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9, default 12
 
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4
@@ -93,3 +109,9 @@ DEFAULT_MAX_PEAK_KW = 4.0
 DEFAULT_PEAK_GRACE_MIN = 2.0
 DEFAULT_CAPTAR_COOLDOWN_MIN = 10.0
 DEFAULT_POWER_RESPECT_PEAK = True
+DEFAULT_EV_BATTERY_CAPACITY_KWH = 75.0
+DEFAULT_MAX_SOLAR_SOC = 100.0
+DEFAULT_SOLAR_STEP_PP = 5.0
+DEFAULT_SOLAR_STEP_THRESHOLD_PP = 2.0
+DEFAULT_SOLAR_RESERVE_SOC = 60.0
+DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0

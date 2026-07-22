@@ -18,12 +18,17 @@ from .const import (
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_DEPARTURE_EXTERNAL_ENTITY,
+    CONF_EV_BATTERY_CAPACITY_ENTITY,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
+    CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
@@ -32,18 +37,25 @@ from .const import (
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
+    DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_GRID_SAFETY_OFFSET_A,
     DEFAULT_MAX_PEAK_KW,
+    DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_NOMINAL_VOLTAGE,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
@@ -51,11 +63,15 @@ from .const import (
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_COOLDOWN_MIN,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
     DEFAULT_SOLAR_ONLY_MIDPOINT,
     DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
     DEFAULT_SOLAR_ONLY_STRATEGY,
+    DEFAULT_SOLAR_RESERVE_SOC,
     DEFAULT_SOLAR_START_THRESHOLD_W,
+    DEFAULT_SOLAR_STEP_PP,
+    DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     STATE_CHARGING,
     STATE_CONNECTED,
@@ -83,6 +99,12 @@ OPTION_KEYS = (
     CONF_PEAK_GRACE_MIN,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_POWER_RESPECT_PEAK,
+    CONF_EV_BATTERY_CAPACITY_KWH,
+    CONF_MAX_SOLAR_SOC,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
+    CONF_SOLAR_RESERVE_SOC,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
 )
 
 
@@ -115,6 +137,10 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Optional(CONF_SOLAR_INSTALLED, default=False): bool,
         vol.Optional(CONF_CAPTAR_AVAILABLE, default=True): bool,
         vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
     }
 )
 
@@ -192,6 +218,32 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
                 CONF_POWER_RESPECT_PEAK,
                 default=d.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
             ): bool,
+            vol.Required(
+                CONF_EV_BATTERY_CAPACITY_KWH,
+                default=d.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_SOLAR_SOC,
+                default=d.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_STEP_PP,
+                default=d.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_STEP_THRESHOLD_PP,
+                default=d.get(CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_RESERVE_SOC,
+                default=d.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+                default=d.get(
+                    CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
+                ),
+            ): vol.Coerce(float),
         }
     )
 
@@ -212,6 +264,22 @@ def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
     ):
         return {CONF_EV_SOC_ENTITY: "required_when_captar_available"}
     return None
+
+
+def _solar_forecast_missing_error(user_input: dict) -> dict[str, str] | None:
+    """Design doc §3: solar_forecast is required only when CONF_SOLAR_INSTALLED is True
+    (R9's precondition is inert without the solar capability) -- same
+    required_when_solar_installed-style guard ev_soc's own guard uses."""
+    if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_SOLAR_FORECAST_ENTITY):
+        return {CONF_SOLAR_FORECAST_ENTITY: "required_when_solar_installed"}
+    return None
+
+
+def _mapping_errors(user_input: dict) -> dict[str, str] | None:
+    """Combined config-time guards for the mapping step (install + reconfigure)."""
+    errors = _ev_soc_missing_error(user_input) or {}
+    errors.update(_solar_forecast_missing_error(user_input) or {})
+    return errors or None
 
 
 def _split_data(user_input: dict) -> dict:
@@ -236,7 +304,7 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=USER_SCHEMA)
 
-        errors = _ev_soc_missing_error(user_input)
+        errors = _mapping_errors(user_input)
         if errors:
             return self.async_show_form(
                 step_id="user",
@@ -255,7 +323,7 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(step_id="reconfigure", data_schema=MAPPING_SCHEMA)
 
-        errors = _ev_soc_missing_error(user_input)
+        errors = _mapping_errors(user_input)
         if errors:
             return self.async_show_form(
                 step_id="reconfigure",
