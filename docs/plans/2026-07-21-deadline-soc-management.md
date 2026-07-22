@@ -359,7 +359,7 @@ DEADLINE = time(6, 0)  # next-day 06:00 -- 8 hours remaining
 
 def test_no_deadline_never_urgent():
     result = resolve_required_current(
-        deadline=None, now=NOW, soc=50.0, active_soc_limit=80.0, battery_capacity_kwh=75.0,
+        deadline=None, now=NOW, soc=50.0, active_soc_limit=80.0, ev_battery_capacity_kwh=75.0,
         voltage=230.0, baseline_desired_a=6.0, maximum_permitted_rate_a=32.0,
     )
     assert result.required_a is None
@@ -370,7 +370,7 @@ def test_no_deadline_never_urgent():
 def test_required_current_formula_worked_example():
     # energy = 75 kWh * (80-50)/100 = 22.5 kWh over 8h -> 2812.5 W -> /230V = 12.228... A
     result = resolve_required_current(
-        deadline=DEADLINE, now=NOW, soc=50.0, active_soc_limit=80.0, battery_capacity_kwh=75.0,
+        deadline=DEADLINE, now=NOW, soc=50.0, active_soc_limit=80.0, ev_battery_capacity_kwh=75.0,
         voltage=230.0, baseline_desired_a=6.0, maximum_permitted_rate_a=32.0,
     )
     assert result.required_a == pytest.approx(12.228, abs=0.01)
@@ -378,7 +378,7 @@ def test_required_current_formula_worked_example():
 
 def test_normal_when_required_at_or_below_baseline():
     result = resolve_required_current(
-        deadline=DEADLINE, now=NOW, soc=79.0, active_soc_limit=80.0, battery_capacity_kwh=75.0,
+        deadline=DEADLINE, now=NOW, soc=79.0, active_soc_limit=80.0, ev_battery_capacity_kwh=75.0,
         voltage=230.0, baseline_desired_a=6.0, maximum_permitted_rate_a=32.0,
     )
     assert result.urgent is False
@@ -387,7 +387,7 @@ def test_normal_when_required_at_or_below_baseline():
 
 def test_urgent_when_required_between_baseline_and_max_rate():
     result = resolve_required_current(
-        deadline=DEADLINE, now=NOW, soc=50.0, active_soc_limit=80.0, battery_capacity_kwh=75.0,
+        deadline=DEADLINE, now=NOW, soc=50.0, active_soc_limit=80.0, ev_battery_capacity_kwh=75.0,
         voltage=230.0, baseline_desired_a=6.0, maximum_permitted_rate_a=32.0,
     )
     assert result.urgent is True
@@ -396,7 +396,7 @@ def test_urgent_when_required_between_baseline_and_max_rate():
 
 def test_unreachable_when_required_exceeds_max_rate():
     result = resolve_required_current(
-        deadline=time(22, 5), now=NOW, soc=10.0, active_soc_limit=80.0, battery_capacity_kwh=75.0,
+        deadline=time(22, 5), now=NOW, soc=10.0, active_soc_limit=80.0, ev_battery_capacity_kwh=75.0,
         voltage=230.0, baseline_desired_a=6.0, maximum_permitted_rate_a=32.0,
     )
     assert result.unreachable is True
@@ -404,7 +404,7 @@ def test_unreachable_when_required_exceeds_max_rate():
 
 def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
     result = resolve_required_current(
-        deadline=time(21, 0), now=NOW, soc=50.0, active_soc_limit=80.0, battery_capacity_kwh=75.0,
+        deadline=time(21, 0), now=NOW, soc=50.0, active_soc_limit=80.0, ev_battery_capacity_kwh=75.0,
         voltage=230.0, baseline_desired_a=6.0, maximum_permitted_rate_a=32.0,
     )
     assert result.unreachable is True  # deadline in the past -> max urgency, not an exception
@@ -560,9 +560,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Phase 2 — Adapters (HA harness, RA1/RA2 extension)
 
-### Task 2.1: `battery_capacity` (RA1), `departure_external`/`home_day_external`/`solar_forecast` (RA2) adapter roles
+### Task 2.1: `ev_battery_capacity` (RA1), `departure_external`/`home_day_external`/`solar_forecast` (RA2) adapter roles
 
-Per `project-plan.md`, `battery_capacity` is an RA1 (core adapter) extension; `departure_external`,
+Per `project-plan.md`, `ev_battery_capacity` is an RA1 (core adapter) extension; `departure_external`,
 `home_day_external`, and `solar_forecast` belong to RA2. All four follow the identical
 optional-at-the-factory-level pattern regardless of which RA task-line owns them, so this task
 still builds all four together — only the commit message/task title distinguishes ownership for
@@ -578,15 +578,15 @@ traceability.
 optional-role tests:
 
 ```python
-async def test_factory_builds_battery_capacity_role_when_configured(hass):
+async def test_factory_builds_ev_battery_capacity_role_when_configured(hass):
     data = _data()
-    data[CONF_BATTERY_CAPACITY_ENTITY] = "sensor.ev_battery_capacity"
+    data[CONF_EV_BATTERY_CAPACITY_ENTITY] = "sensor.ev_battery_capacity"
     adapters = build_adapters(hass, data)
-    assert isinstance(adapters[ROLE_BATTERY_CAPACITY], NumericReadAdapter)
+    assert isinstance(adapters[ROLE_EV_BATTERY_CAPACITY], NumericReadAdapter)
 
 
-async def test_battery_capacity_role_absent_when_not_configured(hass):
-    assert ROLE_BATTERY_CAPACITY not in build_adapters(hass, _data())
+async def test_ev_battery_capacity_role_absent_when_not_configured(hass):
+    assert ROLE_EV_BATTERY_CAPACITY not in build_adapters(hass, _data())
 
 # ... same shape for departure_external (StatusReadAdapter or a plain read adapter -- time-typed,
 # see design doc §4 note: use whichever existing adapter class already reads a non-numeric native
@@ -606,7 +606,7 @@ PR. **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
 git add custom_components/smart_charging/const.py custom_components/smart_charging/adapters/factory.py tests/adapters/test_factory.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add battery_capacity (RA1), departure_external/home_day_external/solar_forecast (RA2) adapter roles
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: add ev_battery_capacity (RA1), departure_external/home_day_external/solar_forecast (RA2) adapter roles
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -622,7 +622,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:** Modify `custom_components/smart_charging/const.py`
 
 **Step 1: Append** every remaining `CONF_*`/`DEFAULT_*` OPTIONS constant from design doc §3 —
-`CONF_BATTERY_CAPACITY_KWH`, `CONF_MAX_SOLAR_SOC`, `CONF_SOLAR_STEP_PP`,
+`CONF_EV_BATTERY_CAPACITY_KWH`, `CONF_MAX_SOLAR_SOC`, `CONF_SOLAR_STEP_PP`,
 `CONF_SOLAR_STEP_THRESHOLD_PP`, `CONF_SOLAR_RESERVE_SOC`, `CONF_SOLAR_FORECAST_THRESHOLD_KWH`, each
 with its `DEFAULT_*`. `CONF_SOLAR_FORECAST_ENTITY` (DATA) already exists from Task 2.1 — this task
 does not re-add it. **Step 2: Commit**
@@ -654,15 +654,15 @@ async def test_solar_forecast_not_required_when_solar_not_installed(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
 
 
-async def test_battery_capacity_entity_can_be_mapped(hass):
-    result = await _run_user_flow(hass, overrides={CONF_BATTERY_CAPACITY_ENTITY: "sensor.ev_battery_capacity"})
-    assert result["data"][CONF_BATTERY_CAPACITY_ENTITY] == "sensor.ev_battery_capacity"
+async def test_ev_battery_capacity_entity_can_be_mapped(hass):
+    result = await _run_user_flow(hass, overrides={CONF_EV_BATTERY_CAPACITY_ENTITY: "sensor.ev_battery_capacity"})
+    assert result["data"][CONF_EV_BATTERY_CAPACITY_ENTITY] == "sensor.ev_battery_capacity"
 
 
-async def test_battery_capacity_entity_is_optional(hass):
-    result = await _run_user_flow(hass, omit=[CONF_BATTERY_CAPACITY_ENTITY])
+async def test_ev_battery_capacity_entity_is_optional(hass):
+    result = await _run_user_flow(hass, omit=[CONF_EV_BATTERY_CAPACITY_ENTITY])
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert CONF_BATTERY_CAPACITY_ENTITY not in result["data"]
+    assert CONF_EV_BATTERY_CAPACITY_ENTITY not in result["data"]
 
 
 async def test_departure_external_and_home_day_external_entities_can_be_mapped(hass):
@@ -676,7 +676,7 @@ async def test_departure_external_and_home_day_external_entities_can_be_mapped(h
 
 async def test_new_thresholds_seeded_with_defaults(hass):
     result = await _run_user_flow(hass)
-    assert result["options"][CONF_BATTERY_CAPACITY_KWH] == DEFAULT_BATTERY_CAPACITY_KWH
+    assert result["options"][CONF_EV_BATTERY_CAPACITY_KWH] == DEFAULT_EV_BATTERY_CAPACITY_KWH
     assert result["options"][CONF_MAX_SOLAR_SOC] == DEFAULT_MAX_SOLAR_SOC
     assert result["options"][CONF_SOLAR_STEP_PP] == DEFAULT_SOLAR_STEP_PP
     assert result["options"][CONF_SOLAR_STEP_THRESHOLD_PP] == DEFAULT_SOLAR_STEP_THRESHOLD_PP
@@ -695,7 +695,7 @@ async def test_options_flow_edits_the_new_thresholds(hass):
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — add all four new roles to `MAPPING_SCHEMA`:
 `vol.Optional(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor")`,
-`vol.Optional(CONF_BATTERY_CAPACITY_ENTITY): _entity("sensor")`,
+`vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor")`,
 `vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor")`,
 `vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"])` — all
 four all-optional except `solar_forecast`, which alone carries a conditional guard. Extend the
@@ -703,7 +703,7 @@ existing `_ev_soc_missing_error`-style guard function (or add a sibling
 `_solar_forecast_missing_error`, composed the same way) so `CONF_SOLAR_INSTALLED=True` without
 `CONF_SOLAR_FORECAST_ENTITY` is rejected with `required_when_solar_installed`, reusing that same
 error key `CONF_EV_SOC_ENTITY`'s own `required_when_solar_installed` case already established.
-`battery_capacity`/`departure_external`/`home_day_external` need no such guard — all three stay
+`ev_battery_capacity`/`departure_external`/`home_day_external` need no such guard — all three stay
 optional regardless of any capability toggle (R15's fallback and R14/R13's own "at least one
 mechanism" wording never make an external role mandatory). Add the six new OPTIONS fields (with
 `DEFAULT_*`) to `OPTION_KEYS` and `_threshold_schema()`. **Step 4: Run** → PASS. **Step 5: Commit**
@@ -947,13 +947,13 @@ async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass, ...):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
     mutual-exclusivity clause)."""
 
-async def test_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, ...):
-    """R15: with `battery_capacity` role mapped and reading 60.0 kWh, the required-current
-    computation uses 60.0, not CONF_BATTERY_CAPACITY_KWH's configured default."""
+async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, ...):
+    """R15: with `ev_battery_capacity` role mapped and reading 60.0 kWh, the required-current
+    computation uses 60.0, not CONF_EV_BATTERY_CAPACITY_KWH's configured default."""
 
-async def test_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass, ...):
+async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass, ...):
     """R15: with the role mapped but currently reading None (or the role unmapped
-    entirely), the required-current computation falls back to CONF_BATTERY_CAPACITY_KWH."""
+    entirely), the required-current computation falls back to CONF_EV_BATTERY_CAPACITY_KWH."""
 
 async def test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate(hass, ...):
     """R5/ADR-0011: DeadlineUnreachableNotified is published every cycle
@@ -964,8 +964,8 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — call `resolve_departure_deadline` twice per cycle
 (today's inputs, and tomorrow's per design doc §10 step 2); resolve the effective battery capacity as
-`battery_capacity` role reading if the role is configured and its reading is not `None`, else
-`CONF_BATTERY_CAPACITY_KWH` (R15); under `Auto`, compute the baseline mode by calling `select_mode`
+`ev_battery_capacity` role reading if the role is configured and its reading is not `None`, else
+`CONF_EV_BATTERY_CAPACITY_KWH` (R15); under `Auto`, compute the baseline mode by calling `select_mode`
 (Task 1.6) with `urgent=False` first, get that mode's own desired current from the same dispatch
 table (without actually charging on it), then call `resolve_required_current` with that baseline
 current; under `Manual`, the baseline is simply the manually selected mode's own desired current for

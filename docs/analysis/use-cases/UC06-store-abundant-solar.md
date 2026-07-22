@@ -11,6 +11,7 @@
 
 ## Preconditions
 
+- The `Auto` [profile](../system-overview.md#ubiquitous-language) is active (R8/R16) — under `Manual`, no step-up ever applies, regardless of which solar mode is selected.
 - The solar [capability](../system-overview.md#ubiquitous-language) is present (R18).
 - The [active mode](../system-overview.md#ubiquitous-language) is a solar mode (`Solar` or `SolarOnly`) and it is charging (per [UC01](UC01-charge-from-solar-surplus.md) or [UC02](UC02-charge-from-solar-only.md)).
 - The [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`) is below the configured maximum (`sc_max_solar_soc`, default 100%).

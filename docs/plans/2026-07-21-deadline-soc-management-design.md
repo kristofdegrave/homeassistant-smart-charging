@@ -87,13 +87,13 @@ naming and DATA-vs-OPTIONS split follow ADR-0005 exactly as the existing keys do
 **DATA** (entity-role mappings, changed only via reconfigure — ADR-0005):
 
 ```python
-CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"   # optional (NF3) — battery_capacity role
+CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"   # optional (NF3) — ev_battery_capacity role
 CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"  # optional (NF3) — departure_external role
 CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"  # optional (NF3) — home_day_external role
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"  # required when CONF_SOLAR_INSTALLED (R9 needs it)
 ```
 
-`battery_capacity`, `departure_external`, and `home_day_external` are all-optional adapter roles
+`ev_battery_capacity`, `departure_external`, and `home_day_external` are all-optional adapter roles
 (same "optional at the factory level" pattern `grid_voltage`/`ev_soc` already use — entity-catalog.md
 marks each "mapped ... when available" / NF3). `solar_forecast` is required only when
 `CONF_SOLAR_INSTALLED` is `True` (R9's precondition is inert without the solar capability, per R18's
@@ -103,14 +103,14 @@ marks each "mapped ... when available" / NF3). `solar_forecast` is required only
 **OPTIONS** (thresholds/defaults, editable anytime — ADR-0005):
 
 ```python
-CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"           # R15, default 75
+CONF_EV_BATTERY_CAPACITY_KWH = "ev_battery_capacity_kwh"           # R15, default 75
 CONF_MAX_SOLAR_SOC = "max_solar_soc"                         # R8 ceiling, default 100
 CONF_SOLAR_STEP_PP = "solar_step_pp"                         # R8 step size, default 5
 CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"     # R8 trigger gap, default 2
 CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"                 # R9 cap, default 60 (runtime, R7-priority-1)
 CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9, default 12
 
-DEFAULT_BATTERY_CAPACITY_KWH = 75.0
+DEFAULT_EV_BATTERY_CAPACITY_KWH = 75.0
 DEFAULT_MAX_SOLAR_SOC = 100.0
 DEFAULT_SOLAR_STEP_PP = 5.0
 DEFAULT_SOLAR_STEP_THRESHOLD_PP = 2.0
@@ -152,7 +152,7 @@ restore-state behavior (ADR-0004 native naming throughout).
 | `time.smart_charging_departure_home_day` | `time.py` | Default none (R14). |
 | `switch.smart_charging_home_day` | `switch.py` (new platform) | Default off; resets to off at local midnight (R13) — a small coordinator-driven or `homeassistant.helpers.event.async_track_time_change` reset, not a config option. |
 
-New adapter roles (`adapters/factory.py`, all optional/conditional per §3): `battery_capacity`,
+New adapter roles (`adapters/factory.py`, all optional/conditional per §3): `ev_battery_capacity`,
 `departure_external`, `home_day_external`, `solar_forecast`.
 
 The midnight reset for `switch.smart_charging_home_day` is the one piece of behavior not already
@@ -284,7 +284,7 @@ def resolve_required_current(
     now: datetime,
     soc: float,
     active_soc_limit: float,
-    battery_capacity_kwh: float,
+    ev_battery_capacity_kwh: float,
     voltage: float,
     baseline_desired_a: float,
     maximum_permitted_rate_a: float,
@@ -406,9 +406,9 @@ existing docstring already flags as blocked on E4.
 Extends `_run_cycle`, inserted into the existing step order per `control-cycle.md` (step numbers
 below match that doc):
 
-1. **(step 1, unchanged)** Read sensors — plus the new optional roles (`battery_capacity`,
+1. **(step 1, unchanged)** Read sensors — plus the new optional roles (`ev_battery_capacity`,
    `departure_external`, `home_day_external`, `solar_forecast`) when configured, defaulting to the
-   configured fallback (`battery_capacity`: `CONF_BATTERY_CAPACITY_KWH`) or `None`/`False` otherwise.
+   configured fallback (`ev_battery_capacity`: `CONF_EV_BATTERY_CAPACITY_KWH`) or `None`/`False` otherwise.
 2. **(new, before step 4)** Resolve tomorrow's departure deadline (E4, one-day-ahead inputs — R14's
    own note) to get `solar_reserve_active` (E3, §5) — needed before step 4's SOC-limit resolution.
 3. **(step 4, extended)** Resolve the active SOC limit via the full three-row table (E3, §5) instead
@@ -426,7 +426,8 @@ New coordinator state threaded across cycles: `self._step_up_state: SolarStepUpS
 clearing is **not** wired to the coordinator's generic per-mode-switch reset (that reset also fires
 on a `Solar`↔`SolarOnly` switch, which R7/UC06 alternate-flow 4a requires to *preserve* an in-effect
 step-up). Instead, `resolve_solar_step_up` (§5) is called every cycle with
-`is_solar_mode_charging = active_mode in (MODE_SOLAR, MODE_SOLAR_ONLY)` computed fresh from the
+`is_solar_mode_charging = active_profile == PROFILE_AUTO and active_mode in (MODE_SOLAR,
+MODE_SOLAR_ONLY)` (R8 is `Auto`-only, like R9's reserve cap) computed fresh from the
 **resolved** active mode this cycle (under `Auto`, this is necessarily the *prior* cycle's resolved
 mode, since step 3 below resolves the step-up before selecting this cycle's mode — one cycle of lag,
 matching R8's own "next control cycle" framing); its own `False`-when-not-solar branch is what clears
