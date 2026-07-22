@@ -139,12 +139,21 @@ notification tuning values the same ADR-0005 way as every other threshold, keepi
 the analysis-layer names. (This is the mechanism precedent, not a new decision — see §9's open
 question on the catalog-vs-ADR-0005 naming.)
 
+**Bucket note.** `entity-catalog.md` classifies `sc_reminder_lead_h`, `sc_evening_prompt_enabled`, and
+`sc_evening_prompt_time` as **install-time** (its "Notes" section groups `sc_evening_prompt_enabled`
+explicitly among the "set once and rarely revisited" install-time choices). This slice realizes all
+three as **options** instead, matching the "runtime-tunable threshold" bucket the Power/Captar slices
+used for comparable values — behaviorally harmless (options are editable anytime from the HA UI, a
+superset of install-time editability), but a real divergence from the catalog's own bucket, flagged
+here rather than silently folded into the ADR-0005-realization precedent above.
+
 | Field | Bucket | Constant / default | Source |
 | --- | --- | --- | --- |
 | **Notification target** entity (a `notify`-domain entity) | data — required for M3 to deliver at all | `CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"`; role `ROLE_NOTIFICATION_TARGET = "notification_target"` | RA4 (§6); named to match the existing `ROLE_EV_SOC`/`ROLE_CHARGER_STATUS` convention in `const.py` |
 | **Plug-in reminder lead time** | options | `CONF_REMINDER_LEAD_H`, default **8 h** | `input_number.sc_reminder_lead_h` (entity-catalog); UC10 trigger (R12) |
 | **Evening prompt enabled** | options | `CONF_EVENING_PROMPT_ENABLED`, default **on** | `input_boolean.sc_evening_prompt_enabled`; UC08 precondition |
 | **Evening prompt time** | options | `CONF_EVENING_PROMPT_TIME`, default **18:00** | `input_datetime.sc_evening_prompt_time`; UC08 trigger |
+| **Solar-forecast threshold** | options | `CONF_SOLAR_FORECAST_THRESHOLD_KWH`, default **12 kWh** | `input_number.sc_solar_forecast_threshold_kwh` (entity-catalog); UC08 precondition 2 (R9's threshold, read independently — UC08 §"Relationships") |
 | `car_home`, `solar_forecast`, `home_day_external` entity mappings (data) | data | RA2 roles, create-if-not (§4) | entity-catalog (RA2) |
 
 Config-flow validation for the notify target mirrors ADR-0003's other roles: the mapped entity must
@@ -204,7 +213,8 @@ Per §5.3's first `alt` and UC10:
    transition Armed→Sent (`PlugInReminderSent`). While **Sent**, send nothing more for the window.
 4. Re-arm Sent→Armed on a `disconnected→connected→disconnected` cycle (3a) **or** a departure-window
    change (3b) — `PlugInReminderRearmed`. The `binary_sensor` is `on` exactly while the step-2 gate
-   holds and the state is Armed.
+   holds (entity-catalog's own definition, no Armed/Sent qualifier — a reminder already Sent, with
+   the driver still not having plugged in, is still "due").
 
 ### UC08 branch (evening home-day prompt)
 Per §5.3's second `alt` and UC08:
