@@ -1,7 +1,7 @@
-"""Plain-pytest tests for the Billing-Protection Engine (E5 -- UC03, R3).
+"""Plain-pytest tests for the Billing-Protection Engine (E5 -- UC03, R3, R5).
 
-Row-2-only effective-peak-limit resolution (deadline urgency, row 1, is
-structurally inert without the Deadline Engine, E4 -- its own epic)."""
+Row 1 (deadline urgency) is added by this suite -- row 2 (unchanged) is only
+reached when urgent=False."""
 
 from custom_components.smart_charging.engines.billing_protection import (
     PeakBreachTracker,
@@ -14,8 +14,21 @@ DEFAULTS = dict(voltage=230.0, safety_margin_w=250.0, min_a=6.0, grace_period_s=
 
 
 def test_effective_peak_limit_is_the_lesser_of_monthly_peak_and_maximum():
-    assert resolve_effective_peak_limit(monthly_peak_kw=3.0, max_peak_kw=4.0) == 3.0
-    assert resolve_effective_peak_limit(monthly_peak_kw=5.0, max_peak_kw=4.0) == 4.0
+    assert resolve_effective_peak_limit(monthly_peak_kw=3.0, max_peak_kw=4.0, urgent=False) == 3.0
+    assert resolve_effective_peak_limit(monthly_peak_kw=5.0, max_peak_kw=4.0, urgent=False) == 4.0
+
+
+def test_urgency_raises_to_the_maximum_peak_regardless_of_monthly_peak():
+    assert resolve_effective_peak_limit(monthly_peak_kw=1.0, max_peak_kw=4.0, urgent=True) == 4.0
+
+
+def test_urgency_never_exceeds_the_maximum_peak():
+    assert resolve_effective_peak_limit(monthly_peak_kw=1.0, max_peak_kw=4.0, urgent=True) <= 4.0
+
+
+def test_row2_unchanged_when_not_urgent():
+    assert resolve_effective_peak_limit(monthly_peak_kw=3.0, max_peak_kw=4.0, urgent=False) == 3.0
+    assert resolve_effective_peak_limit(monthly_peak_kw=5.0, max_peak_kw=4.0, urgent=False) == 4.0
 
 
 def test_clamp_reduces_to_available_headroom():
