@@ -12,6 +12,7 @@ from custom_components.smart_charging.engines.capability_gate import resolve_ava
 
 def test_neither_capability_only_off_and_power():
     modes = resolve_available_modes(solar_available=False, captar_available=False)
+    assert isinstance(modes, frozenset)
     assert modes == {MODE_OFF, MODE_POWER}
 
 
