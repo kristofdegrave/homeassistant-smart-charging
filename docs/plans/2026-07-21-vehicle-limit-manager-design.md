@@ -332,7 +332,10 @@ own scope — **is implemented** (§5.1 guard, §3 `car_home` requirement), not 
 Working non-interactively, these are the conservative, spec-faithful defaults chosen at each real fork.
 Each is cheap to change if the human partner prefers otherwise.
 
-- **§9.1 — `car_home` required when `vehicle_charge_limit` is mapped.** C2's home gate is not optional,
+- **§9.1 — `car_home` required when `vehicle_charge_limit` is mapped.** **Confirmed by the human
+  partner in PR review** — kept as a distinct signal rather than derived from `charger_status`, since
+  the project is hardware-agnostic and some installs may map `charger_status` to something that isn't
+  location-fixed (e.g. a vehicle's own cloud-reported charging state). C2's home gate is not optional,
   so allowing a vehicle-limit output with no presence source would let the System write to the vehicle
   without ever confirming "at home". Chosen: config-flow validation requires `car_home` in that case
   (mirroring `ev_soc`'s existing guard). *Alternative if overturned:* treat a missing/`None` `car_home`
