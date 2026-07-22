@@ -19,6 +19,10 @@ MODE_SOLAR = "Solar"
 MODE_SOLAR_ONLY = "SolarOnly"
 MODE_CAPTAR = "Captar"
 
+# Profile names (select.profile options; also the coordinator's active_profile values, R16).
+PROFILE_MANUAL = "Manual"
+PROFILE_AUTO = "Auto"
+
 # Adapter role keys (the coordinator's/factory's per-role dict; RA1 extension for ROLE_EV_SOC).
 ROLE_EV_SOC = "ev_soc"
 ROLE_CHARGER_CURRENT = "charger_current"
