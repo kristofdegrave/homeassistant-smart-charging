@@ -72,7 +72,7 @@ M2 waits for the published signal. This is the crux of why the write branch is d
 | Canonical charger status (disconnect transition; connected-at-home gate) | `charger_status` adapter **already built** (`StatusReadAdapter`) | **Reused unchanged** |
 | A default SOC limit to reset to on disconnect / adopt manual changes into | `number.smart_charging_soc_limit_override` **already built** (default 80 %, 50–100, R6) | **Reused unchanged** — no new config field (§3) |
 | The resolved active-SOC-limit *change* signal | `ActiveSocLimitChanged` / `sensor.smart_charging_active_soc_limit` **not built** (E3/M1, deferred) | **Out of scope — hard dependency** (§0/§8); the write branch is dormant until it lands |
-| The Manager itself (three branches, echo guard, event production) | Does not exist | **In scope** — `vehicle_limit.py` (M2) (§5) |
+| The Manager itself (three branches, echo guard, event production) | Does not exist | **In scope** — `managers/vehicle_limit.py` (M2) (§5) |
 
 §8 lists what is deferred (M3 notifications, UC08/UC10; the runtime dashboard C5; broader C6
 external-event wiring; automatic capability detection) — none of which UC09 needs to run.
@@ -302,6 +302,10 @@ produce (§0/§8).
   each gated by its own issue and **not done**. This slice references that contract and tests §5.1
   against a simulated sensor; it builds none of it. **A follow-up issue should track wiring §5.1 live
   once E3/M1 land** (re-diff the entity id and event type against whatever E3/M1 actually publish).
+- **`managers/` subpackage ADR (#330).** §9.4 was confirmed to place M2 under a new `managers/`
+  subpackage rather than the package root, but that is a package-layout decision needing its own ADR
+  (mirroring ADR-0010's `engines/` call) before the `custom_components/` code lands. Task set 4
+  (§10/§11) should not start until that ADR is Accepted.
 
 **Out of scope (later project-plan slices, each independent of M2):**
 
@@ -340,12 +344,14 @@ Each is cheap to change if the human partner prefers otherwise.
 - **§9.3 — Echo guard is exact-match, no tolerance dial.** Both directions carry the same canonical
   whole-percent value. *Alternative if overturned:* a small tolerance — rejected because it can swallow a
   genuine ±1 % manual nudge.
-- **§9.4 — M2 lives at the package root as `vehicle_limit.py`, mirroring `coordinator.py`.** ADR-0002
-  places the Coordinator Manager at the root (`coordinator.py`) but names **no** home for the M2/M3
-  Managers. Chosen: the direct extension of ADR-0002's established "Managers at root" pattern — a
-  single root module, no new package, no new structural decision. *If the team later prefers a
-  `managers/` subpackage* (e.g. once M3 also lands and grouping earns its keep), that is a follow-up ADR
-  mirroring ADR-0010's engines-package decision — **flagged, not made here.**
+- **§9.4 — M2 lives in a new `managers/` subpackage (`managers/vehicle_limit.py`), not the package
+  root.** **Confirmed by the human partner in PR review**, overturning this design's original
+  root-placement default. ADR-0002 places the Coordinator Manager at the root (`coordinator.py`) but
+  names no home for the M2/M3 Managers, so a `managers/` subpackage is a package-layout decision in
+  the same family as ADR-0010's `engines/` call — **it needs its own follow-up ADR before the
+  `custom_components/` code is written** (tracked as a separate issue; see §8). This design/plan is
+  updated to build against `managers/` now so it doesn't drift once that ADR lands; `develop-task`
+  should not start Task set 4 (§10/§11) until the ADR is Accepted.
 - **§9.5 — M2 self-registers its trigger listeners at setup, rather than a dedicated C6 Client owning
   them.** `project-plan.md` defines **C6 — External-event wiring** as a distinct Client that wires
   charger connect/disconnect, vehicle-limit changes, and notification actions to M2/M3, and which
@@ -404,15 +410,17 @@ custom_components/smart_charging/
     presence.py           # new — PresenceReadAdapter (car_home): state→bool (RA2 role, built early)
     factory.py            # + vehicle_charge_limit (NumericReadWriteAdapter, reused) + car_home, both
                           #   optional; vehicle_charge_limit gated on its mapping, car_home alongside
-  vehicle_limit.py        # NEW — M2: the Vehicle-Limit Manager (§5/§6/§7). Manager at package root,
-                          #   sibling to coordinator.py (§9.4). No HA policy beyond orchestration.
+  managers/
+    vehicle_limit.py       # NEW — M2: the Vehicle-Limit Manager (§5/§6/§7), pending its own
+                          #   follow-up ADR for the managers/ subpackage (§9.4). No HA policy
+                          #   beyond orchestration.
   config_flow.py          # C4 — + the two data fields + the required_when_vehicle_limit_mapped guard
   __init__.py             # setup — construct M2, register its state-change listeners (§5.4), tear down
 ```
 
 `tests/` mirrors 1:1 (ADR-0002/0009): `tests/adapters/test_presence.py`, additions to
 `tests/adapters/test_factory.py`, `tests/test_config_flow.py`, `tests/test_init.py`, and a new
-`tests/test_vehicle_limit.py`.
+`tests/managers/test_vehicle_limit.py`.
 
 No `engines/` or `modes/` module is added — M2 composes existing engines (via the published limit) and
 adapters; it is not itself a policy engine.

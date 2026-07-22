@@ -7,8 +7,8 @@
 SOC limit in both directions, with an echo guard, and resetting it to the default on disconnect (UC09,
 R6).
 
-**Architecture:** M2 is a Manager at the package root (`vehicle_limit.py`, sibling to
-`coordinator.py`), driven by HA state-change listeners on three entities (the mapped `charger_status`
+**Architecture:** M2 is a Manager living in the `managers/` subpackage (`managers/vehicle_limit.py`),
+pending its own follow-up ADR (design §9.4), driven by HA state-change listeners on three entities (the mapped `charger_status`
 and `vehicle_charge_limit` entities, and `sensor.smart_charging_active_soc_limit`). It reads inputs
 through adapters, writes the vehicle through the `vehicle_charge_limit` adapter, and adopts manual
 changes by setting the existing `number.smart_charging_soc_limit_override` entity. It never calls or is
@@ -371,7 +371,8 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ## Phase 3 — The Vehicle-Limit Manager (M2), fully-functional branches first
 
-M2 lives in a new root module `vehicle_limit.py` (design §9.4). Build its two E3/M1-independent
+M2 lives in a new `managers/vehicle_limit.py` module (design §9.4, pending its own follow-up ADR).
+Build its two E3/M1-independent
 branches (adoption, disconnect reset) and the echo guard **first** — they ship working; the dormant
 System→vehicle branch follows in Phase 4. Each task drives M2 through its **public reaction methods**
 in the HA harness (not by faking HA listener plumbing — that is Phase 5's job); tests construct M2 with
@@ -380,11 +381,11 @@ a small adapter map and call the reaction directly.
 ### Task 3.1: M2 skeleton + the echo-guard state
 
 **ADR honored:** system-design §4 rule 5 / ADR-0011 (Manager, no M1 coupling). **Test boundary:** HA
-harness, `tests/test_vehicle_limit.py`.
+harness, `tests/managers/test_vehicle_limit.py`.
 
 **Files:**
-- Create: `custom_components/smart_charging/vehicle_limit.py`
-- Test: `tests/test_vehicle_limit.py`
+- Create: `custom_components/smart_charging/managers/vehicle_limit.py`
+- Test: `tests/managers/test_vehicle_limit.py`
 
 **Step 1: Write the failing test**
 
@@ -498,7 +499,7 @@ class VehicleLimitManager:
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/vehicle_limit.py tests/test_vehicle_limit.py
+git add custom_components/smart_charging/managers/vehicle_limit.py tests/managers/test_vehicle_limit.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: add Vehicle-Limit Manager (M2) skeleton + echo-guard state
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
@@ -583,7 +584,7 @@ def _fire(self, event_type: str, limit: float) -> None:
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/vehicle_limit.py tests/test_vehicle_limit.py
+git add custom_components/smart_charging/managers/vehicle_limit.py tests/managers/test_vehicle_limit.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: M2 disconnect reset to default SOC limit (UC09 steps 7-8)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
@@ -669,13 +670,13 @@ async def on_vehicle_limit_changed(self, reported: float | None) -> None:
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/vehicle_limit.py tests/test_vehicle_limit.py
+git add custom_components/smart_charging/managers/vehicle_limit.py tests/managers/test_vehicle_limit.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: M2 manual-change adoption with echo guard (UC09 steps 4-6)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
-> **⎔ Phase 3 checkpoint:** `pytest tests/test_vehicle_limit.py -v` green; the two E3/M1-independent
+> **⎔ Phase 3 checkpoint:** `pytest tests/managers/test_vehicle_limit.py -v` green; the two E3/M1-independent
 > branches (adoption + disconnect reset) and the echo guard all work; no import of `coordinator` in
 > `vehicle_limit.py` (grep-assert — ADR-0011 no cross-Manager call).
 
@@ -754,7 +755,7 @@ async def on_active_soc_limit_changed(self, new_limit: float | None) -> None:
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/vehicle_limit.py tests/test_vehicle_limit.py
+git add custom_components/smart_charging/managers/vehicle_limit.py tests/managers/test_vehicle_limit.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: M2 System->vehicle write on SOC-limit change, C2-gated (UC09 step 2)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
@@ -775,7 +776,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `custom_components/smart_charging/__init__.py`
-- Modify: `custom_components/smart_charging/vehicle_limit.py` (a `register_listeners` helper)
+- Modify: `custom_components/smart_charging/managers/vehicle_limit.py` (a `register_listeners` helper)
 - Test: `tests/test_init.py`
 
 **Step 1: Write the failing tests**
@@ -860,7 +861,7 @@ def register_listeners(self, *, vehicle_entity_id, status_entity_id):
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
-git add custom_components/smart_charging/__init__.py custom_components/smart_charging/vehicle_limit.py tests/test_init.py
+git add custom_components/smart_charging/__init__.py custom_components/smart_charging/managers/vehicle_limit.py tests/test_init.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: wire M2 + its state-change listeners at setup (mapped roles only)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
