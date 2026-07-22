@@ -107,7 +107,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] At any moment exactly one active SOC limit applies, resolved in priority order: the solar-reserve cap (R9) first, then any solar step-up (R8), otherwise the default SOC limit (R6).
-- [ ] A solar step-up raises the active SOC limit only while charging in a solar mode (`Solar` or `SolarOnly`); switching between those two preserves an in-effect step-up.
+- [ ] A solar step-up raises the active SOC limit only under the `Auto` profile, while charging in a solar mode (`Solar` or `SolarOnly`, R8); switching between those two preserves an in-effect step-up.
 - [ ] When the active mode is no longer a solar mode, any solar step-up is cleared and the active SOC limit returns to the default limit.
 - [ ] On disconnect, the active SOC limit resets to the default limit (any solar step-up is cleared).
 - [ ] Charging does not resume above the active SOC limit until the limit changes or the car is unplugged and replugged.
@@ -117,12 +117,14 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R8 — Solar SOC step-up
 
 **Priority:** Should
-**What:** While charging in a solar mode, the system raises the active SOC limit in steps so that abundant free solar energy is stored rather than wasted. (Its scope and reset are governed by R7.)
+**What:** While the `Auto` profile is active and charging in a solar mode, the system raises the active SOC limit in steps so that abundant free solar energy is stored rather than wasted. (Its scope and reset are governed by R7.) This is `Auto`'s own coordination decision (R16), like R9 — it does not apply under `Manual`, at least for now; a manually selected solar-mode session charges to whichever active SOC limit is currently resolved (R7) without stepping it up.
 
 **Acceptance criteria:**
 
-- [ ] When solar charging is active and the car's SOC reaches within a configurable threshold (default 2 pp) of the active SOC limit, the limit rises by a configurable step (default 5 pp).
+- [ ] The step-up activates only under the `Auto` profile.
+- [ ] When solar charging is active under `Auto` and the car's SOC reaches within a configurable threshold (default 2 pp) of the active SOC limit, the limit rises by a configurable step (default 5 pp).
 - [ ] The stepped-up limit never exceeds a user-configurable maximum (50–100%, default 100%); a step that would overshoot it clamps to the maximum.
+- [ ] Under `Manual`, no step-up ever applies, regardless of which solar mode is selected or how close the SOC is to the active SOC limit.
 
 ---
 

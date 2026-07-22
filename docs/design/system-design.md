@@ -170,7 +170,7 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
 
 - **Adapter roles (V1)** — one class per role in `entity-catalog.md`, sharing the `Adapter`
   protocol (`read()` / `write(value)`), ADR-0003: `charger_current` (r/w), `charger_power`,
-  `charger_status` (with the raw→canonical translation table), `ev_soc`, `battery_capacity`,
+  `charger_status` (with the raw→canonical translation table), `ev_soc`, `ev_battery_capacity`,
   `vehicle_charge_limit` (r/w), `car_home`, `net_power`, `grid_voltage`, `solar_power`,
   `solar_forecast`, `low_tariff`, `departure_external`, `home_day_external`. Each isolates one
   upstream entity's access mechanics — nothing more. A role returning `None` is the fault signal
