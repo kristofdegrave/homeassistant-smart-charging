@@ -119,7 +119,7 @@ keys; zero new options keys; the reset/default value reuses an entity that alrea
 | Field | Bucket | Role / Notes |
 | --- | --- | --- |
 | **Vehicle charge-limit entity** (`CONF_VEHICLE_CHARGE_LIMIT_ENTITY`) | **data** — new, **optional** | RA1-VL. Mapped to the vehicle's settable charge-limit entity (a `number`-domain entity, matching `charger_current`'s write path — §4). When blank/absent, UC09 does not apply and M2 is inert (success criterion 6). Data-bucket because remapping a hardware role mid-cycle is reconfigure-only (ADR-0005), exactly like every other role. |
-| **Car-home entity** (`CONF_CAR_HOME_ENTITY`) | **data** — new; **required whenever `CONF_VEHICLE_CHARGE_LIMIT_ENTITY` is mapped** | The presence/`device_tracker`/`binary_sensor` entity backing C2's home gate. Config-flow validation rejects a save that maps `vehicle_charge_limit` without `car_home` — the C2 home gate is **not** optional, so a vehicle-limit output with no way to check "at home" would be unsafe. Mirrors the existing `required_when_solar_installed` / `required_when_captar_available` guard shape on `ev_soc`. **Judgment call — §9.1.** |
+| **Car-home entity** (`CONF_CAR_HOME_ENTITY`) | **data** — new; **required whenever `CONF_VEHICLE_CHARGE_LIMIT_ENTITY` is mapped** | The presence entity (`device_tracker` / `person` / `binary_sensor`) backing C2's home gate. Config-flow validation rejects a save that maps `vehicle_charge_limit` without `car_home` — the C2 home gate is **not** optional, so a vehicle-limit output with no way to check "at home" would be unsafe. Mirrors the existing `required_when_solar_installed` / `required_when_captar_available` guard shape on `ev_soc`. **Judgment call — §9.1.** |
 | **Default / reset SOC limit** | — | **No new field.** The value M2 resets to on disconnect and adopts manual changes into **is** the existing `number.smart_charging_soc_limit_override` (config-time default `CONF_DEFAULT_SOC_LIMIT` = 80 %, runtime range 50–100). R6 AC 1/3 and UC09 step 8 name this exact entity ("default SOC limit, default 80 %"). Adding a separate reset value would duplicate it and could drift. **Judgment call — §9.2.** |
 
 No new **options** keys: there is no echo-guard tolerance dial (§6 uses exact-match), no separate
@@ -231,10 +231,13 @@ M2 registers HA **state-change listeners** at integration setup (`__init__.py`, 
 `async_track_state_change_event` on the *mapped underlying entities*, resolved from config-entry data):
 the `charger_status` entity (§5.3), the `vehicle_charge_limit` entity (§5.2), and
 `sensor.smart_charging_active_soc_limit` (§5.1). This is the **minimal, M2-scoped slice of C6**
-(external-event wiring) — enough to drive M2's own three triggers. The broader C6 (notification-action
-wiring for M3, etc.) stays deferred (§8). Listeners for un-mapped roles are simply not registered
-(success criterion 6). Because listeners live only while the entry is loaded, ADR-0008 reload semantics
-need nothing special — a reload tears down and re-registers them.
+(external-event wiring) — enough to drive M2's own three triggers — and is the same self-wiring pattern
+M1 already uses (the Coordinator self-schedules its own control-interval timer rather than waiting for a
+separate timer Client, per ADR-0006). The broader C6 (notification-action wiring for M3, etc.) stays
+deferred (§8). **This "Manager wires its own triggers vs. a dedicated C6 Client owns them" choice is a
+flagged judgment call — §9.5.** Listeners for un-mapped roles are simply not registered (success
+criterion 6). Because listeners live only while the entry is loaded, ADR-0008 reload semantics need
+nothing special — a reload tears down and re-registers them.
 
 ---
 
@@ -246,9 +249,16 @@ The mechanism required by UC09's exception flow, kept as small as it can be:
   `vehicle_charge_limit`, in canonical percent), set by §5.1 and §5.3, initialised `None`.
 - On a vehicle-side change (§5.2): if the reported value **equals** `_last_written_limit`, it is our own
   write reflecting back → ignore. Otherwise → manual change → adopt.
-- **Exact match on the canonical percent value** (both sides are integers/whole percents through the
+- **Exact match on the canonical percent value** (our side writes and reads whole percents through the
   `number` domain; the value written and the value read back are the same canonical unit). No tolerance
   dial (§3) — a tolerance would risk *swallowing* a genuine small manual nudge. **Judgment call — §9.3.**
+  *Boundary, stated:* this assumes the external vehicle entity reports back the value we wrote at the
+  same quantization. A vehicle whose charge-limit `number` uses a coarser step (e.g. 5 %) could report a
+  rounded value that fails the exact-match and be misread as a manual change → a spurious
+  `ManualChargeLimitAdopted` that re-adopts a near-identical default. This is a **correctness edge, not a
+  safety issue** (no unsafe current results — M2 issues no set-point), and such non-unit external steps
+  are out of scope for this slice; §9.3's tolerance alternative is where to revisit it if a real vehicle
+  needs it.
 - `_last_written_limit` is **not persisted** across a reload/restart (it is transient loop-guard state,
   not user state). Worst case after a restart: the very first vehicle report that happens to equal the
   reset/override value is treated as an echo and not re-adopted — harmless, because that value already
@@ -336,6 +346,16 @@ Each is cheap to change if the human partner prefers otherwise.
   single root module, no new package, no new structural decision. *If the team later prefers a
   `managers/` subpackage* (e.g. once M3 also lands and grouping earns its keep), that is a follow-up ADR
   mirroring ADR-0010's engines-package decision — **flagged, not made here.**
+- **§9.5 — M2 self-registers its trigger listeners at setup, rather than a dedicated C6 Client owning
+  them.** `project-plan.md` defines **C6 — External-event wiring** as a distinct Client that wires
+  charger connect/disconnect, vehicle-limit changes, and notification actions to M2/M3, and which
+  *depends on* M2. This slice wires M2's own three triggers inside M2's setup (§5.4) so the adoption and
+  disconnect branches ship working now, following the same self-wiring precedent M1 uses for its
+  control-interval timer (ADR-0006). Chosen: self-wiring, with C6 scoped down to the *broader*
+  app-action wiring (notification responses for M3) that genuinely needs a separate Client. *If the team
+  prefers all Manager-trigger wiring to live in a single C6 Client*, M2's listener registration moves
+  there when C6 is built — a mechanical relocation, no behavior change. **Flagged so it is not silently
+  re-homed later.**
 
 ---
 

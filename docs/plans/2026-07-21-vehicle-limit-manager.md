@@ -39,10 +39,10 @@ event as part of this slice — that is out of scope (design §8).
 ## Conventions used throughout
 
 Same as `2026-07-20-captar.md`'s conventions section (package root, tests-mirror-1:1, canonical charger
-states from `const.py`, engine/adapter purity boundaries, ADR-0009 harness split, commit-after-green,
-**re-check `git branch --show-current` is `docs/276`… no — this is a code slice: work on a
-`dev/276`-style implementation branch when actually implementing; this plan itself lives on `docs/276`**).
-Additionally:
+states from `const.py`, engine/adapter purity boundaries, ADR-0009 harness split, commit-after-green).
+**Branch:** this plan document lives on `docs/276`; the implementation commits it describes land on a
+`dev/276`-style implementation branch. Re-check `git branch --show-current` before every commit
+(shared checkout — a concurrent session can switch HEAD). Additionally:
 
 - **Named constants, no magic strings** (CLAUDE.md): every new role key, config key, HA event type, and
   entity id is a `const.py` constant, referenced by name in code and tests.
@@ -789,10 +789,12 @@ async def test_m2_listeners_registered_when_vehicle_limit_mapped(hass):
     })
     m = hass.data[DOMAIN][entry.entry_id]["vehicle_limit_manager"]
     assert m is not None
-    # Driving the underlying entities reaches the manager:
+    # Driving the underlying vehicle entity reaches the manager and adopts the change:
+    events = _capture(hass, "smart_charging_manual_charge_limit_adopted")
     hass.states.async_set("number.car_limit", "55")
     await hass.async_block_till_done()
-    # (assert adoption happened via a captured event or the number entity's new value)
+    assert len(events) == 1  # the vehicle listener fired M2's adoption branch
+    assert hass.states.get("number.smart_charging_soc_limit_override").state == "55.0"
 
 
 async def test_no_m2_when_vehicle_limit_unmapped(hass):
@@ -815,10 +817,17 @@ def register_listeners(self, *, vehicle_entity_id, status_entity_id):
     Only called when vehicle_charge_limit is mapped (setup gates on that)."""
     unsubs = []
     async def _vehicle(event):
-        await self.on_vehicle_limit_changed(_num(event))
+        # NF3/ADR-0003 (design §5.2): external state crosses its adapter — read the vehicle
+        # value THROUGH the adapter, not by parsing event.new_state.state, so the adapter's
+        # numeric-coercion/None semantics are the single source of truth (mirrors _status below).
+        await self.on_vehicle_limit_changed(
+            await self._adapters[ROLE_VEHICLE_CHARGE_LIMIT].read()
+        )
     async def _status(event):
         await self.on_status_changed(await self._adapters[ROLE_CHARGER_STATUS].read())
     async def _active(event):
+        # sensor.smart_charging_active_soc_limit is an owned diagnostic entity (E3/M1), NOT a
+        # hardware adapter role, so it has no adapter to read through — parse its state directly.
         await self.on_active_soc_limit_changed(_num(event))
     unsubs.append(async_track_state_change_event(self._hass, [vehicle_entity_id], _vehicle))
     unsubs.append(async_track_state_change_event(self._hass, [status_entity_id], _status))
@@ -828,18 +837,25 @@ def register_listeners(self, *, vehicle_entity_id, status_entity_id):
     return unsubs
 ```
 
-  (`_num` = parse the event's `new_state.state` to float or None — a tiny module helper. The vehicle
-  listener passes the *raw read-back* value; if the wiring instead reads through the adapter, keep it
-  consistent with Task 3.3's `float|None` contract.)
+  (`_num` = parse the event's `new_state.state` to float or None — a tiny module helper, used only for
+  the owned `active_soc_limit` diagnostic entity, which has no adapter. The two hardware-backed roles
+  (`vehicle_charge_limit`, `charger_status`) are read through their adapters.)
 
 - In `__init__.py`'s `async_setup_entry`, **after** platforms are set up (so `SocLimitOverrideNumber`
   exists to adopt into): if `entry.data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY)`, construct
   `VehicleLimitManager` with `get_default_soc_limit=lambda: coordinator.soc_limit_override` and
-  `set_default_soc_limit` wired to set the number entity / `coordinator.soc_limit_override` (locate the
-  `SocLimitOverrideNumber` via the entity registry, or push through the coordinator + request refresh —
-  match how `number.py` seeds it). Register listeners, and register each unsub via
-  `entry.async_on_unload(unsub)` so unload/reload tears them down (ADR-0008). Store the manager under
-  `hass.data[DOMAIN][entry.entry_id]["vehicle_limit_manager"]` (or `None` when unmapped).
+  `set_default_soc_limit` wired to **call the `number.set_value` service on
+  `number.smart_charging_soc_limit_override`** — the same service path the adapter uses for external
+  `number` entities. This is the correct target because `SocLimitOverrideNumber` is a `RestoreNumber`
+  (`number.py`): setting only `coordinator.soc_limit_override` would leave the entity's `native_value`
+  stale, and on the next restart `RestoreNumber` would restore the pre-adoption value and overwrite the
+  coordinator — losing the adopted default and violating UC09 step 6 ("future writes use the newly
+  adopted default until the user changes it again"). Routing through `number.set_value` updates
+  `native_value`, seeds the coordinator via the entity's own `async_set_native_value`, and persists
+  ha_state in one path. (Do **not** try to hold the `SocLimitOverrideNumber` object from the entity
+  registry — the registry yields an `entity_id`, not the instance.) Register listeners, and register
+  each unsub via `entry.async_on_unload(unsub)` so unload/reload tears them down (ADR-0008). Store the
+  manager under `hass.data[DOMAIN][entry.entry_id]["vehicle_limit_manager"]` (or `None` when unmapped).
 
 **Step 4: Run** → PASS. **Step 5: Commit**
 
