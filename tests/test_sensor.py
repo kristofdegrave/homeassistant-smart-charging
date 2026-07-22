@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
+    ActiveSocLimitSensor,
     ChargingStatusSensor,
     EffectivePeakLimitSensor,
     MonthlyPeakSensor,
@@ -171,3 +172,26 @@ def test_active_mode_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = ActiveModeSensor(entry_id="abc", coordinator=coord)
     assert sensor.unique_id == "abc_active_mode"
+
+
+async def test_active_soc_limit_sensor_reflects_the_resolved_value(hass):
+    """After a cycle, sensor.smart_charging_active_soc_limit's native_value equals the
+    coordinator's resolved R7 value this cycle."""
+    coord = SimpleNamespace(data=SimpleNamespace(active_soc_limit=80.0))
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 80.0
+
+    coord.data = SimpleNamespace(active_soc_limit=60.0)
+    assert sensor.native_value == 60.0
+
+
+async def test_active_soc_limit_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_active_soc_limit_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_active_soc_limit"
