@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 
@@ -23,7 +25,7 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
         super().__init__(entry_id)
         self._attr_unique_id = f"{entry_id}_home_day"
         self._attr_is_on = False
-        self._unsub_midnight_reset = None
+        self._unsub_midnight_reset: CALLBACK_TYPE | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -37,7 +39,7 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
             self._unsub_midnight_reset = None
         await super().async_will_remove_from_hass()
 
-    async def _async_reset_at_midnight(self, now) -> None:
+    async def _async_reset_at_midnight(self, now: datetime) -> None:
         self._attr_is_on = False
         self.async_write_ha_state()
 
