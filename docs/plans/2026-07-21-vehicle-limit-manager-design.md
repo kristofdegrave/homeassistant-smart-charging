@@ -1,7 +1,7 @@
 # Vehicle-Limit Manager slice (M2 / V12) — design
 
 **Date:** 2026-07-21
-**Status:** draft (issue #276, epic #256)
+**Status:** draft (issue #303, epic #302)
 **Type:** implementation design (a slice of the approved architecture — not a new decision)
 
 This document defines the **Vehicle-Limit Manager** (M2, volatility **V12**) and the read/write
@@ -28,7 +28,7 @@ as if it owned them. Where UC09 and ADR-0011 differ on how the System→vehicle 
 ## 0. Dependency on E3 / M1 — READ FIRST (proceeding ahead of schedule)
 
 **This slice is being authored ahead of its upstream dependency, at the explicit direction of the
-human partner, so the design is ready when that dependency lands.** Per epic #256, the SOC-Target
+human partner, so the design is ready when that dependency lands.** Per epic #302, the SOC-Target
 Engine **E3** and the Coordinator wiring **M1** that together *publish* the `ActiveSocLimitChanged`
 domain event — the signal this Manager's System→vehicle write branch consumes — are tracked in the
 **still-open** epic #255 and are **not built yet in the form M2 needs**.
