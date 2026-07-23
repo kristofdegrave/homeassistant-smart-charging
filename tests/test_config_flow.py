@@ -14,26 +14,42 @@ from custom_components.smart_charging.const import (
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
+    CONF_DEPARTURE_EXTERNAL_ENTITY,
+    CONF_EV_BATTERY_CAPACITY_ENTITY,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
+    CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
+    DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_PEAK_KW,
+    DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_ONLY_STRATEGY,
+    DEFAULT_SOLAR_RESERVE_SOC,
+    DEFAULT_SOLAR_STEP_PP,
+    DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     STATE_CHARGING,
     STATE_CONNECTED,
@@ -263,7 +279,11 @@ async def test_solar_installed_true_requires_ev_soc(hass):
 async def test_solar_installed_true_with_ev_soc_succeeds(hass):
     result = await _run_user_flow(
         hass,
-        overrides={CONF_SOLAR_INSTALLED: True, CONF_EV_SOC_ENTITY: "sensor.ev_soc"},
+        overrides={
+            CONF_SOLAR_INSTALLED: True,
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+        },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_SOLAR_INSTALLED] is True
@@ -346,6 +366,43 @@ async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
     assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
 
 
+async def test_reconfigure_rejects_solar_installed_true_without_solar_forecast(hass):
+    # Design doc §3: the solar_forecast guard must also hold on reconfigure, mirroring
+    # the ev_soc guard's own reconfigure test above -- otherwise a user could bypass it
+    # by flipping CONF_SOLAR_INSTALLED on through Reconfigure instead of the install form.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+            "charger_status_entity": "sensor.evse",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
+        },
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    new_mapping = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+        "charger_status_entity": "sensor.evse",
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+        "net_power_entity": "sensor.net_power",
+        "charger_power_entity": "sensor.charger_power",
+        CONF_SOLAR_INSTALLED: True,
+        CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+    }
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == "required_when_solar_installed"
+
+
 async def test_captar_available_defaults_true(hass):
     # Design doc §3: R18 ("defaulting to present") / entity-catalog.md's sc_captar_available.
     result = await _run_user_flow(hass)
@@ -406,3 +463,67 @@ async def test_power_respect_peak_can_be_turned_off(hass):
         result["flow_id"], {**_current_options(entry), CONF_POWER_RESPECT_PEAK: False}
     )
     assert entry.options[CONF_POWER_RESPECT_PEAK] is False
+
+
+async def test_solar_forecast_required_when_solar_installed(hass):
+    # Design doc §3: solar_forecast is required only when CONF_SOLAR_INSTALLED is True
+    # (R9's precondition is inert without the solar capability) -- same
+    # required_when_solar_installed-style guard ev_soc already uses.
+    result = await _run_user_flow(
+        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_SOLAR_FORECAST_ENTITY]
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == "required_when_solar_installed"
+
+
+async def test_solar_forecast_not_required_when_solar_not_installed(hass):
+    result = await _run_user_flow(
+        hass, overrides={CONF_SOLAR_INSTALLED: False}, omit=[CONF_SOLAR_FORECAST_ENTITY]
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_ev_battery_capacity_entity_can_be_mapped(hass):
+    result = await _run_user_flow(
+        hass, overrides={CONF_EV_BATTERY_CAPACITY_ENTITY: "sensor.ev_battery_capacity"}
+    )
+    assert result["data"][CONF_EV_BATTERY_CAPACITY_ENTITY] == "sensor.ev_battery_capacity"
+
+
+async def test_ev_battery_capacity_entity_is_optional(hass):
+    result = await _run_user_flow(hass, omit=[CONF_EV_BATTERY_CAPACITY_ENTITY])
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_EV_BATTERY_CAPACITY_ENTITY not in result["data"]
+
+
+async def test_departure_external_and_home_day_external_entities_can_be_mapped(hass):
+    result = await _run_user_flow(
+        hass,
+        overrides={
+            CONF_DEPARTURE_EXTERNAL_ENTITY: "sensor.departure_time",
+            CONF_HOME_DAY_EXTERNAL_ENTITY: "binary_sensor.home_day",
+        },
+    )
+    assert result["data"][CONF_DEPARTURE_EXTERNAL_ENTITY] == "sensor.departure_time"
+    assert result["data"][CONF_HOME_DAY_EXTERNAL_ENTITY] == "binary_sensor.home_day"
+
+
+async def test_new_thresholds_seeded_with_defaults(hass):
+    result = await _run_user_flow(hass)
+    assert result["options"][CONF_EV_BATTERY_CAPACITY_KWH] == DEFAULT_EV_BATTERY_CAPACITY_KWH
+    assert result["options"][CONF_MAX_SOLAR_SOC] == DEFAULT_MAX_SOLAR_SOC
+    assert result["options"][CONF_SOLAR_STEP_PP] == DEFAULT_SOLAR_STEP_PP
+    assert result["options"][CONF_SOLAR_STEP_THRESHOLD_PP] == DEFAULT_SOLAR_STEP_THRESHOLD_PP
+    assert result["options"][CONF_SOLAR_RESERVE_SOC] == DEFAULT_SOLAR_RESERVE_SOC
+    assert (
+        result["options"][CONF_SOLAR_FORECAST_THRESHOLD_KWH] == DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
+    )
+
+
+async def test_options_flow_edits_the_new_thresholds(hass):
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**_current_options(entry), CONF_SOLAR_RESERVE_SOC: 55.0}
+    )
+    assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
