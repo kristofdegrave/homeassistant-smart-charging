@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .adapters.sun import SUN_STATE_ABOVE_HORIZON, SUN_STATE_BELOW_HORIZON
 from .const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
@@ -73,8 +74,10 @@ from .const import (
     ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
+    ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
+    ROLE_SUN,
 )
 from .engines.billing_protection import (
     PeakBreachTracker,
@@ -100,10 +103,6 @@ from .engines.soc_target import (
 from .modes import captar, power, solar, solar_only
 from .modes._phase import Phase
 from .profiles.auto import select_mode
-
-SUN_ENTITY_ID = "sun.sun"  # entity-catalog.md: read directly, not through an adapter role.
-SUN_STATE_ABOVE_HORIZON = "above_horizon"  # HA's own sun.sun states (glossary: "sun is down"
-SUN_STATE_BELOW_HORIZON = "below_horizon"  # is the below_horizon state; "sun is up" its mirror)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -242,20 +241,20 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._peak_tracked_month,
         )
         self._peak_tracked_kw = monthly_peak_kw
-        # Placeholder urgent=False reproduces today's row-2-only behavior; Task 5.3 wires the
-        # real resolved urgency (E4) into this call.
+        # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
+        # known -- overwritten with the real `urgent` value once required-current resolves.
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw,
             self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
             urgent=False,
         )
-
-        if self.active_mode != self._last_active_mode:
-            # R11: switching mode resets timers -- fresh state for every mode with one, whether
-            # or not the incoming mode is one of them (a state nobody is dispatching to is inert
-            # either way).
-            self._mode_state = _fresh_mode_state()
-            self._last_active_mode = self.active_mode
+        # R11: catches a Manual mode change here (already final -- set externally before this
+        # cycle runs), before the baseline-mode dry run below reads _mode_state, so that dry
+        # run sees fresh state on the very cycle the user switches modes. Idempotent -- a no-op
+        # if nothing has changed yet, which is always true for Auto at this point (its own mode
+        # isn't resolved until later, below); the same check runs again after that resolution,
+        # to catch an Auto mode change too.
+        self._reset_mode_state_if_changed()
 
         # ev_soc is read whenever the car is connected and the role is configured -- Task 5.2's
         # deadline-urgency comparison needs it regardless of mode (R5 is cross-cutting), not
@@ -289,7 +288,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # the baseline-mode dry-run (Task 5.2)
         now = self.hass.loop.time()  # injected, not read inside modes/engines
         # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
-        # cycle from THIS cycle's resolved active_mode/active_profile, not the prior one.
+        # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
+        # already this cycle's final value (set externally before the cycle runs); under Auto,
+        # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
+        # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
         is_solar_mode_charging = (
             self.active_profile == PROFILE_AUTO
             and self.active_mode in _SOLAR_MODES
@@ -315,9 +317,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         external = (
             await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
         )
-        sun_state = self.hass.states.get(SUN_ENTITY_ID)
-        sun_is_up = sun_state is not None and sun_state.state == SUN_STATE_ABOVE_HORIZON
-        sun_is_down = sun_state is not None and sun_state.state == SUN_STATE_BELOW_HORIZON
+        sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
+        sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
+        sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
+        # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
+        # default -- "the signal is omitted and the flag is treated as always active".
+        low_tariff_active = True
+        if ROLE_LOW_TARIFF in self._adapters:
+            low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
+            if low_tariff_reading is not None:
+                low_tariff_active = low_tariff_reading
         today_weekday = now_dt.weekday()
         tomorrow_weekday = (today_weekday + 1) % 7
 
@@ -361,7 +370,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # R5/R14/R15: today's departure deadline and the required-current/urgency it drives.
         # Guarded on ev_soc being known -- without an SOC reading (disconnected, or a
         # non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring
-        # R14's own "no deadline resolved -> urgency never applies" shape.
+        # R14's own "no deadline resolved -> urgency never applies" shape. `auto_dispatchable`
+        # is also this cycle's own gate for actually resolving Auto's active mode below --
+        # computed once here and reused there, rather than repeating the same conjunction, so
+        # the two can never drift apart. When it's False (disconnected, or Auto with no ev_soc
+        # role mapped at all), Auto simply keeps whatever active_mode it last resolved -- a
+        # deliberate, scope-truthful simplification, same as required-current's own guard above.
+        auto_dispatchable = (
+            self.active_profile == PROFILE_AUTO
+            and status in CHARGEABLE_STATES
+            and ev_soc is not None
+        )
         if status in CHARGEABLE_STATES and ev_soc is not None:
             deadline_today = resolve_departure_deadline(
                 external_configured,
@@ -384,7 +403,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 if sensed_capacity_kwh is not None
                 else self._config.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH)
             )
-            if self.active_profile == PROFILE_AUTO:
+            if auto_dispatchable:
                 # The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
                 # (urgent=False) every cycle -- never Captar's own already-escalated request,
                 # per resolution-rules.md's explicit warning against that (it would make urgency
@@ -405,10 +424,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     solar_surplus_sufficient=surplus_w
                     >= self._config[CONF_SOLAR_START_THRESHOLD_W],
                     sun_is_down=sun_is_down,
-                    # No low-tariff source is wired in this slice -- the glossary's own
-                    # single-tariff default ("the signal is omitted and the flag is treated as
-                    # always active") applies unconditionally.
-                    low_tariff_active=True,
+                    low_tariff_active=low_tariff_active,
                     solar_reserve_active=solar_reserve_active,
                 )
             else:
@@ -450,6 +466,36 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self.hass.bus.async_fire(
                 EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: required.required_a}
             )
+
+        # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
+        # Urgent (UC05's Postconditions) -- this `or` makes that explicit even though
+        # `unreachable` implies `urgent` by construction, per the required-current formula.
+        urgent = required.urgent or required.unreachable
+        effective_peak_limit_kw = resolve_effective_peak_limit(
+            monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW), urgent=urgent
+        )
+        if auto_dispatchable:
+            # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
+            # never changes here while Manual, even under urgency) -- only Auto resolves its
+            # own mode, via the real (non-baseline) urgent this time.
+            self.active_mode = select_mode(
+                soc=ev_soc,
+                active_soc_limit=active_soc_limit,
+                available_modes=available_modes,
+                urgent=urgent,
+                solar_capability_present=self._config.get(CONF_SOLAR_INSTALLED, False),
+                sun_is_up=sun_is_up,
+                solar_surplus_sufficient=surplus_w >= self._config[CONF_SOLAR_START_THRESHOLD_W],
+                sun_is_down=sun_is_down,
+                low_tariff_active=low_tariff_active,
+                solar_reserve_active=solar_reserve_active,
+            )
+
+        # Checked again here, after Auto's own mode resolution above -- catches a same-cycle
+        # Auto escalation/revert in time for this cycle's own dispatch below, not one cycle
+        # late (the earlier call above only ever catches a Manual change, since Auto's mode
+        # isn't resolved yet at that point).
+        self._reset_mode_state_if_changed()
 
         if status not in CHARGEABLE_STATES:
             desired = 0.0
@@ -554,6 +600,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_peak_limit_kw=effective_peak_limit_kw,
             active_soc_limit=active_soc_limit,
         )
+
+    def _reset_mode_state_if_changed(self) -> None:
+        """R11: switching mode resets timers -- fresh state for every mode with one, whether
+        or not the incoming mode is one of them (a state nobody is dispatching to is inert
+        either way). Idempotent -- a no-op once `_last_active_mode` catches up, so calling
+        this twice in the same cycle (Manual's change is already final at the top of the
+        cycle; Auto's own mode isn't resolved until later) never double-resets."""
+        if self.active_mode != self._last_active_mode:
+            self._mode_state = _fresh_mode_state()
+            self._last_active_mode = self.active_mode
 
     def _mode_desired_current(
         self,

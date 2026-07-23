@@ -9,6 +9,7 @@ from custom_components.smart_charging.adapters.numeric import (
     NumericReadWriteAdapter,
 )
 from custom_components.smart_charging.adapters.status import StatusReadAdapter
+from custom_components.smart_charging.adapters.sun import SunReadAdapter
 from custom_components.smart_charging.adapters.time_read import TimeReadAdapter
 from custom_components.smart_charging.const import (
     CONF_CHARGER_CURRENT_ENTITY,
@@ -19,6 +20,7 @@ from custom_components.smart_charging.const import (
     CONF_EV_SOC_ENTITY,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
+    CONF_LOW_TARIFF_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_STATUS_TRANSLATION,
@@ -30,8 +32,10 @@ from custom_components.smart_charging.const import (
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
     ROLE_HOME_DAY_EXTERNAL,
+    ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
+    ROLE_SUN,
 )
 
 
@@ -64,6 +68,22 @@ async def test_factory_builds_expected_roles(hass):
 
     assert isinstance(adapters[ROLE_GRID_VOLTAGE], NumericReadAdapter)
     assert adapters[ROLE_GRID_VOLTAGE]._entity_id == "sensor.grid_voltage"
+
+    assert isinstance(adapters[ROLE_SUN], SunReadAdapter)
+
+
+async def test_sun_role_built_unconditionally_no_config_needed(hass):
+    # Unlike every other role, sun needs no entity mapping at all (issue #376) -- it must
+    # be present even with the bare-minimum required fields.
+    data = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+        CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
+        CONF_STATUS_TRANSLATION: {"Charging": "charging"},
+        CONF_NET_POWER_ENTITY: "sensor.net_power",
+        CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
+    }
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_SUN], SunReadAdapter)
 
 
 async def test_grid_voltage_optional(hass):
@@ -187,3 +207,23 @@ async def test_solar_forecast_empty_string_treated_as_absent(hass):
     data[CONF_SOLAR_FORECAST_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_SOLAR_FORECAST not in adapters
+
+
+async def test_factory_builds_low_tariff_role_when_configured(hass):
+    data = _data()
+    data[CONF_LOW_TARIFF_ENTITY] = "binary_sensor.low_tariff"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_LOW_TARIFF], BooleanReadAdapter)
+    assert adapters[ROLE_LOW_TARIFF]._entity_id == "binary_sensor.low_tariff"
+
+
+async def test_low_tariff_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_LOW_TARIFF not in adapters
+
+
+async def test_low_tariff_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_LOW_TARIFF_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_LOW_TARIFF not in adapters

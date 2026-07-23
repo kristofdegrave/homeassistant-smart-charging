@@ -22,6 +22,7 @@ from custom_components.smart_charging.const import (
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
+    CONF_LOW_TARIFF_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
     CONF_PEAK_GRACE_MIN,
@@ -506,6 +507,19 @@ async def test_departure_external_and_home_day_external_entities_can_be_mapped(h
     )
     assert result["data"][CONF_DEPARTURE_EXTERNAL_ENTITY] == "sensor.departure_time"
     assert result["data"][CONF_HOME_DAY_EXTERNAL_ENTITY] == "binary_sensor.home_day"
+
+
+async def test_low_tariff_entity_can_be_mapped(hass):
+    result = await _run_user_flow(
+        hass, overrides={CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff"}
+    )
+    assert result["data"][CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
+
+
+async def test_low_tariff_entity_is_optional(hass):
+    result = await _run_user_flow(hass, omit=[CONF_LOW_TARIFF_ENTITY])
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_LOW_TARIFF_ENTITY not in result["data"]
 
 
 async def test_new_thresholds_seeded_with_defaults(hass):
