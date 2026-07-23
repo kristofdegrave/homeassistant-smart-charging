@@ -19,6 +19,10 @@ MODE_SOLAR = "Solar"
 MODE_SOLAR_ONLY = "SolarOnly"
 MODE_CAPTAR = "Captar"
 
+# Profile names (select.profile options; also the coordinator's active_profile values, R16).
+PROFILE_MANUAL = "Manual"
+PROFILE_AUTO = "Auto"
+
 # Adapter role keys (the coordinator's/factory's per-role dict; RA1 extension for ROLE_EV_SOC).
 ROLE_EV_SOC = "ev_soc"
 ROLE_CHARGER_CURRENT = "charger_current"
@@ -93,6 +97,12 @@ CONF_MAX_PEAK_KW = "max_peak_kw"  # Captar billing-protection peak limit (design
 CONF_PEAK_GRACE_MIN = "peak_grace_min"  # Captar grace period before peak enforcement (design §3)
 CONF_CAPTAR_COOLDOWN_MIN = "captar_cooldown_min"  # Captar mode cooldown duration (design doc §3)
 CONF_POWER_RESPECT_PEAK = "power_respect_peak"  # R17 opt-out: Power mode honors the peak limit
+CONF_EV_BATTERY_CAPACITY_KWH = "ev_battery_capacity_kwh"  # R15 required-current formula input
+CONF_MAX_SOLAR_SOC = "max_solar_soc"  # R8 solar step-up ceiling
+CONF_SOLAR_STEP_PP = "solar_step_pp"  # R8 solar step-up step size
+CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"  # R8 solar step-up trigger gap
+CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"  # R9 overnight solar-reserve cap (runtime, R7 row 1)
+CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-reserve forecast gate
 
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4
@@ -109,3 +119,9 @@ DEFAULT_MAX_PEAK_KW = 4.0
 DEFAULT_PEAK_GRACE_MIN = 2.0
 DEFAULT_CAPTAR_COOLDOWN_MIN = 10.0
 DEFAULT_POWER_RESPECT_PEAK = True
+DEFAULT_EV_BATTERY_CAPACITY_KWH = 75.0
+DEFAULT_MAX_SOLAR_SOC = 100.0
+DEFAULT_SOLAR_STEP_PP = 5.0
+DEFAULT_SOLAR_STEP_THRESHOLD_PP = 2.0
+DEFAULT_SOLAR_RESERVE_SOC = 60.0
+DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
