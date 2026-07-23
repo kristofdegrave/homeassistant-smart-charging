@@ -41,6 +41,7 @@ from custom_components.smart_charging.const import (
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
     PROFILE_AUTO,
+    PROFILE_MANUAL,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
@@ -1067,3 +1068,148 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
     await coord._async_update_data()
 
     assert coord._required_current.urgent is False
+
+
+# --- Task 5.3: Auto mode-selection dispatch, Capability-Gate, peak-limit row-1 raise ---
+
+
+async def test_auto_profile_selects_solar_when_surplus_sufficient(hass):
+    """Row 3: solar capability present, sun up, surplus above threshold -> Solar, no
+    urgency in the way (no deadline seeded)."""
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=50.0, net_w=100.0, charger_w=500.0, sun_state="above_horizon"
+    )
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = True
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_SOLAR
+
+
+async def test_auto_profile_escalates_to_captar_under_urgency(hass, freezer):
+    """Row 2: a tight deadline the baseline (Off, no solar/low-tariff match) can't meet
+    escalates Auto to Captar, the available urgency-capable mode."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = True
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR
+
+
+async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_urgency(
+    hass, freezer
+):
+    """R16/R18's carve-out: the same urgency as above, but with Captar unavailable, Auto
+    selects Power instead of falling through to Off."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = False
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_POWER
+
+
+async def test_manual_profile_never_changes_mode_regardless_of_urgency(hass, freezer):
+    """NF2 regression: active_mode stays whatever the user selected even while urgent."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)  # would be urgent, if Auto
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert result.active_mode == MODE_SOLAR
+
+
+async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freezer):
+    """R5/C3 row 1: urgency raises the effective peak limit to max_peak_kw, above the
+    monthly-tracked peak it would otherwise be capped to."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 10.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord, kw=1.0)  # well below max_peak_kw -- row 2 alone would apply
+
+    result = await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 10.0
+
+
+async def test_effective_peak_limit_resolves_normally_once_urgency_reverts(hass, freezer):
+    """Once the SOC reaches the active limit (nothing left to charge, no urgency), the
+    effective peak limit reverts to row 2's min(monthly, max)."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 10.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord, kw=1.0)
+
+    result = await coord._async_update_data()
+    assert result.effective_peak_limit_kw == 10.0  # urgent -- raised
+
+    adapters[ROLE_EV_SOC]._value = 80.0  # SOC now at the limit -- nothing left to charge
+    result = await coord._async_update_data()
+    assert coord._required_current.urgent is False
+    assert result.effective_peak_limit_kw == 1.0  # reverted -- min(monthly, max)
+
+
+async def test_manual_selector_unaffected_by_available_modes_gate_already_true_today(hass):
+    """Regression: existing ModeSelect option-gating behavior (R18) is untouched by the
+    new resolve_available_modes call this task adds for Auto's own use -- Manual dispatches
+    to Captar directly even with the Captar capability unavailable (config alone doesn't
+    gate Manual's own dispatch; select.py's own option list is what does, unaffected here)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    config = _config()
+    config[CONF_CAPTAR_AVAILABLE] = False
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR
+    assert result.commanded_current == 16.0  # CONF_MAX_CURRENT -- Captar's own step ran normally
