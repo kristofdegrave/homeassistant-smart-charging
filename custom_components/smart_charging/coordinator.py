@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .adapters.sun import SUN_STATE_ABOVE_HORIZON, SUN_STATE_BELOW_HORIZON
 from .const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
@@ -73,8 +74,10 @@ from .const import (
     ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
+    ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
+    ROLE_SUN,
 )
 from .engines.billing_protection import (
     PeakBreachTracker,
@@ -100,10 +103,6 @@ from .engines.soc_target import (
 from .modes import captar, power, solar, solar_only
 from .modes._phase import Phase
 from .profiles.auto import select_mode
-
-SUN_ENTITY_ID = "sun.sun"  # entity-catalog.md: read directly, not through an adapter role.
-SUN_STATE_ABOVE_HORIZON = "above_horizon"  # HA's own sun.sun states (glossary: "sun is down"
-SUN_STATE_BELOW_HORIZON = "below_horizon"  # is the below_horizon state; "sun is up" its mirror)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -315,9 +314,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         external = (
             await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
         )
-        sun_state = self.hass.states.get(SUN_ENTITY_ID)
-        sun_is_up = sun_state is not None and sun_state.state == SUN_STATE_ABOVE_HORIZON
-        sun_is_down = sun_state is not None and sun_state.state == SUN_STATE_BELOW_HORIZON
+        sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
+        sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
+        sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
+        # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
+        # default -- "the signal is omitted and the flag is treated as always active".
+        low_tariff_active = True
+        if ROLE_LOW_TARIFF in self._adapters:
+            low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
+            if low_tariff_reading is not None:
+                low_tariff_active = low_tariff_reading
         today_weekday = now_dt.weekday()
         tomorrow_weekday = (today_weekday + 1) % 7
 
@@ -405,10 +411,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     solar_surplus_sufficient=surplus_w
                     >= self._config[CONF_SOLAR_START_THRESHOLD_W],
                     sun_is_down=sun_is_down,
-                    # No low-tariff source is wired in this slice -- the glossary's own
-                    # single-tariff default ("the signal is omitted and the flag is treated as
-                    # always active") applies unconditionally.
-                    low_tariff_active=True,
+                    low_tariff_active=low_tariff_active,
                     solar_reserve_active=solar_reserve_active,
                 )
             else:

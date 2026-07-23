@@ -58,6 +58,12 @@ ROLE_DEPARTURE_EXTERNAL = "departure_external"
 ROLE_HOME_DAY_EXTERNAL = "home_day_external"
 # RA2 (Task 2.1, R9): next-day solar forecast, required only when CONF_SOLAR_INSTALLED.
 ROLE_SOLAR_FORECAST = "solar_forecast"
+# issue #376: built unconditionally by the factory, no config_flow entry -- sun.sun is a
+# core Home Assistant entity, always present once the (auto-loaded) sun integration is set up.
+ROLE_SUN = "sun"
+# issue #376: optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
+# None reading keeps the glossary's single-tariff "always active" default.
+ROLE_LOW_TARIFF = "low_tariff"
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
@@ -88,6 +94,8 @@ CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"
 CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 # required only when CONF_SOLAR_INSTALLED (R9 needs it) -- design doc §3
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
+# optional at the factory level (NF3) -- issue #376, Auto mode-selection row 4 (R16)
+CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names

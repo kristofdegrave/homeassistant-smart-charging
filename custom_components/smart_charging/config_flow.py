@@ -26,6 +26,7 @@ from .const import (
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
+    CONF_LOW_TARIFF_ENTITY,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
@@ -141,6 +142,7 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
         vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
         vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
     }
 )
 
