@@ -1,10 +1,10 @@
 """Shared pytest fixtures for the Smart Charging test suite.
 
-Per ADR-0009 (Option A), the pure mode/engine logic under ``tests/modes/`` and
-``tests/engines/`` runs as plain pytest with no HA dependency. Every other test
-(adapters, plus the root-level config-flow / coordinator / entity / init tests)
-is an HA-harness test that needs the custom integration loaded. The autouse
-fixture below applies ``enable_custom_integrations`` to the HA-harness tests
+Per ADR-0009 (Option A), the pure mode/engine/profile logic under ``tests/modes/``,
+``tests/engines/``, and ``tests/profiles/`` runs as plain pytest with no HA dependency.
+Every other test (adapters, plus the root-level config-flow / coordinator / entity /
+init tests) is an HA-harness test that needs the custom integration loaded. The
+autouse fixture below applies ``enable_custom_integrations`` to the HA-harness tests
 only, keeping the pure dirs HA-free so they collect without phcc.
 """
 
@@ -13,11 +13,11 @@ from pathlib import Path
 import pytest
 
 # Directories whose tests are pure logic with no HA dependency (ADR-0009).
-_PURE_DIRS = frozenset({"modes", "engines"})
+_PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
 
 def _is_pure_logic_test(node: pytest.Item) -> bool:
-    """True when the test lives under a pure-logic dir (tests/modes, tests/engines)."""
+    """True when the test lives under a pure-logic dir (modes, engines, profiles)."""
     return any(part in _PURE_DIRS for part in Path(str(node.path)).parts)
 
 
