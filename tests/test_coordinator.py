@@ -59,6 +59,7 @@ from custom_components.smart_charging.coordinator import SmartChargingCoordinato
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
+from custom_components.smart_charging.modes.captar import CaptarState
 
 _AMPLE_PEAK_HEADROOM_KW = 100.0  # keeps R3's clamp out of the way of tests that don't test it
 
@@ -1110,6 +1111,34 @@ async def test_auto_profile_escalates_to_captar_under_urgency(hass, freezer):
     result = await coord._async_update_data()
 
     assert result.active_mode == MODE_CAPTAR
+
+
+async def test_auto_escalation_resets_captar_state_the_same_cycle(hass, freezer):
+    """Regression: the mode-switch reset (R11) must fire the SAME cycle Auto escalates into
+    Captar, not one cycle late -- otherwise a stale leftover CaptarState (e.g. cooldown from
+    a much earlier session) would block this cycle's dispatch at 0 A instead of the fresh
+    max-current request a just-arrived escalation should get."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = True
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR  # this cycle escalates away from Solar, not already Captar
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    # Leftover Captar cooldown state from long before this test's own dispatch -- if the reset
+    # doesn't fire this same cycle, Captar's step() sees this and returns 0 A (still cooling
+    # down) instead of max_a.
+    coord._mode_state[MODE_CAPTAR] = CaptarState(Phase.COOLDOWN, hass.loop.time())
+    coord._last_active_mode = MODE_SOLAR
+
+    _seed_today_deadline(coord, hours_from_now=1)
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR
+    assert result.commanded_current == 16.0  # CONF_MAX_CURRENT -- fresh idle state, not cooldown
 
 
 async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_urgency(
