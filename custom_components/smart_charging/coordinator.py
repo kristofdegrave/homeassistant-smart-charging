@@ -11,12 +11,14 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ATTR_ACTIVE_SOC_LIMIT,
     CHARGEABLE_STATES,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
@@ -30,20 +32,28 @@ from .const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_MAX_PEAK_KW,
+    DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_STEP_PP,
+    DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
+    EVENT_ACTIVE_SOC_LIMIT_CHANGED,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
     PEAK_WINDOW_SECONDS,
+    PROFILE_AUTO,
+    PROFILE_MANUAL,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
@@ -60,13 +70,18 @@ from .engines.cycle_invariant import apply_floor_cap
 from .engines.grid_safety import clamp_to_ceiling
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
-from .engines.soc_target import SolarStepUpState, resolve_active_soc_limit
+from .engines.soc_target import (
+    SolarStepUpState,
+    resolve_active_soc_limit,
+    resolve_solar_step_up,
+)
 from .modes import captar, power, solar, solar_only
 from .modes._phase import Phase
 
 _LOGGER = logging.getLogger(__name__)
 
 _SOC_GATED_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR)
+_SOLAR_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY)  # R8's (and R9's, Task 5.2) Auto-only precondition
 
 
 def _fresh_mode_state() -> dict:
@@ -88,6 +103,7 @@ class CycleResult:
     active_mode: str
     monthly_peak_kw: float = 0.0
     effective_peak_limit_kw: float = 0.0
+    active_soc_limit: float = 0.0
 
 
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
@@ -111,10 +127,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # this MODE_POWER default only matters for a coordinator instance never wired to a
         # select entity (e.g. a unit test constructing one directly).
         self.active_mode: str = MODE_POWER
+        # Mirrors active_mode (R16): seeded Manual, written by select.smart_charging_profile.
+        self.active_profile: str = PROFILE_MANUAL
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
-        # Task 5.1 (Phase 5) replaces this placeholder wiring with the real R7/R8/R9 inputs;
-        # for now it reproduces today's row-3-only behavior (E3, Task 1.2).
+        # R8's lifecycle state, threaded across cycles -- cleared only via
+        # resolve_solar_step_up's own is_solar_mode_charging=False branch (Task 5.1), never by
+        # the generic per-mode-switch reset below (that would wrongly clear an in-effect
+        # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a).
         self._step_up_state: SolarStepUpState = SolarStepUpState()
+        # ADR-0011: the prior cycle's resolved active SOC limit, for ActiveSocLimitChanged's
+        # change-detection. None on cycle 1, so the first resolution always fires the event.
+        self._last_active_soc_limit: float | None = None
         self._last_active_mode: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = _fresh_mode_state()
@@ -218,16 +241,38 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         smoothed_net_w, self._net_window = smooth_net_power(
             net_w, self._net_window, size=smoothing_window
         )
+        # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
+        # cycle from THIS cycle's resolved active_mode/active_profile, not the prior one.
+        is_solar_mode_charging = (
+            self.active_profile == PROFILE_AUTO
+            and self.active_mode in _SOLAR_MODES
+            and status in CHARGEABLE_STATES
+        )
+        _, self._step_up_state = resolve_solar_step_up(
+            self._step_up_state,
+            is_solar_mode_charging=is_solar_mode_charging,
+            soc=ev_soc if ev_soc is not None else 0.0,
+            default_limit=self.soc_limit_override,
+            step_threshold_pp=self._config.get(
+                CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP
+            ),
+            step_pp=self._config.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
+            max_solar_soc=self._config.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
+        )
         # solar_reserve_active/solar_reserve_soc are placeholders (row 1 always inactive) --
-        # Task 5.1 replaces them with the real resolve_solar_reserve_active/CONF_SOLAR_RESERVE_SOC
-        # values; self._step_up_state is likewise only reset here, never populated by
-        # resolve_solar_step_up until that same task wires it in.
+        # Task 5.2 replaces them with the real resolve_solar_reserve_active/CONF_SOLAR_RESERVE_SOC
+        # values, once the deadline-tomorrow resolution it depends on is wired in.
         active_soc_limit = resolve_active_soc_limit(
             self.soc_limit_override,
             solar_reserve_active=False,
             solar_reserve_soc=0.0,
             step_up_state=self._step_up_state,
         )
+        if active_soc_limit != self._last_active_soc_limit:
+            self.hass.bus.async_fire(
+                EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
+            )
+        self._last_active_soc_limit = active_soc_limit
         now = self.hass.loop.time()  # injected, not read inside modes/engines
 
         if status not in CHARGEABLE_STATES:
@@ -333,6 +378,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             active_mode=self.active_mode,
             monthly_peak_kw=monthly_peak_kw,
             effective_peak_limit_kw=effective_peak_limit_kw,
+            active_soc_limit=active_soc_limit,
         )
 
     async def _write(self, value: float) -> None:
