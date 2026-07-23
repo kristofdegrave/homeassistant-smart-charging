@@ -252,3 +252,57 @@ def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
         maximum_permitted_rate_a=32.0,
     )
     assert result.unreachable is True  # deadline in the past -> max urgency, not an exception
+    assert result.urgent is True  # Unreachable is a subset of Urgent (resolution-rules.md)
+
+
+def test_no_urgency_when_soc_already_at_or_above_limit_even_if_deadline_passed():
+    # Reviewer finding (PR #350): a passed deadline must not report urgency/unreachability
+    # when there's nothing left to charge -- the caller (Auto row 1: SOC >= limit -> Off)
+    # happens to gate on this first, but the signal itself should be correct on its own.
+    result = resolve_required_current(
+        deadline=time(21, 0),
+        now=NOW,
+        soc=80.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=75.0,
+        voltage=230.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    assert result.required_a == 0.0
+    assert result.urgent is False
+    assert result.unreachable is False
+
+
+def test_boundary_required_equals_baseline_is_not_urgent():
+    # Strict '>' per resolution-rules.md: required_a == baseline_desired_a is Normal.
+    result = resolve_required_current(
+        deadline=time(7, 0),
+        now=datetime(2026, 7, 21, 6, 0),
+        soc=79.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=60.0,
+        voltage=100.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    assert result.required_a == pytest.approx(6.0)
+    assert result.urgent is False
+
+
+def test_boundary_required_equals_maximum_rate_is_still_reachable():
+    # Strict '>' per resolution-rules.md: required_a == maximum_permitted_rate_a is Urgent,
+    # not Unreachable.
+    result = resolve_required_current(
+        deadline=time(7, 0),
+        now=datetime(2026, 7, 21, 6, 0),
+        soc=70.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=32.0,
+        voltage=100.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    assert result.required_a == pytest.approx(32.0)
+    assert result.urgent is True
+    assert result.unreachable is False

@@ -86,7 +86,11 @@ def resolve_required_current(
     remaining_hours = (deadline_dt - now).total_seconds() / 3600
     energy_needed_kwh = ev_battery_capacity_kwh * (active_soc_limit - soc) / 100
 
-    if remaining_hours <= 0:
+    if energy_needed_kwh <= 0:
+        # SOC already at/above the active limit -- nothing left to charge, so a passed
+        # or imminent deadline carries no urgency regardless of time remaining.
+        required_a = 0.0
+    elif remaining_hours <= 0:
         # Deadline already passed today -- saturate to maximum urgency instead of
         # dividing by zero/negative (design doc §6).
         required_a = float("inf")
