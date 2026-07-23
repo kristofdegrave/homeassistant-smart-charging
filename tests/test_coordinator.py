@@ -1,11 +1,16 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+from datetime import timedelta
+
 import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
+    ATTR_REQUIRED_CURRENT_A,
+    CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
@@ -20,13 +25,16 @@ from custom_components.smart_charging.const import (
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    DEFAULT_CAPTAR_AVAILABLE,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
+    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -36,9 +44,11 @@ from custom_components.smart_charging.const import (
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
+    ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
     ROLE_NET_POWER,
+    ROLE_SOLAR_FORECAST,
     STATE_CHARGING,
     STATE_DISCONNECTED,
 )
@@ -117,6 +127,16 @@ def _config():
         CONF_SOLAR_STEP_PP: 5.0,
         CONF_SOLAR_STEP_THRESHOLD_PP: 2.0,
     }
+
+
+def _seed_today_deadline(coord, hours_from_now):
+    """Seed today's departure-deadline default so it resolves `hours_from_now` ahead of
+    real wall-clock now (Task 5.2's deadline/required-current resolution reads dt_util.now(),
+    not the mode state machines' injected monotonic clock)."""
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = (
+        now_dt + timedelta(hours=hours_from_now)
+    ).time()
 
 
 def _seed_ample_peak_headroom(coord, kw=_AMPLE_PEAK_HEADROOM_KW):
@@ -804,3 +824,166 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
     await coord._async_update_data()  # changed -> fires again
     assert len(events) == 2
     assert events[1].data[ATTR_ACTIVE_SOC_LIMIT] == 90.0
+
+
+# --- Task 5.2: deadline resolution, required-current/urgency, baseline-mode comparison ---
+
+
+async def test_urgency_engages_when_required_current_exceeds_baseline(hass, freezer):
+    """Manual profile: baseline is simply the manually selected mode's own desired current
+    (Power's target_current here) -- a required current above it is urgent (R5)."""
+    freezer.move_to("2026-01-15 12:00:00")  # fixed, away from midnight (no rollover semantics)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 2.0  # well below the ~3.26 A the deadline below will require
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert coord._required_current.unreachable is False
+
+
+async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass, freezer):
+    """Same deadline as above, but Power's own target current already exceeds what's
+    required -- urgency never engages (R16's revert case)."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 5.0  # above the ~3.26 A the deadline below requires
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is False
+
+
+async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
+    """Regression per resolution-rules.md's own warning: comparing against Captar's own
+    (already-maximum) desired current would make urgency look satisfied instantly and
+    revert every cycle -- this test drives that exact scenario and asserts urgency holds."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_CAPTAR  # already escalated from a prior cycle
+    coord.soc_limit_override = 80.0
+    # No solar capability and sun up -> Auto's own baseline (rows 3-5, urgent=False) falls
+    # through to Off, not Captar -- the required current below (~3.26 A) only exceeds a
+    # baseline of 0 A, never Captar's own (already-maximum, 16 A) desired current.
+    hass.states.async_set("sun.sun", "above_horizon")
+    _seed_today_deadline(coord, hours_from_now=2)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+
+
+async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
+    """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
+    mutual-exclusivity clause)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    coord.home_day_flag = True
+    hass.states.async_set("sun.sun", "below_horizon")
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+    assert result.active_soc_limit == 60.0  # DEFAULT_SOLAR_RESERVE_SOC -- reserve engaged
+
+    # R14 row 3 (home_day_flag already True above) wins over the day-of-week default, so the
+    # home-day override -- not departure_dow_defaults -- is what must resolve for the
+    # one-day-ahead evaluation to stop returning "no deadline".
+    coord.departure_home_day_override = dt_util.now().time()
+    result = await coord._async_update_data()
+    assert result.active_soc_limit == 80.0  # tomorrow deadline resolved -> reserve lifted
+
+
+async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, freezer):
+    """R15: with `ev_battery_capacity` role mapped and reading 60.0 kWh, the required-current
+    computation uses 60.0, not CONF_EV_BATTERY_CAPACITY_KWH's configured default."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(60.0)
+    config = _config()
+    config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    expected_required_a = (60.0 * 30 / 100 * 1000) / 3 / 230.0
+    assert coord._required_current.required_a == pytest.approx(expected_required_a)
+
+
+async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass, freezer):
+    """R15: with the role mapped but currently reading None, the required-current
+    computation falls back to CONF_EV_BATTERY_CAPACITY_KWH."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(None)
+    config = _config()
+    config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    expected_required_a = (75.0 * 30 / 100 * 1000) / 3 / 230.0
+    assert coord._required_current.required_a == pytest.approx(expected_required_a)
+
+
+async def test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate(
+    hass, freezer
+):
+    """R5/ADR-0011: DeadlineUnreachableNotified is published every cycle
+    resolve_required_current's `unreachable` flag is True -- including re-firing on a
+    later cycle that is still Unreachable, not only on the Normal/Urgent -> Unreachable
+    transition edge (UC05's domain-events section)."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    config = _config()  # CONF_MAX_CURRENT=16.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)  # tight deadline -> required current >> 16 A
+    _seed_ample_peak_headroom(coord)
+
+    events = []
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, lambda event: events.append(event))
+
+    await coord._async_update_data()
+    assert len(events) == 1
+    assert coord._required_current.unreachable is True
+    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(
+        coord._required_current.required_a
+    )
+
+    await coord._async_update_data()  # still Unreachable -- fires again, not just on the edge
+    assert len(events) == 2
