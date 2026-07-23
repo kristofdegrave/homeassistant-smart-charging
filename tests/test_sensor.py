@@ -191,6 +191,12 @@ async def test_active_soc_limit_sensor_defaults_to_none_when_no_data_yet(hass):
     assert sensor.native_value is None
 
 
+async def test_active_soc_limit_sensor_defaults_to_none_when_coordinator_data_lacks_field(hass):
+    coord = SimpleNamespace(data=SimpleNamespace())
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
 def test_active_soc_limit_sensor_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
