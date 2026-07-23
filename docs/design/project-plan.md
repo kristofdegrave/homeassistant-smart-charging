@@ -124,7 +124,7 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Builds:** the shared `Adapter` protocol (`async read()` / `async write(value)`, ADR-0003) in
   `adapters/`; the factory that instantiates one adapter per role from config-entry **data** role
   mappings; and the control-cycle roles: `charger_current` (r/w), `charger_power`, `charger_status`
-  (with the raw→canonical translation table), `ev_soc`, `battery_capacity`, `net_power`,
+  (with the raw→canonical translation table), `ev_soc`, `ev_battery_capacity`, `net_power`,
   `grid_voltage`, `solar_power`. A role returning `None` is the ADR-0007 fault signal (grid voltage
   excepted, NF4) — the adapter surfaces `None`, it does not decide policy.
 - **Depends on:** config-entry data shape (ADR-0003/0005) — provided as fixtures for now; RA3's

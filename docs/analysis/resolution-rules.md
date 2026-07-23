@@ -24,7 +24,7 @@ charges to this resolved value — it has no opinion on *why* the limit is where
 | Priority | Condition | Active SOC limit |
 | --- | --- | --- |
 | 1 | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh), and the departure-deadline rule below, evaluated one day ahead, resolves to "no deadline" for tomorrow | The solar-reserve cap (default 60 %) |
-| 2 | A solar step-up is in effect (a step has been applied while charging in a solar mode) | The stepped-up value, clamped to `sc_max_solar_soc` (default 100 %) |
+| 2 | A solar step-up is in effect (a step has been applied while the `Auto` profile is active and charging in a solar mode, R8) | The stepped-up value, clamped to `sc_max_solar_soc` (default 100 %) |
 | 3 | Otherwise | The default `number.smart_charging_soc_limit_override` (default 80 %) |
 
 - **The solar-reserve cap is an `Auto`-only coordination decision (R9).** Reserving overnight
@@ -34,6 +34,10 @@ charges to this resolved value — it has no opinion on *why* the limit is where
   user's own mode choice is not second-guessed by this policy (mirrors R16's "no automatic
   changes under `Manual`"). The mode `Auto` selects (typically `Captar`, row 4 below) does not
   itself evaluate the home-day flag or forecast; it only ever sees the resolved limit.
+- **The solar step-up is also an `Auto`-only coordination decision (R8), like the reserve cap
+  above.** Under `Manual`, row 2 never matches regardless of which solar mode is charging or how
+  close the SOC is to the active SOC limit — a manually selected solar session simply charges to
+  whichever limit row 3 resolves, with no automatic raise.
 - **Lifecycle and reset are governed by R7** (and applied by UC06): a step-up survives a switch
   between `Solar` and `SolarOnly`, is cleared when the active mode is no longer a solar mode,
   and resets to the default on disconnect. This table resolves the *current* value only.
