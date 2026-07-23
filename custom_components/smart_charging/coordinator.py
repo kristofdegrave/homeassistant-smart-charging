@@ -60,7 +60,7 @@ from .engines.cycle_invariant import apply_floor_cap
 from .engines.grid_safety import clamp_to_ceiling
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
-from .engines.soc_target import resolve_active_soc_limit
+from .engines.soc_target import SolarStepUpState, resolve_active_soc_limit
 from .modes import captar, power, solar, solar_only
 from .modes._phase import Phase
 
@@ -112,6 +112,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # select entity (e.g. a unit test constructing one directly).
         self.active_mode: str = MODE_POWER
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
+        # Task 5.1 (Phase 5) replaces this placeholder wiring with the real R7/R8/R9 inputs;
+        # for now it reproduces today's row-3-only behavior (E3, Task 1.2).
+        self._step_up_state: SolarStepUpState = SolarStepUpState()
         self._last_active_mode: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = _fresh_mode_state()
@@ -215,7 +218,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         smoothed_net_w, self._net_window = smooth_net_power(
             net_w, self._net_window, size=smoothing_window
         )
-        active_soc_limit = resolve_active_soc_limit(self.soc_limit_override)
+        # solar_reserve_active/solar_reserve_soc are placeholders (row 1 always inactive) --
+        # Task 5.1 replaces them with the real resolve_solar_reserve_active/CONF_SOLAR_RESERVE_SOC
+        # values; self._step_up_state is likewise only reset here, never populated by
+        # resolve_solar_step_up until that same task wires it in.
+        active_soc_limit = resolve_active_soc_limit(
+            self.soc_limit_override,
+            solar_reserve_active=False,
+            solar_reserve_soc=0.0,
+            step_up_state=self._step_up_state,
+        )
         now = self.hass.loop.time()  # injected, not read inside modes/engines
 
         if status not in CHARGEABLE_STATES:
