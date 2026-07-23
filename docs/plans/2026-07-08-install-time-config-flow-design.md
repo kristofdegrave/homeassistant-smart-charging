@@ -121,7 +121,7 @@ solar" a single, findable action while still avoiding a flat 12-field form.
 
 **Adapter roles** (NF3's "mapped to the user's real upstream entity") are exactly what HA's
 `selector.EntitySelector` exists for — each adapter-role field (`net_power`, `charger_power`,
-`charger_status`, `charger_current`, `ev_soc`, `battery_capacity`, `car_home`,
+`charger_status`, `charger_current`, `ev_soc`, `ev_battery_capacity`, `car_home`,
 `vehicle_charge_limit`, `solar_power`, `solar_forecast`, `grid_voltage`, `low_tariff`,
 `departure_external`, `home_day_external`) is rendered as a live entity picker (optionally filtered
 by domain/device-class, e.g. `sensor` + `device_class: power` for `net_power`) rather than a free-text
