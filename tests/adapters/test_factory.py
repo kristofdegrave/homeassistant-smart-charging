@@ -2,26 +2,36 @@
 
 import pytest
 
+from custom_components.smart_charging.adapters.boolean import BooleanReadAdapter
 from custom_components.smart_charging.adapters.factory import build_adapters
 from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
     NumericReadWriteAdapter,
 )
 from custom_components.smart_charging.adapters.status import StatusReadAdapter
+from custom_components.smart_charging.adapters.time_read import TimeReadAdapter
 from custom_components.smart_charging.const import (
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
+    CONF_DEPARTURE_EXTERNAL_ENTITY,
+    CONF_EV_BATTERY_CAPACITY_ENTITY,
     CONF_EV_SOC_ENTITY,
     CONF_GRID_VOLTAGE_ENTITY,
+    CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_NET_POWER_ENTITY,
+    CONF_SOLAR_FORECAST_ENTITY,
     CONF_STATUS_TRANSLATION,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
+    ROLE_DEPARTURE_EXTERNAL,
+    ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
+    ROLE_HOME_DAY_EXTERNAL,
     ROLE_NET_POWER,
+    ROLE_SOLAR_FORECAST,
 )
 
 
@@ -97,3 +107,83 @@ async def test_ev_soc_empty_string_treated_as_absent(hass):
     data[CONF_EV_SOC_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_EV_SOC not in adapters
+
+
+async def test_factory_builds_ev_battery_capacity_role_when_configured(hass):
+    data = _data()
+    data[CONF_EV_BATTERY_CAPACITY_ENTITY] = "sensor.ev_battery_capacity"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_EV_BATTERY_CAPACITY], NumericReadAdapter)
+    assert adapters[ROLE_EV_BATTERY_CAPACITY]._entity_id == "sensor.ev_battery_capacity"
+
+
+async def test_ev_battery_capacity_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_EV_BATTERY_CAPACITY not in adapters
+
+
+async def test_ev_battery_capacity_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_EV_BATTERY_CAPACITY_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_EV_BATTERY_CAPACITY not in adapters
+
+
+async def test_factory_builds_departure_external_role_when_configured(hass):
+    data = _data()
+    data[CONF_DEPARTURE_EXTERNAL_ENTITY] = "sensor.departure_time"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_DEPARTURE_EXTERNAL], TimeReadAdapter)
+    assert adapters[ROLE_DEPARTURE_EXTERNAL]._entity_id == "sensor.departure_time"
+
+
+async def test_departure_external_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_DEPARTURE_EXTERNAL not in adapters
+
+
+async def test_departure_external_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_DEPARTURE_EXTERNAL_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_DEPARTURE_EXTERNAL not in adapters
+
+
+async def test_factory_builds_home_day_external_role_when_configured(hass):
+    data = _data()
+    data[CONF_HOME_DAY_EXTERNAL_ENTITY] = "binary_sensor.home_day"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_HOME_DAY_EXTERNAL], BooleanReadAdapter)
+    assert adapters[ROLE_HOME_DAY_EXTERNAL]._entity_id == "binary_sensor.home_day"
+
+
+async def test_home_day_external_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_HOME_DAY_EXTERNAL not in adapters
+
+
+async def test_home_day_external_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_HOME_DAY_EXTERNAL_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_HOME_DAY_EXTERNAL not in adapters
+
+
+async def test_factory_builds_solar_forecast_role_when_configured(hass):
+    data = _data()
+    data[CONF_SOLAR_FORECAST_ENTITY] = "sensor.solar_forecast"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_SOLAR_FORECAST], NumericReadAdapter)
+    assert adapters[ROLE_SOLAR_FORECAST]._entity_id == "sensor.solar_forecast"
+
+
+async def test_solar_forecast_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_SOLAR_FORECAST not in adapters
+
+
+async def test_solar_forecast_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_SOLAR_FORECAST_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_SOLAR_FORECAST not in adapters
