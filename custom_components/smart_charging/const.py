@@ -7,6 +7,10 @@ DOMAIN = "smart_charging"
 # Domain events (ADR-0011). Past-tense PascalCase payload, snake_case HA event type.
 EVENT_ACTIVE_SOC_LIMIT_CHANGED = "smart_charging_active_soc_limit_changed"
 ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key
+# R5/ADR-0011: fires every cycle resolve_required_current's `unreachable` is True (Task 5.2),
+# not only on the Normal/Urgent -> Unreachable transition edge (UC05's domain-events section).
+EVENT_DEADLINE_UNREACHABLE_NOTIFIED = "smart_charging_deadline_unreachable_notified"
+ATTR_REQUIRED_CURRENT_A = "required_current_a"  # DeadlineUnreachableNotified payload key
 
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"
