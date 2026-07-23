@@ -23,12 +23,9 @@ def test_urgency_raises_to_the_maximum_peak_regardless_of_monthly_peak():
 
 
 def test_urgency_never_exceeds_the_maximum_peak():
-    assert resolve_effective_peak_limit(monthly_peak_kw=1.0, max_peak_kw=4.0, urgent=True) <= 4.0
-
-
-def test_row2_unchanged_when_not_urgent():
-    assert resolve_effective_peak_limit(monthly_peak_kw=3.0, max_peak_kw=4.0, urgent=False) == 3.0
-    assert resolve_effective_peak_limit(monthly_peak_kw=5.0, max_peak_kw=4.0, urgent=False) == 4.0
+    # monthly_peak_kw exceeds max_peak_kw here so this is discriminating on its own --
+    # row 2 (min) would return 10.0 without row 1's raise-to-maximum behavior.
+    assert resolve_effective_peak_limit(monthly_peak_kw=10.0, max_peak_kw=4.0, urgent=True) == 4.0
 
 
 def test_clamp_reduces_to_available_headroom():

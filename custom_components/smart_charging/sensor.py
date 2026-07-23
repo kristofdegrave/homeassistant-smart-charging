@@ -123,7 +123,7 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
 
 
 class EffectivePeakLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
-    """Diagnostic: resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw), kW (C3).
+    """Diagnostic: resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw, urgent), kW (C3).
     No restore needed -- recomputed from MonthlyPeakSensor's own restored value on the
     first post-restart cycle."""
 
