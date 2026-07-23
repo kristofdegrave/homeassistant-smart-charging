@@ -102,6 +102,8 @@ from .modes._phase import Phase
 from .profiles.auto import select_mode
 
 SUN_ENTITY_ID = "sun.sun"  # entity-catalog.md: read directly, not through an adapter role.
+SUN_STATE_ABOVE_HORIZON = "above_horizon"  # HA's own sun.sun states (glossary: "sun is down"
+SUN_STATE_BELOW_HORIZON = "below_horizon"  # is the below_horizon state; "sun is up" its mirror)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -314,8 +316,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
         )
         sun_state = self.hass.states.get(SUN_ENTITY_ID)
-        sun_is_up = sun_state is not None and sun_state.state == "above_horizon"
-        sun_is_down = sun_state is not None and sun_state.state == "below_horizon"
+        sun_is_up = sun_state is not None and sun_state.state == SUN_STATE_ABOVE_HORIZON
+        sun_is_down = sun_state is not None and sun_state.state == SUN_STATE_BELOW_HORIZON
         today_weekday = now_dt.weekday()
         tomorrow_weekday = (today_weekday + 1) % 7
 
@@ -360,16 +362,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Guarded on ev_soc being known -- without an SOC reading (disconnected, or a
         # non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring
         # R14's own "no deadline resolved -> urgency never applies" shape.
-        deadline_today = resolve_departure_deadline(
-            external_configured,
-            external,
-            is_holiday=False,
-            holiday_override=self.departure_holiday_override,
-            home_day_flag=self.home_day_flag,
-            home_day_override=self.departure_home_day_override,
-            day_of_week_default=self.departure_dow_defaults.get(today_weekday),
-        )
         if status in CHARGEABLE_STATES and ev_soc is not None:
+            deadline_today = resolve_departure_deadline(
+                external_configured,
+                external,
+                is_holiday=False,
+                holiday_override=self.departure_holiday_override,
+                home_day_flag=self.home_day_flag,
+                home_day_override=self.departure_home_day_override,
+                day_of_week_default=self.departure_dow_defaults.get(today_weekday),
+            )
             sensed_capacity_kwh = (
                 await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
                 if ROLE_EV_BATTERY_CAPACITY in self._adapters
@@ -425,6 +427,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 # engines/deadline.py combines this with a naive `time` (the departure-time
                 # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
                 # doesn't raise (both sides represent the same local wall clock either way).
+                # Wall-clock subtraction on the two DST-transition days a year can be off by
+                # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
                 now_dt.replace(tzinfo=None),
                 soc=ev_soc,
                 active_soc_limit=active_soc_limit,

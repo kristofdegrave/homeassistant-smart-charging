@@ -829,9 +829,10 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
 # --- Task 5.2: deadline resolution, required-current/urgency, baseline-mode comparison ---
 
 
-async def test_urgency_engages_when_required_current_exceeds_baseline(hass):
+async def test_urgency_engages_when_required_current_exceeds_baseline(hass, freezer):
     """Manual profile: baseline is simply the manually selected mode's own desired current
     (Power's target_current here) -- a required current above it is urgent (R5)."""
+    freezer.move_to("2026-01-15 12:00:00")  # fixed, away from midnight (no rollover semantics)
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
@@ -847,9 +848,10 @@ async def test_urgency_engages_when_required_current_exceeds_baseline(hass):
     assert coord._required_current.unreachable is False
 
 
-async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass):
+async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass, freezer):
     """Same deadline as above, but Power's own target current already exceeds what's
     required -- urgency never engages (R16's revert case)."""
+    freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
@@ -864,10 +866,11 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass)
     assert coord._required_current.urgent is False
 
 
-async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass):
+async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
     """Regression per resolution-rules.md's own warning: comparing against Captar's own
     (already-maximum) desired current would make urgency look satisfied instantly and
     revert every cycle -- this test drives that exact scenario and asserts urgency holds."""
+    freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0)
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
@@ -913,9 +916,10 @@ async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
     assert result.active_soc_limit == 80.0  # tomorrow deadline resolved -> reserve lifted
 
 
-async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass):
+async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, freezer):
     """R15: with `ev_battery_capacity` role mapped and reading 60.0 kWh, the required-current
     computation uses 60.0, not CONF_EV_BATTERY_CAPACITY_KWH's configured default."""
+    freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(60.0)
     config = _config()
@@ -933,9 +937,10 @@ async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_v
     assert coord._required_current.required_a == pytest.approx(expected_required_a)
 
 
-async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass):
+async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass, freezer):
     """R15: with the role mapped but currently reading None, the required-current
     computation falls back to CONF_EV_BATTERY_CAPACITY_KWH."""
+    freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(None)
     config = _config()
@@ -953,11 +958,14 @@ async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavaila
     assert coord._required_current.required_a == pytest.approx(expected_required_a)
 
 
-async def test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate(hass):
+async def test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate(
+    hass, freezer
+):
     """R5/ADR-0011: DeadlineUnreachableNotified is published every cycle
     resolve_required_current's `unreachable` flag is True -- including re-firing on a
     later cycle that is still Unreachable, not only on the Normal/Urgent -> Unreachable
     transition edge (UC05's domain-events section)."""
+    freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     config = _config()  # CONF_MAX_CURRENT=16.0
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
