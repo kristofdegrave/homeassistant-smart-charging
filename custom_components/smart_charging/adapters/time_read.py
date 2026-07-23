@@ -18,9 +18,9 @@ class TimeReadAdapter:
     2.1 plan instruction rather than silently repurposing either.
 
     Returns None when the entity is missing/unavailable/unknown OR its native state can't
-    be parsed as a time (e.g. a `time` entity currently reporting "no deadline") -- the
-    ADR-0007 fault signal, same as every other read adapter, and also R14's own "external
-    sensor currently reports no deadline" case.
+    be parsed as a time (e.g. a source sensor currently reporting a non-time value like
+    "no deadline") -- the ADR-0007 fault signal, same as every other read adapter, and
+    also R14's own "external sensor currently reports no deadline" case.
     """
 
     def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
