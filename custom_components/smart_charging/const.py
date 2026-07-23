@@ -4,6 +4,9 @@ from .modes._amp_step import ROUND_DOWN
 
 DOMAIN = "smart_charging"
 
+# Domain events (ADR-0011). Past-tense PascalCase payload, snake_case HA event type.
+EVENT_ACTIVE_SOC_LIMIT_CHANGED = "smart_charging_active_soc_limit_changed"
+
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"
 STATE_CONNECTED = "connected"

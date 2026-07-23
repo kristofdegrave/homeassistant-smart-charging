@@ -9,6 +9,7 @@ from custom_components.smart_charging.const import (
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
@@ -22,11 +23,15 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
+    EVENT_ACTIVE_SOC_LIMIT_CHANGED,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    PROFILE_AUTO,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
@@ -37,6 +42,7 @@ from custom_components.smart_charging.const import (
     STATE_DISCONNECTED,
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
+from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 
@@ -106,6 +112,9 @@ def _config():
         CONF_CAPTAR_COOLDOWN_MIN: 5.0,
         CONF_POWER_RESPECT_PEAK: True,
         CONF_PEAK_WINDOW_SIZE: 1,
+        CONF_MAX_SOLAR_SOC: 100.0,
+        CONF_SOLAR_STEP_PP: 5.0,
+        CONF_SOLAR_STEP_THRESHOLD_PP: 2.0,
     }
 
 
@@ -679,3 +688,100 @@ async def test_grid_ceiling_still_clamps_a_captar_request(hass):
     _coord, result = await _run_mode(hass, adapters, config, MODE_CAPTAR, soc_limit_override=80.0)
 
     assert result.commanded_current == 11.0
+
+
+# --- Task 5.1: full active-SOC-limit resolution + ActiveSocLimitChanged (R7/R8/R9) ---
+
+
+async def test_active_soc_limit_resolves_via_the_three_row_table(hass):
+    """With a solar step-up already in effect, active_soc_limit reflects the stepped
+    value, not the raw soc_limit_override (E3 row 2)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_soc_limit == 85.0
+
+
+async def test_solar_step_up_clears_on_mode_switch_away_from_solar(hass):
+    """Switching from Solar to Power resets self._step_up_state (UC06 exception flow)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    _seed_ample_peak_headroom(coord)
+
+    coord.active_mode = MODE_POWER
+    await coord._async_update_data()
+
+    assert coord._step_up_state == SolarStepUpState()
+
+
+async def test_solar_step_up_clears_on_disconnect(hass):
+    """A disconnect clears the step-up state even while Solar is still selected (UC06)."""
+    adapters = _adapters(status=STATE_DISCONNECTED, ev_soc_role=False)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._step_up_state == SolarStepUpState()
+
+
+async def test_solar_step_up_survives_solar_to_solaronly_switch(hass):
+    """R7/UC06 alternate flow 4a: a Solar<->SolarOnly switch preserves an in-effect
+    step-up -- only the generic per-mode-switch reset is scoped to _mode_state, not this."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    _seed_ample_peak_headroom(coord)
+
+    coord.active_mode = MODE_SOLAR_ONLY
+    await coord._async_update_data()
+
+    assert coord._step_up_state == SolarStepUpState(stepped_pct=85.0)
+
+
+async def test_active_soc_limit_changed_event_fires_on_change(hass):
+    """ADR-0011: ActiveSocLimitChanged fires only when the resolved value differs from
+    the prior cycle's, not on every cycle."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    events = []
+    hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, lambda event: events.append(event))
+
+    await coord._async_update_data()  # first resolution: 80.0, no prior value -> fires
+    assert len(events) == 1
+    assert events[0].data["active_soc_limit"] == 80.0
+
+    await coord._async_update_data()  # unchanged -> no second event
+    assert len(events) == 1
+
+    coord.soc_limit_override = 90.0
+    await coord._async_update_data()  # changed -> fires again
+    assert len(events) == 2
+    assert events[1].data["active_soc_limit"] == 90.0
