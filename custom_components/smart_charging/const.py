@@ -6,6 +6,7 @@ DOMAIN = "smart_charging"
 
 # Domain events (ADR-0011). Past-tense PascalCase payload, snake_case HA event type.
 EVENT_ACTIVE_SOC_LIMIT_CHANGED = "smart_charging_active_soc_limit_changed"
+ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key
 
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"

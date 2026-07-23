@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ATTR_ACTIVE_SOC_LIMIT,
     CHARGEABLE_STATES,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_GRID_CEILING_A,
@@ -80,6 +81,7 @@ from .modes._phase import Phase
 _LOGGER = logging.getLogger(__name__)
 
 _SOC_GATED_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR)
+_SOLAR_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY)  # R8's (and R9's, Task 5.2) Auto-only precondition
 
 
 def _fresh_mode_state() -> dict:
@@ -243,7 +245,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # cycle from THIS cycle's resolved active_mode/active_profile, not the prior one.
         is_solar_mode_charging = (
             self.active_profile == PROFILE_AUTO
-            and self.active_mode in (MODE_SOLAR, MODE_SOLAR_ONLY)
+            and self.active_mode in _SOLAR_MODES
             and status in CHARGEABLE_STATES
         )
         _, self._step_up_state = resolve_solar_step_up(
@@ -268,7 +270,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         if active_soc_limit != self._last_active_soc_limit:
             self.hass.bus.async_fire(
-                EVENT_ACTIVE_SOC_LIMIT_CHANGED, {"active_soc_limit": active_soc_limit}
+                EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
             )
         self._last_active_soc_limit = active_soc_limit
         now = self.hass.loop.time()  # injected, not read inside modes/engines

@@ -4,6 +4,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
+    ATTR_ACTIVE_SOC_LIMIT,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
@@ -710,6 +711,24 @@ async def test_active_soc_limit_resolves_via_the_three_row_table(hass):
     assert result.active_soc_limit == 85.0
 
 
+async def test_solar_step_up_applies_a_fresh_step_when_soc_nears_the_current_limit(hass):
+    """No step-up in effect yet: SOC within step_threshold_pp of soc_limit_override triggers
+    a fresh step, proving the coordinator wires ev_soc (not some other value) into
+    resolve_solar_step_up's soc parameter (R8/UC06 main success)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
+    config = _config()  # step_threshold_pp=2.0, step_pp=5.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_soc_limit == 85.0
+    assert coord._step_up_state.stepped_pct == 85.0
+
+
 async def test_solar_step_up_clears_on_mode_switch_away_from_solar(hass):
     """Switching from Solar to Power resets self._step_up_state (UC06 exception flow)."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
@@ -776,7 +795,7 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
 
     await coord._async_update_data()  # first resolution: 80.0, no prior value -> fires
     assert len(events) == 1
-    assert events[0].data["active_soc_limit"] == 80.0
+    assert events[0].data[ATTR_ACTIVE_SOC_LIMIT] == 80.0
 
     await coord._async_update_data()  # unchanged -> no second event
     assert len(events) == 1
@@ -784,4 +803,4 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
     coord.soc_limit_override = 90.0
     await coord._async_update_data()  # changed -> fires again
     assert len(events) == 2
-    assert events[1].data["active_soc_limit"] == 90.0
+    assert events[1].data[ATTR_ACTIVE_SOC_LIMIT] == 90.0
