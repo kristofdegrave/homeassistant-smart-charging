@@ -24,14 +24,14 @@ subscribed).
 
 ## Before starting: check E4 / the deferred hookup (design §0/§9)
 
-The Deadline Engine (E4, epic #255, PR #273) is **not merged** as of this writing. Confirm before
-starting the gated piece:
+The Deadline Engine (E4, tracked in epic #306, "Deadline & SOC Management") is **not built** as of
+this writing. Confirm before starting the gated piece:
 
 - `git log --all --oneline -- custom_components/smart_charging/engines/deadline.py` and
   `grep -r "DeadlineUnreachable" custom_components/` — **does the coordinator publish
   `DeadlineUnreachableNotified` as a bus event yet, and under what concrete signal name/payload?**
   If **no** (expected today): build **Task 6.1 (R5-delivery)** against a *synthetic* bus event whose
-  name/payload you define as a local placeholder, and leave a `TODO(E4/#255)` noting the real
+  name/payload you define as a local placeholder, and leave a `TODO(E4/#306)` noting the real
   signal name is owned by E4's spec and must be reconciled once E4 lands (design §9 open question 3).
   If **yes**: match E4's actual signal name/payload — do not invent one.
 
@@ -417,7 +417,7 @@ async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass, ..
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — subscribe M3 to the event bus
 (`hass.bus.async_listen(...)`, unsubscribed on unload); on receipt, send the notice via RA4. Leave a
-`TODO(E4/#255)`: the concrete signal name/payload is owned by E4's spec (design §9 open question 3) —
+`TODO(E4/#306)`: the concrete signal name/payload is owned by E4's spec (design §9 open question 3) —
 match it once E4 lands; until then the placeholder name defined here stands. **Step 4: Run** → PASS.
 **Step 5: Commit**
 
@@ -483,5 +483,5 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 > hassfest/HACS validation passes; a manual HA install can map a notify entity, receive and answer
 > the evening home-day prompt (flag set on "yes", unset on "no"/timeout), and — once E4 publishes
 > `DeadlineUnreachableNotified` (Task 6.1's gate) — receive the deadline-unreachable notice. The
-> deferred hookup (the real `DeadlineUnreachableNotified` signal name) remains `TODO(E4/#255)`,
+> deferred hookup (the real `DeadlineUnreachableNotified` signal name) remains `TODO(E4/#306)`,
 > tracked, not silently built (design §0/§9).
