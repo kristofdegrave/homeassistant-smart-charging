@@ -36,10 +36,11 @@ follows that same convention: M3 is a package-root module (`notification_manager
 `coordinator.py`, per ADR-0002's layout (which reserves root modules and names no `managers/`
 home). See §10.
 
-**This slice's one real cross-slice dependency is on the Deadline Engine (E4, epic #255).** E4 owns
-`DeadlineUnreachableNotified` — the one output this slice references — currently **unbuilt** (E4's
-spec is drafted in PR #273, not merged as of this writing — `engines/deadline.py` does not exist and
-the coordinator publishes no `DeadlineUnreachableNotified` event; confirmed against the current tree):
+**This slice's one real cross-slice dependency is on the Deadline Engine (E4, tracked in epic #306,
+"Deadline & SOC Management").** E4 owns `DeadlineUnreachableNotified` — the one output this slice
+references — currently **unbuilt** (epic #306's implementation spec is not yet written as of this
+writing — `engines/deadline.py` does not exist and the coordinator publishes no
+`DeadlineUnreachableNotified` event; confirmed against the current tree):
 
 **`DeadlineUnreachableNotified`** (the ADR-0011 published event) is consumed by the **R5-delivery**
 task. This is the **one task in this plan gated on E4/M1**: its subscription handler can be
@@ -66,7 +67,7 @@ consumes, following the Captar slice's **"extend if it exists, create if it does
 | `solar_forecast`, `home_day_external` read roles (RA2, V1) | Absent | **In scope** — factory extension, create-if-not (§4) |
 | Home-day flag as owned state, written on "yes" (C2; `switch.smart_charging_home_day`) | Absent (no `switch.py`) | **In scope** — create-if-not (§4/§7) |
 | `charger_status` read role (RA1) | Shipped | **Reused unchanged** |
-| `DeadlineUnreachableNotified` event (E4/M1 publish) | Absent (epic #255) | **Gated last task** (§0/§9) |
+| `DeadlineUnreachableNotified` event (E4/M1 publish) | Absent (epic #306) | **Gated last task** (§0/§9) |
 
 §8 lists what is explicitly deferred.
 
@@ -267,8 +268,9 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
   UC10 up, alongside its E4/R14 deadline dependency (below). No reader should infer a silent scope
   cut — this is an explicit deferral of an approved feature.
 - **Deadline Engine (E4), R14 resolution and the `DeadlineUnreachableNotified` publish** — its own
-  epic (#255, PR #273 not merged). R5-delivery is gated on the `DeadlineUnreachableNotified` event
-  (§0/§9). This slice builds **no** departure-deadline resolver and **no** `departure_external` role.
+  epic (#306, "Deadline & SOC Management"; implementation spec not yet written). R5-delivery is gated
+  on the `DeadlineUnreachableNotified` event (§0/§9). This slice builds **no** departure-deadline
+  resolver and **no** `departure_external` role.
 - **`Auto` profile / `sc_prompt_timeout_h` wiring** — the prompt-timeout catalog row is not wired
   (§3/§9); midnight is the only deadline (UC08).
 - **Vehicle-limit sync (M2, UC09)** — a different Manager; no shared work here.
@@ -300,8 +302,8 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
    *domain-event name* `DeadlineUnreachableNotified` is already settled — ADR-0011 keeps it as the one
    published cross-Manager event (its Decision row 1). What is **not** yet fixed is E4's technical
    realization: the actual `hass.bus` event-type string and payload shape the Coordinator will fire
-   once E4 (epic #255, PR #273) is merged. Owned by E4's spec, not this design; R5-delivery matches
-   whatever E4 lands with rather than inventing a concrete string now (§0's `TODO(E4/#255)`).
+   once E4 (epic #306) is built. Owned by E4's spec, not this design; R5-delivery matches whatever E4
+   lands with rather than inventing a concrete string now (§0's `TODO(E4/#306)`).
 
 ---
 
