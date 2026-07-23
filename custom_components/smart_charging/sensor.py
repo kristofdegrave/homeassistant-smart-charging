@@ -143,6 +143,26 @@ class EffectivePeakLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEnt
         return None
 
 
+class ActiveSocLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
+    """Diagnostic: the coordinator's resolved active SOC limit from the last cycle (R7).
+    No restore needed -- recomputed each cycle from the SOC-limit-override/solar-reserve/
+    solar-step-up three-row table (Task 5.1 wires the full resolution)."""
+
+    _attr_translation_key = "active_soc_limit"
+
+    def __init__(self, entry_id: str, coordinator) -> None:
+        SmartChargingEntity.__init__(self, entry_id)
+        CoordinatorEntity.__init__(self, coordinator)
+        self._attr_unique_id = f"{entry_id}_active_soc_limit"
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        if data is not None:
+            return getattr(data, "active_soc_limit", None)
+        return None
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -153,5 +173,6 @@ async def async_setup_entry(
             ActiveModeSensor(entry.entry_id, coordinator),
             MonthlyPeakSensor(entry.entry_id, coordinator),
             EffectivePeakLimitSensor(entry.entry_id, coordinator),
+            ActiveSocLimitSensor(entry.entry_id, coordinator),
         ]
     )
