@@ -3,4 +3,4 @@
 homeassistant==2026.7.2
 pytest
 pytest-homeassistant-custom-component==0.13.346
-ruff
+ruff==0.15.22
