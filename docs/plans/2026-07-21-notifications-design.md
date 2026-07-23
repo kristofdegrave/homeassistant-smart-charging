@@ -281,19 +281,27 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
 
 ## 9. Open questions / genuine gaps (flagged, not silently answered)
 
-1. **`sc_prompt_timeout_h` (catalog, 2 h) vs UC08 (midnight only).** The entity-catalog "Reminders &
-   prompts" row lists a 2-hour prompt timeout (R13), but UC08's "Relationships" section states
-   midnight is the only answer deadline with no separate configurable timeout. **These disagree.**
-   Per `project-plan.md` §1 (source doc wins over an anchor), UC08 is authoritative: this slice wires
-   **no** timeout option and times the prompt out at midnight. Flagged for analysis-doc reconciliation
-   (the catalog row should be reconciled with UC08 via the write-requirement flow) — this design opens
-   no such change.
-2. **Catalog `input_*`/`sc_` ids vs ADR-0005 config realization.** Resolved by precedent, not
-   invention: realize the tuning values as config-entry options with `CONF_*` constants (§3), as every
-   prior slice did, keeping the catalog ids as analysis-layer names. Flagged as the same deferred
-   `sc_`-helper reconciliation `project-plan.md`'s G-NAMING row already records.
-3. **Concrete bus signal name/payload for `DeadlineUnreachableNotified`.** Owned by E4's spec
-   (PR #273). R5-delivery matches it; this design does not fix a concrete string.
+1. **No prompt-timeout option is needed — settled, not open.** The entity-catalog "Reminders &
+   prompts" row lists a 2-hour `sc_prompt_timeout_h` (R13), but UC08's "Relationships" section states
+   midnight is the only answer deadline, with no separate configurable timeout. Per `project-plan.md`
+   §1 (source doc wins over an anchor), UC08 is authoritative: this slice wires **no** timeout option
+   and times the prompt out at midnight — that part is decided, not a gap. What remains genuinely open
+   is only the **analysis-doc discrepancy itself**: the catalog row and UC08 disagree with each other,
+   independent of what this slice builds, and should be reconciled via the write-requirement flow —
+   this design does not open that reconciliation.
+2. **Should the catalog's `input_*`/`sc_` helper-style ids eventually be renamed to match their
+   `CONF_*` config-entry realization, or do the two naming layers stay intentionally distinct?**
+   **Resolution:** by precedent, not invention — realize the tuning values as config-entry options
+   with `CONF_*` constants (§3), as every prior slice did, and keep the catalog ids as analysis-layer
+   names for now; this design does not rename them. The renaming question itself is not settled here —
+   it is the same deferred `sc_`-helper reconciliation `project-plan.md`'s G-NAMING row already
+   records, and stays open until that reconciliation happens.
+3. **What concrete HA bus event type/payload will carry `DeadlineUnreachableNotified`?** The
+   *domain-event name* `DeadlineUnreachableNotified` is already settled — ADR-0011 keeps it as the one
+   published cross-Manager event (its Decision row 1). What is **not** yet fixed is E4's technical
+   realization: the actual `hass.bus` event-type string and payload shape the Coordinator will fire
+   once E4 (epic #255, PR #273) is merged. Owned by E4's spec, not this design; R5-delivery matches
+   whatever E4 lands with rather than inventing a concrete string now (§0's `TODO(E4/#255)`).
 
 ---
 
