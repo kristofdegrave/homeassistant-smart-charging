@@ -3,13 +3,19 @@
 from datetime import time
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockEntityPlatform
+from homeassistant.core import State
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    MockEntityPlatform,
+    mock_restore_cache,
+)
 
 from custom_components.smart_charging.time import (
     DAY_OF_WEEK_DEFAULTS,
     OVERRIDE_DEFAULTS,
     WEEKDAY_DEFAULT,
     SmartChargingDepartureTime,
+    async_setup_entry,
 )
 
 _WEEKDAY_SUFFIXES = ("mon", "tue", "wed", "thu", "fri")
@@ -77,3 +83,45 @@ async def test_setting_one_entity_does_not_affect_a_sibling(hass):
     await mon.async_set_value(time(7, 30))
     assert mon.native_value == time(7, 30)
     assert holiday.native_value is None
+
+
+def test_translation_key_matches_suffix():
+    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix="holiday", default=None)
+    assert entity.translation_key == "departure_holiday"
+
+
+async def test_restores_a_previously_set_value_across_restart(hass):
+    entity_id = "time.smart_charging_departure_mon"
+    mock_restore_cache(hass, (State(entity_id, "07:30:00"),))
+    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix="mon", default=WEEKDAY_DEFAULT)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert entity.native_value == time(7, 30)
+
+
+async def test_no_restored_state_keeps_the_constructor_default(hass):
+    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix="mon", default=WEEKDAY_DEFAULT)
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert entity.native_value == WEEKDAY_DEFAULT
+
+
+async def test_async_setup_entry_creates_nine_entities_with_expected_ids_and_defaults(hass):
+    entry = MockConfigEntry(domain="smart_charging", entry_id="xyz")
+    entry.add_to_hass(hass)
+    added: list[SmartChargingDepartureTime] = []
+
+    def _capture(entities):
+        added.extend(entities)
+
+    await async_setup_entry(hass, entry, _capture)
+
+    assert len(added) == 9
+    by_unique_id = {e.unique_id: e for e in added}
+    expected_suffixes = ["mon", "tue", "wed", "thu", "fri", "sat", "sun", "holiday", "home_day"]
+    assert set(by_unique_id) == {f"xyz_departure_{suffix}" for suffix in expected_suffixes}
+    for suffix in ("mon", "tue", "wed", "thu", "fri"):
+        assert by_unique_id[f"xyz_departure_{suffix}"].native_value == WEEKDAY_DEFAULT
+    for suffix in ("sat", "sun", "holiday", "home_day"):
+        assert by_unique_id[f"xyz_departure_{suffix}"].native_value is None

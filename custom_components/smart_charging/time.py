@@ -1,9 +1,19 @@
 """Departure-time entities (C2, R14). ADR-0004 native naming.
 
 Nine owned `time` entities per design doc Sec 4 / `entity-catalog.md`: one per day of week
-(`mon`..`sun`) plus a public-holiday override and a home-day override. All are plain
-user-editable `time` entities -- HA's own entity-registry state carries the value across a
-restart, so no `RestoreEntity` is needed here (design doc Sec 4).
+(`mon`..`sun`) plus a public-holiday override and a home-day override.
+
+Deviation from design doc Sec 4: that section claims these entities need no `RestoreEntity`
+because "a `time` entity's state persists natively via HA's own entity-registry state". That
+is not correct for an integration-owned platform entity (as opposed to a storage-backed helper
+like `input_datetime`) -- the entity registry persists entity *metadata* (unique_id, name,
+...), not the runtime state value; without `RestoreEntity`, a user-set departure time would
+silently revert to its constructor default on every HA restart, contradicting
+`entity-catalog.md`'s own "runtime" persistence classification for these rows (the same
+category `number.smart_charging_soc_limit_override`/`select.smart_charging_mode` are in, both
+of which the codebase already restores). This class therefore mirrors `ModeSelect`
+(`select.py`) and uses `RestoreEntity` -- flagged here as a corrected, task-scoped deviation
+from the design doc's wording rather than a silent departure from it.
 """
 
 from __future__ import annotations
@@ -14,6 +24,7 @@ from homeassistant.components.time import TimeEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .entity import SmartChargingEntity
 
@@ -38,7 +49,7 @@ OVERRIDE_DEFAULTS: list[tuple[str, time | None]] = [
 ]
 
 
-class SmartChargingDepartureTime(SmartChargingEntity, TimeEntity):
+class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity):
     """One departure-time entity, parameterized by id-suffix and default (R14)."""
 
     def __init__(self, entry_id: str, id_suffix: str, default: time | None) -> None:
@@ -46,6 +57,12 @@ class SmartChargingDepartureTime(SmartChargingEntity, TimeEntity):
         self._attr_translation_key = f"departure_{id_suffix}"
         self._attr_unique_id = f"{entry_id}_departure_{id_suffix}"
         self._attr_native_value = default
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state not in (None, "unknown", "unavailable"):
+            self._attr_native_value = time.fromisoformat(last.state)
 
     async def async_set_value(self, value: time) -> None:
         self._attr_native_value = value
