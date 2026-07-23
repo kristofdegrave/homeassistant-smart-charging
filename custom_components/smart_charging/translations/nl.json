@@ -115,6 +115,11 @@
       "effective_peak_limit": {
         "name": "Effectieve piekgrens"
       }
+    },
+    "switch": {
+      "home_day": {
+        "name": "Thuisdag"
+      }
     }
   }
 }

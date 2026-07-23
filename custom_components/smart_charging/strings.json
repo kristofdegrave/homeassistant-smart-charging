@@ -115,6 +115,11 @@
       "effective_peak_limit": {
         "name": "Effective peak limit"
       }
+    },
+    "switch": {
+      "home_day": {
+        "name": "Home day"
+      }
     }
   }
 }
