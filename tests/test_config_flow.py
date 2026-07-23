@@ -366,6 +366,43 @@ async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
     assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
 
 
+async def test_reconfigure_rejects_solar_installed_true_without_solar_forecast(hass):
+    # Design doc §3: the solar_forecast guard must also hold on reconfigure, mirroring
+    # the ev_soc guard's own reconfigure test above -- otherwise a user could bypass it
+    # by flipping CONF_SOLAR_INSTALLED on through Reconfigure instead of the install form.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+            "charger_status_entity": "sensor.evse",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
+        },
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    new_mapping = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+        "charger_status_entity": "sensor.evse",
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+        "net_power_entity": "sensor.net_power",
+        "charger_power_entity": "sensor.charger_power",
+        CONF_SOLAR_INSTALLED: True,
+        CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+    }
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == "required_when_solar_installed"
+
+
 async def test_captar_available_defaults_true(hass):
     # Design doc §3: R18 ("defaulting to present") / entity-catalog.md's sc_captar_available.
     result = await _run_user_flow(hass)
