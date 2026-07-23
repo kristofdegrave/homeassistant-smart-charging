@@ -23,6 +23,18 @@ MODE_CAPTAR = "Captar"
 PROFILE_MANUAL = "Manual"
 PROFILE_AUTO = "Auto"
 
+# Departure-time entity id-suffixes (time.py platform; unique_id/translation_key building
+# blocks, R14). Day-of-week suffixes double as Python's own Monday-first ordering.
+DAY_MON = "mon"
+DAY_TUE = "tue"
+DAY_WED = "wed"
+DAY_THU = "thu"
+DAY_FRI = "fri"
+DAY_SAT = "sat"
+DAY_SUN = "sun"
+DEPARTURE_OVERRIDE_HOLIDAY = "holiday"
+DEPARTURE_OVERRIDE_HOME_DAY = "home_day"
+
 # Adapter role keys (the coordinator's/factory's per-role dict; RA1 extension for ROLE_EV_SOC).
 ROLE_EV_SOC = "ev_soc"
 ROLE_CHARGER_CURRENT = "charger_current"
