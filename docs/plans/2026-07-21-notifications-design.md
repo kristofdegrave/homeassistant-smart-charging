@@ -5,8 +5,8 @@
 **Type:** implementation design (a slice of the approved architecture — not a new decision)
 
 This document defines the **Notifications** build slice: **RA4** (Notification access, Resource
-Access V11) and **M3** (Notification Manager, V11) — the plug-in reminder (UC10), the evening
-home-day prompt (UC08), and delivery of R5's deadline-unreachable notice.
+Access V11) and **M3** (Notification Manager, V11) — the evening home-day prompt (UC08) and
+delivery of R5's deadline-unreachable notice.
 
 It is a deliberate **subset** of the full architecture, built the same way the Power MVP and the
 Captar slice were: every component below is a slice of a service already named in
@@ -18,9 +18,8 @@ and RA3, it needs **no new ADR**, and this document says so explicitly in §6). 
 coordination follows the already-Accepted **ADR-0011** (G-ADR-0011, resolved).
 
 Behavior is owned by
-[UC10](../analysis/use-cases/UC10-remind-to-plug-in.md) (plug-in reminder, R12) and
 [UC08](../analysis/use-cases/UC08-plan-tomorrow-home-day.md) (evening home-day prompt, R13);
-this document cites their state models, triggers, and thresholds as test anchors and does **not**
+this document cites its state model, triggers, and thresholds as test anchors and does **not**
 restate them as if it owns them. Where an anchor and its source doc disagree (see §9's open
 questions), the source doc wins (`project-plan.md` §1).
 
@@ -38,28 +37,20 @@ follows that same convention: M3 is a package-root module (`notification_manager
 home). See §10.
 
 **This slice's one real cross-slice dependency is on the Deadline Engine (E4, epic #255).** E4 owns
-two outputs this slice's use-cases reference, both currently **unbuilt** (E4's spec is drafted in
-PR #273, not merged as of this writing — `engines/deadline.py` does not exist and the coordinator
-publishes no `DeadlineUnreachableNotified` event; confirmed against the current tree):
+`DeadlineUnreachableNotified` — the one output this slice references — currently **unbuilt** (E4's
+spec is drafted in PR #273, not merged as of this writing — `engines/deadline.py` does not exist and
+the coordinator publishes no `DeadlineUnreachableNotified` event; confirmed against the current tree):
 
-1. **`DeadlineUnreachableNotified`** (the ADR-0011 published event) — consumed by the **R5-delivery**
-   task. This is the **one task in this plan gated on E4/M1**: its subscription handler can be
-   unit-tested now by firing a synthetic event on the HA bus, but the real end-to-end path depends
-   on M1 actually publishing it. It is written as the **last** implementation task (Phase 6), and
-   its "before you start" check is: *does the coordinator publish `DeadlineUnreachableNotified` as a
-   bus event yet, and under what concrete signal name/payload?* (that name is owned by E4's spec —
-   this slice matches it, it does not invent it).
-2. **The resolved next-departure deadline (R14)** — UC10's trigger ("within the configured lead
-   time of the next departure time") and its 3b re-arm ("the next departure time changes") both need
-   E4's deadline resolution. This is **distinct from** the `DeadlineUnreachableNotified` event: UC10
-   is *not* gated on that event, but it *is* gated on E4's R14 output. Handled per §9's open question:
-   UC10's pure de-dup/gating logic is built and tested now against the resolved deadline supplied as
-   an **injected input**; the M1/E4 wiring that feeds it a real R14 resolution is deferred until E4
-   lands, exactly like R5-delivery. This slice never builds a departure-deadline resolver of its own
-   (that is E4's epic, out of scope — §8).
+**`DeadlineUnreachableNotified`** (the ADR-0011 published event) is consumed by the **R5-delivery**
+task. This is the **one task in this plan gated on E4/M1**: its subscription handler can be
+unit-tested now by firing a synthetic event on the HA bus, but the real end-to-end path depends
+on M1 actually publishing it. It is written as the **last** implementation task (Phase 6), and
+its "before you start" check is: *does the coordinator publish `DeadlineUnreachableNotified` as a
+bus event yet, and under what concrete signal name/payload?* (that name is owned by E4's spec —
+this slice matches it, it does not invent it).
 
-Every other task (RA4, UC08, the pure UC10 de-dup logic, the supporting Resource-Access roles and
-owned entities) has **no** E4 dependency and is built and tested first.
+Every other task (RA4, UC08, the supporting Resource-Access roles and owned entities) has **no** E4
+dependency and is built and tested first.
 
 ---
 
@@ -69,15 +60,12 @@ M3 composes services and Resource-Access roles that the shipped code does not ha
 named `project-plan.md` service; this slice builds the minimal, mechanical slice of each that M3
 consumes, following the Captar slice's **"extend if it exists, create if it doesn't"** rule (§10).
 
-| M3 (UC08/UC10) needs | Shipped status | This slice |
+| M3 (UC08) needs | Shipped status | This slice |
 | --- | --- | --- |
 | Reach the HA `notify` domain, send actionable messages, capture responses (RA4, V11) | Absent | **In scope** — `adapters/notify.py`, new role (§4/§6) |
-| `car_home`, `solar_forecast`, `home_day_external` read roles (RA2, V1) | Absent | **In scope** — factory extension, create-if-not (§4) |
+| `solar_forecast`, `home_day_external` read roles (RA2, V1) | Absent | **In scope** — factory extension, create-if-not (§4) |
 | Home-day flag as owned state, written on "yes" (C2; `switch.smart_charging_home_day`) | Absent (no `switch.py`) | **In scope** — create-if-not (§4/§7) |
-| Plug-in-reminder due indicator (C3; `binary_sensor.smart_charging_plug_in_reminder`) | Absent (no `binary_sensor.py`) | **In scope** — create-if-not (§4/§7) |
-| Active-SOC-limit resolution (E3, `resolve_active_soc_limit`) | Shipped (`engines/soc_target.py`) | **Reused unchanged** |
-| `charger_status`, `ev_soc` read roles (RA1) | Shipped | **Reused unchanged** |
-| Resolved next-departure deadline + lead-time window (E4/R14) | Absent (epic #255) | **Deferred hookup** — injected input now (§0/§9) |
+| `charger_status` read role (RA1) | Shipped | **Reused unchanged** |
 | `DeadlineUnreachableNotified` event (E4/M1 publish) | Absent (epic #255) | **Gated last task** (§0/§9) |
 
 §8 lists what is explicitly deferred.
@@ -95,29 +83,18 @@ Each is concrete and testable against the HA harness (or plain pytest for the pu
    the **most recently sent actionable** notification, the adapter's `read()` returns that action id
    (e.g. `HOMEDAY_YES`); a response carrying a **stale** tag (from a previously sent notification)
    makes `read()` return `None`, never the stale value (§6).
-3. **UC10 single reminder.** With the car home, disconnected, below the active SOC limit, the next
-   departure deadline resolved, and within the configured lead time
-   (`sc_reminder_lead_h`, default 8 h — UC10 trigger), M3 sends exactly **one** plug-in reminder for
-   that departure window (UC10 Armed→Sent); no further reminder is sent while the preconditions keep
-   holding (UC10 de-dup).
-4. **UC10 re-arm.** After a reminder has been sent, a `disconnected→connected→disconnected` cycle
-   (3a) **or** a departure-window change (3b) returns M3 to Armed so it can send again (UC10 state
-   model). The `binary_sensor.smart_charging_plug_in_reminder` is `on` exactly while a reminder is
-   currently due (entity-catalog).
-5. **UC10 suppression.** No reminder while connected/charging, or while SOC is at/above the active
-   limit, or while the deadline resolves to "no deadline" (UC10 exception flows).
-6. **UC08 prompt.** With the evening prompt enabled (`sc_evening_prompt_enabled`, default on), the
+3. **UC08 prompt.** With the evening prompt enabled (`sc_evening_prompt_enabled`, default on), the
    next-day forecast above threshold (`sc_solar_forecast_threshold_kwh`, default 12 kWh — the same
    threshold R9 uses), no external source having set tomorrow's home-day flag, and the car connected
    at home at/after `sc_evening_prompt_time` (default 18:00) before midnight, M3 sends **one**
    actionable yes/no notification (UC08 Not-sent→Pending).
-7. **UC08 answer.** A `HOMEDAY_YES` response before midnight sets the home-day flag for tomorrow
+4. **UC08 answer.** A `HOMEDAY_YES` response before midnight sets the home-day flag for tomorrow
    (Pending→Answered-yes); `HOMEDAY_NO` (Answered-no) or midnight with no answer (Timed-out) leaves
    it unset (UC08 state model). Each terminal state is reached at most once per evening; the lifecycle
    re-arms to Not-sent at the midnight date rollover.
-8. **UC08 skips.** No prompt when the prompt is disabled, the forecast is at/below threshold, an
+5. **UC08 skips.** No prompt when the prompt is disabled, the forecast is at/below threshold, an
    external source already set the flag, or the car never connects before midnight (UC08 1a/1b/1c).
-9. **R5 delivery** *(gated — §0/§9)*. On the subscribed `DeadlineUnreachableNotified` event, M3
+6. **R5 delivery** *(gated — §0/§9)*. On the subscribed `DeadlineUnreachableNotified` event, M3
    delivers the deadline-unreachable notice via RA4.
 
 ---
@@ -125,7 +102,7 @@ Each is concrete and testable against the HA harness (or plain pytest for the pu
 ## 3. Install-time / options additions
 
 Extends the config/options flow (ADR-0005 data/options split retained; ADR-0003 role mapping for the
-notify target). The reminder/prompt tuning values are **catalogued** in
+notify target). The prompt tuning values are **catalogued** in
 [`entity-catalog.md`](../analysis/entity-catalog.md)'s "Notification configuration" table — this
 slice cites those ids and defaults; it does not re-derive or rename them.
 
@@ -139,22 +116,22 @@ notification tuning values the same ADR-0005 way as every other threshold, keepi
 the analysis-layer names. (This is the mechanism precedent, not a new decision — see §9's open
 question on the catalog-vs-ADR-0005 naming.)
 
-**Bucket note.** `entity-catalog.md` classifies `sc_reminder_lead_h`, `sc_evening_prompt_enabled`, and
-`sc_evening_prompt_time` as **install-time** (its "Notes" section groups `sc_evening_prompt_enabled`
-explicitly among the "set once and rarely revisited" install-time choices). This slice realizes all
-three as **options** instead, matching the "runtime-tunable threshold" bucket the Power/Captar slices
-used for comparable values — behaviorally harmless (options are editable anytime from the HA UI, a
-superset of install-time editability), but a real divergence from the catalog's own bucket, flagged
-here rather than silently folded into the ADR-0005-realization precedent above.
+**Bucket note.** `entity-catalog.md` classifies `sc_evening_prompt_enabled`, `sc_evening_prompt_time`,
+**and** `sc_solar_forecast_threshold_kwh` as **install-time** (its "Notes" section groups
+`sc_evening_prompt_enabled` explicitly among the "set once and rarely revisited" install-time
+choices). This slice realizes all three as **options** instead, matching the "runtime-tunable
+threshold" bucket the Power/Captar slices used for comparable values — behaviorally harmless (options
+are editable anytime from the HA UI, a superset of install-time editability), but a real divergence
+from the catalog's own bucket, flagged here rather than silently folded into the
+ADR-0005-realization precedent above.
 
 | Field | Bucket | Constant / default | Source |
 | --- | --- | --- | --- |
 | **Notification target** entity (a `notify`-domain entity) | data — required for M3 to deliver at all | `CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"`; role `ROLE_NOTIFICATION_TARGET = "notification_target"` | RA4 (§6); named to match the existing `ROLE_EV_SOC`/`ROLE_CHARGER_STATUS` convention in `const.py` |
-| **Plug-in reminder lead time** | options | `CONF_REMINDER_LEAD_H`, default **8 h** | `input_number.sc_reminder_lead_h` (entity-catalog); UC10 trigger (R12) |
 | **Evening prompt enabled** | options | `CONF_EVENING_PROMPT_ENABLED`, default **on** | `input_boolean.sc_evening_prompt_enabled`; UC08 precondition |
 | **Evening prompt time** | options | `CONF_EVENING_PROMPT_TIME`, default **18:00** | `input_datetime.sc_evening_prompt_time`; UC08 trigger |
 | **Solar-forecast threshold** | options | `CONF_SOLAR_FORECAST_THRESHOLD_KWH`, default **12 kWh** | `input_number.sc_solar_forecast_threshold_kwh` (entity-catalog); UC08 precondition 2 (R9's threshold, read independently — UC08 §"Relationships") |
-| `car_home`, `solar_forecast`, `home_day_external` entity mappings (data) | data | RA2 roles, create-if-not (§4) | entity-catalog (RA2) |
+| `solar_forecast`, `home_day_external` entity mappings (data) | data | RA2 roles, create-if-not (§4) | entity-catalog (RA2) |
 
 Config-flow validation for the notify target mirrors ADR-0003's other roles: the mapped entity must
 exist and its expected platform must be the **`notify`** domain (HA's newer notify-**entity** platform,
@@ -176,17 +153,17 @@ option.
   (`read()`/`write()`), added to the factory under `ROLE_NOTIFICATION_TARGET`, optional at the
   factory level (only present when the target is mapped), the same shape `ev_soc`/`grid_voltage`
   already use. `write(payload)` sends; `read()` returns the last captured actionable response (§6).
-- **RA2 read roles** — `car_home` (bool), `solar_forecast` (kWh), `home_day_external` (bool):
-  factory extensions using the existing `NumericReadAdapter` / a boolean-read variant, **create-if-not**.
-  `departure_external` is **not** built here (it feeds the deferred E4 R14 hookup — §0/§8).
+- **RA2 read roles** — `solar_forecast` (kWh), `home_day_external` (bool): factory extensions using
+  the existing `NumericReadAdapter` / a boolean-read variant, **create-if-not**. `car_home` is **not**
+  built here — entity-catalog attributes it to R12/UC09, not UC08 (UC08's "connected at home" is
+  derived from `charger_status` alone, §5); building it would feed the deferred UC10 slice, not this
+  one (§8). `departure_external` is likewise **not** built here (it feeds the deferred UC10/E4 R14
+  hookup — §8).
 - **`switch.smart_charging_home_day`** — owned home-day flag (C2; entity-catalog "Home day" row:
   `off`, resets daily at midnight, R13). New (`switch.py`), **create-if-not**. Written by UC08 on
   "yes"; resets itself to `off` at the midnight date rollover (its own catalogued R13 behavior,
   independent of UC08). Its `wfh` illustrative name in ADR-0004 is superseded by the settled
   `home_day` id (entity-catalog Id note).
-- **`binary_sensor.smart_charging_plug_in_reminder`** — owned diagnostic (C3; entity-catalog
-  "Reminders & prompts" row: `on` while a plug-in reminder is currently due). New
-  (`binary_sensor.py`), **create-if-not**. Reflects M3's live UC10 due-state.
 - **Not built this slice:** any deadline/departure owned entity; the R5 notice needs no owned
   entity of its own (it is a one-shot delivery on a subscribed event).
 
@@ -196,25 +173,12 @@ option.
 
 M3 is driven per control interval by its own periodic tick plus the HA event bus — the
 `Timer / cycle / evening time (Client)` participant in system-design §5.3. Each evaluation reads
-owned config + the home-day flag from the Store (RA3), reads the adapter roles (RA1/RA2), consults
-E3 (active SOC limit) and — where available — E4 (deadline), and dispatches to exactly one of the
-three §5.3 branches. **"Midnight" is realized as a per-evaluation wall-clock comparison**
-(`dt_util.now()` date rollover) — the same mechanism M1 already uses for the monthly-peak month
-rollover in `coordinator.py`; **no new HA timer/scheduler primitive is introduced.**
-
-### UC10 branch (plug-in reminder)
-Per §5.3's first `alt` and UC10:
-
-1. Read `car_home`, `charger_status`, `ev_soc`; read the resolved active SOC limit (E3); obtain the
-   resolved next-departure deadline (E4/R14 — **injected input** this slice, §0).
-2. Gate on **all** preconditions (car home, `disconnected`, SOC below active limit, deadline resolved
-   to an actual deadline, within `sc_reminder_lead_h` of it) — UC10 preconditions/trigger.
-3. If the pure de-dup state is **Armed** and the gate holds → send the plug-in reminder via RA4;
-   transition Armed→Sent (`PlugInReminderSent`). While **Sent**, send nothing more for the window.
-4. Re-arm Sent→Armed on a `disconnected→connected→disconnected` cycle (3a) **or** a departure-window
-   change (3b) — `PlugInReminderRearmed`. The `binary_sensor` is `on` exactly while the step-2 gate
-   holds (entity-catalog's own definition, no Armed/Sent qualifier — a reminder already Sent, with
-   the driver still not having plugged in, is still "due").
+owned config + the home-day flag from the Store (RA3), reads the adapter roles (RA1/RA2), and
+dispatches to one of the §5.3 branches. **This slice implements the UC08 and R5-delivery branches of
+that diagram, deferring §5.3's UC10 plug-in-reminder branch to a later slice (§8);** system-design
+§5.3 itself (an approved artifact) is unchanged. **"Midnight" is realized as a per-evaluation
+wall-clock comparison** (`dt_util.now()` date rollover) — the same mechanism M1 already uses for the
+monthly-peak month rollover in `coordinator.py`; **no new HA timer/scheduler primitive is introduced.**
 
 ### UC08 branch (evening home-day prompt)
 Per §5.3's second `alt` and UC08:
@@ -232,10 +196,7 @@ Per §5.3's second `alt` and UC08:
 ### R5-delivery branch *(gated — §0/§9)*
 Per §5.3's `else R5 delivery`: M3 **subscribes** to `DeadlineUnreachableNotified` (ADR-0011's one
 published event) and, on receipt, delivers the deadline-unreachable notice via RA4. M3 does **not**
-re-derive urgency — it consumes the event the Coordinator publishes (ADR-0011 Decision row 1). No
-`ChargerConnected`/`ChargerDisconnected` event is invented for UC10's re-arm: per ADR-0011,
-`charger_status` connect/disconnect is **re-derived** by M3 observing its own `charger_status`
-adapter read across evaluations (Decision row 2), which is exactly how step 4's 3a re-arm is detected.
+re-derive urgency — it consumes the event the Coordinator publishes (ADR-0011 Decision row 1).
 
 ---
 
@@ -274,14 +235,14 @@ required**, matching RA2/RA3.
 
 ## 7. Where M3's logic lives, and the pure/HA split (ADR-0009)
 
-**Pure state machines → plain pytest.** UC10's Armed/Sent de-dup and UC08's
-Not-sent/Pending/Answered-yes/Answered-no/Timed-out lifecycle are **pure functions of (prior state,
+**Pure state machine → plain pytest.** UC08's
+Not-sent/Pending/Answered-yes/Answered-no/Timed-out lifecycle is a **pure function of (prior state,
 observed inputs, now)** with no I/O — structurally identical to the mode state machines in `modes/`.
 Per ADR-0009's split criterion (pure logic with no I/O → plain pytest; only HA-coupled wiring needs
-the harness), they are factored into an HA-free module **`notification_state.py`** (package root,
-imports no `homeassistant.*`) and unit-tested with plain pytest, test names tracing to UC10/UC08
+the harness), it is factored into an HA-free module **`notification_state.py`** (package root,
+imports no `homeassistant.*`) and unit-tested with plain pytest, test names tracing to UC08
 acceptance criteria. This is the right call because the *decision* ("given preconditions + prior
-state + now, should a reminder fire / what is the next prompt state / should the flag be written") is
+state + now, what is the next prompt state / should the flag be written") is
 decidable from plain data; only the *observation* of preconditions and the *effects* (send, write)
 touch HA.
 
@@ -298,8 +259,15 @@ could gather M1/M3; it is not needed now, and this slice does not create one (ex
 
 Out of scope for this slice, each a later slice of `project-plan.md`:
 
+- **UC10 plug-in reminder (R12)** — **deferred to a later slice, not cancelled.** UC10 and R12
+  remain valid and approved; they are simply not part of this build slice. This slice therefore builds
+  **no** plug-in-reminder de-dup state machine, **no** `binary_sensor.smart_charging_plug_in_reminder`,
+  **no** reminder-lead-time (`sc_reminder_lead_h`) option, and **no** `car_home` role (entity-catalog
+  attributes `car_home` to R12/UC09, not UC08 — §4); a future slice builds `car_home` when it picks
+  UC10 up, alongside its E4/R14 deadline dependency (below). No reader should infer a silent scope
+  cut — this is an explicit deferral of an approved feature.
 - **Deadline Engine (E4), R14 resolution and the `DeadlineUnreachableNotified` publish** — its own
-  epic (#255, PR #273 not merged). UC10's deadline dependency is injected now; R5-delivery is gated
+  epic (#255, PR #273 not merged). R5-delivery is gated on the `DeadlineUnreachableNotified` event
   (§0/§9). This slice builds **no** departure-deadline resolver and **no** `departure_external` role.
 - **`Auto` profile / `sc_prompt_timeout_h` wiring** — the prompt-timeout catalog row is not wired
   (§3/§9); midnight is the only deadline (UC08).
@@ -313,24 +281,18 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
 
 ## 9. Open questions / genuine gaps (flagged, not silently answered)
 
-1. **UC10's R14 deadline dependency vs. "no dependency" framing.** UC10's trigger and 3b re-arm need
-   E4's resolved next-departure deadline (R14), which does not exist yet. UC10 is *not* gated on the
-   `DeadlineUnreachableNotified` event (that is R5's), but it *is* gated on E4's R14 output.
-   **Resolution:** UC10's pure de-dup/gating logic is built and tested now with the resolved deadline
-   (and lead-time-window boolean) as an **injected input**; the M1/E4 wiring that supplies a real R14
-   resolution is deferred until E4 lands. Recorded as a deferred obligation, not silently built.
-2. **`sc_prompt_timeout_h` (catalog, 2 h) vs UC08 (midnight only).** The entity-catalog "Reminders &
+1. **`sc_prompt_timeout_h` (catalog, 2 h) vs UC08 (midnight only).** The entity-catalog "Reminders &
    prompts" row lists a 2-hour prompt timeout (R13), but UC08's "Relationships" section states
    midnight is the only answer deadline with no separate configurable timeout. **These disagree.**
    Per `project-plan.md` §1 (source doc wins over an anchor), UC08 is authoritative: this slice wires
    **no** timeout option and times the prompt out at midnight. Flagged for analysis-doc reconciliation
    (the catalog row should be reconciled with UC08 via the write-requirement flow) — this design opens
    no such change.
-3. **Catalog `input_*`/`sc_` ids vs ADR-0005 config realization.** Resolved by precedent, not
+2. **Catalog `input_*`/`sc_` ids vs ADR-0005 config realization.** Resolved by precedent, not
    invention: realize the tuning values as config-entry options with `CONF_*` constants (§3), as every
    prior slice did, keeping the catalog ids as analysis-layer names. Flagged as the same deferred
    `sc_`-helper reconciliation `project-plan.md`'s G-NAMING row already records.
-4. **Concrete bus signal name/payload for `DeadlineUnreachableNotified`.** Owned by E4's spec
+3. **Concrete bus signal name/payload for `DeadlineUnreachableNotified`.** Owned by E4's spec
    (PR #273). R5-delivery matches it; this design does not fix a concrete string.
 
 ---
@@ -340,37 +302,34 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
 ```text
 custom_components/smart_charging/
   const.py                 # + CONF_NOTIFICATION_TARGET_ENTITY, ROLE_NOTIFICATION_TARGET (data);
-                            #   + CONF_REMINDER_LEAD_H, CONF_EVENING_PROMPT_ENABLED, CONF_EVENING_PROMPT_TIME
+                            #   + CONF_EVENING_PROMPT_ENABLED, CONF_EVENING_PROMPT_TIME
                             #   (options) + DEFAULT_* ; + RA2 role/CONF constants (create-if-not);
-                            #   + home-day flag / reminder action-id constants
+                            #   + home-day flag / home-day prompt action-id constants
   adapters/
     notify.py              # RA4 — new: NotifyAdapter (send + tag-keyed response capture, §6)
     factory.py             # RA1 — extend: wire ROLE_NOTIFICATION_TARGET + RA2 roles (create-if-not)
     numeric.py / base.py   # reuse; note the write-type widening for the notify payload (§6)
-  notification_state.py    # M3 pure logic — new: UC10 de-dup + UC08 prompt-lifecycle state machines
+  notification_state.py    # M3 pure logic — new: UC08 prompt-lifecycle state machine
                             #   (HA-free, plain pytest — §7)
   notification_manager.py  # M3 — new: orchestration (reads, Store writes, notify dispatch, event subs)
   switch.py                # C2 — new (create-if-not): home-day flag owned entity (R13 midnight reset)
-  binary_sensor.py         # C3 — new (create-if-not): plug-in-reminder due indicator
-  config_flow.py           # C4 — extend: notify-target data field + validation; reminder/prompt options
+  config_flow.py           # C4 — extend: notify-target data field + validation; prompt options
   __init__.py              # extend: build RA4/RA2 adapters; instantiate M3 + schedule its tick;
-                            #   register SWITCH + BINARY_SENSOR platforms
-  strings.json             # + notify-target/reminder/prompt labels; switch/binary_sensor entity names
+                            #   register SWITCH platform
+  strings.json             # + notify-target/prompt labels; switch entity name
   translations/en.json     # mirror strings.json (nl.json best-effort)
 ```
 
 `tests/` mirrors 1:1 per ADR-0002/0009: `tests/test_notification_state.py` (plain pytest);
 `tests/adapters/test_notify.py`, `tests/test_notification_manager.py`, `tests/test_switch.py`,
-`tests/test_binary_sensor.py`, plus HA-harness additions to `tests/adapters/test_factory.py`,
+plus HA-harness additions to `tests/adapters/test_factory.py`,
 `tests/test_config_flow.py`, `tests/test_init.py`.
 
 ---
 
 ## 11. Testing approach (ADR-0009 split)
 
-- **Plain pytest** (no HA) for the pure pieces (§7): UC10's Armed↔Sent de-dup (Armed→Sent on
-  gate-holds; Sent stays de-duped; Sent→Armed on a connect/disconnect cycle 3a; Sent→Armed on a
-  departure-window change 3b; independence of 3a and 3b) and UC08's prompt lifecycle
+- **Plain pytest** (no HA) for the pure piece (§7): UC08's prompt lifecycle
   (Not-sent→Pending on trigger; Pending→Answered-yes/Answered-no on a response; Pending→Timed-out at
   midnight; re-arm to Not-sent at the day rollover; the 1a/1b/1c skips). Deterministic given
   identical inputs; `now`/`current_date` injected, never read inside the module.
@@ -379,12 +338,11 @@ custom_components/smart_charging/
     mapped notify entity) + simulated action response via a fired `mobile_app_notification_action`
     event, including the **stale-tag → `None`** guard (success criteria 1–2), matching
     project-plan RA4's "message dispatch and simulated action response".
-  - **M3** — UC10 reminder gating + de-dup + re-arm (with the resolved deadline injected, §9);
-    UC08 prompt + tag-keyed response capture + home-day flag write on "yes"; the skips; the midnight
-    timeout and re-arm; and (last, gated) R5 delivery on a synthetic `DeadlineUnreachableNotified`
-    bus event — matching project-plan M3's "UC10 reminder gating + de-dup; UC08 prompt + response
+  - **M3** — UC08 prompt + tag-keyed response capture + home-day flag write on "yes"; the skips; the
+    midnight timeout and re-arm; and (last, gated) R5 delivery on a synthetic
+    `DeadlineUnreachableNotified` bus event — matching project-plan M3's "UC08 prompt + response
     capture; R5 delivery on the subscribed event".
-  - Owned entities (`switch`, `binary_sensor`), the factory extensions, the config-flow field +
+  - The owned `switch`, the factory extensions, the config-flow field +
     validation, and the setup wiring are HA-harness tested per their platform/flow nature.
 
 ---
@@ -392,7 +350,7 @@ custom_components/smart_charging/
 ## 12. Next step
 
 This design feeds the `writing-plans` skill to produce the ordered, test-driven implementation plan
-([`2026-07-21-notifications.md`](2026-07-21-notifications.md)). Build order: RA4 → pure UC10/UC08
+([`2026-07-21-notifications.md`](2026-07-21-notifications.md)). Build order: RA4 → pure UC08
 logic → supporting Resource Access + owned entities → M3 orchestration → config/setup wiring →
 R5-delivery (gated, last) → translations/strings/README + end-to-end regression. No
 `custom_components/` code is written until the paired plan exists and is approved.

@@ -2,18 +2,17 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build **RA4** (Notification access) and **M3** (Notification Manager) — the UC10 plug-in
-reminder, the UC08 evening home-day prompt (writing the home-day flag on "yes"), and delivery of R5's
-deadline-unreachable notice — per [`2026-07-21-notifications-design.md`](2026-07-21-notifications-design.md).
+**Goal:** Build **RA4** (Notification access) and **M3** (Notification Manager) — the UC08 evening
+home-day prompt (writing the home-day flag on "yes") and delivery of R5's deadline-unreachable notice
+— per [`2026-07-21-notifications-design.md`](2026-07-21-notifications-design.md).
 
 **Architecture:** Adds a notify adapter role (`adapters/notify.py`, RA4 — an ADR-0003 role extension,
-no new ADR), the RA2 read roles M3 consumes (`car_home`, `solar_forecast`, `home_day_external` —
-factory extension), two owned entities (`switch.smart_charging_home_day` C2,
-`binary_sensor.smart_charging_plug_in_reminder` C3), the pure notification state machines
-(`notification_state.py` — UC10 de-dup + UC08 lifecycle, HA-free), and the Notification Manager
+no new ADR), the RA2 read roles M3 consumes (`solar_forecast`, `home_day_external` —
+factory extension), one owned entity (`switch.smart_charging_home_day` C2), the pure notification
+state machine (`notification_state.py` — UC08 prompt lifecycle, HA-free), and the Notification Manager
 (`notification_manager.py` — package-root module mirroring `coordinator.py`, since there is no
 `managers/` package; see design §0/§7/§10). M3 coordinates via ADR-0011 (`DeadlineUnreachableNotified`
-subscribed; `charger_status` connect/disconnect **re-derived**, not an invented event).
+subscribed).
 
 **Tech Stack:** Same as the shipped slices — Python ≥3.12, Home Assistant, `pytest`,
 `pytest-homeassistant-custom-component` (HA harness, test-only per ADR-0009), `ruff`. Pure logic
@@ -23,26 +22,22 @@ subscribed; `charger_status` connect/disconnect **re-derived**, not an invented 
 
 ---
 
-## Before starting: check E4 / the deferred hookups (design §0/§9)
+## Before starting: check E4 / the deferred hookup (design §0/§9)
 
 The Deadline Engine (E4, epic #255, PR #273) is **not merged** as of this writing. Confirm before
-starting the gated pieces:
+starting the gated piece:
 
 - `git log --all --oneline -- custom_components/smart_charging/engines/deadline.py` and
   `grep -r "DeadlineUnreachable" custom_components/` — **does the coordinator publish
   `DeadlineUnreachableNotified` as a bus event yet, and under what concrete signal name/payload?**
   If **no** (expected today): build **Task 6.1 (R5-delivery)** against a *synthetic* bus event whose
   name/payload you define as a local placeholder, and leave a `TODO(E4/#255)` noting the real
-  signal name is owned by E4's spec and must be reconciled once E4 lands (design §9 open question 4).
+  signal name is owned by E4's spec and must be reconciled once E4 lands (design §9 open question 3).
   If **yes**: match E4's actual signal name/payload — do not invent one.
-- **UC10's resolved next-departure deadline (R14)** is also E4's and absent. Per design §0/§9, every
-  UC10 task below feeds the resolved deadline (and the within-lead-time boolean) as an **injected
-  input** — the pure logic and the manager wiring are fully built and tested that way now; the M1/E4
-  wiring that supplies a real R14 resolution is a `TODO(E4/#255)` deferral, not built here.
 
 Also check the "create-if-not" pieces (design §1/§4): `git log --all --oneline --
-custom_components/smart_charging/switch.py custom_components/smart_charging/binary_sensor.py` and
-grep the factory for `car_home`/`solar_forecast`/`home_day_external`. Build them as written if absent;
+custom_components/smart_charging/switch.py` and
+grep the factory for `solar_forecast`/`home_day_external`. Build them as written if absent;
 extend/reuse if a later-merged slice already added them.
 
 ---
@@ -52,12 +47,12 @@ extend/reuse if a later-merged slice already added them.
 Same as `2026-07-20-captar.md`'s conventions (package root, tests-mirror-1:1, canonical states,
 ADR-0007 fault rule, engine/pure-logic purity, commit-after-green, re-check
 `git branch --show-current` before every commit, `--author="Claude <noreply@anthropic.com>"` +
-`Co-Authored-By: Claude Opus 4.8 (1M context)` trailer). Additionally: the pure state machines in
-`notification_state.py` take their prior state, observed inputs, and clock (`now` / `current_date`)
+`Co-Authored-By: Claude Opus 4.8 (1M context)` trailer). Additionally: the pure state machine in
+`notification_state.py` takes its prior state, observed inputs, and clock (`now` / `current_date`)
 as explicit parameters — never calling `dt_util.now()` inside the module (the coordinator/manager
 supplies wall-clock, matching Captar's `update_monthly_peak_demand` convention). Do **not** restate
-UC10/UC08 thresholds/formulas as if this plan owns them — cite them as test anchors (UC10 preconditions
-& trigger, R12; UC08 preconditions, trigger, and state model, R13), the same way the design doc does.
+UC08 thresholds/formulas as if this plan owns them — cite them as test anchors (UC08 preconditions,
+trigger, and state model, R13), the same way the design doc does.
 
 ---
 
@@ -150,77 +145,23 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Phase 2 — Pure notification state machines (plain pytest, no HA)
+## Phase 2 — Pure notification state machine (plain pytest, no HA)
 
 Per design §7/§11: pure logic with no I/O → plain pytest (ADR-0009). Grep-confirm no
 `import homeassistant` in `notification_state.py`.
 
-### Task 2.1: UC10 plug-in-reminder de-dup state machine
+### Task 2.1: UC08 evening-prompt lifecycle state machine
 
 **Files:**
 - Create: `custom_components/smart_charging/notification_state.py`
 - Create: `tests/test_notification_state.py`
 
-**Step 1: Failing tests** (plain pytest) — test names trace to UC10's state model/flows (R12). The
-resolved deadline and within-lead-time are **injected inputs** (design §0/§9):
-
-```python
-"""Plain-pytest tests for the pure notification state machines (M3 -- UC10/UC08)."""
-
-from custom_components.smart_charging.notification_state import (
-    ReminderState,   # Armed | Sent
-    evaluate_reminder,
-)
-
-# Anchors: UC10 preconditions + trigger (R12); 3a connect/disconnect re-arm; 3b window change.
-
-def test_armed_sends_when_all_preconditions_and_lead_time_hold():
-    """Armed + (home, disconnected, below active SOC limit, deadline resolved, within lead time)
-    -> send, transition to Sent (PlugInReminderSent)."""
-
-def test_sent_does_not_repeat_while_preconditions_keep_holding():
-    """Sent stays Sent and sends nothing further for the same departure window (UC10 de-dup)."""
-
-def test_sent_rearms_on_connect_then_disconnect_cycle():
-    """Sent -> Armed after disconnected->connected->disconnected (UC10 3a)."""
-
-def test_sent_rearms_on_departure_window_change():
-    """Sent -> Armed when the resolved departure window changes (UC10 3b), independently of 3a."""
-
-def test_no_send_when_connected_or_charging():
-    """UC10 exception: connected/charging -> never send."""
-
-def test_no_send_when_soc_at_or_above_active_limit():
-    """UC10 exception: SOC >= active limit -> never send."""
-
-def test_no_send_when_deadline_unresolved():
-    """UC10 exception: deadline resolves to 'no deadline' -> never send."""
-
-def test_deterministic_given_identical_inputs():
-    ...
-```
-
-**Step 2: Run** → `ImportError`. **Step 3: Implement** the pure `ReminderState` + `evaluate_reminder`
-(returns `(should_send, next_state, is_due)` — `is_due` feeds the binary_sensor, design §4). No HA
-imports; `now`/window identity injected. **Step 4: Run** → PASS. **Step 5: Commit**
-
-```bash
-git add custom_components/smart_charging/notification_state.py tests/test_notification_state.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add UC10 plug-in-reminder de-dup state machine (M3, pure)
-
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
-```
-
-### Task 2.2: UC08 evening-prompt lifecycle state machine
-
-**Files:**
-- Modify: `custom_components/smart_charging/notification_state.py`
-- Modify: `tests/test_notification_state.py`
-
 **Step 1: Failing tests** (plain pytest) — names trace to UC08's state model (R13). `current_date` /
 midnight rollover injected:
 
 ```python
+"""Plain-pytest tests for the pure notification state machine (M3 -- UC08)."""
+
 from custom_components.smart_charging.notification_state import (
     PromptState,   # NotSent | Pending | AnsweredYes | AnsweredNo | TimedOut
     evaluate_prompt,
@@ -251,7 +192,7 @@ def test_rearms_to_not_sent_at_day_rollover():
     """Terminal states -> Not-sent at the midnight date rollover (fresh each evening)."""
 ```
 
-**Step 2: Run** → FAIL. **Step 3: Implement** `PromptState` + `evaluate_prompt` (returns
+**Step 2: Run** → `ImportError`. **Step 3: Implement** `PromptState` + `evaluate_prompt` (returns
 `(should_send, next_state, write_flag)`), pure, clock injected. **Step 4: Run** → PASS.
 **Step 5: Commit**
 
@@ -263,33 +204,35 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 2 checkpoint:** `pytest tests/test_notification_state.py -v` green; grep-confirm no
-> `import homeassistant` in `notification_state.py`. Every UC10/UC08 transition has a named test.
+> `import homeassistant` in `notification_state.py`. Every UC08 transition has a named test.
 
 ---
 
 ## Phase 3 — Supporting Resource Access & owned entities (HA harness)
 
-### Task 3.1: RA2 read roles M3 consumes (`car_home`, `solar_forecast`, `home_day_external`)
+### Task 3.1: RA2 read roles M3 consumes (`solar_forecast`, `home_day_external`)
 
 **Create-if-not** (design §1/§4). Honors ADR-0003 (RA2 roles) / ADR-0009 (HA harness).
 
 **Files:**
-- Modify: `custom_components/smart_charging/const.py` (add `ROLE_*` / `CONF_*_ENTITY` for the three
+- Modify: `custom_components/smart_charging/const.py` (add `ROLE_*` / `CONF_*_ENTITY` for the two
   roles, matching the existing convention)
 - Modify: `custom_components/smart_charging/adapters/factory.py`
 - Modify: `tests/adapters/test_factory.py`
 
 **Step 1: Failing tests** — factory builds each role when its entity is configured, and omits it when
-not (same optional pattern `ev_soc`/`grid_voltage` use). `car_home`/`home_day_external` read as
-booleans; `solar_forecast` numeric (kWh). **Step 2: Run** → FAIL. **Step 3: Implement** — reuse
+not (same optional pattern `ev_soc`/`grid_voltage` use). `home_day_external` reads as a boolean;
+`solar_forecast` numeric (kWh). **Step 2: Run** → FAIL. **Step 3: Implement** — reuse
 `NumericReadAdapter` for `solar_forecast`; add a small boolean-read adapter (or reuse an existing one)
-for `car_home`/`home_day_external`; wire all three into `build_adapters` optionally.
-**Note:** `departure_external` is **not** added here (deferred with E4, design §8).
+for `home_day_external`; wire both into `build_adapters` optionally.
+**Note:** `car_home` is **not** added here — entity-catalog attributes it to R12/UC09, not UC08; UC08's
+"connected at home" is derived from `charger_status` alone (design §4/§5). `departure_external` is
+likewise **not** added here (deferred with E4, design §8).
 **Step 4: Run** → PASS. **Step 5: Commit**
 
 ```bash
 git add custom_components/smart_charging/const.py custom_components/smart_charging/adapters/factory.py tests/adapters/test_factory.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add car_home/solar_forecast/home_day_external read roles (RA2)
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: add solar_forecast/home_day_external read roles (RA2)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -319,67 +262,22 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 3 checkpoint:** RA2 roles resolve through the factory; the home-day switch materializes
-> under the Smart Charging device and resets at a simulated midnight. (The reminder binary_sensor is
-> built in Phase 4, Task 4.3, after its only data source — M3's `is_due` — exists; project-plan §2's
-> own rule places C3 diagnostic entities after their writer, "for build-order reasons only".)
+> under the Smart Charging device and resets at a simulated midnight.
 
 ---
 
 ## Phase 4 — Notification Manager (M3) orchestration (HA harness)
 
 M3 is a package-root module (`notification_manager.py`, mirroring `coordinator.py` — design §7/§10),
-composing RA1/RA2/RA4 + the Store + the pure state machines. Honors **ADR-0011** (`charger_status`
-connect/disconnect re-derived by observing the adapter; no invented event) and **ADR-0009** (HA
+composing RA1/RA2/RA4 + the Store + the pure state machine. Honors **ADR-0011** (M3 consumes the
+`DeadlineUnreachableNotified` published event; it does not re-derive urgency) and **ADR-0009** (HA
 harness — Managers are HA-coupled). **Never** calls M1 directly (system-design §4 rule 5).
 
-### Task 4.1: UC10 reminder orchestration + due-state exposure
+### Task 4.1: UC08 prompt orchestration + response capture + home-day flag write
 
 **Files:**
 - Create: `custom_components/smart_charging/notification_manager.py`
 - Create: `tests/test_notification_manager.py`
-
-**Step 1: Failing tests** (HA harness) — the resolved deadline injected (design §0/§9,
-`TODO(E4/#255)`):
-
-```python
-async def test_sends_one_reminder_when_gate_holds(hass, ...):
-    """Home, disconnected, below active SOC limit (E3), deadline resolved + within lead time
-    (injected) -> exactly one notify send; a second evaluation sends nothing (UC10 de-dup)."""
-
-async def test_rearms_and_resends_after_connect_disconnect_cycle(hass, ...):
-    """charger_status disconnected->connected->disconnected (re-derived via the adapter, ADR-0011)
-    -> reminder can fire again (UC10 3a)."""
-
-async def test_rearms_on_departure_window_change(hass, ...):
-    """Injected resolved deadline changes -> reminder can fire again (UC10 3b)."""
-
-async def test_no_reminder_when_connected_or_soc_reached_or_no_deadline(hass, ...):
-    """UC10 exception flows -> no send; binary_sensor due-state is off."""
-
-async def test_binary_sensor_due_state_tracks_the_gate(hass, ...):
-    """is_due is True exactly while the UC10 gate holds (car home, disconnected, below limit,
-    within lead time) -- independent of Armed/Sent, matching entity-catalog's own definition
-    (design §5); feeds Task 4.3."""
-```
-
-**Step 2: Run** → FAIL. **Step 3: Implement** — the Manager reads `car_home`/`charger_status`/`ev_soc`
-(RA1/RA2), the active SOC limit via `resolve_active_soc_limit` (E3, reused), takes the injected
-resolved deadline, calls `evaluate_reminder` (Task 2.1), sends via RA4 (Task 1.2) on `should_send`,
-threads `ReminderState`, and exposes `is_due` for the binary_sensor. **Step 4: Run** → PASS.
-**Step 5: Commit**
-
-```bash
-git add custom_components/smart_charging/notification_manager.py tests/test_notification_manager.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add Notification Manager UC10 reminder orchestration (M3)
-
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
-```
-
-### Task 4.2: UC08 prompt orchestration + response capture + home-day flag write
-
-**Files:**
-- Modify: `custom_components/smart_charging/notification_manager.py`
-- Modify: `tests/test_notification_manager.py`
 
 **Step 1: Failing tests** (HA harness):
 
@@ -407,9 +305,10 @@ async def test_stale_prompt_response_is_not_misread(hass, ...):
     """A prior evening's response tag must not resolve tonight's prompt (RA4 stale-tag guard, §6)."""
 ```
 
-**Step 2: Run** → FAIL. **Step 3: Implement** — reads `solar_forecast`/`home_day_external`/`car_home`/
-`charger_status` + the evening-prompt options (comparing `solar_forecast` against
-`CONF_SOLAR_FORECAST_THRESHOLD_KWH`, Task 5.1), calls `evaluate_prompt` (Task 2.2), sends the
+**Step 2: Run** → `ImportError`. **Step 3: Implement** — reads `solar_forecast`/`home_day_external`/
+`charger_status` (UC08's sole "connected at home" signal — no `car_home` role, design §4) + the
+evening-prompt options (comparing `solar_forecast` against
+`CONF_SOLAR_FORECAST_THRESHOLD_KWH`, Task 5.1), calls `evaluate_prompt` (Task 2.1), sends the
 actionable payload via RA4, captures the response via RA4 `read()` (tag-keyed), writes the home-day
 flag through the Store on `write_flag`, and detects midnight via `dt_util.now()` date rollover
 (design §5 — no new timer). **Step 4: Run** → PASS. **Step 5: Commit**
@@ -421,33 +320,8 @@ git commit --author="Claude <noreply@anthropic.com>" -m "feat: add UC08 evening 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-### Task 4.3: Plug-in-reminder indicator (`binary_sensor.smart_charging_plug_in_reminder`, C3)
-
-**Create-if-not.** Honors ADR-0004 (owned entity) / ADR-0002 (`binary_sensor.py` at root) / ADR-0009.
-Realizes the entity-catalog "Reminders & prompts" row (`on` while a reminder is currently due, R12).
-Placed here, after Task 4.1 (not in Phase 3), because it depends on M3's `is_due` signal —
-project-plan §2's own rule places C3 diagnostic entities after their writer, "for build-order
-reasons only", not reclassified as anything but an owned entity (design §4).
-
-**Files:**
-- Create: `custom_components/smart_charging/binary_sensor.py`
-- Create: `tests/test_binary_sensor.py`
-
-**Step 1: Failing tests** (HA harness): `is_on` reflects M3's live UC10 due-state (the `is_due`
-signal Task 4.1 exposes) — `on` exactly while the UC10 gate holds, independent of Armed/Sent (design
-§5, entity-catalog's own definition — see success criterion 4); created under the Smart Charging
-device. **Step 2: Run** → FAIL. **Step 3: Implement** — `PlugInReminderBinarySensor(SmartChargingEntity,
-BinarySensorEntity)` reading M3's exposed due-state. **Step 4: Run** → PASS. **Step 5: Commit**
-
-```bash
-git add custom_components/smart_charging/binary_sensor.py tests/test_binary_sensor.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: add plug-in-reminder binary_sensor (C3, R12)
-
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
-```
-
-> **⎔ Phase 4 checkpoint:** M3 sends/de-dups UC10 reminders and runs the UC08 prompt lifecycle
-> end-to-end against mocked adapters/Store; the reminder binary_sensor tracks M3's due-state; no
+> **⎔ Phase 4 checkpoint:** M3 runs the UC08 prompt lifecycle
+> end-to-end against mocked adapters/Store; no
 > direct M1↔M3 call (assert no coordinator import in `notification_manager.py` beyond types).
 
 ---
@@ -466,12 +340,10 @@ Honors ADR-0005 (data/options split) / ADR-0003 (notify-target validation) / ADR
 **Step 1: Append constants** (design §3; catalog defaults cited, not re-derived):
 
 ```python
-CONF_REMINDER_LEAD_H = "reminder_lead_h"          # input_number.sc_reminder_lead_h
 CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
 CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
 CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # input_number.sc_solar_forecast_threshold_kwh
 
-DEFAULT_REMINDER_LEAD_H = 8.0
 DEFAULT_EVENING_PROMPT_ENABLED = True
 DEFAULT_EVENING_PROMPT_TIME = "18:00:00"
 DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
@@ -479,18 +351,18 @@ DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
 
 **Step 2: Failing tests** — the user flow accepts and stores the notify-target **data** field and
 validates it is a `notify`-domain entity (rejecting a non-notify entity, mirroring the existing
-platform-validation guard); the four reminder/prompt fields (including the forecast threshold, UC08
+platform-validation guard); the three prompt fields (including the forecast threshold, UC08
 precondition 2, design §3) seed into **options** with their `DEFAULT_*`; the options flow round-trips
 edits to each; a pre-existing entry reads each with its `DEFAULT_*` (no migration). **Note:**
 `sc_prompt_timeout_h` is deliberately **not** added (design §3/§9 — UC08 has no separate timeout;
 source doc wins). **Step 3: Run** → FAIL.
 **Step 4: Implement** — add the notify-target field to `MAPPING_SCHEMA` with `notify`-platform
-validation; add the four options fields to `OPTION_KEYS` + `_threshold_schema()`. **Step 5: Run** →
+validation; add the three options fields to `OPTION_KEYS` + `_threshold_schema()`. **Step 5: Run** →
 PASS. **Step 6: Commit**
 
 ```bash
 git add custom_components/smart_charging/const.py custom_components/smart_charging/config_flow.py tests/test_config_flow.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: map notify target + add reminder/prompt options (C4)
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: map notify target + add prompt options (C4)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -502,24 +374,24 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `tests/test_init.py`
 
 **Step 1: Failing tests** — setup builds the notify + RA2 adapters, instantiates the Notification
-Manager, registers the `SWITCH` and `BINARY_SENSOR` platforms, and schedules M3's periodic evaluation
+Manager, registers the `SWITCH` platform, and schedules M3's periodic evaluation
 (`async_track_time_interval` on the same control interval — the design §5 tick, a C1-style timer);
 teardown cancels the tick and the event listeners cleanly. **Step 2: Run** → FAIL.
 **Step 3: Implement** — thread the three new options into M3's config; add
-`Platform.SWITCH, Platform.BINARY_SENSOR` to `PLATFORMS`; store M3 in `hass.data[DOMAIN][entry_id]`;
+`Platform.SWITCH` to `PLATFORMS`; store M3 in `hass.data[DOMAIN][entry_id]`;
 register the tick via `entry.async_on_unload(async_track_time_interval(...))`. **Step 4: Run** → PASS.
 **Step 5: Commit**
 
 ```bash
 git add custom_components/smart_charging/__init__.py tests/test_init.py
-git commit --author="Claude <noreply@anthropic.com>" -m "feat: wire Notification Manager + switch/binary_sensor platforms at setup
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: wire Notification Manager + switch platform at setup
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 5 checkpoint:** a full config entry maps the notify target and round-trips the
-> reminder/prompt options; setup instantiates M3, schedules its tick, and registers all platforms;
-> the switch/binary_sensor appear on the device.
+> prompt options; setup instantiates M3, schedules its tick, and registers all platforms;
+> the switch appears on the device.
 
 ---
 
@@ -545,7 +417,7 @@ async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass, ..
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — subscribe M3 to the event bus
 (`hass.bus.async_listen(...)`, unsubscribed on unload); on receipt, send the notice via RA4. Leave a
-`TODO(E4/#255)`: the concrete signal name/payload is owned by E4's spec (design §9 open question 4) —
+`TODO(E4/#255)`: the concrete signal name/payload is owned by E4's spec (design §9 open question 3) —
 match it once E4 lands; until then the placeholder name defined here stands. **Step 4: Run** → PASS.
 **Step 5: Commit**
 
@@ -556,27 +428,19 @@ git commit --author="Claude <noreply@anthropic.com>" -m "feat: deliver R5 deadli
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-### Task 6.2: End-to-end HA-harness regression (UC10 + UC08)
+### Task 6.2: End-to-end HA-harness regression (UC08)
 
 **Files:** Create `tests/test_notifications_end_to_end.py`
 
 **Step 1: Failing tests** (HA harness), driven through `hass.config_entries` + M3's scheduled
 evaluation + fired action/`DeadlineUnreachableNotified` events against mocked entity states — not
-calling `notification_state` functions directly (Phase 2's job; this suite proves the wiring). The
-resolved deadline stays injected (design §0/§9):
+calling `notification_state` functions directly (Phase 2's job; this suite proves the wiring):
 
 ```python
-"""End-to-end HA-harness regression for UC10 (R12) and UC08 (R13), setup-to-teardown."""
-
-async def test_e2e_uc10_main_success_sends_one_reminder(hass, ...): ...
-async def test_e2e_uc10_rearms_on_connect_disconnect_cycle(hass, ...): ...       # 3a
-async def test_e2e_uc10_rearms_on_departure_window_change(hass, ...): ...        # 3b
-async def test_e2e_uc10_no_reminder_when_connected_or_charging(hass, ...): ...
-async def test_e2e_uc10_no_reminder_when_soc_at_or_above_limit(hass, ...): ...
-async def test_e2e_uc10_no_reminder_when_deadline_unresolved(hass, ...): ...
+"""End-to-end HA-harness regression for UC08 (R13), setup-to-teardown."""
 
 async def test_e2e_uc08_main_success_prompt_then_yes_sets_flag(hass, ...): ...
-async def test_e2e_uc08_no_response_leaves_flag_unset(hass, ...): ...           # 3a
+async def test_e2e_uc08_no_response_leaves_flag_unset(hass, ...): ...
 async def test_e2e_uc08_timeout_at_midnight_leaves_flag_unset(hass, ...): ...
 async def test_e2e_uc08_skips_when_prompt_disabled(hass, ...): ...              # 1a
 async def test_e2e_uc08_skips_when_forecast_below_threshold(hass, ...): ...     # 1b
@@ -589,7 +453,7 @@ Phases 1–5. **Step 4: Run** → PASS. **Step 5: Commit.**
 
 ```bash
 git add tests/test_notifications_end_to_end.py
-git commit --author="Claude <noreply@anthropic.com>" -m "test: add end-to-end HA-harness regression for UC10/UC08
+git commit --author="Claude <noreply@anthropic.com>" -m "test: add end-to-end HA-harness regression for UC08
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -599,11 +463,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Modify: `custom_components/smart_charging/strings.json` + `translations/en.json` (new config
   `notification_target_entity` label + `notify`-validation error; new options
-  `reminder_lead_h`/`evening_prompt_enabled`/`evening_prompt_time` labels; `switch.home_day` and
-  `binary_sensor.plug_in_reminder` entity names); `translations/nl.json` best-effort
-- Modify: `README.md` (Configuration table: notification target, reminder lead time, evening prompt
-  enable/time; move the plug-in reminder + evening prompt from "Deferred" to the feature list; note
-  R5-delivery is gated on the Deadline Engine)
+  `evening_prompt_enabled`/`evening_prompt_time`/`solar_forecast_threshold_kwh` labels;
+  `switch.home_day` entity name); `translations/nl.json` best-effort
+- Modify: `README.md` (Configuration table: notification target, evening prompt
+  enable/time, solar-forecast threshold; move the evening prompt from "Deferred" to the feature list;
+  note R5-delivery is gated on the Deadline Engine)
 
 **Step 1:** Run `python -m script.hassfest` (or the project's validation task) to confirm strings
 completeness. **Step 2: Commit.**
@@ -616,9 +480,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 6 / slice checkpoint:** `ruff check . && ruff format --check . && pytest -q` all green;
-> hassfest/HACS validation passes; a manual HA install can map a notify entity, receive a plug-in
-> reminder (de-dup + re-arm), receive and answer the evening home-day prompt (flag set on "yes",
-> unset on "no"/timeout), and — once E4 publishes `DeadlineUnreachableNotified` (Task 6.1's gate) —
-> receive the deadline-unreachable notice. The two deferred hookups (UC10's R14 deadline resolution;
-> the real `DeadlineUnreachableNotified` signal name) remain `TODO(E4/#255)`, tracked, not silently
-> built (design §0/§9).
+> hassfest/HACS validation passes; a manual HA install can map a notify entity, receive and answer
+> the evening home-day prompt (flag set on "yes", unset on "no"/timeout), and — once E4 publishes
+> `DeadlineUnreachableNotified` (Task 6.1's gate) — receive the deadline-unreachable notice. The
+> deferred hookup (the real `DeadlineUnreachableNotified` signal name) remains `TODO(E4/#255)`,
+> tracked, not silently built (design §0/§9).
