@@ -76,3 +76,26 @@ def test_row3_never_selects_solar_without_the_capability():
         "sun_is_down": False,
     }
     assert select_mode(**kwargs, available_modes=modes) != MODE_SOLAR
+
+
+def test_row1_wins_over_row2_even_when_urgent():
+    # First-match-wins (resolution-rules.md/design doc §8): a full battery (row 1)
+    # still selects Off even if the deadline is simultaneously urgent (row 2) --
+    # a full battery does not charge just because a deadline is close.
+    modes = frozenset({MODE_OFF, MODE_POWER, MODE_CAPTAR})
+    kwargs = {**BASE, "soc": 80.0, "urgent": True}
+    assert select_mode(**kwargs, available_modes=modes) == MODE_OFF
+
+
+def test_row2_wins_over_row3_even_during_a_solar_eligible_window():
+    # First-match-wins: an urgent deadline (row 2) escalates to Captar/Power even
+    # when row 3's solar-surplus condition also holds -- it never falls through to Solar.
+    modes = frozenset({MODE_OFF, MODE_POWER, MODE_CAPTAR, MODE_SOLAR})
+    kwargs = {
+        **BASE,
+        "urgent": True,
+        "sun_is_up": True,
+        "solar_surplus_sufficient": True,
+        "sun_is_down": False,
+    }
+    assert select_mode(**kwargs, available_modes=modes) == MODE_CAPTAR

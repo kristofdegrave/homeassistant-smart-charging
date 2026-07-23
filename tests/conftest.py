@@ -17,7 +17,7 @@ _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
 
 def _is_pure_logic_test(node: pytest.Item) -> bool:
-    """True when the test lives under a pure-logic dir (tests/modes, tests/engines)."""
+    """True when the test lives under a pure-logic dir (tests/modes, tests/engines, tests/profiles)."""
     return any(part in _PURE_DIRS for part in Path(str(node.path)).parts)
 
 
