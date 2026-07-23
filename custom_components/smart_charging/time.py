@@ -26,6 +26,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
+from .const import (
+    DAY_FRI,
+    DAY_MON,
+    DAY_SAT,
+    DAY_SUN,
+    DAY_THU,
+    DAY_TUE,
+    DAY_WED,
+    DEPARTURE_OVERRIDE_HOLIDAY,
+    DEPARTURE_OVERRIDE_HOME_DAY,
+)
 from .entity import SmartChargingEntity
 
 WEEKDAY_DEFAULT = time(6, 0)
@@ -33,19 +44,19 @@ WEEKDAY_DEFAULT = time(6, 0)
 # (id_suffix, default) pairs for the seven day-of-week entities, Monday first (R14: Mon-Fri
 # default 06:00, Sat/Sun default none).
 DAY_OF_WEEK_DEFAULTS: list[tuple[str, time | None]] = [
-    ("mon", WEEKDAY_DEFAULT),
-    ("tue", WEEKDAY_DEFAULT),
-    ("wed", WEEKDAY_DEFAULT),
-    ("thu", WEEKDAY_DEFAULT),
-    ("fri", WEEKDAY_DEFAULT),
-    ("sat", None),
-    ("sun", None),
+    (DAY_MON, WEEKDAY_DEFAULT),
+    (DAY_TUE, WEEKDAY_DEFAULT),
+    (DAY_WED, WEEKDAY_DEFAULT),
+    (DAY_THU, WEEKDAY_DEFAULT),
+    (DAY_FRI, WEEKDAY_DEFAULT),
+    (DAY_SAT, None),
+    (DAY_SUN, None),
 ]
 
 # The holiday/home-day overrides both default to none (R14).
 OVERRIDE_DEFAULTS: list[tuple[str, time | None]] = [
-    ("holiday", None),
-    ("home_day", None),
+    (DEPARTURE_OVERRIDE_HOLIDAY, None),
+    (DEPARTURE_OVERRIDE_HOME_DAY, None),
 ]
 
 
