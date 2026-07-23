@@ -174,8 +174,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._peak_tracked_month,
         )
         self._peak_tracked_kw = monthly_peak_kw
+        # Placeholder urgent=False reproduces today's row-2-only behavior; Task 5.3 wires the
+        # real resolved urgency (E4) into this call.
         effective_peak_limit_kw = resolve_effective_peak_limit(
-            monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
+            monthly_peak_kw,
+            self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
+            urgent=False,
         )
 
         if self.active_mode != self._last_active_mode:

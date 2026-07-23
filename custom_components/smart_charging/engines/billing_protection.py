@@ -1,13 +1,14 @@
 """Billing-Protection Engine (E5, part 1/2). Pure -- no HA imports (ADR-0006/0009).
 
-The row-2-only effective-peak-limit resolution (`resolution-rules.md` -- row 1,
-deadline urgency, is structurally inert without the Deadline Engine, E4, which
-doesn't exist yet -- see design doc 2026-07-20-captar-design.md Sec 6.1) and the
-R3 peak clamp with its grace-period breach tracker (Sec 6.2). The Peak-Demand
-Tracker is a SEPARATE sibling module, `engines/peak_demand_tracker.py` (Task
-1.3) -- ADR-0010's Decision names both modules explicitly and states they "stay
-two sibling modules ... their relationship is recorded by project-plan task E5
-bundling them, not by a directory."
+The full two-row effective-peak-limit resolution (`resolution-rules.md`): row 1
+raises to the maximum peak under deadline urgency (R5/C3, fed by the Deadline
+Engine, E4); row 2 (unchanged) is min(monthly, max), reached only when
+`urgent=False`. Also the R3 peak clamp with its grace-period breach tracker
+(Sec 6.2). The Peak-Demand Tracker is a SEPARATE sibling module,
+`engines/peak_demand_tracker.py` (Task 1.3) -- ADR-0010's Decision names both
+modules explicitly and states they "stay two sibling modules ... their
+relationship is recorded by project-plan task E5 bundling them, not by a
+directory."
 """
 
 from __future__ import annotations
@@ -16,8 +17,10 @@ import math
 from dataclasses import dataclass
 
 
-def resolve_effective_peak_limit(monthly_peak_kw: float, max_peak_kw: float) -> float:
-    """Row 2 of the effective-peak-limit rule: min(monthly peak, maximum peak) (C3)."""
+def resolve_effective_peak_limit(monthly_peak_kw: float, max_peak_kw: float, urgent: bool) -> float:
+    """Row 1: urgent -> max_peak_kw (R5/C3). Row 2 (unchanged): min(monthly, max)."""
+    if urgent:
+        return max_peak_kw
     return min(monthly_peak_kw, max_peak_kw)
 
 
