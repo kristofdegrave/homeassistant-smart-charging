@@ -7,7 +7,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache,
 )
 
-from custom_components.smart_charging.select import ModeSelect
+from custom_components.smart_charging.select import ModeSelect, ProfileSelect
 
 
 class _StubCoordinator:
@@ -107,3 +107,74 @@ def test_mode_options_compose_independently(solar_installed, captar_available, e
         captar_available=captar_available,
     )
     assert entity.options == expected
+
+
+class _StubProfileCoordinator:
+    """HA-harness test for the profile selector (C2, R16)."""
+
+    def __init__(self):
+        self.active_profile = None
+        self.refreshed = False
+
+    async def async_request_refresh(self):
+        self.refreshed = True
+
+
+def test_default_profile_is_manual():
+    entity = ProfileSelect(entry_id="abc", coordinator=_StubProfileCoordinator())
+    assert entity.current_option == "Manual"
+    assert entity.options == ["Manual", "Auto"]
+
+
+async def test_select_auto_pushes_to_coordinator_and_refreshes(hass):
+    coord = _StubProfileCoordinator()
+    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    await entity.async_select_option("Auto")
+    assert coord.active_profile == "Auto"
+    assert coord.refreshed is True
+    assert entity.current_option == "Auto"
+
+
+async def test_restores_prior_selection_across_restart(hass):
+    """Mirrors ModeSelect's RestoreEntity test: a restored 'Auto' state is adopted on
+    async_added_to_hass instead of resetting to the 'Manual' default."""
+    entity_id = "select.smart_charging_profile"
+    mock_restore_cache(hass, (State(entity_id, "Auto"),))
+    coord = _StubProfileCoordinator()
+    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    assert entity.current_option == "Auto"
+    assert coord.active_profile == "Auto"
+
+
+async def test_restore_rejects_unknown_option_falls_back_to_manual(hass):
+    """Mirrors ModeSelect's test_restore_rejects_*_option tests: a restored state that is no
+    longer a valid option (e.g. a renamed/removed profile) falls back to the Manual default
+    rather than adopting the invalid value."""
+    entity_id = "select.smart_charging_profile"
+    mock_restore_cache(hass, (State(entity_id, "Bogus"),))
+    coord = _StubProfileCoordinator()
+    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    assert entity.current_option == "Manual"
+    assert coord.active_profile == "Manual"
+
+
+async def test_profile_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
+    coord = _StubProfileCoordinator()
+    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+    platform = MockEntityPlatform(hass, domain="select")
+    await platform.async_add_entities([entity])
+    assert entity.current_option == "Manual"
+    assert coord.active_profile == "Manual"
+
+
+def test_profile_init_seeds_unique_id():
+    entity = ProfileSelect(entry_id="abc", coordinator=_StubProfileCoordinator())
+    assert entity.unique_id == "abc_profile"
