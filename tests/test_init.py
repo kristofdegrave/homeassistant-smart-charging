@@ -28,6 +28,7 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_RESERVE_SOC,
@@ -39,6 +40,7 @@ from custom_components.smart_charging.const import (
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
+    PROFILE_AUTO,
     STATE_CHARGING,
     STATE_CONNECTED,
 )
@@ -304,6 +306,37 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     assert config[CONF_SOLAR_STEP_THRESHOLD_PP] == 5.0
     assert config[CONF_SOLAR_RESERVE_SOC] == 70.0
     assert config[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 20.0
+
+
+async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass):
+    """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
+    CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
+    R9 reserve cap (coordinator.py's `resolve_active_soc_limit` read), not just into an inert
+    dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
+    reserve engages (UC07 main success scenario) at the *configured* 70.0, not
+    DEFAULT_SOLAR_RESERVE_SOC (60.0)."""
+    _seed_states(hass, status="Charging")
+    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    data = _entry_data()
+    data[CONF_SOLAR_FORECAST_ENTITY] = "sensor.solar_forecast"
+    options = _entry_options()
+    options[CONF_SOLAR_RESERVE_SOC] = 70.0
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator.active_profile = PROFILE_AUTO
+    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit")
+    assert float(hass.states.get(entity_id).state) == 70.0
 
 
 async def test_select_omits_captar_when_unavailable(hass):

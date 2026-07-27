@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from .adapters.factory import build_adapters
 from .const import (
+    CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
@@ -28,6 +29,7 @@ from .const import (
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
@@ -35,6 +37,7 @@ from .const import (
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
@@ -84,6 +87,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # coordinator.py's own fallback (PEAK_WINDOW_SECONDS, shared).
     peak_window_size = max(1, round(PEAK_WINDOW_SECONDS / interval_s))
     config = {
+        CONF_SOLAR_INSTALLED: entry.data.get(CONF_SOLAR_INSTALLED, False),
+        CONF_CAPTAR_AVAILABLE: entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
         CONF_MIN_CURRENT: min_current,
         CONF_MAX_CURRENT: max_current,
         CONF_GRID_CEILING_A: opts[CONF_GRID_CEILING_A],
