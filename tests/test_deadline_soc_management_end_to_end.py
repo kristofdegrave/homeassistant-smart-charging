@@ -133,8 +133,8 @@ def _seed_ample_peak_headroom(coordinator, kw=100.0):
     """A large historical peak (the same shape a MonthlyPeakSensor restore would seed) keeps
     R3's clamp out of the way of these tests, none of which exercise R3 itself."""
     now_dt = dt_util.now()
-    coordinator._peak_tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_tracked_kw = kw
+    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coordinator._peak_demand.tracked_kw = kw
 
 
 async def _setup(hass, *, data_overrides=None, option_overrides=None):

@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
+from custom_components.smart_charging.coordinator_cycle import PeakDemandState
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
     ActiveSocLimitSensor,
@@ -84,6 +85,7 @@ class _StubPeakCoordinator:
 
     def __init__(self, data=None):
         self.data = data
+        self._peak_demand = PeakDemandState()
 
     def async_add_listener(self, update_callback, context=None):
         return lambda: None
@@ -114,9 +116,9 @@ async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass
     await platform.async_add_entities([sensor])
 
     assert sensor.native_value == 3.4
-    assert coord._peak_tracked_kw == 3.4
-    assert coord._peak_tracked_month == (2026, 7)
-    assert not hasattr(coord, "_peak_window")
+    assert coord._peak_demand.tracked_kw == 3.4
+    assert coord._peak_demand.tracked_month == (2026, 7)
+    assert coord._peak_demand.window == ()
     assert sensor.extra_state_attributes == {"period_month": "2026-07"}
 
 
@@ -129,7 +131,7 @@ async def test_monthly_peak_sensor_starts_cold_when_no_restored_state(hass):
     await platform.async_add_entities([sensor])
 
     assert sensor.native_value == 0.0
-    assert getattr(coord, "_peak_tracked_kw", None) is None
+    assert coord._peak_demand.tracked_kw == 0.0
     assert sensor.extra_state_attributes == {"period_month": None}
 
 
@@ -137,10 +139,10 @@ async def test_monthly_peak_sensor_extra_state_attributes_reflect_live_coordinat
     """period_month must not freeze at the value restored on startup -- a mid-run month
     rollover the coordinator tracks needs to show up in the exposed attribute too."""
     coord = _StubPeakCoordinator()
-    coord._peak_tracked_month = (2026, 7)
+    coord._peak_demand.tracked_month = (2026, 7)
     sensor = MonthlyPeakSensor(entry_id="abc", coordinator=coord)
     assert sensor.extra_state_attributes == {"period_month": "2026-07"}
-    coord._peak_tracked_month = (2026, 8)
+    coord._peak_demand.tracked_month = (2026, 8)
     assert sensor.extra_state_attributes == {"period_month": "2026-08"}
 
 

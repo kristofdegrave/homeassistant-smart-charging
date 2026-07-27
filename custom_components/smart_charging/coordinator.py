@@ -79,6 +79,7 @@ from .const import (
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
 )
+from .coordinator_cycle import PeakDemandState
 from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
@@ -92,7 +93,6 @@ from .engines.deadline import (
     resolve_required_current,
 )
 from .engines.grid_safety import clamp_to_ceiling
-from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import (
     SolarStepUpState,
@@ -184,12 +184,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._mode_state = _fresh_mode_state()
         self._was_faulted = False
         # M1's OWN 15-minute window (E5, Task 1.3), distinct from R10's `_net_window` above --
-        # a MonthlyPeakSensor restore may seed `_peak_tracked_kw`/`_peak_tracked_month` before
+        # a MonthlyPeakSensor restore may seed `_peak_demand.tracked_kw`/`.tracked_month` before
         # the first cycle (Task 4.2); the window itself is deliberately never persisted (design
-        # doc Sec 6.4), so it always starts empty here.
-        self._peak_window: tuple[float, ...] = ()
-        self._peak_tracked_kw: float = 0.0
-        self._peak_tracked_month: tuple[int, int] | None = None
+        # doc Sec 6.4), so it always starts empty here. Owned by PeakDemandState (ADR-0012).
+        self._peak_demand = PeakDemandState()
         self._peak_tracker = PeakBreachTracker()
 
     async def _async_update_data(self) -> CycleResult:
@@ -222,25 +220,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # real wall-clock (dt_util.now()) for month rollover, distinct from the monotonic `now`
         # the mode state machines use below.
         now_dt = dt_util.now()
-        current_month = (now_dt.year, now_dt.month)
-        if current_month != self._peak_tracked_month:
-            # Month rollover resets the SMOOTHING WINDOW too, not just the tracked value --
-            # otherwise this cycle's "smoothed" reading would still partly reflect last month's
-            # raw samples (design doc Sec 6.4's month-rollover note).
-            self._peak_window = ()
         peak_window_size = self._config.get(
             CONF_PEAK_WINDOW_SIZE, max(1, round(PEAK_WINDOW_SECONDS / self._interval_s))
         )
-        smoothed_peak_w, self._peak_window = smooth_net_power(
-            net_w, self._peak_window, size=peak_window_size
-        )
-        monthly_peak_kw, self._peak_tracked_month = update_monthly_peak_demand(
-            smoothed_peak_w / 1000.0,
-            current_month,
-            self._peak_tracked_kw,
-            self._peak_tracked_month,
-        )
-        self._peak_tracked_kw = monthly_peak_kw
+        monthly_peak_kw = self._peak_demand.update(net_w, now_dt, window_size=peak_window_size)
         # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
         # known -- overwritten with the real `urgent` value once required-current resolves.
         effective_peak_limit_kw = resolve_effective_peak_limit(

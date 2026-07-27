@@ -105,8 +105,8 @@ def _seed_ample_peak_headroom(coordinator, kw=100.0):
     test can control the effective peak limit purely through options (see
     `tests/test_solar_end_to_end.py` for the identical pattern predating Captar's clamp)."""
     now_dt = dt_util.now()
-    coordinator._peak_tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_tracked_kw = kw
+    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coordinator._peak_demand.tracked_kw = kw
 
 
 def _effective_peak_limit_state(hass):
