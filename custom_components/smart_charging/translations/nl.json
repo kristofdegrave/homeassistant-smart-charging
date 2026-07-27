@@ -19,6 +19,7 @@
           "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
           "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
+          "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
@@ -39,10 +40,10 @@
           "captar_cooldown_min": "Afkoelduur Captar (min)",
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
-          "max_solar_soc": "Maximaal laadniveau zon-stapfunctie (%)",
-          "solar_step_pp": "Stapgrootte zon-stapfunctie (procentpunten)",
-          "solar_step_threshold_pp": "Drempelwaarde zon-stapfunctie (procentpunten)",
-          "solar_reserve_soc": "Reserveniveau zonnereserve (%)",
+          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
+          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
+          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
+          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
         }
       },
@@ -63,7 +64,8 @@
           "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
           "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
-          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)"
+          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
+          "low_tariff_entity": "Laagtarief-entiteit (optioneel)"
         }
       }
     },
@@ -98,10 +100,10 @@
           "captar_cooldown_min": "Afkoelduur Captar (min)",
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
-          "max_solar_soc": "Maximaal laadniveau zon-stapfunctie (%)",
-          "solar_step_pp": "Stapgrootte zon-stapfunctie (procentpunten)",
-          "solar_step_threshold_pp": "Drempelwaarde zon-stapfunctie (procentpunten)",
-          "solar_reserve_soc": "Reserveniveau zonnereserve (%)",
+          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
+          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
+          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
+          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
           "control_interval_s": "Regelinterval (s)"
         }

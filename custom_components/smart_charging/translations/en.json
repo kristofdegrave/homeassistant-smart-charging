@@ -19,6 +19,7 @@
           "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
           "departure_external_entity": "External departure-time entity (optional)",
           "home_day_external_entity": "External home-day entity (optional)",
+          "low_tariff_entity": "Low-tariff entity (optional)",
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)",
@@ -63,7 +64,8 @@
           "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
           "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
           "departure_external_entity": "External departure-time entity (optional)",
-          "home_day_external_entity": "External home-day entity (optional)"
+          "home_day_external_entity": "External home-day entity (optional)",
+          "low_tariff_entity": "Low-tariff entity (optional)"
         }
       }
     },

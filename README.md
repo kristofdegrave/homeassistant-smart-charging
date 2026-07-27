@@ -20,10 +20,10 @@ capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 > clamp available to `Power` mode too. Deadline-aware SOC management resolves
 > a departure-time-driven active charge limit (default limit, solar step-up,
 > and overnight solar-reserve cap) and escalates charging urgency as the
-> configured departure time approaches. Notifications and vehicle
-> charge-limit sync are **not implemented yet** — see
-> [Deferred](#deferred-not-in-this-mvp) below. See [CLAUDE.md](CLAUDE.md) for
-> the working method.
+> configured departure time approaches. Notifications, vehicle
+> charge-limit sync, and the runtime dashboard are **not implemented yet** —
+> see [Deferred](#deferred-not-in-this-mvp) below. See
+> [CLAUDE.md](CLAUDE.md) for the working method.
 
 ## Installation (HACS custom repository)
 
@@ -53,6 +53,7 @@ sets the initial thresholds:
 | EV battery capacity entity (optional) | `sensor` for the EV's sensed battery capacity (kWh); overrides the configured default when mapped |
 | External departure-time entity (optional) | External `sensor`/`input_datetime` overriding the built-in day-of-week departure-time entities |
 | External home-day entity (optional) | External `binary_sensor`/`input_boolean` overriding `switch.smart_charging_home_day` |
+| Low-tariff entity (optional) | `binary_sensor`/`input_boolean` reporting whether a low grid tariff is currently active; unmapped defaults to "always active" (single-tariff households) |
 | Nominal grid voltage, min/max current, grid ceiling, grid safety offset, default target current | Thresholds, editable anytime afterwards via **Configure** |
 | Smoothing window | Rolling-window sample count for surplus smoothing (R10) |
 | Solar start threshold, SolarOnly start threshold | Surplus power (W) required to start charging in each mode |
@@ -96,8 +97,10 @@ maximum peak)`); a sustained breach past the configured grace period forces a
 stop, with its own cooldown before restarting.
 `select.smart_charging_profile` chooses `Manual` (the mode selector above
 drives dispatch) or `Auto` (the coordinator selects the mode itself each
-cycle from solar surplus, the peak limit, low-tariff periods, and deadline
-urgency, in the same priority order as [What it does](#what-it-does) below).
+cycle, first match wins: `Off` once the active charge limit is reached;
+`Captar`/`Power` when the departure deadline is urgent; `Solar` while solar
+surplus is sufficient; `Captar` after sundown during a low-tariff period
+when the solar reserve isn't active; otherwise `Off`).
 `sensor.smart_charging_status` reports `Fault`/`OK`;
 `sensor.smart_charging_active_mode` reports the mode in effect;
 `sensor.smart_charging_monthly_peak_kw` reports the tracked rolling monthly
