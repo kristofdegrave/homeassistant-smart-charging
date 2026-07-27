@@ -6,17 +6,23 @@ Smart EV charging integration for Home Assistant — solar-first and
 capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 (three-phase later).
 
-> **Status: Power/Solar/SolarOnly/Captar modes.** This project follows an analysis-first,
-> spec-driven methodology — the documents under [`docs/analysis/`](docs/analysis/)
-> are the source of truth for the full design. The current code implements the
-> **Power**, **Solar**, **SolarOnly**, and **Captar** modes, selected manually via
-> `select.smart_charging_mode`: a target-current control loop with grid-safety
-> clamping (never exceed the configured grid ceiling), solar-surplus-driven
-> charging with start/hold/cooldown behaviour, and capacity-tariff (CapTar) peak
-> protection — a monthly-peak-aware charging mode with its own grace/cooldown
-> behaviour, plus an opt-in peak-respecting clamp available to `Power` mode too.
-> The `Auto` profile, deadline management, and notifications are **not
-> implemented yet** — see [Deferred](#deferred-not-in-this-mvp) below. See
+> **Status: Power/Solar/SolarOnly/Captar modes, Auto profile, deadline & SOC
+> management.** This project follows an analysis-first, spec-driven
+> methodology — the documents under [`docs/analysis/`](docs/analysis/) are the
+> source of truth for the full design. The current code implements the
+> **Power**, **Solar**, **SolarOnly**, and **Captar** modes (selectable
+> manually via `select.smart_charging_mode`, or automatically by the **Auto**
+> profile via `select.smart_charging_profile`): a target-current control loop
+> with grid-safety clamping (never exceed the configured grid ceiling),
+> solar-surplus-driven charging with start/hold/cooldown behaviour, and
+> capacity-tariff (CapTar) peak protection — a monthly-peak-aware charging
+> mode with its own grace/cooldown behaviour, plus an opt-in peak-respecting
+> clamp available to `Power` mode too. Deadline-aware SOC management resolves
+> a departure-time-driven active charge limit (default limit, solar step-up,
+> and overnight solar-reserve cap) and escalates charging urgency as the
+> configured departure time approaches. Notifications, vehicle
+> charge-limit sync, and the runtime dashboard are **not implemented yet** —
+> see [Deferred](#deferred-not-in-this-mvp) below. See
 > [CLAUDE.md](CLAUDE.md) for the working method.
 
 ## Installation (HACS custom repository)
@@ -43,6 +49,11 @@ sets the initial thresholds:
 | Solar installed | Toggle that offers `Solar`/`SolarOnly` in the mode selector; requires the EV SOC entity to be mapped |
 | CapTar available | Toggle (default on) that offers `Captar` in the mode selector; requires the EV SOC entity to be mapped |
 | EV state-of-charge entity (required if Solar installed or CapTar available) | `sensor` for the EV's state of charge (%) |
+| Solar forecast entity (required if Solar installed) | `sensor` for the next-day solar production forecast (kWh), gates the overnight solar-reserve cap |
+| EV battery capacity entity (optional) | `sensor` for the EV's sensed battery capacity (kWh); overrides the configured default when mapped |
+| External departure-time entity (optional) | External `sensor`/`input_datetime` overriding the built-in day-of-week departure-time entities |
+| External home-day entity (optional) | External `binary_sensor`/`input_boolean` overriding `switch.smart_charging_home_day` |
+| Low-tariff entity (optional) | `binary_sensor`/`input_boolean` reporting whether a low grid tariff is currently active; unmapped defaults to "always active" (single-tariff households) |
 | Nominal grid voltage, min/max current, grid ceiling, grid safety offset, default target current | Thresholds, editable anytime afterwards via **Configure** |
 | Smoothing window | Rolling-window sample count for surplus smoothing (R10) |
 | Solar start threshold, SolarOnly start threshold | Surplus power (W) required to start charging in each mode |
@@ -54,6 +65,17 @@ sets the initial thresholds:
 | CapTar peak grace period (min) | How long a peak breach must persist before Captar force-stops charging (the headroom clamp itself applies every cycle; avoids stopping on brief spikes) |
 | Captar cooldown duration (min) | Minutes Captar must wait after a sustained-breach stop before it may restart |
 | Power mode respects the peak limit | Opt-out (default on, R17): when enabled, `Power` mode also clamps to the effective peak limit instead of only the grid ceiling |
+| Default EV battery capacity (kWh) | Fallback used by the required-current/urgency formula when no EV battery capacity entity is mapped |
+| Solar step-up maximum SOC (%), step size, trigger threshold (percentage points) | How far and how often the active charge limit steps up above the default while solar surplus persists |
+| Solar-reserve SOC cap (%), forecast threshold (kWh) | Overnight cap on the active charge limit, and the next-day forecast (kWh) below which the reserve activates |
+
+Nine `time` entities (`time.smart_charging_departure_mon` … `_sun`, plus
+`_holiday` and `_home_day` overrides) and `switch.smart_charging_home_day`
+configure *when* the EV must be ready: one departure time per day of the week
+(Mon–Fri default 06:00, Sat/Sun default unset), an override for public
+holidays, and an override used whenever `switch.smart_charging_home_day` is
+on (a daily flag that resets at local midnight, settable directly or via the
+optional external home-day entity above).
 
 Entity-role mappings can be changed later via **Reconfigure** (this re-validates
 and reloads the integration). Thresholds and the control interval can be changed
@@ -73,17 +95,24 @@ control loop tracks the rolling monthly peak and clamps the target current to
 stay a safety margin below the effective peak limit (`min(monthly peak, CapTar
 maximum peak)`); a sustained breach past the configured grace period forces a
 stop, with its own cooldown before restarting.
+`select.smart_charging_profile` chooses `Manual` (the mode selector above
+drives dispatch) or `Auto` (the coordinator selects the mode itself each
+cycle, first match wins: `Off` once the active charge limit is reached;
+`Captar`/`Power` when the departure deadline is urgent; `Solar` while solar
+surplus is sufficient; `Captar` after sundown during a low-tariff period
+when the solar reserve isn't active; otherwise `Off`).
 `sensor.smart_charging_status` reports `Fault`/`OK`;
 `sensor.smart_charging_active_mode` reports the mode in effect;
 `sensor.smart_charging_monthly_peak_kw` reports the tracked rolling monthly
 peak (kW); `sensor.smart_charging_effective_peak_limit` reports the peak limit
-currently in force (kW).
+currently in force (kW); `sensor.smart_charging_active_soc_limit` reports the
+resolved active charge limit (%) after any solar step-up/solar-reserve
+adjustment.
 
 ## Deferred (not in this MVP)
 
-The `Auto` profile; SOC-target/deadline management; notifications; vehicle
-charge-limit sync; the runtime dashboard. These are later slices of
-[`docs/design/project-plan.md`](docs/design/project-plan.md).
+Notifications; vehicle charge-limit sync; the runtime dashboard. These are
+later slices of [`docs/design/project-plan.md`](docs/design/project-plan.md).
 
 ## What it does
 

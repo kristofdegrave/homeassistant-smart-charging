@@ -15,6 +15,11 @@
           "solar_installed": "Solar installed",
           "captar_available": "CapTar available",
           "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
+          "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
+          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
+          "departure_external_entity": "External departure-time entity (optional)",
+          "home_day_external_entity": "External home-day entity (optional)",
+          "low_tariff_entity": "Low-tariff entity (optional)",
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)",
@@ -33,7 +38,13 @@
           "max_peak_kw": "CapTar maximum peak (kW)",
           "peak_grace_min": "CapTar peak grace period (min)",
           "captar_cooldown_min": "Captar cooldown duration (min)",
-          "power_respect_peak": "Power mode respects the peak limit"
+          "power_respect_peak": "Power mode respects the peak limit",
+          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
+          "max_solar_soc": "Solar step-up maximum SOC (%)",
+          "solar_step_pp": "Solar step-up step size (percentage points)",
+          "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
+          "solar_reserve_soc": "Solar-reserve SOC cap (%)",
+          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
         }
       },
       "reconfigure": {
@@ -49,7 +60,12 @@
           "grid_voltage_entity": "Grid voltage entity (optional)",
           "solar_installed": "Solar installed",
           "captar_available": "CapTar available",
-          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)"
+          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
+          "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
+          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
+          "departure_external_entity": "External departure-time entity (optional)",
+          "home_day_external_entity": "External home-day entity (optional)",
+          "low_tariff_entity": "Low-tariff entity (optional)"
         }
       }
     },
@@ -83,6 +99,12 @@
           "peak_grace_min": "CapTar peak grace period (min)",
           "captar_cooldown_min": "Captar cooldown duration (min)",
           "power_respect_peak": "Power mode respects the peak limit",
+          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
+          "max_solar_soc": "Solar step-up maximum SOC (%)",
+          "solar_step_pp": "Solar step-up step size (percentage points)",
+          "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
+          "solar_reserve_soc": "Solar-reserve SOC cap (%)",
+          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)",
           "control_interval_s": "Control interval (s)"
         }
       }
@@ -100,6 +122,9 @@
     "select": {
       "mode": {
         "name": "Mode"
+      },
+      "profile": {
+        "name": "Profile"
       }
     },
     "sensor": {
@@ -114,11 +139,43 @@
       },
       "effective_peak_limit": {
         "name": "Effective peak limit"
+      },
+      "active_soc_limit": {
+        "name": "Active charge limit"
       }
     },
     "switch": {
       "home_day": {
         "name": "Home day"
+      }
+    },
+    "time": {
+      "departure_mon": {
+        "name": "Monday departure time"
+      },
+      "departure_tue": {
+        "name": "Tuesday departure time"
+      },
+      "departure_wed": {
+        "name": "Wednesday departure time"
+      },
+      "departure_thu": {
+        "name": "Thursday departure time"
+      },
+      "departure_fri": {
+        "name": "Friday departure time"
+      },
+      "departure_sat": {
+        "name": "Saturday departure time"
+      },
+      "departure_sun": {
+        "name": "Sunday departure time"
+      },
+      "departure_holiday": {
+        "name": "Public-holiday departure time"
+      },
+      "departure_home_day": {
+        "name": "Home-day departure time"
       }
     }
   }
