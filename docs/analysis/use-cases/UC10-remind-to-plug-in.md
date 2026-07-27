@@ -14,6 +14,7 @@
 - The car is home (`car_home`).
 - [Charger status](../system-overview.md#ubiquitous-language) is `disconnected`.
 - State of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`, R7).
+- The [deadline capability](../system-overview.md#ubiquitous-language) is present (R18). When it is absent no departure time is ever resolved, so this use-case never applies at all.
 - The next departure time is resolved to an actual deadline, not "no deadline" (`resolution-rules.md`'s Departure deadline rule, R14 — which may fall on a later day than today, e.g. an evening reminder ahead of tomorrow's departure).
 
 ## Trigger
@@ -101,7 +102,7 @@ stateDiagram-v2
 
 - **R12** — Plug-in reminder notification (all three acceptance criteria: the single notification within the configured lead time of the next departure time; the connect/disconnect de-dup rule for the same departure window; and no reminder while already connected or already at/above the active SOC limit).
 
-Inherited from the shared mechanism (referenced, not restated): the departure-deadline resolution and its next-departure-time note (R14, `resolution-rules.md`), the active-SOC-limit resolution (R7, `resolution-rules.md`), and `charger status`'s canonical values (`system-overview.md`).
+Inherited from the shared mechanism (referenced, not restated): the deadline-capability gate on this use-case as a whole (R18); the departure-deadline resolution and its next-departure-time note (R14, `resolution-rules.md`), the active-SOC-limit resolution (R7, `resolution-rules.md`), and `charger status`'s canonical values (`system-overview.md`).
 
 ## Relationships
 

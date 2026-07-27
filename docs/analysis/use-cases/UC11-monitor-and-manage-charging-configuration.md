@@ -60,12 +60,15 @@ whenever a human looks at or edits the dashboard.
 
 ## Alternate flows
 
-**4a — Solar capability absent** — branches from step 4.
-Given the solar capability (`sc_solar_available`) is off (R18)
+**4a — A capability is absent** — branches from step 4.
+Given any [capability](../system-overview.md#ubiquitous-language) is off (R18) — currently solar
+(`sc_solar_available`) or deadline management (`sc_deadline_available`)
 When the System renders the runtime configuration section
-Then every solar-dependent runtime entity (e.g. the solar-reserve cap default) is omitted, exactly
-as `Solar`/`SolarOnly` are omitted from the active-mode selector under R18 — the dashboard never
-shows a runtime control for a behaviour the installation cannot exercise.
+Then every runtime entity that capability gates is omitted: the solar-dependent entities (e.g. the
+solar-reserve cap default) without the solar capability, and the departure-time rows without the
+deadline capability — exactly as `Solar`/`SolarOnly` are omitted from the active-mode selector
+under R18. The dashboard never shows a runtime control for a behaviour the installation cannot
+exercise.
 
 **5a — Edited value is out of its configured range** — branches from step 5.
 Given the user attempts to set a runtime value outside its configured minimum/maximum (e.g. a
@@ -86,7 +89,8 @@ every other section of the dashboard continues to render normally.
 ## Postconditions
 
 - Every entity `entity-catalog.md` classifies as runtime configuration is both visible and settable
-  from the dashboard; no entity classified as install-time configuration is presented on it —
+  from the dashboard, except those gated by an absent capability (4a, R18); no entity classified as
+  install-time configuration is presented on it —
   install-time configuration remains reachable only through the integration's configuration flow
   (R19).
 - The current charging status (charger status, active profile, active mode, active SOC limit,
@@ -125,14 +129,15 @@ flowchart TD
 
 ## Requirements satisfied
 
-- **R19** — Runtime dashboard (all five acceptance criteria: charging-status display; solar
-  surplus/net import display; every runtime entity visible and settable; no install-time entity
-  shown; new runtime entities require no dashboard-specific logic change).
+- **R19** — Runtime dashboard (all six acceptance criteria: charging-status display; solar
+  surplus/net import display; every runtime entity visible and settable; runtime entities gated by
+  an absent capability omitted; no install-time entity shown; new runtime entities require no
+  dashboard-specific logic change).
 
 Inherited from the shared mechanism (referenced, not restated): the [install-time / runtime
 configuration](../system-overview.md#ubiquitous-language) classification and the `Setup` column in
 `entity-catalog.md`; the active-SOC-limit resolution (R7) and departure-deadline resolution (R14)
-that a runtime edit here ultimately feeds; the solar-capability gating of runtime entities (R18).
+that a runtime edit here ultimately feeds; the capability gating of runtime entities (R18).
 
 ## Relationships
 
@@ -144,5 +149,7 @@ that a runtime edit here ultimately feeds; the solar-capability gating of runtim
   computed by `control-cycle.md` and `resolution-rules.md`; a runtime edit it forwards is consumed
   by whichever of UC01–UC10 or `resolution-rules.md` reads that entity. This use-case neither
   computes charging behaviour nor overrides it.
-- Gated by the solar capability (R18) for solar-dependent runtime entities, the same gating
-  `select.smart_charging_mode`'s selector already applies (`entity-catalog.md`).
+- Gated by the declared capabilities (R18) for the runtime entities each one gates — solar-dependent
+  entities under the solar capability, the departure-time rows under the deadline capability — the
+  same gating `select.smart_charging_mode`'s selector already applies for modes
+  (`entity-catalog.md`).

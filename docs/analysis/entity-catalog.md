@@ -69,6 +69,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_boolean.sc_solar_available` | config | install-time | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user |
 | `input_boolean.sc_captar_available` | config | install-time | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user |
+| `input_boolean.sc_deadline_available` | config | install-time | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 
@@ -210,6 +211,11 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 ### Departure times
 
+*All rows in this subgroup are conditional on the [deadline capability](system-overview.md#ubiquitous-language)
+(`sc_deadline_available`, R18); when it is off they are neither offered nor required, and no
+departure deadline is ever resolved. The Home day subgroup below is **not** gated by it — the
+home-day flag also drives the solar-reserve cap (R9).*
+
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `time.smart_charging_departure_<dow>` | config | runtime | time | 06:00 Mon–Fri; none Sat–Sun | [departure deadline](system-overview.md#ubiquitous-language) day-of-week default (R14) — seven entities, `mon`…`sun` | resolution-rules, UC11 | user, UC11 |
@@ -224,7 +230,7 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 | `home_day_external` | adapter role | — | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules, UC08 | — |
 | `switch.smart_charging_home_day` | state | runtime | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC08, UC11 | UC08, UC11 |
 
-The home-day flag drives the solar-reserve cap (R9) and the home-day departure override (R14). How it is set is deliberately left open (R13) — currently via the evening prompt (UC08) or an external source (NF3).
+The home-day flag drives the solar-reserve cap (R9) and, while the deadline capability is present (R18), the home-day departure override (R14). How it is set is deliberately left open (R13) — currently via the evening prompt (UC08) or an external source (NF3).
 
 > **Id note.** ADR-0004 illustratively named this owned switch `switch.smart_charging_wfh`. This catalog deliberately uses `switch.smart_charging_home_day` to match the settled "home-day flag" ubiquitous-language term (broader than work-from-home — also weekends and holidays); the ADR's `wfh` was an illustrative example, not a binding id.
 
@@ -271,6 +277,15 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
 - **Captar-dependent entities are conditional on the CapTar capability (R18).** When
   `sc_captar_available` is off, `sc_captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly.
+- **Deadline-dependent entities are conditional on the deadline capability (R18).** When
+  `sc_deadline_available` is off, the *Departure times* subgroup and `sc_reminder_lead_h` are not
+  required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
+  for the full behavioural consequence). Two binding-level notes this catalog is authoritative for:
+  `sc_ev_battery_capacity_kwh` / the `ev_battery_capacity` role still resolve but feed nothing,
+  since the required-current computation is their only consumer; and the *Home day* subgroup and
+  `sc_evening_prompt_*` are **not** gated, because the home-day flag independently drives the
+  solar-reserve cap (R9). Unlike the solar and CapTar capabilities, this one removes no option from
+  `select.smart_charging_mode`.
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
   manual selection; without the CapTar capability, `Captar` is not offered for manual selection.
@@ -289,7 +304,8 @@ The home-day flag drives the solar-reserve cap (R9) and the home-day departure o
   (per ADR-0004) moved only the integration's owned **control and diagnostic** entities to native
   `smart_charging_` platform entities (the `select`/`number`/`time`/`switch`/`sensor`/`binary_sensor`
   rows above). Every install-time / tuning threshold and the capability flag are **unchanged here**
-  and stay as `input_*.sc_*` helpers (e.g. `sc_solar_available`, `sc_captar_available`, `sc_control_interval_s`,
+  and stay as `input_*.sc_*` helpers (e.g. `sc_solar_available`, `sc_captar_available`,
+  `sc_deadline_available`, `sc_control_interval_s`,
   `sc_grid_supply_ceiling_a`, `sc_max_peak_kw`, `sc_min_current_a`/`sc_max_current_a`, the
   `sc_solar_*` thresholds, `sc_prompt_timeout_h`, `sc_reminder_lead_h`, `sc_evening_prompt_*`).
   A few runtime user-set values also intentionally stay `sc_` for now because ADR-0004 does not

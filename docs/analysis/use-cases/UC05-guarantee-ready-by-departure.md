@@ -12,6 +12,7 @@
 ## Preconditions
 
 - The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`), state of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`), and the dispatched mode has computed its own desired current for this cycle (`control-cycle.md`, step 4). The **baseline mode** — the mode that would be active absent any deadline-driven mode escalation — is the dispatched mode itself under `Manual` (which never escalates the mode), or whichever mode Auto mode-selection's rows 3–5 would otherwise select under `Auto`.
+- The [deadline capability](../system-overview.md#ubiquitous-language) is present (R18). When it is absent this use-case never applies at all — no deadline is ever resolved, so urgency cannot arise.
 - A [departure deadline](../system-overview.md#ubiquitous-language) is resolved for today — not "no deadline" (`resolution-rules.md`).
 
 ## Trigger
@@ -120,7 +121,7 @@ stateDiagram-v2
 
 - **R5** — Departure deadline guarantee (urgency detection; the effective-peak-limit raise shared by both profiles; `Auto`'s additional mode-selection escalation to `Captar` (CapTar capability present) or `Power` (absent, R18); high-tariff permission; never raising the active SOC limit; and the deadline-unreachable notification, triggered against the maximum permitted rate).
 
-Inherited from the shared mechanism (referenced, not restated): the required-current computation, the effective-peak-limit resolution, and Auto mode-selection (all `resolution-rules.md`); the departure-deadline resolution (R14); the active-SOC-limit resolution (R7, which neither lever raises); the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps (`control-cycle.md`); and the EV battery capacity configuration parameter (R15, `requirements.md`) that feeds the required-current computation.
+Inherited from the shared mechanism (referenced, not restated): the deadline-capability gate on this use-case as a whole and the CapTar-capability branch within it (R18); the required-current computation, the effective-peak-limit resolution, and Auto mode-selection (all `resolution-rules.md`); the departure-deadline resolution (R14); the active-SOC-limit resolution (R7, which neither lever raises); the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps (`control-cycle.md`); and the EV battery capacity configuration parameter (R15, `requirements.md`) that feeds the required-current computation.
 
 ## Relationships
 
