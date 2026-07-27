@@ -45,7 +45,8 @@ charges to this resolved value — it has no opinion on *why* the limit is where
   whichever limit this table returns. A departure deadline resolved for tomorrow and the
   solar-reserve cap (row 1) are mutually exclusive (R9): the deadline takes priority, so row 1
   never matches while one is resolved, and deadline urgency can therefore never coincide with the
-  cap.
+  cap. Without the deadline capability (R18) no deadline is ever resolved, so row 1's "no deadline
+  for tomorrow" condition is always satisfied and the cap turns on its remaining conditions alone.
 - Without the solar capability (R18), rows 1–2 are inert: no solar mode ever runs (so no
   step-up), and the solar-reserve inputs are not configured, so the table returns the default.
 
@@ -59,6 +60,14 @@ Resolves the [departure deadline](system-overview.md#ubiquitous-language) for th
 Priority order: external sensor → public-holiday / home-day override → day-of-week default.
 **Any row may resolve to "no deadline,"** in which case no deadline applies that day (R5 forces
 no charging and R12 sends no reminder).
+
+**This rule is evaluated only while the [deadline capability](system-overview.md#ubiquitous-language)
+is present (R18).** When it is absent none of the inputs below is configured at all, the rule does
+not run, and no deadline is ever resolved — for today or for any day ahead. Every consumer then
+behaves exactly as it does under "no deadline": the required-current rule computes nothing, so
+deadline urgency never engages and the effective-peak-limit rule never takes its urgency row (R5);
+Auto mode-selection row 2 never matches (R16); the plug-in reminder never fires (R12); and the
+solar-reserve cap's one-day-ahead "no deadline" precondition is always satisfied (R9).
 
 | Priority | Condition | Departure deadline |
 | --- | --- | --- |
@@ -90,7 +99,8 @@ applies.
 - **Energy needed** = EV battery capacity (R15, sensed or configured) × (active SOC limit −
   current state of charge) ÷ 100.
 - **Time remaining** = the departure deadline above − now. When the departure deadline has
-  resolved to "no deadline," no required current is computed and deadline urgency never applies.
+  resolved to "no deadline" — or the deadline capability is absent, so no deadline is resolved at
+  all (R18) — no required current is computed and deadline urgency never applies.
 - **[Required current](system-overview.md#ubiquitous-language)** = energy needed ÷ time
   remaining, converted to amperes via the resolved supply voltage (NF4).
 - Deadline urgency is in effect for as long as the required current exceeds the desired current
@@ -116,7 +126,7 @@ otherwise it is the lesser of the billed peak and the configured maximum.
 
 | Priority | Condition | Effective peak limit |
 | --- | --- | --- |
-| 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
+| 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5 — possible only while the [deadline capability](system-overview.md#ubiquitous-language) is present, R18) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
 | 2 | Otherwise (normal operation) | `min(`[monthly peak demand](system-overview.md#ubiquitous-language)`, maximum peak)` |
 
 - This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
@@ -198,6 +208,10 @@ escalation and revert happen automatically.
   not adapt to how urgent the deadline is and may still leave it unmet, in which case R5's
   unreachable-deadline notification still applies. Reverts the same way row 2 always does, once
   urgency no longer holds.
+- **Without the deadline capability, row 2 never matches (R18).** No deadline is ever resolved, so
+  no required current is computed and urgency cannot arise; Auto selection falls straight through
+  to rows 3–5, and the `Power` carve-out above — which exists only for row 2 — is unreachable. This
+  is independent of the CapTar capability: `Auto` simply never has a deadline to escalate for.
 - **`Manual` needs no table:** under `Manual` the active mode is whatever the user or an
   external source sets directly (R16, NF1); this rule does not apply.
 

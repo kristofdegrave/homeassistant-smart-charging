@@ -31,7 +31,8 @@ has no charging mode of its own.
   threshold (default 12 kWh).
 - No [departure deadline](../system-overview.md#ubiquitous-language) is resolved for tomorrow
   (`resolution-rules.md`, R14, evaluated one day ahead) — if one is, the deadline takes priority
-  and this use case does not apply.
+  and this use case does not apply. Without the [deadline capability](../system-overview.md#ubiquitous-language)
+  (R18) no deadline is ever resolved, so this precondition is always satisfied.
 
 ## Trigger
 
