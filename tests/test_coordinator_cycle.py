@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from custom_components.smart_charging.const import STATE_CHARGING
-from custom_components.smart_charging.coordinator_cycle import CycleContext
+from custom_components.smart_charging.coordinator_cycle import CycleContext, PeakDemandState
 
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
@@ -54,3 +54,38 @@ def test_cycle_context_is_mutable_and_filled_progressively():
     )
     ctx.surplus_w = 500.0
     assert ctx.surplus_w == 500.0
+
+
+def test_peak_demand_state_accumulates_within_same_month():
+    """PeakDemandState.update (ADR-0012) wraps signal_conditioning.smooth_net_power +
+    peak_demand_tracker.update_monthly_peak_demand: within the same month the running peak is
+    the max of the smoothed kW readings seen so far."""
+    state = PeakDemandState()
+    state.update(2000.0, datetime(2026, 7, 1, 0, 0), window_size=1)
+    peak = state.update(1000.0, datetime(2026, 7, 2, 0, 0), window_size=1)
+    assert peak == 2.0  # kW -- max(2.0, 1.0)
+
+
+def test_peak_demand_state_threads_window_size_and_averages_within_the_month():
+    """Distinct from the two tests above: proves window_size is actually threaded through to
+    smooth_net_power (not hard-coded/dropped) and that the smoothed *mean* -- not the raw last
+    sample -- is what reaches update_monthly_peak_demand. window_size=1 or identical samples
+    would let a broken implementation pass the other two tests undetected."""
+    state = PeakDemandState()
+    state.update(2000.0, datetime(2026, 7, 1, 0, 0), window_size=2)
+    peak = state.update(0.0, datetime(2026, 7, 1, 0, 5), window_size=2)
+    assert state.window == (2000.0, 0.0)  # both samples kept -- window preserved within the month
+    assert peak == 2.0  # running peak still 2.0 kW -- the 1.0 kW mean of this cycle doesn't beat it
+
+
+def test_peak_demand_state_resets_window_and_tracked_kw_on_month_rollover():
+    """A month rollover resets both the smoothing window and tracked_kw (design doc Sec 6.4) --
+    window_size=2 so the pre-rollover window would carry 2 samples if NOT cleared, proving the
+    reset actually happens (window_size=1 would always show a 1-element window regardless, since
+    smooth_net_power always appends the new sample before returning)."""
+    state = PeakDemandState()
+    state.update(5000.0, datetime(2026, 7, 30, 0, 0), window_size=2)
+    state.update(5000.0, datetime(2026, 7, 31, 0, 0), window_size=2)
+    peak = state.update(1000.0, datetime(2026, 8, 1, 0, 0), window_size=2)
+    assert peak == 1.0  # not max(5.0, 1.0) -- rollover resets tracked_kw to this cycle's reading
+    assert state.window == (1000.0,)  # only this cycle's sample -- last month's were cleared
