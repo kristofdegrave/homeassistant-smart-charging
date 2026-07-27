@@ -29,6 +29,6 @@ label adr         5319e7 "Architecture Decision Record"
 label specs       006b75 "Specification work (reserved — drafter not wired yet)"
 label development c5def5 "Implementation work (reserved — drafter not wired yet)"
 label testing     bfd4f2 "Test-authoring work (reserved — drafter not wired yet)"
-label workflow    e99695 "CI/skill/agent-authoring change (no auto-drafter; review wiring pending #388)"
+label workflow    e99695 "CI/skill/agent-authoring change (review only — no auto-drafter)"
 
 echo "Labels created/updated."
