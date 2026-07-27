@@ -13,12 +13,14 @@ from custom_components.smart_charging.const import (
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
@@ -26,7 +28,11 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_INSTALLED,
+    CONF_SOLAR_RESERVE_SOC,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     DOMAIN,
     MODE_CAPTAR,
@@ -267,6 +273,37 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
 
     assert hass.states.get("sensor.smart_charging_status").state == "OK"
     assert calls[-1]["value"] == 10.0  # default_target_current, unclamped by R3.
+
+
+async def test_setup_threads_deadline_and_soc_management_options_into_coordinator_config(hass):
+    """#327 (T6.1): setup must wire the Deadline & SOC Management epic's options (Phase 3's
+    CONF_EV_BATTERY_CAPACITY_KWH/CONF_MAX_SOLAR_SOC/CONF_SOLAR_STEP_PP/
+    CONF_SOLAR_STEP_THRESHOLD_PP/CONF_SOLAR_RESERVE_SOC/CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    consumed via `self._config.get(...)` in coordinator.py's R8/R9/R15 wiring) into the
+    coordinator's config dict as non-default overrides, not just fall back to the coordinator's
+    own internal defaults."""
+    _seed_states(hass, status="Charging")
+    options = _entry_options()
+    options[CONF_EV_BATTERY_CAPACITY_KWH] = 60.0
+    options[CONF_MAX_SOLAR_SOC] = 90.0
+    options[CONF_SOLAR_STEP_PP] = 10.0
+    options[CONF_SOLAR_STEP_THRESHOLD_PP] = 5.0
+    options[CONF_SOLAR_RESERVE_SOC] = 70.0
+    options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] = 20.0
+
+    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    config = coordinator._config
+    assert config[CONF_EV_BATTERY_CAPACITY_KWH] == 60.0
+    assert config[CONF_MAX_SOLAR_SOC] == 90.0
+    assert config[CONF_SOLAR_STEP_PP] == 10.0
+    assert config[CONF_SOLAR_STEP_THRESHOLD_PP] == 5.0
+    assert config[CONF_SOLAR_RESERVE_SOC] == 70.0
+    assert config[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 20.0
 
 
 async def test_select_omits_captar_when_unavailable(hass):
