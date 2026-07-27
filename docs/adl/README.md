@@ -18,5 +18,6 @@ template.
 | [0009](0009-testing-strategy.md) | Testing strategy | Accepted |
 | [0010](0010-engines-package-home.md) | Package home for the cross-cutting engines | Accepted |
 | [0011](0011-cross-manager-coordination-via-domain-events.md) | Cross-Manager coordination via domain events | Accepted |
+| [0012](0012-coordinator-internal-decomposition.md) | Coordinator internal decomposition (Strategy + extracted state owners) | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
