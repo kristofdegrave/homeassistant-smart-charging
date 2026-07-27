@@ -26,9 +26,9 @@ label needs-approval b60205 "PR: automatic review/fix cap reached — a maintain
 label uc          1d76db "Use-case analysis document"
 label requirement 0052cc "Requirement / constraint / glossary change"
 label adr         5319e7 "Architecture Decision Record"
-label specs       006b75 "Specification work (reserved — drafter not wired yet)"
-label development c5def5 "Implementation work (reserved — drafter not wired yet)"
-label testing     bfd4f2 "Test-authoring work (reserved — drafter not wired yet)"
+label specs       006b75 "Implementation spec (design + TDD plan) work"
+label development c5def5 "Implementation task (code + tests), pinned to a Plan: docs/plans task"
+label testing     bfd4f2 "Test-authoring work, pinned to a Plan: docs/plans task"
 label workflow    e99695 "CI/skill/agent-authoring change (review only — no auto-drafter)"
 
 echo "Labels created/updated."
