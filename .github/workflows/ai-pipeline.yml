@@ -10,10 +10,13 @@ name: AI documentation pipeline
 #
 # Labels
 #   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
-#   Context/type : uc | requirement | adr | specs | development | testing
+#   Context/type : uc | requirement | adr | specs | development | testing | workflow
 # A context label says WHAT to draft and gives the reviewer context; the action label is the
 # go-signal. `specs` / `development` / `testing` are reserved — the draft job explains they are
-# not wired yet and stops. Review picks its checklist from the changed file paths, not the label.
+# not wired yet and stops. `workflow` (CI/skill/agent changes) is deliberately never
+# auto-drafted — only its review is wired (see _ai-review.yml / workflow-reviewer.md); the PR's
+# path filter below does not yet cover that tree (tracked separately). Review picks its
+# checklist from the changed file paths, not the label.
 # Run .github/setup-labels.sh once so every label exists (gh --add-label won't create them).
 #
 # Guards on every AI job: exact label + actor allow-list. Applying a label needs Triage+, so
