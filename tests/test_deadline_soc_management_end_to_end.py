@@ -9,6 +9,12 @@ fetched from `hass.data`, mirroring `tests/test_init.py`'s own live-wiring tests
 entity->coordinator wiring for those (switch.smart_charging_home_day,
 time.smart_charging_departure_*) is tracked separately (issue #402) and not yet threaded, so
 there is no entity to seed instead.
+
+All the thresholds this file's arithmetic depends on (battery capacity, solar step/threshold,
+solar-forecast threshold) are pinned explicitly in `_entry_options` via their own `DEFAULT_*`
+constants, rather than left as bare literals relying on the module defaults -- so a future
+default change can't silently flip an Urgent/Unreachable or step-up boundary in these tests
+without also touching this file.
 """
 
 from datetime import timedelta
@@ -26,18 +32,28 @@ from custom_components.smart_charging.const import (
     CONF_CHARGER_STATUS_ENTITY,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_RESERVE_SOC,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
+    DEFAULT_EV_BATTERY_CAPACITY_KWH,
+    DEFAULT_MAX_SOLAR_SOC,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+    DEFAULT_SOLAR_STEP_PP,
+    DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
@@ -50,6 +66,7 @@ from custom_components.smart_charging.const import (
     PROFILE_MANUAL,
     STATE_CHARGING,
 )
+from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 
 
 def _entry_data(**overrides):
@@ -67,7 +84,10 @@ def _entry_data(**overrides):
 
 
 def _entry_options(**overrides):
-    """OPTIONS bucket -- thresholds/defaults + interval (ADR-0005)."""
+    """OPTIONS bucket -- thresholds/defaults + interval (ADR-0005). Every R5/R8/R9 threshold
+    this file's arithmetic relies on is pinned explicitly (via its own DEFAULT_* constant), not
+    left implicit, so the module's own defaults can change without silently moving this file's
+    Urgent/Unreachable/step-up boundaries."""
     options = {
         CONF_NOMINAL_VOLTAGE: 230.0,
         CONF_MIN_CURRENT: 6.0,
@@ -77,6 +97,11 @@ def _entry_options(**overrides):
         CONF_DEFAULT_TARGET_CURRENT: 10.0,
         CONF_DEFAULT_SOC_LIMIT: 80.0,
         CONF_MAX_PEAK_KW: 100.0,  # ample headroom -- R3 not under test here
+        CONF_EV_BATTERY_CAPACITY_KWH: DEFAULT_EV_BATTERY_CAPACITY_KWH,
+        CONF_MAX_SOLAR_SOC: DEFAULT_MAX_SOLAR_SOC,
+        CONF_SOLAR_STEP_PP: DEFAULT_SOLAR_STEP_PP,
+        CONF_SOLAR_STEP_THRESHOLD_PP: DEFAULT_SOLAR_STEP_THRESHOLD_PP,
+        CONF_SOLAR_FORECAST_THRESHOLD_KWH: DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     }
     options.update(overrides)
     return options
@@ -88,6 +113,20 @@ def _seed_states(hass, *, status="Charging", net_w=0.0, charger_w=0.0, ev_soc=50
     hass.states.async_set("sensor.net_power", str(net_w))
     hass.states.async_set("sensor.charger_power", str(charger_w))
     hass.states.async_set("sensor.ev_soc", str(ev_soc))
+
+
+def _capture_charger_current_writes(hass):
+    """Captures `number.set_value` calls targeting the charger-current entity, the same way
+    `tests/test_init.py` does -- proves a scenario's resolved lever actually reaches the write
+    path, not just the coordinator's own internal `CycleResult`/state."""
+    calls = []
+
+    def _record(event):
+        if event.data["domain"] == "number" and event.data["service"] == "set_value":
+            calls.append(event.data["service_data"])
+
+    hass.bus.async_listen("call_service", _record)
+    return calls
 
 
 def _seed_ample_peak_headroom(coordinator, kw=100.0):
@@ -114,6 +153,14 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
     return coordinator
 
 
+def _active_soc_limit_entity_id(hass):
+    """Looked up by unique_id, not entity_id -- its translation entry is T6.3's own job, not
+    this task's (mirrors tests/test_init.py's own active_soc_limit sensor lookup)."""
+    entry_id = next(iter(hass.data[DOMAIN]))
+    registry = er.async_get(hass)
+    return registry.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_active_soc_limit")
+
+
 def _seed_today_deadline(coordinator, *, hours_from_now):
     """Seeds today's day-of-week default so R14 resolves `hours_from_now` ahead of real
     wall-clock now (the coordinator's deadline resolution reads dt_util.now())."""
@@ -124,13 +171,19 @@ def _seed_today_deadline(coordinator, *, hours_from_now):
 
 
 # --- UC05: Normal -> Urgent -> Unreachable, both profiles' lever sets ---
+#
+# With the pinned 75 kWh battery capacity and a 10 pp SOC gap (70 -> 80), the required current
+# is (75 * 10/100 * 1000) / hours / 230 A. A 4h deadline requires ~8.15 A (urgent, reachable);
+# a 0.01h deadline requires ~3261 A (unreachable, far past the 16 A CONF_MAX_CURRENT ceiling).
 
 
 async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, freezer):
     """UC05 main success scenario + 3a + exception flow, Auto profile with CapTar available:
-    Normal (no urgency) -> Urgent (escalates to Captar) -> Unreachable (still Captar, but
-    notifies) as the deadline tightens cycle over cycle."""
+    Normal (no deadline resolved) -> Urgent (escalates to Captar) -> reverts to Normal (SOC
+    catches up) -> Unreachable (still Captar, but notifies) as conditions change cycle over
+    cycle."""
     freezer.move_to("2026-01-15 12:00:00")
+    calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(
         hass,
@@ -139,14 +192,16 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     coordinator.active_profile = PROFILE_AUTO
     coordinator.active_mode = MODE_OFF
 
-    # Normal: no deadline seeded yet -- baseline (Off, no solar/low-tariff) is never urgent.
+    # Normal: no deadline resolved yet -- required_a is None, never urgent.
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    assert coordinator._required_current.required_a is None
     assert coordinator._required_current.urgent is False
     assert coordinator.active_mode == MODE_OFF
 
     # Urgent: a 4h deadline the Off baseline can't meet, but still within the maximum
-    # permitted rate (~8.15 A required vs. 16 A max), escalates Auto to Captar.
+    # permitted rate (~8.15 A required vs. 16 A max), escalates Auto to Captar -- whose own
+    # maximum-current request (16 A) reaches the write path.
     _seed_today_deadline(coordinator, hours_from_now=4)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -154,8 +209,19 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     assert coordinator._required_current.unreachable is False
     assert coordinator.active_mode == MODE_CAPTAR
     assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_CAPTAR
+    assert calls[-1]["value"] == 16.0  # CONF_MAX_CURRENT -- Captar's own maximum-current request
 
-    # Unreachable: a much tighter deadline exceeds even Captar's maximum-current request.
+    # Revert to Normal: the SOC catches up to the active limit -- nothing left to charge, so
+    # urgency reverts even with the same (now-irrelevant) deadline still seeded.
+    hass.states.async_set("sensor.ev_soc", "80.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator._required_current.urgent is False
+    assert coordinator.active_mode != MODE_CAPTAR  # Auto falls back through rows 3-5
+
+    # Unreachable: SOC back below the limit, but a much tighter deadline exceeds even
+    # Captar's maximum-current request.
+    hass.states.async_set("sensor.ev_soc", "70.0")
     events = []
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, lambda e: events.append(e))
     _seed_today_deadline(coordinator, hours_from_now=0.01)
@@ -163,14 +229,20 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     await hass.async_block_till_done()
     assert coordinator._required_current.unreachable is True
     assert coordinator.active_mode == MODE_CAPTAR  # still escalated (R5/R16 postcondition)
+    assert calls[-1]["value"] == 16.0  # clamped to the maximum permitted rate, not the
+    # (huge) required current itself
     assert len(events) == 1
-    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == coordinator._required_current.required_a
+    expected_required_a = coordinator._required_current.required_a
+    assert expected_required_a is not None and expected_required_a > 16.0
+    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == expected_required_a
 
 
 async def test_uc05_auto_profile_without_captar_escalates_to_power_not_captar(hass, freezer):
     """UC05 alternate flow 3a' (R18 carve-out): CapTar capability absent -- Auto's urgency
-    escalation falls back to Power instead of Captar."""
+    escalation falls back to Power instead of Captar, whose own configured target current (not
+    a maximum-current request) is what reaches the write path."""
     freezer.move_to("2026-01-15 12:00:00")
+    calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(
         hass,
@@ -178,13 +250,16 @@ async def test_uc05_auto_profile_without_captar_escalates_to_power_not_captar(ha
     )
     coordinator.active_profile = PROFILE_AUTO
     coordinator.active_mode = MODE_OFF
-    _seed_today_deadline(coordinator, hours_from_now=1)
+    # 4h deadline: urgent (~8.15 A required), but reachable -- distinct from Unreachable.
+    _seed_today_deadline(coordinator, hours_from_now=4)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
     assert coordinator._required_current.urgent is True
+    assert coordinator._required_current.unreachable is False
     assert coordinator.active_mode == MODE_POWER
+    assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- Power's own request
 
 
 async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(hass, freezer):
@@ -194,15 +269,18 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
     freezer.move_to("2026-01-15 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(hass, option_overrides={CONF_MAX_PEAK_KW: 10.0})
-    _seed_ample_peak_headroom(coordinator, kw=1.0)  # below max_peak_kw -- row 2 alone would apply
+    # A small tracked peak (well below max_peak_kw) makes row 1's raise distinguishable from
+    # row 2 -- row 2 alone (min(monthly, max)) would otherwise also read 10.0.
+    _seed_ample_peak_headroom(coordinator, kw=1.0)
     coordinator.active_profile = PROFILE_MANUAL
     coordinator.active_mode = MODE_SOLAR
-    _seed_today_deadline(coordinator, hours_from_now=1)
+    _seed_today_deadline(coordinator, hours_from_now=4)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
     assert coordinator._required_current.urgent is True
+    assert coordinator._required_current.unreachable is False
     assert coordinator.active_mode == MODE_SOLAR  # unchanged (NF2)
     assert coordinator.data.effective_peak_limit_kw == 10.0  # the one lever Manual does get
 
@@ -212,10 +290,10 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
 
 async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass):
     """UC06 main success scenario + exception flow: SOC nears the limit while a solar mode
-    charges under `Auto` (R8/R16 precondition -- UC06's own preconditions section: "under
-    Manual, no step-up ever applies") -> step-up applies (Baseline -> SteppedUp); the user
-    then manually switching away from Auto/solar clears it (SteppedUp -> Baseline, R7's
-    shared reset)."""
+    charges under `Auto` (R8/R16 precondition) -> step-up applies (Baseline -> SteppedUp); an
+    Auto-driven escalation away from solar (e.g. Captar under urgency, simulated here by
+    flipping only `active_mode`, profile staying `Auto`) clears it (SteppedUp -> Baseline,
+    R7's shared reset) -- isolated from UC06's separate `Manual`-precondition case below."""
     _seed_states(hass, status="Charging", ev_soc=50.0, net_w=100.0, charger_w=500.0)
     hass.states.async_set("sun.sun", "above_horizon")  # sufficient surplus keeps Auto in Solar
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
@@ -235,16 +313,11 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass):
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 85.0  # default 80 + default step 5
     assert coordinator._step_up_state.stepped_pct == 85.0
-    # Looked up by unique_id, not entity_id -- its translation entry is T6.3's own job, not
-    # this task's (mirrors tests/test_init.py's own active_soc_limit sensor lookup).
-    entry_id = next(iter(hass.data[DOMAIN]))
-    registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_active_soc_limit")
+    entity_id = _active_soc_limit_entity_id(hass)
     assert float(hass.states.get(entity_id).state) == 85.0
 
-    # Baseline again: the user manually switches away from Auto/solar charging (UC06's own
-    # exception-flow example) -- the step-up clears and the limit returns to the default.
-    coordinator.active_profile = PROFILE_MANUAL
+    # Baseline again: the active mode leaves solar charging entirely (still under Auto) --
+    # the step-up clears and the limit returns to the default.
     coordinator.active_mode = MODE_POWER
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -255,7 +328,11 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass):
 async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     """UC06 alternate flow 4a: switching between Solar and SolarOnly is a self-loop within
     SteppedUp, not a reset -- only leaving solar charging entirely (R7's shared rule) clears
-    it, per coordinator.py's own comment warning against conflating the two."""
+    it, per coordinator.py's own comment warning against conflating the two. The second
+    cycle's SOC (76, below even the un-stepped 78 threshold) is chosen so the assertion can
+    only pass if the step-up state was genuinely preserved across the switch, not accidentally
+    re-derived fresh from the default limit (which would also apply a step at a higher SOC,
+    making the two cases indistinguishable)."""
     _seed_states(hass, status="Charging", ev_soc=78.5)
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
     coordinator.active_profile = PROFILE_AUTO
@@ -265,6 +342,7 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     await hass.async_block_till_done()
     assert coordinator._step_up_state.stepped_pct == 85.0
 
+    hass.states.async_set("sensor.ev_soc", "76.0")
     coordinator.active_mode = MODE_SOLAR_ONLY
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -273,13 +351,55 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     assert coordinator.data.active_soc_limit == 85.0
 
 
+async def test_uc06_no_further_step_once_maximum_already_reached(hass):
+    """UC06 alternate flow 2a: a step-up already clamped to `sc_max_solar_soc` applies no
+    further step, even though SOC is again within the step threshold of that (maximum)
+    limit."""
+    _seed_states(hass, status="Charging", ev_soc=98.0)
+    coordinator = await _setup(
+        hass,
+        data_overrides={CONF_SOLAR_INSTALLED: True},
+        option_overrides={CONF_MAX_SOLAR_SOC: 100.0},
+    )
+    coordinator.active_profile = PROFILE_AUTO
+    coordinator.active_mode = MODE_SOLAR
+    # A prior step-up already clamped to the maximum -- seeded directly on the coordinator,
+    # the same way tests/test_coordinator.py's own Task 5.1 suite seeds a pre-existing
+    # step-up, since there is no owning entity for this state.
+    coordinator._step_up_state = SolarStepUpState(stepped_pct=100.0)
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.data.active_soc_limit == 100.0  # unchanged -- no further step possible
+    assert coordinator._step_up_state.stepped_pct == 100.0
+
+
+async def test_uc06_manual_profile_never_applies_a_step_up(hass):
+    """UC06 Preconditions: "under `Manual`, no step-up ever applies, regardless of which solar
+    mode is selected" (R8/R16) -- SOC within the step threshold, charging in Solar, but under
+    `Manual` the active SOC limit stays the plain default."""
+    _seed_states(hass, status="Charging", ev_soc=78.5)
+    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
+    coordinator.active_profile = PROFILE_MANUAL
+    coordinator.active_mode = MODE_SOLAR
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator._step_up_state.stepped_pct is None
+    assert coordinator.data.active_soc_limit == 80.0
+
+
 # --- UC07: Normal -> Reserved -> Normal, and the UC05 mutual-exclusivity case ---
 
 
 async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
-    """UC07 main success scenario + Postconditions: sun down + home-day flag + ample forecast
-    + no deadline for tomorrow engages the reserve cap (Normal -> Reserved); sun coming back up
-    lifts it (Reserved -> Normal)."""
+    """UC07 main success scenario + Postconditions: starts in Normal (home-day flag clear);
+    setting the flag with every other precondition already holding (sun down, ample forecast,
+    no deadline for tomorrow) engages the reserve cap (Normal -> Reserved); the sun coming
+    back up lifts it again (Reserved -> Normal)."""
+    calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", "below_horizon")
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
@@ -290,18 +410,24 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
     )
     coordinator.active_profile = PROFILE_AUTO
     coordinator.active_mode = MODE_OFF
-    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
 
     events = []
     hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, lambda e: events.append(e))
 
-    # Reserved: every precondition holds, no deadline anywhere for tomorrow.
+    # Normal: the home-day flag isn't set yet -- the reserve's own precondition doesn't hold.
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 80.0  # default limit, reserve not engaged
+
+    # Reserved: every precondition now holds, no deadline anywhere for tomorrow.
+    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 55.0  # configured reserve cap, not default (80)
     assert events[-1].data[ATTR_ACTIVE_SOC_LIMIT] == 55.0
     # Row 4 (overnight top-up) withheld by the reserve -- Auto does not start Captar for it.
     assert coordinator.active_mode == MODE_OFF
+    assert calls[-1]["value"] == 0.0
 
     # Normal: the sun comes back up -- the reserve's own precondition lapses.
     hass.states.async_set("sun.sun", "above_horizon")
@@ -309,6 +435,28 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 80.0  # default limit resolves again
     assert events[-1].data[ATTR_ACTIVE_SOC_LIMIT] == 80.0
+
+
+async def test_uc07_manual_profile_never_engages_the_reserve(hass):
+    """UC07 alternate flow 1a: under `Manual`, the reserve's own precondition (R16's "Auto
+    profile is active") never holds, regardless of the home-day flag or the solar forecast --
+    the active SOC limit resolves as if this use-case weren't coordinating it at all."""
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sensor.solar_forecast", "20.0")
+    coordinator = await _setup(
+        hass,
+        data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    coordinator.active_profile = PROFILE_MANUAL
+    coordinator.active_mode = MODE_SOLAR
+    coordinator.home_day_flag = True
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.data.active_soc_limit == 80.0  # default -- reserve never engages
 
 
 async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass):
