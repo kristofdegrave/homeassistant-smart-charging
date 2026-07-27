@@ -20,13 +20,14 @@ domain) from the **device name + the entity's translated name** — i.e. the
 `entity.<platform>.<translation_key>.name` string in `strings.json` — not from the
 `translation_key` itself. Concretely, `soc_limit_override`'s strings.json name "Default
 charge limit" yields `number.smart_charging_default_charge_limit`, not the catalog's
-`number.smart_charging_soc_limit_override`; four other owned entities have the same
-mismatch (`monthly_peak_kw`, `departure_mon`, `departure_holiday`, `active_soc_limit`).
+`number.smart_charging_soc_limit_override`; several other owned entities have the same
+mismatch (at least `monthly_peak_kw`, `departure_mon`…`departure_sun`,
+`departure_holiday`, `departure_home_day`, `active_soc_limit`).
 
 This also means the generated `object_id` is not stable across HA locales: the same
 entity registers under a different `entity_id` on a Dutch install than an English one,
 because the name string it derives from is translated but the `translation_key` is not.
-`tests/test_init.py:141` already documents the current (English-locale) behavior by
+`tests/test_init.py:149` already documents the current (English-locale) behavior by
 asserting `number.smart_charging_default_charge_limit`, confirming this is what actually
 ships today, not a test bug.
 
@@ -62,41 +63,41 @@ via the entity picker.
 
 - Pro: No code change; this is standard, unremarkable `has_entity_name` behavior used by
   the vast majority of HA integrations, and avoids the redundant id Option A introduces.
-- Con: Breaks the concrete commitment `entity-catalog.md`/`README.md` already make today
-  (this is the bug #408 reports) — every automation/dashboard example in the README
-  written against a literal `smart_charging_*` id becomes locale-fragile, and a
-  non-English user following the README's literal ids finds nothing at that `entity_id`.
-  It also reopens `entity-catalog.md`/ADR-0004/README for a documentation rewrite of
-  every owned-entity row, larger than the follow-up ADR-0004 already tracks.
+- Con: Breaks the concrete commitment `entity-catalog.md`/`README.md` already make
+  today — every automation/dashboard example in the README written against a literal
+  `smart_charging_*` id becomes locale-fragile, and a non-English user following the
+  README's literal ids finds nothing at that `entity_id`. It also reopens
+  `entity-catalog.md`/ADR-0004/README for a documentation rewrite of every owned-entity
+  row, larger than the follow-up ADR-0004 already tracks.
 
 ## Decision
 
 Option A. `entity-catalog.md`, `README.md`, and ADR-0004 already commit to specific,
 literal `entity_id`s for every owned entity, for direct use in user automations and
-dashboards — that commitment predates this ADR and is the reason #408 is a bug rather
-than a documentation gap. Option B's Con is exactly that regression: it would convert an
-already-documented, already-relied-upon contract into a locale-dependent one. Option A's
-Con (two identifiers to keep in sync) is a one-time, per-entity cost paid once when an
-owned entity is added, caught by test coverage (each owned entity's `entity_id` is
-asserted in `tests/test_init.py`-equivalent tests) rather than by convention alone.
+dashboards — that commitment predates this ADR, and the current translated-name-derived
+ids are a bug against it rather than a documentation gap. Option B's Con is exactly that
+regression: it would convert an already-documented, already-relied-upon contract into a
+locale-dependent one. Option A's Con (two identifiers to keep in sync) is a one-time,
+per-entity cost paid once when an owned entity is added, caught by test coverage (each
+owned entity's `entity_id` is asserted in `tests/test_init.py`-equivalent tests) rather
+than by convention alone.
 
 Each owned entity's explicit object_id suffix equals the suffix already used in
 `entity-catalog.md`'s existing rows (e.g. `soc_limit_override`, not
-`default_charge_limit`), so no catalog renumbering is needed — only the five entities
-listed in #408 change their generated `entity_id` to match the catalog value they were
-always documented to have.
+`default_charge_limit`), so no catalog renumbering is needed — only the entities whose
+generated `entity_id` currently diverges from the catalog change, to match the catalog
+value they were always documented to have.
 
 ## Consequences
 
 - Every owned entity in `select.py`, `number.py`, `sensor.py`, `switch.py`, `time.py`
   needs an explicit, locale-independent object_id pinned alongside its
   `_attr_translation_key`, matching `entity-catalog.md`'s existing suffix for that
-  entity. This includes entities beyond the five #408 lists, wherever the
-  translation-key-derived name happens to already coincide with the catalog suffix
-  today (e.g. `select.smart_charging_profile`) — those need the same explicit pin so
-  future wording changes to `strings.json` can't silently drift their `entity_id`
-  the same way #408 describes.
-- `tests/test_init.py:141` (and any sibling assertions on other owned entities) must be
+  entity. This includes entities whose translation-key-derived name happens to already
+  coincide with the catalog suffix today (e.g. `select.smart_charging_profile`) — those
+  need the same explicit pin so a future wording change to `strings.json` can't silently
+  drift their `entity_id` the way it has for the entities this ADR's Context lists.
+- `tests/test_init.py:149` (and any sibling assertions on other owned entities) must be
   updated to assert the catalog's documented `entity_id`s, not the currently-generated
   locale-derived ones.
 - Follow-up: open an implementation task (via `write-impl-spec`, scoped to whichever
@@ -104,9 +105,6 @@ always documented to have.
   open) to make the code change and update the affected tests; this ADR records the
   naming decision, not the code.
 - Follow-up: no further `entity-catalog.md`/README rewrite is needed as a result of this
-  ADR — the existing documented ids become correct once the code change lands, closing
-  #408.
-- A future owned entity added under ADR-0004's follow-up (the still-open catalog
-  reconciliation for `input_select`/`input_number`/`input_datetime` → native platform
-  entities) must pin its object_id the same way from the start, rather than relying on
-  the translated name.
+  ADR — the existing documented ids become correct once the code change lands.
+- Any future owned entity added to the catalog must pin its object_id the same way from
+  the start, rather than relying on the translated name.
