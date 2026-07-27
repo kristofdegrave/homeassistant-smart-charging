@@ -10,10 +10,12 @@ name: AI documentation pipeline
 #
 # Labels
 #   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
-#   Context/type : uc | requirement | adr | specs | development | testing
+#   Context/type : uc | requirement | adr | specs | development | testing | workflow
 # A context label says WHAT to draft and gives the reviewer context; the action label is the
 # go-signal. `specs` / `development` / `testing` are reserved — the draft job explains they are
-# not wired yet and stops. Review picks its checklist from the changed file paths, not the label.
+# not wired yet and stops. `workflow` (CI/skill/agent changes) is deliberately never
+# auto-drafted — only its review is wired (see _ai-review.yml / workflow-reviewer.md). Review
+# picks its checklist from the changed file paths, not the label.
 # Run .github/setup-labels.sh once so every label exists (gh --add-label won't create them).
 #
 # Guards on every AI job: exact label + actor allow-list. Applying a label needs Triage+, so
@@ -21,9 +23,18 @@ name: AI documentation pipeline
 # reusable workflow) only scopes the API key. PAT-added labels count as the PAT owner. Merge
 # always needs the maintainer's manual approval (CODEOWNERS + branch protection).
 #
-# pull_request (NOT pull_request_target): fork PRs run without secrets, so an external PR can
-# never spend the API key. The path filter scopes PR jobs to the doc trees this pipeline knows
-# how to review; extend it when `specs` / `development` / `testing` get wired to their own trees.
+# pull_request (NOT pull_request_target): a fork PR runs with the workflow file version from
+# its OWN head ref, but gets no repository secrets and a read-only default GITHUB_TOKEN — a
+# platform guarantee, not something this file configures — so it can never spend
+# ANTHROPIC_API_KEY or push/write regardless of what it changes. This holds for every path
+# below, including .github/workflows/**: even a fork PR that rewrites the pipeline's own
+# workflow files only ever runs that rewritten version with no secrets attached. `review` DOES
+# hold pull-requests/issues: write and secrets: inherit on a same-repo PR (it spends the API key
+# and posts comments), so it relies on that platform guarantee, not on lacking write access, to
+# stay safe against a fork PR. `fix` additionally excludes forks outright
+# (head.repo.full_name check) as belt-and-suspenders, since it also holds contents: write and
+# can push. The path filter's job is only to scope which doc/CI trees the review step knows how
+# to checklist — it is not itself a trust boundary.
 #
 # Permissions live on the calling jobs below (the token passed to a reusable workflow is
 # governed by the caller). Concurrency keys also live here, where the event context is richest.
@@ -37,6 +48,10 @@ on:
       - "docs/analysis/**"
       - "docs/adl/**"
       - "docs/plans/**"
+      - ".github/workflows/**"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".github/setup-labels.sh"
 
 # Conservative default; each calling job widens to exactly what its reusable workflow needs.
 permissions:
