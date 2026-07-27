@@ -136,7 +136,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow (R13), the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow.
+- [ ] The cap activates only under the `Auto` profile, and only when the home-day flag is set for tomorrow (R13), the next-day solar-forecast yield, read from a configured forecast sensor (NF3), exceeds a configurable threshold (default 12 kWh), and the departure-deadline resolution (R14), evaluated one day ahead, resolves to "no deadline" for tomorrow — a condition trivially satisfied while the deadline capability is absent (R18), since no deadline is ever resolved then.
 - [ ] While active, the overnight active SOC limit resolves to a configurable value (default 60%) while the sun is down (R7).
 - [ ] While active, `Auto` does not select a mode for the sake of opportunistic overnight grid top-up (Auto mode-selection row 4, `resolution-rules.md`).
 - [ ] Under `Manual`, this cap never applies, regardless of the home-day flag or forecast — the active SOC limit resolves as if `Auto` were not coordinating it at all.
@@ -176,7 +176,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R12 — Plug-in reminder notification
 
 **Priority:** Could
-**What:** The system notifies the user to plug in the car when it is home, unplugged, and below the active SOC limit with limited time before departure.
+**What:** The system notifies the user to plug in the car when it is home, unplugged, and below the active SOC limit with limited time before departure. Applies only while the deadline capability is present (R18).
 
 **Acceptance criteria:**
 
@@ -194,7 +194,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 **Acceptance criteria:**
 
 - [ ] The home-day flag for tomorrow can be set through at least one configured mechanism, whether a system-provided input or an external source (NF3).
-- [ ] When the home-day flag is set for tomorrow, it feeds the solar-reserve cap (R9) and the departure-time override (R14).
+- [ ] When the home-day flag is set for tomorrow, it feeds the solar-reserve cap (R9) and — while the deadline capability is present (R18) — the departure-time override (R14).
 - [ ] When no configured mechanism has set the flag, tomorrow is treated as not a home day.
 - [ ] The home-day flag resets each day at midnight.
 
@@ -221,7 +221,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R15 — Configurable EV battery capacity
 
 **Priority:** Must
-**What:** The car's usable battery capacity is configurable so charging-time estimates reflect the actual vehicle; it may alternatively be read from a sensor when one is available.
+**What:** The car's usable battery capacity is configurable so charging-time estimates reflect the actual vehicle; it may alternatively be read from a sensor when one is available. The deadline calculation (R5) is its only consumer, so while the deadline capability is absent (R18) the capacity still resolves but affects no charging behaviour.
 
 **Acceptance criteria:**
 
@@ -267,7 +267,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R18 — Configurable installation capabilities
 
 **Priority:** Should
-**What:** The available charging modes and the behaviours that depend on them adapt to the hardware, the billing arrangement, and the deadline policy the installation actually has, declared as configurable capabilities, so the system remains fully usable, under both `Manual` and `Auto`, on an installation without a solar array, without capacity-tariff billing, or with no interest in departure deadlines at all. Without the solar capability alone, a grid mode (`Captar`) is still reachable under `Auto`, since the CapTar capability is unaffected. Without the CapTar capability, `Auto`'s deadline-urgency escalation (R5) falls back to `Power` instead of `Captar` (R16) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — while `Auto`'s opportunistic overnight top-up (R16 row 4) simply does not occur, since there is no deadline forcing it; this also applies when both capabilities are absent.
+**What:** The available charging modes and the behaviours that depend on them adapt to the hardware, the billing arrangement, and the deadline policy the installation actually has, declared as configurable capabilities, so the system remains fully usable, under both `Manual` and `Auto`, on an installation without a solar array, without capacity-tariff billing, or with no interest in departure deadlines at all. Without the solar capability alone, a grid mode (`Captar`) is still reachable under `Auto`, since the CapTar capability is unaffected. Without the CapTar capability, `Auto`'s deadline-urgency escalation (R5) falls back to `Power` instead of `Captar` (R16) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — while `Auto`'s opportunistic overnight top-up (R16 row 4) simply does not occur, since there is no deadline forcing it; this also applies when both capabilities are absent. Every capability defaults to *present*, so each requirement a capability gates — including the `Must` ones (R5, R14) — holds in full on a default installation; a capability only ever subtracts behaviour the household has declared it does not have or does not want.
 
 **Acceptance criteria:**
 
@@ -277,7 +277,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Whether the installation bills against a capacity tariff (the CapTar capability) is user-configurable, defaulting to present.
 - [ ] When the CapTar capability is absent, the `Captar` mode is not offered for manual selection; the `Solar` (subject to the solar capability), `SolarOnly` (subject to the solar capability), `Power`, and `Off` modes remain available for manual selection. `Auto` never chooses `Captar` for opportunistic overnight top-up in this case (R16 row 4 simply does not occur), but does select `Power` — otherwise never an `Auto`-chosen mode — as a best-effort deadline-urgency escalation (R5, R16).
 - [ ] Whether the household wants departure deadlines managed at all (the deadline capability) is user-configurable, defaulting to present.
-- [ ] When the deadline capability is absent, the departure-time inputs are neither offered nor required (R14), no departure deadline is ever resolved, deadline urgency never engages and no unreachable-deadline notification is sent (R5), and no plug-in reminder is ever sent (R12). The charging modes available for selection are unaffected — the deadline capability gates behaviour, not modes.
+- [ ] When the deadline capability is absent, the departure-time inputs (R14) and the plug-in reminder's lead time (R12) are neither offered nor required, no departure deadline is ever resolved, deadline urgency never engages and no unreachable-deadline notification is sent (R5), and no plug-in reminder is ever sent (R12). The charging modes offered for manual selection are unaffected — the deadline capability gates behaviour, not the mode menu. It does, however, make `Auto`'s deadline-only `Power` carve-out unreachable (R16), since that carve-out exists solely to serve a deadline.
 - [ ] When the deadline capability is absent, the solar-reserve overnight cap's "no departure deadline resolved for tomorrow" precondition (R9) is always satisfied, so the cap depends only on its remaining conditions. The EV battery capacity (R15) still resolves as configured, but has no remaining effect on charging behaviour, since it feeds only the deadline calculation.
 - [ ] Changing a capability takes effect within the next control cycle.
 - [ ] The capability model is extensible: additional hardware, billing, or policy capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on it, without altering existing modes (NF2). Capabilities beyond solar, CapTar, and deadline management are out of scope this release.

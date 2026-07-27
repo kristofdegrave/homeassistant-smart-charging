@@ -61,8 +61,8 @@ whenever a human looks at or edits the dashboard.
 ## Alternate flows
 
 **4a — A capability is absent** — branches from step 4.
-Given a [capability](../system-overview.md#ubiquitous-language) is off (R18) — the solar capability
-(`sc_solar_available`) or the deadline capability (`sc_deadline_available`)
+Given any [capability](../system-overview.md#ubiquitous-language) is off (R18) — currently solar
+(`sc_solar_available`) or deadline management (`sc_deadline_available`)
 When the System renders the runtime configuration section
 Then every runtime entity that capability gates is omitted: the solar-dependent entities (e.g. the
 solar-reserve cap default) without the solar capability, and the departure-time rows without the
@@ -89,7 +89,8 @@ every other section of the dashboard continues to render normally.
 ## Postconditions
 
 - Every entity `entity-catalog.md` classifies as runtime configuration is both visible and settable
-  from the dashboard; no entity classified as install-time configuration is presented on it —
+  from the dashboard, except those gated by an absent capability (4a, R18); no entity classified as
+  install-time configuration is presented on it —
   install-time configuration remains reachable only through the integration's configuration flow
   (R19).
 - The current charging status (charger status, active profile, active mode, active SOC limit,
