@@ -161,8 +161,8 @@ def _seed_ample_peak_headroom(coord, kw=_AMPLE_PEAK_HEADROOM_KW):
     (the same shape a MonthlyPeakSensor restore would seed, Task 4.2) -- keeps R3's clamp
     out of the way of tests that exercise unrelated behavior, not R3 itself."""
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = kw
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = kw
 
 
 async def _run(hass, adapters, config, target):
@@ -544,8 +544,8 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_OFF
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.0  # already-tracked peak is the lesser of the two
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.0  # already-tracked peak is the lesser of the two
 
     result = await coord._async_update_data()
 
@@ -564,8 +564,8 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.56
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.56
 
     result = await coord._async_update_data()
 
@@ -587,8 +587,8 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 0.1
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 0.1
 
     result = await coord._async_update_data()
 
@@ -610,8 +610,8 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 1.0
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 1.0
 
     result = await coord._async_update_data()
 
@@ -638,8 +638,8 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 1.0
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 1.0
     await coord._async_update_data()
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
 
@@ -648,7 +648,7 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     ample = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord._adapters = ample
     coord._config = {**config, CONF_MAX_PEAK_KW: _AMPLE_PEAK_HEADROOM_KW}
-    coord._peak_tracked_kw = _AMPLE_PEAK_HEADROOM_KW
+    coord._peak_demand.tracked_kw = _AMPLE_PEAK_HEADROOM_KW
     coord.active_mode = MODE_OFF
     await coord._async_update_data()
     coord.active_mode = MODE_CAPTAR
@@ -687,8 +687,8 @@ async def test_power_respects_peak_by_default(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.56
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.56
 
     result = await coord._async_update_data()
 
@@ -706,8 +706,8 @@ async def test_power_can_opt_out_of_peak_protection(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.56
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.56
 
     result = await coord._async_update_data()
 

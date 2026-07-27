@@ -102,8 +102,8 @@ def _seed_ample_peak_headroom(coordinator, kw=100.0):
     (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
     predates peak protection and never seeded any tracked history of its own."""
     now_dt = dt_util.now()
-    coordinator._peak_tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_tracked_kw = kw
+    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coordinator._peak_demand.tracked_kw = kw
 
 
 async def test_end_to_end_commands_target_current(hass):
