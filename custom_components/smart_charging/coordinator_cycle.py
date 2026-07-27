@@ -8,6 +8,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from .engines.peak_demand_tracker import update_monthly_peak_demand
+from .engines.signal_conditioning import smooth_net_power
+
+_WATTS_PER_KILOWATT = 1000.0
+
 
 @dataclass  # deliberately not frozen -- steps mutate fields in place as each value resolves
 class CycleContext:
@@ -31,3 +36,31 @@ class CycleContext:
     sun_is_down: bool = False
     low_tariff_active: bool = True
     solar_reserve_active: bool = False
+
+
+@dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place
+class PeakDemandState:
+    """Owns the coordinator's monthly-peak-demand bookkeeping (project-plan E5 / Power-MVP Task
+    1.3), replacing the three loose _peak_window/_peak_tracked_kw/_peak_tracked_month fields
+    ADR-0012 flagged. Distinct from _peak_tracker (PeakBreachTracker, the R3 clamp's own
+    breach-timer state) -- untouched by this decision, still threaded through the step-7 clamp
+    call directly."""
+
+    window: tuple[float, ...] = ()
+    tracked_kw: float = 0.0
+    tracked_month: tuple[int, int] | None = None
+
+    def update(self, net_w: float, now_dt: datetime, *, window_size: int) -> float:
+        """Fold `net_w` into the smoothing window and return the running monthly-peak kW.
+
+        A month rollover resets the smoothing window too, not just tracked_kw (design doc
+        Sec 6.4) -- else this cycle's "smoothed" reading would partly reflect last month.
+        """
+        current_month = (now_dt.year, now_dt.month)
+        if current_month != self.tracked_month:
+            self.window = ()
+        smoothed_w, self.window = smooth_net_power(net_w, self.window, size=window_size)
+        self.tracked_kw, self.tracked_month = update_monthly_peak_demand(
+            smoothed_w / _WATTS_PER_KILOWATT, current_month, self.tracked_kw, self.tracked_month
+        )
+        return self.tracked_kw
