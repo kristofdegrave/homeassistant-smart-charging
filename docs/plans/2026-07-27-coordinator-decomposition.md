@@ -8,10 +8,12 @@ Option D. **Pure refactor — no behavior, entity, config, or event change.** AD
 the separate R3/C4 clamp call sites are untouched; `_peak_tracker` (the R3 breach-timer) is untouched.
 
 **Architecture:** One new sibling module, `coordinator_cycle.py`, holding all four units — imported only
-by `coordinator.py`, the same "private helper, one consumer" precedent `modes/_phase.py` already sets.
+by `coordinator.py`. This is a deliberate, stated deviation from ADR-0002's namespace preference
+(design doc §3): these units are HA-free but are orchestration wiring, not reusable policy, so they get
+the same root-level treatment `coordinator.py` itself already has, not `engines/`.
 Full design: [`2026-07-27-coordinator-decomposition-design.md`](2026-07-27-coordinator-decomposition-design.md).
 
-**Tech Stack:** Python ≥3.12, `pytest` (plain, ADR-0009 — every new unit is pure/HA-free),
+**Tech Stack:** Python ≥3.12, `pytest` (plain, ADR-0009 — every new unit is HA-free),
 `pytest-homeassistant-custom-component` (HA harness — regression only, no new HA-harness tests),
 `ruff`.
 
@@ -64,6 +66,13 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
     assert ctx.ev_soc is None
     assert ctx.urgent is False
     assert ctx.low_tariff_active is True
+
+
+def test_cycle_context_accepts_none_now_dt_for_dry_run_construction():
+    """now_dt is None only in _mode_desired_current's dry-run ctx (Task 3.3), which needs no
+    month/weekday context -- documented as the one legitimate None, not an accidental gap."""
+    ctx = CycleContext(status="charging", net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None)
+    assert ctx.now_dt is None
 ```
 
 **Step 2: Run to verify failure** — `pytest tests/test_coordinator_cycle.py -v` → `ModuleNotFoundError`.
@@ -94,7 +103,7 @@ class CycleContext:
     charger_w: float
     voltage: float
     now: float
-    now_dt: datetime
+    now_dt: datetime | None  # None only in the Task 3.3 dry-run construction
     ev_soc: float | None = None
     surplus_w: float = 0.0
     monthly_peak_kw: float = 0.0
@@ -145,11 +154,16 @@ def test_peak_demand_state_accumulates_within_same_month():
 
 
 def test_peak_demand_state_resets_window_and_tracked_kw_on_month_rollover():
+    # window_size=2 so the pre-rollover window would carry 2 samples if NOT cleared -- proving
+    # the reset actually happens, rather than window_size=1 where every update() always leaves a
+    # 1-element window regardless (smooth_net_power always appends the new sample before
+    # returning, so `window == ()` right after an update() is never observable).
     state = PeakDemandState()
-    state.update(5000.0, datetime(2026, 7, 31, 0, 0), window_size=1)
-    peak = state.update(1000.0, datetime(2026, 8, 1, 0, 0), window_size=1)
-    assert peak == 1.0  # not max(5.0, 1.0) -- rollover resets to this cycle's own reading
-    assert state.window == ()
+    state.update(5000.0, datetime(2026, 7, 30, 0, 0), window_size=2)
+    state.update(5000.0, datetime(2026, 7, 31, 0, 0), window_size=2)
+    peak = state.update(1000.0, datetime(2026, 8, 1, 0, 0), window_size=2)
+    assert peak == 1.0  # not max(5.0, 1.0) -- rollover resets tracked_kw to this cycle's reading
+    assert state.window == (1000.0,)  # only this cycle's sample -- last month's were cleared, not carried
 ```
 
 **Step 2: Run to verify failure.**
@@ -193,29 +207,62 @@ git commit --author="Claude <noreply@anthropic.com>" -m "feat: add PeakDemandSta
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
-### Task 1.2: Wire `coordinator.py` to `PeakDemandState`
+### Task 1.2: Wire `coordinator.py` (and `sensor.py`) to `PeakDemandState`
 
-**Test boundary:** HA harness — `tests/test_coordinator.py` (existing suite; no new tests, must keep
-passing unchanged — this is the regression proof).
+**Test boundary:** HA harness — `tests/test_coordinator.py`, `tests/test_sensor.py`,
+`tests/test_init.py`, `tests/test_solar_end_to_end.py`, `tests/test_captar_end_to_end.py` (existing
+suites; no *new test expectations*, but the peak-headroom seeding helpers in these files must be
+updated to seed the new object — see Step 4. This is the regression proof).
 
-**Files:** Modify: `custom_components/smart_charging/coordinator.py`
+**Files:** Modify: `custom_components/smart_charging/coordinator.py`,
+`custom_components/smart_charging/sensor.py`, and the four test files above.
 
-**Step 1:** In `__init__`, replace `self._peak_window`/`self._peak_tracked_kw`/`self._peak_tracked_month`
-with `self._peak_demand = PeakDemandState()`. Import `PeakDemandState` from `.coordinator_cycle`.
+**Step 1:** In `coordinator.py::__init__`, replace `self._peak_window`/`self._peak_tracked_kw`/
+`self._peak_tracked_month` with `self._peak_demand = PeakDemandState()`. Import `PeakDemandState` from
+`.coordinator_cycle`.
 
-**Step 2:** In `_run_cycle`, replace the inline month-rollover/smoothing/`update_monthly_peak_demand`
-block (current lines ~224-243) with:
+**Step 2:** In `_run_cycle`, the block being replaced (current `:224-243`) computes two things this
+task must **keep**, not delete: `now_dt = dt_util.now()` (used later in the cycle, e.g. `:321`, `:432`
+— do not remove it) and `peak_window_size = self._config.get(CONF_PEAK_WINDOW_SIZE, max(1, round(...)))`
+(needed only for this call). Replace *only* the month-rollover/smoothing/`update_monthly_peak_demand`
+lines with:
 
 ```python
 monthly_peak_kw = self._peak_demand.update(net_w, now_dt, window_size=peak_window_size)
 ```
 
-**Step 3: Run the full existing suite** — `pytest tests/test_coordinator.py -v` — must pass unchanged.
+i.e. `now_dt`'s own computation and `peak_window_size`'s own computation stay exactly where they are;
+only the four lines that mutate `self._peak_window`/`self._peak_tracked_kw`/`self._peak_tracked_month`
+and call `update_monthly_peak_demand` collapse into the one line above.
 
-**Step 4: Commit:**
+**Step 3 (found by fresh-agent review — not optional):** `sensor.py`'s `MonthlyPeakSensor` reads/writes
+`coordinator._peak_tracked_kw`/`coordinator._peak_tracked_month` directly — for restore-state seeding on
+`async_added_to_hass` and for `extra_restore_state_data`/`extra_state_attributes`. These fields are being
+removed in Step 1, so every one of those call sites must change to
+`coordinator._peak_demand.tracked_kw`/`coordinator._peak_demand.tracked_month`. Grep `sensor.py` for
+`_peak_tracked_kw`/`_peak_tracked_month` and update each occurrence; this is a same-value, same-semantics
+rename, not a behavior change, but it is safety-relevant (the restored monthly peak feeds the R3 clamp),
+so treat it as a required sub-step, not a follow-up.
+
+**Step 4:** The following files seed the old fields directly to hold the R3 peak clamp out of headroom
+during unrelated test scenarios; each seeding call site must target `coordinator._peak_demand`'s fields
+instead (same values seeded, just through the new object):
+- `tests/test_coordinator.py` (`_seed_ample_peak_headroom` and its other direct-seed call sites)
+- `tests/test_init.py`
+- `tests/test_solar_end_to_end.py`
+- `tests/test_captar_end_to_end.py`
+
+Grep each file for `_peak_tracked_kw`/`_peak_tracked_month`/`_peak_window` and update every match before
+running the suite — otherwise Step 5 fails across all four files, not because behavior changed, but
+because the seeding is now inert.
+
+**Step 5: Run the full existing suite across all five affected test files** — must pass unchanged once
+Steps 3–4 are done.
+
+**Step 6: Commit:**
 
 ```bash
-git commit --author="Claude <noreply@anthropic.com>" -m "refactor: wire coordinator.py to PeakDemandState (ADR-0012)
+git commit --author="Claude <noreply@anthropic.com>" -m "refactor: wire coordinator.py and sensor.py to PeakDemandState (ADR-0012)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
@@ -355,30 +402,44 @@ behavior is already covered by `tests/modes/`; these tests only prove correct de
 mode behavior.
 
 **Step 1: Write the failing tests** (one per handler; `_SolarModeHandler` shown, others follow the same
-shape against `modes.solar_only`/`modes.captar`/`modes.power`/no-op for off):
+shape against `modes.solar_only`/`modes.captar`/`modes.power`/no-op for off). Tests deliberately import
+the package-private `_SolarModeHandler` etc. directly — these are coordinator-internal implementation
+units with no public API of their own, tested for correct delegation, not through `coordinator.py`'s
+public surface:
 
 ```python
+from datetime import datetime
+
 from custom_components.smart_charging.coordinator_cycle import CycleContext, _SolarModeHandler
 from custom_components.smart_charging.modes import solar
 
 
 def test_solar_mode_handler_delegates_to_modes_solar_step():
+    # Surplus (1000 W) clears the 500 W start threshold -> solar.step's own idle->charging
+    # transition sets 6 A (min_a), the SolarState's documented start behavior (tests/modes/
+    # test_solar.py anchors this same 6 A expectation) -- hardcoded here as the anchor, not
+    # recomputed by calling solar.step again, so this test actually proves correct delegation
+    # rather than mirroring the implementation.
     config = {
         "solar_start_threshold_w": 500, "min_current": 6,
         "solar_hold_min": 5, "solar_cooldown_min": 10,
     }
     handler = _SolarModeHandler(config)
-    ctx = CycleContext(status="charging", net_w=0, charger_w=0, voltage=230.0, now=1.0, now_dt=None, surplus_w=1000.0)
-    current, new_state = handler.desired_current(ctx, solar.SolarState.idle())
-    expected_current, expected_state = solar.step(
-        1000.0, solar.SolarState.idle(), 1.0,
-        start_threshold_w=500, min_a=6, hold_minutes=5, cooldown_minutes=10, voltage=230.0,
+    ctx = CycleContext(
+        status="charging", net_w=0, charger_w=0, voltage=230.0, now=1.0,
+        now_dt=datetime(2026, 7, 27, 12, 0), surplus_w=1000.0,
     )
-    assert (current, new_state) == (expected_current, expected_state)
+    current, new_state = handler.desired_current(ctx, solar.SolarState.idle())
+    assert current == 6.0
+    assert new_state.phase == solar.Phase.CHARGING
 ```
 
 Use the real `const.py` `CONF_*` keys in the actual implementation/tests, not the string literals shown
-here (illustrative only — replace with named constants per CLAUDE.md).
+here (illustrative only — replace with named constants per CLAUDE.md). Confirm the exact expected
+`current`/`new_state` values against `tests/modes/test_solar.py`'s own fixtures during implementation —
+the numbers above illustrate the pattern (hardcode, don't recompute), not a guaranteed-correct value to
+copy blindly. Each of the other four handlers' tests follows the same hardcoded-anchor pattern against
+its own `tests/modes/` fixture.
 
 **Step 2: Run to verify failure.**
 
@@ -487,23 +548,39 @@ self._mode_handlers: dict[str, ModeHandler] = {
 }
 ```
 
-**Step 2:** In `_run_cycle`, the disconnect/`MODE_OFF`/SOC-gated-stop `if/elif` branches (current
-~500-522) stay exactly as they are — they decide *whether* to dispatch, which ADR-0012 leaves in the
-coordinator. Replace only the final `elif self.active_mode == MODE_SOLAR: ... elif ... else: # MODE_CAPTAR`
-chain (current ~523-554) with:
+**Step 2:** Anchor by content, not by line number — the line numbers below are illustrative only and
+must be re-checked against the file as it stands at implementation time (a stale-anchor mistake in this
+spec's first draft pointed at the R3/C4 clamp block itself; do not repeat it). In `_run_cycle`:
+
+1. First, populate `ctx` at each of its existing computation sites, per design doc §4 (e.g.
+   `ctx.surplus_w = surplus_w` right after the `surplus_w = charger_w - smoothed_net_w` line;
+   `ctx.ev_soc = ev_soc` once `ev_soc` is read; and so on for every field design §4 lists). This is a
+   set of one-line additions alongside existing code, not a restructuring.
+2. The disconnect/`MODE_OFF`/SOC-gated-stop `if/elif` guards — the block that sets `desired = 0.0` and
+   resets per-mode state for disconnect/Off/gated-stop — stay **exactly** as they are; they decide
+   *whether* to dispatch, which ADR-0012 leaves in the coordinator. **Do not touch the R3 peak clamp
+   (`apply_peak_clamp`) or the C4 ceiling clamp (`clamp_to_ceiling`) call sites, or `_peak_tracker`'s
+   threading through the R3 clamp — none of those are in scope for this task.**
+3. Replace only the final per-mode dispatch chain (the `elif self.active_mode == MODE_SOLAR: ...` /
+   `elif self.active_mode == MODE_SOLAR_ONLY: ...` / `else: # MODE_CAPTAR` branches — **not** `MODE_POWER`,
+   see below) with:
 
 ```python
 else:
-    ctx.surplus_w = surplus_w  # (or however CycleContext was populated earlier in this task's diff)
     desired, self._mode_state[self.active_mode] = self._mode_handlers[
         self.active_mode
-    ].desired_current(ctx, self._mode_state[self.active_mode])
+    ].desired_current(ctx, self._mode_state.get(self.active_mode))
 ```
 
-(`MODE_POWER`'s own branch, current line ~507-508, can also collapse into this lookup once `ctx` is
-populated, since `_PowerModeHandler` reproduces it exactly — do so only if it doesn't disturb the
-disconnect/SOC-gate guard ordering; if it does, leave `MODE_POWER` as its own branch calling the same
-handler explicitly. Either is fine; note which was chosen in the commit message.)
+**`MODE_POWER` stays its own explicit `elif` branch** (per design doc §3.4's resolved decision):
+`_fresh_mode_state()` has no `MODE_POWER`/`MODE_OFF` entries, so bracket-writing
+`self._mode_state[self.active_mode] = ...` for `MODE_POWER` would insert a key that never existed before
+and that tests don't expect. Call the handler for observability/consistency but discard its state:
+
+```python
+elif self.active_mode == MODE_POWER:
+    desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
+```
 
 **Step 3: Run the full existing suite, must pass unchanged. Commit:**
 
@@ -521,7 +598,17 @@ tests of its own beyond what already exercises it through Task 5.2's baseline-mo
 **Step 1:** Replace `_mode_desired_current`'s entire `if/elif` body with:
 
 ```python
-def _mode_desired_current(self, mode, *, status, ev_soc, active_soc_limit, surplus_w, voltage, now) -> float:
+def _mode_desired_current(
+    self,
+    mode: str,
+    *,
+    status: str,
+    ev_soc: float,
+    active_soc_limit: float,
+    surplus_w: float,
+    voltage: float,
+    now: float,
+) -> float:
     if status not in CHARGEABLE_STATES:
         return 0.0
     if mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
@@ -534,9 +621,13 @@ def _mode_desired_current(self, mode, *, status, ev_soc, active_soc_limit, surpl
     return current
 ```
 
-(`net_w`/`charger_w` are irrelevant to every `ModeHandler.desired_current` — none of the five reads them
-off `ctx` — so `0.0` placeholders are safe; confirm this holds during implementation and note it in the
-commit message if any handler needs updating to not depend on them.)
+`net_w`/`charger_w`/`now_dt` are deliberately `0.0`/`0.0`/`None` here, not threaded from the caller: none
+of the five `ModeHandler.desired_current` implementations reads `ctx.net_w`, `ctx.charger_w`, or
+`ctx.now_dt` (verified against §3.4's five handlers — each reads only `ctx.surplus_w`/`ctx.voltage`/
+`ctx.now`/`ctx.status`). This is the one intentional exception `CycleContext`'s `now_dt: datetime | None`
+typing documents (Task 0.1). If a future `ModeHandler` needs any of these three, thread the real values
+from `_run_cycle` (which has them all in scope) at that point — not before, since adding unused
+parameters now would be speculative.
 
 **Step 2: Run the full existing suite, must pass unchanged. Commit:**
 
@@ -560,9 +651,20 @@ expectations anywhere outside `tests/test_coordinator_cycle.py`.
 **Step 2:** `ruff check .` and `ruff format --check .` — both clean.
 
 **Step 3:** Confirm no dead code remains: the three old peak-tracking fields, `_last_active_soc_limit`,
-and the old inline `if/elif` chains are fully removed from `coordinator.py` (grep to confirm).
+and the old inline `if/elif` chains are fully removed from `coordinator.py` (grep to confirm), and that
+`sensor.py` has no remaining direct reference to the removed coordinator fields.
 
-**Step 4:** Commit any final cleanup:
+**Step 4 (explicit clamp-integrity check — not just the grep above):** Read the post-refactor
+`_run_cycle` top to bottom and confirm: (a) all ten of ADR-0006's steps are still present as an explicit,
+readable sequence of calls, in the same order; (b) the R3 peak clamp (`apply_peak_clamp`, gated by the
+R17 `power_respect_peak` opt-out) and the C4 ceiling clamp (`clamp_to_ceiling`) remain two separate call
+sites, neither merged nor reordered relative to each other; (c) `_peak_tracker` (`PeakBreachTracker`) is
+still threaded through the R3 clamp call only, untouched by `PeakDemandState`. This check exists because
+this spec's own first draft mis-anchored a task's line numbers at exactly this block (fresh-agent
+review caught it before implementation) — the risk is real enough to verify explicitly, not just trust
+the test suite.
+
+**Step 5:** Commit any final cleanup:
 
 ```bash
 git commit --author="Claude <noreply@anthropic.com>" -m "chore: remove dead pre-decomposition state from coordinator.py (ADR-0012)
