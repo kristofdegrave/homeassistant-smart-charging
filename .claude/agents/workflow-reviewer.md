@@ -64,10 +64,11 @@ Always read:
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The context-label vocabulary is inherently listed in three places — `ai-pipeline.yml`'s
-  header comment, `_ai-draft.yml`'s `context_labels` variable, and `.github/setup-labels.sh`'s
-  label definitions. A change to one that doesn't update the other two is a Major finding
-  (silent drift in the vocabulary the whole label-driven pipeline trusts).
+- The context-label vocabulary is inherently listed in several places — `ai-pipeline.yml`'s
+  header comment; `_ai-draft.yml`'s `context_labels` variable, its "No context label found"
+  reason string, and its `case` block; and `.github/setup-labels.sh`'s label definitions. A
+  change to one that doesn't update the rest is a Major finding (silent drift in the
+  vocabulary the whole label-driven pipeline trusts).
 
 **(5) Non-negotiables unaffected**
 - Write and review still happen in separate sessions/agents (a skill or workflow must never
