@@ -15,6 +15,11 @@
           "solar_installed": "Zonne-energie geïnstalleerd",
           "captar_available": "CapTar beschikbaar",
           "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
+          "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
+          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
+          "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
+          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
+          "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
@@ -33,7 +38,13 @@
           "max_peak_kw": "CapTar maximale piek (kW)",
           "peak_grace_min": "CapTar respijtperiode piek (min)",
           "captar_cooldown_min": "Afkoelduur Captar (min)",
-          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
+          "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
+          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
+          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
+          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
+          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
+          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
         }
       },
       "reconfigure": {
@@ -49,7 +60,12 @@
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
           "solar_installed": "Zonne-energie geïnstalleerd",
           "captar_available": "CapTar beschikbaar",
-          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)"
+          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
+          "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
+          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
+          "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
+          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
+          "low_tariff_entity": "Laagtarief-entiteit (optioneel)"
         }
       }
     },
@@ -83,6 +99,12 @@
           "peak_grace_min": "CapTar respijtperiode piek (min)",
           "captar_cooldown_min": "Afkoelduur Captar (min)",
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
+          "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
+          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
+          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
+          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
+          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
+          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
           "control_interval_s": "Regelinterval (s)"
         }
       }
@@ -100,6 +122,9 @@
     "select": {
       "mode": {
         "name": "Modus"
+      },
+      "profile": {
+        "name": "Profiel"
       }
     },
     "sensor": {
@@ -114,11 +139,43 @@
       },
       "effective_peak_limit": {
         "name": "Effectieve piekgrens"
+      },
+      "active_soc_limit": {
+        "name": "Actieve laadlimiet"
       }
     },
     "switch": {
       "home_day": {
         "name": "Thuisdag"
+      }
+    },
+    "time": {
+      "departure_mon": {
+        "name": "Vertrektijd maandag"
+      },
+      "departure_tue": {
+        "name": "Vertrektijd dinsdag"
+      },
+      "departure_wed": {
+        "name": "Vertrektijd woensdag"
+      },
+      "departure_thu": {
+        "name": "Vertrektijd donderdag"
+      },
+      "departure_fri": {
+        "name": "Vertrektijd vrijdag"
+      },
+      "departure_sat": {
+        "name": "Vertrektijd zaterdag"
+      },
+      "departure_sun": {
+        "name": "Vertrektijd zondag"
+      },
+      "departure_holiday": {
+        "name": "Vertrektijd feestdag"
+      },
+      "departure_home_day": {
+        "name": "Vertrektijd thuisdag"
       }
     }
   }
