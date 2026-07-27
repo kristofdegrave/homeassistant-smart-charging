@@ -15,7 +15,9 @@ name: AI documentation pipeline
 # go-signal. `specs` / `development` / `testing` are reserved — the draft job explains they are
 # not wired yet and stops. `workflow` (CI/skill/agent changes) is deliberately never
 # auto-drafted — only its review is wired (see _ai-review.yml / workflow-reviewer.md). Review
-# picks its checklist from the changed file paths, not the label.
+# picks its checklist from the changed file paths, not the label — this is also why a
+# human-authored `development`/`testing` PR (touching custom_components/ or tests/) already gets
+# reviewed by code-reviewer/test-reviewer today, even though those labels have no auto-drafter.
 # Run .github/setup-labels.sh once so every label exists (gh --add-label won't create them).
 #
 # Guards on every AI job: exact label + actor allow-list. Applying a label needs Triage+, so
@@ -52,6 +54,8 @@ on:
       - ".claude/skills/**"
       - ".claude/agents/**"
       - ".github/setup-labels.sh"
+      - "custom_components/**"
+      - "tests/**"
 
 # Conservative default; each calling job widens to exactly what its reusable workflow needs.
 permissions:
