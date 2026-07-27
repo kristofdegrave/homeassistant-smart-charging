@@ -4,6 +4,11 @@ name: AI draft (reusable)
 # `needs-draft` plus one context label. Resolves the artifact type from the context label,
 # has Claude draft it, opens a PR, and hands off to review with `needs-review`.
 # `specs` / `development` / `testing` are reserved: it explains that and clears the trigger.
+# `workflow` (CI/skill/agent-authoring changes) is deliberately never auto-drafted — writing
+# to .github/workflows, .claude/skills, .claude/agents from untrusted issue content has no safe
+# add-paths containment the way docs/** does, so a human always authors the first draft; only
+# the review step (workflow-reviewer.md) is automated for this type. It explains that and
+# clears the trigger the same way the reserved types do.
 
 on:
   workflow_call:
@@ -53,7 +58,7 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
-          context_labels="uc requirement adr specs development testing"
+          context_labels="uc requirement adr specs development testing workflow"
 
           present=""
           for l in $context_labels; do
@@ -68,7 +73,7 @@ jobs:
 
           if [ "$count" -eq 0 ]; then
             emit proceed false
-            emit reason "No context label found. Add exactly one of: uc, requirement, adr, specs, development, testing (alongside needs-draft)."
+            emit reason "No context label found. Add exactly one of: uc, requirement, adr, specs, development, testing, workflow (alongside needs-draft)."
             exit 0
           fi
           if [ "$count" -gt 1 ]; then
@@ -82,6 +87,11 @@ jobs:
             requirement) skill=write-requirement; artifact="requirement or constraint";;
             adr)          skill=write-adr;         artifact="Architecture Decision Record (ADR)";;
             specs)       skill=write-impl-spec;   artifact="implementation spec (design + TDD plan)";;
+            workflow)
+              emit proceed false
+              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author (no safe add-paths containment for untrusted issue content outside docs/**). Draft it manually; the review step is still automated."
+              exit 0
+              ;;
             *)
               emit proceed false
               emit reason "Drafting for \`$present\` is not wired up yet (the label is reserved). Draft it manually for now."
