@@ -167,9 +167,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # R9/R14 inputs -- single source of truth is meant to be the owning entity
         # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring
         # ModeSelect/ProfileSelect's own push-on-change), but that entity->coordinator wiring
-        # is not yet threaded (follow-up, alongside Task 6.1's config threading); until then
-        # these default conservatively (no home day, no configured deadline anywhere), and
-        # tests set them directly, the same way they already set soc_limit_override.
+        # is not yet threaded (tracked separately, issue #402); until then these default
+        # conservatively (no home day, no configured deadline anywhere), and tests set them
+        # directly, the same way they already set soc_limit_override.
         self.home_day_flag: bool = False
         self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
         self.departure_holiday_override: time_of_day | None = None
@@ -278,8 +278,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 effective_peak_limit_kw=effective_peak_limit_kw,
             )
 
-        # .get(): the smoothing-window option is only wired into the config entry once Task 6.1
-        # threads it through __init__.py; smoothing runs every cycle regardless of mode.
+        # .get(): a pre-solar config entry predates this option (`DEFAULT_SMOOTHING_WINDOW`
+        # applies); smoothing runs every cycle regardless of mode.
         smoothing_window = self._config.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW)
         smoothed_net_w, self._net_window = smooth_net_power(
             net_w, self._net_window, size=smoothing_window
