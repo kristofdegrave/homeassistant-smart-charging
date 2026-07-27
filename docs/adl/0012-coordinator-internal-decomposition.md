@@ -1,7 +1,7 @@
 # ADR-0012: Coordinator internal decomposition (Strategy + extracted state owners)
 
 Date: 2026-07-23
-Status: Proposed
+Status: Accepted
 
 ## Context
 
