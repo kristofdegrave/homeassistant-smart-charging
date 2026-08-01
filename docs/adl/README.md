@@ -18,8 +18,8 @@ template.
 | [0009](0009-testing-strategy.md) | Testing strategy | Accepted |
 | [0010](0010-engines-package-home.md) | Package home for the cross-cutting engines | Accepted |
 | [0011](0011-cross-manager-coordination-via-domain-events.md) | Cross-Manager coordination via domain events | Accepted |
-| [0012](0012-coordinator-internal-decomposition.md) | Coordinator internal decomposition (Strategy + extracted state owners) | Proposed |
+| [0012](0012-coordinator-internal-decomposition.md) | Coordinator internal decomposition (Strategy + extracted state owners) | Accepted |
 | [0013](0013-stable-owned-entity-object-ids.md) | Stable, locale-independent object_ids for owned entities | Proposed |
-| [0014](0014-state-mutation-encapsulation.md) | State-mutation encapsulation for coordinator-owned state | Proposed |
+| [0014](0014-state-mutation-encapsulation.md) | Setter-method encapsulation for the coordinator's externally-writable fields | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
