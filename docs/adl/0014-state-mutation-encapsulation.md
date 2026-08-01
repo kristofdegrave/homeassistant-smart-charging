@@ -1,141 +1,134 @@
-# ADR-0014: State-mutation encapsulation for coordinator-owned state
+# ADR-0014: Setter-method encapsulation for the coordinator's externally-writable fields
 
 Date: 2026-08-01
 Status: Proposed
 
 ## Context
 
-Issue #420 raises Fowler's Anemic Domain Model concern: a class's own fields should not
-be reassigned from outside it by whatever caller happens to hold a reference; mutation
-should go through a method the class itself defines (or, alternatively, the class should
-be immutable and a method should return a new instance rather than mutate in place).
+A class's own fields should not be reassigned from outside it by whatever caller happens
+to hold a reference — mutation should go through a method the class itself defines, so
+that whatever invariant the field carries is enforced in one place regardless of who is
+calling (Fowler's Anemic Domain Model concern).
 
-The codebase today has three different patterns already in place, none of them
-contradicting each other on their own terms, but with no written rule for which pattern a
-new piece of state should follow:
+Inside the coordinator, this is already how state transitions work: `_mode_state` and
+`_last_active_mode` are reassigned together only from
+`_reset_mode_state_if_changed()` (`coordinator.py:587-595`), the sole method that owns
+that pair, called from `_run_cycle` rather than written from outside. The same shape
+holds for `PeakDemandState.update()` (`coordinator_cycle.py`, ADR-0012): its three
+tracking fields are reassigned only inside that method, never by a caller reaching in
+directly. Pure engine/mode results (`PeakBreachTracker`, `SolarState`/`CaptarState`/
+`SolarOnlyState`, `RequiredCurrentResult`, `SolarStepUpState`) are `@dataclass(frozen=True)`
+and the module-level pure function operating on one returns a new instance rather than
+mutating in place. None of the coordinator's *internal* state transitions are anemic
+today.
 
-- **Pure engine/mode value objects** — `PeakBreachTracker` (`engines/billing_protection.py`),
-  `SolarState`/`CaptarState`/`SolarOnlyState` (`modes/*.py`), `RequiredCurrentResult`
-  (`engines/deadline.py`) — are `@dataclass(frozen=True)`, and the module-level pure
-  function that operates on one returns a new instance (e.g. `apply_peak_clamp` returns
-  `(clamped_current, new_tracker, force_stop)`). No field is ever reassigned in place.
-- **`PeakDemandState`** (`coordinator_cycle.py`, ADR-0012) is the opposite: a plain
-  (non-frozen) dataclass whose three tracking fields (`window`, `tracked_kw`,
-  `tracked_month`) are reassigned only from inside its own `update()` method — no caller
-  ever writes `peak_demand.window = ...` directly.
-- **`SmartChargingCoordinator` itself** does neither. `_run_cycle` reassigns the
-  coordinator's own instance fields directly and repeatedly: `self.active_mode`,
-  `self._mode_state`, `self._was_faulted`, `self._last_active_mode`,
-  `self._last_active_soc_limit`, `self._step_up_state`, `self._net_window`, and
-  `self._required_current` are all set by bare `self.x = ...` from more than a dozen call
-  sites spread across the method (`coordinator.py:279-665`). At least one of these
-  encodes a real cross-field invariant with no single place enforcing it: `_mode_state`
-  must be reset to fresh whenever `active_mode` changes, and today that reset is
-  duplicated by hand at two independent call sites (`coordinator.py:487` and `:594`) —
-  exactly the failure mode an anemic model produces, where an invariant between two
-  fields depends on every caller remembering to keep both in sync, rather than on one
-  method that owns both.
-- **`CycleContext`** (`coordinator_cycle.py`, ADR-0012) is deliberately mutable by design,
-  with its own comment saying so: each of `_run_cycle`'s ten steps sets the one or two
-  fields it resolves (`ctx.surplus_w = ...`, `ctx.urgent = ...`, ...) as that step runs.
-  No field depends on another for validity — each is independently resolved and later
-  read once — so there is no cross-field invariant for a method to protect.
+The gap is at the coordinator's *public* boundary. `SmartChargingCoordinator` exposes
+four plain writable attributes that entity platforms assign directly from outside the
+class, with no method in between:
 
-This ADR decides which of these patterns new coordinator-owned state should follow,
-without reopening ADR-0012 (which already accepted `PeakDemandState`'s and
-`CycleContext`'s specific designs) or ADR-0006/0009/0010's separate rule that pure
-engine/mode logic stays HA-free and side-effect-free.
+- `active_mode`, written by `ModeSelect.async_select_option`/`async_added_to_hass`
+  (`select.py:62,66`)
+- `active_profile`, written by `ProfileSelect.async_select_option`/`async_added_to_hass`
+  (`select.py:89,93`)
+- `target_current`, written by `TargetCurrentNumber.async_set_native_value`/
+  `async_added_to_hass` (`number.py:47,51`)
+- `soc_limit_override`, written by `SocLimitOverrideNumber.async_set_native_value`/
+  `async_added_to_hass` (`number.py:80,84`)
+
+For the two numeric fields, the only range validation is `min(max(value, min_value),
+max_value)` inside `TargetCurrentNumber`/`SocLimitOverrideNumber` themselves
+(`number.py:41-44,74-77`, applied only on restore, not on `async_set_native_value`) —
+the coordinator's own `target_current`/`soc_limit_override` attributes accept whatever
+value is assigned, with no clamp of their own. Any other caller that reaches
+`coordinator.target_current = value` directly (a different entity, a future service
+call, a test) bypasses that clamp entirely; the value is only made safe again if some
+later engine step happens to floor/cap it downstream, which is an accidental side effect
+of that engine's own logic, not a guarantee this field makes about itself.
+`active_mode`/`active_profile` have no numeric range to violate — `SelectEntity`'s own
+`options` list already stops `async_select_option` from ever being called with a value
+outside the enum — but they are written through the same unencapsulated `field =
+value` path as the two numeric ones.
+
+`CycleContext` (`coordinator_cycle.py`, ADR-0012) is a related but separate case: it is a
+per-cycle data carrier introduced by ADR-0012's decomposition, not yet wired into
+`coordinator.py`'s `_run_cycle`. This ADR does not decide anything about it — whether its
+planned field-by-field resolution needs setter methods is a question for the
+implementation spec that wires it in, not this decision.
 
 ## Considered options
 
-### Option A — Status quo: no rule; leave `SmartChargingCoordinator`'s own fields as raw assignment
+### Option A — Status quo: entity platforms keep assigning coordinator fields directly
 
-- Pro: Zero migration cost; nothing in `_run_cycle` changes.
-- Con: The `active_mode`/`_mode_state` reset invariant stays enforced only by convention
-  at two separate call sites, with no structural guard stopping a third mode-change path
-  from being added later without the matching reset — the exact anemic-model failure
-  issue #420 names, and the one already reproducing in this codebase today.
+- Pro: Zero migration cost; matches the common Home Assistant idiom of an entity writing
+  a coordinator attribute and calling `async_request_refresh()`.
+- Con: `target_current`/`soc_limit_override`'s range validation lives only in the
+  entity's own `min`/`max` attrs and is silently skipped for any other caller that
+  assigns the coordinator field directly — the coordinator's own attribute makes no
+  promise about its own validity.
 
-### Option B — Full functional immutability everywhere: no in-place mutation anywhere, including `CycleContext` and the coordinator's own fields
+### Option B — Coordinator holds one immutable state snapshot; every external write goes through a method that returns a new snapshot, coordinator swaps its reference
 
-Every step and every owned object returns a new instance instead of mutating; the
-coordinator threads a new state snapshot through `_run_cycle` each cycle rather than
-holding mutable instance fields at all.
+- Pro: Matches Fowler's other suggested pattern (immutable state, methods return new
+  instances) and the frozen-dataclass style already used throughout `engines/`/`modes/`.
+- Con: Entities hold `self._coordinator = coordinator` for the object's whole lifetime,
+  and HA's own `DataUpdateCoordinator` listener wiring (ADR-0006) is built around that
+  same live reference; swapping the coordinator's identity on every write would break
+  every entity's stored reference and re-open how ADR-0006 wires the coordinator into HA,
+  for a scope far larger than the four fields actually in question.
 
-- Pro: One uniform rule with no categories to learn — matches Fowler's second suggested
-  alternative (immutable state, methods return new instances) applied without exception.
-- Con: `CycleContext`'s in-place field resolution was a deliberate, already-reviewed
-  choice in ADR-0012 for a ten-step, five-second-interval hot loop with ten independently
-  resolved fields and no cross-field invariant to protect; forcing it (and the
-  coordinator's own long-lived fields) through copy-on-write would reopen an Accepted
-  ADR with no new fact that invalidates its reasoning, for a much larger diff than the
-  one real problem (the coordinator's own scattered raw assignment) requires.
+### Option C — Add one setter method per externally-writable field; entity platforms call the method instead of assigning the attribute
 
-### Option C — Encapsulate only state with a cross-field invariant behind an owning method; leave per-cycle `CycleContext` and pure engine/mode value objects as they already are
+Add `set_active_mode(mode)`, `set_active_profile(profile)`, `set_target_current(value)`,
+`set_soc_limit_override(value)` to `SmartChargingCoordinator`, each the single place that
+field's own validation (the range clamp, for the two numeric fields) runs; update the
+four call sites in `select.py`/`number.py` to call the method instead of assigning.
 
-Extend the pattern `PeakDemandState.update()` already established: any state whose fields
-must change together to stay valid gets pulled into its own small object, mutated only by
-a method that changes all of them together. Fields with no such invariant, or state
-scoped to a single cycle (`CycleContext`), stay as they are.
+- Pro: Closes Option A's gap — the range clamp moves from "each entity's own attrs,
+  skipped by any other caller" to "the coordinator's own method, run for every caller" —
+  without touching the coordinator's live identity or its `DataUpdateCoordinator` wiring.
+- Con: Four small setter methods to add and keep in sync with each field's own rule, and
+  four call sites to update across two platform files — a real, if small, diff.
 
-- Pro: Targets exactly the demonstrated problem — the `active_mode`/`_mode_state` reset
-  invariant duplicated at two call sites — using a pattern the codebase has already
-  adopted and had reviewed (`PeakDemandState`); does not touch `CycleContext` or the
-  frozen engine/mode value objects, both already correct on their own terms.
-- Con: Three coexisting mutation conventions (mutator-method state owners, frozen
-  value-objects-plus-pure-functions, and freely-mutable per-cycle scratch objects) means a
-  future contributor must learn which category a given class falls into rather than apply
-  one rule everywhere.
+### Option D — Setter methods only for the two numeric fields (`target_current`,
+`soc_limit_override`); leave `active_mode`/`active_profile` as direct assignment
 
-### Option D — Same as Option C, but also wrap `CycleContext`'s per-step field resolution behind setter methods
-
-- Pro: No object anywhere is ever mutated via a bare `obj.field = value` from outside its
-  own methods — closer to full encapsulation than Option C.
-- Con: `CycleContext`'s ten fields are each resolved independently by a different step
-  with nothing to protect between them (no field's validity depends on another's value);
-  wrapping each in a one-line setter is ceremony with no invariant behind it, and reopens
-  ADR-0012's already-accepted `CycleContext` design without a new reason to.
+- Pro: Smaller diff than Option C — targets only the two fields with a real range
+  invariant a bad caller could violate; `active_mode`/`active_profile` can't receive an
+  invalid value today because `SelectEntity`'s own `options` list already rejects
+  anything outside the enum before `async_select_option` is ever called.
+- Con: Leaves two of the four externally-written fields unencapsulated "because they
+  happen to be safe today", with no rule covering what happens if either later gains a
+  second constraint beyond options-list membership (e.g. a mode becoming runtime-
+  unavailable, not just configuration-time-absent) — a boundary drawn per field's current
+  behavior rather than per field's role (externally-writable coordinator state).
 
 ## Decision
 
-Option C. The rule: **a field may be reassigned directly only if no other field's
-validity depends on it; state where two or more fields must change together to stay
-consistent must be owned by its own object, mutated only through a method that changes
-all of them together** — the same shape `PeakDemandState.update()` already established.
-This makes the choice between "mutator method" and "immutable value returned by a
-function" (issue #420's two suggested alternatives) a consequence of one question — does
-this object outlive a single control cycle and carry a cross-field invariant? — rather
-than a global either/or:
-
-- Pure engine/mode results (`PeakBreachTracker`, `SolarState`, `RequiredCurrentResult`,
-  ...) stay frozen dataclasses returned fresh by pure functions — they carry no identity
-  across cycles for a mutator method to attach to; ADR-0006/0009/0010's HA-free,
-  side-effect-free rule for this layer is unaffected.
-- `PeakDemandState` is unchanged and is the model going forward: cross-cycle,
-  invariant-bearing state gets a mutator method.
-- `CycleContext` is unchanged: single-cycle scoped, no cross-field invariant, so direct
-  field assignment during its one cycle of life is not the problem this ADR addresses.
-- `SmartChargingCoordinator`'s own `active_mode`/`_mode_state` pair is the one violation
-  this ADR requires fixing, since it is the one demonstrated case of an invariant
-  enforced only by convention at multiple call sites.
+Option C. It closes the actual gap named in Context — validation for
+`target_current`/`soc_limit_override` living only in the entity, silently bypassable by
+any other caller — using the same "mutate only through an owning method" shape the
+coordinator's internal transitions (`_reset_mode_state_if_changed`,
+`PeakDemandState.update()`) already use, so the coordinator's external boundary follows
+the same rule as its internal one instead of a different, weaker one. It avoids Option
+B's cost of re-deriving ADR-0006's coordinator/HA wiring for a problem that is scoped to
+four fields, not the coordinator's whole identity. Option D's smaller diff is rejected
+because it draws the encapsulation boundary around each field's current behavior
+("safe today") rather than its role (externally-writable coordinator state), which gives
+no rule for the next field added to this surface.
 
 ## Consequences
 
-- Follow-up issue: extract `active_mode`, `_mode_state`, and `_last_active_mode` into one
-  small owned object (e.g. a `ModeTransitionState` mutated only by a
-  `transition_to(new_mode)` method that resets `_mode_state` exactly once), replacing the
-  two independent reset call sites at `coordinator.py:487` and `:594`. This is
-  implementation-spec-level detail, not part of this decision.
-- `_was_faulted`, `_last_active_soc_limit`, `_step_up_state`, `_net_window`, and
-  `_required_current` are single fields with no sibling field's validity depending on
-  them today; this ADR does not require extracting them, but any future addition that
-  gives one of them a cross-field invariant (as `_mode_state` already has with
-  `active_mode`) must follow this same rule rather than adding another hand-kept
-  convention.
-- This ADR does not reopen ADR-0012's `CycleContext` or `PeakDemandState` designs, and
-  does not change ADR-0006/0009/0010's rule that engine/mode logic stays pure and
-  HA-free.
-- A future object that needs cross-field invariant protection follows this same rule by
-  construction — no new ADR needed per object, only when the *category* boundary itself
-  is challenged (e.g., a proposal to make `CycleContext` invariant-bearing, or to drop
-  frozen dataclasses for engine results).
+- Follow-up issue: add `set_active_mode`, `set_active_profile`, `set_target_current`,
+  and `set_soc_limit_override` to `SmartChargingCoordinator`; move the range clamp for
+  the two numeric setters from `TargetCurrentNumber`/`SocLimitOverrideNumber` into the
+  coordinator method (or have the entity clamp for its own displayed value and the
+  coordinator clamp independently for its own — an implementation-spec-level choice, not
+  part of this decision); update the four call sites in `select.py`/`number.py` to call
+  the new methods instead of assigning.
+- Any future field added to the coordinator's externally-writable surface follows this
+  same rule (a setter method, not a bare attribute) rather than needing its own ADR.
+- Does not change `_reset_mode_state_if_changed()`, `PeakDemandState`, or any
+  frozen engine/mode value object — all already follow the pattern this ADR generalizes
+  to the coordinator's public boundary.
+- Does not decide anything about `CycleContext`, which is not yet wired into
+  `coordinator.py`; that is scoped to the implementation spec that wires it in.
