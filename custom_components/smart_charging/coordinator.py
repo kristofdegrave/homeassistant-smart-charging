@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import time as time_of_day
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .adapters.sun import SUN_STATE_ABOVE_HORIZON, SUN_STATE_BELOW_HORIZON
 from .const import (
     ATTR_ACTIVE_SOC_LIMIT,
+    ATTR_REQUIRED_CURRENT_A,
     CHARGEABLE_STATES,
+    CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
@@ -27,14 +32,19 @@ from .const import (
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
+    DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_GRACE_MIN,
@@ -42,10 +52,13 @@ from .const import (
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+    DEFAULT_SOLAR_RESERVE_SOC,
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
+    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -57,26 +70,39 @@ from .const import (
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
+    ROLE_DEPARTURE_EXTERNAL,
+    ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
+    ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
+    ROLE_SOLAR_FORECAST,
+    ROLE_SUN,
 )
+from .coordinator_cycle import PeakDemandState
 from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
     resolve_effective_peak_limit,
 )
+from .engines.capability_gate import resolve_available_modes
 from .engines.cycle_invariant import apply_floor_cap
+from .engines.deadline import (
+    RequiredCurrentResult,
+    resolve_departure_deadline,
+    resolve_required_current,
+)
 from .engines.grid_safety import clamp_to_ceiling
-from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import (
     SolarStepUpState,
     resolve_active_soc_limit,
+    resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
 from .modes import captar, power, solar, solar_only
 from .modes._phase import Phase
+from .profiles.auto import select_mode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,17 +164,30 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ADR-0011: the prior cycle's resolved active SOC limit, for ActiveSocLimitChanged's
         # change-detection. None on cycle 1, so the first resolution always fires the event.
         self._last_active_soc_limit: float | None = None
+        # R9/R14 inputs -- single source of truth is meant to be the owning entity
+        # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring
+        # ModeSelect/ProfileSelect's own push-on-change), but that entity->coordinator wiring
+        # is not yet threaded (tracked separately, issue #402); until then these default
+        # conservatively (no home day, no configured deadline anywhere), and tests set them
+        # directly, the same way they already set soc_limit_override.
+        self.home_day_flag: bool = False
+        self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
+        self.departure_holiday_override: time_of_day | None = None
+        self.departure_home_day_override: time_of_day | None = None
+        # R5: the last cycle's required-current/urgency determination -- exposed for Task 5.3's
+        # own use and inspected directly by tests, the same way `_step_up_state` already is.
+        self._required_current = RequiredCurrentResult(
+            required_a=None, urgent=False, unreachable=False
+        )
         self._last_active_mode: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = _fresh_mode_state()
         self._was_faulted = False
         # M1's OWN 15-minute window (E5, Task 1.3), distinct from R10's `_net_window` above --
-        # a MonthlyPeakSensor restore may seed `_peak_tracked_kw`/`_peak_tracked_month` before
+        # a MonthlyPeakSensor restore may seed `_peak_demand.tracked_kw`/`.tracked_month` before
         # the first cycle (Task 4.2); the window itself is deliberately never persisted (design
-        # doc Sec 6.4), so it always starts empty here.
-        self._peak_window: tuple[float, ...] = ()
-        self._peak_tracked_kw: float = 0.0
-        self._peak_tracked_month: tuple[int, int] | None = None
+        # doc Sec 6.4), so it always starts empty here. Owned by PeakDemandState (ADR-0012).
+        self._peak_demand = PeakDemandState()
         self._peak_tracker = PeakBreachTracker()
 
     async def _async_update_data(self) -> CycleResult:
@@ -181,68 +220,61 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # real wall-clock (dt_util.now()) for month rollover, distinct from the monotonic `now`
         # the mode state machines use below.
         now_dt = dt_util.now()
-        current_month = (now_dt.year, now_dt.month)
-        if current_month != self._peak_tracked_month:
-            # Month rollover resets the SMOOTHING WINDOW too, not just the tracked value --
-            # otherwise this cycle's "smoothed" reading would still partly reflect last month's
-            # raw samples (design doc Sec 6.4's month-rollover note).
-            self._peak_window = ()
         peak_window_size = self._config.get(
             CONF_PEAK_WINDOW_SIZE, max(1, round(PEAK_WINDOW_SECONDS / self._interval_s))
         )
-        smoothed_peak_w, self._peak_window = smooth_net_power(
-            net_w, self._peak_window, size=peak_window_size
-        )
-        monthly_peak_kw, self._peak_tracked_month = update_monthly_peak_demand(
-            smoothed_peak_w / 1000.0,
-            current_month,
-            self._peak_tracked_kw,
-            self._peak_tracked_month,
-        )
-        self._peak_tracked_kw = monthly_peak_kw
-        # Placeholder urgent=False reproduces today's row-2-only behavior; Task 5.3 wires the
-        # real resolved urgency (E4) into this call.
+        monthly_peak_kw = self._peak_demand.update(net_w, now_dt, window_size=peak_window_size)
+        # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
+        # known -- overwritten with the real `urgent` value once required-current resolves.
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw,
             self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
             urgent=False,
         )
+        # R11: catches a Manual mode change here (already final -- set externally before this
+        # cycle runs), before the baseline-mode dry run below reads _mode_state, so that dry
+        # run sees fresh state on the very cycle the user switches modes. Idempotent -- a no-op
+        # if nothing has changed yet, which is always true for Auto at this point (its own mode
+        # isn't resolved until later, below); the same check runs again after that resolution,
+        # to catch an Auto mode change too.
+        self._reset_mode_state_if_changed()
 
-        if self.active_mode != self._last_active_mode:
-            # R11: switching mode resets timers -- fresh state for every mode with one, whether
-            # or not the incoming mode is one of them (a state nobody is dispatching to is inert
-            # either way).
-            self._mode_state = _fresh_mode_state()
-            self._last_active_mode = self.active_mode
-
-        # ev_soc is read -- and its absence is a fault -- ONLY while a solar mode or Captar is
-        # selected AND the car is connected (success-criterion 6 / S2: Power/Off must not regress
-        # to needing an SOC sensor; a disconnected car is a clean idle stop, not a fault, even if
-        # its SOC sensor also goes unavailable on unplug, per UC01/R7).
+        # ev_soc is read whenever the car is connected and the role is configured -- Task 5.2's
+        # deadline-urgency comparison needs it regardless of mode (R5 is cross-cutting), not
+        # only while a solar mode or Captar is selected. Its absence is only ever a FAULT while
+        # a solar mode or Captar is selected AND the car is connected (success-criterion 6 / S2:
+        # Power/Off must not regress to needing an SOC sensor; a disconnected car is a clean idle
+        # stop, not a fault, even if its SOC sensor also goes unavailable on unplug, per UC01/R7);
+        # outside that gate a missing reading just means deadline urgency can't be computed this
+        # cycle (below), not a fault.
         ev_soc = None
-        if self.active_mode in _SOC_GATED_MODES and status in CHARGEABLE_STATES:
-            ev_soc = (
-                await self._adapters[ROLE_EV_SOC].read() if ROLE_EV_SOC in self._adapters else None
+        if status in CHARGEABLE_STATES and ROLE_EV_SOC in self._adapters:
+            ev_soc = await self._adapters[ROLE_EV_SOC].read()
+        if self.active_mode in _SOC_GATED_MODES and status in CHARGEABLE_STATES and ev_soc is None:
+            self._log_fault("ev_soc required while a solar mode is active but missing/None")
+            await self._write(0.0)
+            return CycleResult(
+                commanded_current=0.0,
+                fault=True,
+                active_mode=self.active_mode,
+                monthly_peak_kw=monthly_peak_kw,
+                effective_peak_limit_kw=effective_peak_limit_kw,
             )
-            if ev_soc is None:
-                self._log_fault("ev_soc required while a solar mode is active but missing/None")
-                await self._write(0.0)
-                return CycleResult(
-                    commanded_current=0.0,
-                    fault=True,
-                    active_mode=self.active_mode,
-                    monthly_peak_kw=monthly_peak_kw,
-                    effective_peak_limit_kw=effective_peak_limit_kw,
-                )
 
-        # .get(): the smoothing-window option is only wired into the config entry once Task 6.1
-        # threads it through __init__.py; smoothing runs every cycle regardless of mode.
+        # .get(): a pre-solar config entry predates this option (`DEFAULT_SMOOTHING_WINDOW`
+        # applies); smoothing runs every cycle regardless of mode.
         smoothing_window = self._config.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW)
         smoothed_net_w, self._net_window = smooth_net_power(
             net_w, self._net_window, size=smoothing_window
         )
+        surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
+        # the baseline-mode dry-run (Task 5.2)
+        now = self.hass.loop.time()  # injected, not read inside modes/engines
         # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
-        # cycle from THIS cycle's resolved active_mode/active_profile, not the prior one.
+        # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
+        # already this cycle's final value (set externally before the cycle runs); under Auto,
+        # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
+        # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
         is_solar_mode_charging = (
             self.active_profile == PROFILE_AUTO
             and self.active_mode in _SOLAR_MODES
@@ -259,13 +291,57 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             step_pp=self._config.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
             max_solar_soc=self._config.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
         )
-        # solar_reserve_active/solar_reserve_soc are placeholders (row 1 always inactive) --
-        # Task 5.2 replaces them with the real resolve_solar_reserve_active/CONF_SOLAR_RESERVE_SOC
-        # values, once the deadline-tomorrow resolution it depends on is wired in.
+
+        # R14: departure-external role + sun state, shared by both today's and tomorrow's
+        # (one-day-ahead, R9) deadline resolution below. is_holiday is hardcoded False in both
+        # calls -- UC11 (public-holiday recognition) is out of this slice's scope, no holiday
+        # source is wired in yet, so row 2 of R14's table never matches until UC11 lands.
+        external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
+        external = (
+            await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
+        )
+        sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
+        sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
+        sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
+        # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
+        # default -- "the signal is omitted and the flag is treated as always active".
+        low_tariff_active = True
+        if ROLE_LOW_TARIFF in self._adapters:
+            low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
+            if low_tariff_reading is not None:
+                low_tariff_active = low_tariff_reading
+        today_weekday = now_dt.weekday()
+        tomorrow_weekday = (today_weekday + 1) % 7
+
+        # R9's precondition (UC07): the same R14 table evaluated one day ahead.
+        deadline_tomorrow = resolve_departure_deadline(
+            external_configured,
+            external,
+            is_holiday=False,
+            holiday_override=self.departure_holiday_override,
+            home_day_flag=self.home_day_flag,
+            home_day_override=self.departure_home_day_override,
+            day_of_week_default=self.departure_dow_defaults.get(tomorrow_weekday),
+        )
+        forecast_kwh = (
+            await self._adapters[ROLE_SOLAR_FORECAST].read()
+            if ROLE_SOLAR_FORECAST in self._adapters
+            else None
+        )
+        solar_reserve_active = resolve_solar_reserve_active(
+            profile=self.active_profile,
+            home_day_flag=self.home_day_flag,
+            sun_is_down=sun_is_down,
+            forecast_kwh=forecast_kwh if forecast_kwh is not None else 0.0,
+            forecast_threshold_kwh=self._config.get(
+                CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
+            ),
+            deadline_tomorrow_resolved=deadline_tomorrow is not None,
+        )
         active_soc_limit = resolve_active_soc_limit(
             self.soc_limit_override,
-            solar_reserve_active=False,
-            solar_reserve_soc=0.0,
+            solar_reserve_active=solar_reserve_active,
+            solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
             step_up_state=self._step_up_state,
         )
         if active_soc_limit != self._last_active_soc_limit:
@@ -273,7 +349,136 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
             )
         self._last_active_soc_limit = active_soc_limit
-        now = self.hass.loop.time()  # injected, not read inside modes/engines
+
+        # R5/R14/R15: today's departure deadline and the required-current/urgency it drives.
+        # Guarded on ev_soc being known -- without an SOC reading (disconnected, or a
+        # non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring
+        # R14's own "no deadline resolved -> urgency never applies" shape. `auto_dispatchable`
+        # is also this cycle's own gate for actually resolving Auto's active mode below --
+        # computed once here and reused there, rather than repeating the same conjunction, so
+        # the two can never drift apart. When it's False (disconnected, or Auto with no ev_soc
+        # role mapped at all), Auto simply keeps whatever active_mode it last resolved -- a
+        # deliberate, scope-truthful simplification, same as required-current's own guard above.
+        auto_dispatchable = (
+            self.active_profile == PROFILE_AUTO
+            and status in CHARGEABLE_STATES
+            and ev_soc is not None
+        )
+        if status in CHARGEABLE_STATES and ev_soc is not None:
+            deadline_today = resolve_departure_deadline(
+                external_configured,
+                external,
+                is_holiday=False,
+                holiday_override=self.departure_holiday_override,
+                home_day_flag=self.home_day_flag,
+                home_day_override=self.departure_home_day_override,
+                day_of_week_default=self.departure_dow_defaults.get(today_weekday),
+            )
+            sensed_capacity_kwh = (
+                await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
+                if ROLE_EV_BATTERY_CAPACITY in self._adapters
+                else None
+            )
+            # R15: prefer the sensed role's current reading, falling back to the configured
+            # value both when the role is unmapped and when it currently reads None.
+            effective_battery_capacity_kwh = (
+                sensed_capacity_kwh
+                if sensed_capacity_kwh is not None
+                else self._config.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH)
+            )
+            if auto_dispatchable:
+                # The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
+                # (urgent=False) every cycle -- never Captar's own already-escalated request,
+                # per resolution-rules.md's explicit warning against that (it would make urgency
+                # look satisfied the instant it engages and revert every cycle).
+                available_modes = resolve_available_modes(
+                    solar_available=self._config.get(CONF_SOLAR_INSTALLED, False),
+                    captar_available=self._config.get(
+                        CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE
+                    ),
+                )
+                baseline_mode = select_mode(
+                    soc=ev_soc,
+                    active_soc_limit=active_soc_limit,
+                    available_modes=available_modes,
+                    urgent=False,
+                    solar_capability_present=self._config.get(CONF_SOLAR_INSTALLED, False),
+                    sun_is_up=sun_is_up,
+                    solar_surplus_sufficient=surplus_w
+                    >= self._config[CONF_SOLAR_START_THRESHOLD_W],
+                    sun_is_down=sun_is_down,
+                    low_tariff_active=low_tariff_active,
+                    solar_reserve_active=solar_reserve_active,
+                )
+            else:
+                baseline_mode = self.active_mode
+            baseline_desired_a = self._mode_desired_current(
+                baseline_mode,
+                status=status,
+                ev_soc=ev_soc,
+                active_soc_limit=active_soc_limit,
+                surplus_w=surplus_w,
+                voltage=voltage,
+                now=now,
+            )
+            required = resolve_required_current(
+                deadline_today,
+                # engines/deadline.py combines this with a naive `time` (the departure-time
+                # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
+                # doesn't raise (both sides represent the same local wall clock either way).
+                # Wall-clock subtraction on the two DST-transition days a year can be off by
+                # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
+                now_dt.replace(tzinfo=None),
+                soc=ev_soc,
+                active_soc_limit=active_soc_limit,
+                ev_battery_capacity_kwh=effective_battery_capacity_kwh,
+                voltage=voltage,
+                baseline_desired_a=baseline_desired_a,
+                # A deliberate simplification of "maximum permitted rate"'s full peak-clamp-fitted
+                # definition (system-overview.md glossary) down to C1's hard ceiling -- refining
+                # this to the actual peak-fitted rate is tracked follow-up work (issue #367),
+                # not this task's job; it only affects when DeadlineUnreachableNotified fires.
+                maximum_permitted_rate_a=self._config[CONF_MAX_CURRENT],
+            )
+        else:
+            required = RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)
+        # Exposed for Task 5.3's own use (the effective-peak-limit `urgent` parameter and Auto
+        # mode-selection's escalation) and for tests, the same way `_step_up_state` already is.
+        self._required_current = required
+        if required.unreachable:
+            self.hass.bus.async_fire(
+                EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: required.required_a}
+            )
+
+        # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
+        # Urgent (UC05's Postconditions) -- this `or` makes that explicit even though
+        # `unreachable` implies `urgent` by construction, per the required-current formula.
+        urgent = required.urgent or required.unreachable
+        effective_peak_limit_kw = resolve_effective_peak_limit(
+            monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW), urgent=urgent
+        )
+        if auto_dispatchable:
+            # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
+            # never changes here while Manual, even under urgency) -- only Auto resolves its
+            # own mode, via the real (non-baseline) urgent this time.
+            self.active_mode = select_mode(
+                soc=ev_soc,
+                active_soc_limit=active_soc_limit,
+                available_modes=available_modes,
+                urgent=urgent,
+                solar_capability_present=self._config.get(CONF_SOLAR_INSTALLED, False),
+                sun_is_up=sun_is_up,
+                solar_surplus_sufficient=surplus_w >= self._config[CONF_SOLAR_START_THRESHOLD_W],
+                sun_is_down=sun_is_down,
+                low_tariff_active=low_tariff_active,
+                solar_reserve_active=solar_reserve_active,
+            )
+
+        # Checked again here, after Auto's own mode resolution above -- catches a same-cycle
+        # Auto escalation/revert in time for this cycle's own dispatch below, not one cycle
+        # late (the earlier call above only ever catches a Manual change, since Auto's mode
+        # isn't resolved yet at that point).
+        self._reset_mode_state_if_changed()
 
         if status not in CHARGEABLE_STATES:
             desired = 0.0
@@ -299,7 +504,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     else solar_only.SolarOnlyState.idle()
                 )
         elif self.active_mode == MODE_SOLAR:
-            surplus_w = charger_w - smoothed_net_w
             desired, self._mode_state[MODE_SOLAR] = solar.step(
                 surplus_w,
                 self._mode_state[MODE_SOLAR],
@@ -311,7 +515,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 voltage=voltage,
             )
         elif self.active_mode == MODE_SOLAR_ONLY:
-            surplus_w = charger_w - smoothed_net_w
             desired, self._mode_state[MODE_SOLAR_ONLY] = solar_only.step(
                 surplus_w,
                 self._mode_state[MODE_SOLAR_ONLY],
@@ -380,6 +583,72 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_peak_limit_kw=effective_peak_limit_kw,
             active_soc_limit=active_soc_limit,
         )
+
+    def _reset_mode_state_if_changed(self) -> None:
+        """R11: switching mode resets timers -- fresh state for every mode with one, whether
+        or not the incoming mode is one of them (a state nobody is dispatching to is inert
+        either way). Idempotent -- a no-op once `_last_active_mode` catches up, so calling
+        this twice in the same cycle (Manual's change is already final at the top of the
+        cycle; Auto's own mode isn't resolved until later) never double-resets."""
+        if self.active_mode != self._last_active_mode:
+            self._mode_state = _fresh_mode_state()
+            self._last_active_mode = self.active_mode
+
+    def _mode_desired_current(
+        self,
+        mode: str,
+        *,
+        status: str,
+        ev_soc: float,
+        active_soc_limit: float,
+        surplus_w: float,
+        voltage: float,
+        now: float,
+    ) -> float:
+        """`mode`'s own desired current this cycle, from the same dispatch table `_run_cycle`
+        uses below, without mutating any persisted per-mode state -- Task 5.2's baseline-mode
+        comparison needs a candidate mode's request without actually charging on it."""
+        if status not in CHARGEABLE_STATES or mode == MODE_OFF:
+            return 0.0
+        if mode == MODE_POWER:
+            return power.desired_current(self.target_current, status)
+        if mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
+            return 0.0
+        if mode == MODE_SOLAR:
+            desired, _ = solar.step(
+                surplus_w,
+                self._mode_state[MODE_SOLAR],
+                now,
+                start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
+                min_a=self._config[CONF_MIN_CURRENT],
+                hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
+                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
+                voltage=voltage,
+            )
+            return desired
+        if mode == MODE_SOLAR_ONLY:
+            desired, _ = solar_only.step(
+                surplus_w,
+                self._mode_state[MODE_SOLAR_ONLY],
+                now,
+                start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
+                min_a=self._config[CONF_MIN_CURRENT],
+                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
+                strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
+                midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
+                voltage=voltage,
+            )
+            return desired
+        # MODE_CAPTAR
+        desired, _ = captar.step(
+            self._mode_state[MODE_CAPTAR],
+            now,
+            max_a=self._config[CONF_MAX_CURRENT],
+            cooldown_minutes=self._config.get(
+                CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
+            ),
+        )
+        return desired
 
     async def _write(self, value: float) -> None:
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)

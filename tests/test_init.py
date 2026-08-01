@@ -13,12 +13,14 @@ from custom_components.smart_charging.const import (
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
+    CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
@@ -26,13 +28,19 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_INSTALLED,
+    CONF_SOLAR_RESERVE_SOC,
+    CONF_SOLAR_STEP_PP,
+    CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     DOMAIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
+    PROFILE_AUTO,
     STATE_CHARGING,
     STATE_CONNECTED,
 )
@@ -94,8 +102,8 @@ def _seed_ample_peak_headroom(coordinator, kw=100.0):
     (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
     predates peak protection and never seeded any tracked history of its own."""
     now_dt = dt_util.now()
-    coordinator._peak_tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_tracked_kw = kw
+    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coordinator._peak_demand.tracked_kw = kw
 
 
 async def test_end_to_end_commands_target_current(hass):
@@ -267,6 +275,68 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
 
     assert hass.states.get("sensor.smart_charging_status").state == "OK"
     assert calls[-1]["value"] == 10.0  # default_target_current, unclamped by R3.
+
+
+async def test_setup_threads_deadline_and_soc_management_options_into_coordinator_config(hass):
+    """#327 (T6.1): setup must wire the Deadline & SOC Management epic's options (Phase 3's
+    CONF_EV_BATTERY_CAPACITY_KWH/CONF_MAX_SOLAR_SOC/CONF_SOLAR_STEP_PP/
+    CONF_SOLAR_STEP_THRESHOLD_PP/CONF_SOLAR_RESERVE_SOC/CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    consumed via `self._config.get(...)` in coordinator.py's R8/R9/R15 wiring) into the
+    coordinator's config dict as non-default overrides, not just fall back to the coordinator's
+    own internal defaults."""
+    _seed_states(hass, status="Charging")
+    options = _entry_options()
+    options[CONF_EV_BATTERY_CAPACITY_KWH] = 60.0
+    options[CONF_MAX_SOLAR_SOC] = 90.0
+    options[CONF_SOLAR_STEP_PP] = 10.0
+    options[CONF_SOLAR_STEP_THRESHOLD_PP] = 5.0
+    options[CONF_SOLAR_RESERVE_SOC] = 70.0
+    options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] = 20.0
+
+    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    config = coordinator._config
+    assert config[CONF_EV_BATTERY_CAPACITY_KWH] == 60.0
+    assert config[CONF_MAX_SOLAR_SOC] == 90.0
+    assert config[CONF_SOLAR_STEP_PP] == 10.0
+    assert config[CONF_SOLAR_STEP_THRESHOLD_PP] == 5.0
+    assert config[CONF_SOLAR_RESERVE_SOC] == 70.0
+    assert config[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 20.0
+
+
+async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass):
+    """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
+    CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
+    R9 reserve cap (coordinator.py's `resolve_active_soc_limit` read), not just into an inert
+    dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
+    reserve engages (UC07 main success scenario) at the *configured* 70.0, not
+    DEFAULT_SOLAR_RESERVE_SOC (60.0)."""
+    _seed_states(hass, status="Charging")
+    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    data = _entry_data()
+    data[CONF_SOLAR_FORECAST_ENTITY] = "sensor.solar_forecast"
+    options = _entry_options()
+    options[CONF_SOLAR_RESERVE_SOC] = 70.0
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator.active_profile = PROFILE_AUTO
+    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit")
+    assert float(hass.states.get(entity_id).state) == 70.0
 
 
 async def test_select_omits_captar_when_unavailable(hass):

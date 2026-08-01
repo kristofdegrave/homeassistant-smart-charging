@@ -55,6 +55,11 @@ Use-cases plug into two shared mechanism documents rather than restating them:
   (a best-effort exception to `Power` otherwise never being Auto-selected) when it is absent
   (`resolution-rules.md`, Auto mode-selection row 2, R18) — so `Auto` meets far more deadlines
   than `Manual` can, since `Manual` never gets that second lever.
+- **UC05 and UC10 apply only while the deadline capability is present (R18).** Both hang off the
+  departure-deadline resolution, which is not evaluated at all when that capability is absent
+  (`resolution-rules.md`) — no deadline is ever resolved, so urgency never engages (UC05) and no
+  plug-in reminder ever fires (UC10). The capability defaults to present, so both are live on a
+  default installation.
 - **The `Auto` profile is not a use-case.** Choosing which mode is active is a priority-ordered
   decision with no human pursuing a goal, so it lives as the Auto mode-selection table in
   [`resolution-rules.md`](../resolution-rules.md). The `Manual` profile needs no document — the

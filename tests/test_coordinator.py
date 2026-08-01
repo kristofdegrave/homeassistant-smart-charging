@@ -1,11 +1,16 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+from datetime import timedelta
+
 import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
+    ATTR_REQUIRED_CURRENT_A,
+    CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
@@ -20,25 +25,33 @@ from custom_components.smart_charging.const import (
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    DEFAULT_CAPTAR_AVAILABLE,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
+    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
     PROFILE_AUTO,
+    PROFILE_MANUAL,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
+    ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
+    ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
+    ROLE_SOLAR_FORECAST,
+    ROLE_SUN,
     STATE_CHARGING,
     STATE_DISCONNECTED,
 )
@@ -46,6 +59,7 @@ from custom_components.smart_charging.coordinator import SmartChargingCoordinato
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
+from custom_components.smart_charging.modes.captar import CaptarState
 
 _AMPLE_PEAK_HEADROOM_KW = 100.0  # keeps R3's clamp out of the way of tests that don't test it
 
@@ -79,7 +93,14 @@ class _RaisingNumeric:
 
 
 def _adapters(
-    status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, ev_soc_role=True, ev_soc=50.0
+    status=STATE_CHARGING,
+    net_w=0.0,
+    charger_w=0.0,
+    voltage=230.0,
+    ev_soc_role=True,
+    ev_soc=50.0,
+    sun_state=None,
+    low_tariff=None,
 ):
     adapters = {
         ROLE_CHARGER_CURRENT: _FakeNumeric(0.0),
@@ -87,9 +108,15 @@ def _adapters(
         ROLE_NET_POWER: _FakeNumeric(net_w),
         ROLE_CHARGER_POWER: _FakeNumeric(charger_w),
         ROLE_GRID_VOLTAGE: _FakeNumeric(voltage),
+        # ROLE_SUN is built unconditionally by the real factory (issue #376) -- present
+        # here too, `sun_state=None` (both sun_is_up/sun_is_down False) matching the prior
+        # default behavior of an unset sun.sun entity.
+        ROLE_SUN: _FakeNumeric(sun_state),
     }
     if ev_soc_role:
         adapters[ROLE_EV_SOC] = _FakeNumeric(ev_soc)
+    if low_tariff is not None:
+        adapters[ROLE_LOW_TARIFF] = _FakeNumeric(low_tariff)
     return adapters
 
 
@@ -119,13 +146,23 @@ def _config():
     }
 
 
+def _seed_today_deadline(coord, hours_from_now):
+    """Seed today's departure-deadline default so it resolves `hours_from_now` ahead of
+    real wall-clock now (Task 5.2's deadline/required-current resolution reads dt_util.now(),
+    not the mode state machines' injected monotonic clock)."""
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = (
+        now_dt + timedelta(hours=hours_from_now)
+    ).time()
+
+
 def _seed_ample_peak_headroom(coord, kw=_AMPLE_PEAK_HEADROOM_KW):
     """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
     (the same shape a MonthlyPeakSensor restore would seed, Task 4.2) -- keeps R3's clamp
     out of the way of tests that exercise unrelated behavior, not R3 itself."""
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = kw
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = kw
 
 
 async def _run(hass, adapters, config, target):
@@ -507,8 +544,8 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_OFF
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.0  # already-tracked peak is the lesser of the two
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.0  # already-tracked peak is the lesser of the two
 
     result = await coord._async_update_data()
 
@@ -527,8 +564,8 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.56
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.56
 
     result = await coord._async_update_data()
 
@@ -550,8 +587,8 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 0.1
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 0.1
 
     result = await coord._async_update_data()
 
@@ -573,8 +610,8 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 1.0
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 1.0
 
     result = await coord._async_update_data()
 
@@ -601,8 +638,8 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 1.0
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 1.0
     await coord._async_update_data()
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
 
@@ -611,7 +648,7 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     ample = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord._adapters = ample
     coord._config = {**config, CONF_MAX_PEAK_KW: _AMPLE_PEAK_HEADROOM_KW}
-    coord._peak_tracked_kw = _AMPLE_PEAK_HEADROOM_KW
+    coord._peak_demand.tracked_kw = _AMPLE_PEAK_HEADROOM_KW
     coord.active_mode = MODE_OFF
     await coord._async_update_data()
     coord.active_mode = MODE_CAPTAR
@@ -650,8 +687,8 @@ async def test_power_respects_peak_by_default(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.56
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.56
 
     result = await coord._async_update_data()
 
@@ -669,8 +706,8 @@ async def test_power_can_opt_out_of_peak_protection(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
     now_dt = dt_util.now()
-    coord._peak_tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_tracked_kw = 3.56
+    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
+    coord._peak_demand.tracked_kw = 3.56
 
     result = await coord._async_update_data()
 
@@ -804,3 +841,404 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
     await coord._async_update_data()  # changed -> fires again
     assert len(events) == 2
     assert events[1].data[ATTR_ACTIVE_SOC_LIMIT] == 90.0
+
+
+# --- Task 5.2: deadline resolution, required-current/urgency, baseline-mode comparison ---
+
+
+async def test_urgency_engages_when_required_current_exceeds_baseline(hass, freezer):
+    """Manual profile: baseline is simply the manually selected mode's own desired current
+    (Power's target_current here) -- a required current above it is urgent (R5)."""
+    freezer.move_to("2026-01-15 12:00:00")  # fixed, away from midnight (no rollover semantics)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 2.0  # well below the ~3.26 A the deadline below will require
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert coord._required_current.unreachable is False
+
+
+async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass, freezer):
+    """Same deadline as above, but Power's own target current already exceeds what's
+    required -- urgency never engages (R16's revert case)."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 5.0  # above the ~3.26 A the deadline below requires
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is False
+
+
+async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
+    """Regression per resolution-rules.md's own warning: comparing against Captar's own
+    (already-maximum) desired current would make urgency look satisfied instantly and
+    revert every cycle -- this test drives that exact scenario and asserts urgency holds."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0, sun_state="above_horizon")
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_CAPTAR  # already escalated from a prior cycle
+    coord.soc_limit_override = 80.0
+    # No solar capability and sun up -> Auto's own baseline (rows 3-5, urgent=False) falls
+    # through to Off, not Captar -- the required current below (~3.26 A) only exceeds a
+    # baseline of 0 A, never Captar's own (already-maximum, 16 A) desired current.
+    _seed_today_deadline(coord, hours_from_now=2)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+
+
+async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
+    """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
+    mutual-exclusivity clause)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state="below_horizon")
+    adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    coord.home_day_flag = True
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+    assert result.active_soc_limit == 60.0  # DEFAULT_SOLAR_RESERVE_SOC -- reserve engaged
+
+    # R14 row 3 (home_day_flag already True above) wins over the day-of-week default, so the
+    # home-day override -- not departure_dow_defaults -- is what must resolve for the
+    # one-day-ahead evaluation to stop returning "no deadline".
+    coord.departure_home_day_override = dt_util.now().time()
+    result = await coord._async_update_data()
+    assert result.active_soc_limit == 80.0  # tomorrow deadline resolved -> reserve lifted
+
+
+async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, freezer):
+    """R15: with `ev_battery_capacity` role mapped and reading 60.0 kWh, the required-current
+    computation uses 60.0, not CONF_EV_BATTERY_CAPACITY_KWH's configured default."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(60.0)
+    config = _config()
+    config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    expected_required_a = (60.0 * 30 / 100 * 1000) / 3 / 230.0
+    assert coord._required_current.required_a == pytest.approx(expected_required_a)
+
+
+async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavailable(hass, freezer):
+    """R15: with the role mapped but currently reading None, the required-current
+    computation falls back to CONF_EV_BATTERY_CAPACITY_KWH."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(None)
+    config = _config()
+    config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    expected_required_a = (75.0 * 30 / 100 * 1000) / 3 / 230.0
+    assert coord._required_current.required_a == pytest.approx(expected_required_a)
+
+
+async def test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate(
+    hass, freezer
+):
+    """R5/ADR-0011: DeadlineUnreachableNotified is published every cycle
+    resolve_required_current's `unreachable` flag is True -- including re-firing on a
+    later cycle that is still Unreachable, not only on the Normal/Urgent -> Unreachable
+    transition edge (UC05's domain-events section)."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    config = _config()  # CONF_MAX_CURRENT=16.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)  # tight deadline -> required current >> 16 A
+    _seed_ample_peak_headroom(coord)
+
+    events = []
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, lambda event: events.append(event))
+
+    await coord._async_update_data()
+    assert len(events) == 1
+    assert coord._required_current.unreachable is True
+    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(
+        coord._required_current.required_a
+    )
+
+    await coord._async_update_data()  # still Unreachable -- fires again, not just on the edge
+    assert len(events) == 2
+
+
+# --- ROLE_LOW_TARIFF (issue #376): Auto row 4's low-tariff input ---
+
+
+async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
+    """Glossary's own single-tariff default: with ROLE_LOW_TARIFF unmapped, row 4 behaves
+    as though low_tariff_active is always True -- baseline selects Captar (16 A, exceeds
+    the ~10.87 A the deadline below requires), so urgency never engages."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state="below_horizon")
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is False
+
+
+async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
+    """With ROLE_LOW_TARIFF mapped and reading False, row 4 never matches -- baseline
+    falls through to Off (0 A), so the same deadline as above now reads urgent."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=70.0, sun_state="below_horizon", low_tariff=False
+    )
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+
+
+async def test_low_tariff_mapped_true_matches_default(hass, freezer):
+    """A mapped ROLE_LOW_TARIFF reading True behaves the same as the unmapped default."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=70.0, sun_state="below_horizon", low_tariff=True
+    )
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=3)
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()
+
+    assert coord._required_current.urgent is False
+
+
+# --- Task 5.3: Auto mode-selection dispatch, Capability-Gate, peak-limit row-1 raise ---
+
+
+async def test_auto_profile_selects_solar_when_surplus_sufficient(hass):
+    """Row 3: solar capability present, sun up, surplus above threshold -> Solar, no
+    urgency in the way (no deadline seeded)."""
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=50.0, net_w=100.0, charger_w=500.0, sun_state="above_horizon"
+    )
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = True
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_SOLAR
+
+
+async def test_auto_profile_escalates_to_captar_under_urgency(hass, freezer):
+    """Row 2: a tight deadline the baseline (Off, no solar/low-tariff match) can't meet
+    escalates Auto to Captar, the available urgency-capable mode."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = True
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR
+
+
+async def test_auto_escalation_resets_captar_state_the_same_cycle(hass, freezer):
+    """Regression: the mode-switch reset (R11) must fire the SAME cycle Auto escalates into
+    Captar, not one cycle late -- otherwise a stale leftover CaptarState (e.g. cooldown from
+    a much earlier session) would block this cycle's dispatch at 0 A instead of the fresh
+    max-current request a just-arrived escalation should get."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = True
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR  # this cycle escalates away from Solar, not already Captar
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    # Leftover Captar cooldown state from long before this test's own dispatch -- if the reset
+    # doesn't fire this same cycle, Captar's step() sees this and returns 0 A (still cooling
+    # down) instead of max_a.
+    coord._mode_state[MODE_CAPTAR] = CaptarState(Phase.COOLDOWN, hass.loop.time())
+    coord._last_active_mode = MODE_SOLAR
+
+    _seed_today_deadline(coord, hours_from_now=1)
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR
+    assert result.commanded_current == 16.0  # CONF_MAX_CURRENT -- fresh idle state, not cooldown
+
+
+async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_urgency(
+    hass, freezer
+):
+    """R16/R18's carve-out: the same urgency as above, but with Captar unavailable, Auto
+    selects Power instead of falling through to Off."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_SOLAR_INSTALLED] = False
+    config[CONF_CAPTAR_AVAILABLE] = False
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_POWER
+
+
+async def test_manual_profile_never_changes_mode_regardless_of_urgency(hass, freezer):
+    """NF2 regression: active_mode stays whatever the user selected even while urgent."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)  # would be urgent, if Auto
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert result.active_mode == MODE_SOLAR
+
+
+async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freezer):
+    """R5/C3 row 1: urgency raises the effective peak limit to max_peak_kw, above the
+    monthly-tracked peak it would otherwise be capped to."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 10.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord, kw=1.0)  # well below max_peak_kw -- row 2 alone would apply
+
+    result = await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 10.0
+
+
+async def test_effective_peak_limit_resolves_normally_once_urgency_reverts(hass, freezer):
+    """Once the SOC reaches the active limit (nothing left to charge, no urgency), the
+    effective peak limit reverts to row 2's min(monthly, max)."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 10.0
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord, kw=1.0)
+
+    result = await coord._async_update_data()
+    assert result.effective_peak_limit_kw == 10.0  # urgent -- raised
+
+    adapters[ROLE_EV_SOC]._value = 80.0  # SOC now at the limit -- nothing left to charge
+    result = await coord._async_update_data()
+    assert coord._required_current.urgent is False
+    assert result.effective_peak_limit_kw == 1.0  # reverted -- min(monthly, max)
+
+
+async def test_manual_selector_unaffected_by_available_modes_gate_already_true_today(hass):
+    """Regression: existing ModeSelect option-gating behavior (R18) is untouched by the
+    new resolve_available_modes call this task adds for Auto's own use -- Manual dispatches
+    to Captar directly even with the Captar capability unavailable (config alone doesn't
+    gate Manual's own dispatch; select.py's own option list is what does, unaffected here)."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    config = _config()
+    config[CONF_CAPTAR_AVAILABLE] = False
+    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR
+    assert result.commanded_current == 16.0  # CONF_MAX_CURRENT -- Captar's own step ran normally

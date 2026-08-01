@@ -6,6 +6,11 @@ Every other test (adapters, plus the root-level config-flow / coordinator / enti
 init tests) is an HA-harness test that needs the custom integration loaded. The
 autouse fixture below applies ``enable_custom_integrations`` to the HA-harness tests
 only, keeping the pure dirs HA-free so they collect without phcc.
+
+``test_coordinator_cycle.py`` is a deliberate root-level exception (ADR-0012): it tests
+``coordinator_cycle.py``, a root-sibling module to ``coordinator.py`` that is nonetheless
+HA-free like ``engines/``/``modes/`` (see that module's own docstring), so its tests are
+plain pytest too.
 """
 
 from pathlib import Path
@@ -15,10 +20,14 @@ import pytest
 # Directories whose tests are pure logic with no HA dependency (ADR-0009).
 _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
+# Root-level test files that are pure logic despite living outside _PURE_DIRS (ADR-0012).
+_PURE_FILES = frozenset({"test_coordinator_cycle.py"})
+
 
 def _is_pure_logic_test(node: pytest.Item) -> bool:
-    """True when the test lives under a pure-logic dir (modes, engines, profiles)."""
-    return any(part in _PURE_DIRS for part in Path(str(node.path)).parts)
+    """True when the test lives under a pure-logic dir, or is a named pure-logic file."""
+    path = Path(str(node.path))
+    return path.name in _PURE_FILES or any(part in _PURE_DIRS for part in path.parts)
 
 
 @pytest.fixture(autouse=True)
