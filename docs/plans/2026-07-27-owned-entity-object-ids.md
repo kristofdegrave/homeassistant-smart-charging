@@ -285,8 +285,8 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     assert registered == set(expected)
 ```
 
-Add the `homeassistant.helpers.entity_registry as er` import if not already present, plus any
-`CONF_*` already used elsewhere in the file.
+`er` and `DOMAIN` are already imported in `tests/test_init.py` (Task 2.2 already depends on
+`er`); reuse any `CONF_*` already used elsewhere in the file.
 
 **Step 3: Run** → the 9 `departure_*` rows and the new enumeration test (including its reverse
 assertion) all pass. **Step 4: Commit.**
@@ -299,8 +299,8 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 > **⎔ Phase 2 checkpoint:** every owned entity sets `_object_id_suffix`; the corrected
-> `test_init.py:149` assertion and the new enumeration test (with its reverse assertion) are
-> both green.
+> `test_init.py:149` assertion, Task 2.2's `monthly_peak_kw`/`active_soc_limit` assertions, and
+> the new enumeration test (with its reverse assertion) are all green.
 
 ---
 

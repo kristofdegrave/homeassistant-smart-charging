@@ -283,7 +283,13 @@ Changes required:
    `number.smart_charging_target_current`) resolve to the **same** id after the pin and need
    no change.
 
-2. **New comprehensive regression test in `tests/test_init.py`** — enumerate **all 19 owned
+2. **Two covering assertions for `monthly_peak_kw` and `active_soc_limit`** (plan Task 2.2) —
+   these are the only two remaining diverging ids with no existing `test_init.py` coverage
+   (unlike `soc_limit_override`, which item 1 above already covers); add a unique_id-based
+   entity_id lookup for each into an existing full-setup test, so this task's id change also
+   doesn't land uncovered.
+
+3. **New comprehensive regression test in `tests/test_init.py`** — enumerate **all 19 owned
    entity_ids** against their catalog values after a full setup, looking each up by its
    `unique_id` in the entity registry (`er.async_get(hass).async_get_entity_id(...)`) and
    asserting the returned `entity_id` equals the catalog value, plus a reverse assertion that no
