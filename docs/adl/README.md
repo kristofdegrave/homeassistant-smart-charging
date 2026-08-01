@@ -20,5 +20,6 @@ template.
 | [0011](0011-cross-manager-coordination-via-domain-events.md) | Cross-Manager coordination via domain events | Accepted |
 | [0012](0012-coordinator-internal-decomposition.md) | Coordinator internal decomposition (Strategy + extracted state owners) | Proposed |
 | [0013](0013-stable-owned-entity-object-ids.md) | Stable, locale-independent object_ids for owned entities | Proposed |
+| [0014](0014-state-mutation-encapsulation.md) | State-mutation encapsulation for coordinator-owned state | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
