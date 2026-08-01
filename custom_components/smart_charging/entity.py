@@ -12,6 +12,7 @@ class SmartChargingEntity(Entity):
     """Common device grouping for owned entities; subclasses set their own unique_id."""
 
     _attr_has_entity_name = True
+    _object_id_suffix: str | None = None  # locale-independent object_id suffix (ADR-0013)
 
     def __init__(self, entry_id: str) -> None:
         self._entry_id = entry_id
@@ -19,3 +20,12 @@ class SmartChargingEntity(Entity):
             identifiers={(DOMAIN, entry_id)},
             name="Smart Charging",
         )
+
+    @property
+    def suggested_object_id(self) -> str | None:
+        # ADR-0013: pin the object_id to a fixed, locale-independent suffix so the
+        # registered entity_id matches entity-catalog.md in every HA locale, decoupled
+        # from the translated display name (which still comes from translation_key). The
+        # returned suffix is device-name-prefixed by HA because has_entity_name is True,
+        # yielding e.g. number.smart_charging_soc_limit_override.
+        return self._object_id_suffix or super().suggested_object_id
