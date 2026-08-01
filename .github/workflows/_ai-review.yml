@@ -176,14 +176,17 @@ jobs:
           # issue comment. --paginate merges the array pages into one JSON array.
           reviews=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews" --paginate)
 
-          # Latest verdict marker from a review body posted by the review step above.
+          # Latest verdict marker from a review body posted by the review step above. Restricted
+          # to the default workflow identity (github-actions[bot]) — the marker now drives an
+          # affirmative needs-approval state, not just suppression of a fix cycle, so an
+          # unauthenticated PR reviewer must not be able to forge it.
           verdict=$(echo "$reviews" \
-            | jq -r '[.[] | select(.body | contains("<!-- ai-review-verdict:"))] | last.body // ""' \
+            | jq -r '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict:"))] | last.body // ""' \
             | grep -oE 'ai-review-verdict: (remarks|clean)' | awk '{print $2}' || true)
 
           # Cycle counter: every past "remarks" review on this PR is one review->fix cycle.
           remarks_count=$(echo "$reviews" \
-            | jq '[.[] | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
+            | jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
           # _ai-fix.yml only knows how to author docs/** (it `git add docs`-only stages, and its
           # prompt only follows doc-authoring skills like write-use-case/write-adr) — it cannot
@@ -195,18 +198,22 @@ jobs:
 
           echo "verdict=${verdict:-none}, remarks reviews so far (incl. this one)=${remarks_count}, non-docs changed=${non_docs_changed:+yes}"
 
-          # Removal never needs to trigger anything, so the default token is fine here.
+          # Removal never needs to trigger anything, so the default token is fine here. Also
+          # clear a prior needs-approval so a stale "reviewed clean"/"cap reached" signal can't
+          # sit alongside the new state (e.g. a clean review followed by a later remarks review).
           gh pr edit "$PR" --remove-label needs-review || true
+          gh pr edit "$PR" --remove-label needs-approval || true
 
-          if [ "${verdict:-}" = "remarks" ]; then
-            if [ -n "$non_docs_changed" ]; then
-              gh pr edit "$PR" --add-label needs-approval
-              gh pr comment "$PR" --body "Automatic fixing is only wired for \`docs/**\` changes — this PR touches files outside \`docs/\` (e.g. \`$non_docs_changed\`), so the remarks above need a human fix. Labeled \`needs-approval\`."
-            elif [ "$remarks_count" -le 2 ]; then
+          if [ "${verdict:-}" = "clean" ]; then
+            # needs-approval triggers no job, so a failed add here is a labeling hiccup, not a
+            # review failure — warn instead of tripping the pipefail "Clean up on failure" path.
+            gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
+          elif [ "${verdict:-}" = "remarks" ]; then
+            if [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
             else
-              gh pr edit "$PR" --add-label needs-approval
+              gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
               gh pr comment "$PR" --body "Automatic review/fix limit reached (2 cycles) — remaining remarks need a human. Label \`needs-work\` manually to force one more cycle."
             fi
           fi
