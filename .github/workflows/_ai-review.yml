@@ -2,7 +2,7 @@ name: AI review (reusable)
 
 # Reusable worker for the `review` task — called by ai-pipeline.yml when a doc PR gets
 # `needs-review`. Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
-#   clean                -> stop; ready for the maintainer's manual review
+#   clean                -> add `needs-approval`; ready for the maintainer's manual review
 #   remarks (cycles 1-2) -> add `needs-work` (via PAT) so _ai-fix.yml addresses them
 #   remarks (3rd time)   -> add `needs-approval` and stop (max 2 automatic fix cycles)
 # Submitted human review comments without an `ai-fix-ack` thread reply count as remarks, so
@@ -181,7 +181,9 @@ jobs:
           # Removal never needs to trigger anything, so the default token is fine here.
           gh pr edit "$PR" --remove-label needs-review || true
 
-          if [ "${verdict:-}" = "remarks" ]; then
+          if [ "${verdict:-}" = "clean" ]; then
+            gh pr edit "$PR" --add-label needs-approval
+          elif [ "${verdict:-}" = "remarks" ]; then
             if [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
