@@ -11,7 +11,7 @@ registers under the `entity_id` that [`entity-catalog.md`](../analysis/entity-ca
 already documents, in every Home Assistant locale.
 
 It carries out the implementation follow-up
-[ADR-0013](../adl/0013-stable-owned-entity-object-ids.md) (Accepted, merged) calls for in its Consequences.
+[ADR-0013](../adl/0013-stable-owned-entity-object-ids.md) (Accepted) calls for in its Consequences.
 Nothing here decides anything new: ADR-0013 already chose *Option A — pin an explicit,
 locale-independent object_id for every owned entity* over correcting the docs; this slice
 is the code and tests, exactly the scope [issue #417](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/417)
@@ -87,11 +87,12 @@ hardware entities are referenced by the user's own `entity_id` and are untouched
   out-of-scope concern** tracked apart from this slice.
 - **No entity-registry migration for already-registered entities** (§7).
 - **No config-entry schema/version change** (§7).
-- **`sensor.smart_charging_desired_current`** and **`binary_sensor.smart_charging_plug_in_reminder`**
-  are catalogued (entity-catalog "Diagnostic outputs"; the latter deferred per the
-  notifications design) but have **no entity class today** — they are catalog-ahead-of-code
-  and not this slice's concern; we pin only entities that exist. Both must pin their object_id
-  suffix the same way (ADR-0013's last consequence) when they land in a future slice.
+- **`sensor.smart_charging_desired_current`** (entity-catalog "Diagnostic outputs") and
+  **`binary_sensor.smart_charging_plug_in_reminder`** (entity-catalog "Notification
+  configuration → Reminders & prompts", deferred per the notifications design) are both
+  catalogued but have **no entity class today** — they are catalog-ahead-of-code and not this
+  slice's concern; we pin only entities that exist. Both must pin their object_id suffix the
+  same way (ADR-0013's last consequence) when they land in a future slice.
 
 ---
 
@@ -263,9 +264,13 @@ they neither verify nor are broken by this change. Others — several tests acro
 created under `MockEntityPlatform`, these would register unprefixed ids (e.g. `switch.home_day`)
 after the pin instead of the currently name-derived ones. None of them assert an `entity_id`
 today, so all keep passing either way, but they provide **no** coverage of the pin either. The
-only place the real, HA-generated `entity_id` is asserted end-to-end (device prefix included) is
-`tests/test_init.py`, which sets up a full config entry via `hass.config_entries.async_setup`
-and forwards all five platforms (`PLATFORMS = [NUMBER, SELECT, SENSOR, SWITCH, TIME]`).
+end-to-end tests that do assert a real, HA-generated `entity_id` (device prefix included) —
+`tests/test_init.py` and the full-setup suites in `tests/test_captar_end_to_end.py`,
+`tests/test_solar_end_to_end.py`, and `tests/test_deadline_soc_management_end_to_end.py` — all
+assert only *coincident* ids (ones unaffected by this pin), so none of them guard the 12
+diverging ids either. `tests/test_init.py` is where this slice's coverage belongs because it
+already carries the one assertion that currently encodes the bug (line 149) and is where new
+full-setup tests for this integration are conventionally added.
 
 Changes required:
 
@@ -287,9 +292,10 @@ Changes required:
    owned entity added later without a pin would pass silently). `tests/test_init.py` has no
    single owned-id-enumeration check today (only scattered per-id `hass.states.get(...)`
    assertions); this one guards the whole owned population against future drift in one place,
-   which is the corrective intent of ADR-0013. It is the integration checkpoint (§ plan
-   Task 3), added once every owned entity already pins its suffix so it lands green rather than
-   driving the work. Looking entities up by `unique_id` (not by the literal id) keeps the test
+   which is the corrective intent of ADR-0013. It lands with the last per-entity pin (§ plan
+   Task 2.3), added once every owned entity already pins its suffix so it lands green rather
+   than driving the work; plan Task 3 re-runs it as part of the full-suite check, but does not
+   introduce it. Looking entities up by `unique_id` (not by the literal id) keeps the test
    locale-robust: it asserts the *generated* id equals the catalog id, which is the property
    under test.
 

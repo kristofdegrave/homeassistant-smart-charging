@@ -51,8 +51,13 @@ commit.
 - Modify: `custom_components/smart_charging/entity.py`
 - Add: `tests/test_entity.py`
 
-**Step 1: Failing test (plain pytest — a property override with no entity-registry or
-platform interaction is pure logic per ADR-0009, not HA-coupled).**
+**Step 1: Failing test.** This one small test is a deliberate, stated exception to ADR-0009's
+plain-pytest/HA-harness split: `SmartChargingEntity` does subclass HA's `Entity`, but the
+behavior under test — an attribute-driven property override — needs no `hass`, no
+`EntityPlatform`, and no registry to exercise; instantiating the class directly and reading the
+property is pure logic in effect, even though the class imports `homeassistant.helpers.entity`.
+This is why it gets its own small file rather than living under the HA harness with the rest of
+this slice's tests.
 
 ```python
 """Tests for SmartChargingEntity's object_id pin (ADR-0013)."""
@@ -61,20 +66,25 @@ from custom_components.smart_charging.entity import SmartChargingEntity
 
 
 def test_suggested_object_id_falls_back_when_unset():
-    """Undecorated entities keep HA's default (translated-name-derived) behavior."""
+    """Undecorated entities keep HA's default (translated-name-derived) behavior. This
+    passes already — Entity.suggested_object_id gracefully returns None for an entity with
+    no platform/name set — and is here to lock in that pre-existing fallback behavior."""
     entity = SmartChargingEntity(entry_id="test_entry")
     assert entity.suggested_object_id is None
 
 
 def test_suggested_object_id_returns_pinned_suffix_when_set():
     """ADR-0013: a subclass pinning `_object_id_suffix` overrides the translated-name
-    default, decoupling the registered object_id from the display name."""
+    default, decoupling the registered object_id from the display name. This is the one
+    that actually fails until the override is implemented."""
     entity = SmartChargingEntity(entry_id="test_entry")
     entity._object_id_suffix = "soc_limit_override"
     assert entity.suggested_object_id == "soc_limit_override"
 ```
 
-**Step 2: Run** → both fail (`suggested_object_id` doesn't exist yet on the base class).
+**Step 2: Run** → the fallback test already passes (it locks in `Entity`'s existing behavior,
+unchanged by this task); the pinned-suffix test fails, since nothing yet reads
+`_object_id_suffix`.
 
 **Step 3: Implement** the mechanism in `entity.py` (design §3):
 
@@ -93,7 +103,8 @@ class SmartChargingEntity(Entity):
         return self._object_id_suffix or super().suggested_object_id
 ```
 
-**Step 4: Run** → both green. **Step 5: Commit.**
+**Step 4: Run** → both green (the fallback test still passes; the pinned-suffix test now
+passes too). **Step 5: Commit.**
 
 ```bash
 git add custom_components/smart_charging/entity.py tests/test_entity.py
@@ -138,6 +149,16 @@ and `select.smart_charging_profile` and `number.smart_charging_target_current` a
 (pinned to prevent future drift); `number.smart_charging_default_charge_limit` →
 `number.smart_charging_soc_limit_override`.
 
+**Step 3b: Update two stale comments in `tests/test_init.py`** that describe the pre-fix,
+translation-derived behavior as current — both become inaccurate once this pin lands:
+
+- Line ~118 ("The number entity exists, its object_id suffixed per strings.json
+  translations…") → its object_id is now an explicit pin (ADR-0013), not translation-derived;
+  reword accordingly (the id itself, `number.smart_charging_target_current`, is unchanged).
+- Lines ~169-171 ("Looked up by unique_id, not entity_id -- the `_mode`-suffixed entity_id
+  depends on the select.mode translation entry…") → the `_mode`-suffixed entity_id is now the
+  explicit pin, not a translation-key dependency; reword the same way.
+
 **Step 4: Run** → the corrected assertion passes. **Step 5: Commit.**
 
 ```bash
@@ -147,25 +168,46 @@ git commit --author="Claude <noreply@anthropic.com>" -m "fix: pin select/number 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
-### Task 2.2: `sensor.py` + `switch.py`
+### Task 2.2: `sensor.py` + `switch.py`, plus covering assertions for the two ids this task flips
 
 **Files:** Modify `custom_components/smart_charging/sensor.py`,
-`custom_components/smart_charging/switch.py`.
+`custom_components/smart_charging/switch.py`, `tests/test_init.py`.
 
-**Change:** add `_object_id_suffix` to `ChargingStatusSensor` (`"status"`), `ActiveModeSensor`
-(`"active_mode"`), `MonthlyPeakSensor` (`"monthly_peak_kw"`), `EffectivePeakLimitSensor`
-(`"effective_peak_limit"`), `ActiveSocLimitSensor` (`"active_soc_limit"`), and `HomeDaySwitch`
-(`"home_day"`). Before/after: `sensor.smart_charging_monthly_peak` →
+**Step 1: Failing test.** Two of this task's sensors flip a real, catalog-diverging id
+(`monthly_peak_kw`, `active_soc_limit`) with no existing `test_init.py` coverage of the literal
+id — `active_soc_limit` is exercised today only via a locale-robust unique_id lookup
+(`test_solar_reserve_soc_option_threaded_engages_configured_cap_live`), which would keep passing
+regardless of what the id actually is, so it doesn't guard this task's change either way. Add a
+small pair of assertions, in the style of Task 2.1's `soc_limit_override` check, so this task
+doesn't commit an observable id change with zero covering assertion:
+
+```python
+registry = er.async_get(hass)
+entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_monthly_peak_kw")
+assert entity_id == "sensor.smart_charging_monthly_peak_kw"
+entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit")
+assert entity_id == "sensor.smart_charging_active_soc_limit"
+```
+
+Add these to an existing full-setup test in `tests/test_init.py` rather than a new test
+function — any test that already sets up the config entry and has access to `er.async_get(hass)`
+(e.g. alongside the `test_select_entity_is_registered_on_setup` unique_id-lookup pattern).
+
+**Step 2: Run** → both new assertions fail (today's ids are
+`sensor.smart_charging_monthly_peak` and `sensor.smart_charging_active_charge_limit`).
+
+**Step 3: Implement.** Add `_object_id_suffix` to `ChargingStatusSensor` (`"status"`),
+`ActiveModeSensor` (`"active_mode"`), `MonthlyPeakSensor` (`"monthly_peak_kw"`),
+`EffectivePeakLimitSensor` (`"effective_peak_limit"`), `ActiveSocLimitSensor`
+(`"active_soc_limit"`), and `HomeDaySwitch` (`"home_day"`). Before/after: `sensor.smart_charging_monthly_peak` →
 `sensor.smart_charging_monthly_peak_kw`; `sensor.smart_charging_active_charge_limit` →
 `sensor.smart_charging_active_soc_limit`; the other three sensors and the switch already
-coincide (pinned to prevent drift). This task doesn't touch `tests/test_init.py` — no existing
-assertion there covers these ids yet (that lands with Task 2.3's enumeration test), so there is
-nothing to turn red or green here beyond the full suite continuing to pass.
+coincide (pinned to prevent drift).
 
-**Run** → full suite still green (no regression). **Commit.**
+**Step 4: Run** → both new assertions pass. **Step 5: Commit.**
 
 ```bash
-git add custom_components/smart_charging/sensor.py custom_components/smart_charging/switch.py
+git add custom_components/smart_charging/sensor.py custom_components/smart_charging/switch.py tests/test_init.py
 git commit --author="Claude <noreply@anthropic.com>" -m "fix: pin sensor/switch owned-entity object_ids to catalog ids (ADR-0013)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
