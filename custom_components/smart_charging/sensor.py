@@ -21,6 +21,7 @@ class ChargingStatusSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity)
     """Reports Fault when the last cycle faulted (ADR-0007), else OK."""
 
     _attr_translation_key = "status"
+    _object_id_suffix = "status"
 
     def __init__(self, entry_id: str, coordinator) -> None:
         SmartChargingEntity.__init__(self, entry_id)
@@ -39,6 +40,7 @@ class ActiveModeSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
     """Reports the resolved active mode from the last cycle (Task 4.3, plan §5.1)."""
 
     _attr_translation_key = "active_mode"
+    _object_id_suffix = "active_mode"
 
     def __init__(self, entry_id: str, coordinator) -> None:
         SmartChargingEntity.__init__(self, entry_id)
@@ -79,6 +81,7 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
     it rebuilds from scratch post-restart, same as R10's own window."""
 
     _attr_translation_key = "monthly_peak_kw"
+    _object_id_suffix = "monthly_peak_kw"
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
 
     def __init__(self, entry_id: str, coordinator) -> None:
@@ -130,6 +133,7 @@ class EffectivePeakLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEnt
     first post-restart cycle."""
 
     _attr_translation_key = "effective_peak_limit"
+    _object_id_suffix = "effective_peak_limit"
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
 
     def __init__(self, entry_id: str, coordinator) -> None:
@@ -151,6 +155,7 @@ class ActiveSocLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity)
     solar-step-up three-row table (Task 5.1 wires the full resolution)."""
 
     _attr_translation_key = "active_soc_limit"
+    _object_id_suffix = "active_soc_limit"
 
     def __init__(self, entry_id: str, coordinator) -> None:
         SmartChargingEntity.__init__(self, entry_id)

@@ -191,6 +191,13 @@ async def test_select_entity_is_registered_on_setup(hass):
     # §3), so Captar is offered alongside Solar/SolarOnly without being set explicitly.
     assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly", "Captar"]
 
+    # ADR-0013: these two flip a real, catalog-diverging id with no other covering
+    # assertion -- guard the pin explicitly (T2.2).
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_monthly_peak_kw")
+    assert entity_id == "sensor.smart_charging_monthly_peak_kw"
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit")
+    assert entity_id == "sensor.smart_charging_active_soc_limit"
+
 
 async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     """T6.1: the new Solar/SolarOnly options must be threaded into the coordinator's
