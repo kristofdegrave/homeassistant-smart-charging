@@ -12,12 +12,13 @@ and [ADR-0013](../adl/0013-stable-owned-entity-object-ids.md).
 `SmartChargingEntity.suggested_object_id` property to return a fixed per-entity suffix
 (design §3), which HA prefixes with the `smart_charging` device slug to yield the catalog id
 (locale-independent, decoupled from the translated display name). Each owned class then sets
-one `_object_id` value. No new service, entity, config key, adapter role, or structural
+one `_object_id_suffix` value. No new service, entity, config key, adapter role, or structural
 boundary (design §2).
 
 **Tech Stack:** Same as the shipped slices — Python ≥3.12, Home Assistant,
-`pytest-homeassistant-custom-component` (HA harness, ADR-0009), `ruff`. Every task here is
-HA-coupled (entity registration) → HA harness; there is no plain-pytest piece.
+`pytest-homeassistant-custom-component` (HA harness, ADR-0009), `ruff`. The base-class property
+override (Task 1) is pure logic with no entity-registry/platform interaction → plain pytest;
+every other task here is HA-coupled (entity registration) → HA harness.
 
 **Model:** Per CLAUDE.md, this is development work — execute on **Sonnet**.
 
@@ -36,94 +37,51 @@ non-goals).
 
 ---
 
-## Phase 1 — The mechanism + the failing assertions (HA harness)
+## Phase 1 — The mechanism, proven in isolation (plain pytest)
 
-### Task 1: Base-class `suggested_object_id` override, with the corrected + new tests as the failing tests
+### Task 1: Base-class `suggested_object_id` override, proven by a standalone unit test
 
-Honors **ADR-0013** (explicit, locale-independent object_id pinned alongside `translation_key`)
-and **ADR-0009** (HA harness — entity registration is HA-coupled). The failing tests here are
-what drive the whole slice red→green; the per-file pins in Phase 2 turn each entity's row of
-the enumeration test green.
+Honors **ADR-0013** (explicit, locale-independent object_id pinned alongside `translation_key`).
+This task lands the mechanism **fully green on its own** — it does not touch any owned entity
+class or `tests/test_init.py`, so it cannot leave a known-red assertion in the repo. The
+per-file pins in Phase 2 are what turn `tests/test_init.py`'s assertions green, each in its own
+commit.
 
 **Files:**
 - Modify: `custom_components/smart_charging/entity.py`
-- Modify: `tests/test_init.py`
+- Add: `tests/test_entity.py`
 
-**Step 1: Failing tests (HA harness).**
+**Step 1: Failing test (plain pytest — a property override with no entity-registry or
+platform interaction is pure logic per ADR-0009, not HA-coupled).**
 
-1. **Correct the existing assertion.** In `tests/test_init.py`, change the id asserted at
-   line ~149 from `number.smart_charging_default_charge_limit` (the locale-derived bug) to
-   the catalog id `number.smart_charging_soc_limit_override`:
+```python
+"""Tests for SmartChargingEntity's object_id pin (ADR-0013)."""
 
-   ```python
-   state = hass.states.get("number.smart_charging_soc_limit_override")
-   assert state is not None
-   assert float(state.state) == 80.0
-   ```
+from custom_components.smart_charging.entity import SmartChargingEntity
 
-2. **Add a comprehensive owned-id enumeration regression test** (design §6). After a full
-   config-entry setup that forwards all five platforms, look each owned entity up by its
-   `unique_id` and assert the registry's generated `entity_id` equals the catalog value:
 
-   ```python
-   async def test_every_owned_entity_id_matches_entity_catalog(hass):
-       """ADR-0013: every owned entity registers under its documented entity-catalog id,
-       independent of the translated display name. Looked up by unique_id so the test
-       asserts the GENERATED id equals the catalog id (the property under test)."""
-       _seed_states(hass, status="Charging")
-       data = _entry_data()
-       data[CONF_SOLAR_INSTALLED] = True
-       data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
-       hass.states.async_set("sensor.ev_soc", "50.0")
-       entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
-       entry.add_to_hass(hass)
-       assert await hass.config_entries.async_setup(entry.entry_id)
-       await hass.async_block_till_done()
+def test_suggested_object_id_falls_back_when_unset():
+    """Undecorated entities keep HA's default (translated-name-derived) behavior."""
+    entity = SmartChargingEntity(entry_id="test_entry")
+    assert entity.suggested_object_id is None
 
-       registry = er.async_get(hass)
-       # (unique_id suffix, expected catalog entity_id) for all 19 owned entities.
-       expected = {
-           "mode": "select.smart_charging_mode",
-           "profile": "select.smart_charging_profile",
-           "target_current": "number.smart_charging_target_current",
-           "soc_limit_override": "number.smart_charging_soc_limit_override",
-           "status": "sensor.smart_charging_status",
-           "active_mode": "sensor.smart_charging_active_mode",
-           "monthly_peak_kw": "sensor.smart_charging_monthly_peak_kw",
-           "effective_peak_limit": "sensor.smart_charging_effective_peak_limit",
-           "active_soc_limit": "sensor.smart_charging_active_soc_limit",
-           "home_day": "switch.smart_charging_home_day",
-           "departure_mon": "time.smart_charging_departure_mon",
-           "departure_tue": "time.smart_charging_departure_tue",
-           "departure_wed": "time.smart_charging_departure_wed",
-           "departure_thu": "time.smart_charging_departure_thu",
-           "departure_fri": "time.smart_charging_departure_fri",
-           "departure_sat": "time.smart_charging_departure_sat",
-           "departure_sun": "time.smart_charging_departure_sun",
-           "departure_holiday": "time.smart_charging_departure_holiday",
-           "departure_home_day": "time.smart_charging_departure_home_day",
-       }
-       for uid_suffix, want_id in expected.items():
-           domain = want_id.split(".", 1)[0]
-           got = registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{uid_suffix}")
-           assert got == want_id, f"{uid_suffix}: {got!r} != {want_id!r}"
-   ```
 
-   Add the `homeassistant.helpers.entity_registry as er` import if not already present, plus
-   any `CONF_*` already used elsewhere in the file. `target_current` is asserted at its
-   sibling-consistent id even though it has **no catalog row** (design §2 out-of-scope note) —
-   its expected id here is code-consistency, not catalog-verified.
+def test_suggested_object_id_returns_pinned_suffix_when_set():
+    """ADR-0013: a subclass pinning `_object_id_suffix` overrides the translated-name
+    default, decoupling the registered object_id from the display name."""
+    entity = SmartChargingEntity(entry_id="test_entry")
+    entity._object_id_suffix = "soc_limit_override"
+    assert entity.suggested_object_id == "soc_limit_override"
+```
 
-**Step 2: Run** → both fail: the corrected assertion (id is `default_charge_limit` today) and
-the enumeration test (12 of 19 ids diverge — the `soc_limit_override`, `monthly_peak_kw`,
-`active_soc_limit`, and 9 `departure_*` rows).
+**Step 2: Run** → both fail (`suggested_object_id` doesn't exist yet on the base class).
 
 **Step 3: Implement** the mechanism in `entity.py` (design §3):
 
 ```python
 class SmartChargingEntity(Entity):
     _attr_has_entity_name = True
-    _object_id: str | None = None  # locale-independent object_id suffix (ADR-0013)
+    _object_id_suffix: str | None = None  # locale-independent object_id suffix (ADR-0013)
 
     @property
     def suggested_object_id(self) -> str | None:
@@ -132,54 +90,58 @@ class SmartChargingEntity(Entity):
         # from the translated display name (which still comes from translation_key). The
         # returned suffix is device-name-prefixed by HA because has_entity_name is True,
         # yielding e.g. number.smart_charging_soc_limit_override.
-        return self._object_id or super().suggested_object_id
+        return self._object_id_suffix or super().suggested_object_id
 ```
 
-At this point no subclass sets `_object_id` yet, so the enumeration test still fails — the
-per-file pins in Phase 2 make it pass class by class. (If preferred, Task 1 and the Phase 2
-pins may be developed together and committed once the whole enumeration test is green; keep
-them as separate commits per file if committing incrementally, re-running the suite after
-each.)
-
-**Step 4: Run** → mechanism present; enumeration test still red pending Phase 2. **Step 5:
-Commit** the mechanism + tests.
+**Step 4: Run** → both green. **Step 5: Commit.**
 
 ```bash
-git add custom_components/smart_charging/entity.py tests/test_init.py
+git add custom_components/smart_charging/entity.py tests/test_entity.py
 git commit --author="Claude <noreply@anthropic.com>" -m "feat: add locale-independent object_id mechanism to owned-entity base (ADR-0013)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
-> **⎔ Phase 1 checkpoint:** `SmartChargingEntity.suggested_object_id` returns `_object_id`
-> when set; the corrected `test_init.py:149` and the new enumeration test exist and drive the
-> remaining work.
+> **⎔ Phase 1 checkpoint:** `SmartChargingEntity.suggested_object_id` returns
+> `_object_id_suffix` when set, else falls back to HA's default — proven in isolation, fully
+> green. No owned entity pins its suffix yet; that is Phase 2.
 
 ---
 
 ## Phase 2 — Pin the suffix on every owned entity (HA harness)
 
-Each task sets `_object_id` (value == the class's existing `_attr_translation_key`, design §4)
-and turns its rows of the Phase 1 enumeration test green. All honor **ADR-0013** / **ADR-0004**
-(owned native entities) / **ADR-0009**.
+Each task sets `_object_id_suffix` (value == the class's existing `_attr_translation_key`,
+design §4) and lands its own `tests/test_init.py` coverage green in the same commit — no task
+here ever leaves a known-red assertion. All honor **ADR-0013** / **ADR-0004** (owned native
+entities) / **ADR-0009**.
 
-### Task 2.1: `select.py` + `number.py`
+### Task 2.1: `select.py` + `number.py`, plus the corrected `test_init.py` assertion
 
 **Files:** Modify `custom_components/smart_charging/select.py`,
-`custom_components/smart_charging/number.py`.
+`custom_components/smart_charging/number.py`, `tests/test_init.py`.
 
-**Change:** add a `_object_id` class attribute to each of `ModeSelect` (`"mode"`),
-`ProfileSelect` (`"profile"`), `TargetCurrentNumber` (`"target_current"`),
+**Step 1: Failing test.** Correct the existing assertion in `tests/test_init.py` (line ~149)
+from the locale-derived bug to the catalog id:
+
+```python
+state = hass.states.get("number.smart_charging_soc_limit_override")
+assert state is not None
+assert float(state.state) == 80.0
+```
+
+**Step 2: Run** → fails (today's id is `number.smart_charging_default_charge_limit`).
+
+**Step 3: Implement.** Add a `_object_id_suffix` class attribute to each of `ModeSelect`
+(`"mode"`), `ProfileSelect` (`"profile"`), `TargetCurrentNumber` (`"target_current"`),
 `SocLimitOverrideNumber` (`"soc_limit_override"`). Before/after ids: `select.smart_charging_mode`
 and `select.smart_charging_profile` and `number.smart_charging_target_current` already coincide
 (pinned to prevent future drift); `number.smart_charging_default_charge_limit` →
 `number.smart_charging_soc_limit_override`.
 
-**Run** → the enumeration test's `soc_limit_override` row and the corrected `test_init.py:149`
-now pass; select/number rows green. **Commit.**
+**Step 4: Run** → the corrected assertion passes. **Step 5: Commit.**
 
 ```bash
-git add custom_components/smart_charging/select.py custom_components/smart_charging/number.py
+git add custom_components/smart_charging/select.py custom_components/smart_charging/number.py tests/test_init.py
 git commit --author="Claude <noreply@anthropic.com>" -m "fix: pin select/number owned-entity object_ids to catalog ids (ADR-0013)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
@@ -190,15 +152,17 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 **Files:** Modify `custom_components/smart_charging/sensor.py`,
 `custom_components/smart_charging/switch.py`.
 
-**Change:** add `_object_id` to `ChargingStatusSensor` (`"status"`), `ActiveModeSensor`
+**Change:** add `_object_id_suffix` to `ChargingStatusSensor` (`"status"`), `ActiveModeSensor`
 (`"active_mode"`), `MonthlyPeakSensor` (`"monthly_peak_kw"`), `EffectivePeakLimitSensor`
 (`"effective_peak_limit"`), `ActiveSocLimitSensor` (`"active_soc_limit"`), and `HomeDaySwitch`
 (`"home_day"`). Before/after: `sensor.smart_charging_monthly_peak` →
 `sensor.smart_charging_monthly_peak_kw`; `sensor.smart_charging_active_charge_limit` →
 `sensor.smart_charging_active_soc_limit`; the other three sensors and the switch already
-coincide (pinned to prevent drift).
+coincide (pinned to prevent drift). This task doesn't touch `tests/test_init.py` — no existing
+assertion there covers these ids yet (that lands with Task 2.3's enumeration test), so there is
+nothing to turn red or green here beyond the full suite continuing to pass.
 
-**Run** → enumeration test's sensor + switch rows green. **Commit.**
+**Run** → full suite still green (no regression). **Commit.**
 
 ```bash
 git add custom_components/smart_charging/sensor.py custom_components/smart_charging/switch.py
@@ -207,30 +171,94 @@ git commit --author="Claude <noreply@anthropic.com>" -m "fix: pin sensor/switch 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
-### Task 2.3: `time.py` (the 9 departure entities)
+### Task 2.3: `time.py` (the 9 departure entities) + the comprehensive enumeration test
 
-**Files:** Modify `custom_components/smart_charging/time.py`.
+**Files:** Modify `custom_components/smart_charging/time.py`, `tests/test_init.py`.
 
-**Change:** in `SmartChargingDepartureTime.__init__`, set
-`self._object_id = f"departure_{id_suffix}"` right beside the existing
+**Step 1: Pin the remaining entities.** In `SmartChargingDepartureTime.__init__`, set
+`self._object_id_suffix = f"departure_{id_suffix}"` right beside the existing
 `self._attr_translation_key = f"departure_{id_suffix}"` (reusing the `id_suffix` already
 built from `DAY_MON`…`DAY_SUN` / `DEPARTURE_OVERRIDE_HOLIDAY` / `DEPARTURE_OVERRIDE_HOME_DAY`
 — no new literals). Before/after for all 9:
 `time.smart_charging_<weekday>_departure_time` (and `public_holiday_`/`home_day_` variants) →
 `time.smart_charging_departure_<suffix>`.
 
-**Run** → enumeration test's 9 `departure_*` rows green; the whole enumeration test now
-passes. **Commit.**
+**Step 2: Add the comprehensive owned-id enumeration regression test** (design §6). By this
+point every owned entity pins its suffix, so this test is added already green — it is the
+integration checkpoint for the whole slice, not a driver of it. After a full config-entry setup
+that forwards all five platforms, look each owned entity up by its `unique_id` and assert the
+registry's generated `entity_id` equals the catalog value, **and** that no owned entity is
+missing from the expectation table (closing ADR-0013's "any future owned entity must pin its
+object_id the same way" consequence):
+
+```python
+async def test_every_owned_entity_id_matches_entity_catalog(hass):
+    """ADR-0013: every owned entity registers under its documented entity-catalog id,
+    independent of the translated display name. Looked up by unique_id so the test
+    asserts the GENERATED id equals the catalog id (the property under test)."""
+    _seed_states(hass, status="Charging")
+    data = _entry_data()
+    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    hass.states.async_set("sensor.ev_soc", "50.0")
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    # (unique_id suffix, expected catalog entity_id) for all 19 owned entities.
+    expected = {
+        "mode": "select.smart_charging_mode",
+        "profile": "select.smart_charging_profile",
+        "target_current": "number.smart_charging_target_current",  # no catalog row (design §2)
+        "soc_limit_override": "number.smart_charging_soc_limit_override",
+        "status": "sensor.smart_charging_status",
+        "active_mode": "sensor.smart_charging_active_mode",
+        "monthly_peak_kw": "sensor.smart_charging_monthly_peak_kw",
+        "effective_peak_limit": "sensor.smart_charging_effective_peak_limit",
+        "active_soc_limit": "sensor.smart_charging_active_soc_limit",
+        "home_day": "switch.smart_charging_home_day",
+        "departure_mon": "time.smart_charging_departure_mon",
+        "departure_tue": "time.smart_charging_departure_tue",
+        "departure_wed": "time.smart_charging_departure_wed",
+        "departure_thu": "time.smart_charging_departure_thu",
+        "departure_fri": "time.smart_charging_departure_fri",
+        "departure_sat": "time.smart_charging_departure_sat",
+        "departure_sun": "time.smart_charging_departure_sun",
+        "departure_holiday": "time.smart_charging_departure_holiday",
+        "departure_home_day": "time.smart_charging_departure_home_day",
+    }
+    for uid_suffix, want_id in expected.items():
+        domain = want_id.split(".", 1)[0]
+        got = registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{uid_suffix}")
+        assert got == want_id, f"{uid_suffix}: {got!r} != {want_id!r}"
+
+    # No owned entity may be missing from `expected` above — a future owned entity added
+    # without a pin here would otherwise pass this test silently (ADR-0013's last consequence).
+    registered = {
+        e.unique_id.removeprefix(f"{entry.entry_id}_")
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+    }
+    assert registered == set(expected)
+```
+
+Add the `homeassistant.helpers.entity_registry as er` import if not already present, plus any
+`CONF_*` already used elsewhere in the file.
+
+**Step 3: Run** → the 9 `departure_*` rows and the new enumeration test (including its reverse
+assertion) all pass. **Step 4: Commit.**
 
 ```bash
-git add custom_components/smart_charging/time.py
-git commit --author="Claude <noreply@anthropic.com>" -m "fix: pin departure-time owned-entity object_ids to catalog ids (ADR-0013)
+git add custom_components/smart_charging/time.py tests/test_init.py
+git commit --author="Claude <noreply@anthropic.com>" -m "fix: pin departure-time owned-entity object_ids to catalog ids, add enumeration regression test (ADR-0013)
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
-> **⎔ Phase 2 checkpoint:** every owned entity sets `_object_id`; the Phase 1 enumeration test
-> is fully green.
+> **⎔ Phase 2 checkpoint:** every owned entity sets `_object_id_suffix`; the corrected
+> `test_init.py:149` assertion and the new enumeration test (with its reverse assertion) are
+> both green.
 
 ---
 
@@ -248,12 +276,14 @@ ruff check . && ruff format --check . && pytest -q
 
 **Step 2:** Confirm:
 - the new `test_every_owned_entity_id_matches_entity_catalog` passes — all 19 owned
-  `entity_id`s equal their catalog value (design §4 table);
+  `entity_id`s equal their catalog value (design §4 table), and the reverse assertion confirms
+  no owned entity is missing from the expectation table;
 - the corrected `test_init.py` SOC-limit assertion passes;
-- no other test regressed. In particular, `tests/test_select.py`, `tests/test_sensor.py`,
-  and `tests/test_time.py` set `entity.entity_id` manually and are unaffected (design §6) —
-  if any *did* break, that is a signal the mechanism took the wrong id path and must be
-  investigated, not silenced.
+- no other test regressed. Design §6 explains in detail which existing entity tests do and
+  don't exercise this change and why (some bypass the registry-derived path entirely by setting
+  `entity.entity_id` manually; others take the changed path but assert no `entity_id`, so they
+  pass either way) — if any of them *did* start failing, treat it as a genuine signal to
+  investigate against that explanation, not a false alarm to silence.
 
 **Step 3:** If any pre-existing full-setup assertion still encodes a now-wrong id (none
 expected beyond the corrected line 149), fix it to the catalog id and note it. **Commit** only

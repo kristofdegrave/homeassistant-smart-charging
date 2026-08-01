@@ -11,7 +11,7 @@ registers under the `entity_id` that [`entity-catalog.md`](../analysis/entity-ca
 already documents, in every Home Assistant locale.
 
 It carries out the implementation follow-up
-[ADR-0013](../adl/0013-stable-owned-entity-object-ids.md) calls for in its Consequences.
+[ADR-0013](../adl/0013-stable-owned-entity-object-ids.md) (Accepted, merged) calls for in its Consequences.
 Nothing here decides anything new: ADR-0013 already chose *Option A — pin an explicit,
 locale-independent object_id for every owned entity* over correcting the docs; this slice
 is the code and tests, exactly the scope [issue #417](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/417)
@@ -45,7 +45,7 @@ generated `entity_id` **already diverges from the catalog today** are:
 | `ActiveSocLimitSensor` | "Active charge limit" | `sensor.smart_charging_active_charge_limit` | `sensor.smart_charging_active_soc_limit` |
 | `SmartChargingDepartureTime` ×9 | "Monday departure time" … "Home-day departure time" | `time.smart_charging_monday_departure_time` … `time.smart_charging_home_day_departure_time` | `time.smart_charging_departure_mon` … `time.smart_charging_departure_home_day` |
 
-`tests/test_init.py:149` already asserts the wrong
+`tests/test_init.py:149` (`test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries`) already asserts the wrong
 `number.smart_charging_default_charge_limit`, documenting that the locale-derived id is what
 ships today — this is a real bug against the catalog's contract, not a test artifact.
 
@@ -70,6 +70,11 @@ hardware entities are referenced by the user's own `entity_id` and are untouched
 - **No further `entity-catalog.md`/`README.md` rewrite.** ADR-0013's Decision concluded none
   is needed — the existing documented ids become *correct* once this code lands. This slice
   does not touch either document.
+- **No `strings.json` rename.** Pinning the object_id deliberately decouples it from the
+  display name — e.g. `soc_limit_override` keeps its "Default charge limit" display name while
+  its id becomes `number.smart_charging_soc_limit_override` (same for "Monthly peak" /
+  `monthly_peak_kw` and "Active charge limit" / `active_soc_limit`). That divergence is the
+  intended effect of ADR-0013, not something this slice needs to reconcile.
 - **`number.smart_charging_target_current` has no catalog row to verify against.**
   `TargetCurrentNumber` (`_attr_translation_key = "target_current"`) has **no** owned-entity
   row in `entity-catalog.md` today — the catalog documents only `input_number.sc_power_target_current_a`
@@ -82,9 +87,11 @@ hardware entities are referenced by the user's own `entity_id` and are untouched
   out-of-scope concern** tracked apart from this slice.
 - **No entity-registry migration for already-registered entities** (§7).
 - **No config-entry schema/version change** (§7).
-- **`sensor.smart_charging_desired_current`** is catalogued (entity-catalog "Diagnostic
-  outputs") but has **no entity class in `sensor.py` today** — it is code-ahead-of-catalog in
-  the other direction and is not this slice's concern; we pin only entities that exist.
+- **`sensor.smart_charging_desired_current`** and **`binary_sensor.smart_charging_plug_in_reminder`**
+  are catalogued (entity-catalog "Diagnostic outputs"; the latter deferred per the
+  notifications design) but have **no entity class today** — they are catalog-ahead-of-code
+  and not this slice's concern; we pin only entities that exist. Both must pin their object_id
+  suffix the same way (ADR-0013's last consequence) when they land in a future slice.
 
 ---
 
@@ -142,6 +149,15 @@ short, catalog-matching suffix — mirroring how `_attr_translation_key` is alre
 with the device prefix applied once, by HA, in the base class. One implementation point, no
 repeated prefix.
 
+**Residual coupling this does not remove.** Because the pinned suffix still flows through
+`object_id_base`, HA prefixes it with `device.name_by_user or device.name`
+(`entity_registry.py`), not a hardcoded `"smart_charging"` literal. So the pin is
+locale-independent but not *device-name*-independent: an owned entity first registered
+**after** a user renames the "Smart Charging" device would pick up that custom name's slug
+instead of `smart_charging_`. This is a narrower, pre-existing exposure (device rename is rare
+and user-initiated, unlike locale which varies per install by default) and is not this ADR's
+concern to close — noted here, and again in §7, as a known limitation rather than a silent gap.
+
 **Consistency with the ADRs.** ADR-0013 (Option A) mandates *"an explicit, locale-independent
 object_id pinned alongside its `_attr_translation_key`"* — the property override is precisely
 that, kept as a **distinct** identifier (ADR-0013's "two related-but-distinct identifiers"),
@@ -156,19 +172,19 @@ owned-vs-mapped boundary. Neither ADR is contradicted.
 ```python
 class SmartChargingEntity(Entity):
     _attr_has_entity_name = True
-    _object_id: str | None = None  # locale-independent object_id suffix (ADR-0013)
+    _object_id_suffix: str | None = None  # locale-independent object_id suffix (ADR-0013)
 
     @property
     def suggested_object_id(self) -> str | None:
         # ADR-0013: pin the object_id to a fixed, locale-independent suffix so the
         # registered entity_id matches entity-catalog.md in every HA locale, decoupled
         # from the translated display name (which still comes from translation_key).
-        return self._object_id or super().suggested_object_id
+        return self._object_id_suffix or super().suggested_object_id
 ```
 
-Each owned class sets `_object_id` to its catalog suffix — as a class attribute for the
+Each owned class sets `_object_id_suffix` to its catalog suffix — as a class attribute for the
 fixed entities, or in `__init__` for the parameterized departure entity
-(`self._object_id = f"departure_{id_suffix}"`, right beside the existing
+(`self._object_id_suffix = f"departure_{id_suffix}"`, right beside the existing
 `self._attr_translation_key = f"departure_{id_suffix}"`).
 
 ---
@@ -213,12 +229,12 @@ already used in `time.py`, so the pin reuses those constants (no new literals).
 
 ```text
 custom_components/smart_charging/
-  entity.py     # + `_object_id` attr + `suggested_object_id` property override (§3) — the mechanism
-  select.py     # set _object_id on ModeSelect, ProfileSelect
-  number.py     # set _object_id on TargetCurrentNumber, SocLimitOverrideNumber
-  sensor.py     # set _object_id on the 5 sensor classes
-  switch.py     # set _object_id on HomeDaySwitch
-  time.py       # set self._object_id = f"departure_{id_suffix}" in __init__
+  entity.py     # + `_object_id_suffix` attr + `suggested_object_id` property override (§3) — the mechanism
+  select.py     # set _object_id_suffix on ModeSelect, ProfileSelect
+  number.py     # set _object_id_suffix on TargetCurrentNumber, SocLimitOverrideNumber
+  sensor.py     # set _object_id_suffix on the 5 sensor classes
+  switch.py     # set _object_id_suffix on HomeDaySwitch
+  time.py       # set self._object_id_suffix = f"departure_{id_suffix}" in __init__
 ```
 
 No `strings.json`, `const.py`, `config_flow.py`, `__init__.py`, or adapter change. The
@@ -231,21 +247,29 @@ class attribute whose value equals the class's existing `_attr_translation_key`.
 
 Entity platform files are HA-coupled (they register through `entity_platform` and the entity
 registry), so per **ADR-0009** their `entity_id`-generation behavior is tested on the **HA
-harness**, not plain pytest. There is no pure-logic piece here.
+harness**, not plain pytest. The one exception is the `suggested_object_id` property override
+itself (§3): it reads a plain instance attribute and calls no HA registry/platform API, so it
+is pure logic and gets a small standalone plain-pytest test (`tests/test_entity.py`) proving the
+override in isolation, ahead of and independent from any owned entity pinning its suffix.
 
-**Why most existing entity tests do not exercise this fix.** `tests/test_select.py`,
+**Why most existing entity tests do not exercise this fix.** Some tests in `tests/test_select.py`,
 `tests/test_sensor.py`, and `tests/test_time.py` set `entity.entity_id = "..."` *manually*
-before adding the entity to a `MockEntityPlatform`. That bypasses the registry-derived
-object_id entirely (it takes the `suggested_object_id` path, not `object_id_base`), so those
-tests neither verify nor are broken by this change — they keep passing untouched, but they
-provide **no** coverage of the pin. The only place the real, HA-generated `entity_id` is
-asserted is `tests/test_init.py`, which sets up a full config entry via
-`hass.config_entries.async_setup` and forwards all five platforms
-(`PLATFORMS = [NUMBER, SELECT, SENSOR, SWITCH, TIME]`).
+before adding the entity to a `MockEntityPlatform`; those bypass the registry-derived object_id
+entirely (they take the `suggested_object_id`-registry-input path, not `object_id_base`), so
+they neither verify nor are broken by this change. Others — several tests across
+`tests/test_select.py`, `tests/test_number.py`, `tests/test_switch.py`, and `tests/test_time.py`
+— add the entity to `MockEntityPlatform` **without** setting `entity_id`, which *does* take the
+`object_id_base`/`suggested_object_id`-property path this slice changes; because no device is
+created under `MockEntityPlatform`, these would register unprefixed ids (e.g. `switch.home_day`)
+after the pin instead of the currently name-derived ones. None of them assert an `entity_id`
+today, so all keep passing either way, but they provide **no** coverage of the pin either. The
+only place the real, HA-generated `entity_id` is asserted end-to-end (device prefix included) is
+`tests/test_init.py`, which sets up a full config entry via `hass.config_entries.async_setup`
+and forwards all five platforms (`PLATFORMS = [NUMBER, SELECT, SENSOR, SWITCH, TIME]`).
 
 Changes required:
 
-1. **`tests/test_init.py:149`** — flip the asserted id from
+1. **`tests/test_init.py:149` (`test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries`)** — flip the asserted id from
    `number.smart_charging_default_charge_limit` to
    `number.smart_charging_soc_limit_override`. This is the one existing assertion that
    currently encodes the bug; it turns red the moment the pin lands and green once the
@@ -257,17 +281,22 @@ Changes required:
 2. **New comprehensive regression test in `tests/test_init.py`** — enumerate **all 19 owned
    entity_ids** against their catalog values after a full setup, looking each up by its
    `unique_id` in the entity registry (`er.async_get(hass).async_get_entity_id(...)`) and
-   asserting the returned `entity_id` equals the catalog value. `tests/test_init.py` has no
+   asserting the returned `entity_id` equals the catalog value, plus a reverse assertion that no
+   registered owned entity is missing from that expectation table (closing ADR-0013's "any
+   future owned entity must pin its object_id the same way" consequence — without it, a 20th
+   owned entity added later without a pin would pass silently). `tests/test_init.py` has no
    single owned-id-enumeration check today (only scattered per-id `hass.states.get(...)`
    assertions); this one guards the whole owned population against future drift in one place,
    which is the corrective intent of ADR-0013. It is the integration checkpoint (§ plan
-   Task 3). Looking entities up by `unique_id` (not by the literal id) keeps the test locale-
-   robust: it asserts the *generated* id equals the catalog id, which is the property under
-   test.
+   Task 3), added once every owned entity already pins its suffix so it lands green rather than
+   driving the work. Looking entities up by `unique_id` (not by the literal id) keeps the test
+   locale-robust: it asserts the *generated* id equals the catalog id, which is the property
+   under test.
 
-No **new test file** is warranted — this is a corrective change to existing entities, not new
-behavior, so the coverage belongs alongside the existing full-setup tests in
-`tests/test_init.py`.
+No **new test file** is warranted for this enumeration test — it is a corrective change to
+existing entities, not new behavior, so the coverage belongs alongside the existing full-setup
+tests in `tests/test_init.py`. (`tests/test_entity.py`, added in Task 1, is a separate, small
+new file for the base-class mechanism itself — see above.)
 
 ---
 
@@ -280,6 +309,10 @@ behavior, so the coverage belongs alongside the existing full-setup tests in
   an existing install would require either an `async_migrate_entry`/`async_regenerate_entity_id`
   registry migration or the user manually renaming (or deleting and re-adding) the affected
   entities.
+- **Device-rename exposure (see §3).** The pin removes locale-dependence but not
+  device-name-dependence: an owned entity first registered after a user renames the "Smart
+  Charging" device inherits that custom name's slug instead of `smart_charging_`. Out of scope
+  here, same as the migration limitation above.
 - **Why "new installs only, no migration" is the correct scope here.** The integration is
   pre-release — `manifest.json` version `0.2.1`, an actively-developed HACS custom
   integration with no stable installed base whose entity_ids we must preserve. ADR-0013 did
@@ -299,6 +332,10 @@ behavior, so the coverage belongs alongside the existing full-setup tests in
 
 This design feeds the paired TDD plan
 ([`2026-07-27-owned-entity-object-ids.md`](2026-07-27-owned-entity-object-ids.md)). Build
-order: the base-class mechanism first (with the corrected `test_init.py:149` and the new
-enumeration test as the failing tests), then the per-file pins, then the full-suite
-integration checkpoint. No `custom_components/` code is written ahead of the plan.
+order: the base-class mechanism first, proven green in isolation by a standalone unit test
+(no owned entity or `tests/test_init.py` assertion touched yet); then the per-file pins, each
+turning its own slice of `tests/test_init.py` coverage green in the same commit — the corrected
+`test_init.py:149` assertion lands with the `select`/`number` pins, and the comprehensive
+enumeration test (with its reverse assertion) lands already-green with the final `time.py` pins;
+then the full-suite integration checkpoint. No task commits a known-red test, and no
+`custom_components/` code is written ahead of the plan.

@@ -1,7 +1,7 @@
 # ADR-0013: Stable, locale-independent object_ids for owned entities
 
 Date: 2026-07-27
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -39,11 +39,14 @@ unaffected.
 
 ### Option A — Pin an explicit, locale-independent `object_id` for every owned entity
 
-Give each owned entity an explicit `_attr_suggested_object_id` (or platform-appropriate
-equivalent) equal to its catalog id's suffix (e.g. `soc_limit_override`,
-`monthly_peak_kw`), decoupling the registered `entity_id` from the translated display
-name. The display name shown in the UI still comes from `translation_key` and remains
-fully localized; only the `entity_id` is pinned.
+Give each owned entity an explicit, locale-independent object_id suffix equal to its
+catalog id's suffix (e.g. `soc_limit_override`, `monthly_peak_kw`), decoupling the
+registered `entity_id` from the translated display name. The display name shown in the
+UI still comes from `translation_key` and remains fully localized; only the `entity_id`
+is pinned. (`_attr_suggested_object_id` is a no-op in the HA version this integration
+targets; the mechanism is an override of the `suggested_object_id` property on the
+shared `SmartChargingEntity` base — see the implementation follow-up for the verified
+detail.)
 
 - Pro: `entity_id` matches `entity-catalog.md`/`README.md` exactly, in every HA locale,
   which is what those documents already promise users for automations and dashboards —
