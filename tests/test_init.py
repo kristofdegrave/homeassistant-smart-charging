@@ -369,11 +369,15 @@ async def test_select_omits_captar_when_unavailable(hass):
 
 
 async def test_every_owned_entity_id_matches_entity_catalog(hass):
-    """ADR-0013: every owned entity registers under its documented entity-catalog id,
-    independent of the translated display name. Looked up by unique_id so the test
-    asserts the GENERATED id equals the catalog id (the property under test)."""
+    """ADR-0013: every owned entity registers under its documented entity-catalog id (or,
+    for `target_current`, its pre-existing id -- no catalog row exists for it, design §2),
+    independent of the translated display name. Looked up by unique_id so the test asserts
+    the GENERATED id equals the catalog id (the property under test)."""
     _seed_states(hass, status="Charging")
     data = _entry_data()
+    # Solar/EV-SOC config is not required for any owned entity's creation -- none is
+    # capability-gated -- but is set anyway so this test exercises the widest entity
+    # population, same as test_select_entity_is_registered_on_setup above.
     data[CONF_SOLAR_INSTALLED] = True
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
     hass.states.async_set("sensor.ev_soc", "50.0")
@@ -412,8 +416,14 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
 
     # No owned entity may be missing from `expected` above -- a future owned entity added
     # without a pin here would otherwise pass this test silently (ADR-0013's last consequence).
+    # Domain-qualified so a same-suffix entity registered under a *different* platform (e.g.
+    # a future sensor.smart_charging_home_day alongside the home_day switch) can't be absorbed
+    # into the set and escape the forward loop above undetected.
+    expected_by_domain = {
+        (want_id.split(".", 1)[0], uid_suffix) for uid_suffix, want_id in expected.items()
+    }
     registered = {
-        e.unique_id.removeprefix(f"{entry.entry_id}_")
+        (e.domain, e.unique_id.removeprefix(f"{entry.entry_id}_"))
         for e in er.async_entries_for_config_entry(registry, entry.entry_id)
     }
-    assert registered == set(expected)
+    assert registered == expected_by_domain
