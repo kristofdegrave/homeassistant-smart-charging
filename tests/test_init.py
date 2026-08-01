@@ -115,7 +115,9 @@ async def test_end_to_end_commands_target_current(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # The number entity exists, its object_id an explicit pin (ADR-0013), not translation-derived...
+    # The number entity exists; its object_id is pinned (ADR-0013) -- this particular id
+    # happens to also match the pre-pin translated name, so this line doesn't itself guard
+    # the pin (T2.3's enumeration test does)...
     assert hass.states.get("number.smart_charging_target_current") is not None
     # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1),
     # so the setup cycle wrote 0 A -- pin that down before selecting Power explicitly, same
