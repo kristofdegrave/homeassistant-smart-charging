@@ -20,7 +20,7 @@ label idea            f2a101 "Not yet scoped — work it with the work-idea skil
 label needs-draft    0e8a16 "Issue: with one context label, trigger the CI drafter"
 label needs-review   fbca04 "PR: trigger the fresh AI review"
 label needs-work     d93f0b "PR: trigger the AI fix pass to address review remarks"
-label needs-approval b60205 "PR: automatic review/fix cap reached — a maintainer must decide"
+label needs-approval b60205 "PR: reviewed clean, or automatic review/fix cap reached — a maintainer must decide"
 
 # --- Context / artifact-type labels ------------------------------------------------------
 label uc          1d76db "Use-case analysis document"
