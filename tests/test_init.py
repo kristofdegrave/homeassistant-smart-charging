@@ -115,7 +115,7 @@ async def test_end_to_end_commands_target_current(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # The number entity exists, its object_id suffixed per strings.json translations...
+    # The number entity exists, its object_id an explicit pin (ADR-0013), not translation-derived...
     assert hass.states.get("number.smart_charging_target_current") is not None
     # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1),
     # so the setup cycle wrote 0 A -- pin that down before selecting Power explicitly, same
@@ -146,7 +146,7 @@ async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("number.smart_charging_default_charge_limit")
+    state = hass.states.get("number.smart_charging_soc_limit_override")
     assert state is not None
     assert float(state.state) == 80.0
 
@@ -167,8 +167,8 @@ async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
 
 async def test_select_entity_is_registered_on_setup(hass):
     """T6.1: the select platform must be forwarded alongside number/sensor. Looked up by
-    unique_id, not entity_id -- the "_mode"-suffixed entity_id depends on the select.mode
-    translation entry that T6.3 (strings/translations) adds, not this task."""
+    unique_id, not entity_id -- the "_mode"-suffixed entity_id is now an explicit pin
+    (ADR-0013), not a translation-key dependency."""
     _seed_states(hass, status="Charging")
     data = _entry_data()
     data[CONF_SOLAR_INSTALLED] = True
