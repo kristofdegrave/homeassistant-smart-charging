@@ -1,7 +1,7 @@
 # ADR-0014: Setter-method encapsulation for the coordinator's externally-writable fields
 
 Date: 2026-08-01
-Status: Accepted
+Status: Superseded by ADR-0016
 
 ## Context
 
