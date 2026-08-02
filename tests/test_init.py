@@ -170,7 +170,10 @@ async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
 async def test_select_entity_is_registered_on_setup(hass):
     """T6.1: the select platform must be forwarded alongside number/sensor. Looked up by
     unique_id, not entity_id -- the "_mode"-suffixed entity_id is now an explicit pin
-    (ADR-0013), not a translation-key dependency."""
+    (ADR-0013), not a translation-key dependency. Also carries the ADR-0013 covering
+    assertions for the two sensor ids T2.2 flips (`monthly_peak_kw`/`active_soc_limit`) --
+    T2.3's `test_every_owned_entity_id_matches_entity_catalog` is the durable, comprehensive
+    guard for every owned entity; these two are here only because T2.2 predates it."""
     _seed_states(hass, status="Charging")
     data = _entry_data()
     data[CONF_SOLAR_INSTALLED] = True
@@ -190,6 +193,13 @@ async def test_select_entity_is_registered_on_setup(hass):
     # CONF_CAPTAR_AVAILABLE predates this entry's data too -- defaults to True (design doc
     # §3), so Captar is offered alongside Solar/SolarOnly without being set explicitly.
     assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly", "Captar"]
+
+    # ADR-0013: these two flip a real, catalog-diverging id with no other covering
+    # assertion -- guard the pin explicitly (T2.2).
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_monthly_peak_kw")
+    assert entity_id == "sensor.smart_charging_monthly_peak_kw"
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit")
+    assert entity_id == "sensor.smart_charging_active_soc_limit"
 
 
 async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
