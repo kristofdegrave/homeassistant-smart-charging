@@ -12,6 +12,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
     STATE_CHARGING,
     STATE_CONNECTED,
     STATE_DISCONNECTED,
@@ -27,6 +28,7 @@ from custom_components.smart_charging.coordinator_cycle import (
     _SolarOnlyModeHandler,
 )
 from custom_components.smart_charging.modes import captar, solar, solar_only
+from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 
 
@@ -218,15 +220,17 @@ def test_solar_mode_handler_delegates_to_modes_solar_step():
 
 
 def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
-    # Surplus (1380 W) clears the 1300 W start threshold -> solar_only.step's own
-    # idle->charging transition rounds 1380 W / 230 V = 6.0 A down to 6 A (tests/modes/
-    # test_solar_only.py's test_starts_at_threshold_default_round_down_never_imports anchors
-    # this same 6 A expectation).
+    # Surplus (1450 W) clears the 1300 W start threshold -> ideal = 1450 / 230 = 6.304 A,
+    # a deliberately non-integral value (unlike 1380 W, whose 6.0 A ideal is identical
+    # across round_down/round_up/round_nearest and so wouldn't prove strategy/midpoint are
+    # threaded through -- code-reviewer finding on PR #451). round_down floors 6.304 A to
+    # 6 A, matching the pattern tests/modes/test_solar_only.py uses for its own
+    # strategy-threading tests.
     config = {
         CONF_SOLAR_ONLY_START_THRESHOLD_W: 1300.0,
         CONF_MIN_CURRENT: 6.0,
         CONF_SOLAR_COOLDOWN_MIN: 2.0,
-        CONF_SOLAR_ONLY_STRATEGY: "round_down",
+        CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
         CONF_SOLAR_ONLY_MIDPOINT: 0.5,
     }
     handler = _SolarOnlyModeHandler(config)
@@ -237,7 +241,7 @@ def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
         voltage=230.0,
         now=0.0,
         now_dt=datetime(2026, 7, 27, 12, 0),
-        surplus_w=1380.0,
+        surplus_w=1450.0,
     )
     current, new_state = handler.desired_current(ctx, solar_only.SolarOnlyState.idle())
     assert current == 6.0
@@ -248,7 +252,10 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     # Idle -> charging always requests max_a (tests/modes/test_captar.py's
     # test_idle_starts_charging_immediately_requesting_max_current anchors this 32 A
     # expectation) -- captar.step has no surplus/voltage dependency, unlike its siblings.
-    config = {CONF_MAX_CURRENT: 32.0, CONF_CAPTAR_COOLDOWN_MIN: 10.0}
+    # cooldown_minutes=1.0 is deliberately distinct from DEFAULT_CAPTAR_COOLDOWN_MIN (10.0)
+    # so this test and the fallback test below are behaviorally distinguishable
+    # (code-reviewer finding on PR #451); exercised via the cooldown-elapsing assertions.
+    config = {CONF_MAX_CURRENT: 32.0, CONF_CAPTAR_COOLDOWN_MIN: 1.0}
     handler = _CaptarModeHandler(config)
     ctx = CycleContext(
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, now_dt=None
@@ -257,17 +264,52 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     assert current == 32.0
     assert new_state.phase == Phase.CHARGING
 
+    # Prove cooldown_minutes=1.0 is actually threaded through, not just present in the
+    # config dict: at 59s (< 1 min) cooldown still blocks; at 61s (> 1 min) it's re-armed.
+    cooldown_state = captar.CaptarState(Phase.COOLDOWN, phase_started_at=0.0)
+    blocked, _ = handler.desired_current(ctx, cooldown_state)
+    assert blocked == 0.0
+    ctx_later = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=61.0, now_dt=None
+    )
+    rearmed, rearmed_state = handler.desired_current(ctx_later, cooldown_state)
+    assert rearmed == 32.0
+    assert rearmed_state.phase == Phase.CHARGING
+
 
 def test_captar_mode_handler_uses_default_cooldown_when_config_key_absent():
     """_CaptarModeHandler falls back to DEFAULT_CAPTAR_COOLDOWN_MIN when the config mapping
     omits CONF_CAPTAR_COOLDOWN_MIN (design doc Sec 3.4's .get(..., DEFAULT_CAPTAR_COOLDOWN_MIN)
     call) -- distinct from the other four handlers' plain bracket lookups, which require the
-    key to be present."""
+    key to be present. Proven via the cooldown phase (idle/charging never read
+    cooldown_minutes at all -- code-reviewer finding on PR #451): just before
+    DEFAULT_CAPTAR_COOLDOWN_MIN elapses, cooldown still blocks; just after, it re-arms."""
     config = {CONF_MAX_CURRENT: 32.0}
     handler = _CaptarModeHandler(config)
-    ctx = CycleContext(
-        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, now_dt=None
+    cooldown_state = captar.CaptarState(Phase.COOLDOWN, phase_started_at=0.0)
+
+    still_blocked_now = DEFAULT_CAPTAR_COOLDOWN_MIN * 60 - 1
+    ctx_before = CycleContext(
+        status=STATE_CHARGING,
+        net_w=0.0,
+        charger_w=0.0,
+        voltage=230.0,
+        now=still_blocked_now,
+        now_dt=None,
     )
-    current, new_state = handler.desired_current(ctx, captar.CaptarState.idle())
+    current, new_state = handler.desired_current(ctx_before, cooldown_state)
+    assert current == 0.0
+    assert new_state.phase == Phase.COOLDOWN
+
+    rearmed_now = DEFAULT_CAPTAR_COOLDOWN_MIN * 60 + 1
+    ctx_after = CycleContext(
+        status=STATE_CHARGING,
+        net_w=0.0,
+        charger_w=0.0,
+        voltage=230.0,
+        now=rearmed_now,
+        now_dt=None,
+    )
+    current, new_state = handler.desired_current(ctx_after, cooldown_state)
     assert current == 32.0
     assert new_state.phase == Phase.CHARGING
