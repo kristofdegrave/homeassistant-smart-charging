@@ -1,7 +1,5 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
-from datetime import timedelta
-
 import pytest
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
@@ -63,8 +61,7 @@ from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
-
-_AMPLE_PEAK_HEADROOM_KW = 100.0  # keeps R3's clamp out of the way of tests that don't test it
+from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom, seed_today_deadline
 
 
 class _FakeNumeric:
@@ -150,22 +147,11 @@ def _config():
 
 
 def _seed_today_deadline(coord, hours_from_now):
-    """Seed today's departure-deadline default so it resolves `hours_from_now` ahead of
-    real wall-clock now (Task 5.2's deadline/required-current resolution reads dt_util.now(),
-    not the mode state machines' injected monotonic clock)."""
-    now_dt = dt_util.now()
-    coord.departure_dow_defaults[now_dt.weekday()] = (
-        now_dt + timedelta(hours=hours_from_now)
-    ).time()
+    seed_today_deadline(coord, hours_from_now=hours_from_now)
 
 
-def _seed_ample_peak_headroom(coord, kw=_AMPLE_PEAK_HEADROOM_KW):
-    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
-    (the same shape a MonthlyPeakSensor restore would seed, Task 4.2) -- keeps R3's clamp
-    out of the way of tests that exercise unrelated behavior, not R3 itself."""
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = kw
+def _seed_ample_peak_headroom(coord, kw=AMPLE_PEAK_HEADROOM_KW):
+    seed_ample_peak_headroom(coord, kw=kw)
 
 
 async def _run(hass, adapters, config, target):
@@ -557,9 +543,7 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0)
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_OFF
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 3.0  # already-tracked peak is the lesser of the two
+    seed_ample_peak_headroom(coord, kw=3.0)  # already-tracked peak is the lesser of the two
 
     result = await coord._async_update_data()
 
@@ -577,9 +561,7 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 3.56
+    seed_ample_peak_headroom(coord, kw=3.56)
 
     result = await coord._async_update_data()
 
@@ -600,9 +582,7 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 0.1
+    seed_ample_peak_headroom(coord, kw=0.1)
 
     result = await coord._async_update_data()
 
@@ -631,9 +611,7 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
     coord = SmartChargingCoordinator(hass, adapters=breaching, config=config, interval_s=30)
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 1.0
+    seed_ample_peak_headroom(coord, kw=1.0)
 
     result = await coord._async_update_data()
 
@@ -659,9 +637,7 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     coord = SmartChargingCoordinator(hass, adapters=breaching, config=config, interval_s=30)
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 1.0
+    seed_ample_peak_headroom(coord, kw=1.0)
     await coord._async_update_data()
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
 
@@ -669,8 +645,8 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     # Also restore ample peak headroom so only the cooldown reset is under test here.
     ample = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord._adapters = ample
-    coord._config = {**config, CONF_MAX_PEAK_KW: _AMPLE_PEAK_HEADROOM_KW}
-    coord._peak_demand.tracked_kw = _AMPLE_PEAK_HEADROOM_KW
+    coord._config = {**config, CONF_MAX_PEAK_KW: AMPLE_PEAK_HEADROOM_KW}
+    coord._peak_demand.tracked_kw = AMPLE_PEAK_HEADROOM_KW
     coord.active_mode = MODE_OFF
     await coord._async_update_data()
     coord.active_mode = MODE_CAPTAR
@@ -708,9 +684,7 @@ async def test_power_respects_peak_by_default(hass):
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 3.56
+    seed_ample_peak_headroom(coord, kw=3.56)
 
     result = await coord._async_update_data()
 
@@ -727,9 +701,7 @@ async def test_power_can_opt_out_of_peak_protection(hass):
     coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = 3.56
+    seed_ample_peak_headroom(coord, kw=3.56)
 
     result = await coord._async_update_data()
 
