@@ -81,7 +81,7 @@ from .const import (
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
 )
-from .coordinator_cycle import PeakDemandState
+from .coordinator_cycle import PeakDemandState, SocGateResolver
 from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
@@ -98,7 +98,6 @@ from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import (
     SolarStepUpState,
-    resolve_active_soc_limit,
     resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
@@ -163,9 +162,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # the generic per-mode-switch reset below (that would wrongly clear an in-effect
         # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a).
         self._step_up_state: SolarStepUpState = SolarStepUpState()
-        # ADR-0011: the prior cycle's resolved active SOC limit, for ActiveSocLimitChanged's
-        # change-detection. None on cycle 1, so the first resolution always fires the event.
-        self._last_active_soc_limit: float | None = None
+        # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
+        # ActiveSocLimitChanged (ADR-0012's SocGateResolver). First resolution always reports
+        # changed=True, so the first cycle always fires the event.
+        self._soc_gate = SocGateResolver()
         # R9/R14 inputs -- single source of truth is meant to be the owning entity
         # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring
         # ModeSelect/ProfileSelect's own push-on-change), but that entity->coordinator wiring
@@ -340,17 +340,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ),
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
-        active_soc_limit = resolve_active_soc_limit(
+        active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
             self.soc_limit_override,
             solar_reserve_active=solar_reserve_active,
             solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
             step_up_state=self._step_up_state,
         )
-        if active_soc_limit != self._last_active_soc_limit:
+        if soc_limit_changed:
             self.hass.bus.async_fire(
                 EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
             )
-        self._last_active_soc_limit = active_soc_limit
 
         # R5/R14/R15: today's departure deadline and the required-current/urgency it drives.
         # Guarded on ev_soc being known -- without an SOC reading (disconnected, or a
