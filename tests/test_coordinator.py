@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 import pytest
+from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
@@ -835,7 +836,14 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
     _seed_ample_peak_headroom(coord)
 
     events = []
-    hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, lambda event: events.append(event))
+
+    @callback
+    def _record(event):
+        # A plain (non-@callback) listener is dispatched as an executor job -- appending
+        # from a worker thread races the assertions below. @callback keeps it synchronous.
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, _record)
 
     await coord._async_update_data()  # first resolution: 80.0, no prior value -> fires
     assert len(events) == 1
@@ -998,7 +1006,14 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
     _seed_ample_peak_headroom(coord)
 
     events = []
-    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, lambda event: events.append(event))
+
+    @callback
+    def _record(event):
+        # A plain (non-@callback) listener is dispatched as an executor job -- appending
+        # from a worker thread races the assertions below. @callback keeps it synchronous.
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
     await coord._async_update_data()
     assert len(events) == 1
