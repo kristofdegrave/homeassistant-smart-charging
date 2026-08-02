@@ -15,9 +15,16 @@ from custom_components.smart_charging.number import (
 
 class _StubCoordinator:
     def __init__(self):
-        self.target_current = None
+        self._target_current = None
         self.soc_limit_override = None
         self.refreshed = False
+
+    @property
+    def target_current(self):
+        return self._target_current
+
+    def set_target_current(self, value):
+        self._target_current = value
 
     async def async_request_refresh(self):
         self.refreshed = True
@@ -45,6 +52,25 @@ def test_init_seeds_bounds_and_default():
     assert entity.native_max_value == 16.0
     assert entity.native_value == 10.0
     assert entity.unique_id == "abc_target_current"
+
+
+def test_init_clamps_out_of_range_default_target_current():
+    """config_flow validates default_target_current with vol.Coerce(float) only, no
+    [min_a, max_a] range -- an out-of-range configured default must clamp here too
+    (ADR-0014 criterion 6, entity-side clamp, distinct from the coordinator's own)."""
+    entity = TargetCurrentNumber(
+        entry_id="abc", coordinator=_StubCoordinator(), min_a=6.0, max_a=16.0, default=99.0
+    )
+    assert entity.native_value == 16.0
+
+
+def test_init_clamps_out_of_range_default_target_current_below_minimum():
+    """Same clamp as above, exercised on the below-minimum side too -- the plan's own test
+    body only covers the above-maximum case, so this closes the min(default, min_a) half."""
+    entity = TargetCurrentNumber(
+        entry_id="abc", coordinator=_StubCoordinator(), min_a=6.0, max_a=16.0, default=1.0
+    )
+    assert entity.native_value == 6.0
 
 
 async def test_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
