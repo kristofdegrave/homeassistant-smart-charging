@@ -81,7 +81,16 @@ from .const import (
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
 )
-from .coordinator_cycle import PeakDemandState
+from .coordinator_cycle import (
+    CycleContext,
+    ModeHandler,
+    PeakDemandState,
+    _CaptarModeHandler,
+    _OffModeHandler,
+    _PowerModeHandler,
+    _SolarModeHandler,
+    _SolarOnlyModeHandler,
+)
 from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
@@ -147,6 +156,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._adapters = adapters
         self._config = config
         self._interval_s = interval_s
+        # ADR-0012: one thin adapter per mode, looked up by active_mode instead of the old
+        # if/elif dispatch chain. MODE_POWER is registered too (for the discard-state branch
+        # below, kept as its own elif per design doc Sec 3.4) even though it never goes through
+        # the registry's shared state-write path.
+        self._mode_handlers: dict[str, ModeHandler] = {
+            MODE_OFF: _OffModeHandler(),
+            MODE_POWER: _PowerModeHandler(lambda: self.target_current),
+            MODE_SOLAR: _SolarModeHandler(config),
+            MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
+            MODE_CAPTAR: _CaptarModeHandler(config),
+        }
         # Single source of truth for the setpoint is the number entity, which seeds this on
         # add (restored value, else configured default). 0 A is the safe default for cycle 0.
         self.target_current: float = 0.0
@@ -272,6 +292,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
         # the baseline-mode dry-run (Task 5.2)
         now = self.hass.loop.time()  # injected, not read inside modes/engines
+        # ADR-0012: carries this cycle's readings/derived values into the ModeHandler registry
+        # lookup below, replacing the loose local variables the old dispatch chain threaded by
+        # hand. Filled progressively as later steps resolve each remaining value -- not
+        # everything is known yet at this point in the cycle.
+        ctx = CycleContext(
+            status=status,
+            net_w=net_w,
+            charger_w=charger_w,
+            voltage=voltage,
+            now=now,
+            now_dt=now_dt,
+            ev_soc=ev_soc,
+            surplus_w=surplus_w,
+            monthly_peak_kw=monthly_peak_kw,
+        )
         # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
         # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
         # already this cycle's final value (set externally before the cycle runs); under Auto,
@@ -305,6 +340,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
         sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
         sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
+        ctx.sun_is_up = sun_is_up
+        ctx.sun_is_down = sun_is_down
         # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
         # default -- "the signal is omitted and the flag is treated as always active".
         low_tariff_active = True
@@ -312,6 +349,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
             if low_tariff_reading is not None:
                 low_tariff_active = low_tariff_reading
+        ctx.low_tariff_active = low_tariff_active
         today_weekday = now_dt.weekday()
         tomorrow_weekday = (today_weekday + 1) % 7
 
@@ -340,6 +378,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ),
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
+        ctx.solar_reserve_active = solar_reserve_active
         active_soc_limit = resolve_active_soc_limit(
             self.soc_limit_override,
             solar_reserve_active=solar_reserve_active,
@@ -351,6 +390,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
             )
         self._last_active_soc_limit = active_soc_limit
+        ctx.active_soc_limit = active_soc_limit
 
         # R5/R14/R15: today's departure deadline and the required-current/urgency it drives.
         # Guarded on ev_soc being known -- without an SOC reading (disconnected, or a
@@ -456,9 +496,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Urgent (UC05's Postconditions) -- this `or` makes that explicit even though
         # `unreachable` implies `urgent` by construction, per the required-current formula.
         urgent = required.urgent or required.unreachable
+        ctx.urgent = urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW), urgent=urgent
         )
+        ctx.effective_peak_limit_kw = effective_peak_limit_kw
         if auto_dispatchable:
             # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
             # never changes here while Manual, even under urgency) -- only Auto resolves its
@@ -490,7 +532,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         elif self.active_mode == MODE_OFF:
             desired = 0.0
         elif self.active_mode == MODE_POWER:
-            desired = power.desired_current(self.target_current, status)  # unchanged, no SOC gate
+            # ADR-0012: routed through the registry too, for observability/consistency with the
+            # other modes, but MODE_POWER has no entry in _fresh_mode_state() and must not gain
+            # one -- its returned state is discarded, never written to _mode_state (design doc
+            # Sec 3.4). Unchanged behavior: no SOC gate.
+            desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
         elif self.active_mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
             # R7: don't resume until the gate clears. Holding the state at idle() (rather than
             # dispatching into step()) means the next cycle where this branch stops matching --
@@ -505,38 +551,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     if self.active_mode == MODE_SOLAR
                     else solar_only.SolarOnlyState.idle()
                 )
-        elif self.active_mode == MODE_SOLAR:
-            desired, self._mode_state[MODE_SOLAR] = solar.step(
-                surplus_w,
-                self._mode_state[MODE_SOLAR],
-                now,
-                start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
-                min_a=self._config[CONF_MIN_CURRENT],
-                hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
-                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-                voltage=voltage,
-            )
-        elif self.active_mode == MODE_SOLAR_ONLY:
-            desired, self._mode_state[MODE_SOLAR_ONLY] = solar_only.step(
-                surplus_w,
-                self._mode_state[MODE_SOLAR_ONLY],
-                now,
-                start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
-                min_a=self._config[CONF_MIN_CURRENT],
-                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-                strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
-                midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
-                voltage=voltage,
-            )
-        else:  # MODE_CAPTAR
-            desired, self._mode_state[MODE_CAPTAR] = captar.step(
-                self._mode_state[MODE_CAPTAR],
-                now,
-                max_a=self._config[CONF_MAX_CURRENT],
-                cooldown_minutes=self._config.get(
-                    CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
-                ),
-            )
+        else:
+            # ADR-0012: one ModeHandler registry lookup replaces the old per-mode
+            # if/elif chain (MODE_SOLAR/MODE_SOLAR_ONLY/MODE_CAPTAR -- the only modes that
+            # can still reach this branch, since MODE_OFF/MODE_POWER/the SOC-gated-stop guard
+            # above all handle their own case first). Each handler wraps its modes/*.py
+            # step()/desired_current() unchanged; only the lookup mechanism changed.
+            desired, self._mode_state[self.active_mode] = self._mode_handlers[
+                self.active_mode
+            ].desired_current(ctx, self._mode_state.get(self.active_mode))
 
         # R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
         # Sec 7). `desired` here is the already-computed mode request from dispatch above --
