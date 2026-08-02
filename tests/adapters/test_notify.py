@@ -106,3 +106,41 @@ async def test_read_ignores_a_stale_tag_response(hass):
 async def test_read_is_none_before_any_response(hass):
     adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
     assert await adapter.read() is None
+
+
+async def test_write_omits_data_and_tag_when_payload_is_not_actionable(hass):
+    calls = _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(NotificationRequest(message="Deadline unreachable", title="Smart Charging"))
+    await hass.async_block_till_done()
+
+    assert "data" not in calls[0]
+
+
+async def test_read_is_none_after_a_non_actionable_write(hass):
+    _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(NotificationRequest(message="Deadline unreachable"))
+    await hass.async_block_till_done()
+
+    assert await adapter.read() is None
+
+
+async def test_registers_the_action_listener_exactly_once(hass):
+    _register_capture(hass)
+    baseline = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+    for _ in range(3):
+        await adapter.write(
+            NotificationRequest(
+                message="Home tomorrow?", actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO]
+            )
+        )
+    await hass.async_block_till_done()
+
+    # One listener registered at construction; repeated write() calls do not add more.
+    after = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+    assert after - baseline == 1
