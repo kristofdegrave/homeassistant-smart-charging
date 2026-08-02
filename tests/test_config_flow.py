@@ -19,6 +19,8 @@ from custom_components.smart_charging.const import (
     CONF_EV_BATTERY_CAPACITY_ENTITY,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
@@ -26,6 +28,7 @@ from custom_components.smart_charging.const import (
     CONF_LOW_TARIFF_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
+    CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
@@ -42,6 +45,8 @@ from custom_components.smart_charging.const import (
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
+    DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_GRACE_MIN,
@@ -630,3 +635,90 @@ async def test_reconfigure_rejects_vehicle_limit_mapped_without_car_home(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_CAR_HOME_ENTITY] == "required_when_vehicle_limit_mapped"
+
+
+async def test_options_flow_edits_solar_forecast_threshold(hass):
+    # Notifications design doc §3: the options flow round-trips edits to the forecast
+    # threshold, same as every other threshold field (this field predates this task -- it
+    # is reused, not newly added -- but the round-trip itself was previously untested here).
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**_current_options(entry), CONF_SOLAR_FORECAST_THRESHOLD_KWH: 15.0}
+    )
+    assert entry.options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 15.0
+
+
+async def test_notification_target_entity_can_be_mapped(hass):
+    # RA4 notify-target data field (notifications design doc §3/§6).
+    result = await _run_user_flow(
+        hass, overrides={CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app_phone"}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app_phone"
+
+
+async def test_notification_target_entity_is_optional(hass):
+    result = await _run_user_flow(hass, omit=[CONF_NOTIFICATION_TARGET_ENTITY])
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_NOTIFICATION_TARGET_ENTITY not in result["data"]
+
+
+async def test_notification_target_entity_rejects_non_notify_domain(hass):
+    # Design doc §3/§6: the mapped entity's expected platform must be `notify` -- mirrors the
+    # existing platform-validation guard (EntitySelector's own domain filter raises vol.Invalid,
+    # the same mechanism test_options_flow_rejects_a_data_key exercises for a tampered options
+    # submission).
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    user_input = dict(USER_INPUT)
+    user_input[CONF_NOTIFICATION_TARGET_ENTITY] = "sensor.not_a_notify_entity"
+
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
+async def test_evening_prompt_options_seeded_into_options_with_defaults(hass):
+    # Notifications design doc §3: evening-prompt options seed into OPTIONS with their
+    # DEFAULT_* fallbacks -- no config-entry migration needed (an entry that predates these
+    # keys reads each with its DEFAULT_* fallback, exercised separately below).
+    result = await _run_user_flow(hass)
+    assert result["options"][CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
+    assert result["options"][CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
+
+
+async def test_options_flow_round_trips_evening_prompt_options(hass):
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **_current_options(entry),
+            CONF_EVENING_PROMPT_ENABLED: False,
+            CONF_EVENING_PROMPT_TIME: "19:30:00",
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_EVENING_PROMPT_ENABLED] is False
+    assert entry.options[CONF_EVENING_PROMPT_TIME] == "19:30:00"
+
+
+async def test_pre_existing_entry_defaults_evening_prompt_options(hass):
+    # An entry created before this task predates these keys entirely -- opening the options
+    # flow on it must seed each field with its DEFAULT_* (no config-entry migration, design
+    # doc §3), and submitting that pre-filled form must persist those defaults, not KeyError.
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(USER_INPUT), options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == FlowResultType.FORM
+    defaults = {key.schema: key.default() for key in result["data_schema"].schema}
+    assert defaults[CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
+    assert defaults[CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], defaults)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
+    assert entry.options[CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
