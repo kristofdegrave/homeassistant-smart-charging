@@ -5,24 +5,24 @@ Status: Proposed
 
 ## Context
 
-Every owned control entity that lets the user set a value the coordinator consumes today
-holds `self._coordinator = coordinator` for the entity's whole lifetime — passed in at
-construction by its platform's `async_setup_entry`, which reads it out of
-`hass.data[DOMAIN][entry.entry_id]` — and calls a coordinator method directly on every
-change, followed by `await self._coordinator.async_request_refresh()`:
+Two owned control entities that let the user set a value the coordinator consumes —
+`ModeSelect`/`ProfileSelect` (`select.py:63,67,91,95`) and `TargetCurrentNumber`/
+`SocLimitOverrideNumber` (`number.py:54,58,92,96`) — hold `self._coordinator = coordinator`
+for the entity's whole lifetime, passed in at construction by their platform's
+`async_setup_entry` (which reads it out of `hass.data[DOMAIN][entry.entry_id]`), and call a
+coordinator method directly on every change, followed by
+`await self._coordinator.async_request_refresh()`: `set_active_mode`, `set_active_profile`,
+`set_target_current`, `set_soc_limit_override`.
 
-- `ModeSelect` / `ProfileSelect` (`select.py:63,67,91,95`) → `set_active_mode` /
-  `set_active_profile`
-- `TargetCurrentNumber` / `SocLimitOverrideNumber` (`number.py:54,58,92,96`) →
-  `set_target_current` / `set_soc_limit_override`
-- `SmartChargingDepartureTime` (`time.py`) and `HomeDaySwitch` (`switch.py`) — the two
-  platforms added by the in-flight departure-time/home-day work, which extends the same
-  shape to `home_day_flag`, `departure_dow_defaults`, `departure_holiday_override` and
-  `departure_home_day_override` via `activate_home_day`/`deactivate_home_day`,
-  `configure_weekday_departure`, `override_holiday_departure` and
-  `override_home_day_departure`.
+`SmartChargingDepartureTime` (`time.py`) and `HomeDaySwitch` (`switch.py`) already exist as
+owned control entities for `home_day_flag`, `departure_dow_defaults`,
+`departure_holiday_override` and `departure_home_day_override`, but their coordinator wiring
+is in-flight work-in-progress, not yet landed here: it is being built against the same
+held-reference-plus-setter shape (`activate_home_day`/`deactivate_home_day`,
+`configure_weekday_departure`, `override_holiday_departure`, `override_home_day_departure`),
+which is exactly what prompts this decision now, before that wiring lands, rather than after.
 
-That is eight externally-writable coordinator fields reached the same way. ADR-0014 settled
+That is eight externally-writable coordinator fields meant to be reached the same way. ADR-0014 settled
 the *method* half of that shape (mutate through a method the coordinator owns, not a bare
 attribute assignment) for the first four fields, and generalized it forward: "any future
 field added to the coordinator's externally-writable surface follows this same rule … rather
@@ -44,20 +44,23 @@ Four forces now bear on the reference half:
   a plain `Entity`, not a `CoordinatorEntity`. For these eight write paths the coordinator
   reference exists *only* to push a value inward and to request a refresh; it is not used
   for coordinator→entity state sync. The read direction is a separate, already-different
-  mechanism — `sensor.py`'s `ChargingStatusSensor`/`ActiveModeSensor` do subclass
-  `CoordinatorEntity` and legitimately need the reference for it. Only the write path is in
-  question here.
-- **The codebase already has a working event bus, but not for this direction.** ADR-0011
-  established publish/subscribe on domain events as the project's coordination mechanism and
-  fixed the naming convention: a past-tense PascalCase domain event mapped to a snake_case HA
-  event type in `const.py` (`EVENT_ACTIVE_SOC_LIMIT_CHANGED =
-  "smart_charging_active_soc_limit_changed"`, `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`, …).
-  ADR-0011's events are Coordinator→Manager: an integration-*computed* transition broadcast
-  outward to a peer service that must not call the producer directly. What is proposed here
-  runs the other way — an entity pushing a UI input *inward* to its own coordinator. No event
-  in the vocabulary today carries a **request to change state**; every existing one is a
-  notification that state already changed. So ADR-0011 is precedent that the mechanism works
-  in this codebase, not precedent that this particular use is already decided.
+  mechanism — `sensor.py`'s five diagnostic sensors (`ChargingStatusSensor`,
+  `ActiveModeSensor`, `MonthlyPeakSensor`, `EffectivePeakLimitSensor`,
+  `ActiveSocLimitSensor`) all subclass `CoordinatorEntity` and legitimately need the
+  reference for it. Only the write path is in question here.
+- **The codebase already has a working event bus, but ADR-0011's criterion doesn't reach
+  this case.** ADR-0011 decided *when* to mint a domain event versus re-derive a condition:
+  publish one **iff** the trigger is an integration-*computed* domain transition the consumer
+  cannot observe without duplicating the producer's logic (its Option C). Every event that
+  criterion produced — `EVENT_ACTIVE_SOC_LIMIT_CHANGED`, `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`
+  — is Coordinator→Manager: a past-tense notification that a computed transition already
+  happened, fired outward to a peer service that must not call the producer directly. What is
+  proposed here is a different shape entirely: an entity firing a **request to change
+  state**, inward, to its own coordinator, before anything has been computed or transitioned.
+  That is not a transition ADR-0011's criterion would ever classify — it is a UI input, not a
+  domain event by CLAUDE.md's own definition. So ADR-0011 is precedent that `hass.bus` works
+  as a mechanism in this codebase; it is not precedent that this particular use already
+  satisfies its criterion, and this decision does not claim it does.
 - **Two mechanics the direct reference gets for free.** (a) *Entry scoping* — the HA event
   bus is global to the instance, while `hass.data[DOMAIN][entry.entry_id]` gives each entity
   a handle on its **own** config entry's coordinator. With two config entries, an event-based
@@ -214,16 +217,19 @@ the design rather than an accident of call order.
   immutability rule. Its forward-looking rule ("any future externally-writable field gets a
   setter method rather than its own ADR") no longer applies — the rule is now this ADR's
   event path.
-- **New `EVENT_*` constants in `const.py`** — one per externally-writable field, following the
-  existing past-tense-PascalCase-concept → `smart_charging_*` snake_case convention ADR-0011
-  established, plus the payload-key `ATTR_*` constants they need (including the shared
-  entry-id key). Naming the exact set is the implementation spec's job; this ADR fixes only
-  that they exist, are per-field, and follow that convention.
-- **PR #452 (branch `dev/402`) currently implements the now-superseded pattern** for
-  `time.py`/`switch.py` and their coordinator setters — the review feedback on that PR is
-  what prompted this decision. Per CLAUDE.md's rule that a decision is captured before the
-  work depending on it is committed, that PR is expected to be reworked onto this ADR's event
-  shape before it merges, rather than merging the superseded pattern and migrating later.
+- **New `EVENT_*` constants in `const.py`** — one per externally-writable field, using the
+  same `smart_charging_*` snake_case HA event-type shape ADR-0011's constants use
+  (`EVENT_ACTIVE_SOC_LIMIT_CHANGED`, …), plus the payload-key `ATTR_*` constants they need
+  (including the shared entry-id key). These are **not** ADR-0011-criterion domain events
+  (they name a requested change, not a past-tense computed transition), so they should be
+  named accordingly (e.g. a `*ChangeRequested` shape) rather than reusing PascalCase
+  transition names that would misrepresent them as ADR-0011 events. Naming the exact set is
+  the implementation spec's job; this ADR fixes only that they exist and are per-field.
+- **The in-flight departure-time/home-day platform work implements the now-superseded
+  pattern.** Its coordinator wiring is what prompted this decision. Per CLAUDE.md's rule that
+  a decision is captured before the work depending on it is committed, that work is expected
+  to be reworked onto this ADR's event shape before it merges, rather than landing the
+  superseded pattern and migrating later.
 - **Out of scope: the read direction.** `sensor.py`'s `CoordinatorEntity` subclasses keep
   their coordinator reference for coordinator→entity state sync. This decision covers only
   the write path of owned *control* entities.
