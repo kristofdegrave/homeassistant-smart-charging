@@ -1,7 +1,5 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
-from datetime import timedelta
-
 import pytest
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
@@ -63,6 +61,7 @@ from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
+from tests.conftest import seed_ample_peak_headroom, seed_today_deadline
 
 _AMPLE_PEAK_HEADROOM_KW = 100.0  # keeps R3's clamp out of the way of tests that don't test it
 
@@ -150,22 +149,11 @@ def _config():
 
 
 def _seed_today_deadline(coord, hours_from_now):
-    """Seed today's departure-deadline default so it resolves `hours_from_now` ahead of
-    real wall-clock now (Task 5.2's deadline/required-current resolution reads dt_util.now(),
-    not the mode state machines' injected monotonic clock)."""
-    now_dt = dt_util.now()
-    coord.departure_dow_defaults[now_dt.weekday()] = (
-        now_dt + timedelta(hours=hours_from_now)
-    ).time()
+    seed_today_deadline(coord, hours_from_now=hours_from_now)
 
 
 def _seed_ample_peak_headroom(coord, kw=_AMPLE_PEAK_HEADROOM_KW):
-    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
-    (the same shape a MonthlyPeakSensor restore would seed, Task 4.2) -- keeps R3's clamp
-    out of the way of tests that exercise unrelated behavior, not R3 itself."""
-    now_dt = dt_util.now()
-    coord._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coord._peak_demand.tracked_kw = kw
+    seed_ample_peak_headroom(coord, kw=kw)
 
 
 async def _run(hass, adapters, config, target):

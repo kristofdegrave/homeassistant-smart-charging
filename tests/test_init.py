@@ -1,29 +1,17 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
 from homeassistant.helpers import entity_registry as er
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
-    CONF_CHARGER_CURRENT_ENTITY,
-    CONF_CHARGER_POWER_ENTITY,
-    CONF_CHARGER_STATUS_ENTITY,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
-    CONF_DEFAULT_TARGET_CURRENT,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_GRID_VOLTAGE_ENTITY,
-    CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
-    CONF_MIN_CURRENT,
-    CONF_NET_POWER_ENTITY,
-    CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
@@ -34,76 +22,27 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
-    CONF_STATUS_TRANSLATION,
     DOMAIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     PROFILE_AUTO,
-    STATE_CHARGING,
-    STATE_CONNECTED,
+)
+from tests.conftest import (
+    capture_charger_current_writes,
+    entry_data_base,
+    entry_options_base,
+    seed_ample_peak_headroom,
+    seed_charger_states,
 )
 
-
-def _entry_data():
-    """DATA bucket — entity-role mappings + translation only (ADR-0005)."""
-    return {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
-        CONF_STATUS_TRANSLATION: {"Charging": STATE_CHARGING, "Connected": STATE_CONNECTED},
-        CONF_NET_POWER_ENTITY: "sensor.net_power",
-        CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
-        CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
-    }
-
-
-def _entry_options():
-    """OPTIONS bucket — thresholds/defaults + interval (ADR-0005)."""
-    return {
-        CONF_NOMINAL_VOLTAGE: 230.0,
-        CONF_MIN_CURRENT: 6.0,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 2.0,
-        CONF_DEFAULT_TARGET_CURRENT: 10.0,
-        CONF_DEFAULT_SOC_LIMIT: 80.0,
-    }
-
-
-def _capture_charger_current_writes(hass):
-    """Capture number.set_value calls targeting the charger-current entity.
-
-    The real `number` platform (loaded via PLATFORMS) registers its own set_value
-    service handler on setup, so a fake `hass.services.async_register` stand-in gets
-    clobbered; listen for the call_service event instead — it fires for every call
-    regardless of which handler is installed.
-    """
-    calls = []
-
-    def _record(event):
-        if event.data["domain"] == "number" and event.data["service"] == "set_value":
-            calls.append(event.data["service_data"])
-
-    hass.bus.async_listen("call_service", _record)
-    return calls
-
-
-def _seed_states(hass, *, status: str) -> None:
-    hass.states.async_set("number.charger_current", "0.0")
-    hass.states.async_set("sensor.evse", status)
-    hass.states.async_set("sensor.net_power", "0.0")
-    hass.states.async_set("sensor.charger_power", "0.0")
-    hass.states.async_set("sensor.grid_voltage", "230.0")
-
-
-def _seed_ample_peak_headroom(coordinator, kw=100.0):
-    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
-    (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
-    predates peak protection and never seeded any tracked history of its own."""
-    now_dt = dt_util.now()
-    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_demand.tracked_kw = kw
+# This suite's config entry matches the shared base shape exactly -- no local overrides needed.
+_entry_data = entry_data_base
+_entry_options = entry_options_base
+_seed_states = seed_charger_states
+_capture_charger_current_writes = capture_charger_current_writes
+_seed_ample_peak_headroom = seed_ample_peak_headroom
 
 
 async def test_end_to_end_commands_target_current(hass):

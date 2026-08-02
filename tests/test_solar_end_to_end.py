@@ -7,50 +7,40 @@ machines in isolation; this file proves the coordinator wiring (Task 5.1/6.1) di
 them correctly through a real config entry.
 """
 
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
-    CONF_CHARGER_CURRENT_ENTITY,
-    CONF_CHARGER_POWER_ENTITY,
-    CONF_CHARGER_STATUS_ENTITY,
-    CONF_DEFAULT_SOC_LIMIT,
-    CONF_DEFAULT_TARGET_CURRENT,
     CONF_EV_SOC_ENTITY,
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_GRID_VOLTAGE_ENTITY,
-    CONF_MAX_CURRENT,
-    CONF_MIN_CURRENT,
-    CONF_NET_POWER_ENTITY,
-    CONF_NOMINAL_VOLTAGE,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_STRATEGY,
-    CONF_STATUS_TRANSLATION,
     DOMAIN,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
 )
 from custom_components.smart_charging.modes._amp_step import ROUND_NEAREST, ROUND_UP
 from custom_components.smart_charging.modes._phase import Phase
+from tests.conftest import (
+    capture_charger_current_writes,
+    entry_data_base,
+    entry_options_base,
+    seed_ample_peak_headroom,
+    seed_charger_states,
+)
 
 
 def _entry_data():
-    """DATA bucket -- entity-role mappings + translation only (ADR-0005)."""
-    return {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
-        CONF_STATUS_TRANSLATION: {"Charging": "charging", "Connected": "connected"},
-        CONF_NET_POWER_ENTITY: "sensor.net_power",
-        CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
-        CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
-        CONF_SOLAR_INSTALLED: True,
-        CONF_EV_SOC_ENTITY: "sensor.ev_soc",
-    }
+    """DATA bucket -- entity-role mappings + translation only (ADR-0005), plus this suite's
+    own Solar/SolarOnly-specific overrides on top of the shared base shape."""
+    return entry_data_base(
+        **{
+            CONF_SOLAR_INSTALLED: True,
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+        }
+    )
 
 
 def _entry_options(**overrides):
@@ -60,47 +50,18 @@ def _entry_options(**overrides):
     surplus values in each test are chosen to straddle them -- so this suite exercises
     the same numbers a real install would see, not test-only shortcuts.
     """
-    options = {
-        CONF_NOMINAL_VOLTAGE: 230.0,
-        CONF_MIN_CURRENT: 6.0,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 2.0,
-        CONF_DEFAULT_TARGET_CURRENT: 10.0,
-        CONF_DEFAULT_SOC_LIMIT: 80.0,
-    }
-    options.update(overrides)
-    return options
+    return entry_options_base(**overrides)
 
 
-def _capture_charger_current_writes(hass):
-    """Capture number.set_value calls targeting the charger-current entity (see test_init.py)."""
-    calls = []
-
-    def _record(event):
-        if event.data["domain"] == "number" and event.data["service"] == "set_value":
-            calls.append(event.data["service_data"])
-
-    hass.bus.async_listen("call_service", _record)
-    return calls
+_capture_charger_current_writes = capture_charger_current_writes
 
 
 def _seed_states(hass, *, status: str, net_w: float = 0.0, charger_w: float = 0.0) -> None:
-    hass.states.async_set("number.charger_current", "0.0")
-    hass.states.async_set("sensor.evse", status)
-    hass.states.async_set("sensor.net_power", str(net_w))
-    hass.states.async_set("sensor.charger_power", str(charger_w))
-    hass.states.async_set("sensor.grid_voltage", "230.0")
-    hass.states.async_set("sensor.ev_soc", "50.0")  # below the default 80% SOC limit throughout
+    # below the default 80% SOC limit throughout (ev_soc left at seed_charger_states' default)
+    seed_charger_states(hass, status=status, net_w=net_w, charger_w=charger_w)
 
 
-def _seed_ample_peak_headroom(coordinator, kw=100.0):
-    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
-    (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
-    predates peak protection and never seeded any tracked history of its own."""
-    now_dt = dt_util.now()
-    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_demand.tracked_kw = kw
+_seed_ample_peak_headroom = seed_ample_peak_headroom
 
 
 async def _setup(hass, **option_overrides):
