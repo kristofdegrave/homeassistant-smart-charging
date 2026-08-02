@@ -187,6 +187,13 @@ async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0
     return coord, result
 
 
+async def test_set_active_profile_sets_the_field(hass):
+    """ADR-0014: set_active_profile is the coordinator's own boundary for active_profile."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_active_profile(PROFILE_AUTO)
+    assert coord.active_profile == PROFILE_AUTO
+
+
 async def test_r17_commands_target_when_charging(hass):
     adapters = _adapters(status=STATE_CHARGING)
     coord, result = await _run(hass, adapters, _config(), target=10.0)

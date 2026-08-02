@@ -594,6 +594,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._mode_state = _fresh_mode_state()
             self._last_active_mode = self.active_mode
 
+    def set_active_profile(self, profile: str) -> None:
+        """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
+        path for select.py; the field itself stays a plain writable attribute (design doc §2,
+        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects
+        any value outside the enum before this is ever called."""
+        self.active_profile = profile
+
     def _mode_desired_current(
         self,
         mode: str,
