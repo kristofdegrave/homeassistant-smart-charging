@@ -255,6 +255,7 @@ async def test_car_home_empty_string_treated_as_absent(hass):
 
 
 async def test_factory_builds_vehicle_charge_limit_role_when_configured(hass):
+    """Task 1.2 / RA1-VL: mapping vehicle_charge_limit builds it via NumericReadWriteAdapter."""
     data = _data()
     data[CONF_VEHICLE_CHARGE_LIMIT_ENTITY] = "number.car_charge_limit"
     adapters = build_adapters(hass, data)
@@ -263,6 +264,7 @@ async def test_factory_builds_vehicle_charge_limit_role_when_configured(hass):
 
 
 async def test_vehicle_charge_limit_role_absent_when_not_configured(hass):
+    """UC09 precondition: unmapped vehicle_charge_limit -> no role, M2 stays inert."""
     adapters = build_adapters(hass, _data())
     assert ROLE_VEHICLE_CHARGE_LIMIT not in adapters
 
