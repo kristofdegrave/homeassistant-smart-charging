@@ -566,6 +566,9 @@ async def test_vehicle_limit_mapped_with_car_home_is_accepted(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_VEHICLE_CHARGE_LIMIT_ENTITY] == "number.car_limit"
     assert result["data"][CONF_CAR_HOME_ENTITY] == "device_tracker.car"
+    # ADR-0005: both are hardware mappings, folded into DATA -- neither belongs in options.
+    assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in result["options"]
+    assert CONF_CAR_HOME_ENTITY not in result["options"]
 
 
 async def test_car_home_mapped_alone_is_accepted(hass):
@@ -620,6 +623,7 @@ async def test_reconfigure_rejects_vehicle_limit_mapped_without_car_home(hass):
         CONF_CHARGING_STATES: "Charging",
         "net_power_entity": "sensor.net_power",
         "charger_power_entity": "sensor.charger_power",
+        CONF_CAPTAR_AVAILABLE: False,  # isolate the car_home guard from the ev_soc guard
         CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit",
     }
 
