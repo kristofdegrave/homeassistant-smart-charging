@@ -235,17 +235,17 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R16 — Auto profile
 
 **Priority:** Must
-**What:** The active profile is chosen by the user (`Manual` or `Auto`); under `Auto` the system selects the active mode over time from observable conditions, so the user need not switch modes by hand.
+**What:** The active [profile](system-overview.md#ubiquitous-language) is chosen by the user (`Manual` or `Auto`), each a fixed combination of the profile concept's three behaviours (mode selection, reserve coordination, escalation levers); under `Auto` the system selects the active mode over time from observable conditions, so the user need not switch modes by hand.
 
 **Acceptance criteria:**
 
 - [ ] The active profile is selected via a single profile selector; the built-in profiles are `Manual` and `Auto`. A profile sets the active mode and is not itself a mode.
-- [ ] Under `Manual`, the system makes no automatic mode changes — the active mode is whatever the user or an external source sets (NF1).
-- [ ] Under `Auto`, the system sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, CapTar availability, SOC, departure deadline, home-day flag).
-- [ ] Under `Auto`, `Captar` is selected for cost-efficient overnight grid top-up only while the low-tariff flag is active (Auto mode-selection row 4, `resolution-rules.md`); the low-tariff preference belongs to this selection, not to `Captar` mode itself (R4) — a manually selected `Captar` session charges regardless of tariff.
-- [ ] Under `Auto`, when its own solar-reserve conditions hold (R9), `Auto` also lowers the active SOC limit (R7) and declines to select a mode for opportunistic overnight top-up — coordinating the limit alongside the mode is `Auto`'s job, not a rule the selected mode enforces; under `Manual` this coordination never happens.
-- [ ] Under `Auto`, a mode that is unavailable given the installation's capabilities (R18) is never selected.
-- [ ] Under `Auto`, and while the deadline capability is present (R18), the system escalates from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and reverts to a solar mode once grid charging is no longer required. When the CapTar capability is absent, `Auto` escalates to `Power` instead (R18) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — and still reverts once the deadline is no longer at risk.
+- [ ] Under `Manual`: mode selection is a pass-through of the user's own selection (no automatic mode changes, NF1); reserve coordination never declines opportunistic top-up; no escalation levers are available.
+- [ ] Under `Auto`, mode selection sets the active mode from observable conditions (time of day, low-tariff flag, solar availability and forecast, CapTar availability, SOC, departure deadline, home-day flag).
+- [ ] Under `Auto`, mode selection chooses `Captar` for cost-efficient overnight grid top-up only while the low-tariff flag is active (Auto mode-selection row 4, `resolution-rules.md`); the low-tariff preference belongs to this selection, not to `Captar` mode itself (R4) — a manually selected `Captar` session charges regardless of tariff.
+- [ ] Under `Auto`, when its own solar-reserve conditions hold (R9), reserve coordination lowers the active SOC limit (R7) and declines to select a mode for opportunistic overnight top-up — coordinating the limit alongside the mode is `Auto`'s job, not a rule the selected mode enforces.
+- [ ] Under `Auto`, mode selection never selects a mode that is unavailable given the installation's capabilities (R18).
+- [ ] Under `Auto`, and while the deadline capability is present (R18), `Auto`'s escalation levers switch from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and revert to a solar mode once grid charging is no longer required. When the CapTar capability is absent, the levers escalate to `Power` instead (R18) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — and still revert once the deadline is no longer at risk.
 - [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
 
 ---
