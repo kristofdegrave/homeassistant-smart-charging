@@ -21,5 +21,6 @@ template.
 | [0012](0012-coordinator-internal-decomposition.md) | Coordinator internal decomposition (Strategy + extracted state owners) | Accepted |
 | [0013](0013-stable-owned-entity-object-ids.md) | Stable, locale-independent object_ids for owned entities | Proposed |
 | [0014](0014-state-mutation-encapsulation.md) | Setter-method encapsulation for the coordinator's externally-writable fields | Accepted |
+| [0015](0015-managers-package-home.md) | Package home for the Managers beyond the Coordinator | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.

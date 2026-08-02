@@ -20,6 +20,8 @@
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
           "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
           "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
+          "vehicle_charge_limit_entity": "Laadlimiet-entiteit voertuig (optioneel; vereist car_home indien gekoppeld)",
+          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)",
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
@@ -65,13 +67,16 @@
           "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
           "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
-          "low_tariff_entity": "Laagtarief-entiteit (optioneel)"
+          "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
+          "vehicle_charge_limit_entity": "Laadlimiet-entiteit voertuig (optioneel; vereist car_home indien gekoppeld)",
+          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)"
         }
       }
     },
     "error": {
       "required_when_solar_installed": "Verplicht wanneer Zonne-energie is geïnstalleerd",
-      "required_when_captar_available": "Verplicht wanneer CapTar beschikbaar is"
+      "required_when_captar_available": "Verplicht wanneer CapTar beschikbaar is",
+      "required_when_vehicle_limit_mapped": "Verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld"
     }
   },
   "options": {
