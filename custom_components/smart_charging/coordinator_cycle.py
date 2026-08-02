@@ -5,11 +5,26 @@ imports (mirrors engines/ purity, ADR-0009/0010), even though these aren't engin
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Protocol
 
+from .const import (
+    CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_MAX_CURRENT,
+    CONF_MIN_CURRENT,
+    CONF_SOLAR_COOLDOWN_MIN,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
+    CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_START_THRESHOLD_W,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
+)
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
+from .modes import captar, power, solar, solar_only
 
 _WATTS_PER_KILOWATT = 1000.0
 
@@ -64,3 +79,97 @@ class PeakDemandState:
             smoothed_w / _WATTS_PER_KILOWATT, current_month, self.tracked_kw, self.tracked_month
         )
         return self.tracked_kw
+
+
+class ModeHandler(Protocol):
+    """One thin adapter per mode module, wrapping its existing pure step()/desired_current()
+    unchanged (ADR-0012) -- this decision only changes how the coordinator looks one up, not
+    any mode module's own logic."""
+
+    def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
+        """Return (desired_current_a, new_state); does not mutate ctx or state in place."""
+        ...
+
+
+class _OffModeHandler:
+    """Off mode has no modes/*.py module of its own to wrap -- commands 0 A unconditionally
+    and passes state through unchanged, mirroring today's MODE_OFF branch, which never
+    touches per-mode state (design doc Sec 3.4)."""
+
+    def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
+        return 0.0, state
+
+
+class _PowerModeHandler:
+    """Wraps modes/power.py::desired_current unchanged. power.desired_current reads the
+    coordinator's own mutable target_current (set externally by the number entity), not
+    anything on CycleContext -- so this handler takes a zero-arg getter bound at construction
+    (design doc Sec 3.4) rather than duplicating that value onto CycleContext each cycle."""
+
+    def __init__(self, target_current_getter: Callable[[], float]) -> None:
+        self._target_current_getter = target_current_getter
+
+    def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
+        return power.desired_current(self._target_current_getter(), ctx.status), state
+
+
+class _SolarModeHandler:
+    """Wraps modes/solar.py::step unchanged."""
+
+    def __init__(self, config: Mapping[str, Any]) -> None:
+        self._config = config
+
+    def desired_current(
+        self, ctx: CycleContext, state: solar.SolarState
+    ) -> tuple[float, solar.SolarState]:
+        return solar.step(
+            ctx.surplus_w,
+            state,
+            ctx.now,
+            start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
+            min_a=self._config[CONF_MIN_CURRENT],
+            hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
+            cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
+            voltage=ctx.voltage,
+        )
+
+
+class _SolarOnlyModeHandler:
+    """Wraps modes/solar_only.py::step unchanged."""
+
+    def __init__(self, config: Mapping[str, Any]) -> None:
+        self._config = config
+
+    def desired_current(
+        self, ctx: CycleContext, state: solar_only.SolarOnlyState
+    ) -> tuple[float, solar_only.SolarOnlyState]:
+        return solar_only.step(
+            ctx.surplus_w,
+            state,
+            ctx.now,
+            start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
+            min_a=self._config[CONF_MIN_CURRENT],
+            cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
+            strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
+            midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
+            voltage=ctx.voltage,
+        )
+
+
+class _CaptarModeHandler:
+    """Wraps modes/captar.py::step unchanged."""
+
+    def __init__(self, config: Mapping[str, Any]) -> None:
+        self._config = config
+
+    def desired_current(
+        self, ctx: CycleContext, state: captar.CaptarState
+    ) -> tuple[float, captar.CaptarState]:
+        return captar.step(
+            state,
+            ctx.now,
+            max_a=self._config[CONF_MAX_CURRENT],
+            cooldown_minutes=self._config.get(
+                CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
+            ),
+        )
