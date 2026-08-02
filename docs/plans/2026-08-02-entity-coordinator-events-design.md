@@ -18,10 +18,10 @@ update the entity tests that currently assert against a coordinator double"). It
 event and payload-key vocabulary, where listeners are registered and torn down, how the coordinator
 learns its own `entry_id`, and the before/after at every call site.
 
-**This is not a pure internal refactor.** Three observable changes are deliberate, and each is
+**This is not a pure internal refactor.** Four observable changes are deliberate, and each is
 named as such rather than smuggled in:
 
-1. **The refresh moves from the entity to the coordinator's listener** (§5). An entity used to
+1. **The refresh moves from the entity to the coordinator's listener** (§4.3). An entity used to
    `await self._coordinator.async_request_refresh()` *before* `self.async_write_ha_state()`; it now
    fires an event and writes its HA state immediately, and the refresh is scheduled by the
    coordinator's listener. Ordering of *apply-then-refresh* is preserved (§4.3); ordering of
@@ -32,6 +32,15 @@ named as such rather than smuggled in:
 3. **A cross-config-entry cross-talk failure mode is newly possible and newly guarded** (§4.4,
    §6.4). The direct reference could not have this bug; the event bus can, and the entry-id filter
    is the only thing preventing it.
+4. **A single `async_setup_entry` now schedules roughly a dozen refresh requests during entity
+   seeding, not zero.** Today's `async_added_to_hass` seed paths (e.g. `select.py:63`, `:91`;
+   `number.py:54`, `:92`) call the setter directly and request no refresh at all — only a
+   user-initiated *change* awaits one. After this slice, every seed also fires an event, and every
+   listener unconditionally schedules a refresh (§4.3) — so setup now schedules on the order of one
+   refresh per owned control entity (2 select + 2 number + 1 switch + 9 time ≈ 14) before
+   `async_config_entry_first_refresh` ever runs. `async_request_refresh`'s own debouncing makes this
+   benign, but it is a real, new-on-setup behavior, not merely a relocation of an existing one —
+   named here so it isn't mistaken for covered by point 1.
 
 ---
 
@@ -87,8 +96,8 @@ double this ADR deliberately deletes.**
 
 1. `const.py` defines exactly **eight** `EVENT_*` constants (§3.1) — one per externally-writable
    coordinator field, none generic, none reusing an ADR-0011 domain-event name — plus exactly
-   **three** new `ATTR_*` payload keys (`ATTR_ENTRY_ID`, `ATTR_VALUE`, `ATTR_WEEKDAY`, §3.2). Each
-   event-type string matches the `smart_charging_<snake_case>` shape the existing four `EVENT_*`
+   **three** new `ATTR_*` payload keys — `ATTR_ENTRY_ID`, `ATTR_VALUE`, `ATTR_WEEKDAY` (§3.2). Each
+   event-type string matches the `smart_charging_<snake_case>` shape the existing five `EVENT_*`
    constants use (`const.py:8,12,22-24`), and each ends in `_change_requested`.
 2. No entity in `select.py`, `number.py`, `time.py` or `switch.py` accepts a `coordinator`
    parameter or sets a `self._coordinator` attribute. Checkable two ways, both required: a grep for
@@ -185,14 +194,16 @@ per-event-type, with no stringly-typed field discriminator anywhere.
 | `..._HOME_DAY_FLAG_...` | `bool` |
 | `..._WEEKDAY_DEPARTURE_...`, `..._HOLIDAY_DEPARTURE_...`, `..._HOME_DAY_DEPARTURE_...` | **`str | None` — an ISO-8601 time string (`value.isoformat()`), or `None`** |
 
-The three departure events carry an **ISO-8601 string, not a `datetime.time` object.** Reason: a
-fired event is not private — any websocket client subscribing to it forces the payload through
-serialization, and Home Assistant's own fallback `JSONEncoder` (`homeassistant/helpers/json.py`)
-special-cases `datetime.datetime` but not `datetime.time`, so a raw `time` is a latent
-`TypeError` on a path no unit test exercises. A string also matches what `RestoreEntity` already
-persists and what `time.py:77` already parses back with `time.fromisoformat`. The entity serializes
-on fire (§6.1); the coordinator's listener parses on receive (§4.3). `None` (no departure
-configured) passes through unchanged and is a valid value, not a missing key.
+The three departure events carry an **ISO-8601 string, not a `datetime.time` object.** A fired
+event is not private — any websocket client subscribing to it forces the payload through
+serialization, and a bare `datetime.time` is at best an unnecessary risk to carry across that
+boundary unserialized (the exact serialization path Home Assistant's frontend/websocket layer
+takes for an event payload was not verified against installed-package source as part of this
+design — treat "serialize defensively" as the operative reason, not a specific verified
+exception). A string is also the format `RestoreEntity` already persists and what `time.py:77`
+already parses back with `time.fromisoformat`, so it costs nothing new to produce or consume. The
+entity serializes on fire (§6.1); the coordinator's listener parses on receive (§4.3). `None` (no
+departure configured) passes through unchanged and is a valid value, not a missing key.
 
 ---
 
@@ -204,7 +215,7 @@ configured) passes through unchanged and is a valid value, not a missing key.
 `(self, hass, *, adapters, config, interval_s)` and stores nothing that identifies the config
 entry. `DataUpdateCoordinator.__init__` may populate `self.config_entry` from HA's
 `config_entries.current_entry` ContextVar when constructed inside `async_setup_entry`, but that is
-`None` for every one of the ~40 direct constructions in `tests/` — so it cannot be the filter's
+`None` for every one of the 45 direct constructions in `tests/` (44 in test_coordinator.py, 1 in benchmarks/test_coordinator_perf.py) — so it cannot be the filter's
 source of truth without silently disabling the filter under test.
 
 **Decision:** add an explicit keyword, defaulted:
@@ -215,12 +226,12 @@ def __init__(self, hass, *, adapters, config, interval_s, entry_id: str | None =
     self._entry_id = entry_id
 ```
 
-Defaulted to `None` so the ~40 existing `SmartChargingCoordinator(hass, adapters=..., config=...,
+Defaulted to `None` so the 45 existing `SmartChargingCoordinator(hass, adapters=..., config=...,
 interval_s=30)` call sites across `tests/test_coordinator.py`,
 `tests/benchmarks/test_coordinator_perf.py` and the three end-to-end suites keep compiling
 untouched — the same "don't mass-rewrite test construction for a mechanical rename" call the
 ADR-0014 spec made for its 137 field assignments. `__init__.py` passes `entry_id=entry.entry_id`
-(§5.1). The default is made safe rather than silent by §4.2's guard: a coordinator with
+(§4.5). The default is made safe rather than silent by §4.2's guard: a coordinator with
 `_entry_id is None` **raises** on listener registration instead of registering listeners that can
 never match. See §10 for the open question on whether it should simply be required.
 
@@ -288,6 +299,30 @@ bus. Without the `!= self._entry_id` early return, entry A's mode selector would
 in HA, so the filter is the mechanism. Criterion 5's test exists because a missing filter is
 invisible in a single-entry test suite.
 
+### 4.5 Wiring in `__init__.py`: registration order and teardown
+
+`async_setup_entry` (`__init__.py:130-145`) constructs the coordinator, populates
+`hass.data[DOMAIN][entry.entry_id]`, then calls
+`await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)` (`:144`), which is what
+runs every entity's `async_added_to_hass` — the seed fire (§5, §6.1, §6.2).
+
+Two decisions, both load-bearing:
+
+1. **Register before forwarding.** `coordinator.async_register_owned_entity_listeners()` is called
+   with `entry_id=entry.entry_id` passed to the constructor, **before** `:144`'s
+   `async_forward_entry_setups`. If registration happened after, every entity's seed event
+   (fired from `async_added_to_hass`, itself run by that same forwarding call) would be fired into
+   a bus nobody is listening on yet, and the coordinator would silently keep its construction-time
+   defaults instead of the entities' restored/configured values — this is exactly criterion 3's
+   "the coordinator learns its own `entry_id`" combined with criterion 8's ordering, made concrete
+   (§7.3 names the test).
+2. **Every unsub goes through `entry.async_on_unload`.** `async_register_owned_entity_listeners()`
+   returns a list of unsubscribe callables (§4.2); `async_setup_entry` hands each one to
+   `entry.async_on_unload(unsub)` rather than storing them itself. HA calls every registered
+   `async_on_unload` callback on both unload and (per ADR-0008) reload's implicit unload-then-setup,
+   so this is what prevents a stale subscription from accumulating one per reload (criterion 8;
+   §7.3's second bullet).
+
 ---
 
 ## 5. Before/after — `select.py` and `number.py`
@@ -309,7 +344,7 @@ No entity needs a new field to fire an entry-scoped event.
 | `select.py:65-69` `async_select_option` | `:67` `self._coordinator.set_active_mode(option)`; `:68` `await self._coordinator.async_request_refresh()` | `:67` becomes the same `async_fire`; **`:68` is deleted** — the refresh is now the listener's (§4.3). `:66` (`_attr_current_option = option`) and `:69` (`async_write_ha_state()`) unchanged |
 | `select.py:80-84` `ProfileSelect.__init__` | `(self, entry_id, coordinator)`; `self._coordinator = coordinator` (`:82`) | `coordinator` removed; `:82` deleted |
 | `select.py:91` / `:95-96` | `set_active_profile(...)` / `await async_request_refresh()` | `async_fire(EVENT_ACTIVE_PROFILE_CHANGE_REQUESTED, ...)` / line deleted |
-| `select.py:100-117` `async_setup_entry` | `:103` reads `hass.data[DOMAIN][entry.entry_id]["coordinator"]`, passes `coordinator=` twice | `:103` deleted; both constructor calls drop `coordinator=`. `hass`/`DOMAIN` imports become unused here — remove |
+| `select.py:100-117` `async_setup_entry` | `:103` reads `hass.data[DOMAIN][entry.entry_id]["coordinator"]`, passes `coordinator=` twice | `:103` deleted; both constructor calls drop `coordinator=`. `DOMAIN` becomes unused in this module and is removed from the import — `hass` stays: it is `async_setup_entry`'s own mandatory parameter (its `HomeAssistant` type annotation is unaffected) |
 | `number.py:31-43` `TargetCurrentNumber.__init__` | `(self, entry_id, coordinator, min_a, max_a, default)`; `self._coordinator = coordinator` (`:35`) | `coordinator` removed; `:35` deleted. **`:37-43` unchanged**, including the `:43` default clamp (criterion 7) |
 | `number.py:54` | `self._coordinator.set_target_current(self._attr_native_value)` | `async_fire(EVENT_TARGET_CURRENT_CHANGE_REQUESTED, {ATTR_ENTRY_ID: self._entry_id, ATTR_VALUE: self._attr_native_value})` |
 | `number.py:56-60` `async_set_native_value` | `:58` setter; `:59` `await async_request_refresh()` | `:58` becomes `async_fire`; **`:59` deleted** |
@@ -502,7 +537,7 @@ Constructed with the new `entry_id="abc"` keyword (§4.1) plus
 - **Registration guard** — a coordinator constructed without `entry_id` raises on
   `async_register_owned_entity_listeners()` (§4.1's guard against a silently-dead filter).
 
-The ~40 existing `SmartChargingCoordinator(...)` constructions and the existing direct field
+The 45 existing `SmartChargingCoordinator(...)` constructions and the existing direct field
 assignments across `test_coordinator.py`, the three end-to-end suites and
 `benchmarks/test_coordinator_perf.py` are **untouched** (§4.1's defaulted keyword is what buys
 this) — except where §6.4's newly-live departure/home-day fields change an end-to-end expectation.
@@ -510,7 +545,7 @@ this) — except where §6.4's newly-live departure/home-day fields change an en
 ### 7.3 Setup/teardown tests — `tests/test_init.py`
 
 - Listeners are registered by `async_setup_entry` **before** platforms are forwarded, so an
-  entity's `async_added_to_hass` seed event is not dropped (§5.1). Assert by setting up a
+  entity's `async_added_to_hass` seed event is not dropped (§4.5). Assert by setting up a
   `MockConfigEntry` end-to-end and checking the coordinator's `active_mode`/`target_current` hold
   the entities' seeded values rather than the constructor defaults — this is the test that would
   catch the ordering being wrong.
@@ -530,7 +565,7 @@ custom_components/smart_charging/
                   #   The 4 existing setters (:617-656) are unchanged; the 4 time/switch setters
                   #   are added here or inherited from PR #452 (§9)
   __init__.py     # + entry_id=entry.entry_id on construction; + listener registration before
-                  #   async_forward_entry_setups, each unsub via entry.async_on_unload (§5.1)
+                  #   async_forward_entry_setups, each unsub via entry.async_on_unload (§4.5)
   select.py       # both constructors drop `coordinator`; 4 write sites fire events; 2 awaited
                   #   refreshes deleted; async_setup_entry drops the coordinator lookup
   number.py       # same, 4 write sites; async_setup_entry keeps its hass.data read for the
@@ -584,7 +619,7 @@ to be reworked onto this ADR's event shape before it merges."
   entity→coordinator write from a held reference to an event; it does not build, and does not
   preclude, the Store the project plan targets. If anything, an event bus is a plausible substrate
   for one — but that is a future decision, not this one.
-- **ADR-0011's four domain events are untouched.** `EVENT_ACTIVE_SOC_LIMIT_CHANGED`,
+- **ADR-0011's five domain events are untouched.** `EVENT_ACTIVE_SOC_LIMIT_CHANGED`,
   `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`, `EVENT_VEHICLE_CHARGE_LIMIT_SYNCED`,
   `EVENT_MANUAL_CHARGE_LIMIT_ADOPTED`, `EVENT_VEHICLE_CHARGE_LIMIT_RESET` keep their current names,
   payloads, and — notably — their **lack of an `entry_id` key**. Adding `ATTR_ENTRY_ID` to them
@@ -619,7 +654,7 @@ to be reworked onto this ADR's event shape before it merges."
 
 **Decided (human partner): defaulted, not required.** `entry_id: str | None = None` (§4.1), guarded
 by a raise at `async_register_owned_entity_listeners()` rather than a required constructor keyword.
-This keeps the ~40 existing `SmartChargingCoordinator(...)` test constructions untouched, consistent
+This keeps the 45 existing `SmartChargingCoordinator(...)` test constructions untouched, consistent
 with the ADR-0014 spec's refusal to mass-rewrite test setup for a mechanical signature change.
 
 ---

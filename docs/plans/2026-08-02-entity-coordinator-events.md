@@ -26,11 +26,14 @@ is not a pure internal refactor", and §6.4's four newly-live fields).
 
 - **Test boundary, once for the whole plan:** every test in this plan is **HA harness**
   (`pytest_homeassistant_custom_component`), per [ADR-0009](../adl/0009-testing-strategy.md) and
-  design §7. Nothing in this slice is HA-free logic — every touched surface is `hass.bus`,
-  `DataUpdateCoordinator`, or an entity platform. **No new test file** is created; assertions land
-  in the six existing suites (`tests/test_select.py`, `tests/test_number.py`, `tests/test_time.py`,
-  `tests/test_switch.py`, `tests/test_coordinator.py`, `tests/test_init.py`). Individual tasks
-  therefore name only the *files*, not the harness.
+  design §7. Every production surface this slice touches is `hass.bus`, `DataUpdateCoordinator`,
+  or an entity platform — none of it is HA-free logic. (A handful of individual assertions, e.g.
+  Task 1's constant-shape checks and Task 9's `hasattr` checks, need no live `hass` fixture
+  themselves; they still live in the harness suites because the modules they import do, per
+  ADR-0009's file-level split, not because each assertion is independently HA-coupled.) **No new
+  test file** is created; assertions land in the six existing suites (`tests/test_select.py`,
+  `tests/test_number.py`, `tests/test_time.py`, `tests/test_switch.py`, `tests/test_coordinator.py`,
+  `tests/test_init.py`). Individual tasks therefore name only the *files*, not the harness.
 - **Named constants, no magic strings** (CLAUDE.md) — every event type and payload key comes from
   `const.py`; no bare `"entry_id"`/`"value"`/`"smart_charging_..."` literals in production **or**
   test code.
@@ -97,7 +100,7 @@ In `tests/test_coordinator.py` (extend the existing
 ```python
 def test_owned_entity_change_request_event_names_follow_the_domain_prefix_shape():
     """ADR-0016 criterion 1: eight events, one per externally-writable coordinator field,
-    each `smart_charging_<snake_case>` like the existing four EVENT_* constants and each
+    each `smart_charging_<snake_case>` like the existing five EVENT_* constants and each
     ending in `_change_requested` -- the suffix that marks them as inward *requests*, not
     ADR-0011 past-tense domain events."""
     events = [
@@ -225,8 +228,11 @@ Expected: `TypeError: __init__() got an unexpected keyword argument 'entry_id'` 
 In `coordinator.py`, add to the imports (`homeassistant.core`, currently `:10`):
 
 ```python
-from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 ```
+
+(`Event` is not needed until Task 3's handlers reference it as a parameter annotation — add it to
+this same import line there, not here. `ruff check .` would flag it F401-unused if added now.)
 
 Change the signature (`:149`) and store the id next to `self._interval_s`:
 
@@ -368,8 +374,11 @@ Expected: all five fail — `assert coord.active_mode == 'Solar'` where `active_
 
 **Step 3: Write the minimal implementation**
 
-In `coordinator.py`, extend the `from .const import (...)` block with the four event constants and
-`ATTR_ENTRY_ID`/`ATTR_VALUE`. Fill in the registration list:
+In `coordinator.py`, add `Event` to the `homeassistant.core` import (Task 2 deliberately left it out
+— it's unused until these four handlers reference it as a parameter annotation):
+`from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback`. Extend the
+`from .const import (...)` block with the four event constants and `ATTR_ENTRY_ID`/`ATTR_VALUE`.
+Fill in the registration list:
 
 ```python
         return [
@@ -564,7 +573,7 @@ one the listener awaits directly — `await hass.async_block_till_done()` still 
 
 ## Task 6: `__init__.py` — pass the entry id, register before platforms, unregister on unload
 
-**Design section honored:** §5.1 (as summarized in §8's packaging table), §7.3 (criterion 8's
+**Design section honored:** §4.5 (as summarized in §8's packaging table), §7.3 (criterion 8's
 production half).
 
 **Files:**
@@ -741,9 +750,9 @@ criteria 7 and 9.
 **Step 1: Write the failing tests — starting with the deletion**
 
 Delete `_StubCoordinator` (`tests/test_number.py:17-38`) — the single double shared by both number
-entities. Strip `coordinator=coord` / `coordinator=_StubCoordinator()` from all fifteen
-constructions in the file, and convert the write-path/seed assertions to event assertions in the
-same shape as Task 7:
+entities. Strip `coordinator=coord` / `coordinator=_StubCoordinator()` from all thirteen
+constructions in the file (`:44, 57, 70, 79, 87, 114, 125, 136, 147, 174, 200, 226, 237`), and
+convert the write-path/seed assertions to event assertions in the same shape as Task 7:
 
 ```python
 async def test_set_value_requests_a_target_current_change(hass):
@@ -818,8 +827,9 @@ different route**, and makes the grep half an executable, non-optional check rat
 
 **Step 1: Write the failing tests**
 
-Add one `hasattr` assertion per owned control-entity class — five today, plus `HomeDaySwitch` and
-`SmartChargingDepartureTime` which Tasks 10 and 12 will add their own copies of:
+Add one `hasattr` assertion per owned control-entity class — four here (`ModeSelect`,
+`ProfileSelect`, `TargetCurrentNumber`, `SocLimitOverrideNumber`), plus `HomeDaySwitch` and
+`SmartChargingDepartureTime` which Tasks 10 and 12 will add their own copies of (six in all):
 
 ```python
 def test_mode_select_holds_no_coordinator_reference():
@@ -1062,9 +1072,10 @@ async def test_weekday_departure_change_request_clears_on_none(hass):
     ],
 )
 async def test_departure_override_change_request_parses_the_iso_string(hass, event_type, field):
-    """§3.3: the bus carries an ISO-8601 string, never a datetime.time -- HA's fallback
-    JSONEncoder special-cases datetime.datetime but not datetime.time, so a raw time is a
-    latent TypeError the moment a websocket client subscribes. The listener parses on receive."""
+    """§3.3: the bus carries an ISO-8601 string, never a datetime.time -- a fired event isn't
+    private (any websocket client can subscribe), and a string is the format RestoreEntity
+    already persists and time.py already parses back, so it costs nothing new. The listener
+    parses on receive."""
     coord = _wired(hass)
     hass.bus.async_fire(event_type, {ATTR_ENTRY_ID: "abc", ATTR_VALUE: "07:30:00"})
     await hass.async_block_till_done()
@@ -1300,8 +1311,9 @@ concrete.
 **Files:**
 - Verify, and adjust only where §6.4 demands it: `tests/test_deadline_soc_management_end_to_end.py`,
   `tests/test_init.py`
-- Verify only (no departure/home-day dependency expected): `tests/test_solar_end_to_end.py`,
-  `tests/test_captar_end_to_end.py`, `tests/benchmarks/test_coordinator_perf.py`
+- Verify (the true blast radius is wider than "no departure/home-day dependency expected" — see
+  Step 1's second paragraph): `tests/test_solar_end_to_end.py`, `tests/test_captar_end_to_end.py`,
+  `tests/benchmarks/test_coordinator_perf.py`
 
 **Step 1: Identify every expectation that rested on an inert default**
 
@@ -1309,7 +1321,18 @@ concrete.
 grep -rn "departure_dow_defaults\|departure_holiday_override\|departure_home_day_override\|home_day_flag" tests/
 ```
 
-Two known sites, both flagged by the design:
+This also surfaces `tests/helpers.py`'s `seed_today_deadline` (a shared helper imported by
+`test_coordinator.py`, `test_init.py`, `test_solar_end_to_end.py`, `test_captar_end_to_end.py`
+and `test_deadline_soc_management_end_to_end.py`) and the direct field assignments at
+`tests/test_coordinator.py:921-930` — read every hit, not just the two sites below.
+
+**`Platform.TIME` and `Platform.SWITCH` are both in `PLATFORMS`** (`__init__.py:67-73`), so after
+Task 12 this is not scoped to two files: **every** test that goes through a real
+`async_setup_entry` now sees `departure_dow_defaults` seeded Mon–Fri 06:00, not just the two named
+below. Whether `test_solar_end_to_end.py`/`test_captar_end_to_end.py` are actually affected is
+something this step verifies by running them, not a classification to trust up front.
+
+Two sites are known in advance, both flagged by the design:
 
 1. `tests/test_deadline_soc_management_end_to_end.py` — its module docstring (`:6-10`) states
    outright that these four fields "are set directly on the live coordinator instance" because the
@@ -1376,9 +1399,13 @@ async def test_owned_entities_seed_the_coordinator_through_the_event_bus_on_setu
     await hass.async_block_till_done()
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    # target_current/active_mode are the two assertions that actually prove the ordering: the
+    # coordinator's own constructor defaults are 0.0 and MODE_POWER (coordinator.py's __init__),
+    # so seeing the entities' seeded values instead is only possible if the seed events reached a
+    # listener. (active_profile's constructor default is already PROFILE_MANUAL -- asserting it
+    # would pass whether or not the seed event was ever delivered, so it's omitted here.)
     assert coordinator.target_current == entry.options[CONF_DEFAULT_TARGET_CURRENT]
     assert coordinator.active_mode == MODE_OFF   # ModeSelect's own default seed
-    assert coordinator.active_profile == PROFILE_MANUAL
 ```
 
 **Step 2: Prove the red** — this passes as soon as Task 6 landed, so demonstrate it the other way:
@@ -1430,42 +1457,44 @@ async def test_unload_detaches_the_change_request_listeners(hass):
     assert coordinator.active_mode == before
 
 
-async def test_reload_applies_each_change_request_exactly_once(hass):
-    """ADR-0016 criterion 8, half two: the observable form of 'no leaked duplicate
-    subscription per ADR-0008 reload'. A leaked listener would apply twice -- and, being
-    the same value, would be invisible on the field, so count the applies via the setter."""
+async def test_reload_does_not_accumulate_a_duplicate_listener(hass):
+    """ADR-0016 criterion 8, half two: the observable form of 'no leaked duplicate subscription
+    per ADR-0008 reload'. Reload constructs a brand-new SmartChargingCoordinator instance
+    (__init__.py's async_setup_entry runs fresh) -- a leaked pre-reload subscription would be
+    bound to the OLD instance's method, not the new one, so spying on the new coordinator's
+    setter cannot observe it. hass.bus.async_listeners() counts registered listeners per event
+    type across the whole bus, independent of which object they're bound to, and is what
+    actually distinguishes 'the old subscription was torn down' from 'it leaked'."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    before = hass.bus.async_listeners()[EVENT_ACTIVE_MODE_CHANGE_REQUESTED]
+
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    applies = []
-    original = coordinator.set_active_mode
-    coordinator.set_active_mode = lambda mode: applies.append(mode) or original(mode)
-
-    hass.bus.async_fire(
-        EVENT_ACTIVE_MODE_CHANGE_REQUESTED,
-        {ATTR_ENTRY_ID: entry.entry_id, ATTR_VALUE: MODE_POWER},
-    )
-    await hass.async_block_till_done()
-    assert applies == [MODE_POWER]      # exactly one, not two
+    after = hass.bus.async_listeners()[EVENT_ACTIVE_MODE_CHANGE_REQUESTED]
+    assert after == before      # same count -- the pre-reload listener was torn down, not doubled
 ```
 
-The second test counts *applies* rather than inspecting the field on purpose: a duplicate
-subscription applies the same value twice, which no field assertion could see.
+The listener-count assertion is what actually detects a leak. An assertion against the *field*
+(fire an event, check `active_mode`) cannot: a duplicate subscription applies the same value
+twice, which is invisible on the resulting field either way, and spying on the post-reload
+coordinator's own `set_active_mode` only observes calls made through the *new* instance — a
+leaked pre-reload subscription is bound to the *old* instance's method entirely, so it would never
+appear in that spy at all.
 
 **Step 2: Run to verify failure or prove the red**
 
-Run: `pytest tests/test_init.py -k "detaches or exactly_once" -v`. Task 6 routed every unsub through
-`entry.async_on_unload`, so these should pass. Prove the red by temporarily dropping the
+Run: `pytest tests/test_init.py -k "detaches or duplicate_listener" -v`. Task 6 routed every unsub
+through `entry.async_on_unload`, so these should pass. Prove the red by temporarily dropping the
 `entry.async_on_unload(unsub)` wrapper (just call
 `coordinator.async_register_owned_entity_listeners()` and discard the result): the first test then
-FAILS on the detach assertion and the second on `assert ['Power', 'Power'] == ['Power']`. Revert.
+FAILS on the detach assertion, and the second FAILS with `after == before * 2` (one leaked
+pre-reload listener plus the new one). Revert.
 
 If they do **not** pass, the fix belongs in `__init__.py` (Task 6's registration loop), not in the
 test.
