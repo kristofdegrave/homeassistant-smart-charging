@@ -176,9 +176,9 @@ def test_timed_out_is_terminal_a_late_yes_is_ignored():
     assert result.write_home_day_flag is False
 
 
-def test_not_sent_skip_is_terminal_a_late_yes_is_ignored():
-    """Once Not-sent has settled as a skip for the evening (e.g. 1a/1b), a response
-    arriving anyway (there is nothing to answer) must not be treated as an answer."""
+def test_not_sent_with_no_pending_prompt_a_response_is_ignored():
+    """Not-sent has nothing pending to answer -- a response arriving anyway (e.g. a
+    1a/1b evening, or before the trigger has fired) must not be treated as an answer."""
     now = datetime.combine(DAY_1, time(19, 0))
 
     result = _evaluate(
@@ -192,3 +192,65 @@ def test_not_sent_skip_is_terminal_a_late_yes_is_ignored():
     assert result.next_state is PromptState.NOT_SENT
     assert result.should_send is False
     assert result.write_home_day_flag is False
+
+
+def test_not_sent_re_evaluates_the_1a_1b_gates_every_tick_not_latched():
+    """Not-sent is not a terminal 'skipped' state distinct from 'not yet triggered':
+    a gate observed false on one tick (e.g. the external flag still set at 18:00) does
+    not preclude sending later the same evening once the gate clears, before midnight --
+    there is no separate skipped state in the UC08 state model, only Not-sent."""
+    still_gated = _evaluate(
+        PromptState.NOT_SENT,
+        DAY_1,
+        datetime.combine(DAY_1, time(18, 0)),
+        external_flag_set=True,
+    )
+    assert still_gated.next_state is PromptState.NOT_SENT
+    assert still_gated.should_send is False
+
+    gate_cleared_later = _evaluate(
+        PromptState.NOT_SENT,
+        DAY_1,
+        datetime.combine(DAY_1, time(19, 0)),
+        external_flag_set=False,
+    )
+    assert gate_cleared_later.next_state is PromptState.PENDING
+    assert gate_cleared_later.should_send is True
+
+
+def test_pending_stays_pending_same_evening_when_unanswered_so_far():
+    """A Pending prompt with no response yet, still the same evening (no midnight
+    crossed), stays Pending and does not re-send (UC08 sends the notification once)."""
+    now = datetime.combine(DAY_1, time(20, 0))
+
+    result = _evaluate(PromptState.PENDING, DAY_1, now, response=None)
+
+    assert result.should_send is False
+    assert result.next_state is PromptState.PENDING
+    assert result.next_date == DAY_1
+    assert result.write_home_day_flag is False
+
+
+def test_rearm_and_new_evenings_trigger_can_fire_on_the_same_tick():
+    """The module docstring's same-tick 'rearm, then evaluate against the new evening's
+    own trigger' path: a terminal prior state from yesterday, observed on a tick where
+    today's own trigger already holds, sends immediately rather than waiting a tick."""
+    now = datetime.combine(DAY_2, time(18, 5))
+
+    result = _evaluate(PromptState.ANSWERED_YES, DAY_1, now)
+
+    assert result.should_send is True
+    assert result.next_state is PromptState.PENDING
+    assert result.next_date == DAY_2
+    assert result.write_home_day_flag is False
+
+
+def test_connected_before_prompt_time_does_not_trigger_yet():
+    """UC08 1c (partial): connected at home, but before the configured prompt time --
+    the trigger has not been reached yet, stays Not-sent."""
+    now = datetime.combine(DAY_1, time(17, 59))
+
+    result = _evaluate(PromptState.NOT_SENT, DAY_1, now, connected_at_home=True)
+
+    assert result.should_send is False
+    assert result.next_state is PromptState.NOT_SENT

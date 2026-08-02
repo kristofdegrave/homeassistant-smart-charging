@@ -25,9 +25,13 @@ prior evening:
   the (now terminal) prior state. This keeps each call recording at most one terminal
   transition, matching UC08's "at most once per evening" state model.
 
-Once a state is terminal for an evening, it stays terminal until the day rolls over --
-a response observed against a terminal prior state (a second, contradictory answer, or a
-late tap after Timed-out) is not a valid transition and is ignored.
+Once Pending has resolved to Answered-yes/Answered-no/Timed-out for an evening, it stays
+resolved until the day rolls over -- a response observed against one of those states (a
+second, contradictory answer, or a late tap after Timed-out) is not a valid transition and
+is ignored. Not-sent is not latched against a *response* either (there is nothing pending
+to answer), but -- unlike those three -- it is not latched against the 1a/1b *gates*
+either: each tick re-observes them, so a still-Not-sent evening can still trigger later if
+the caller's readings change before midnight (see the ``NOT_SENT`` branch below).
 """
 
 from __future__ import annotations
@@ -87,7 +91,7 @@ def evaluate_prompt(
     """
     today = now.date()
 
-    if today != prior_date:
+    if today > prior_date:
         if prior_state is PromptState.PENDING:
             # Midnight arrived with no answer for the evening `prior_date` was still
             # open for -- finalize it (UC08 Exception flows). The rearm to Not-sent for
@@ -106,7 +110,11 @@ def evaluate_prompt(
 
     if prior_state is PromptState.NOT_SENT:
         if not enabled or forecast_kwh <= threshold_kwh or external_flag_set:
-            # UC08 1a/1b -- skip for the evening; a terminal Not-sent for `prior_date`.
+            # UC08 1a/1b -- stays Not-sent for `prior_date`. Re-evaluated every tick,
+            # not latched: a gate observed false on one tick does not preclude sending
+            # later the same evening if the caller's reading of `forecast_kwh`/
+            # `external_flag_set` changes before midnight -- there is no distinct
+            # "skipped" state, only Not-sent, per the state model.
             return PromptEvaluation(
                 should_send=False,
                 next_state=PromptState.NOT_SENT,
