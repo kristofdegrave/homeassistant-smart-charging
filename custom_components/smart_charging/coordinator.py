@@ -610,6 +610,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._mode_state = _fresh_mode_state()
             self._last_active_mode = self.active_mode
 
+    def set_target_current(self, value: float) -> None:
+        """Coordinator's own boundary for `target_current` (ADR-0014). Clamps to the
+        configured `[CONF_MIN_CURRENT, CONF_MAX_CURRENT]` bound -- previously enforced only by
+        `TargetCurrentNumber`'s own native_min_value/native_max_value, bypassable by any other
+        caller writing the field directly. Never the write path for a commanded stop -- ADR-0007's
+        fault path writes 0 A via `self._write(0.0)` directly, not through this field."""
+        self.target_current = min(
+            max(value, self._config[CONF_MIN_CURRENT]), self._config[CONF_MAX_CURRENT]
+        )
+
     def set_active_profile(self, profile: str) -> None:
         """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
         path for select.py; the field itself stays a plain writable attribute (design doc §2,

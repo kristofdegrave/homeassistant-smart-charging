@@ -1297,3 +1297,26 @@ async def test_set_soc_limit_override_passes_through_in_range_value(hass):
     coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
     coord.set_soc_limit_override(80.0)
     assert coord.soc_limit_override == 80.0
+
+
+async def test_set_target_current_clamps_below_minimum(hass):
+    """ADR-0014: the coordinator's own clamp -- reachable by any caller, not just
+    TargetCurrentNumber's own native_min_value/native_max_value."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_target_current(0.0)  # _config()'s CONF_MIN_CURRENT is 6.0
+    assert coord.target_current == 6.0
+
+
+async def test_set_target_current_clamps_above_maximum(hass):
+    """ADR-0014: the same clamp, exercised on the above-maximum side."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_target_current(99.0)  # _config()'s CONF_MAX_CURRENT is 16.0
+    assert coord.target_current == 16.0
+
+
+async def test_set_target_current_passes_through_in_range_value(hass):
+    """ADR-0014: an in-range value is left untouched -- the clamp only ever narrows toward
+    the configured bound, never perturbs a value already inside it."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_target_current(10.0)
+    assert coord.target_current == 10.0
