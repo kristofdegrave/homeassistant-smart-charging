@@ -22,6 +22,7 @@
           "low_tariff_entity": "Low-tariff entity (optional)",
           "vehicle_charge_limit_entity": "Vehicle charge-limit entity (optional; requires car_home when mapped)",
           "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)",
+          "notification_target_entity": "Notification target entity (optional, notify domain)",
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)",
@@ -46,7 +47,9 @@
           "solar_step_pp": "Solar step-up step size (percentage points)",
           "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
           "solar_reserve_soc": "Solar-reserve SOC cap (%)",
-          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
+          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)",
+          "evening_prompt_enabled": "Evening home-day prompt enabled",
+          "evening_prompt_time": "Evening home-day prompt time"
         }
       },
       "reconfigure": {
@@ -69,7 +72,8 @@
           "home_day_external_entity": "External home-day entity (optional)",
           "low_tariff_entity": "Low-tariff entity (optional)",
           "vehicle_charge_limit_entity": "Vehicle charge-limit entity (optional; requires car_home when mapped)",
-          "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)"
+          "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)",
+          "notification_target_entity": "Notification target entity (optional, notify domain)"
         }
       }
     },
@@ -110,6 +114,8 @@
           "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
           "solar_reserve_soc": "Solar-reserve SOC cap (%)",
           "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)",
+          "evening_prompt_enabled": "Evening home-day prompt enabled",
+          "evening_prompt_time": "Evening home-day prompt time",
           "control_interval_s": "Control interval (s)"
         }
       }
