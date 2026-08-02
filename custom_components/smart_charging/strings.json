@@ -20,6 +20,8 @@
           "departure_external_entity": "External departure-time entity (optional)",
           "home_day_external_entity": "External home-day entity (optional)",
           "low_tariff_entity": "Low-tariff entity (optional)",
+          "vehicle_charge_limit_entity": "Vehicle charge-limit entity (optional; requires car_home when mapped)",
+          "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)",
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)",
@@ -65,13 +67,16 @@
           "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
           "departure_external_entity": "External departure-time entity (optional)",
           "home_day_external_entity": "External home-day entity (optional)",
-          "low_tariff_entity": "Low-tariff entity (optional)"
+          "low_tariff_entity": "Low-tariff entity (optional)",
+          "vehicle_charge_limit_entity": "Vehicle charge-limit entity (optional; requires car_home when mapped)",
+          "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)"
         }
       }
     },
     "error": {
       "required_when_solar_installed": "Required when Solar is installed",
-      "required_when_captar_available": "Required when CapTar is available"
+      "required_when_captar_available": "Required when CapTar is available",
+      "required_when_vehicle_limit_mapped": "Required when the vehicle charge-limit entity is mapped"
     }
   },
   "options": {

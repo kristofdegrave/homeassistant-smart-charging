@@ -1,28 +1,22 @@
 name: CI
 
-# Build/validate + test gate for the integration code. Scoped by path so it stays idle on
-# docs-only and tooling-only PRs and activates once integration code exists (the first code PR
-# adds custom_components/, manifest.json, pyproject.toml, requirements-test.txt). Realizes the
-# dev-tooling CI that ADR-0009 deferred (pytest for logic, HA harness for adapters/coordinator).
+# Build/validate + test gate for the integration code. Realizes the dev-tooling CI that
+# ADR-0009 deferred (pytest for logic, HA harness for adapters/coordinator).
+#
+# lint/test/hassfest/hacs are required status checks in branch protection on main, so the
+# workflow's `on:` trigger has no path filter -- a required check that never triggers at all
+# (e.g. because the whole workflow was path-filtered out) leaves the PR stuck "pending"
+# forever. Instead the workflow always runs; a `changes` job computes whether code-relevant
+# paths changed, and each job skips internally via
+# `if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')`
+# on non-matching PRs -- reporting "skipped" (which satisfies a required check) instead of
+# never running. The `needs.changes.result != 'success'` half is deliberate fail-safe: if the
+# `changes` job itself errors, jobs still run rather than silently reporting green.
 
 on:
   push:
     branches: [main]
-    paths:
-      - "custom_components/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "requirements-test.txt"
-      - "hacs.json"
-      - ".github/workflows/ci.yml"
   pull_request:
-    paths:
-      - "custom_components/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "requirements-test.txt"
-      - "hacs.json"
-      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
@@ -32,7 +26,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Mirrors coverage.yml's path filter (see coverage.yml for the counterpart);
+          # update both together.
+          filters: |
+            code:
+              - "custom_components/**"
+              - "tests/**"
+              - "pyproject.toml"
+              - "requirements-test.txt"
+              - "hacs.json"
+              - ".github/workflows/ci.yml"
+
   lint:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -44,6 +63,8 @@ jobs:
       - run: ruff format --check .
 
   test:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -60,6 +81,8 @@ jobs:
     # CPU/memory tripwire for the M1 control cycle (issue #266), separate from the
     # functional gate above. continue-on-error: advisory-only until a real baseline
     # exists -- a ceiling breach is visible in the run but never blocks merge.
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -81,6 +104,8 @@ jobs:
 
   hassfest:
     # Validates manifest.json / integration structure against Home Assistant's own checks.
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -88,6 +113,8 @@ jobs:
 
   hacs:
     # Validates the repo is installable as a HACS custom integration.
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
