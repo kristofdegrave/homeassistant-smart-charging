@@ -26,6 +26,7 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_STATUS_TRANSLATION,
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
@@ -39,6 +40,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    ROLE_VEHICLE_CHARGE_LIMIT,
 )
 
 
@@ -250,3 +252,23 @@ async def test_car_home_empty_string_treated_as_absent(hass):
     data[CONF_CAR_HOME_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_CAR_HOME not in adapters
+
+
+async def test_factory_builds_vehicle_charge_limit_role_when_configured(hass):
+    data = _data()
+    data[CONF_VEHICLE_CHARGE_LIMIT_ENTITY] = "number.car_charge_limit"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_VEHICLE_CHARGE_LIMIT], NumericReadWriteAdapter)
+    assert adapters[ROLE_VEHICLE_CHARGE_LIMIT]._entity_id == "number.car_charge_limit"
+
+
+async def test_vehicle_charge_limit_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_VEHICLE_CHARGE_LIMIT not in adapters
+
+
+async def test_vehicle_charge_limit_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_VEHICLE_CHARGE_LIMIT_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_VEHICLE_CHARGE_LIMIT not in adapters
