@@ -35,6 +35,7 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
     is only offered when its own config-time toggle is True."""
 
     _attr_translation_key = "mode"
+    _object_id_suffix = "mode"
 
     def __init__(
         self,
@@ -73,6 +74,7 @@ class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
     (E2's own mode-selection drives dispatch, R16). Mirrors `ModeSelect` (design doc §4)."""
 
     _attr_translation_key = "profile"
+    _object_id_suffix = "profile"
     _attr_options = PROFILE_OPTIONS
 
     def __init__(self, entry_id: str, coordinator) -> None:

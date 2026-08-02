@@ -22,6 +22,7 @@ class TargetCurrentNumber(SmartChargingEntity, RestoreNumber):
     """User-set target charging current for Power mode."""
 
     _attr_translation_key = "target_current"
+    _object_id_suffix = "target_current"
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_native_step = 1.0
 
@@ -58,6 +59,7 @@ class SocLimitOverrideNumber(SmartChargingEntity, RestoreNumber):
     a solar step-up or the overnight solar-reserve cap is temporarily raising/lowering it."""
 
     _attr_translation_key = "soc_limit_override"
+    _object_id_suffix = "soc_limit_override"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_native_step = 1.0
     _attr_native_min_value = 50.0
