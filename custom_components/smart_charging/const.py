@@ -64,6 +64,9 @@ ROLE_SUN = "sun"
 # issue #376: optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
 # None reading keeps the glossary's single-tariff "always active" default.
 ROLE_LOW_TARIFF = "low_tariff"
+# Adapter role keys (RA1-VL + the car_home RA2 role, built early -- M2 is their first consumer).
+ROLE_VEHICLE_CHARGE_LIMIT = "vehicle_charge_limit"
+ROLE_CAR_HOME = "car_home"
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
@@ -96,6 +99,20 @@ CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 # optional at the factory level (NF3) -- issue #376, Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
+CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
+# required when vehicle_charge_limit is mapped (design §9.1)
+CONF_CAR_HOME_ENTITY = "car_home_entity"
+
+# Entity M2 subscribes to for the resolved-active-SOC-limit change (ADR-0011). NOT built by this
+# slice -- materialized by E3/M1 (epic #255); M2's write branch is dormant until it exists (design
+# §0).
+ACTIVE_SOC_LIMIT_ENTITY = "sensor.smart_charging_active_soc_limit"
+
+# Domain events M2 fires on the HA event bus (UC09 "Domain events produced"; DDD->HA mapping). Not
+# consumed by any other Manager (ADR-0011) -- observability/automation only.
+EVENT_VEHICLE_CHARGE_LIMIT_SYNCED = "smart_charging_vehicle_charge_limit_synced"
+EVENT_MANUAL_CHARGE_LIMIT_ADOPTED = "smart_charging_manual_charge_limit_adopted"
+EVENT_VEHICLE_CHARGE_LIMIT_RESET = "smart_charging_vehicle_charge_limit_reset"
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names
