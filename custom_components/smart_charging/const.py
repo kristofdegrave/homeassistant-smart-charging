@@ -64,6 +64,12 @@ ROLE_SUN = "sun"
 # issue #376: optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
 # None reading keeps the glossary's single-tariff "always active" default.
 ROLE_LOW_TARIFF = "low_tariff"
+# RA4 (notifications design doc §3): message dispatch + simulated action response.
+ROLE_NOTIFICATION_TARGET = "notification_target"
+
+# Actionable home-day prompt action ids (UC08; notifications design doc §5/§6).
+ACTION_HOMEDAY_YES = "HOMEDAY_YES"
+ACTION_HOMEDAY_NO = "HOMEDAY_NO"
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
@@ -96,6 +102,8 @@ CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 # optional at the factory level (NF3) -- issue #376, Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
+# RA4 role mapping (notifications design doc §3)
+CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names
