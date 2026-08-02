@@ -176,8 +176,12 @@ jobs:
           REASON: ${{ steps.kind.outputs.reason }}
         run: |
           set -euo pipefail
-          gh issue comment "$ISSUE" --body "🤖 $REASON"
-          gh issue edit "$ISSUE" --remove-label needs-draft || true
+          # --repo is required here: this step runs before Checkout (gated on proceed ==
+          # 'true'), so the working directory has no git remote for gh to infer the repo from.
+          # Clear the label first: if the comment call itself fails (rate limit, locked issue),
+          # the trigger must not stay stuck on needs-draft with no way to retry.
+          gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 $REASON"
 
       - name: Checkout
         if: steps.kind.outputs.proceed == 'true'
@@ -206,8 +210,10 @@ jobs:
 
           emit() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
           fail() {
-            gh issue comment "$ISSUE" --body "🤖 $1"
-            gh issue edit "$ISSUE" --remove-label needs-draft || true
+            # --repo pins the target explicitly, same as the pre-checkout refusal step, so the
+            # two refusal paths can't drift if a future reorder moves this one before Checkout.
+            gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 $1"
             emit ok false
             exit 0
           }
