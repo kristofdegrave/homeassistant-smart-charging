@@ -6,6 +6,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from ..const import (
+    CONF_CAR_HOME_ENTITY,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
@@ -18,6 +19,7 @@ from ..const import (
     CONF_NET_POWER_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_STATUS_TRANSLATION,
+    ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
@@ -34,6 +36,7 @@ from ..const import (
 from .base import Adapter
 from .boolean import BooleanReadAdapter
 from .numeric import NumericReadAdapter, NumericReadWriteAdapter
+from .presence import PresenceReadAdapter
 from .status import StatusReadAdapter
 from .sun import SunReadAdapter
 from .time_read import TimeReadAdapter
@@ -43,12 +46,12 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     """Build the control-cycle adapter set from config-entry data.
 
     grid_voltage, ev_soc, ev_battery_capacity, departure_external, home_day_external,
-    solar_forecast, and low_tariff are all optional at the factory level (NF4 / RA1 / RA2
-    extensions); sun is built unconditionally with no entity mapping at all (issue #376:
-    `sun.sun` is a core Home Assistant entity, not something the user maps); every other
-    role is required. An optional role's absence is only a fault where its consuming
-    engine actually needs it (e.g. ev_soc while a solar mode is active, Task 5.1's job) --
-    the factory itself never requires any of them.
+    solar_forecast, low_tariff, and car_home are all optional at the factory level (NF4 /
+    RA1 / RA2 extensions); sun is built unconditionally with no entity mapping at all
+    (issue #376: `sun.sun` is a core Home Assistant entity, not something the user maps);
+    every other role is required. An optional role's absence is only a fault where its
+    consuming engine actually needs it (e.g. ev_soc while a solar mode is active, Task
+    5.1's job) -- the factory itself never requires any of them.
     """
     adapters: dict[str, Adapter] = {
         ROLE_CHARGER_CURRENT: NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
@@ -79,4 +82,6 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
         adapters[ROLE_SOLAR_FORECAST] = NumericReadAdapter(hass, data[CONF_SOLAR_FORECAST_ENTITY])
     if data.get(CONF_LOW_TARIFF_ENTITY):
         adapters[ROLE_LOW_TARIFF] = BooleanReadAdapter(hass, data[CONF_LOW_TARIFF_ENTITY])
+    if data.get(CONF_CAR_HOME_ENTITY):
+        adapters[ROLE_CAR_HOME] = PresenceReadAdapter(hass, data[CONF_CAR_HOME_ENTITY])
     return adapters
