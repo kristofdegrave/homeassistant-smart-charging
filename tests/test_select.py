@@ -12,8 +12,15 @@ from custom_components.smart_charging.select import ModeSelect, ProfileSelect
 
 class _StubCoordinator:
     def __init__(self):
-        self.active_mode = None
+        self._active_mode = None
         self.refreshed = False
+
+    @property
+    def active_mode(self):
+        return self._active_mode
+
+    def set_active_mode(self, mode):
+        self._active_mode = mode
 
     async def async_request_refresh(self):
         self.refreshed = True

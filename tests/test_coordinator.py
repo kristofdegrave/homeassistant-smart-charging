@@ -596,6 +596,14 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     assert result.fault is False
 
 
+async def test_set_active_mode_sets_the_field(hass):
+    """ADR-0014: set_active_mode is the coordinator's own boundary for active_mode -- no
+    clamp (SelectEntity's own options list already gates the enum), just encapsulation."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_active_mode(MODE_SOLAR)
+    assert coord.active_mode == MODE_SOLAR
+
+
 async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown(hass):
     """Grace period 0 -- the very first breaching cycle already exceeds it -- forces 0 A
     and CaptarState -> cooldown; the cooldown then blocks a restart until it elapses (R11)."""

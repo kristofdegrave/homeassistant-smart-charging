@@ -584,6 +584,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             active_soc_limit=active_soc_limit,
         )
 
+    def set_active_mode(self, mode: str) -> None:
+        """Coordinator's own boundary for `active_mode` (ADR-0014) -- the intended write path for
+        select.py; the field itself stays a plain writable attribute (ADR-0014's design doc §2,
+        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects any
+        value outside the enum before this is ever called."""
+        self.active_mode = mode
+
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether
         or not the incoming mode is one of them (a state nobody is dispatching to is inert
