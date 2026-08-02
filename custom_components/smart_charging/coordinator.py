@@ -610,6 +610,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.target_current = min(
             max(value, self._config[CONF_MIN_CURRENT]), self._config[CONF_MAX_CURRENT]
         )
+
     def set_active_profile(self, profile: str) -> None:
         """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
         path for select.py; the field itself stays a plain writable attribute (design doc §2,
