@@ -2,12 +2,13 @@ name: Release
 
 # Guards the GitHub Release HACS distributes from. Triggered by any version tag
 # push (release-please (#132) now tags AND publishes the Release itself — see
-# release-please.yml and #184 for why it must own publishing). This workflow
-# gates on CI (#128) having passed for the tagged commit — main has no
-# required-status-check branch protection, so this is the enforcement point —
-# and validates manifest.json's version matches the tag. If either check
-# fails, it deletes the Release release-please just published so a broken
-# build is never left distributable via HACS.
+# release-please.yml and #184 for why it must own publishing). Branch
+# protection on main already requires lint/test/hassfest/hacs to pass before a
+# PR merges (see ci.yml), but this workflow re-verifies CI (#128) succeeded for
+# the exact tagged commit and validates manifest.json's version matches the
+# tag, as defense in depth against a stale check or a manually-pushed tag. If
+# either check fails, it deletes the Release release-please just published so
+# a broken build is never left distributable via HACS.
 
 on:
   push:

@@ -391,6 +391,10 @@ async def test_power_and_off_ignore_soc_entirely(hass, mode):
     # Assert
     assert result.fault is False
     assert result.commanded_current == (10.0 if mode == MODE_POWER else 0.0)
+    # ADR-0012 (coordinator decomposition Task 3.2): MODE_POWER/MODE_OFF have no entry in
+    # _fresh_mode_state() and must never gain one -- the ModeHandler registry lookup for these
+    # two modes discards its returned state rather than writing it to _mode_state.
+    assert mode not in coord._mode_state
 
 
 async def test_missing_ev_soc_faults_only_while_a_solar_mode_is_selected(hass):

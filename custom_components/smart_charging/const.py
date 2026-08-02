@@ -164,6 +164,11 @@ CONF_SOLAR_STEP_PP = "solar_step_pp"  # R8 solar step-up step size
 CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"  # R8 solar step-up trigger gap
 CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"  # R9 overnight solar-reserve cap (runtime, R7 row 1)
 CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-reserve forecast gate
+# UC08 evening home-day prompt options (notifications design doc §3). sc_prompt_timeout_h is
+# deliberately NOT wired here -- UC08's own state model has no separate configurable timeout;
+# midnight is the only answer deadline (design doc §3/§9).
+CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
+CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
 
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4
@@ -186,6 +191,8 @@ DEFAULT_SOLAR_STEP_PP = 5.0
 DEFAULT_SOLAR_STEP_THRESHOLD_PP = 2.0
 DEFAULT_SOLAR_RESERVE_SOC = 60.0
 DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
+DEFAULT_EVENING_PROMPT_ENABLED = True
+DEFAULT_EVENING_PROMPT_TIME = "18:00:00"
 
 SOC_LIMIT_OVERRIDE_MIN = 50.0  # percent (R6) -- shared by number.py's own bounds and the
 SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (single source)
