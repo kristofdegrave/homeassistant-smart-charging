@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_CAR_HOME_ENTITY,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
@@ -37,6 +38,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
@@ -541,3 +543,86 @@ async def test_options_flow_edits_the_new_thresholds(hass):
         result["flow_id"], {**_current_options(entry), CONF_SOLAR_RESERVE_SOC: 55.0}
     )
     assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
+
+
+async def test_vehicle_limit_mapped_without_car_home_is_rejected(hass):
+    # UC09 C2 / design §9.1: a vehicle-limit output with no presence source is unsafe --
+    # the config-time guard must reject the save outright, not defer to a runtime fault.
+    result = await _run_user_flow(
+        hass, overrides={CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_CAR_HOME_ENTITY] == "required_when_vehicle_limit_mapped"
+
+
+async def test_vehicle_limit_mapped_with_car_home_is_accepted(hass):
+    result = await _run_user_flow(
+        hass,
+        overrides={
+            CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit",
+            CONF_CAR_HOME_ENTITY: "device_tracker.car",
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_VEHICLE_CHARGE_LIMIT_ENTITY] == "number.car_limit"
+    assert result["data"][CONF_CAR_HOME_ENTITY] == "device_tracker.car"
+
+
+async def test_car_home_mapped_alone_is_accepted(hass):
+    # car_home has no guard of its own -- only vehicle_charge_limit requires it.
+    result = await _run_user_flow(hass, overrides={CONF_CAR_HOME_ENTITY: "device_tracker.car"})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_CAR_HOME_ENTITY] == "device_tracker.car"
+    assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in result["data"]
+
+
+async def test_neither_vehicle_limit_nor_car_home_is_accepted(hass):
+    # UC09 precondition: unmapped vehicle limit -> M2 inert, no requirement on car_home.
+    result = await _run_user_flow(hass)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in result["data"]
+    assert CONF_CAR_HOME_ENTITY not in result["data"]
+
+
+async def test_pre_field_entry_reads_vehicle_limit_and_car_home_as_absent(hass):
+    # An entry created before these fields must not KeyError -- no migration needed
+    # (design doc §8), mirroring the ev_soc/captar_available pre-toggle-entry tests above.
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(USER_INPUT), options={})
+    assert entry.data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY) is None
+    assert entry.data.get(CONF_CAR_HOME_ENTITY) is None
+
+
+async def test_reconfigure_rejects_vehicle_limit_mapped_without_car_home(hass):
+    # Design doc §9.1: the guard must hold on reconfigure too, mirroring the ev_soc/
+    # solar_forecast reconfigure guard tests above -- otherwise a user could bypass it by
+    # mapping vehicle_charge_limit through Reconfigure instead of the install form.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+            "charger_status_entity": "sensor.evse",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
+        },
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    new_mapping = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+        "charger_status_entity": "sensor.evse",
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+        "net_power_entity": "sensor.net_power",
+        "charger_power_entity": "sensor.charger_power",
+        CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit",
+    }
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"][CONF_CAR_HOME_ENTITY] == "required_when_vehicle_limit_mapped"

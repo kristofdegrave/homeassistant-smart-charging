@@ -10,6 +10,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_CAR_HOME_ENTITY,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
@@ -50,6 +51,7 @@ from .const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -143,6 +145,8 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
         vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
         vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+        vol.Optional(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
+        vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
     }
 )
 
@@ -277,10 +281,21 @@ def _solar_forecast_missing_error(user_input: dict) -> dict[str, str] | None:
     return None
 
 
+def _car_home_missing_error(user_input: dict) -> dict[str, str] | None:
+    """UC09 C2 / design §9.1: mapping vehicle_charge_limit requires car_home -- the
+    home-only write gate is not optional. Unmapped vehicle limit imposes no requirement."""
+    if user_input.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY) and not user_input.get(
+        CONF_CAR_HOME_ENTITY
+    ):
+        return {CONF_CAR_HOME_ENTITY: "required_when_vehicle_limit_mapped"}
+    return None
+
+
 def _mapping_errors(user_input: dict) -> dict[str, str] | None:
     """Combined config-time guards for the mapping step (install + reconfigure)."""
     errors = _ev_soc_missing_error(user_input) or {}
     errors.update(_solar_forecast_missing_error(user_input) or {})
+    errors.update(_car_home_missing_error(user_input) or {})
     return errors or None
 
 
