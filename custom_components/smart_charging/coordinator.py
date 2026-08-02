@@ -85,6 +85,7 @@ from .coordinator_cycle import (
     CycleContext,
     ModeHandler,
     PeakDemandState,
+    SocGateResolver,
     _CaptarModeHandler,
     _OffModeHandler,
     _PowerModeHandler,
@@ -379,7 +380,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
         ctx.solar_reserve_active = solar_reserve_active
-        active_soc_limit = resolve_active_soc_limit(
+        active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
             self.soc_limit_override,
             solar_reserve_active=solar_reserve_active,
             solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
@@ -389,7 +390,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self.hass.bus.async_fire(
                 EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
             )
-        self._last_active_soc_limit = active_soc_limit
         ctx.active_soc_limit = active_soc_limit
 
         # R5/R14/R15: today's departure deadline and the required-current/urgency it drives.
