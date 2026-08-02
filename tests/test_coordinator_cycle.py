@@ -21,22 +21,17 @@ from custom_components.smart_charging.coordinator_cycle import (
     CycleContext,
     ModeHandler,
     PeakDemandState,
+    SocGateResolver,
     _CaptarModeHandler,
     _OffModeHandler,
     _PowerModeHandler,
     _SolarModeHandler,
     _SolarOnlyModeHandler,
 )
+from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes import captar, solar, solar_only
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
-from custom_components.smart_charging.const import STATE_CHARGING
-from custom_components.smart_charging.coordinator_cycle import (
-    CycleContext,
-    PeakDemandState,
-    SocGateResolver,
-)
-from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
@@ -320,6 +315,8 @@ def test_captar_mode_handler_uses_default_cooldown_when_config_key_absent():
     current, new_state = handler.desired_current(ctx_after, cooldown_state)
     assert current == 32.0
     assert new_state.phase == Phase.CHARGING
+
+
 def test_soc_gate_resolver_first_call_always_reports_changed():
     """SocGateResolver.resolve (ADR-0012, T2.1) wraps engines/soc_target.py's
     resolve_active_soc_limit + the inline _last_active_soc_limit comparison it replaces: with

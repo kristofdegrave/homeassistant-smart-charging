@@ -24,8 +24,8 @@ from .const import (
 )
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
-from .modes import captar, power, solar, solar_only
 from .engines.soc_target import SolarStepUpState, resolve_active_soc_limit
+from .modes import captar, power, solar, solar_only
 
 _WATTS_PER_KILOWATT = 1000.0
 
@@ -174,6 +174,8 @@ class _CaptarModeHandler:
                 CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
             ),
         )
+
+
 class SocGateResolver:
     """Owns SOC-limit resolution + change detection (ADR-0012), replacing the inline
     resolve_active_soc_limit call + _last_active_soc_limit comparison. Pure -- no hass.bus
