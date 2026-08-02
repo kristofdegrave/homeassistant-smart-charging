@@ -41,3 +41,19 @@ jobs:
           name: coverage-report
           path: coverage.xml
           retention-days: 30
+      - name: Compute coverage percentage
+        id: coverage
+        run: |
+          pct=$(python -c "import xml.etree.ElementTree as ET; print(round(float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100))")
+          echo "percentage=$pct" >> "$GITHUB_OUTPUT"
+      - name: Update coverage badge gist
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: c567fdec00982c4da95cfe92f80caf81
+          filename: smart-charging-coverage.json
+          label: coverage
+          message: ${{ steps.coverage.outputs.percentage }}%
+          valColorRange: ${{ steps.coverage.outputs.percentage }}
+          maxColorRange: 100
+          minColorRange: 50
