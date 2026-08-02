@@ -1,5 +1,7 @@
 # homeassistant-smart-charging
 
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kristofdegrave/c567fdec00982c4da95cfe92f80caf81/raw/smart-charging-coverage.json)](https://github.com/kristofdegrave/homeassistant-smart-charging/actions/workflows/coverage.yml)
+
 <img src="custom_components/smart_charging/brand/logo@2x.png" alt="Smart Charging logo" width="96" height="96" align="right" />
 
 Smart EV charging integration for Home Assistant — solar-first and
