@@ -53,8 +53,8 @@ on:
         # Explicit escalation only. Leave 0 (default) to let the "Resolve max_turns from
         # context + Size" step derive the ceiling from the issue's context label and its
         # project-board Size field (see that step) — this replaced a flat default of 15 after
-        # issue #398 (a Size=XS `development` sweep task) hit it and truncated
-        # (run 30738065459); ai-cost-summary now had the data the old comment here asked for.
+        # issue #398 (a Size=XS `development` sweep task) hit it and truncated (#459);
+        # ai-cost-summary now had the data the old comment here asked for.
         description: >-
           Override the derived max_turns ceiling. Leave 0 (default) to derive it from context
           label + project-board Size.
@@ -235,11 +235,15 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      # Projects (v2) items aren't reachable with the default GITHUB_TOKEN regardless of the
-      # permissions block above — same reason "Hand off to AI review" below needs WORKFLOW_PAT
-      # instead of GITHUB_TOKEN. A missing/unrecognized Size doesn't fail the draft; it falls
-      # back to the M tier in the next step (with a warning) so a board-hygiene gap never blocks
-      # drafting.
+      # Projects (v2) items aren't reachable with GITHUB_TOKEN at all — org/user Projects-v2
+      # read isn't a grantable Actions-token permission, unlike repo-scoped classic projects —
+      # so this needs WORKFLOW_PAT (which must carry Projects read access), same as "Hand off to
+      # AI review" below. Best-effort: any failure here (PAT lacking that scope, rate limit, a
+      # transferred/deleted issue) must NOT fail the job — this step only ever narrows a turn
+      # ceiling, and the trigger-clearing steps later are gated on proceed=='true', so an
+      # unhandled failure here would strand the issue on needs-draft with no explanation, the
+      # exact failure mode the rest of this file (see "Explain and clear the trigger" above)
+      # is built to avoid. Falls back to empty (-> the M tier in the next step) on any problem.
       - name: Read the issue's project-board Size field
         id: size
         if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
@@ -247,15 +251,19 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           ISSUE: ${{ inputs.issue_number }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           owner="${GITHUB_REPOSITORY%%/*}"
           repo="${GITHUB_REPOSITORY##*/}"
+          # Project 1 ("EMS") is the one board this repo's issues live on — pinned by number
+          # (stable) rather than title (renameable), and filtered explicitly so a Size field on
+          # some unrelated board an issue happens to also sit on is never picked up by accident.
           size=$(gh api graphql -f query='
             query($owner: String!, $repo: String!, $number: Int!) {
               repository(owner: $owner, name: $repo) {
                 issue(number: $number) {
                   projectItems(first: 10) {
                     nodes {
+                      project { number }
                       fieldValueByName(name: "Size") {
                         ... on ProjectV2ItemFieldSingleSelectValue { name }
                       }
@@ -264,11 +272,15 @@ jobs:
                 }
               }
             }' -f owner="$owner" -f repo="$repo" -F number="$ISSUE" \
-            --jq '[.data.repository.issue.projectItems.nodes[].fieldValueByName.name] | map(select(. != null)) | first // ""')
+            --jq '[(.data.repository.issue.projectItems.nodes // [])[] | select(.project.number == 1) | .fieldValueByName.name] | map(select(. != null)) | first // ""' \
+            2>/dev/null) || size=""
 
           if [ -z "$size" ]; then
-            echo "::warning::Issue #$ISSUE has no project-board Size set — falling back to the M tier for max_turns. Set Size (and Estimate) on the EMS project board when creating issues."
+            echo "::warning::Issue #$ISSUE has no readable Size on the EMS project board (unset, not on that board, or the board/PAT couldn't be read) — falling back to the M tier for max_turns. Set Size (and Estimate) on the EMS board when creating issues, and confirm WORKFLOW_PAT has Projects read access."
           fi
+          # Single-select option names never contain a newline, so the simple (non-heredoc)
+          # form is safe here — contrast add_paths above, which needs the heredoc form because
+          # it can be multi-line.
           printf 'value=%s\n' "$size" >> "$GITHUB_OUTPUT"
 
       - name: Resolve max_turns from context + Size
@@ -280,17 +292,28 @@ jobs:
           OVERRIDE: ${{ inputs.max_turns }}
         run: |
           set -euo pipefail
-          if [ "$OVERRIDE" != "0" ]; then
+          # Matched against a digit-string, not just != "0": a future caller passing something
+          # that resolves empty must fall through to auto-derive rather than emit an empty
+          # `value=`, which would corrupt the `--max-turns` flag downstream (the next flag would
+          # be consumed as its argument).
+          if [[ "$OVERRIDE" =~ ^[1-9][0-9]*$ ]]; then
             printf 'value=%s\n' "$OVERRIDE" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           # Baselines per context-label workload shape (docs: single-file Opus draft against a
           # template; development/testing: Sonnet reading existing code + writing tests, no
-          # Bash access, structurally more turn-hungry). Size scales up from there. See #459 for
-          # the run (#398, Size=XS `development`) that hit the old flat 15-turn default.
+          # Bash access, structurally more turn-hungry). Size scales up from there.
+          #
+          # The development/testing row is deliberately generous, not merely "enough": the only
+          # real sample (#398, Size=XS development) hit the *old* flat 15-turn ceiling and
+          # truncated at turn 16 (#459), which only proves the true requirement is >=16, not what
+          # it is. A too-low ceiling here means a truncated, wasted, re-run job — costlier than a
+          # ceiling that's somewhat too high — and timeout_minutes (20) already bounds the
+          # wall-clock downside of over-provisioning. Revisit with ai-cost-summary data per
+          # docs/reference/ai-authoring-token-efficiency.md once these have run for real.
           case "$TYPE" in
-            development|testing) xs=20; s=25; m=30; l=40; xl=55 ;;
+            development|testing) xs=30; s=35; m=40; l=50; xl=75 ;;
             *)                   xs=15; s=20; m=25; l=35; xl=45 ;;
           esac
 
@@ -300,7 +323,10 @@ jobs:
             M)  turns=$m ;;
             L)  turns=$l ;;
             XL) turns=$xl ;;
-            *)  turns=$m ;;
+            *)
+              echo "::warning::Unrecognized project-board Size '${SIZE}' — falling back to the M tier for max_turns. Expected one of XS/S/M/L/XL."
+              turns=$m
+              ;;
           esac
 
           printf 'value=%s\n' "$turns" >> "$GITHUB_OUTPUT"
