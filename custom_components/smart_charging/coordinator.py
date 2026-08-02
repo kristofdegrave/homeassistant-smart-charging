@@ -592,6 +592,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         `SocLimitOverrideNumber` already enforces on its own restored value, now also enforced at
         the coordinator's own field."""
         self.soc_limit_override = min(max(value, SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
+        
+    def set_active_mode(self, mode: str) -> None:
+        """Coordinator's own boundary for `active_mode` (ADR-0014) -- the intended write path for
+        select.py; the field itself stays a plain writable attribute (ADR-0014's design doc §2,
+        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects any
+        value outside the enum before this is ever called."""
+        self.active_mode = mode
 
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether
@@ -602,6 +609,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if self.active_mode != self._last_active_mode:
             self._mode_state = _fresh_mode_state()
             self._last_active_mode = self.active_mode
+
+    def set_active_profile(self, profile: str) -> None:
+        """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
+        path for select.py; the field itself stays a plain writable attribute (design doc §2,
+        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects
+        any value outside the enum before this is ever called."""
+        self.active_profile = profile
 
     def _mode_desired_current(
         self,

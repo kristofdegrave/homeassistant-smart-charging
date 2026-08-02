@@ -60,11 +60,11 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         last = await self.async_get_last_state()
         if last is not None and last.state in self._attr_options:
             self._attr_current_option = last.state
-        self._coordinator.active_mode = self._attr_current_option
+        self._coordinator.set_active_mode(self._attr_current_option)
 
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option
-        self._coordinator.active_mode = option  # coordinator resets mode-state (M1, Task 5.1)
+        self._coordinator.set_active_mode(option)  # coordinator resets mode-state (M1, Task 5.1)
         await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
@@ -88,11 +88,11 @@ class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         last = await self.async_get_last_state()
         if last is not None and last.state in self._attr_options:
             self._attr_current_option = last.state
-        self._coordinator.active_profile = self._attr_current_option
+        self._coordinator.set_active_profile(self._attr_current_option)
 
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option
-        self._coordinator.active_profile = option
+        self._coordinator.set_active_profile(option)
         await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 

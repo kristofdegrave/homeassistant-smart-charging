@@ -189,6 +189,13 @@ async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0
     return coord, result
 
 
+async def test_set_active_profile_sets_the_field(hass):
+    """ADR-0014: set_active_profile is the coordinator's own boundary for active_profile."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_active_profile(PROFILE_AUTO)
+    assert coord.active_profile == PROFILE_AUTO
+
+
 async def test_r17_commands_target_when_charging(hass):
     adapters = _adapters(status=STATE_CHARGING)
     coord, result = await _run(hass, adapters, _config(), target=10.0)
@@ -597,6 +604,14 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
 
     assert result.commanded_current == 11.0
     assert result.fault is False
+
+
+async def test_set_active_mode_sets_the_field(hass):
+    """ADR-0014: set_active_mode is the coordinator's own boundary for active_mode -- no
+    clamp (SelectEntity's own options list already gates the enum), just encapsulation."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_active_mode(MODE_SOLAR)
+    assert coord.active_mode == MODE_SOLAR
 
 
 async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown(hass):
