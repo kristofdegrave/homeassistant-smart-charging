@@ -274,7 +274,7 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     coordinator.active_profile = PROFILE_AUTO
-    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
+    coordinator.home_day_flag = True  # direct set, mirrors soc_limit_override's own test style
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 

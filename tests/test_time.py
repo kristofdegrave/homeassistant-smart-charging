@@ -20,6 +20,7 @@ from custom_components.smart_charging.const import (
     DAY_WED,
     DEPARTURE_OVERRIDE_HOLIDAY,
     DEPARTURE_OVERRIDE_HOME_DAY,
+    DOMAIN,
 )
 from custom_components.smart_charging.time import (
     DAY_OF_WEEK_DEFAULTS,
@@ -32,16 +33,43 @@ from custom_components.smart_charging.time import (
 _WEEKDAY_SUFFIXES = (DAY_MON, DAY_TUE, DAY_WED, DAY_THU, DAY_FRI)
 _WEEKEND_SUFFIXES = (DAY_SAT, DAY_SUN)
 
+# Monday-first, matching datetime.weekday() (Monday=0..Sunday=6) and DAY_OF_WEEK_DEFAULTS' order.
+_SUFFIX_TO_WEEKDAY = {
+    DAY_MON: 0,
+    DAY_TUE: 1,
+    DAY_WED: 2,
+    DAY_THU: 3,
+    DAY_FRI: 4,
+    DAY_SAT: 5,
+    DAY_SUN: 6,
+}
+
+
+class _StubCoordinator:
+    def __init__(self):
+        self.home_day_flag = False
+        self.departure_dow_defaults = dict.fromkeys(range(7))
+        self.departure_holiday_override = None
+        self.departure_home_day_override = None
+        self.refreshed = False
+
+    async def async_request_refresh(self):
+        self.refreshed = True
+
 
 @pytest.mark.parametrize("suffix", _WEEKDAY_SUFFIXES)
 def test_weekday_default_is_six_am(suffix):
-    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=suffix, default=WEEKDAY_DEFAULT)
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=suffix, default=WEEKDAY_DEFAULT
+    )
     assert entity.native_value == time(6, 0)
 
 
 @pytest.mark.parametrize("suffix", _WEEKEND_SUFFIXES)
 def test_weekend_default_is_none(suffix):
-    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=suffix, default=None)
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=suffix, default=None
+    )
     assert entity.native_value is None
 
 
@@ -72,17 +100,23 @@ def test_holiday_and_home_day_overrides_default_to_none():
         (DEPARTURE_OVERRIDE_HOME_DAY, None),
     ]
     for suffix, default in OVERRIDE_DEFAULTS:
-        entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=suffix, default=default)
+        entity = SmartChargingDepartureTime(
+            entry_id="abc", coordinator=_StubCoordinator(), id_suffix=suffix, default=default
+        )
         assert entity.native_value is None
 
 
 def test_unique_id_is_scoped_to_entry_and_suffix():
-    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=DAY_MON, default=WEEKDAY_DEFAULT
+    )
     assert entity.unique_id == "abc_departure_mon"
 
 
 async def test_user_can_set_a_departure_time(hass):
-    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=DAY_MON, default=WEEKDAY_DEFAULT
+    )
     platform = MockEntityPlatform(hass, domain="time")
     await platform.async_add_entities([entity])
     await entity.async_set_value(time(7, 30))
@@ -90,9 +124,14 @@ async def test_user_can_set_a_departure_time(hass):
 
 
 async def test_setting_one_entity_does_not_affect_a_sibling(hass):
-    mon = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    mon = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=DAY_MON, default=WEEKDAY_DEFAULT
+    )
     holiday = SmartChargingDepartureTime(
-        entry_id="abc", id_suffix=DEPARTURE_OVERRIDE_HOLIDAY, default=None
+        entry_id="abc",
+        coordinator=_StubCoordinator(),
+        id_suffix=DEPARTURE_OVERRIDE_HOLIDAY,
+        default=None,
     )
     platform = MockEntityPlatform(hass, domain="time")
     await platform.async_add_entities([mon, holiday])
@@ -103,7 +142,10 @@ async def test_setting_one_entity_does_not_affect_a_sibling(hass):
 
 def test_translation_key_matches_suffix():
     entity = SmartChargingDepartureTime(
-        entry_id="abc", id_suffix=DEPARTURE_OVERRIDE_HOLIDAY, default=None
+        entry_id="abc",
+        coordinator=_StubCoordinator(),
+        id_suffix=DEPARTURE_OVERRIDE_HOLIDAY,
+        default=None,
     )
     assert entity.translation_key == "departure_holiday"
 
@@ -111,7 +153,9 @@ def test_translation_key_matches_suffix():
 async def test_restores_a_previously_set_value_across_restart(hass):
     entity_id = "time.smart_charging_departure_mon"
     mock_restore_cache(hass, (State(entity_id, "07:30:00"),))
-    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=DAY_MON, default=WEEKDAY_DEFAULT
+    )
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="time")
     await platform.async_add_entities([entity])
@@ -119,7 +163,9 @@ async def test_restores_a_previously_set_value_across_restart(hass):
 
 
 async def test_no_restored_state_keeps_the_constructor_default(hass):
-    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=_StubCoordinator(), id_suffix=DAY_MON, default=WEEKDAY_DEFAULT
+    )
     platform = MockEntityPlatform(hass, domain="time")
     await platform.async_add_entities([entity])
     assert entity.native_value == WEEKDAY_DEFAULT
@@ -128,6 +174,7 @@ async def test_no_restored_state_keeps_the_constructor_default(hass):
 async def test_async_setup_entry_creates_nine_entities_with_expected_ids_and_defaults(hass):
     entry = MockConfigEntry(domain="smart_charging", entry_id="xyz")
     entry.add_to_hass(hass)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": _StubCoordinator()}
     added: list[SmartChargingDepartureTime] = []
 
     def _capture(entities):
@@ -153,3 +200,108 @@ async def test_async_setup_entry_creates_nine_entities_with_expected_ids_and_def
         assert by_unique_id[f"xyz_departure_{suffix}"].native_value == WEEKDAY_DEFAULT
     for suffix in (DAY_SAT, DAY_SUN, DEPARTURE_OVERRIDE_HOLIDAY, DEPARTURE_OVERRIDE_HOME_DAY):
         assert by_unique_id[f"xyz_departure_{suffix}"].native_value is None
+
+
+# --- issue #402: pushing into the coordinator (R14/R9 deadline resolution and home-day
+#     trigger were inert without this, mirroring ModeSelect/ProfileSelect's push pattern). ---
+
+
+@pytest.mark.parametrize("suffix", _WEEKDAY_SUFFIXES + _WEEKEND_SUFFIXES)
+async def test_added_to_hass_seeds_coordinator_dow_defaults_with_constructor_default(hass, suffix):
+    default = WEEKDAY_DEFAULT if suffix in _WEEKDAY_SUFFIXES else None
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=suffix, default=default
+    )
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert coord.departure_dow_defaults[_SUFFIX_TO_WEEKDAY[suffix]] == default
+
+
+async def test_added_to_hass_seeds_coordinator_holiday_override(hass):
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOLIDAY, default=None
+    )
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert coord.departure_holiday_override is None
+
+
+async def test_added_to_hass_seeds_coordinator_home_day_override(hass):
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOME_DAY, default=None
+    )
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert coord.departure_home_day_override is None
+
+
+async def test_restoring_a_value_pushes_the_restored_value_not_the_default(hass):
+    entity_id = "time.smart_charging_departure_mon"
+    mock_restore_cache(hass, (State(entity_id, "07:30:00"),))
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DAY_MON, default=WEEKDAY_DEFAULT
+    )
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert coord.departure_dow_defaults[0] == time(7, 30)
+
+
+async def test_set_value_pushes_dow_default_into_coordinator_and_refreshes(hass):
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DAY_TUE, default=WEEKDAY_DEFAULT
+    )
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    await entity.async_set_value(time(8, 15))
+    assert coord.departure_dow_defaults[1] == time(8, 15)
+    assert coord.refreshed is True
+
+
+async def test_set_value_pushes_holiday_override_into_coordinator_and_refreshes(hass):
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOLIDAY, default=None
+    )
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    await entity.async_set_value(time(9, 0))
+    assert coord.departure_holiday_override == time(9, 0)
+    assert coord.refreshed is True
+
+
+async def test_set_value_pushes_home_day_override_into_coordinator_and_refreshes(hass):
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOME_DAY, default=None
+    )
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    await entity.async_set_value(time(10, 0))
+    assert coord.departure_home_day_override == time(10, 0)
+    assert coord.refreshed is True
+
+
+async def test_setup_entry_wires_each_entity_to_the_coordinator_from_hass_data(hass):
+    entry = MockConfigEntry(domain="smart_charging", entry_id="xyz2")
+    entry.add_to_hass(hass)
+    coord = _StubCoordinator()
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coord}
+    added: list[SmartChargingDepartureTime] = []
+
+    def _capture(entities):
+        added.extend(entities)
+
+    await async_setup_entry(hass, entry, _capture)
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities(added)
+
+    mon = next(e for e in added if e.unique_id == "xyz2_departure_mon")
+    await mon.async_set_value(time(7, 0))
+    assert coord.departure_dow_defaults[0] == time(7, 0)
+    assert coord.refreshed is True

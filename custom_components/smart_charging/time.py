@@ -36,6 +36,7 @@ from .const import (
     DAY_WED,
     DEPARTURE_OVERRIDE_HOLIDAY,
     DEPARTURE_OVERRIDE_HOME_DAY,
+    DOMAIN,
 )
 from .entity import SmartChargingEntity
 
@@ -60,11 +61,23 @@ OVERRIDE_DEFAULTS: list[tuple[str, time | None]] = [
 ]
 
 
-class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity):
-    """One departure-time entity, parameterized by id-suffix and default (R14)."""
+# Day-of-week suffixes double as Python's own datetime.weekday() ordering (Monday=0..Sunday=6):
+# DAY_OF_WEEK_DEFAULTS is Monday-first, so its list index *is* the weekday int.
+_DAY_SUFFIX_TO_WEEKDAY: dict[str, int] = {
+    suffix: weekday for weekday, (suffix, _) in enumerate(DAY_OF_WEEK_DEFAULTS)
+}
 
-    def __init__(self, entry_id: str, id_suffix: str, default: time | None) -> None:
+
+class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity):
+    """One departure-time entity, parameterized by id-suffix and default (R14). Pushes its
+    value into the coordinator on both restore and user-set, mirroring ModeSelect/ProfileSelect
+    (select.py) so R14's deadline resolution and R9's home-day trigger see real user input
+    instead of the coordinator's all-`None`/`False` construction-time defaults (issue #402)."""
+
+    def __init__(self, entry_id: str, coordinator, id_suffix: str, default: time | None) -> None:
         super().__init__(entry_id)
+        self._coordinator = coordinator
+        self._id_suffix = id_suffix
         self._attr_translation_key = f"departure_{id_suffix}"
         self._object_id_suffix = f"departure_{id_suffix}"
         self._attr_unique_id = f"{entry_id}_departure_{id_suffix}"
@@ -75,18 +88,31 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
         last = await self.async_get_last_state()
         if last is not None and last.state not in (None, "unknown", "unavailable"):
             self._attr_native_value = time.fromisoformat(last.state)
+        self._push_to_coordinator()
 
     async def async_set_value(self, value: time) -> None:
         self._attr_native_value = value
+        self._push_to_coordinator()
+        await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
+
+    def _push_to_coordinator(self) -> None:
+        if self._id_suffix == DEPARTURE_OVERRIDE_HOLIDAY:
+            self._coordinator.departure_holiday_override = self._attr_native_value
+        elif self._id_suffix == DEPARTURE_OVERRIDE_HOME_DAY:
+            self._coordinator.departure_home_day_override = self._attr_native_value
+        else:
+            weekday = _DAY_SUFFIX_TO_WEEKDAY[self._id_suffix]
+            self._coordinator.departure_dow_defaults[weekday] = self._attr_native_value
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     async_add_entities(
         [
-            SmartChargingDepartureTime(entry.entry_id, suffix, default)
+            SmartChargingDepartureTime(entry.entry_id, coordinator, suffix, default)
             for suffix, default in (*DAY_OF_WEEK_DEFAULTS, *OVERRIDE_DEFAULTS)
         ]
     )

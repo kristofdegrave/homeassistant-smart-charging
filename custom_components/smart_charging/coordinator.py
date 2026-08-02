@@ -166,12 +166,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
         self._soc_gate = SocGateResolver()
-        # R9/R14 inputs -- single source of truth is meant to be the owning entity
-        # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring
-        # ModeSelect/ProfileSelect's own push-on-change), but that entity->coordinator wiring
-        # is not yet threaded (tracked separately, issue #402); until then these default
-        # conservatively (no home day, no configured deadline anywhere), and tests set them
-        # directly, the same way they already set soc_limit_override.
+        # R9/R14 inputs -- single source of truth is the owning entity (switch.smart_charging_
+        # home_day / time.smart_charging_departure_*), which pushes on add/change, mirroring
+        # ModeSelect/ProfileSelect's own push-on-change (issue #402). These construction-time
+        # values (no home day, no configured deadline anywhere) only matter for a coordinator
+        # instance never wired to those entities (e.g. a unit test constructing one directly,
+        # which may also set them directly, the same way it already sets soc_limit_override).
         self.home_day_flag: bool = False
         self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
         self.departure_holiday_override: time_of_day | None = None

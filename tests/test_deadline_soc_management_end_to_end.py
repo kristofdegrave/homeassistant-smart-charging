@@ -5,10 +5,13 @@ Every test is driven through `hass.config_entries.async_setup` + a full
 engine/profile functions directly (that's Phase 1's own test suites' job; this file proves the
 coordinator wiring). `departure_dow_defaults`/`departure_holiday_override`/
 `departure_home_day_override`/`home_day_flag` are set directly on the live coordinator instance
-fetched from `hass.data`, mirroring `tests/test_init.py`'s own live-wiring tests -- the
-entity->coordinator wiring for those (switch.smart_charging_home_day,
-time.smart_charging_departure_*) is tracked separately (issue #402) and not yet threaded, so
-there is no entity to seed instead.
+fetched from `hass.data`, mirroring `tests/test_init.py`'s own live-wiring tests -- the owning
+entities (switch.smart_charging_home_day, time.smart_charging_departure_*) do push into these
+fields themselves now (issue #402), but this file still sets them directly for per-scenario
+control rather than driving 9+1 separate entities through every test. `_setup` resets
+`departure_dow_defaults` to all-`None` right after entry setup specifically to undo the real
+`time.smart_charging_departure_*` entities' own Mon-Fri 06:00 weekday default (R14) seeded during
+that setup, so "no deadline configured" scenarios below stay accurate.
 
 All the thresholds this file's arithmetic depends on (battery capacity, solar step/threshold,
 solar-forecast threshold) are pinned explicitly in `_entry_options` via their own `DEFAULT_*`
@@ -123,6 +126,12 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
     await hass.async_block_till_done()
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     _seed_ample_peak_headroom(coordinator)
+    # Undo the real time.smart_charging_departure_* entities' own Mon-Fri 06:00 weekday
+    # default (R14), pushed into the coordinator during setup (issue #402) -- this file's
+    # scenarios seed deadlines explicitly per test via _seed_today_deadline/direct assignment,
+    # so a "no deadline configured" scenario should start from no defaults, same as before
+    # the entity->coordinator wiring existed.
+    coordinator.departure_dow_defaults = dict.fromkeys(range(7))
     return coordinator
 
 
@@ -387,7 +396,7 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
     assert coordinator.data.active_soc_limit == 80.0  # default limit, reserve not engaged
 
     # Reserved: every precondition now holds, no deadline anywhere for tomorrow.
-    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
+    coordinator.home_day_flag = True  # direct set, same as the file docstring explains
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 55.0  # configured reserve cap, not default (80)
