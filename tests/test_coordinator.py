@@ -1,5 +1,7 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+from datetime import time, timedelta
+
 import pytest
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
@@ -592,6 +594,39 @@ async def test_set_active_mode_sets_the_field(hass):
     coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
     coord.set_active_mode(MODE_SOLAR)
     assert coord.active_mode == MODE_SOLAR
+
+
+async def test_set_home_day_flag_sets_the_field(hass):
+    """ADR-0014: set_home_day_flag is the coordinator's own boundary for home_day_flag --
+    the intended write path for switch.py's HomeDaySwitch (issue #402's review)."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_home_day_flag(True)
+    assert coord.home_day_flag is True
+
+
+async def test_set_departure_dow_default_sets_the_field(hass):
+    """ADR-0014: set_departure_dow_default is the coordinator's own boundary for one
+    departure_dow_defaults entry -- the intended write path for time.py's day-of-week
+    SmartChargingDepartureTime entities (issue #402's review)."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_departure_dow_default(0, time(7, 30))
+    assert coord.departure_dow_defaults[0] == time(7, 30)
+
+
+async def test_set_departure_holiday_override_sets_the_field(hass):
+    """ADR-0014: set_departure_holiday_override is the coordinator's own boundary for
+    departure_holiday_override (issue #402's review)."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_departure_holiday_override(time(22, 0))
+    assert coord.departure_holiday_override == time(22, 0)
+
+
+async def test_set_departure_home_day_override_sets_the_field(hass):
+    """ADR-0014: set_departure_home_day_override is the coordinator's own boundary for
+    departure_home_day_override (issue #402's review)."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_departure_home_day_override(time(21, 0))
+    assert coord.departure_home_day_override == time(21, 0)
 
 
 async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown(hass):

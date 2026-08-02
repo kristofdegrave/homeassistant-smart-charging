@@ -53,6 +53,15 @@ class _StubCoordinator:
         self.departure_home_day_override = None
         self.refreshed = False
 
+    def set_departure_dow_default(self, weekday, value):
+        self.departure_dow_defaults[weekday] = value
+
+    def set_departure_holiday_override(self, value):
+        self.departure_holiday_override = value
+
+    def set_departure_home_day_override(self, value):
+        self.departure_home_day_override = value
+
     async def async_request_refresh(self):
         self.refreshed = True
 

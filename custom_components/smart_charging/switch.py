@@ -40,7 +40,7 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
         self._unsub_midnight_reset = async_track_time_change(
             self.hass, self._async_reset_at_midnight, hour=0, minute=0, second=0
         )
-        self._coordinator.home_day_flag = self._attr_is_on
+        self._coordinator.set_home_day_flag(self._attr_is_on)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._unsub_midnight_reset is not None:
@@ -50,19 +50,19 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
 
     async def _async_reset_at_midnight(self, now: datetime) -> None:
         self._attr_is_on = False
-        self._coordinator.home_day_flag = False
+        self._coordinator.set_home_day_flag(False)
         await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:
         self._attr_is_on = True
-        self._coordinator.home_day_flag = True
+        self._coordinator.set_home_day_flag(True)
         await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         self._attr_is_on = False
-        self._coordinator.home_day_flag = False
+        self._coordinator.set_home_day_flag(False)
         await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
