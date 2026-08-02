@@ -157,7 +157,7 @@ DEFAULT_SOLAR_HOLD_MIN = 5.0
 DEFAULT_SOLAR_COOLDOWN_MIN = 2.0
 DEFAULT_SOLAR_ONLY_STRATEGY = ROUND_DOWN
 DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a percent
-DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by config_flow/number entity
+DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by `SocLimitOverrideNumber`
 DEFAULT_CAPTAR_AVAILABLE = True
 DEFAULT_SAFETY_MARGIN_W = 250.0
 DEFAULT_MAX_PEAK_KW = 4.0
@@ -170,3 +170,6 @@ DEFAULT_SOLAR_STEP_PP = 5.0
 DEFAULT_SOLAR_STEP_THRESHOLD_PP = 2.0
 DEFAULT_SOLAR_RESERVE_SOC = 60.0
 DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
+
+SOC_LIMIT_OVERRIDE_MIN = 50.0  # percent (R6) -- shared by number.py's own bounds and the
+SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (single source)
