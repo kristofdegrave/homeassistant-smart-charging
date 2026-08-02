@@ -53,6 +53,8 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    SOC_LIMIT_OVERRIDE_MAX,
+    SOC_LIMIT_OVERRIDE_MIN,
     STATE_CHARGING,
     STATE_DISCONNECTED,
 )
@@ -1272,6 +1274,29 @@ async def test_manual_selector_unaffected_by_available_modes_gate_already_true_t
 
     assert result.active_mode == MODE_CAPTAR
     assert result.commanded_current == 16.0  # CONF_MAX_CURRENT -- Captar's own step ran normally
+
+
+async def test_set_soc_limit_override_clamps_below_minimum(hass):
+    """ADR-0014: the coordinator's own clamp, using the new named SOC_LIMIT_OVERRIDE_MIN/MAX
+    constants shared with SocLimitOverrideNumber's own bounds."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_soc_limit_override(10.0)
+    assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MIN
+
+
+async def test_set_soc_limit_override_clamps_above_maximum(hass):
+    """ADR-0014: same clamp, upper bound."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_soc_limit_override(150.0)
+    assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
+
+
+async def test_set_soc_limit_override_passes_through_in_range_value(hass):
+    """ADR-0014: an in-range value reaches the field unchanged -- the clamp only rejects
+    out-of-range input, it doesn't substitute a fixed value for everything."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_soc_limit_override(80.0)
+    assert coord.soc_limit_override == 80.0
 
 
 async def test_set_target_current_clamps_below_minimum(hass):
