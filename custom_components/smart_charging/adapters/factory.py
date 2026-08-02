@@ -51,8 +51,7 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     (issue #376: `sun.sun` is a core Home Assistant entity, not something the user maps);
     every other role is required. An optional role's absence is only a fault where its
     consuming engine actually needs it (e.g. ev_soc while a solar mode is active, Task
-    5.1's job) --
-    the factory itself never requires any of them.
+    5.1's job) -- the factory itself never requires any of them.
     """
     adapters: dict[str, Adapter] = {
         ROLE_CHARGER_CURRENT: NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
