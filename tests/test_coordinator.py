@@ -596,36 +596,46 @@ async def test_set_active_mode_sets_the_field(hass):
     assert coord.active_mode == MODE_SOLAR
 
 
-async def test_set_home_day_flag_sets_the_field(hass):
-    """ADR-0014: set_home_day_flag is the coordinator's own boundary for home_day_flag --
-    the intended write path for switch.py's HomeDaySwitch (issue #402's review)."""
+async def test_activate_home_day_sets_the_field(hass):
+    """ADR-0014: activate_home_day is the coordinator's own boundary for home_day_flag --
+    the intended write path for switch.py's HomeDaySwitch turning on (issue #402's review;
+    named for the action rather than a generic set_home_day_flag(True))."""
     coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
-    coord.set_home_day_flag(True)
+    coord.activate_home_day()
     assert coord.home_day_flag is True
 
 
-async def test_set_departure_dow_default_sets_the_field(hass):
-    """ADR-0014: set_departure_dow_default is the coordinator's own boundary for one
+async def test_deactivate_home_day_sets_the_field(hass):
+    """ADR-0014: deactivate_home_day is the coordinator's own boundary for home_day_flag --
+    the intended write path for switch.py's HomeDaySwitch turning off or its midnight reset."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.activate_home_day()
+    coord.deactivate_home_day()
+    assert coord.home_day_flag is False
+
+
+async def test_configure_weekday_departure_sets_the_field(hass):
+    """ADR-0014: configure_weekday_departure is the coordinator's own boundary for one
     departure_dow_defaults entry -- the intended write path for time.py's day-of-week
     SmartChargingDepartureTime entities (issue #402's review)."""
     coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
-    coord.set_departure_dow_default(0, time(7, 30))
+    coord.configure_weekday_departure(0, time(7, 30))
     assert coord.departure_dow_defaults[0] == time(7, 30)
 
 
-async def test_set_departure_holiday_override_sets_the_field(hass):
-    """ADR-0014: set_departure_holiday_override is the coordinator's own boundary for
+async def test_override_holiday_departure_sets_the_field(hass):
+    """ADR-0014: override_holiday_departure is the coordinator's own boundary for
     departure_holiday_override (issue #402's review)."""
     coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
-    coord.set_departure_holiday_override(time(22, 0))
+    coord.override_holiday_departure(time(22, 0))
     assert coord.departure_holiday_override == time(22, 0)
 
 
-async def test_set_departure_home_day_override_sets_the_field(hass):
-    """ADR-0014: set_departure_home_day_override is the coordinator's own boundary for
+async def test_override_home_day_departure_sets_the_field(hass):
+    """ADR-0014: override_home_day_departure is the coordinator's own boundary for
     departure_home_day_override (issue #402's review)."""
     coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
-    coord.set_departure_home_day_override(time(21, 0))
+    coord.override_home_day_departure(time(21, 0))
     assert coord.departure_home_day_override == time(21, 0)
 
 

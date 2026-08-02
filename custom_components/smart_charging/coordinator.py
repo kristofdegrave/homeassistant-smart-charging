@@ -626,25 +626,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         any value outside the enum before this is ever called."""
         self.active_profile = profile
 
-    def set_home_day_flag(self, value: bool) -> None:
+    def activate_home_day(self) -> None:
         """Coordinator's own boundary for `home_day_flag` (ADR-0014) -- the intended write
-        path for switch.py's `HomeDaySwitch`. No range to clamp: a bool has no invalid value."""
-        self.home_day_flag = value
+        path for switch.py's `HomeDaySwitch` turning on. Named for the action rather than
+        `set_home_day_flag(True)` so the call site reads as what happened, not what field
+        changed."""
+        self.home_day_flag = True
 
-    def set_departure_dow_default(self, weekday: int, value: time_of_day | None) -> None:
+    def deactivate_home_day(self) -> None:
+        """Coordinator's own boundary for `home_day_flag` (ADR-0014) -- the intended write
+        path for switch.py's `HomeDaySwitch` turning off or its midnight reset."""
+        self.home_day_flag = False
+
+    def configure_weekday_departure(self, weekday: int, value: time_of_day | None) -> None:
         """Coordinator's own boundary for one `departure_dow_defaults` entry (ADR-0014) --
         the intended write path for time.py's day-of-week `SmartChargingDepartureTime`
         entities. No range to clamp: any `time` (or `None`) is a valid deadline default."""
         self.departure_dow_defaults[weekday] = value
 
-    def set_departure_holiday_override(self, value: time_of_day | None) -> None:
+    def override_holiday_departure(self, value: time_of_day | None) -> None:
         """Coordinator's own boundary for `departure_holiday_override` (ADR-0014) -- the
-        intended write path for time.py's holiday-override `SmartChargingDepartureTime`."""
+        intended write path for time.py's holiday-override `SmartChargingDepartureTime`.
+        `None` clears a previously configured override."""
         self.departure_holiday_override = value
 
-    def set_departure_home_day_override(self, value: time_of_day | None) -> None:
+    def override_home_day_departure(self, value: time_of_day | None) -> None:
         """Coordinator's own boundary for `departure_home_day_override` (ADR-0014) -- the
-        intended write path for time.py's home-day-override `SmartChargingDepartureTime`."""
+        intended write path for time.py's home-day-override `SmartChargingDepartureTime`.
+        `None` clears a previously configured override."""
         self.departure_home_day_override = value
 
     def _mode_desired_current(

@@ -104,12 +104,12 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
 
     def _push_to_coordinator(self) -> None:
         if self._id_suffix == DEPARTURE_OVERRIDE_HOLIDAY:
-            self._coordinator.set_departure_holiday_override(self._attr_native_value)
+            self._coordinator.override_holiday_departure(self._attr_native_value)
         elif self._id_suffix == DEPARTURE_OVERRIDE_HOME_DAY:
-            self._coordinator.set_departure_home_day_override(self._attr_native_value)
+            self._coordinator.override_home_day_departure(self._attr_native_value)
         else:
             weekday = _DAY_SUFFIX_TO_WEEKDAY[self._id_suffix]
-            self._coordinator.set_departure_dow_default(weekday, self._attr_native_value)
+            self._coordinator.configure_weekday_departure(weekday, self._attr_native_value)
 
 
 async def async_setup_entry(

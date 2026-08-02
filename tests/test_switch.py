@@ -18,8 +18,11 @@ class _StubCoordinator:
         self.home_day_flag = False
         self.refreshed = False
 
-    def set_home_day_flag(self, value):
-        self.home_day_flag = value
+    def activate_home_day(self):
+        self.home_day_flag = True
+
+    def deactivate_home_day(self):
+        self.home_day_flag = False
 
     async def async_request_refresh(self):
         self.refreshed = True
