@@ -16,7 +16,7 @@ from custom_components.smart_charging.number import (
 
 class _StubCoordinator:
     def __init__(self):
-        self.target_current = None
+        self._target_current = None
         self._soc_limit_override = None
         self.refreshed = False
 
@@ -26,9 +26,6 @@ class _StubCoordinator:
 
     def set_soc_limit_override(self, value):
         self._soc_limit_override = value
-        self._target_current = None
-        self.soc_limit_override = None
-        self.refreshed = False
 
     @property
     def target_current(self):
