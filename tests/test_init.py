@@ -1,29 +1,17 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
 from homeassistant.helpers import entity_registry as er
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
-    CONF_CHARGER_CURRENT_ENTITY,
-    CONF_CHARGER_POWER_ENTITY,
-    CONF_CHARGER_STATUS_ENTITY,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
-    CONF_DEFAULT_TARGET_CURRENT,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_GRID_VOLTAGE_ENTITY,
-    CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
-    CONF_MIN_CURRENT,
-    CONF_NET_POWER_ENTITY,
-    CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
@@ -34,83 +22,29 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
-    CONF_STATUS_TRANSLATION,
     DOMAIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     PROFILE_AUTO,
-    STATE_CHARGING,
-    STATE_CONNECTED,
+)
+from tests.helpers import (
+    capture_charger_current_writes,
+    entry_data_base,
+    entry_options_base,
+    seed_ample_peak_headroom,
+    seed_charger_states,
 )
 
-
-def _entry_data():
-    """DATA bucket — entity-role mappings + translation only (ADR-0005)."""
-    return {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
-        CONF_STATUS_TRANSLATION: {"Charging": STATE_CHARGING, "Connected": STATE_CONNECTED},
-        CONF_NET_POWER_ENTITY: "sensor.net_power",
-        CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
-        CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
-    }
-
-
-def _entry_options():
-    """OPTIONS bucket — thresholds/defaults + interval (ADR-0005)."""
-    return {
-        CONF_NOMINAL_VOLTAGE: 230.0,
-        CONF_MIN_CURRENT: 6.0,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 2.0,
-        CONF_DEFAULT_TARGET_CURRENT: 10.0,
-        CONF_DEFAULT_SOC_LIMIT: 80.0,
-    }
-
-
-def _capture_charger_current_writes(hass):
-    """Capture number.set_value calls targeting the charger-current entity.
-
-    The real `number` platform (loaded via PLATFORMS) registers its own set_value
-    service handler on setup, so a fake `hass.services.async_register` stand-in gets
-    clobbered; listen for the call_service event instead — it fires for every call
-    regardless of which handler is installed.
-    """
-    calls = []
-
-    def _record(event):
-        if event.data["domain"] == "number" and event.data["service"] == "set_value":
-            calls.append(event.data["service_data"])
-
-    hass.bus.async_listen("call_service", _record)
-    return calls
-
-
-def _seed_states(hass, *, status: str) -> None:
-    hass.states.async_set("number.charger_current", "0.0")
-    hass.states.async_set("sensor.evse", status)
-    hass.states.async_set("sensor.net_power", "0.0")
-    hass.states.async_set("sensor.charger_power", "0.0")
-    hass.states.async_set("sensor.grid_voltage", "230.0")
-
-
-def _seed_ample_peak_headroom(coordinator, kw=100.0):
-    """Pre-seed the Peak-Demand Tracker as though a large historical peak already exists
-    (Captar T5.1/#228) -- keeps R3's clamp out of the way of this pre-Captar suite, which
-    predates peak protection and never seeded any tracked history of its own."""
-    now_dt = dt_util.now()
-    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_demand.tracked_kw = kw
+# This suite's config entry matches the shared base shape exactly -- no local overrides needed.
 
 
 async def test_end_to_end_commands_target_current(hass):
-    calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging")
+    calls = capture_charger_current_writes(hass)
+    seed_charger_states(hass, status="Charging")
 
-    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -125,7 +59,7 @@ async def test_end_to_end_commands_target_current(hass):
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     assert coordinator.active_mode == MODE_OFF
     assert calls[-1]["value"] == 0.0
-    _seed_ample_peak_headroom(coordinator)
+    seed_ample_peak_headroom(coordinator)
     coordinator.active_mode = MODE_POWER
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -139,11 +73,11 @@ async def test_end_to_end_commands_target_current(hass):
 
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
     """A config entry created before this option existed must still set up (no migration)."""
-    _seed_states(hass, status="Charging")
-    options = _entry_options()
+    seed_charger_states(hass, status="Charging")
+    options = entry_options_base()
     del options[CONF_DEFAULT_SOC_LIMIT]
 
-    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -154,10 +88,10 @@ async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass)
 
 
 async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
-    calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Unplugged")  # unmapped raw state -> None (ADR-0003/0007)
+    calls = capture_charger_current_writes(hass)
+    seed_charger_states(hass, status="Unplugged")  # unmapped raw state -> None (ADR-0003/0007)
 
-    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -174,13 +108,12 @@ async def test_select_entity_is_registered_on_setup(hass):
     assertions for the two sensor ids T2.2 flips (`monthly_peak_kw`/`active_soc_limit`) --
     T2.3's `test_every_owned_entity_id_matches_entity_catalog` is the durable, comprehensive
     guard for every owned entity; these two are here only because T2.2 predates it."""
-    _seed_states(hass, status="Charging")
-    data = _entry_data()
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
     data[CONF_SOLAR_INSTALLED] = True
-    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
-    hass.states.async_set("sensor.ev_soc", "50.0")
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"  # seed_charger_states already seeds sensor.ev_soc
 
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -206,21 +139,20 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     """T6.1: the new Solar/SolarOnly options must be threaded into the coordinator's
     config dict -- without it, dispatching to Solar mode KeyErrors on
     CONF_SOLAR_START_THRESHOLD_W (coordinator.py reads it unconditionally, no default)."""
-    calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging")
+    calls = capture_charger_current_writes(hass)
+    seed_charger_states(hass, status="Charging")
     hass.states.async_set("sensor.charger_power", "2400.0")  # 10.43 A ideal -> round_up -> 11 A,
     # distinguishable from Power mode's unrelated 10.0 A default target current.
-    data = _entry_data()
-    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
-    hass.states.async_set("sensor.ev_soc", "50.0")
+    data = entry_data_base()
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"  # seed_charger_states already seeds sensor.ev_soc
 
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    _seed_ample_peak_headroom(coordinator)
+    seed_ample_peak_headroom(coordinator)
     coordinator.active_mode = MODE_SOLAR
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -235,12 +167,12 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     keys, consumed via `self._config.get(...)` in coordinator.py's Task 5.1 wiring) into the
     coordinator's config dict as non-default overrides, plus a `peak_window_size` derived from
     `control_interval_s` -- not just fall back to the coordinator's own internal defaults."""
-    _seed_states(hass, status="Charging")
-    data = _entry_data()
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
     hass.states.async_set("sensor.ev_soc", "50.0")
 
-    options = _entry_options()
+    options = entry_options_base()
     options[CONF_CONTROL_INTERVAL_S] = 60
     options[CONF_SAFETY_MARGIN_W] = 500.0
     options[CONF_MAX_PEAK_KW] = 7.5
@@ -270,12 +202,12 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
     R17 opt-out (coordinator.py's `power_respect_peak` read), not just into an inert dict entry.
     With zero tracked peak headroom, Power would otherwise be clamped to 0 A by R3 (design doc
     Sec 7) -- turning the opt-out on must still command the full default target current."""
-    calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging")  # net_power/charger_power both 0.0 -- no headroom.
-    options = _entry_options()
+    calls = capture_charger_current_writes(hass)
+    seed_charger_states(hass, status="Charging")  # net_power/charger_power both 0.0 -- no headroom.
+    options = entry_options_base()
     options[CONF_POWER_RESPECT_PEAK] = False
 
-    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -296,8 +228,8 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     consumed via `self._config.get(...)` in coordinator.py's R8/R9/R15 wiring) into the
     coordinator's config dict as non-default overrides, not just fall back to the coordinator's
     own internal defaults."""
-    _seed_states(hass, status="Charging")
-    options = _entry_options()
+    seed_charger_states(hass, status="Charging")
+    options = entry_options_base()
     options[CONF_EV_BATTERY_CAPACITY_KWH] = 60.0
     options[CONF_MAX_SOLAR_SOC] = 90.0
     options[CONF_SOLAR_STEP_PP] = 10.0
@@ -305,7 +237,7 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     options[CONF_SOLAR_RESERVE_SOC] = 70.0
     options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] = 20.0
 
-    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=options)
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -327,12 +259,12 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
     inert dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
     reserve engages (UC07 main success scenario) at the *configured* 70.0, not
     DEFAULT_SOLAR_RESERVE_SOC (60.0)."""
-    _seed_states(hass, status="Charging")
+    seed_charger_states(hass, status="Charging")
     hass.states.async_set("sun.sun", "below_horizon")
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
-    data = _entry_data()
+    data = entry_data_base()
     data[CONF_SOLAR_FORECAST_ENTITY] = "sensor.solar_forecast"
-    options = _entry_options()
+    options = entry_options_base()
     options[CONF_SOLAR_RESERVE_SOC] = 70.0
 
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
@@ -353,11 +285,11 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
 
 async def test_select_omits_captar_when_unavailable(hass):
     """T6.1: CONF_CAPTAR_AVAILABLE=False must withhold Captar from the mode selector."""
-    _seed_states(hass, status="Charging")
-    data = _entry_data()
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
     data[CONF_CAPTAR_AVAILABLE] = False
 
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -373,15 +305,14 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     for `target_current`, its pre-existing id -- no catalog row exists for it, design §2),
     independent of the translated display name. Looked up by unique_id so the test asserts
     the GENERATED id equals the catalog id (the property under test)."""
-    _seed_states(hass, status="Charging")
-    data = _entry_data()
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
     # Solar/EV-SOC config is not required for any owned entity's creation -- none is
     # capability-gated -- but is set anyway so this test exercises the widest entity
     # population, same as test_select_entity_is_registered_on_setup above.
     data[CONF_SOLAR_INSTALLED] = True
-    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
-    hass.states.async_set("sensor.ev_soc", "50.0")
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"  # seed_charger_states already seeds sensor.ev_soc
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
