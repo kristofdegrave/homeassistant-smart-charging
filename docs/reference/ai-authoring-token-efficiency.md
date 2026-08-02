@@ -73,6 +73,9 @@ Everything below targets one of these two.
 - [ ] `--allowed-tools` is the minimum the task needs; each grant has a comment saying why.
 - [ ] `max_turns` is set high enough to finish in one pass (avoid truncation re-runs) and no
       higher; if a run regularly hits the ceiling, raise it — a hit ceiling means a wasted run.
+      (`_ai-draft.yml` derives this per run from context label + the issue's project-board Size
+      field rather than a flat constant — board hygiene is load-bearing for that path; see its
+      "Resolve max_turns from context + Size" step.)
 - [ ] Any automatic repeat (review↔fix, retries) has an explicit cap and a terminal state
       (e.g. the loop's cycle cap + `needs-approval` escalation in `_ai-review.yml`), so it
       cannot run away.
