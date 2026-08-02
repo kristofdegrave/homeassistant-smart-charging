@@ -17,6 +17,11 @@ plain pytest too.
 ``SmartChargingEntity.suggested_object_id`` by direct instantiation, needing no ``hass``,
 ``EntityPlatform``, or registry (see that module's own docstring), so its tests are plain
 pytest too.
+
+This file deliberately stays HA-free -- it is imported for every test under ``tests/``,
+including the pure-logic dirs above. The shared end-to-end test helpers (config-entry
+seeding, coordinator seeding, etc.) that the HA-harness suites need live in
+``tests/helpers.py`` instead (issue #411).
 """
 
 from pathlib import Path

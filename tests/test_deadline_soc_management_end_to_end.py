@@ -17,8 +17,6 @@ default change can't silently flip an Urgent/Unreachable or step-up boundary in 
 without also touching this file.
 """
 
-from datetime import timedelta
-
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -27,21 +25,11 @@ from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
     CONF_CAPTAR_AVAILABLE,
-    CONF_CHARGER_CURRENT_ENTITY,
-    CONF_CHARGER_POWER_ENTITY,
-    CONF_CHARGER_STATUS_ENTITY,
-    CONF_DEFAULT_SOC_LIMIT,
-    CONF_DEFAULT_TARGET_CURRENT,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_MAX_CURRENT,
+    CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
-    CONF_MIN_CURRENT,
-    CONF_NET_POWER_ENTITY,
-    CONF_NOMINAL_VOLTAGE,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_INSTALLED,
@@ -67,19 +55,32 @@ from custom_components.smart_charging.const import (
     STATE_CHARGING,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
+from tests.helpers import (
+    capture_charger_current_writes,
+    entry_data_base,
+    entry_options_base,
+    seed_ample_peak_headroom,
+    seed_charger_states,
+    seed_today_deadline,
+)
 
 
 def _entry_data(**overrides):
-    """DATA bucket -- entity-role mappings + translation only (ADR-0005)."""
-    data = {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
-        CONF_STATUS_TRANSLATION: {"Charging": STATE_CHARGING},
-        CONF_NET_POWER_ENTITY: "sensor.net_power",
-        CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
-        CONF_EV_SOC_ENTITY: "sensor.ev_soc",
-    }
-    data.update(overrides)
+    """DATA bucket -- entity-role mappings + translation only (ADR-0005), narrowing the
+    shared base's two-way status translation down to this suite's own single-status one
+    (only "Charging" is ever seeded here) before layering the caller's overrides on top.
+
+    Also drops the shared base's grid-voltage role mapping -- this suite predates that role
+    and deliberately exercises the NF4 unmapped-role voltage path (falls back to the nominal
+    voltage), not the sensed-voltage path."""
+    data = entry_data_base(
+        **{
+            CONF_STATUS_TRANSLATION: {"Charging": STATE_CHARGING},
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            **overrides,
+        }
+    )
+    data.pop(CONF_GRID_VOLTAGE_ENTITY, None)
     return data
 
 
@@ -88,53 +89,25 @@ def _entry_options(**overrides):
     this file's arithmetic relies on is pinned explicitly (via its own DEFAULT_* constant), not
     left implicit, so the module's own defaults can change without silently moving this file's
     Urgent/Unreachable/step-up boundaries."""
-    options = {
-        CONF_NOMINAL_VOLTAGE: 230.0,
-        CONF_MIN_CURRENT: 6.0,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 2.0,
-        CONF_DEFAULT_TARGET_CURRENT: 10.0,
-        CONF_DEFAULT_SOC_LIMIT: 80.0,
-        CONF_MAX_PEAK_KW: 100.0,  # ample headroom -- R3 not under test here
-        CONF_EV_BATTERY_CAPACITY_KWH: DEFAULT_EV_BATTERY_CAPACITY_KWH,
-        CONF_MAX_SOLAR_SOC: DEFAULT_MAX_SOLAR_SOC,
-        CONF_SOLAR_STEP_PP: DEFAULT_SOLAR_STEP_PP,
-        CONF_SOLAR_STEP_THRESHOLD_PP: DEFAULT_SOLAR_STEP_THRESHOLD_PP,
-        CONF_SOLAR_FORECAST_THRESHOLD_KWH: DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
-    }
-    options.update(overrides)
-    return options
+    return entry_options_base(
+        **{
+            CONF_MAX_PEAK_KW: 100.0,  # ample headroom -- R3 not under test here
+            CONF_EV_BATTERY_CAPACITY_KWH: DEFAULT_EV_BATTERY_CAPACITY_KWH,
+            CONF_MAX_SOLAR_SOC: DEFAULT_MAX_SOLAR_SOC,
+            CONF_SOLAR_STEP_PP: DEFAULT_SOLAR_STEP_PP,
+            CONF_SOLAR_STEP_THRESHOLD_PP: DEFAULT_SOLAR_STEP_THRESHOLD_PP,
+            CONF_SOLAR_FORECAST_THRESHOLD_KWH: DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+            **overrides,
+        }
+    )
 
 
 def _seed_states(hass, *, status="Charging", net_w=0.0, charger_w=0.0, ev_soc=50.0):
-    hass.states.async_set("number.charger_current", "0.0")
-    hass.states.async_set("sensor.evse", status)
-    hass.states.async_set("sensor.net_power", str(net_w))
-    hass.states.async_set("sensor.charger_power", str(charger_w))
-    hass.states.async_set("sensor.ev_soc", str(ev_soc))
+    seed_charger_states(hass, status=status, net_w=net_w, charger_w=charger_w, ev_soc=ev_soc)
 
 
-def _capture_charger_current_writes(hass):
-    """Captures `number.set_value` calls targeting the charger-current entity, the same way
-    `tests/test_init.py` does -- proves a scenario's resolved lever actually reaches the write
-    path, not just the coordinator's own internal `CycleResult`/state."""
-    calls = []
-
-    def _record(event):
-        if event.data["domain"] == "number" and event.data["service"] == "set_value":
-            calls.append(event.data["service_data"])
-
-    hass.bus.async_listen("call_service", _record)
-    return calls
-
-
-def _seed_ample_peak_headroom(coordinator, kw=100.0):
-    """A large historical peak (the same shape a MonthlyPeakSensor restore would seed) keeps
-    R3's clamp out of the way of these tests, none of which exercise R3 itself."""
-    now_dt = dt_util.now()
-    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_demand.tracked_kw = kw
+_capture_charger_current_writes = capture_charger_current_writes
+_seed_ample_peak_headroom = seed_ample_peak_headroom
 
 
 async def _setup(hass, *, data_overrides=None, option_overrides=None):
@@ -161,13 +134,7 @@ def _active_soc_limit_entity_id(hass):
     return registry.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_active_soc_limit")
 
 
-def _seed_today_deadline(coordinator, *, hours_from_now):
-    """Seeds today's day-of-week default so R14 resolves `hours_from_now` ahead of real
-    wall-clock now (the coordinator's deadline resolution reads dt_util.now())."""
-    now_dt = dt_util.now()
-    weekday = now_dt.weekday()
-    target = now_dt + timedelta(hours=hours_from_now)
-    coordinator.departure_dow_defaults[weekday] = target.time()
+_seed_today_deadline = seed_today_deadline
 
 
 # --- UC05: Normal -> Urgent -> Unreachable, both profiles' lever sets ---
