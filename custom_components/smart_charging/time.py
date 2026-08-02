@@ -66,6 +66,7 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
     def __init__(self, entry_id: str, id_suffix: str, default: time | None) -> None:
         super().__init__(entry_id)
         self._attr_translation_key = f"departure_{id_suffix}"
+        self._object_id_suffix = f"departure_{id_suffix}"
         self._attr_unique_id = f"{entry_id}_departure_{id_suffix}"
         self._attr_native_value = default
 

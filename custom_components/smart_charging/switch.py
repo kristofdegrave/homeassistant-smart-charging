@@ -20,6 +20,7 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
     is not the point, only ever expiring at the day's own boundary is."""
 
     _attr_translation_key = "home_day"
+    _object_id_suffix = "home_day"
 
     def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
