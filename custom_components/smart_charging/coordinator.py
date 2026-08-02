@@ -500,6 +500,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW), urgent=urgent
         )
+        # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
+        # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault
+        # early return) runs before `ctx` is constructed, so ctx's field intentionally carries
+        # its dataclass default (0.0) until this final, real value lands here. No ModeHandler
+        # reads this field today; if one later does, thread the provisional value onto ctx too.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
         if auto_dispatchable:
             # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
@@ -661,9 +666,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         voltage: float,
         now: float,
     ) -> float:
-        """`mode`'s own desired current this cycle, from the same dispatch table `_run_cycle`
-        uses below, without mutating any persisted per-mode state -- Task 5.2's baseline-mode
-        comparison needs a candidate mode's request without actually charging on it."""
+        """`mode`'s own desired current this cycle, mirroring `_run_cycle`'s own dispatch
+        (still its own if/elif chain here -- unified onto the `ModeHandler` registry in Task
+        3.3, ADR-0012), without mutating any persisted per-mode state -- Task 5.2's
+        baseline-mode comparison needs a candidate mode's request without actually charging
+        on it."""
         if status not in CHARGEABLE_STATES or mode == MODE_OFF:
             return 0.0
         if mode == MODE_POWER:
