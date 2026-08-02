@@ -69,7 +69,10 @@ def test_init_seeds_unique_id():
 
 
 async def test_added_to_hass_seeds_coordinator_with_default_off(hass):
+    # Stub pre-poisoned to True so the assertion can only pass if async_added_to_hass
+    # actually pushed the entity's own (False) constructor default.
     coord = _StubCoordinator()
+    coord.home_day_flag = True
     entity = HomeDaySwitch(entry_id="abc", coordinator=coord)
     platform = MockEntityPlatform(hass, domain="switch")
     await platform.async_add_entities([entity])
@@ -103,7 +106,7 @@ async def test_turn_off_pushes_false_into_coordinator_and_refreshes(hass):
     await entity.async_remove()
 
 
-async def test_midnight_reset_pushes_false_into_coordinator(hass):
+async def test_midnight_reset_pushes_false_into_coordinator_and_refreshes(hass):
     coord = _StubCoordinator()
     entity = HomeDaySwitch(entry_id="abc", coordinator=coord)
     platform = MockEntityPlatform(hass, domain="switch")
@@ -111,12 +114,14 @@ async def test_midnight_reset_pushes_false_into_coordinator(hass):
 
     await entity.async_turn_on()
     assert coord.home_day_flag is True
+    coord.refreshed = False
 
     midnight = dt_util.start_of_local_day() + timedelta(days=1)
     async_fire_time_changed(hass, midnight)
     await hass.async_block_till_done()
 
     assert coord.home_day_flag is False
+    assert coord.refreshed is True
     await entity.async_remove()
 
 

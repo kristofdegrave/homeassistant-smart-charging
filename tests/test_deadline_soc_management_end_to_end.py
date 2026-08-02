@@ -130,8 +130,10 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
     # default (R14), pushed into the coordinator during setup (issue #402) -- this file's
     # scenarios seed deadlines explicitly per test via _seed_today_deadline/direct assignment,
     # so a "no deadline configured" scenario should start from no defaults, same as before
-    # the entity->coordinator wiring existed.
-    coordinator.departure_dow_defaults = dict.fromkeys(range(7))
+    # the entity->coordinator wiring existed. Cleared key-by-key (not rebound) so this stays
+    # correct even if something else ever holds its own reference to the same dict.
+    for weekday in coordinator.departure_dow_defaults:
+        coordinator.departure_dow_defaults[weekday] = None
     return coordinator
 
 

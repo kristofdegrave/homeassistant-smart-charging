@@ -1,5 +1,7 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
+from datetime import time
+
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -256,9 +258,13 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
     """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
     CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
     R9 reserve cap (coordinator.py's `SocGateResolver.resolve` read, ADR-0012), not just into an
-    inert dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
-    reserve engages (UC07 main success scenario) at the *configured* 70.0, not
-    DEFAULT_SOLAR_RESERVE_SOC (60.0)."""
+    inert dict entry. Sun down, ample forecast, home day -> R9's reserve engages (UC07 main
+    success scenario) at the *configured* 70.0, not DEFAULT_SOLAR_RESERVE_SOC (60.0). Note: setup
+    does seed the real time.smart_charging_departure_* entities' Mon-Fri 06:00 weekday default
+    into `coordinator.departure_dow_defaults` (issue #402), but with `home_day_flag=True` R14's
+    table resolves tomorrow's deadline from the home-day-override row (still None here), never
+    reaching that day-of-week default row -- so "no departure deadline resolved for tomorrow"
+    still holds for this scenario."""
     seed_charger_states(hass, status="Charging")
     hass.states.async_set("sun.sun", "below_horizon")
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
@@ -358,3 +364,28 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         for e in er.async_entries_for_config_entry(registry, entry.entry_id)
     }
     assert registered == expected_by_domain
+
+
+async def test_departure_time_and_home_day_entities_seed_the_live_coordinator(hass):
+    """Issue #402: proves the *real* time.smart_charging_departure_* / switch.smart_charging_
+    home_day entities -- not a test stub -- push their construction-time defaults into a live
+    `SmartChargingCoordinator` fetched from `hass.data` during a real
+    `hass.config_entries.async_setup`, mirroring select.py's own ModeSelect/ProfileSelect
+    live-wiring proof. Weekday index 0 is Monday (datetime.weekday()), matching
+    `time.py`'s DAY_MON..DAY_SUN Monday-first ordering."""
+    _seed_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    # Mon-Fri (indices 0-4) default to 06:00 (R14); Sat/Sun (5-6) and both overrides default
+    # to no configured deadline.
+    for weekday in range(5):
+        assert coordinator.departure_dow_defaults[weekday] == time(6, 0)
+    for weekday in (5, 6):
+        assert coordinator.departure_dow_defaults[weekday] is None
+    assert coordinator.departure_holiday_override is None
+    assert coordinator.departure_home_day_override is None
+    assert coordinator.home_day_flag is False

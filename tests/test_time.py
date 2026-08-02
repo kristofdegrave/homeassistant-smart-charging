@@ -219,7 +219,10 @@ async def test_added_to_hass_seeds_coordinator_dow_defaults_with_constructor_def
 
 
 async def test_added_to_hass_seeds_coordinator_holiday_override(hass):
+    # Stub pre-poisoned with a non-default value so the assertion can only pass if
+    # _push_to_coordinator() actually overwrote it with the entity's own (None) value.
     coord = _StubCoordinator()
+    coord.departure_holiday_override = time(23, 59)
     entity = SmartChargingDepartureTime(
         entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOLIDAY, default=None
     )
@@ -230,6 +233,7 @@ async def test_added_to_hass_seeds_coordinator_holiday_override(hass):
 
 async def test_added_to_hass_seeds_coordinator_home_day_override(hass):
     coord = _StubCoordinator()
+    coord.departure_home_day_override = time(23, 59)
     entity = SmartChargingDepartureTime(
         entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOME_DAY, default=None
     )
@@ -249,6 +253,32 @@ async def test_restoring_a_value_pushes_the_restored_value_not_the_default(hass)
     platform = MockEntityPlatform(hass, domain="time")
     await platform.async_add_entities([entity])
     assert coord.departure_dow_defaults[0] == time(7, 30)
+
+
+async def test_restoring_a_holiday_override_pushes_the_restored_value(hass):
+    entity_id = "time.smart_charging_departure_holiday"
+    mock_restore_cache(hass, (State(entity_id, "22:00:00"),))
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOLIDAY, default=None
+    )
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert coord.departure_holiday_override == time(22, 0)
+
+
+async def test_restoring_a_home_day_override_pushes_the_restored_value(hass):
+    entity_id = "time.smart_charging_departure_home_day"
+    mock_restore_cache(hass, (State(entity_id, "21:00:00"),))
+    coord = _StubCoordinator()
+    entity = SmartChargingDepartureTime(
+        entry_id="abc", coordinator=coord, id_suffix=DEPARTURE_OVERRIDE_HOME_DAY, default=None
+    )
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert coord.departure_home_day_override == time(21, 0)
 
 
 async def test_set_value_pushes_dow_default_into_coordinator_and_refreshes(hass):
