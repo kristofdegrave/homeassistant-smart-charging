@@ -84,7 +84,11 @@ class SocGateResolver:
         solar_reserve_soc: float,
         step_up_state: SolarStepUpState,
     ) -> tuple[float, bool]:
-        """Return (this cycle's active SOC limit, whether it changed from the last resolve())."""
+        """Return (this cycle's active SOC limit, whether it changed from the last resolve()).
+
+        The first call always reports changed=True -- there is no prior resolve() to compare
+        against, mirroring the old code's None-vs-float first-cycle behavior.
+        """
         limit = resolve_active_soc_limit(
             override,
             solar_reserve_active=solar_reserve_active,

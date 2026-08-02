@@ -152,3 +152,25 @@ def test_soc_gate_resolver_reports_changed_when_limit_moves():
     )
     assert changed is True
     assert limit == 60.0
+
+
+def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite_different_inputs():
+    """Change detection keys on the *resolved limit*, not the raw inputs -- an implementation
+    that compared arguments instead of the resolved value would report `changed` here, since
+    override and step_up_state both differ between the two calls, even though both resolve to
+    the same 80.0 limit (row 2's stepped_pct wins over the override either way, R7)."""
+    resolver = SocGateResolver()
+    resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+    limit, changed = resolver.resolve(
+        50.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(stepped_pct=80.0),
+    )
+    assert changed is False
+    assert limit == 80.0
