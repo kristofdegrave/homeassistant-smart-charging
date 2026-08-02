@@ -78,6 +78,8 @@ from .const import (
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    SOC_LIMIT_OVERRIDE_MAX,
+    SOC_LIMIT_OVERRIDE_MIN,
 )
 from .coordinator_cycle import PeakDemandState
 from .engines.billing_protection import (
@@ -583,6 +585,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_peak_limit_kw=effective_peak_limit_kw,
             active_soc_limit=active_soc_limit,
         )
+
+    def set_soc_limit_override(self, value: float) -> None:
+        """Coordinator's own boundary for `soc_limit_override` (ADR-0014). Clamps to
+        `[SOC_LIMIT_OVERRIDE_MIN, SOC_LIMIT_OVERRIDE_MAX]` -- the same bound
+        `SocLimitOverrideNumber` already enforces on its own restored value, now also enforced at
+        the coordinator's own field."""
+        self.soc_limit_override = min(max(value, SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
 
     def set_active_mode(self, mode: str) -> None:
         """Coordinator's own boundary for `active_mode` (ADR-0014) -- the intended write path for
