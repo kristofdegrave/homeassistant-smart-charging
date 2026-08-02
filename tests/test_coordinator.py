@@ -1,6 +1,6 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
-from datetime import time, timedelta
+from datetime import time
 
 import pytest
 from homeassistant.core import callback

@@ -373,8 +373,8 @@ async def test_departure_time_and_home_day_entities_seed_the_live_coordinator(ha
     `hass.config_entries.async_setup`, mirroring select.py's own ModeSelect/ProfileSelect
     live-wiring proof. Weekday index 0 is Monday (datetime.weekday()), matching
     `time.py`'s DAY_MON..DAY_SUN Monday-first ordering."""
-    _seed_states(hass, status="Charging")
-    entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
