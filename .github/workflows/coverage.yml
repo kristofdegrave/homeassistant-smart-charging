@@ -1,0 +1,43 @@
+name: Coverage
+
+# Code coverage tracking for the integration. Push-to-main only (not a PR gate) --
+# reports the trend over time rather than blocking merges on a threshold. Not run on
+# pull_request, so a change to this workflow's own pytest invocation is only validated
+# after landing on main -- keep changes here small and mirror ci.yml's `test` job setup.
+#
+# Path list intentionally mirrors ci.yml's `changes` job filter (see ci.yml for the
+# counterpart); update both together when the set of code-relevant paths changes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "custom_components/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements-test.txt"
+      - ".github/workflows/coverage.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-test.txt
+      - run: pytest --cov=custom_components/smart_charging --cov-report=term-missing --cov-report=xml -q
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
