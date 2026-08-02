@@ -7,6 +7,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
+from custom_components.smart_charging.const import SOC_LIMIT_OVERRIDE_MIN
 from custom_components.smart_charging.number import (
     SocLimitOverrideNumber,
     TargetCurrentNumber,
@@ -16,8 +17,15 @@ from custom_components.smart_charging.number import (
 class _StubCoordinator:
     def __init__(self):
         self._target_current = None
-        self.soc_limit_override = None
+        self._soc_limit_override = None
         self.refreshed = False
+
+    @property
+    def soc_limit_override(self):
+        return self._soc_limit_override
+
+    def set_soc_limit_override(self, value):
+        self._soc_limit_override = value
 
     @property
     def target_current(self):
@@ -221,3 +229,10 @@ async def test_soc_limit_override_added_to_hass_clamps_restored_value_below_min(
     await platform.async_add_entities([entity])
     assert entity.native_value == 50.0
     assert coord.soc_limit_override == 50.0
+
+
+def test_init_clamps_out_of_range_default_soc_limit():
+    """config_flow validates default_soc_limit with vol.Coerce(float) only, no 50-100 range --
+    an out-of-range configured default must clamp here too."""
+    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=_StubCoordinator(), default=30.0)
+    assert entity.native_value == SOC_LIMIT_OVERRIDE_MIN
