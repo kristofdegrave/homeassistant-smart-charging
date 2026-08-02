@@ -23,6 +23,8 @@ from .const import (
     CONF_EV_BATTERY_CAPACITY_ENTITY,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_GRID_VOLTAGE_ENTITY,
@@ -34,6 +36,7 @@ from .const import (
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
@@ -56,6 +59,8 @@ from .const import (
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
+    DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_GRID_SAFETY_OFFSET_A,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
@@ -108,6 +113,8 @@ OPTION_KEYS = (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
 )
 
 
@@ -147,6 +154,9 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
         vol.Optional(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
         vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
+        # RA4 notify-target role (notifications design doc §3/§6): must be a `notify`-domain
+        # entity; EntitySelector's own domain filter rejects a mismatched entity (vol.Invalid).
+        vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
     }
 )
 
@@ -250,6 +260,17 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
                     CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
                 ),
             ): vol.Coerce(float),
+            # UC08 evening home-day prompt options (notifications design doc §3). No
+            # sc_prompt_timeout_h field -- deliberately not wired (design §3/§9; UC08 has no
+            # separate timeout, midnight is the only answer deadline).
+            vol.Required(
+                CONF_EVENING_PROMPT_ENABLED,
+                default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_EVENING_PROMPT_TIME,
+                default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
+            ): selector.TimeSelector(),
         }
     )
 

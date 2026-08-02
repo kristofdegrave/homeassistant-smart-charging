@@ -22,6 +22,7 @@
           "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
           "vehicle_charge_limit_entity": "Laadlimiet-entiteit voertuig (optioneel; vereist car_home indien gekoppeld)",
           "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)",
+          "notification_target_entity": "Meldingsdoel-entiteit (optioneel, notify-domein)",
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
@@ -46,7 +47,9 @@
           "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
           "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
           "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
-          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
+          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
+          "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
+          "evening_prompt_time": "Tijdstip avondprompt thuisdag"
         }
       },
       "reconfigure": {
@@ -69,7 +72,8 @@
           "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
           "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
           "vehicle_charge_limit_entity": "Laadlimiet-entiteit voertuig (optioneel; vereist car_home indien gekoppeld)",
-          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)"
+          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)",
+          "notification_target_entity": "Meldingsdoel-entiteit (optioneel, notify-domein)"
         }
       }
     },
@@ -110,6 +114,8 @@
           "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
           "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
+          "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
+          "evening_prompt_time": "Tijdstip avondprompt thuisdag",
           "control_interval_s": "Regelinterval (s)"
         }
       }
