@@ -163,8 +163,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a).
         self._step_up_state: SolarStepUpState = SolarStepUpState()
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
-        # ActiveSocLimitChanged (ADR-0012's SocGateResolver). First resolution always reports
-        # changed=True, so the first cycle always fires the event.
+        # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
+        # early-faulted cycle never reaches it) always reports changed=True.
         self._soc_gate = SocGateResolver()
         # R9/R14 inputs -- single source of truth is meant to be the owning entity
         # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring

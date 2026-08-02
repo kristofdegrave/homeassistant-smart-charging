@@ -323,8 +323,8 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
 async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass):
     """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
     CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
-    R9 reserve cap (coordinator.py's `resolve_active_soc_limit` read), not just into an inert
-    dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
+    R9 reserve cap (coordinator.py's `SocGateResolver.resolve` read, ADR-0012), not just into an
+    inert dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
     reserve engages (UC07 main success scenario) at the *configured* 70.0, not
     DEFAULT_SOLAR_RESERVE_SOC (60.0)."""
     _seed_states(hass, status="Charging")
