@@ -592,7 +592,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         `SocLimitOverrideNumber` already enforces on its own restored value, now also enforced at
         the coordinator's own field."""
         self.soc_limit_override = min(max(value, SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
-        
+
     def set_active_mode(self, mode: str) -> None:
         """Coordinator's own boundary for `active_mode` (ADR-0014) -- the intended write path for
         select.py; the field itself stays a plain writable attribute (ADR-0014's design doc §2,
