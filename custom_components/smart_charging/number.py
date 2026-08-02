@@ -14,6 +14,8 @@ from .const import (
     CONF_MAX_CURRENT,
     CONF_MIN_CURRENT,
     DOMAIN,
+    SOC_LIMIT_OVERRIDE_MAX,
+    SOC_LIMIT_OVERRIDE_MIN,
 )
 from .entity import SmartChargingEntity
 
@@ -62,14 +64,18 @@ class SocLimitOverrideNumber(SmartChargingEntity, RestoreNumber):
     _object_id_suffix = "soc_limit_override"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_native_step = 1.0
-    _attr_native_min_value = 50.0
-    _attr_native_max_value = 100.0
+    _attr_native_min_value = SOC_LIMIT_OVERRIDE_MIN
+    _attr_native_max_value = SOC_LIMIT_OVERRIDE_MAX
 
     def __init__(self, entry_id: str, coordinator, default: float) -> None:
         super().__init__(entry_id)
         self._coordinator = coordinator
         self._attr_unique_id = f"{entry_id}_soc_limit_override"
-        self._attr_native_value = default
+        # config_flow validates default_soc_limit with vol.Coerce(float) only, no 50-100 range --
+        # clamp here the same way async_added_to_hass already clamps a restored value, so an
+        # out-of-range configured default can't diverge the entity's display from the coordinator's
+        # own (now also clamped) field.
+        self._attr_native_value = min(max(default, SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -79,11 +85,11 @@ class SocLimitOverrideNumber(SmartChargingEntity, RestoreNumber):
                 max(last.native_value, self._attr_native_min_value),
                 self._attr_native_max_value,
             )
-        self._coordinator.soc_limit_override = self._attr_native_value
+        self._coordinator.set_soc_limit_override(self._attr_native_value)
 
     async def async_set_native_value(self, value: float) -> None:
         self._attr_native_value = value
-        self._coordinator.soc_limit_override = value
+        self._coordinator.set_soc_limit_override(value)
         await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
