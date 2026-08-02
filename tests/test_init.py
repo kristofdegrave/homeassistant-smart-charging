@@ -170,7 +170,10 @@ async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
 async def test_select_entity_is_registered_on_setup(hass):
     """T6.1: the select platform must be forwarded alongside number/sensor. Looked up by
     unique_id, not entity_id -- the "_mode"-suffixed entity_id is now an explicit pin
-    (ADR-0013), not a translation-key dependency."""
+    (ADR-0013), not a translation-key dependency. Also carries the ADR-0013 covering
+    assertions for the two sensor ids T2.2 flips (`monthly_peak_kw`/`active_soc_limit`) --
+    T2.3's `test_every_owned_entity_id_matches_entity_catalog` is the durable, comprehensive
+    guard for every owned entity; these two are here only because T2.2 predates it."""
     _seed_states(hass, status="Charging")
     data = _entry_data()
     data[CONF_SOLAR_INSTALLED] = True
@@ -190,6 +193,13 @@ async def test_select_entity_is_registered_on_setup(hass):
     # CONF_CAPTAR_AVAILABLE predates this entry's data too -- defaults to True (design doc
     # §3), so Captar is offered alongside Solar/SolarOnly without being set explicitly.
     assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly", "Captar"]
+
+    # ADR-0013: these two flip a real, catalog-diverging id with no other covering
+    # assertion -- guard the pin explicitly (T2.2).
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_monthly_peak_kw")
+    assert entity_id == "sensor.smart_charging_monthly_peak_kw"
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit")
+    assert entity_id == "sensor.smart_charging_active_soc_limit"
 
 
 async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
@@ -356,3 +366,64 @@ async def test_select_omits_captar_when_unavailable(hass):
     entity_id = registry.async_get_entity_id("select", DOMAIN, f"{entry.entry_id}_mode")
     state = hass.states.get(entity_id)
     assert MODE_CAPTAR not in state.attributes["options"]
+
+
+async def test_every_owned_entity_id_matches_entity_catalog(hass):
+    """ADR-0013: every owned entity registers under its documented entity-catalog id (or,
+    for `target_current`, its pre-existing id -- no catalog row exists for it, design §2),
+    independent of the translated display name. Looked up by unique_id so the test asserts
+    the GENERATED id equals the catalog id (the property under test)."""
+    _seed_states(hass, status="Charging")
+    data = _entry_data()
+    # Solar/EV-SOC config is not required for any owned entity's creation -- none is
+    # capability-gated -- but is set anyway so this test exercises the widest entity
+    # population, same as test_select_entity_is_registered_on_setup above.
+    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    hass.states.async_set("sensor.ev_soc", "50.0")
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=_entry_options())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    # (unique_id suffix, expected catalog entity_id) for all 19 owned entities.
+    expected = {
+        "mode": "select.smart_charging_mode",
+        "profile": "select.smart_charging_profile",
+        "target_current": "number.smart_charging_target_current",  # no catalog row (design §2)
+        "soc_limit_override": "number.smart_charging_soc_limit_override",
+        "status": "sensor.smart_charging_status",
+        "active_mode": "sensor.smart_charging_active_mode",
+        "monthly_peak_kw": "sensor.smart_charging_monthly_peak_kw",
+        "effective_peak_limit": "sensor.smart_charging_effective_peak_limit",
+        "active_soc_limit": "sensor.smart_charging_active_soc_limit",
+        "home_day": "switch.smart_charging_home_day",
+        "departure_mon": "time.smart_charging_departure_mon",
+        "departure_tue": "time.smart_charging_departure_tue",
+        "departure_wed": "time.smart_charging_departure_wed",
+        "departure_thu": "time.smart_charging_departure_thu",
+        "departure_fri": "time.smart_charging_departure_fri",
+        "departure_sat": "time.smart_charging_departure_sat",
+        "departure_sun": "time.smart_charging_departure_sun",
+        "departure_holiday": "time.smart_charging_departure_holiday",
+        "departure_home_day": "time.smart_charging_departure_home_day",
+    }
+    for uid_suffix, want_id in expected.items():
+        domain = want_id.split(".", 1)[0]
+        got = registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{uid_suffix}")
+        assert got == want_id, f"{uid_suffix}: {got!r} != {want_id!r}"
+
+    # No owned entity may be missing from `expected` above -- a future owned entity added
+    # without a pin here would otherwise pass this test silently (ADR-0013's last consequence).
+    # Domain-qualified so a same-suffix entity registered under a *different* platform (e.g.
+    # a future sensor.smart_charging_home_day alongside the home_day switch) can't be absorbed
+    # into the set and escape the forward loop above undetected.
+    expected_by_domain = {
+        (want_id.split(".", 1)[0], uid_suffix) for uid_suffix, want_id in expected.items()
+    }
+    registered = {
+        (e.domain, e.unique_id.removeprefix(f"{entry.entry_id}_"))
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+    }
+    assert registered == expected_by_domain

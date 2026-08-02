@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 import pytest
+from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
@@ -184,6 +185,13 @@ async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0
     _seed_ample_peak_headroom(coord)
     result = await coord._async_update_data()
     return coord, result
+
+
+async def test_set_active_profile_sets_the_field(hass):
+    """ADR-0014: set_active_profile is the coordinator's own boundary for active_profile."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_active_profile(PROFILE_AUTO)
+    assert coord.active_profile == PROFILE_AUTO
 
 
 async def test_r17_commands_target_when_charging(hass):
@@ -596,6 +604,14 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     assert result.fault is False
 
 
+async def test_set_active_mode_sets_the_field(hass):
+    """ADR-0014: set_active_mode is the coordinator's own boundary for active_mode -- no
+    clamp (SelectEntity's own options list already gates the enum), just encapsulation."""
+    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord.set_active_mode(MODE_SOLAR)
+    assert coord.active_mode == MODE_SOLAR
+
+
 async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown(hass):
     """Grace period 0 -- the very first breaching cycle already exceeds it -- forces 0 A
     and CaptarState -> cooldown; the cooldown then blocks a restart until it elapses (R11)."""
@@ -828,7 +844,14 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
     _seed_ample_peak_headroom(coord)
 
     events = []
-    hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, lambda event: events.append(event))
+
+    @callback
+    def _record(event):
+        # A plain (non-@callback) listener is dispatched as an executor job -- appending
+        # from a worker thread races the assertions below. @callback keeps it synchronous.
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, _record)
 
     await coord._async_update_data()  # first resolution: 80.0, no prior value -> fires
     assert len(events) == 1
@@ -991,7 +1014,14 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
     _seed_ample_peak_headroom(coord)
 
     events = []
-    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, lambda event: events.append(event))
+
+    @callback
+    def _record(event):
+        # A plain (non-@callback) listener is dispatched as an executor job -- appending
+        # from a worker thread races the assertions below. @callback keeps it synchronous.
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
     await coord._async_update_data()
     assert len(events) == 1
