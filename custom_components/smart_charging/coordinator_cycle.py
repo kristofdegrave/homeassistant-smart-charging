@@ -25,6 +25,7 @@ from .const import (
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
 from .modes import captar, power, solar, solar_only
+from .engines.soc_target import SolarStepUpState, resolve_active_soc_limit
 
 _WATTS_PER_KILOWATT = 1000.0
 
@@ -173,3 +174,34 @@ class _CaptarModeHandler:
                 CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
             ),
         )
+class SocGateResolver:
+    """Owns SOC-limit resolution + change detection (ADR-0012), replacing the inline
+    resolve_active_soc_limit call + _last_active_soc_limit comparison. Pure -- no hass.bus
+    access; the coordinator still fires ActiveSocLimitChanged itself on a reported change
+    (ADR-0009/0010 boundary: HA I/O stays coordinator-side)."""
+
+    def __init__(self) -> None:
+        self._last_limit: float | None = None
+
+    def resolve(
+        self,
+        override: float,
+        *,
+        solar_reserve_active: bool,
+        solar_reserve_soc: float,
+        step_up_state: SolarStepUpState,
+    ) -> tuple[float, bool]:
+        """Return (this cycle's active SOC limit, whether it changed from the last resolve()).
+
+        The first call always reports changed=True -- there is no prior resolve() to compare
+        against, mirroring the old code's None-vs-float first-cycle behavior.
+        """
+        limit = resolve_active_soc_limit(
+            override,
+            solar_reserve_active=solar_reserve_active,
+            solar_reserve_soc=solar_reserve_soc,
+            step_up_state=step_up_state,
+        )
+        changed = limit != self._last_limit
+        self._last_limit = limit
+        return limit, changed

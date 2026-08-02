@@ -12,6 +12,17 @@ ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key
 EVENT_DEADLINE_UNREACHABLE_NOTIFIED = "smart_charging_deadline_unreachable_notified"
 ATTR_REQUIRED_CURRENT_A = "required_current_a"  # DeadlineUnreachableNotified payload key
 
+# Entity M2 (Vehicle-Limit Manager) subscribes to for the resolved-active-SOC-limit change
+# (ADR-0011). Already materialized by E3/M1 (ActiveSocLimitSensor in sensor.py, fired via
+# EVENT_ACTIVE_SOC_LIMIT_CHANGED in coordinator.py) -- M2 itself is not built by this slice.
+ACTIVE_SOC_LIMIT_ENTITY = "sensor.smart_charging_active_soc_limit"
+
+# Domain events M2 fires on the HA event bus (UC09 "Domain events produced"; DDD->HA mapping). Not
+# consumed by any other Manager (ADR-0011) -- observability/automation only.
+EVENT_VEHICLE_CHARGE_LIMIT_SYNCED = "smart_charging_vehicle_charge_limit_synced"
+EVENT_MANUAL_CHARGE_LIMIT_ADOPTED = "smart_charging_manual_charge_limit_adopted"
+EVENT_VEHICLE_CHARGE_LIMIT_RESET = "smart_charging_vehicle_charge_limit_reset"
+
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"
 STATE_CONNECTED = "connected"
@@ -64,6 +75,18 @@ ROLE_SUN = "sun"
 # issue #376: optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
 # None reading keeps the glossary's single-tariff "always active" default.
 ROLE_LOW_TARIFF = "low_tariff"
+# RA4 (notifications design doc §3): message dispatch + simulated action response.
+# Optional at the factory level (NF3), like the other RA-role extensions above -- present
+# only when the notification target is mapped.
+ROLE_NOTIFICATION_TARGET = "notification_target"
+# Actionable home-day prompt action ids (UC08; notifications design doc §5/§6). The values
+# round-trip verbatim through HA's mobile_app_notification_action payload -- do not rename them
+# independently of the design doc.
+ACTION_HOMEDAY_YES = "HOMEDAY_YES"
+ACTION_HOMEDAY_NO = "HOMEDAY_NO"
+# RA1-VL + car_home (RA2 role, built early -- M2 is their first consumer).
+ROLE_VEHICLE_CHARGE_LIMIT = "vehicle_charge_limit"
+ROLE_CAR_HOME = "car_home"
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
@@ -96,6 +119,12 @@ CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 # optional at the factory level (NF3) -- issue #376, Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
+# RA4 role mapping (notifications design doc §3) -- required for M3 to deliver at all, though
+# the factory-level role built from it stays optional (NF3) like its siblings above.
+CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
+CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
+# required when vehicle_charge_limit is mapped (design §9.1)
+CONF_CAR_HOME_ENTITY = "car_home_entity"
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names
