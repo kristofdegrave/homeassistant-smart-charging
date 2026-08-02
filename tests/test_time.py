@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.smart_charging.const import (
+    DATA_COORDINATOR,
     DAY_FRI,
     DAY_MON,
     DAY_SAT,
@@ -183,7 +184,7 @@ async def test_no_restored_state_keeps_the_constructor_default(hass):
 async def test_async_setup_entry_creates_nine_entities_with_expected_ids_and_defaults(hass):
     entry = MockConfigEntry(domain="smart_charging", entry_id="xyz")
     entry.add_to_hass(hass)
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": _StubCoordinator()}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: _StubCoordinator()}
     added: list[SmartChargingDepartureTime] = []
 
     def _capture(entities):
@@ -330,7 +331,7 @@ async def test_setup_entry_wires_each_entity_to_the_coordinator_from_hass_data(h
     entry = MockConfigEntry(domain="smart_charging", entry_id="xyz2")
     entry.add_to_hass(hass)
     coord = _StubCoordinator()
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coord}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coord}
     added: list[SmartChargingDepartureTime] = []
 
     def _capture(entities):

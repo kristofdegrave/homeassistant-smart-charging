@@ -10,7 +10,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 
-from .const import DOMAIN
+from .const import DATA_COORDINATOR, DOMAIN
 from .entity import SmartChargingEntity
 
 
@@ -76,5 +76,5 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     async_add_entities([HomeDaySwitch(entry_id=entry.entry_id, coordinator=coordinator)])

@@ -17,6 +17,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_STRATEGY,
+    DATA_COORDINATOR,
     DOMAIN,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
@@ -73,7 +74,7 @@ async def _setup(hass, **option_overrides):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     _seed_ample_peak_headroom(coordinator)
     return coordinator, calls
 

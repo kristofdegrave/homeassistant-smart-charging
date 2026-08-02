@@ -4,6 +4,10 @@ from .modes._amp_step import ROUND_DOWN
 
 DOMAIN = "smart_charging"
 
+# hass.data[DOMAIN][entry.entry_id] key under which __init__.py stores the coordinator --
+# every entity platform's async_setup_entry reads it back through this same key.
+DATA_COORDINATOR = "coordinator"
+
 # Domain events (ADR-0011). Past-tense PascalCase payload, snake_case HA event type.
 EVENT_ACTIVE_SOC_LIMIT_CHANGED = "smart_charging_active_soc_limit_changed"
 ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key

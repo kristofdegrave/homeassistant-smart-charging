@@ -13,6 +13,7 @@ from .const import (
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_MAX_CURRENT,
     CONF_MIN_CURRENT,
+    DATA_COORDINATOR,
     DOMAIN,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
@@ -102,7 +103,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data["coordinator"]
+    coordinator = data[DATA_COORDINATOR]
     async_add_entities(
         [
             TargetCurrentNumber(

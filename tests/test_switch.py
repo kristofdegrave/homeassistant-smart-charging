@@ -9,7 +9,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.smart_charging.const import DOMAIN
+from custom_components.smart_charging.const import DATA_COORDINATOR, DOMAIN
 from custom_components.smart_charging.switch import HomeDaySwitch, async_setup_entry
 
 
@@ -135,7 +135,7 @@ async def test_setup_entry_wires_the_switch_to_the_coordinator_from_hass_data(ha
     entry = MockConfigEntry(domain="smart_charging", entry_id="xyz")
     entry.add_to_hass(hass)
     coord = _StubCoordinator()
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"coordinator": coord}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coord}
     added: list[HomeDaySwitch] = []
 
     def _capture(entities):

@@ -11,6 +11,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_SOLAR_INSTALLED,
+    DATA_COORDINATOR,
     DEFAULT_CAPTAR_AVAILABLE,
     DOMAIN,
     MODE_CAPTAR,
@@ -100,7 +101,7 @@ class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     async_add_entities(
         [
             ModeSelect(

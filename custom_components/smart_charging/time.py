@@ -28,6 +28,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    DATA_COORDINATOR,
     DAY_FRI,
     DAY_MON,
     DAY_SAT,
@@ -115,7 +116,7 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     async_add_entities(
         [
             SmartChargingDepartureTime(entry.entry_id, coordinator, suffix, default)

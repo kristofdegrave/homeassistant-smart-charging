@@ -37,6 +37,7 @@ from .const import (
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    DATA_COORDINATOR,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -133,7 +134,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "coordinator": coordinator,
+        DATA_COORDINATOR: coordinator,
         CONF_MIN_CURRENT: min_current,
         CONF_MAX_CURRENT: max_current,
         CONF_DEFAULT_TARGET_CURRENT: default_target_current,
