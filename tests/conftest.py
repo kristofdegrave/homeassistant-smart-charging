@@ -18,6 +18,11 @@ plain pytest too.
 ``EntityPlatform``, or registry (see that module's own docstring), so its tests are plain
 pytest too.
 
+``test_notification_state.py`` is a deliberate root-level exception (notifications design
+doc Sec7, ADR-0009): it tests ``notification_state.py``'s pure UC08 prompt-lifecycle
+state machine (prior state, observed inputs, and an injected clock -- no HA imports), so
+its tests are plain pytest too.
+
 This file deliberately stays HA-free -- it is imported for every test under ``tests/``,
 including the pure-logic dirs above. The shared end-to-end test helpers (config-entry
 seeding, coordinator seeding, etc.) that the HA-harness suites need live in
@@ -31,8 +36,11 @@ import pytest
 # Directories whose tests are pure logic with no HA dependency (ADR-0009).
 _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
-# Root-level test files that are pure logic despite living outside _PURE_DIRS (ADR-0012/0013).
-_PURE_FILES = frozenset({"test_coordinator_cycle.py", "test_entity.py"})
+# Root-level test files that are pure logic despite living outside _PURE_DIRS
+# (ADR-0012/0013; test_notification_state.py per the notifications design doc Sec7).
+_PURE_FILES = frozenset(
+    {"test_coordinator_cycle.py", "test_entity.py", "test_notification_state.py"}
+)
 
 
 def _is_pure_logic_test(node: pytest.Item) -> bool:
