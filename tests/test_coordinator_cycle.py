@@ -3,7 +3,12 @@
 from datetime import datetime
 
 from custom_components.smart_charging.const import STATE_CHARGING
-from custom_components.smart_charging.coordinator_cycle import CycleContext, PeakDemandState
+from custom_components.smart_charging.coordinator_cycle import (
+    CycleContext,
+    PeakDemandState,
+    SocGateResolver,
+)
+from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
@@ -89,3 +94,61 @@ def test_peak_demand_state_resets_window_and_tracked_kw_on_month_rollover():
     peak = state.update(1000.0, datetime(2026, 8, 1, 0, 0), window_size=2)
     assert peak == 1.0  # not max(5.0, 1.0) -- rollover resets tracked_kw to this cycle's reading
     assert state.window == (1000.0,)  # only this cycle's sample -- last month's were cleared
+
+
+def test_soc_gate_resolver_first_call_always_reports_changed():
+    """SocGateResolver.resolve (ADR-0012, T2.1) wraps engines/soc_target.py's
+    resolve_active_soc_limit + the inline _last_active_soc_limit comparison it replaces: with
+    no prior call there is no "last" value to compare against, so the very first resolve always
+    reports changed -- mirroring the old code's None-vs-float first-cycle behavior."""
+    resolver = SocGateResolver()
+    limit, changed = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+    assert limit == 80.0
+    assert changed is True
+
+
+def test_soc_gate_resolver_reports_unchanged_when_limit_is_stable():
+    """A second resolve() call with the same inputs yields the same limit and is reported as
+    unchanged -- the change-detection half of ADR-0012's replacement for
+    _last_active_soc_limit."""
+    resolver = SocGateResolver()
+    resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+    limit, changed = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+    assert changed is False
+    assert limit == 80.0
+
+
+def test_soc_gate_resolver_reports_changed_when_limit_moves():
+    """A resolve() call whose resulting limit differs from the previous one is reported as
+    changed -- here the second call's solar_reserve_active=True flips the R7 row-1 solar-reserve
+    cap on, moving the effective limit from the override (80.0) to the reserve SOC (60.0)."""
+    resolver = SocGateResolver()
+    resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+    limit, changed = resolver.resolve(
+        80.0,
+        solar_reserve_active=True,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+    assert changed is True
+    assert limit == 60.0
