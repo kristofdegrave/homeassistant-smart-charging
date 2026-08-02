@@ -24,23 +24,29 @@ Four forces constrain the choice:
 - **A Manager is the HA-coupled layer, not the pure one.** Per system-design §4 rule 2 a
   Manager orchestrates: it reads through Resource Access, calls pure Engines, and writes back
   through Resource Access. So — unlike ADR-0010's engines — the directory boundary here cannot
-  be a *purity* guard; every Manager module is allowed to import `homeassistant.*`, and
-  ADR-0009 puts all three on the HA harness. Whatever this ADR decides, it must be justified
-  by navigability and by the layer boundary being *legible*, not by a testability guarantee.
+  be a *purity* guard; every Manager module is allowed to import `homeassistant.*`. ADR-0009's
+  harness split puts HA-coupled code on the HA harness, and `docs/design/project-plan.md`
+  records "Testable on its own: HA harness" for M1, M2, and M3 accordingly. Whatever this ADR
+  decides, it must be justified by navigability and by the layer boundary being *legible*, not
+  by a testability guarantee.
 - **Managers must not call each other** (system-design §4 rule 5, fixed by ADR-0011:
   coordination is publish/subscribe on domain events). A directory that collects the Managers
   makes that rule checkable at a glance — and makes the "no Manager→Manager import" grep the
-  M2 plan already runs a rule about a *package*, not about a hand-maintained list of filenames.
+  M2 plan already runs a rule about a *package*, not about a hand-maintained list of filenames,
+  for every Manager under it (a Manager left outside the package would stay a named exception
+  the check must still spell out).
 - **`coordinator.py` predates the question and is load-bearing in more than code.**
   `coordinator.py` is a Home Assistant convention (a `DataUpdateCoordinator` module at the
   integration root, which is where HA's own scaffolding and quality-scale guidance put it), it
-  is named in ADR-0002's Decision, and it is cited by path — often with line numbers — **22
-  times inside `docs/adl/`** (ADR-0002, -0006, -0009, -0010, -0012, -0014) and 155 times across
-  `docs/`. Accepted ADRs are **immutable** (ADR-0001): a rename could not be repaired by editing
-  those records. Its Python fan-in, by contrast, is trivially small — four import sites
-  (`__init__.py`, `tests/test_coordinator.py`, `tests/benchmarks/test_coordinator_perf.py`, and
-  its own `coordinator_cycle` sibling). The blast radius of moving it is almost entirely
-  *documentary*, not mechanical.
+  is named in ADR-0002's Decision, and it is cited by path — often with line numbers — on **22
+  lines inside `docs/adl/`** (ADR-0002, -0006, -0009, -0010, -0012, -0014, all Accepted) and on
+  155 lines across `docs/`. The project treats an Accepted ADR's Context/Decision as
+  not-to-be-rewritten (ADR-0001), so a rename would either leave those 22 citations stale or
+  force six edits the convention discourages. Its Python fan-in, by contrast, is trivially
+  small — three import sites (`__init__.py`, `tests/test_coordinator.py`,
+  `tests/benchmarks/test_coordinator_perf.py`), plus the `from .coordinator_cycle` edge a move
+  would have to carry with it. The blast radius of moving it is almost entirely *documentary*,
+  not mechanical.
 - **`tests/` mirrors the package 1:1** (ADR-0002, ADR-0009), as `engines/` ↔ `tests/engines/`
   already does. Wherever the Managers live dictates where their HA-harness test modules live.
 
@@ -84,12 +90,12 @@ three test modules.
   Manager.
 - Con: It breaks a Home Assistant convention (coordinator at the integration root) for an
   internal taxonomy, so the layout becomes less recognizable to an HA contributor, not more.
-  It also invalidates the by-path references in six **immutable** Accepted ADRs — records that
-  cannot be corrected without violating ADR-0001, leaving permanently stale paths in the
-  decision log. And it drags a companion question with it: `coordinator_cycle.py` holds
+  It also invalidates the by-path references in six Accepted ADRs, whose Context/Decision text
+  this project does not rewrite (ADR-0001) — so those paths either go stale in the decision log
+  or force six edits against that convention. And it drags a companion question with it: `coordinator_cycle.py` holds
   ADR-0012's extracted state owners, which are not themselves Managers, so the move either
   relocates a non-Manager into `managers/` or splits the ADR-0012 pair across directories. The
-  code-side churn itself is small (four imports), but the change touches the most safety-relevant,
+  code-side churn itself is small (three imports), but the change touches the most safety-relevant,
   most-referenced module in the package to buy tidiness rather than behavior.
 
 ### Option C — Status quo: Managers stay at the package root
@@ -120,15 +126,16 @@ it 1:1 per ADR-0002's mirror rule and ADR-0009's harness split (Manager tests ar
 tests). `coordinator.py` and `coordinator_cycle.py` remain at the package root as the single,
 explicitly grandfathered exception.
 
-Option C is rejected for the reason ADR-0002 and ADR-0010 already rejected the equivalent for
-`modes/`/`profiles/` and the engines: once a layer has more than one member, the root stops
-being a home and becomes a pile, and here the pile hides the layer that carries the project's
-strictest call rule. The choice is therefore between A and B, and it turns on what relocating
-`coordinator.py` actually costs. Its *code* cost is negligible — four imports — so consistency
-would be cheap if code were the whole story. It is not: the module is cited by path 22 times
-inside Accepted ADRs, which ADR-0001 forbids rewriting, so Option B would trade a
-one-directory inconsistency for permanently wrong paths in the decision log, plus a break with
-the HA convention that puts a `DataUpdateCoordinator` at the integration root, plus a forced
+Option C is rejected on the *navigability* half of ADR-0002's and ADR-0010's reasoning — their
+purity half does not transfer here, as the Context notes — namely that once a layer has more
+than one member, the root stops being a home and becomes a pile, and here the pile hides the
+layer that carries the project's strictest call rule. The choice is therefore between A and B,
+and it turns on what relocating `coordinator.py` actually costs. Its *code* cost is negligible
+— three imports plus a relative sibling edge — so consistency would be cheap if code were the
+whole story. It is not: the module is cited by path on 22 lines inside Accepted ADRs, whose
+Context/Decision text this project does not rewrite (ADR-0001), so Option B would trade a
+one-directory inconsistency for either 22 stale paths in the decision log or six edits against
+that convention, plus a break with the HA convention that puts a `DataUpdateCoordinator` at the integration root, plus a forced
 call on `coordinator_cycle.py` — non-Manager code that ADR-0012 deliberately kept beside its
 coordinator. Option A's real Con — a Managers layer split across two places — is a
 documentation problem with a documentation fix: this ADR is the named exception, and the
@@ -153,17 +160,20 @@ ADR-0011's no-direct-call rule can be checked for every Manager written from her
   guarantee — the inverse of `engines/`. Its tests are HA-harness tests under ADR-0009, and the
   boundary it makes checkable is ADR-0011's (no Manager imports another Manager), not
   "no `homeassistant.*` import".
-- This unblocks **task set 4** of `docs/plans/2026-07-21-vehicle-limit-manager.md`, which the M2
-  design §8 gated on this ADR being Accepted; that plan already builds against
-  `managers/vehicle_limit.py` and `tests/managers/test_vehicle_limit.py`, so no plan edit is
-  needed there.
+- This unblocks the M2 build from **Phase 3 onward** — Task 3.1 of
+  `docs/plans/2026-07-21-vehicle-limit-manager.md` is where
+  `custom_components/smart_charging/managers/vehicle_limit.py` is first created. That plan
+  already builds against `managers/vehicle_limit.py` and `tests/managers/test_vehicle_limit.py`,
+  so its task text needs no edit; the M2 design's §8/§9.4 gate wording ("task set 4") under-states
+  the first affected task and should be corrected in the follow-up.
 - **`docs/plans/2026-07-21-notifications-design.md` must be updated** (§0, §7, §10, and the
   paired task plan `2026-07-21-notifications.md`): it currently states there is no `managers/`
   package and places M3 at the package root as `notification_manager.py`, "mirroring
   `coordinator.py`". Under this decision M3's Manager module is
   `managers/notification_manager.py` with `tests/managers/test_notification_manager.py`. The
-  already-landed pure `notification_state.py` is *not* a Manager module and is out of scope of
-  this ADR; where pure notification logic lives is a separate question for that slice.
+  pure `notification_state.py` that `2026-07-21-notifications.md` Phase 2 will create is *not* a
+  Manager module and is out of scope of this ADR; where pure notification logic lives is a
+  separate question for that slice.
   Follow-up issues should track the design/plan update and, if that slice wants it, the
   placement of its pure module.
 - `docs/design/system-design.md` §4 and `docs/design/project-plan.md` gain a concrete file
