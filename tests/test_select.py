@@ -12,8 +12,15 @@ from custom_components.smart_charging.select import ModeSelect, ProfileSelect
 
 class _StubCoordinator:
     def __init__(self):
-        self.active_mode = None
+        self._active_mode = None
         self.refreshed = False
+
+    @property
+    def active_mode(self):
+        return self._active_mode
+
+    def set_active_mode(self, mode):
+        self._active_mode = mode
 
     async def async_request_refresh(self):
         self.refreshed = True
@@ -113,8 +120,15 @@ class _StubProfileCoordinator:
     """HA-harness test for the profile selector (C2, R16)."""
 
     def __init__(self):
-        self.active_profile = None
+        self._active_profile = None
         self.refreshed = False
+
+    @property
+    def active_profile(self):
+        return self._active_profile
+
+    def set_active_profile(self, profile):
+        self._active_profile = profile
 
     async def async_request_refresh(self):
         self.refreshed = True

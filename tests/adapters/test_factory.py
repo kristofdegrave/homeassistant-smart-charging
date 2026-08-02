@@ -8,10 +8,12 @@ from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
     NumericReadWriteAdapter,
 )
+from custom_components.smart_charging.adapters.presence import PresenceReadAdapter
 from custom_components.smart_charging.adapters.status import StatusReadAdapter
 from custom_components.smart_charging.adapters.sun import SunReadAdapter
 from custom_components.smart_charging.adapters.time_read import TimeReadAdapter
 from custom_components.smart_charging.const import (
+    CONF_CAR_HOME_ENTITY,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
@@ -24,6 +26,7 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_STATUS_TRANSLATION,
+    ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
@@ -227,3 +230,23 @@ async def test_low_tariff_empty_string_treated_as_absent(hass):
     data[CONF_LOW_TARIFF_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_LOW_TARIFF not in adapters
+
+
+async def test_factory_builds_car_home_role_when_configured(hass):
+    data = _data()
+    data[CONF_CAR_HOME_ENTITY] = "device_tracker.car"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_CAR_HOME], PresenceReadAdapter)
+    assert adapters[ROLE_CAR_HOME]._entity_id == "device_tracker.car"
+
+
+async def test_car_home_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_CAR_HOME not in adapters
+
+
+async def test_car_home_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_CAR_HOME_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_CAR_HOME not in adapters

@@ -78,6 +78,8 @@ from .const import (
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    SOC_LIMIT_OVERRIDE_MAX,
+    SOC_LIMIT_OVERRIDE_MIN,
 )
 from .coordinator_cycle import PeakDemandState
 from .engines.billing_protection import (
@@ -584,6 +586,20 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             active_soc_limit=active_soc_limit,
         )
 
+    def set_soc_limit_override(self, value: float) -> None:
+        """Coordinator's own boundary for `soc_limit_override` (ADR-0014). Clamps to
+        `[SOC_LIMIT_OVERRIDE_MIN, SOC_LIMIT_OVERRIDE_MAX]` -- the same bound
+        `SocLimitOverrideNumber` already enforces on its own restored value, now also enforced at
+        the coordinator's own field."""
+        self.soc_limit_override = min(max(value, SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
+
+    def set_active_mode(self, mode: str) -> None:
+        """Coordinator's own boundary for `active_mode` (ADR-0014) -- the intended write path for
+        select.py; the field itself stays a plain writable attribute (ADR-0014's design doc §2,
+        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects any
+        value outside the enum before this is ever called."""
+        self.active_mode = mode
+
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether
         or not the incoming mode is one of them (a state nobody is dispatching to is inert
@@ -593,6 +609,23 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if self.active_mode != self._last_active_mode:
             self._mode_state = _fresh_mode_state()
             self._last_active_mode = self.active_mode
+
+    def set_target_current(self, value: float) -> None:
+        """Coordinator's own boundary for `target_current` (ADR-0014). Clamps to the
+        configured `[CONF_MIN_CURRENT, CONF_MAX_CURRENT]` bound -- previously enforced only by
+        `TargetCurrentNumber`'s own native_min_value/native_max_value, bypassable by any other
+        caller writing the field directly. Never the write path for a commanded stop -- ADR-0007's
+        fault path writes 0 A via `self._write(0.0)` directly, not through this field."""
+        self.target_current = min(
+            max(value, self._config[CONF_MIN_CURRENT]), self._config[CONF_MAX_CURRENT]
+        )
+
+    def set_active_profile(self, profile: str) -> None:
+        """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
+        path for select.py; the field itself stays a plain writable attribute (design doc §2,
+        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects
+        any value outside the enum before this is ever called."""
+        self.active_profile = profile
 
     def _mode_desired_current(
         self,
