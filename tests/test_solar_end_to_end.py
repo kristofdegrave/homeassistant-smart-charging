@@ -23,7 +23,7 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.modes._amp_step import ROUND_NEAREST, ROUND_UP
 from custom_components.smart_charging.modes._phase import Phase
-from tests.conftest import (
+from tests.helpers import (
     capture_charger_current_writes,
     entry_data_base,
     entry_options_base,

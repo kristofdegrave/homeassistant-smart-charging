@@ -27,6 +27,7 @@ from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
+    CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
     CONF_SOLAR_FORECAST_ENTITY,
@@ -54,7 +55,7 @@ from custom_components.smart_charging.const import (
     STATE_CHARGING,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
-from tests.conftest import (
+from tests.helpers import (
     capture_charger_current_writes,
     entry_data_base,
     entry_options_base,
@@ -67,14 +68,20 @@ from tests.conftest import (
 def _entry_data(**overrides):
     """DATA bucket -- entity-role mappings + translation only (ADR-0005), narrowing the
     shared base's two-way status translation down to this suite's own single-status one
-    (only "Charging" is ever seeded here) before layering the caller's overrides on top."""
-    return entry_data_base(
+    (only "Charging" is ever seeded here) before layering the caller's overrides on top.
+
+    Also drops the shared base's grid-voltage role mapping -- this suite predates that role
+    and deliberately exercises the NF4 unmapped-role voltage path (falls back to the nominal
+    voltage), not the sensed-voltage path."""
+    data = entry_data_base(
         **{
             CONF_STATUS_TRANSLATION: {"Charging": STATE_CHARGING},
             CONF_EV_SOC_ENTITY: "sensor.ev_soc",
             **overrides,
         }
     )
+    data.pop(CONF_GRID_VOLTAGE_ENTITY, None)
+    return data
 
 
 def _entry_options(**overrides):
