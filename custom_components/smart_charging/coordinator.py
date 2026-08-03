@@ -18,7 +18,6 @@ from .const import (
     ATTR_REQUIRED_CURRENT_A,
     CHARGEABLE_STATES,
     CONF_CAPTAR_AVAILABLE,
-    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
@@ -32,19 +31,13 @@ from .const import (
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
-    CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_INSTALLED,
-    CONF_SOLAR_ONLY_MIDPOINT,
-    CONF_SOLAR_ONLY_START_THRESHOLD_W,
-    CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     DEFAULT_CAPTAR_AVAILABLE,
-    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
@@ -120,7 +113,7 @@ from .engines.soc_target import (
     resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
-from .modes import captar, power, solar, solar_only
+from .modes import captar, solar, solar_only
 from .modes._phase import Phase
 from .profiles.auto import select_mode
 
@@ -716,52 +709,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         voltage: float,
         now: float,
     ) -> float:
-        """`mode`'s own desired current this cycle, mirroring `_run_cycle`'s own dispatch
-        (still its own if/elif chain here -- unified onto the `ModeHandler` registry in Task
-        3.3, ADR-0012), without mutating any persisted per-mode state -- Task 5.2's
-        baseline-mode comparison needs a candidate mode's request without actually charging
-        on it."""
-        if status not in CHARGEABLE_STATES or mode == MODE_OFF:
+        """`mode`'s own desired current this cycle, via the same `ModeHandler` registry the
+        real dispatch uses (ADR-0012, Task 3.3), without mutating any persisted per-mode
+        state -- Task 5.2's baseline-mode comparison needs a candidate mode's request
+        without actually charging on it.
+
+        `net_w`/`charger_w`/`now_dt` are deliberately 0.0/0.0/None here, not threaded from
+        the caller: none of the five `ModeHandler.desired_current` implementations reads
+        `ctx.net_w`, `ctx.charger_w`, or `ctx.now_dt` (only `ctx.surplus_w`/`ctx.voltage`/
+        `ctx.now`/`ctx.status`) -- the one intentional exception `CycleContext.now_dt`'s
+        `datetime | None` typing documents. If a future ModeHandler needs any of these
+        three, thread the real values from `_run_cycle` at that point, not before."""
+        if status not in CHARGEABLE_STATES:
             return 0.0
-        if mode == MODE_POWER:
-            return power.desired_current(self.target_current, status)
         if mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
             return 0.0
-        if mode == MODE_SOLAR:
-            desired, _ = solar.step(
-                surplus_w,
-                self._mode_state[MODE_SOLAR],
-                now,
-                start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
-                min_a=self._config[CONF_MIN_CURRENT],
-                hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
-                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-                voltage=voltage,
-            )
-            return desired
-        if mode == MODE_SOLAR_ONLY:
-            desired, _ = solar_only.step(
-                surplus_w,
-                self._mode_state[MODE_SOLAR_ONLY],
-                now,
-                start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
-                min_a=self._config[CONF_MIN_CURRENT],
-                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-                strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
-                midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
-                voltage=voltage,
-            )
-            return desired
-        # MODE_CAPTAR
-        desired, _ = captar.step(
-            self._mode_state[MODE_CAPTAR],
-            now,
-            max_a=self._config[CONF_MAX_CURRENT],
-            cooldown_minutes=self._config.get(
-                CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
-            ),
+        ctx = CycleContext(
+            status=status,
+            net_w=0.0,
+            charger_w=0.0,
+            voltage=voltage,
+            now=now,
+            now_dt=None,
+            ev_soc=ev_soc,
+            surplus_w=surplus_w,
+            active_soc_limit=active_soc_limit,
         )
-        return desired
+        current, _ = self._mode_handlers[mode].desired_current(ctx, self._mode_state.get(mode))
+        return current
 
     async def _write(self, value: float) -> None:
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)
