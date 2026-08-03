@@ -4,6 +4,7 @@ import pytest
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
+from custom_components.smart_charging import coordinator as coordinator_module
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
@@ -56,7 +57,6 @@ from custom_components.smart_charging.const import (
     STATE_CHARGING,
     STATE_DISCONNECTED,
 )
-from custom_components.smart_charging import coordinator as coordinator_module
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
