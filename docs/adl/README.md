@@ -25,5 +25,6 @@ template.
 | [0016](0016-entity-to-coordinator-writes-via-ha-events.md) | Entity-to-coordinator writes via Home Assistant events | Superseded by ADR-0018 |
 | [0017](0017-profile-as-composed-mode-selection-policy.md) | Mode-selection policy Protocol and registry for `profiles/` | Proposed |
 | [0018](0018-entity-to-coordinator-access-via-ra3-store.md) | Entity-to-coordinator access via RA3's Store (pull-based read, Manager-initiated write) | Proposed |
+| [0019](0019-store-package-home.md) | Package home for the RA3 Config/State Store | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
