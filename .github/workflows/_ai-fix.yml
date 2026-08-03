@@ -22,15 +22,24 @@ on:
         type: string
         default: opus
       max_turns:
-        description: "Max Claude Code iterations (cost ceiling)."
+        # Explicit escalation only. Leave 0 (default) to let the "Resolve max_turns from
+        # workload + Size" step derive the ceiling from the PR's changed paths and the linked
+        # issue's project-board Size field, the same pattern _ai-draft.yml/_ai-review.yml use.
+        description: >-
+          Override the derived max_turns ceiling. Leave 0 (default) to derive it from the
+          PR's changed paths + the linked issue's project-board Size.
         required: false
         type: number
-        default: 50
+        default: 0
       timeout_minutes:
+        # Raised alongside the max_turns ceilings below: unlike hitting --max-turns (which still
+        # lets the job run its routing/cleanup steps), a job-level timeout cancels the job
+        # outright, skipping "Clean up on failure"/"Clean up on API error" and stranding the PR
+        # on needs-work with no comment explaining why.
         description: "Hard wall-clock cap for the fix job."
         required: false
         type: number
-        default: 30
+        default: 40
 
 jobs:
   fix:
@@ -50,6 +59,116 @@ jobs:
         uses: ./.github/actions/anthropic-smoke-test
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Best-effort, same contract as _ai-draft.yml's Size step: any failure here (no linked
+      # issue, PAT lacking Projects scope, rate limit) must NOT fail the job — it only ever
+      # narrows a turn ceiling, and the fix must still run. Falls back to empty (-> the M tier
+      # below) on any problem. First linked issue wins if the PR closes more than one.
+      - name: Resolve the linked issue from the PR
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr_number }}
+        run: |
+          set -uo pipefail
+          number=$(gh pr view "$PR" --json closingIssuesReferences \
+            --jq '[.closingIssuesReferences[].number] | first // ""' 2>/dev/null) || number=""
+          if [ -z "$number" ]; then
+            echo "::warning::PR #$PR has no linked (Closes #N) issue — falling back to the M tier for max_turns."
+          fi
+          printf 'number=%s\n' "$number" >> "$GITHUB_OUTPUT"
+
+      # Projects (v2) items aren't reachable with GITHUB_TOKEN (see _ai-draft.yml's equivalent
+      # step for the full rationale), hence WORKFLOW_PAT here too. Near-duplicate of
+      # _ai-draft.yml's/_ai-review.yml's copy — see _ai-review.yml's identical step for the note
+      # on why this wasn't factored into a composite action.
+      - name: Read the linked issue's project-board Size field
+        id: size
+        if: steps.issue.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          ISSUE: ${{ steps.issue.outputs.number }}
+        run: |
+          set -uo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY##*/}"
+          size=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $number: Int!) {
+              repository(owner: $owner, name: $repo) {
+                issue(number: $number) {
+                  projectItems(first: 10) {
+                    nodes {
+                      project { number }
+                      fieldValueByName(name: "Size") {
+                        ... on ProjectV2ItemFieldSingleSelectValue { name }
+                      }
+                    }
+                  }
+                }
+              }
+            }' -f owner="$owner" -f repo="$repo" -F number="$ISSUE" \
+            --jq '[(.data.repository.issue.projectItems.nodes // [])[] | select(.project.number == 1) | .fieldValueByName.name] | map(select(. != null)) | first // ""' \
+            2>/dev/null) || size=""
+
+          if [ -z "$size" ]; then
+            echo "::warning::Issue #$ISSUE has no readable Size on the EMS project board (unset, not on that board, or the board/PAT couldn't be read) — falling back to the M tier for max_turns. Set Size on the EMS board and confirm WORKFLOW_PAT has Projects read access."
+          fi
+          printf 'value=%s\n' "$size" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve max_turns from workload + Size
+        id: turns
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr_number }}
+          OVERRIDE: ${{ inputs.max_turns }}
+          SIZE: ${{ steps.size.outputs.value }}
+        run: |
+          set -euo pipefail
+          if [[ "$OVERRIDE" =~ ^[1-9][0-9]*$ ]]; then
+            printf 'value=%s\n' "$OVERRIDE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Workload shape from the PR's changed paths, not its context label — a fix pass
+          # reads+writes whichever trees the review flagged. custom_components/tests/.github/
+          # .claude editing is structurally more turn-hungry than a single doc tree, same
+          # distinction _ai-draft.yml/_ai-review.yml draw for their own baselines. `gh api
+          # .../files --paginate`, not `gh pr view --json files` (that caps at 100 files and
+          # would misclassify a large PR whose code files sort past the cap) or a local diff
+          # (this job only checks out the head ref — no base_sha input, so there's no local
+          # merge-base to diff against). A detection failure must not silently pick the lighter
+          # tier (the truncation-prone direction) — capture output first and default to the
+          # heavier tier with a warning if the command itself failed.
+          if ! changed=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate --jq '.[].filename'); then
+            echo "::warning::Could not list the PR's changed files for workload classification — assuming the heavier (code) tier for max_turns."
+            changed=$'custom_components/\n'
+          fi
+
+          # The code tier is only reachable when a maintainer manually re-labels a mixed-tree PR
+          # needs-work — the automatic review->fix routing (_ai-review.yml's non_docs_changed
+          # check) never sends a non-docs diff here, and this job's commit step only stages
+          # `docs` — so any custom_components/tests edits an XL-budget fix pass makes on that
+          # manual path are never committed. The extra read budget still helps it understand
+          # the code context around the docs it CAN fix.
+          if grep -qE '^(custom_components|tests|\.github/workflows|\.claude)/' <<<"$changed"; then
+            xs=55; s=60; m=65; l=80; xl=100
+          else
+            xs=50; s=50; m=55; l=65; xl=80
+          fi
+
+          case "${SIZE:-M}" in
+            XS) turns=$xs ;;
+            S)  turns=$s ;;
+            M)  turns=$m ;;
+            L)  turns=$l ;;
+            XL) turns=$xl ;;
+            *)
+              echo "::warning::Unrecognized project-board Size '${SIZE}' — falling back to the M tier for max_turns. Expected one of XS/S/M/L/XL."
+              turns=$m
+              ;;
+          esac
+
+          printf 'value=%s\n' "$turns" >> "$GITHUB_OUTPUT"
 
       - name: Address review remarks with Claude Code
         id: claude
@@ -86,14 +205,16 @@ jobs:
           # NOTE: claude_args is tokenized shell-style, so the --allowed-tools value MUST be
           # quoted — unquoted spaces inside Bash(...) patterns split the list into garbage
           # tokens and every Bash call gets denied.
-          # 50 turns: every tool call is a turn, and a fix pass reads the review + several
-          # analysis docs, edits multiple files, and posts a summary — 20 was hit mid-work.
-          # Read-only git commands included so inspecting its own edits doesn't burn turns
-          # on permission denials.
+          # Turns: every tool call is a turn, and a fix pass reads the review + several analysis
+          # docs, edits multiple files, and posts a summary — an early flat ceiling of 20 was hit
+          # mid-work, which is why the flat default was raised to 50 and, now, why the "Resolve
+          # max_turns from workload + Size" step's baselines start at or above that. Read-only
+          # git commands included so inspecting its own edits doesn't burn turns on permission
+          # denials.
           # gh api: the skill reads inline review threads (pulls/N/comments) and posts the
           # `ai-fix-ack` thread replies with it — capped by the workflow token's permissions.
           claude_args: >-
-            --model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}
+            --model ${{ inputs.model }} --max-turns ${{ steps.turns.outputs.value }}
             --allowed-tools "Read,Write,Edit,Glob,Grep,Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api:*),Bash(git diff:*),Bash(git log:*),Bash(git status:*)"
 
       # Cost/turns/token visibility in the job summary. always() so it reports even when the
@@ -105,7 +226,7 @@ jobs:
           execution_file: ${{ steps.claude.outputs.execution_file }}
           label: Fix
           model: ${{ inputs.model }}
-          max_turns: ${{ inputs.max_turns }}
+          max_turns: ${{ steps.turns.outputs.value }}
 
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
       # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without

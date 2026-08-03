@@ -28,15 +28,26 @@ on:
         type: string
         default: opus
       max_turns:
-        description: "Max Claude Code iterations (cost ceiling)."
+        # Explicit escalation only. Leave 0 (default) to let the "Resolve max_turns from
+        # workload + Size" step derive the ceiling from the diff's changed paths and the linked
+        # issue's project-board Size field, the same pattern _ai-draft.yml uses — this replaced
+        # a flat default of 16 after PR #475's review (for issue #398, Size=XS development) hit
+        # it and truncated (num_turns=17 against the flat ceiling).
+        description: >-
+          Override the derived max_turns ceiling. Leave 0 (default) to derive it from the
+          diff's changed paths + the linked issue's project-board Size.
         required: false
         type: number
-        default: 16
+        default: 0
       timeout_minutes:
+        # Raised alongside the max_turns ceilings above: unlike hitting --max-turns (which still
+        # lets the job run its routing/cleanup steps), a job-level timeout cancels the job
+        # outright, skipping "Clean up on failure"/"Clean up on API error" and stranding the PR
+        # on needs-review with no comment explaining why.
         description: "Hard wall-clock cap for the review job."
         required: false
         type: number
-        default: 20
+        default: 25
 
 jobs:
   review:
@@ -56,6 +67,113 @@ jobs:
         uses: ./.github/actions/anthropic-smoke-test
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Best-effort, same contract as _ai-draft.yml's Size step: any failure here (no linked
+      # issue, PAT lacking Projects scope, rate limit) must NOT fail the job — it only ever
+      # narrows a turn ceiling, and the review must still run. Falls back to empty (-> the M
+      # tier below) on any problem. First linked issue wins if the PR closes more than one.
+      - name: Resolve the linked issue from the PR
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr_number }}
+        run: |
+          set -uo pipefail
+          number=$(gh pr view "$PR" --json closingIssuesReferences \
+            --jq '[.closingIssuesReferences[].number] | first // ""' 2>/dev/null) || number=""
+          if [ -z "$number" ]; then
+            echo "::warning::PR #$PR has no linked (Closes #N) issue — falling back to the M tier for max_turns."
+          fi
+          printf 'number=%s\n' "$number" >> "$GITHUB_OUTPUT"
+
+      # Projects (v2) items aren't reachable with GITHUB_TOKEN (see _ai-draft.yml's equivalent
+      # step for the full rationale), hence WORKFLOW_PAT here too. Kept as a near-duplicate of
+      # _ai-draft.yml's/_ai-fix.yml's copy rather than factored into a composite action: the
+      # three callers differ in what they already have on hand (issue number directly vs.
+      # resolved from a PR) and in the workload-derivation step that follows it, so the shared
+      # part alone (~15 lines) wasn't judged worth the indirection. If this drifts again, extract
+      # a `.github/actions/resolve-issue-size` composite instead of re-copying.
+      - name: Read the linked issue's project-board Size field
+        id: size
+        if: steps.issue.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          ISSUE: ${{ steps.issue.outputs.number }}
+        run: |
+          set -uo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY##*/}"
+          size=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $number: Int!) {
+              repository(owner: $owner, name: $repo) {
+                issue(number: $number) {
+                  projectItems(first: 10) {
+                    nodes {
+                      project { number }
+                      fieldValueByName(name: "Size") {
+                        ... on ProjectV2ItemFieldSingleSelectValue { name }
+                      }
+                    }
+                  }
+                }
+              }
+            }' -f owner="$owner" -f repo="$repo" -F number="$ISSUE" \
+            --jq '[(.data.repository.issue.projectItems.nodes // [])[] | select(.project.number == 1) | .fieldValueByName.name] | map(select(. != null)) | first // ""' \
+            2>/dev/null) || size=""
+
+          if [ -z "$size" ]; then
+            echo "::warning::Issue #$ISSUE has no readable Size on the EMS project board (unset, not on that board, or the board/PAT couldn't be read) — falling back to the M tier for max_turns. Set Size on the EMS board and confirm WORKFLOW_PAT has Projects read access."
+          fi
+          printf 'value=%s\n' "$size" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve max_turns from workload + Size
+        id: turns
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          OVERRIDE: ${{ inputs.max_turns }}
+          SIZE: ${{ steps.size.outputs.value }}
+        run: |
+          set -euo pipefail
+          if [[ "$OVERRIDE" =~ ^[1-9][0-9]*$ ]]; then
+            printf 'value=%s\n' "$OVERRIDE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Workload shape from the changed paths, not the PR's context label — a review can
+          # cross trees (e.g. a plan doc plus its custom_components/tests implementation), and
+          # there's no single label to read at review time the way there is at draft time.
+          # custom_components/tests/.github/.claude reading is structurally more turn-hungry
+          # than a single doc tree, same distinction _ai-draft.yml draws for its own baselines
+          # (that set also covers workflow-reviewer's wider read list — CLAUDE.md,
+          # ai-authoring-token-efficiency.md, ai-pipeline.yml — for a .github/.claude change).
+          # A detection failure (git error) must not silently pick the lighter tier, since that's
+          # the truncation-prone direction — capture output first and default to the heavier tier
+          # with a warning if the command itself failed.
+          if ! changed=$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}"); then
+            echo "::warning::Could not diff changed paths for workload classification — assuming the heavier (code) tier for max_turns."
+            changed=$'custom_components/\n'
+          fi
+
+          if grep -qE '^(custom_components|tests|\.github/workflows|\.claude)/' <<<"$changed"; then
+            xs=24; s=28; m=32; l=40; xl=55
+          else
+            xs=16; s=20; m=24; l=30; xl=40
+          fi
+
+          case "${SIZE:-M}" in
+            XS) turns=$xs ;;
+            S)  turns=$s ;;
+            M)  turns=$m ;;
+            L)  turns=$l ;;
+            XL) turns=$xl ;;
+            *)
+              echo "::warning::Unrecognized project-board Size '${SIZE}' — falling back to the M tier for max_turns. Expected one of XS/S/M/L/XL."
+              turns=$m
+              ;;
+          esac
+
+          printf 'value=%s\n' "$turns" >> "$GITHUB_OUTPUT"
 
       - name: Fresh-agent review
         id: claude
@@ -134,7 +252,7 @@ jobs:
           # what it can write. Write: only to compose the review payload JSON — the prompt forbids
           # editing repo files and there is no push step, so it can't alter the PR's contents.
           claude_args: >-
-            --model ${{ inputs.model }} --max-turns ${{ inputs.max_turns }}
+            --model ${{ inputs.model }} --max-turns ${{ steps.turns.outputs.value }}
             --allowed-tools "Read,Write,Glob,Grep,Bash(gh api:*),Bash(git diff:*)"
 
       # Cost/turns/token visibility in the job summary. always() so it reports even when the
@@ -146,7 +264,7 @@ jobs:
           execution_file: ${{ steps.claude.outputs.execution_file }}
           label: Review
           model: ${{ inputs.model }}
-          max_turns: ${{ inputs.max_turns }}
+          max_turns: ${{ steps.turns.outputs.value }}
 
       # The action's job step exits 0 even when the underlying Claude call errored (e.g. bad
       # API key, no credits, rate limit) — is_error only shows up inside execution_file. Without
