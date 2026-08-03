@@ -43,6 +43,13 @@ from custom_components.smart_charging.const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_DEPARTURE_DOW,
+    OWNED_SUFFIX_DEPARTURE_HOLIDAY,
+    OWNED_SUFFIX_DEPARTURE_HOME_DAY,
+    OWNED_SUFFIX_HOME_DAY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_TARGET_CURRENT,
     PROFILE_AUTO,
     PROFILE_MANUAL,
     ROLE_CHARGER_CURRENT,
@@ -1414,7 +1421,7 @@ async def test_set_target_current_passes_through_in_range_value(hass):
 async def test_read_owned_entities_updates_active_mode(hass):
     """ADR-0018: the coordinator reads active_mode through the Store, via its own setter --
     the mutation point (set_active_mode) is unchanged, only the caller is."""
-    store = _FakeStore({(Platform.SELECT, "mode"): "solar"})
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): "solar"})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
@@ -1436,7 +1443,9 @@ async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_non
 async def test_read_owned_entities_clamps_target_current_via_existing_setter(hass):
     """The Store-read value still goes through set_target_current's own clamp (ADR-0014) --
     confirms the mutation point didn't change, only its caller."""
-    store = _FakeStore({(Platform.NUMBER, "target_current"): 99.0})  # _config()'s max is 16.0
+    store = _FakeStore(
+        {(Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT): 99.0}
+    )  # _config()'s max is 16.0
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
@@ -1445,7 +1454,7 @@ async def test_read_owned_entities_clamps_target_current_via_existing_setter(has
 
 
 async def test_read_owned_entities_updates_home_day_flag(hass):
-    store = _FakeStore({(Platform.SWITCH, "home_day"): True})
+    store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): True})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
@@ -1454,7 +1463,7 @@ async def test_read_owned_entities_updates_home_day_flag(hass):
 
 
 async def test_read_owned_entities_updates_departure_dow_defaults(hass):
-    store = _FakeStore({(Platform.TIME, "departure_mon"): time_of_day(6, 0)})
+    store = _FakeStore({(Platform.TIME, OWNED_SUFFIX_DEPARTURE_DOW[0]): time_of_day(6, 0)})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
@@ -1463,7 +1472,7 @@ async def test_read_owned_entities_updates_departure_dow_defaults(hass):
 
 
 async def test_read_owned_entities_updates_departure_holiday_override(hass):
-    store = _FakeStore({(Platform.TIME, "departure_holiday"): time_of_day(7, 30)})
+    store = _FakeStore({(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY): time_of_day(7, 30)})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
@@ -1472,7 +1481,7 @@ async def test_read_owned_entities_updates_departure_holiday_override(hass):
 
 
 async def test_read_owned_entities_updates_departure_home_day_override(hass):
-    store = _FakeStore({(Platform.TIME, "departure_home_day"): time_of_day(8, 0)})
+    store = _FakeStore({(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY): time_of_day(8, 0)})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
@@ -1495,9 +1504,30 @@ async def test_read_owned_entities_leaves_departure_dow_default_unchanged_when_s
 async def test_run_cycle_reads_owned_entities_before_anything_else(hass):
     """system-design.md §5.1: the Store read is the cycle's first step, ahead of the
     hardware-adapter read -- a mode change is visible to every step in the same cycle."""
-    store = _FakeStore({(Platform.SELECT, "mode"): MODE_SOLAR_ONLY})
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): MODE_SOLAR_ONLY})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
     await coord._run_cycle()
     assert coord.active_mode == MODE_SOLAR_ONLY
+
+
+async def test_read_owned_entities_does_not_overwrite_active_mode_under_auto(hass):
+    """Regression: under Auto, active_mode is select_mode()'s own resolution, carried
+    across cycles -- the Store's raw selector read (the user's last manual choice, which
+    Auto ignores) must not overwrite it. Overwriting it would falsely register as a mode
+    *change* to _reset_mode_state_if_changed(), silently discarding R7/R11 timers and R3's
+    breach cooldown every single cycle."""
+    store = _FakeStore(
+        {
+            (Platform.SELECT, OWNED_SUFFIX_PROFILE): PROFILE_AUTO,
+            (Platform.SELECT, OWNED_SUFFIX_MODE): MODE_OFF,
+        }
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.set_active_profile(PROFILE_AUTO)
+    coord.set_active_mode(MODE_CAPTAR)  # simulates Auto's own resolution from a prior cycle
+    await coord._read_owned_entities()
+    assert coord.active_mode == MODE_CAPTAR  # unchanged -- the stale selector (Off) not applied

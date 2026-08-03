@@ -304,8 +304,13 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, fr
     assert float(hass.states.get(entity_id).state) == 85.0
 
     # Baseline again: the active mode leaves solar charging entirely (still under Auto) --
-    # the step-up clears and the limit returns to the default.
-    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    # the step-up clears and the limit returns to the default. R8's own check reads
+    # active_mode with a one-cycle lag under Auto (coordinator.py:322-326: "still the PRIOR
+    # cycle's resolved mode" -- Auto's own resolution runs later in the same cycle), so this
+    # simulates "last cycle resolved Power" via the coordinator's own setter directly --
+    # seeding the real selector wouldn't reach active_mode at all under Auto (ADR-0018's
+    # fix for the every-cycle-reset bug this same technique originally exposed).
+    coordinator.set_active_mode(MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._step_up_state.stepped_pct is None
@@ -323,14 +328,20 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     _seed_states(hass, status="Charging", ev_soc=78.5)
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
-    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    # R8's step-up check reads active_mode with a one-cycle lag under Auto
+    # (coordinator.py:322-326) -- seeding the real selector has no effect on active_mode
+    # under Auto (ADR-0018), so "solar was charging last cycle" is simulated via the
+    # coordinator's own setter directly.
+    coordinator.set_active_mode(MODE_SOLAR)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._step_up_state.stepped_pct == 85.0
 
     hass.states.async_set("sensor.ev_soc", "76.0")
-    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
+    # Same one-cycle-lag reasoning as the sibling test above: simulate "last cycle resolved
+    # SolarOnly" via the coordinator's own setter, not the (Auto-ignored) real selector.
+    coordinator.set_active_mode(MODE_SOLAR_ONLY)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -349,7 +360,12 @@ async def test_uc06_no_further_step_once_maximum_already_reached(hass):
         option_overrides={CONF_MAX_SOLAR_SOC: 100.0},
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
-    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    # R8's step-up check reads active_mode with a one-cycle lag under Auto
+    # (coordinator.py:322-326) -- seeding the real selector has no effect on active_mode
+    # under Auto (ADR-0018), so "solar was charging last cycle" is simulated via the
+    # coordinator's own setter directly, the same way tests/test_coordinator.py's own
+    # Task 5.1 suite seeds pre-existing cycle state.
+    coordinator.set_active_mode(MODE_SOLAR)
     # A prior step-up already clamped to the maximum -- seeded directly on the coordinator,
     # the same way tests/test_coordinator.py's own Task 5.1 suite seeds a pre-existing
     # step-up, since there is no owning entity for this state.

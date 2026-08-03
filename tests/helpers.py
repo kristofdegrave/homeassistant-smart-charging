@@ -34,6 +34,7 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_STATUS_TRANSLATION,
+    OWNED_SUFFIX_DEPARTURE_DOW,
     STATE_CHARGING,
     STATE_CONNECTED,
 )
@@ -130,16 +131,13 @@ def seed_owned_entity(hass, entity_id: str, state: str) -> None:
     hass.states.async_set(entity_id, state)
 
 
-_WEEKDAY_SUFFIXES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-
-
 def seed_today_deadline(hass, *, hours_from_now):
     """Seed today's departure-deadline default via the real
     time.smart_charging_departure_<dow> entity (ADR-0018), so it resolves `hours_from_now`
     ahead of real wall-clock now (the deadline/required-current resolution reads
     dt_util.now(), not the mode state machines' injected monotonic clock)."""
     now_dt = dt_util.now()
-    entity_id = f"time.smart_charging_departure_{_WEEKDAY_SUFFIXES[now_dt.weekday()]}"
+    entity_id = f"time.smart_charging_{OWNED_SUFFIX_DEPARTURE_DOW[now_dt.weekday()]}"
     seed_owned_entity(
         hass, entity_id, (now_dt + timedelta(hours=hours_from_now)).time().isoformat()
     )

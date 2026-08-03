@@ -17,6 +17,8 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
     PROFILE_AUTO,
     PROFILE_MANUAL,
 )
@@ -43,7 +45,7 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         captar_available: bool = False,
     ) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_mode"
+        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_MODE}"
         options = list(BASE_MODE_OPTIONS)
         if solar_installed:
             options += SOLAR_MODE_OPTIONS
@@ -73,7 +75,7 @@ class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
 
     def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_profile"
+        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_PROFILE}"
         self._attr_current_option = PROFILE_MANUAL
 
     async def async_added_to_hass(self) -> None:

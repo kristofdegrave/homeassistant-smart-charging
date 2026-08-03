@@ -14,6 +14,8 @@ from .const import (
     CONF_MAX_CURRENT,
     CONF_MIN_CURRENT,
     DOMAIN,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    OWNED_SUFFIX_TARGET_CURRENT,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
 )
@@ -30,7 +32,7 @@ class TargetCurrentNumber(SmartChargingEntity, RestoreNumber):
 
     def __init__(self, entry_id: str, min_a: float, max_a: float, default: float) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_target_current"
+        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_TARGET_CURRENT}"
         self._attr_native_min_value = min_a
         self._attr_native_max_value = max_a
         # config_flow validates default_target_current with vol.Coerce(float) only, no
@@ -66,7 +68,7 @@ class SocLimitOverrideNumber(SmartChargingEntity, RestoreNumber):
 
     def __init__(self, entry_id: str, default: float) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_soc_limit_override"
+        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_SOC_LIMIT_OVERRIDE}"
         # config_flow validates default_soc_limit with vol.Coerce(float) only, no 50-100 range --
         # clamp here the same way async_added_to_hass already clamps a restored value, so an
         # out-of-range configured default can't diverge the entity's display from the coordinator's
