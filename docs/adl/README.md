@@ -23,5 +23,6 @@ template.
 | [0014](0014-state-mutation-encapsulation.md) | Setter-method encapsulation for the coordinator's externally-writable fields | Superseded by ADR-0016 |
 | [0015](0015-managers-package-home.md) | Package home for the Managers beyond the Coordinator | Proposed |
 | [0016](0016-entity-to-coordinator-writes-via-ha-events.md) | Entity-to-coordinator writes via Home Assistant events | Proposed |
+| [0017](0017-profile-as-composed-mode-selection-policy.md) | Mode-selection policy Protocol and registry for `profiles/` | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
