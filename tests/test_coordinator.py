@@ -8,6 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
+from custom_components.smart_charging import coordinator as coordinator_module
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
@@ -1440,6 +1441,80 @@ async def test_set_target_current_passes_through_in_range_value(hass):
     )
     coord.set_target_current(10.0)
     assert coord.target_current == 10.0
+
+
+# --- Task 4.1 (ADR-0012 coordinator decomposition): explicit ADR-0006 clamp-integrity check,
+# made permanent regression tests rather than a one-time manual read (plan Step 4). ---
+#
+# OPEN QUESTION FOR REVIEWER (T4.1's own Step 3 dead-code sweep): `_mode_desired_current` in
+# coordinator.py still carries its own pre-Task-3.3 if/elif dispatch chain (calling
+# solar.step/solar_only.step/captar.step/power.desired_current directly against
+# self._mode_state), rather than the unified `self._mode_handlers[mode].desired_current(ctx,
+# ...)` form Task 3.3 specifies -- its own docstring even says so ("still its own if/elif
+# chain here -- unified onto the ModeHandler registry in Task 3.3"). Task 4.1 assumes Tasks
+# 0.1-3.3 already landed; this sweep found that precondition doesn't hold for Task 3.3
+# specifically. Left unchanged here -- unifying it is Task 3.3's own scope, not T4.1's, and
+# this session's scope is T4.1 only. The three old peak-tracking fields, `_last_active_soc_
+# limit`, and `_run_cycle`'s own old per-mode if/elif chain (Tasks 1.2/2.2/3.2) ARE confirmed
+# fully removed (grep + read, both clean).
+
+
+async def test_power_opt_out_of_r3_does_not_disable_c4_ceiling(hass):
+    """ADR-0006 Option B: the R17 opt-out can only ever skip step 7 (R3 peak clamp); step 8
+    (C4 grid-ceiling clamp) has no opt-out of its own and must still bind. This is the
+    discriminating case test_power_can_opt_out_of_peak_protection above cannot provide: that
+    test's grid ceiling (23A headroom) never actually falls below the 16A target, so it can't
+    tell a merged single-conditional clamp (Option A, rejected) from two distinct call sites --
+    a merged implementation would also return 16.0 here, unclamped."""
+    config = _config()
+    config[CONF_POWER_RESPECT_PEAK] = False
+    config[CONF_GRID_CEILING_A] = 10.0
+    config[CONF_GRID_SAFETY_OFFSET_A] = 2.0  # headroom = 8A, below the 16A target
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0)
+
+    _coord, result = await _run(hass, adapters, config, target=16.0)
+
+    assert result.commanded_current == 8.0
+
+
+async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeypatch):
+    """ADR-0006: 'coordinator.py is the one place the ten-step order lives in code; a change
+    to step order... is a change to this ADR'. Observes the actual call order of the
+    module-level step functions coordinator.py imports, rather than grepping for call sites,
+    to prove ADR-0012's decomposition didn't reorder or merge them."""
+    call_order = []
+
+    def _spy(name, real):
+        def wrapper(*args, **kwargs):
+            call_order.append(name)
+            return real(*args, **kwargs)
+
+        return wrapper
+
+    spied = (
+        "resolve_voltage",
+        "smooth_net_power",
+        "apply_peak_clamp",
+        "clamp_to_ceiling",
+        "apply_floor_cap",
+    )
+    for name in spied:
+        monkeypatch.setattr(coordinator_module, name, _spy(name, getattr(coordinator_module, name)))
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=1000.0)
+
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+
+    assert result.fault is False
+    # Voltage (step 3, NF4) resolves before this cycle's net-power smoothing call (step 2's
+    # mode-dispatch reading) in this implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap)
+    # then run in ADR-0006's fixed order -- neither reordered nor merged.
+    assert call_order == [
+        "resolve_voltage",
+        "smooth_net_power",
+        "apply_peak_clamp",
+        "clamp_to_ceiling",
+        "apply_floor_cap",
+    ]
 
 
 async def test_read_owned_entities_updates_active_mode(hass):
