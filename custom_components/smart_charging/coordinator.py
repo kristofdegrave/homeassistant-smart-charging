@@ -232,6 +232,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
     async def _run_cycle(self) -> CycleResult:
+        await self._read_owned_entities()
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()

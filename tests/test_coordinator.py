@@ -1482,3 +1482,14 @@ async def test_read_owned_entities_leaves_departure_dow_default_unchanged_when_s
     coord.departure_dow_defaults[0] = time_of_day(6, 0)
     await coord._read_owned_entities()
     assert coord.departure_dow_defaults[0] == time_of_day(6, 0)
+
+
+async def test_run_cycle_reads_owned_entities_before_anything_else(hass):
+    """system-design.md §5.1: the Store read is the cycle's first step, ahead of the
+    hardware-adapter read -- a mode change is visible to every step in the same cycle."""
+    store = _FakeStore({(Platform.SELECT, "mode"): MODE_SOLAR_ONLY})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._run_cycle()
+    assert coord.active_mode == MODE_SOLAR_ONLY
