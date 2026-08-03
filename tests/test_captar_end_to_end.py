@@ -29,6 +29,7 @@ from tests.helpers import (
     entry_options_base,
     seed_ample_peak_headroom,
     seed_charger_states,
+    seed_owned_entity,
 )
 
 
@@ -90,7 +91,7 @@ async def _setup(hass, **option_overrides):
     await hass.async_block_till_done()
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     _seed_ample_peak_headroom(coordinator)
-    coordinator.active_mode = MODE_CAPTAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_CAPTAR)
     return coordinator, calls
 
 

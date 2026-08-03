@@ -35,6 +35,7 @@ from tests.helpers import (
     entry_options_base,
     seed_ample_peak_headroom,
     seed_charger_states,
+    seed_owned_entity,
 )
 
 # This suite's config entry matches the shared base shape exactly -- no local overrides needed.
@@ -60,7 +61,7 @@ async def test_end_to_end_commands_target_current(hass):
     assert coordinator.active_mode == MODE_OFF
     assert calls[-1]["value"] == 0.0
     seed_ample_peak_headroom(coordinator)
-    coordinator.active_mode = MODE_POWER
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -153,7 +154,7 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     seed_ample_peak_headroom(coordinator)
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -213,7 +214,7 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
     await hass.async_block_till_done()
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    coordinator.active_mode = MODE_POWER
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -252,13 +253,18 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     assert config[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 20.0
 
 
-async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass):
+async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass, freezer):
     """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
     CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
     R9 reserve cap (coordinator.py's `SocGateResolver.resolve` read, ADR-0012), not just into an
     inert dict entry. Sun down, ample forecast, home day, no departure deadline anywhere -> R9's
     reserve engages (UC07 main success scenario) at the *configured* 70.0, not
-    DEFAULT_SOLAR_RESERVE_SOC (60.0)."""
+    DEFAULT_SOLAR_RESERVE_SOC (60.0).
+
+    Frozen on a Saturday so "no departure deadline anywhere" (Sat/Sun's own R14 default is
+    None) is genuinely true of the real departure-time entities (ADR-0018, issue #402) --
+    unfrozen, this precondition would depend on the real wall-clock weekday."""
+    freezer.move_to("2026-01-17 12:00:00")
     seed_charger_states(hass, status="Charging")
     hass.states.async_set("sun.sun", "below_horizon")
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
@@ -273,8 +279,8 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
     await hass.async_block_till_done()
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 

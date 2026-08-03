@@ -10,90 +10,65 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.smart_charging.select import ModeSelect, ProfileSelect
 
 
-class _StubCoordinator:
-    def __init__(self):
-        self._active_mode = None
-        self.refreshed = False
-
-    @property
-    def active_mode(self):
-        return self._active_mode
-
-    def set_active_mode(self, mode):
-        self._active_mode = mode
-
-    async def async_request_refresh(self):
-        self.refreshed = True
-
-
-async def test_select_option_pushes_to_coordinator(hass):
-    coord = _StubCoordinator()
-    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
+async def test_select_option_writes_only_its_own_state(hass):
+    """ADR-0018: ModeSelect no longer references the coordinator at all -- its
+    constructor doesn't accept one, and it only manages its own displayed state."""
+    entity = ModeSelect(entry_id="abc", solar_installed=True)
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     await entity.async_select_option("Solar")
-    assert coord.active_mode == "Solar"
-    assert coord.refreshed is True
     assert entity.current_option == "Solar"
 
 
 async def test_restores_last_selection(hass):
     entity_id = "select.smart_charging_mode"
     mock_restore_cache(hass, (State(entity_id, "SolarOnly"),))
-    coord = _StubCoordinator()
-    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_installed=True)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "SolarOnly"
-    assert coord.active_mode == "SolarOnly"
 
 
 async def test_restore_rejects_solar_option_when_solar_not_installed(hass):
     entity_id = "select.smart_charging_mode"
     mock_restore_cache(hass, (State(entity_id, "SolarOnly"),))
-    coord = _StubCoordinator()
-    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=False)
+    entity = ModeSelect(entry_id="abc", solar_installed=False)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Off"
-    assert coord.active_mode == "Off"
 
 
 async def test_restore_rejects_captar_option_when_captar_not_available(hass):
     entity_id = "select.smart_charging_mode"
     mock_restore_cache(hass, (State(entity_id, "Captar"),))
-    coord = _StubCoordinator()
-    entity = ModeSelect(entry_id="abc", coordinator=coord, captar_available=False)
+    entity = ModeSelect(entry_id="abc", captar_available=False)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Off"
-    assert coord.active_mode == "Off"
 
 
-async def test_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
-    coord = _StubCoordinator()
-    entity = ModeSelect(entry_id="abc", coordinator=coord, solar_installed=True)
+async def test_added_to_hass_seeds_default_when_no_restored_state(hass):
+    entity = ModeSelect(entry_id="abc", solar_installed=True)
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Off"
-    assert coord.active_mode == "Off"
 
 
 def test_init_seeds_unique_id():
-    entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_installed=True)
     assert entity.unique_id == "abc_mode"
 
 
 def test_options_are_off_power_only_when_solar_not_installed():
-    entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=False)
+    entity = ModeSelect(entry_id="abc", solar_installed=False)
     assert entity.options == ["Off", "Power"]
 
 
 def test_options_include_solar_modes_when_solar_installed():
-    entity = ModeSelect(entry_id="abc", coordinator=_StubCoordinator(), solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_installed=True)
     assert entity.options == ["Off", "Power", "Solar", "SolarOnly"]
 
 
@@ -109,45 +84,24 @@ def test_options_include_solar_modes_when_solar_installed():
 def test_mode_options_compose_independently(solar_installed, captar_available, expected):
     entity = ModeSelect(
         entry_id="abc",
-        coordinator=_StubCoordinator(),
         solar_installed=solar_installed,
         captar_available=captar_available,
     )
     assert entity.options == expected
 
 
-class _StubProfileCoordinator:
-    """HA-harness test for the profile selector (C2, R16)."""
-
-    def __init__(self):
-        self._active_profile = None
-        self.refreshed = False
-
-    @property
-    def active_profile(self):
-        return self._active_profile
-
-    def set_active_profile(self, profile):
-        self._active_profile = profile
-
-    async def async_request_refresh(self):
-        self.refreshed = True
-
-
 def test_default_profile_is_manual():
-    entity = ProfileSelect(entry_id="abc", coordinator=_StubProfileCoordinator())
+    entity = ProfileSelect(entry_id="abc")
     assert entity.current_option == "Manual"
     assert entity.options == ["Manual", "Auto"]
 
 
-async def test_select_auto_pushes_to_coordinator_and_refreshes(hass):
-    coord = _StubProfileCoordinator()
-    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+async def test_select_auto_writes_only_its_own_state(hass):
+    """ADR-0018: ProfileSelect no longer references the coordinator at all."""
+    entity = ProfileSelect(entry_id="abc")
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     await entity.async_select_option("Auto")
-    assert coord.active_profile == "Auto"
-    assert coord.refreshed is True
     assert entity.current_option == "Auto"
 
 
@@ -156,13 +110,11 @@ async def test_restores_prior_selection_across_restart(hass):
     async_added_to_hass instead of resetting to the 'Manual' default."""
     entity_id = "select.smart_charging_profile"
     mock_restore_cache(hass, (State(entity_id, "Auto"),))
-    coord = _StubProfileCoordinator()
-    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+    entity = ProfileSelect(entry_id="abc")
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Auto"
-    assert coord.active_profile == "Auto"
 
 
 async def test_restore_rejects_unknown_option_falls_back_to_manual(hass):
@@ -171,24 +123,20 @@ async def test_restore_rejects_unknown_option_falls_back_to_manual(hass):
     rather than adopting the invalid value."""
     entity_id = "select.smart_charging_profile"
     mock_restore_cache(hass, (State(entity_id, "Bogus"),))
-    coord = _StubProfileCoordinator()
-    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+    entity = ProfileSelect(entry_id="abc")
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Manual"
-    assert coord.active_profile == "Manual"
 
 
-async def test_profile_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
-    coord = _StubProfileCoordinator()
-    entity = ProfileSelect(entry_id="abc", coordinator=coord)
+async def test_profile_added_to_hass_seeds_default_when_no_restored_state(hass):
+    entity = ProfileSelect(entry_id="abc")
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Manual"
-    assert coord.active_profile == "Manual"
 
 
 def test_profile_init_seeds_unique_id():
-    entity = ProfileSelect(entry_id="abc", coordinator=_StubProfileCoordinator())
+    entity = ProfileSelect(entry_id="abc")
     assert entity.unique_id == "abc_profile"

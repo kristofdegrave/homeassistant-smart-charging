@@ -12,12 +12,13 @@ from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_SOLAR_INSTALLED,
     DEFAULT_CAPTAR_AVAILABLE,
-    DOMAIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
     PROFILE_AUTO,
     PROFILE_MANUAL,
 )
@@ -40,13 +41,11 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
     def __init__(
         self,
         entry_id: str,
-        coordinator,
         solar_installed: bool = False,
         captar_available: bool = False,
     ) -> None:
         super().__init__(entry_id)
-        self._coordinator = coordinator
-        self._attr_unique_id = f"{entry_id}_mode"
+        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_MODE}"
         options = list(BASE_MODE_OPTIONS)
         if solar_installed:
             options += SOLAR_MODE_OPTIONS
@@ -60,12 +59,9 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         last = await self.async_get_last_state()
         if last is not None and last.state in self._attr_options:
             self._attr_current_option = last.state
-        self._coordinator.set_active_mode(self._attr_current_option)
 
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option
-        self._coordinator.set_active_mode(option)  # coordinator resets mode-state (M1, Task 5.1)
-        await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
 
@@ -77,10 +73,9 @@ class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
     _object_id_suffix = "profile"
     _attr_options = PROFILE_OPTIONS
 
-    def __init__(self, entry_id: str, coordinator) -> None:
+    def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
-        self._coordinator = coordinator
-        self._attr_unique_id = f"{entry_id}_profile"
+        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_PROFILE}"
         self._attr_current_option = PROFILE_MANUAL
 
     async def async_added_to_hass(self) -> None:
@@ -88,30 +83,24 @@ class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         last = await self.async_get_last_state()
         if last is not None and last.state in self._attr_options:
             self._attr_current_option = last.state
-        self._coordinator.set_active_profile(self._attr_current_option)
 
     async def async_select_option(self, option: str) -> None:
         self._attr_current_option = option
-        self._coordinator.set_active_profile(option)
-        await self._coordinator.async_request_refresh()
         self.async_write_ha_state()
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     async_add_entities(
         [
             ModeSelect(
                 entry_id=entry.entry_id,
-                coordinator=coordinator,
                 solar_installed=entry.data.get(CONF_SOLAR_INSTALLED, False),
                 captar_available=entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
             ),
             ProfileSelect(
                 entry_id=entry.entry_id,
-                coordinator=coordinator,
             ),
         ]
     )

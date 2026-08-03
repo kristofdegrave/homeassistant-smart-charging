@@ -1,7 +1,7 @@
 # ADR-0016: Entity-to-coordinator writes via Home Assistant events
 
 Date: 2026-08-02
-Status: Proposed
+Status: Superseded by ADR-0018
 
 ## Context
 

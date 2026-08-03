@@ -198,7 +198,9 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Builds:** which mode is active given observable conditions passed in — `Manual` → the user's
   selection; `Auto` → `resolution-rules.md` mode-selection (urgency, tariff, sun, surplus, **and the
   set of available modes passed in as an input**, not a Capability-Gate call — §4 rule 4).
-- **Depends on:** E9 output (available modes) and E4/E8 outputs — as input data only.
+- **Depends on:** E9 output (available modes), E3 output (the resolved active SOC limit, row 1),
+  E4 output (required current, row 2), E7 output (conditioned sun/surplus, row 3), and the plain
+  reserve-condition flag the Coordinator evaluates once for R9 (row 4) — all as input data only.
 - **ADR gate:** none (ADR-0002 home).
 - **Testable on its own:** plain pytest; `Manual` returns the selection; `Auto` reproduces the
   resolution-rules table, incl. UC05 escalation to `Captar` and UC07 decline of overnight top-up.
@@ -209,8 +211,11 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 - **Service:** Engine, V4 (cross-cutting). **ADR gate: G-ADR-0010** (package home).
 - **Builds:** the single active SOC limit (reserve cap → step-up → default, R7) and its lifecycle
   transitions (R7/R8/R9); realizes UC06 (step-up row) and UC07's cap row.
-- **Depends on:** ADR-0010 home; deadline inputs (E4) for the cap row (tomorrow's deadline) — as data.
-- **Testable on its own:** plain pytest — the three-row lookup and R8/R9 transitions; `SocReached`
+- **Depends on:** ADR-0010 home; deadline inputs (E4) for the cap row (tomorrow's deadline); the
+  active profile and the previous cycle's active mode (plain input flags, R8's `Auto`-only gate,
+  not a Profile Engine call) — as data.
+- **Testable on its own:** plain pytest — the three-row lookup and R8/R9 transitions, incl. the
+  `Manual` negative case (no step-up, no cap regardless of home-day flag or forecast); `SocReached`
   must not resume on sensor noise, only a genuine limit change or reconnect (R7).
 - **Integration checkpoint:** ⎔ consumed by M1 (cycle), M2 (vehicle-limit sync), M3 (below-limit check).
 

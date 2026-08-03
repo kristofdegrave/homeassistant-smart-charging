@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import time as time_of_day
 from datetime import timedelta
 
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -17,7 +18,6 @@ from .const import (
     ATTR_REQUIRED_CURRENT_A,
     CHARGEABLE_STATES,
     CONF_CAPTAR_AVAILABLE,
-    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
@@ -31,19 +31,13 @@ from .const import (
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
-    CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_INSTALLED,
-    CONF_SOLAR_ONLY_MIDPOINT,
-    CONF_SOLAR_ONLY_START_THRESHOLD_W,
-    CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     DEFAULT_CAPTAR_AVAILABLE,
-    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
@@ -64,6 +58,14 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_DEPARTURE_DOW,
+    OWNED_SUFFIX_DEPARTURE_HOLIDAY,
+    OWNED_SUFFIX_DEPARTURE_HOME_DAY,
+    OWNED_SUFFIX_HOME_DAY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    OWNED_SUFFIX_TARGET_CURRENT,
     PEAK_WINDOW_SECONDS,
     PROFILE_AUTO,
     PROFILE_MANUAL,
@@ -111,7 +113,7 @@ from .engines.soc_target import (
     resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
-from .modes import captar, power, solar, solar_only
+from .modes import captar, solar, solar_only
 from .modes._phase import Phase
 from .profiles.auto import select_mode
 
@@ -146,7 +148,7 @@ class CycleResult:
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     """Runs the control cycle every interval, dispatching to the active mode (M1)."""
 
-    def __init__(self, hass: HomeAssistant, *, adapters, config, interval_s: int) -> None:
+    def __init__(self, hass: HomeAssistant, *, adapters, store, config, interval_s: int) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -154,6 +156,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             update_interval=timedelta(seconds=interval_s),
         )
         self._adapters = adapters
+        self._store = store
         self._config = config
         self._interval_s = interval_s
         # ADR-0012: one thin adapter per mode, looked up by active_mode instead of the old
@@ -167,15 +170,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
             MODE_CAPTAR: _CaptarModeHandler(config),
         }
-        # Single source of truth for the setpoint is the number entity, which seeds this on
-        # add (restored value, else configured default). 0 A is the safe default for cycle 0.
+        # Single source of truth for the setpoint is the number entity, read through the
+        # Store each cycle (_read_owned_entities, ADR-0018). 0 A is the safe default for
+        # cycle 0, before the first read.
         self.target_current: float = 0.0
-        # Single source of truth for these is their owning entity (select/number), which seeds
-        # them on add (restored value, else configured default) before the first refresh --
-        # this MODE_POWER default only matters for a coordinator instance never wired to a
-        # select entity (e.g. a unit test constructing one directly).
+        # Read through the Store each cycle (_read_owned_entities, ADR-0018) -- this
+        # MODE_POWER default only matters for a coordinator instance never wired to a Store
+        # read (e.g. a unit test constructing one directly).
         self.active_mode: str = MODE_POWER
-        # Mirrors active_mode (R16): seeded Manual, written by select.smart_charging_profile.
+        # Mirrors active_mode (R16): read through the Store each cycle, from
+        # select.smart_charging_profile.
         self.active_profile: str = PROFILE_MANUAL
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
         # R8's lifecycle state, threaded across cycles -- cleared only via
@@ -187,12 +191,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
         self._soc_gate = SocGateResolver()
-        # R9/R14 inputs -- single source of truth is meant to be the owning entity
-        # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring
-        # ModeSelect/ProfileSelect's own push-on-change), but that entity->coordinator wiring
-        # is not yet threaded (tracked separately, issue #402); until then these default
-        # conservatively (no home day, no configured deadline anywhere), and tests set them
-        # directly, the same way they already set soc_limit_override.
+        # R9/R14 inputs -- read through the Store each cycle (_read_owned_entities,
+        # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
+        # These constructor defaults (no home day, no configured deadline anywhere) only
+        # matter before the first read.
         self.home_day_flag: bool = False
         self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
         self.departure_holiday_override: time_of_day | None = None
@@ -222,6 +224,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
     async def _run_cycle(self) -> CycleResult:
+        await self._read_owned_entities()
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -628,6 +631,46 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         value outside the enum before this is ever called."""
         self.active_mode = mode
 
+    async def _read_owned_entities(self) -> None:
+        """RA3 (ADR-0018): reads all eight owned control-entity values through the Store once
+        per cycle. A None read leaves the field unchanged -- not a fault: owned entities are
+        internal, and a startup-race/transient-unavailable read is not the same kind of
+        missing data as a hardware adapter returning None (ADR-0007)."""
+        profile = await self._store.read(Platform.SELECT, OWNED_SUFFIX_PROFILE, str)
+        if profile is not None:
+            self.set_active_profile(profile)
+        # Only Manual dispatches via the selector (coordinator.py's own long-standing rule,
+        # applied below at the `auto_dispatchable` check) -- under Auto, self.active_mode is
+        # select_mode()'s own resolution, carried across cycles; re-reading the selector's
+        # raw (stale, user-facing) value here every cycle would fight that resolution and
+        # falsely register as a mode *change* to _reset_mode_state_if_changed() right below,
+        # silently discarding R7/R11 timers and R3's breach cooldown every single cycle.
+        if self.active_profile != PROFILE_AUTO:
+            mode = await self._store.read(Platform.SELECT, OWNED_SUFFIX_MODE, str)
+            if mode is not None:
+                self.set_active_mode(mode)
+        target_current = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float)
+        if target_current is not None:
+            self.set_target_current(target_current)
+        soc_limit = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
+        if soc_limit is not None:
+            self.set_soc_limit_override(soc_limit)
+        home_day = await self._store.read(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, bool)
+        if home_day is not None:
+            self.home_day_flag = home_day
+        for weekday, suffix in enumerate(OWNED_SUFFIX_DEPARTURE_DOW):  # Monday=0 .. Sunday=6
+            value = await self._store.read(Platform.TIME, suffix, time_of_day)
+            if value is not None:
+                self.departure_dow_defaults[weekday] = value
+        holiday = await self._store.read(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY, time_of_day)
+        if holiday is not None:
+            self.departure_holiday_override = holiday
+        home_day_override = await self._store.read(
+            Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY, time_of_day
+        )
+        if home_day_override is not None:
+            self.departure_home_day_override = home_day_override
+
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether
         or not the incoming mode is one of them (a state nobody is dispatching to is inert
@@ -666,52 +709,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         voltage: float,
         now: float,
     ) -> float:
-        """`mode`'s own desired current this cycle, mirroring `_run_cycle`'s own dispatch
-        (still its own if/elif chain here -- unified onto the `ModeHandler` registry in Task
-        3.3, ADR-0012), without mutating any persisted per-mode state -- Task 5.2's
-        baseline-mode comparison needs a candidate mode's request without actually charging
-        on it."""
-        if status not in CHARGEABLE_STATES or mode == MODE_OFF:
+        """`mode`'s own desired current this cycle, via the same `ModeHandler` registry the
+        real dispatch uses (ADR-0012, Task 3.3), without mutating any persisted per-mode
+        state -- Task 5.2's baseline-mode comparison needs a candidate mode's request
+        without actually charging on it.
+
+        `net_w`/`charger_w`/`now_dt` are deliberately 0.0/0.0/None here, not threaded from
+        the caller: none of the five `ModeHandler.desired_current` implementations reads
+        `ctx.net_w`, `ctx.charger_w`, or `ctx.now_dt` (only `ctx.surplus_w`/`ctx.voltage`/
+        `ctx.now`/`ctx.status`) -- the one intentional exception `CycleContext.now_dt`'s
+        `datetime | None` typing documents. If a future ModeHandler needs any of these
+        three, thread the real values from `_run_cycle` at that point, not before."""
+        if status not in CHARGEABLE_STATES:
             return 0.0
-        if mode == MODE_POWER:
-            return power.desired_current(self.target_current, status)
         if mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
             return 0.0
-        if mode == MODE_SOLAR:
-            desired, _ = solar.step(
-                surplus_w,
-                self._mode_state[MODE_SOLAR],
-                now,
-                start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
-                min_a=self._config[CONF_MIN_CURRENT],
-                hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
-                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-                voltage=voltage,
-            )
-            return desired
-        if mode == MODE_SOLAR_ONLY:
-            desired, _ = solar_only.step(
-                surplus_w,
-                self._mode_state[MODE_SOLAR_ONLY],
-                now,
-                start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
-                min_a=self._config[CONF_MIN_CURRENT],
-                cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-                strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
-                midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
-                voltage=voltage,
-            )
-            return desired
-        # MODE_CAPTAR
-        desired, _ = captar.step(
-            self._mode_state[MODE_CAPTAR],
-            now,
-            max_a=self._config[CONF_MAX_CURRENT],
-            cooldown_minutes=self._config.get(
-                CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
-            ),
+        ctx = CycleContext(
+            status=status,
+            net_w=0.0,
+            charger_w=0.0,
+            voltage=voltage,
+            now=now,
+            now_dt=None,
+            ev_soc=ev_soc,
+            surplus_w=surplus_w,
+            active_soc_limit=active_soc_limit,
         )
-        return desired
+        current, _ = self._mode_handlers[mode].desired_current(ctx, self._mode_state.get(mode))
+        return current
 
     async def _write(self, value: float) -> None:
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)

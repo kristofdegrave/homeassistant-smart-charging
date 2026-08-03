@@ -1,6 +1,10 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+from datetime import time as time_of_day
+from datetime import timedelta
+
 import pytest
+from homeassistant.const import Platform
 from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
@@ -40,6 +44,14 @@ from custom_components.smart_charging.const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_DEPARTURE_DOW,
+    OWNED_SUFFIX_DEPARTURE_HOLIDAY,
+    OWNED_SUFFIX_DEPARTURE_HOME_DAY,
+    OWNED_SUFFIX_HOME_DAY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    OWNED_SUFFIX_TARGET_CURRENT,
     PROFILE_AUTO,
     PROFILE_MANUAL,
     ROLE_CHARGER_CURRENT,
@@ -62,7 +74,7 @@ from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
-from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom, seed_today_deadline
+from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom
 
 
 class _FakeNumeric:
@@ -91,6 +103,20 @@ class _RaisingNumeric:
 
     async def write(self, value):
         raise AssertionError("should not be called by a raising read")
+
+
+class _FakeStore:
+    """Returns a fixed value per (entity_domain, unique_id_suffix) key, None otherwise --
+    stands in for adapters/store.py's Store without touching the entity registry. {} means
+    every read() returns None, so _read_owned_entities() is a no-op -- every existing
+    SmartChargingCoordinator(...) construction in this file passes store=_FakeStore({})
+    precisely so it never disturbs a test's own direct field assignments."""
+
+    def __init__(self, values: dict[tuple[str, str], object]) -> None:
+        self._values = values
+
+    async def read(self, entity_domain, unique_id_suffix, value_type):
+        return self._values.get((entity_domain, unique_id_suffix))
 
 
 def _adapters(
@@ -148,7 +174,14 @@ def _config():
 
 
 def _seed_today_deadline(coord, hours_from_now):
-    seed_today_deadline(coord, hours_from_now=hours_from_now)
+    """This file constructs SmartChargingCoordinator directly with a _FakeStore, so there is
+    no real time.smart_charging_departure_<dow> entity for tests.helpers.seed_today_deadline
+    to seed -- seed the coordinator's own field directly instead, same as this file's other
+    direct-construction tests."""
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = (
+        now_dt + timedelta(hours=hours_from_now)
+    ).time()
 
 
 def _seed_ample_peak_headroom(coord, kw=AMPLE_PEAK_HEADROOM_KW):
@@ -156,7 +189,9 @@ def _seed_ample_peak_headroom(coord, kw=AMPLE_PEAK_HEADROOM_KW):
 
 
 async def _run(hass, adapters, config, target):
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER  # M1's original default before mode selection existed (Task 5.1)
     coord.target_current = target
     _seed_ample_peak_headroom(coord)
@@ -166,7 +201,9 @@ async def _run(hass, adapters, config, target):
 
 async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0, coord=None):
     if coord is None:
-        coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+        coord = SmartChargingCoordinator(
+            hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+        )
     else:
         coord._adapters = adapters
     coord.active_mode = active_mode
@@ -178,7 +215,9 @@ async def _run_mode(hass, adapters, config, active_mode, soc_limit_override=80.0
 
 async def test_set_active_profile_sets_the_field(hass):
     """ADR-0014: set_active_profile is the coordinator's own boundary for active_profile."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_active_profile(PROFILE_AUTO)
     assert coord.active_profile == PROFILE_AUTO
 
@@ -378,7 +417,9 @@ async def test_resumes_after_disconnect_and_reconnect_while_still_at_the_limit(h
 async def test_power_and_off_ignore_soc_entirely(hass, mode):
     # Arrange: no ev_soc role configured at all -- Power/Off must not regress to needing one.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc_role=False)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = mode
     coord.soc_limit_override = 80.0
     coord.target_current = 10.0
@@ -411,7 +452,9 @@ async def test_missing_ev_soc_faults_only_while_a_solar_mode_is_selected(hass):
 
     # Arrange (Power): same unmapped ev_soc role.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc_role=False)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
 
@@ -530,7 +573,9 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
     ample-headroom test helpers deliberately, to observe the tracker's own cold-start
     behavior (design doc Sec 6.4)."""
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=3400.0, charger_w=0.0)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_OFF
 
     result = await coord._async_update_data()
@@ -542,7 +587,9 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     config = _config()
     config[CONF_MAX_PEAK_KW] = 4.0
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_OFF
     seed_ample_peak_headroom(coord, kw=3.0)  # already-tracked peak is the lesser of the two
 
@@ -559,7 +606,9 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     config[CONF_SAFETY_MARGIN_W] = 250.0
     # effective_peak_limit(3.56 kW) - margin(250W) - baseline(1000W) = 2310W = 10.04A -> 10A.
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     seed_ample_peak_headroom(coord, kw=3.56)
@@ -580,7 +629,9 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     # surplus = charger_w(2760) - net_w(0) = 2760 W -> round up -> 12 A ideal.
     # headroom = floor((100 - 250 - (0 - 2760)) / 230) = floor(2610 / 230) = 11 A.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
     seed_ample_peak_headroom(coord, kw=0.1)
@@ -594,7 +645,9 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
 async def test_set_active_mode_sets_the_field(hass):
     """ADR-0014: set_active_mode is the coordinator's own boundary for active_mode -- no
     clamp (SelectEntity's own options list already gates the enum), just encapsulation."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_active_mode(MODE_SOLAR)
     assert coord.active_mode == MODE_SOLAR
 
@@ -609,7 +662,9 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
     config[CONF_CAPTAR_COOLDOWN_MIN] = 5.0
     # effective_peak_limit(1.0 kW) - margin(250W) - baseline(600W) = 150W = 0.65A -> 0A < min_a.
     breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
-    coord = SmartChargingCoordinator(hass, adapters=breaching, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=breaching, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     seed_ample_peak_headroom(coord, kw=1.0)
@@ -635,7 +690,9 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     config[CONF_MAX_PEAK_KW] = 1.0
     config[CONF_PEAK_GRACE_MIN] = 0.0
     breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
-    coord = SmartChargingCoordinator(hass, adapters=breaching, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=breaching, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
     seed_ample_peak_headroom(coord, kw=1.0)
@@ -682,7 +739,9 @@ async def test_power_respects_peak_by_default(hass):
     config[CONF_MAX_PEAK_KW] = 3.56
     # Same headroom math as test_peak_clamp_reduces_captar_below_headroom: 10A available.
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
     seed_ample_peak_headroom(coord, kw=3.56)
@@ -699,7 +758,9 @@ async def test_power_can_opt_out_of_peak_protection(hass):
     config[CONF_MAX_PEAK_KW] = 3.56
     config[CONF_POWER_RESPECT_PEAK] = False
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0)
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 16.0
     seed_ample_peak_headroom(coord, kw=3.56)
@@ -731,7 +792,9 @@ async def test_active_soc_limit_resolves_via_the_three_row_table(hass):
     value, not the raw soc_limit_override (E3 row 2)."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
@@ -749,7 +812,9 @@ async def test_solar_step_up_applies_a_fresh_step_when_soc_nears_the_current_lim
     resolve_solar_step_up's soc parameter (R8/UC06 main success)."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()  # step_threshold_pp=2.0, step_pp=5.0
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
@@ -765,7 +830,9 @@ async def test_solar_step_up_clears_on_mode_switch_away_from_solar(hass):
     """Switching from Solar to Power resets self._step_up_state (UC06 exception flow)."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
@@ -782,7 +849,9 @@ async def test_solar_step_up_clears_on_disconnect(hass):
     """A disconnect clears the step-up state even while Solar is still selected (UC06)."""
     adapters = _adapters(status=STATE_DISCONNECTED, ev_soc_role=False)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
@@ -799,7 +868,9 @@ async def test_solar_step_up_survives_solar_to_solaronly_switch(hass):
     step-up -- only the generic per-mode-switch reset is scoped to _mode_state, not this."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
@@ -817,7 +888,9 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
     the prior cycle's, not on every cycle."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
     _seed_ample_peak_headroom(coord)
@@ -854,7 +927,9 @@ async def test_urgency_engages_when_required_current_exceeds_baseline(hass, free
     freezer.move_to("2026-01-15 12:00:00")  # fixed, away from midnight (no rollover semantics)
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 2.0  # well below the ~3.26 A the deadline below will require
     coord.soc_limit_override = 80.0
@@ -873,7 +948,9 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 5.0  # above the ~3.26 A the deadline below requires
     coord.soc_limit_override = 80.0
@@ -894,7 +971,9 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_CAPTAR  # already escalated from a prior cycle
     coord.soc_limit_override = 80.0
@@ -915,7 +994,9 @@ async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state="below_horizon")
     adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -941,7 +1022,9 @@ async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_v
     adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(60.0)
     config = _config()
     config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 0.0
     coord.soc_limit_override = 80.0
@@ -962,7 +1045,9 @@ async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavaila
     adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(None)
     config = _config()
     config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 0.0
     coord.soc_limit_override = 80.0
@@ -985,7 +1070,9 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     config = _config()  # CONF_MAX_CURRENT=16.0
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 0.0
     coord.soc_limit_override = 80.0
@@ -1025,7 +1112,9 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -1047,7 +1136,9 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -1068,7 +1159,9 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -1091,7 +1184,9 @@ async def test_auto_profile_selects_solar_when_surplus_sufficient(hass):
     )
     config = _config()
     config[CONF_SOLAR_INSTALLED] = True
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -1110,7 +1205,9 @@ async def test_auto_profile_escalates_to_captar_under_urgency(hass, freezer):
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = True
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -1132,7 +1229,9 @@ async def test_auto_escalation_resets_captar_state_the_same_cycle(hass, freezer)
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = True
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR  # this cycle escalates away from Solar, not already Captar
     coord.soc_limit_override = 80.0
@@ -1160,7 +1259,9 @@ async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_ur
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = False
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
@@ -1177,7 +1278,9 @@ async def test_manual_profile_never_changes_mode_regardless_of_urgency(hass, fre
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
@@ -1190,6 +1293,29 @@ async def test_manual_profile_never_changes_mode_regardless_of_urgency(hass, fre
     assert result.active_mode == MODE_SOLAR
 
 
+async def test_manual_profile_solar_only_baseline_dry_run(hass, freezer):
+    """Same shape as test_manual_profile_never_changes_mode_regardless_of_urgency, for
+    MODE_SOLAR_ONLY specifically -- the one mode the ModeHandler-registry unification
+    (ADR-0012 T3.3) had no existing dry-run coverage for, since every other baseline-mode
+    deadline test above exercises Off/Power/Solar/Captar but never SolarOnly."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_SOLAR_ONLY
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)  # would be urgent, if Auto
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert result.active_mode == MODE_SOLAR_ONLY
+
+
 async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freezer):
     """R5/C3 row 1: urgency raises the effective peak limit to max_peak_kw, above the
     monthly-tracked peak it would otherwise be capped to."""
@@ -1197,7 +1323,9 @@ async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freez
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
     config[CONF_MAX_PEAK_KW] = 10.0
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
@@ -1217,7 +1345,9 @@ async def test_effective_peak_limit_resolves_normally_once_urgency_reverts(hass,
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
     config[CONF_MAX_PEAK_KW] = 10.0
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
@@ -1241,7 +1371,9 @@ async def test_manual_selector_unaffected_by_available_modes_gate_already_true_t
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
     config[CONF_CAPTAR_AVAILABLE] = False
-    coord = SmartChargingCoordinator(hass, adapters=adapters, config=config, interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_CAPTAR
     coord.soc_limit_override = 80.0
@@ -1256,14 +1388,18 @@ async def test_manual_selector_unaffected_by_available_modes_gate_already_true_t
 async def test_set_soc_limit_override_clamps_below_minimum(hass):
     """ADR-0014: the coordinator's own clamp, using the new named SOC_LIMIT_OVERRIDE_MIN/MAX
     constants shared with SocLimitOverrideNumber's own bounds."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_soc_limit_override(10.0)
     assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MIN
 
 
 async def test_set_soc_limit_override_clamps_above_maximum(hass):
     """ADR-0014: same clamp, upper bound."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_soc_limit_override(150.0)
     assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
 
@@ -1271,7 +1407,9 @@ async def test_set_soc_limit_override_clamps_above_maximum(hass):
 async def test_set_soc_limit_override_passes_through_in_range_value(hass):
     """ADR-0014: an in-range value reaches the field unchanged -- the clamp only rejects
     out-of-range input, it doesn't substitute a fixed value for everything."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_soc_limit_override(80.0)
     assert coord.soc_limit_override == 80.0
 
@@ -1279,14 +1417,18 @@ async def test_set_soc_limit_override_passes_through_in_range_value(hass):
 async def test_set_target_current_clamps_below_minimum(hass):
     """ADR-0014: the coordinator's own clamp -- reachable by any caller, not just
     TargetCurrentNumber's own native_min_value/native_max_value."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_target_current(0.0)  # _config()'s CONF_MIN_CURRENT is 6.0
     assert coord.target_current == 6.0
 
 
 async def test_set_target_current_clamps_above_maximum(hass):
     """ADR-0014: the same clamp, exercised on the above-maximum side."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_target_current(99.0)  # _config()'s CONF_MAX_CURRENT is 16.0
     assert coord.target_current == 16.0
 
@@ -1294,7 +1436,9 @@ async def test_set_target_current_clamps_above_maximum(hass):
 async def test_set_target_current_passes_through_in_range_value(hass):
     """ADR-0014: an in-range value is left untouched -- the clamp only ever narrows toward
     the configured bound, never perturbs a value already inside it."""
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
     coord.set_target_current(10.0)
     assert coord.target_current == 10.0
 
@@ -1371,3 +1515,142 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
         "clamp_to_ceiling",
         "apply_floor_cap",
     ]
+
+
+async def test_read_owned_entities_updates_active_mode(hass):
+    """ADR-0018: the coordinator reads active_mode through the Store, via its own setter --
+    the mutation point (set_active_mode) is unchanged, only the caller is."""
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): "solar"})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.active_mode == "solar"
+
+
+async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_none(hass):
+    """Success criterion 4: a missing/unresolvable read is not a fault -- keep the current value."""
+    store = _FakeStore({})  # every read() call returns None
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.set_active_mode("power")
+    await coord._read_owned_entities()
+    assert coord.active_mode == "power"
+
+
+async def test_read_owned_entities_clamps_target_current_via_existing_setter(hass):
+    """The Store-read value still goes through set_target_current's own clamp (ADR-0014) --
+    confirms the mutation point didn't change, only its caller."""
+    store = _FakeStore(
+        {(Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT): 99.0}
+    )  # _config()'s max is 16.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.target_current == 16.0
+
+
+async def test_read_owned_entities_updates_active_profile(hass):
+    """ADR-0018: the coordinator reads active_profile through the Store, via its own
+    setter -- the mutation point (set_active_profile) is unchanged, only the caller is."""
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_PROFILE): PROFILE_AUTO})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.active_profile == PROFILE_AUTO
+
+
+async def test_read_owned_entities_clamps_soc_limit_override_via_existing_setter(hass):
+    """The Store-read value still goes through set_soc_limit_override's own clamp
+    (ADR-0014) -- confirms the mutation point didn't change, only its caller."""
+    store = _FakeStore(
+        {(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 150.0}
+    )  # SOC_LIMIT_OVERRIDE_MAX is 100.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
+
+
+async def test_read_owned_entities_updates_home_day_flag(hass):
+    store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): True})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.home_day_flag is True
+
+
+async def test_read_owned_entities_updates_departure_dow_defaults(hass):
+    store = _FakeStore({(Platform.TIME, OWNED_SUFFIX_DEPARTURE_DOW[0]): time_of_day(6, 0)})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.departure_dow_defaults[0] == time_of_day(6, 0)  # Monday=0
+
+
+async def test_read_owned_entities_updates_departure_holiday_override(hass):
+    store = _FakeStore({(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY): time_of_day(7, 30)})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.departure_holiday_override == time_of_day(7, 30)
+
+
+async def test_read_owned_entities_updates_departure_home_day_override(hass):
+    store = _FakeStore({(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY): time_of_day(8, 0)})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.departure_home_day_override == time_of_day(8, 0)
+
+
+async def test_read_owned_entities_leaves_departure_dow_default_unchanged_when_store_returns_none(
+    hass,
+):
+    store = _FakeStore({})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.departure_dow_defaults[0] = time_of_day(6, 0)
+    await coord._read_owned_entities()
+    assert coord.departure_dow_defaults[0] == time_of_day(6, 0)
+
+
+async def test_run_cycle_reads_owned_entities_before_anything_else(hass):
+    """system-design.md §5.1: the Store read is the cycle's first step, ahead of the
+    hardware-adapter read -- a mode change is visible to every step in the same cycle."""
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): MODE_SOLAR_ONLY})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._run_cycle()
+    assert coord.active_mode == MODE_SOLAR_ONLY
+
+
+async def test_read_owned_entities_does_not_overwrite_active_mode_under_auto(hass):
+    """Regression: under Auto, active_mode is select_mode()'s own resolution, carried
+    across cycles -- the Store's raw selector read (the user's last manual choice, which
+    Auto ignores) must not overwrite it. Overwriting it would falsely register as a mode
+    *change* to _reset_mode_state_if_changed(), silently discarding R7/R11 timers and R3's
+    breach cooldown every single cycle."""
+    store = _FakeStore(
+        {
+            (Platform.SELECT, OWNED_SUFFIX_PROFILE): PROFILE_AUTO,
+            (Platform.SELECT, OWNED_SUFFIX_MODE): MODE_OFF,
+        }
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.set_active_profile(PROFILE_AUTO)
+    coord.set_active_mode(MODE_CAPTAR)  # simulates Auto's own resolution from a prior cycle
+    await coord._read_owned_entities()
+    assert coord.active_mode == MODE_CAPTAR  # unchanged -- the stale selector (Off) not applied

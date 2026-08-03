@@ -91,21 +91,31 @@ pair (V6, V11, V12). Every service is classified as one of the five Method roles
 | Client | What it does | Realizes |
 | --- | --- | --- |
 | **Control-interval timer** | Fires the control cycle every [control interval](../analysis/system-overview.md#ubiquitous-language) | `control-cycle.md` trigger |
-| **Owned control entities** | The user sets [active profile](../analysis/system-overview.md#ubiquitous-language)/[mode](../analysis/system-overview.md#ubiquitous-language), default SOC limit, [Power target current](../analysis/system-overview.md#ubiquitous-language), departure times, [home-day flag](../analysis/system-overview.md#ubiquitous-language) directly (ADR-0004) | R16, R6, R17, R14, R13 |
+| **Owned control entities** | The user sets [active profile](../analysis/system-overview.md#ubiquitous-language)/[mode](../analysis/system-overview.md#ubiquitous-language), default SOC limit, [Power target current](../analysis/system-overview.md#ubiquitous-language), departure times, [home-day flag](../analysis/system-overview.md#ubiquitous-language) (ADR-0004), through the Store like the dashboard and config flow below | R16, R6, R17, R14, R13 |
 | **Runtime dashboard** | Observes charging status + every runtime-classified entity and edits them in place — **UC11** | R19 |
 | **Install-time config flow / options flow** | Maps adapter roles, declares capabilities, sets install-time thresholds (data); tunes options anytime | R18, R19, ADR-0003/0005 |
 | **External event sources** | Charger connect/disconnect transitions; a user-made vehicle charge-limit change; a mobile-app notification action | UC08, UC09, UC10 |
 
-The config flow and dashboard are Clients, not Managers: they read/write entities and config-entry
-buckets, but hold no orchestration or policy. UC11 has no service of its own for exactly this
-reason — it is a Client rendering owned entities and adapter-role read-backs (R19's "no
-dashboard-specific logic per new entity" is a direct consequence).
+The owned control entities, the config flow, and the dashboard are all Clients, not Managers: they
+read/write owned/runtime entities and config-entry buckets through the Store, but hold no
+orchestration or policy. UC11 has no service of its own for exactly this reason — it is a Client
+rendering owned entities (via the Store) and adapter-role read-backs (via the Adapters, read-only —
+R19's "no dashboard-specific logic per new entity" is a direct consequence). None of the three
+triggers a Manager directly — the Control-interval timer is the Coordinator's only trigger (§4
+rule 1), and the Coordinator reads every owned control entity's current value through the Store on
+its own cycle, the same way it reads hardware through the Adapters. A user action here takes effect
+on the Coordinator's next scheduled cycle, not immediately — NF1 already requires the coordinator
+to hold none of this state itself, and R11's mode-switch timer reset keys off the *active mode*
+the Profile Engine returns each cycle (which the Coordinator already diffs against the prior
+cycle), not off a push notification, so no use-case loses anything by reading on the next cycle
+instead of being pushed to immediately.
 
-Separately from the *user-set* control entities above, the integration also owns **diagnostic
-output entities** the Coordinator *writes* (never the user): `sensor.smart_charging_monthly_peak_kw`, the
-Fault/OK status sensor (ADR-0007), and any resolved-value read-outs the dashboard surfaces
-(e.g. active mode, effective peak limit). These are owned entities written through the Store, not
-Clients — the dashboard consumes them read-only.
+The integration also owns **diagnostic output entities** the Coordinator *writes* (never the
+user): `sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor (ADR-0007), and any
+resolved-value read-outs the dashboard surfaces (e.g. active mode, effective peak limit). These are
+written through the Store exactly like the control entities above — the only difference is which
+end writes and which end reads, not whether the Store mediates. The dashboard consumes diagnostic
+entities read-only through the Store; it can both read and write the control entities above.
 
 ### Managers — orchestrate one workflow's ordered steps
 
@@ -117,17 +127,25 @@ Clients — the dashboard consumes them read-only.
 
 Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisive validation of the
 cut: none is a service. Deadline urgency (UC05) is the Deadline Engine plus the Billing-Protection
-Engine's ceiling-raise and the Auto profile's escalation, all invoked in the Coordinator's normal
-cycle. The solar step-up (UC06) and the solar-reserve cap (UC07) are the SOC-Target Engine writing
-rows 1–2 of the active-SOC-limit lookup. All three "happen" inside the one cycle the Coordinator
-already runs.
+Engine's ceiling-raise and the `Auto` Profile Engine's own escalation row, all invoked in the
+Coordinator's normal cycle. The solar step-up (UC06) is the only Engine whose *decision* changes —
+SOC-Target's, gated by plain input flags the Coordinator already holds (the active profile and the
+previous cycle's active mode; R8) — but UC06 still rides the full cycle (conditioning, mode
+dispatch, both clamps, invariants), so it is not a one-use-case-to-one-engine mapping either (see
+§6's smell note). The solar-reserve cap (UC07) splits across two services: the SOC-Target Engine
+writes row 1 of the active-SOC-limit lookup, while declining opportunistic overnight top-up is the
+`Auto` Profile Engine declining to match row 4 of its own mode-selection table (R9) — not a second
+call, since mode selection is already the Profile Engine's job. The Coordinator evaluates R9's
+five-part reserve condition once and passes the resulting flag to both, the same input-not-a-call
+pattern capability gating uses (below) — the condition is not independently re-evaluated inside
+either engine. All three "happen" inside the one cycle the Coordinator already runs.
 
 ### Engines — reusable policy scoped to one volatility (never orchestrate, never do I/O)
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
 | **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A) |
-| **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in (Manual → the user's selection; Auto → `resolution-rules.md` Auto mode-selection) |
+| **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
 | **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, and what it is willing to spend (R5/R14/R15) |
 | **Billing-Protection Engine** | V6 | Effective peak limit and the R3 peak clamp (skippable only by `Power`'s R17 opt-out) |
@@ -142,11 +160,12 @@ I/O and no Engine calls another Engine.** Cross-engine composition and all I/O a
 job (it reads once, then feeds each engine) — see the call rules in [§4](#4-static-architecture).
 
 - **Pure/leaf Engines** hold no cross-cycle state: the Charging-Mode Engines, the Profile Engines,
-  the SOC-Target, Deadline, Billing-Protection, Grid-Safety, and Capability-Gate Engines. Data in,
-  decision out.
+  the Deadline, Billing-Protection, Grid-Safety, and Capability-Gate Engines. Data in, decision out.
 - **Stateful Engines** operate over cross-cycle state that the **Manager owns and threads in and
   out** — the state is a parameter, never HA-held inside the engine, so the engine stays testable
-  in isolation. Three engines are stateful: **Signal-Conditioning** (the R10 smoothing window),
+  in isolation. Four engines are stateful: **SOC-Target** (the R8 step-up's own progression —
+  whether a step has already been applied — threaded by the Coordinator alongside the plain
+  profile/mode input flags below), **Signal-Conditioning** (the R10 smoothing window),
   **Cycle-Invariant** (the R11 cooldown/hold timers), and the **Peak-Demand Tracker** (the running
   [monthly peak demand](../analysis/system-overview.md#ubiquitous-language)). The Tracker's result
   is surfaced as the owned `sensor.smart_charging_monthly_peak_kw`, but that *write* is the Coordinator's, via
@@ -157,6 +176,18 @@ alike are exercised with plain pytest by passing state in, because none of them 
 same boundary ADR-0002/ADR-0006 draw. (ADR-0006 keeps smoothing as a *coordinator step* over
 coordinator-held state; classifying it as a stateful engine here is the same boundary, just named —
 the smoothing state is still the Coordinator's, threaded into a conditioning routine.)
+
+**R8's solar step-up is realized entirely inside the SOC-Target Engine, not the Profile Engine.**
+Raising the active SOC limit in steps (R8) is a SOC-limit computation, not a mode-selection
+decision, so it stays inside SOC-Target's own volatility (V4). Its `Auto`-only gate is plain input
+flags the Coordinator already holds — the active profile, and the previous cycle's active mode
+(`resolution-rules.md`'s "while charging in a solar mode" condition; the Profile Engine's own mode
+for *this* cycle isn't resolved yet at this point in the sequence, so SOC-Target reads a one-cycle-
+old value, matching R8's own "next control cycle" framing) — passed to SOC-Target directly, the
+same input-not-a-call pattern the capability-gating aside below uses. This is why R8 needs no
+Profile→SOC-Target edge, unlike R9's top-up decline, which stays inside Profile because it *is* a
+mode-selection outcome (declining to match row 4 of the table above), not a call to another
+engine.
 
 **Capability gating (R18) has two realizations, only one of which is the Engine.** At *runtime* the
 Coordinator calls the Capability-Gate Engine to constrain `Auto`'s mode-selection and to gate
@@ -179,10 +210,12 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
   a message and receive an actionable response.
 - **Config/State Store access (V13)** — reads config-entry **data** (role mappings, translation
   tables, capabilities) and **options** (tunable thresholds, control interval), and reads **and
-  writes** owned-entity state via HA's entity registry (ADR-0004/0005): the dashboard/config-flow
-  Clients edit runtime entities through it, the Coordinator writes diagnostic outputs
-  (`sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor per ADR-0007) through it, and the
-  Vehicle-Limit and Notification Managers write owned entities (`number.smart_charging_soc_limit_override`, the home-day flag)
+  writes** owned-entity state via HA's entity registry (ADR-0004/0005): the owned control entities
+  and the dashboard/config-flow Clients edit runtime entities through it, the Coordinator reads
+  every owned control entity's current value through it once per cycle and writes diagnostic
+  outputs (`sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor per ADR-0007)
+  through it, and the Vehicle-Limit and Notification Managers write owned entities
+  (`number.smart_charging_soc_limit_override`, the home-day flag)
   through it. No custom persistence layer — HA's restore-state carries owned-entity values.
 
 ### Resources — the external things reached
@@ -239,7 +272,7 @@ flowchart TD
     end
 
     Timer --> Coord
-    Owned --> Coord
+    Owned --> Store
     Ext --> VLM
     Ext --> NM
     Dash --> Store
@@ -264,9 +297,16 @@ flowchart TD
 
 **Allowed call directions (one-way only):**
 
-1. `Client → Manager` — Clients trigger Managers; a Manager never calls a Client. (The dashboard
-   and config flow are the exception that proves the rule: they touch only the Store, holding no
-   orchestration, so they call no Manager and are called by none.)
+1. `Client → Manager` — Clients trigger Managers; a Manager never calls a Client. Every genuine
+   trigger source (the Control-interval timer, the Notification Manager's own reminder/evening-time
+   checks in [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08), and External
+   event sources) reaches a Manager this way; the owned control entities, the dashboard, and the
+   config flow are the exception that proves the rule — none of the three is a trigger source, and
+   none holds orchestration, so none of them calls a Manager and none is called by one. Their state
+   access — reading or writing owned/runtime entities and config-entry buckets — goes only through
+   the Store (the dashboard additionally reads adapter-role read-backs, read-only, for display). The
+   Coordinator (a Manager) reaches the owned control entities' current values itself, through the
+   Store (rule 2/3 below) — never the reverse.
 2. `Manager → {Engine, Resource Access}` — Managers orchestrate. They read inputs through Resource
    Access, feed them to pure Engines, and write results through Resource Access.
 3. `Resource Access → Resource` — adapters/notification/store access reach the external thing.
@@ -308,6 +348,7 @@ sequenceDiagram
     autonumber
     participant T as Timer (Client)
     participant C as Charging Coordinator
+    participant S as Config/state store
     participant A as Adapter roles
     participant SC as Signal-Conditioning
     participant SOC as SOC-Target
@@ -320,19 +361,22 @@ sequenceDiagram
     participant I as Cycle-Invariant
 
     T->>C: control interval fires
+    C->>S: read owned control-entity values (profile, mode, SOC override, target current, departure times, home-day flag)
+    S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
     C->>SC: smooth net/solar (R10) + resolve voltage (NF4)
     SC-->>C: smoothed readings + supply voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
-    C->>SOC: resolve active SOC limit (R7: cap→step-up→default, cap row uses tomorrow's deadline)
+    C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag below; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
     C->>DL: required current & urgency? (R5/R15, using active SOC limit)
     DL-->>C: urgency flag + required current
     C->>Cap: available modes for declared capabilities (R18)
     Cap-->>C: available modes
-    C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus, available modes)
+    Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)
+    C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (smoothed readings, SOC limit, config)
     M-->>C: desired current
@@ -419,14 +463,14 @@ allowed call directions. A use case crossing several services is the expected, h
 
 | UC | Realized by | Services crossed (validation) |
 | --- | --- | --- |
-| **UC01** Solar surplus | Coordinator cycle | Timer→Coordinator→{Adapters, Signal-Conditioning, SOC-Target, Profile, `Solar` Mode, Billing-Protection, Grid-Safety, Cycle-Invariant}→Adapters(write). ✅ crosses 8 services |
+| **UC01** Solar surplus | Coordinator cycle | Timer→Coordinator→{Store(read owned control entities), Adapters, Signal-Conditioning, SOC-Target, Profile, `Solar` Mode, Billing-Protection, Grid-Safety, Cycle-Invariant}→Adapters(write). ✅ crosses 9 services |
 | **UC02** Solar only | Coordinator cycle | as UC01 with the `SolarOnly` Mode Engine; clamps typically inert (net ≤ 0). ✅ |
 | **UC03** Captar | Coordinator cycle | as UC01 with `Captar` Mode + Billing-Protection doing the real work (peak clamp + effective peak limit) + Peak-Demand Tracker. ✅ |
 | **UC04** Power | Coordinator cycle | as UC01 with `Power` Mode; Billing-Protection **skipped iff** R17 off; Grid-Safety still runs; Capability-Gate/selector gate availability. ✅ |
 | **UC05** Deadline | Coordinator cycle (no own service) | Deadline Engine (urgency) + Billing-Protection (ceiling raise) + Profile (`Auto` escalation) + Notification Manager (unreachable notice via event). ✅ **spans 4 services, owns none** |
 | **UC06** Solar step-up | SOC-Target Engine, within cycle | Coordinator→SOC-Target (writes step-up row); Mode Engines read the resolved limit. ✅ owns no service |
 | **UC07** Solar reserve | SOC-Target + Profile, within cycle | Coordinator→SOC-Target (cap row) + `Auto` Profile (declines overnight top-up) gated by Deadline Engine (tomorrow) + Capability-Gate. ✅ owns no service |
-| **UC08** Evening prompt | Notification Manager | Trigger→NM→{Adapters, Deadline, Notification access}→writes home-day flag. ✅ |
+| **UC08** Evening prompt | Notification Manager | Trigger→NM→{Adapters, Deadline, Notification access}→writes home-day flag through Store. ✅ |
 | **UC09** Charge-limit sync | Vehicle-Limit Manager | event→VLM→{Adapters(`vehicle_charge_limit`, `car_home`, status), SOC-Target}. ✅ |
 | **UC10** Plug-in reminder | Notification Manager | Trigger→NM→{Adapters, Deadline, SOC-Target, Notification access}. ✅ |
 | **UC11** Dashboard | Client (no service) | Dashboard→Store (owned/runtime entities) + Adapter read-backs; edits flow to the same entities other UCs consume. ✅ correctly owns no Manager/Engine |
@@ -453,11 +497,15 @@ Every requirement is reachable from at least one service:
   monthly peak → Peak-Demand Tracker.
 - **R5/R15** → Deadline Engine (+ Billing-Protection ceiling raise + `Auto` Profile escalation +
   Notification for unreachable). **R14** → Deadline Engine's deadline resolution.
-- **R6/C2** → Vehicle-Limit Manager. **R7/R8** → SOC-Target Engine. **R9** has two halves:
-  SOC-Target Engine (lowering the limit to the reserve cap) **and** the `Auto` Profile Engine
-  (declining opportunistic overnight top-up) — one `Auto` decision, two services.
+- **R6/C2** → Vehicle-Limit Manager. **R7/R8** → SOC-Target Engine (R8's `Auto`-only gate is plain
+  input flags — active profile + previous cycle's active mode — not a Profile call; see §3).
+  **R9** has two halves: SOC-Target Engine (lowering the limit to the reserve cap) **and** the
+  `Auto` Profile Engine (declining to match row 4 of its own mode-selection table) — one shared
+  reserve-condition input (evaluated once by the Coordinator, §3), two services.
 - **R10/NF4** → Signal-Conditioning Engine. **R11/C1** → Cycle-Invariant Engine.
-- **R12/R13** → Notification Manager (+ home-day flag as owned state). **R16** → Profile Engines.
+- **R12/R13** → Notification Manager (+ home-day flag as owned state). **R16** → Profile Engines
+  (its mode-selection table also realizes R5's escalation row and R9's top-up-decline half; R8's
+  step-up and R9's cap-lowering half are both realized entirely in SOC-Target Engine, above).
 - **R18** → Capability-Gate Engine. **R19** → dashboard + config-flow Clients over the Store.
 - **NF3** → Resource-Access (adapter) layer. Fault handling (ADR-0007) → Coordinator routing a
   `None`/exception into the Cycle-Invariant stop path **and** setting the owned Fault/OK status
@@ -498,7 +546,16 @@ stands unchanged. Two decisions this design makes explicit are candidates for *n
   calls; events map to HA automation triggers). It deserves its own ADR before the Notification and
   Vehicle-Limit Managers are built.
 
-Both are recorded as follow-ups per the write-adr cycle; this design does not open them.
+Both are recorded as follow-ups per the write-adr cycle; this design does not open them. (This
+table covers only ADRs 0001–0009, written before this design existed — see [§1](#1-relationship-to-the-analysis-docs-and-to-the-adrs).
+ADRs 0010 and later were written after and are not reconciled here.)
+
+**Known divergence surfaced by this revision, not resolved here:** ADR-0016 (entity-to-coordinator
+writes via HA events) decided the owned control entities push an inward event the Coordinator
+subscribes to — the opposite of [§4](#4-static-architecture) rule 1 as revised, which now reserves
+`Client → Manager` for genuine trigger sources and routes the owned control entities' state through
+the Store only. ADR-0016 needs its own superseding ADR to reconcile with this design; this document
+does not open or decide that ADR.
 
 ---
 
