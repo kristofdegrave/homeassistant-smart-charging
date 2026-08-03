@@ -32,27 +32,34 @@ one-dedicated-method-per-field or one-snapshot-method alternative):
 
 ```python
 # adapters/store.py
-async def read(self, platform: str, unique_id_suffix: str, value_type: type[T]) -> T | None:
-    """Resolve f"{entry_id}_{unique_id_suffix}" under `platform` via the entity registry,
-    read its current HA state, and coerce to value_type. None if the entity isn't
+async def read(self, entity_domain: str, unique_id_suffix: str, value_type: type[T]) -> T | None:
+    """Resolve f"{entry_id}_{unique_id_suffix}" as an entity_domain entity via the entity
+    registry, read its current HA state, and coerce to value_type. None if the entity isn't
     registered yet, its state is missing/unknown/unavailable, or coercion fails."""
 ```
 
-- `platform` is `Platform.SELECT`/`Platform.NUMBER`/`Platform.SWITCH`/`Platform.TIME` (HA's own
-  `homeassistant.const.Platform` enum — no new magic strings).
+- `entity_domain` is `Platform.SELECT`/`Platform.NUMBER`/`Platform.SWITCH`/`Platform.TIME` (HA's
+  own `homeassistant.const.Platform` enum — no new magic strings). Named `entity_domain` rather
+  than `platform` to match HA's own `async_get_entity_id(domain, platform, unique_id)` vocabulary,
+  where `domain` is the entity's domain and `platform` means the integration.
 - `unique_id_suffix` is one of the `OWNED_SUFFIX_*` constants added to `const.py` (Task 1), shared
-  between each entity module's `_attr_unique_id` and the Store's read calls, so the two sides
-  cannot drift apart (the same "single source of truth" property `CONF_MIN_CURRENT` already gives
-  `coordinator.py`/`number.py`).
+  between `select.py`/`number.py`'s `_attr_unique_id` and the Store's read calls, so those two
+  sides cannot drift apart, the same "single source of truth" property `CONF_MIN_CURRENT` already
+  gives `coordinator.py`/`number.py`. `time.py`/`switch.py` keep their own inline suffix strings
+  (they're out of scope for this slice's edits — see Entity-side changes below); nothing
+  structurally prevents those from drifting from the matching `OWNED_SUFFIX_*` constant, but the
+  TDD plan's Task 8 (migrating the end-to-end suites to seed the *real* time/switch entities) is
+  what actually exercises that path end-to-end, so a drift would surface as a failing assertion
+  there, not pass silently.
 - `value_type` is `str`, `float`, `bool`, or `datetime.time` — the four value shapes the eight
   fields need. Coercion:
   - `str`: the raw state string (mode/profile options), unless it's `unknown`/`unavailable`.
-  - `float`: `float(state.state)`, `None` on `ValueError`/`unknown`/`unavailable` — mirrors
-    `NumericReadAdapter.read()` exactly (ADR-0003 precedent).
+  - `float`: `float(state.state)`, `None` on `ValueError`/`TypeError`/`unknown`/`unavailable` —
+    mirrors `NumericReadAdapter.read()` exactly (ADR-0003 precedent).
   - `bool`: `state.state == "on"` for a `switch` entity's `on`/`off` state; `unavailable` → `None`.
   - `time`: `time.fromisoformat(state.state)`, `None` on `unknown`/`unavailable`/absent — mirrors
     `SmartChargingDepartureTime.async_added_to_hass`'s own restore-parsing.
-- Entity resolution: `entity_registry.async_get(self._hass).async_get_entity_id(platform,
+- Entity resolution: `entity_registry.async_get(self._hass).async_get_entity_id(entity_domain,
   DOMAIN, f"{self._entry_id}_{unique_id_suffix}")`. Returns `None` if the entity isn't registered
   yet (the startup-race case success criterion 4 names) — `read()` returns `None` in that case too,
   never raises.
@@ -64,8 +71,8 @@ async def read(self, platform: str, unique_id_suffix: str, value_type: type[T]) 
 
 ## Coordinator wiring
 
-A new first step in `_run_cycle`, before the existing `read raw (net_w, solar_w, charger_w,
-voltage, status, SOC)` step (`system-design.md` §5.1's revised sequence):
+A new first step in `_run_cycle`, before the existing `read raw (status, net_w, charger_w,
+optionally voltage, optionally ev_soc)` step (`system-design.md` §5.1's revised sequence):
 
 ```python
 async def _read_owned_entities(self) -> None:
@@ -98,10 +105,12 @@ async def _read_owned_entities(self) -> None:
 
 Each field keeps its current value when the Store returns `None` (success criterion 4) — the
 `if x is not None:` guard is the whole mechanism, no separate fault branch. `set_active_mode`/
-`set_active_profile`/`set_target_current`/`set_soc_limit_override` stay exactly as ADR-0014 left
-them (clamping, single mutation point) — only their *caller* changes, from an entity's
-`async_select_option`/`async_set_native_value` to the Coordinator's own read step (ADR-0018's
-"the caller's access path changes, not the mutation point").
+`set_active_profile`/`set_target_current`/`set_soc_limit_override`'s *bodies* (the clamping logic)
+are unchanged — only their *caller* changes, from an entity's `async_select_option`/
+`async_set_native_value` to the Coordinator's own read step. ADR-0018 supersedes ADR-0016 (which
+superseded ADR-0014), but its Consequences keep this coordinator-side clamp as the mutation point
+going forward ("the caller's access path changes… not the mutation point") — this spec's setters
+are that continuation, not a citation of ADR-0014 as still-governing.
 
 `_read_owned_entities()` is called first inside `_run_cycle`, so a mode/profile change the user
 made since the last cycle is visible to every step that follows in the same cycle it's read —
@@ -146,6 +155,10 @@ shape.
 - **Sub-cycle responsiveness** (ADR-0018's Option C, HA state-change subscription) — explicitly
   not built; a user's change takes effect on the Coordinator's next scheduled cycle, per ADR-0018's
   accepted trade-off.
+- **Diagnostic-entity writes through the Store** (`system-design.md`'s Coordinator-writes-diagnostics
+  path, e.g. `sensor.smart_charging_monthly_peak_kw`) — this slice only adds the Store's *read*
+  side for owned control entities; diagnostic writes stay on whatever mechanism they use today,
+  untouched.
 
 ## Testing approach (ADR-0009)
 
