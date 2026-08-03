@@ -122,11 +122,24 @@ def seed_ample_peak_headroom(coordinator, kw=AMPLE_PEAK_HEADROOM_KW):
     coordinator._peak_demand.tracked_kw = kw
 
 
-def seed_today_deadline(coordinator, *, hours_from_now):
-    """Seed today's departure-deadline default so it resolves `hours_from_now` ahead of
-    real wall-clock now (the deadline/required-current resolution reads dt_util.now(),
-    not the mode state machines' injected monotonic clock)."""
+def seed_owned_entity(hass, entity_id: str, state: str) -> None:
+    """Seed a real owned entity's HA state directly (mirrors seed_charger_states' existing
+    pattern for mapped hardware entities) -- what the RA3 Store reads (ADR-0018), replacing a
+    test's former direct coordinator.<field> = ... assignment now that the Coordinator reads
+    these fields through the Store each cycle instead of taking a pushed value."""
+    hass.states.async_set(entity_id, state)
+
+
+_WEEKDAY_SUFFIXES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def seed_today_deadline(hass, *, hours_from_now):
+    """Seed today's departure-deadline default via the real
+    time.smart_charging_departure_<dow> entity (ADR-0018), so it resolves `hours_from_now`
+    ahead of real wall-clock now (the deadline/required-current resolution reads
+    dt_util.now(), not the mode state machines' injected monotonic clock)."""
     now_dt = dt_util.now()
-    coordinator.departure_dow_defaults[now_dt.weekday()] = (
-        now_dt + timedelta(hours=hours_from_now)
-    ).time()
+    entity_id = f"time.smart_charging_departure_{_WEEKDAY_SUFFIXES[now_dt.weekday()]}"
+    seed_owned_entity(
+        hass, entity_id, (now_dt + timedelta(hours=hours_from_now)).time().isoformat()
+    )

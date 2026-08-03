@@ -3,12 +3,11 @@
 Every test is driven through `hass.config_entries.async_setup` + a full
 `coordinator.async_refresh()` cycle against mocked entity states -- never by calling the pure
 engine/profile functions directly (that's Phase 1's own test suites' job; this file proves the
-coordinator wiring). `departure_dow_defaults`/`departure_holiday_override`/
-`departure_home_day_override`/`home_day_flag` are set directly on the live coordinator instance
-fetched from `hass.data`, mirroring `tests/test_init.py`'s own live-wiring tests -- the
-entity->coordinator wiring for those (switch.smart_charging_home_day,
-time.smart_charging_departure_*) is tracked separately (issue #402) and not yet threaded, so
-there is no entity to seed instead.
+coordinator wiring). `active_mode`/`active_profile`/`home_day_flag`/`departure_dow_defaults`/
+`departure_holiday_override`/`departure_home_day_override` are seeded via the real owned
+entities' HA state (`seed_owned_entity`, ADR-0018) -- the Coordinator reads them through the
+Store each cycle, so a direct `coordinator.<field> = ...` assignment would be silently
+overwritten by the next refresh.
 
 All the thresholds this file's arithmetic depends on (battery capacity, solar step/threshold,
 solar-forecast threshold) are pinned explicitly in `_entry_options` via their own `DEFAULT_*`
@@ -61,6 +60,7 @@ from tests.helpers import (
     entry_options_base,
     seed_ample_peak_headroom,
     seed_charger_states,
+    seed_owned_entity,
     seed_today_deadline,
 )
 
@@ -112,7 +112,16 @@ _seed_ample_peak_headroom = seed_ample_peak_headroom
 
 async def _setup(hass, *, data_overrides=None, option_overrides=None):
     """Sets up a config entry and returns its live coordinator, with ample peak headroom
-    pre-seeded so R3 never interferes with these UC05/UC06/UC07-focused assertions."""
+    pre-seeded so R3 never interferes with these UC05/UC06/UC07-focused assertions.
+
+    Note (ADR-0018, issue #402): the real departure-time entities' compiled defaults
+    (Mon-Fri 06:00, R14) are no longer inert once the Coordinator reads them through the
+    Store -- the Coordinator's first refresh (inside `async_setup`, before this helper
+    returns) already captures whichever weekday "now" is on, and a captured value is never
+    cleared by a later None read (ADR-0018: None means "unresolvable, keep current", not
+    "clear"). Tests that need a genuine "no deadline" starting condition must freeze time on
+    a weekend date (Sat/Sun's own default is None), not rely on blanking the entity
+    afterward -- blanking after this helper returns cannot undo an already-captured value."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=_entry_data(**(data_overrides or {})),
@@ -148,16 +157,22 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     """UC05 main success scenario + 3a + exception flow, Auto profile with CapTar available:
     Normal (no deadline resolved) -> Urgent (escalates to Captar) -> reverts to Normal (SOC
     catches up) -> Unreachable (still Captar, but notifies) as conditions change cycle over
-    cycle."""
-    freezer.move_to("2026-01-15 12:00:00")
+    cycle.
+
+    Frozen on a Saturday (R14: day-of-week default is None on weekends) so the "Normal, no
+    deadline resolved" starting condition is genuinely true of the real
+    time.smart_charging_departure_sat entity's own compiled default -- once the Coordinator
+    reads departure_dow_defaults through the Store (ADR-0018, issue #402), a weekday's
+    06:00 default is a real, resolvable deadline, not inert."""
+    freezer.move_to("2026-01-17 12:00:00")
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(
         hass,
         data_overrides={CONF_CAPTAR_AVAILABLE: True, CONF_SOLAR_INSTALLED: False},
     )
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_OFF
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
 
     # Normal: no deadline resolved yet -- required_a is None, never urgent.
     await coordinator.async_refresh()
@@ -169,7 +184,7 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     # Urgent: a 4h deadline the Off baseline can't meet, but still within the maximum
     # permitted rate (~8.15 A required vs. 16 A max), escalates Auto to Captar -- whose own
     # maximum-current request (16 A) reaches the write path.
-    _seed_today_deadline(coordinator, hours_from_now=4)
+    _seed_today_deadline(hass, hours_from_now=4)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._required_current.urgent is True
@@ -191,7 +206,7 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     hass.states.async_set("sensor.ev_soc", "70.0")
     events = []
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, lambda e: events.append(e))
-    _seed_today_deadline(coordinator, hours_from_now=0.01)
+    _seed_today_deadline(hass, hours_from_now=0.01)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._required_current.unreachable is True
@@ -215,10 +230,10 @@ async def test_uc05_auto_profile_without_captar_escalates_to_power_not_captar(ha
         hass,
         data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_INSTALLED: False},
     )
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_OFF
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
     # 4h deadline: urgent (~8.15 A required), but reachable -- distinct from Unreachable.
-    _seed_today_deadline(coordinator, hours_from_now=4)
+    _seed_today_deadline(hass, hours_from_now=4)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -239,9 +254,9 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
     # A small tracked peak (well below max_peak_kw) makes row 1's raise distinguishable from
     # row 2 -- row 2 alone (min(monthly, max)) would otherwise also read 10.0.
     _seed_ample_peak_headroom(coordinator, kw=1.0)
-    coordinator.active_profile = PROFILE_MANUAL
-    coordinator.active_mode = MODE_SOLAR
-    _seed_today_deadline(coordinator, hours_from_now=4)
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    _seed_today_deadline(hass, hours_from_now=4)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -255,17 +270,22 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
 # --- UC06: Baseline -> SteppedUp -> Baseline, across a Solar/SolarOnly switch ---
 
 
-async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass):
+async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, freezer):
     """UC06 main success scenario + exception flow: SOC nears the limit while a solar mode
     charges under `Auto` (R8/R16 precondition) -> step-up applies (Baseline -> SteppedUp); an
     Auto-driven escalation away from solar (e.g. Captar under urgency, simulated here by
     flipping only `active_mode`, profile staying `Auto`) clears it (SteppedUp -> Baseline,
-    R7's shared reset) -- isolated from UC06's separate `Manual`-precondition case below."""
+    R7's shared reset) -- isolated from UC06's separate `Manual`-precondition case below.
+
+    Frozen on a Saturday (R14: day-of-week default is None) so Auto's mode selection isn't
+    contaminated by a real, resolvable weekday deadline (ADR-0018, issue #402) -- this test
+    is about step-up, not deadline urgency."""
+    freezer.move_to("2026-01-17 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=50.0, net_w=100.0, charger_w=500.0)
     hass.states.async_set("sun.sun", "above_horizon")  # sufficient surplus keeps Auto in Solar
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     # Baseline: SOC (50) is far from the limit (80) -- no step applies yet.
     await coordinator.async_refresh()
@@ -285,7 +305,7 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass):
 
     # Baseline again: the active mode leaves solar charging entirely (still under Auto) --
     # the step-up clears and the limit returns to the default.
-    coordinator.active_mode = MODE_POWER
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._step_up_state.stepped_pct is None
@@ -302,15 +322,15 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     making the two cases indistinguishable)."""
     _seed_states(hass, status="Charging", ev_soc=78.5)
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._step_up_state.stepped_pct == 85.0
 
     hass.states.async_set("sensor.ev_soc", "76.0")
-    coordinator.active_mode = MODE_SOLAR_ONLY
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -328,8 +348,8 @@ async def test_uc06_no_further_step_once_maximum_already_reached(hass):
         data_overrides={CONF_SOLAR_INSTALLED: True},
         option_overrides={CONF_MAX_SOLAR_SOC: 100.0},
     )
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     # A prior step-up already clamped to the maximum -- seeded directly on the coordinator,
     # the same way tests/test_coordinator.py's own Task 5.1 suite seeds a pre-existing
     # step-up, since there is no owning entity for this state.
@@ -348,8 +368,8 @@ async def test_uc06_manual_profile_never_applies_a_step_up(hass):
     `Manual` the active SOC limit stays the plain default."""
     _seed_states(hass, status="Charging", ev_soc=78.5)
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
-    coordinator.active_profile = PROFILE_MANUAL
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -361,11 +381,16 @@ async def test_uc06_manual_profile_never_applies_a_step_up(hass):
 # --- UC07: Normal -> Reserved -> Normal, and the UC05 mutual-exclusivity case ---
 
 
-async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
+async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass, freezer):
     """UC07 main success scenario + Postconditions: starts in Normal (home-day flag clear);
     setting the flag with every other precondition already holding (sun down, ample forecast,
     no deadline for tomorrow) engages the reserve cap (Normal -> Reserved); the sun coming
-    back up lifts it again (Reserved -> Normal)."""
+    back up lifts it again (Reserved -> Normal).
+
+    Frozen on a Saturday so "no deadline for tomorrow" (Sunday, R14 default None) is
+    genuinely true of the real departure-time entities (ADR-0018, issue #402) -- unfrozen,
+    this precondition would depend on whatever the real wall-clock weekday happened to be."""
+    freezer.move_to("2026-01-17 12:00:00")
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", "below_horizon")
@@ -375,8 +400,8 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
         data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
         option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
     )
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_OFF
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
 
     events = []
     hass.bus.async_listen(EVENT_ACTIVE_SOC_LIMIT_CHANGED, lambda e: events.append(e))
@@ -387,7 +412,7 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
     assert coordinator.data.active_soc_limit == 80.0  # default limit, reserve not engaged
 
     # Reserved: every precondition now holds, no deadline anywhere for tomorrow.
-    coordinator.home_day_flag = True  # entity->coordinator wiring pending, issue #402
+    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 55.0  # configured reserve cap, not default (80)
@@ -404,10 +429,11 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass):
     assert events[-1].data[ATTR_ACTIVE_SOC_LIMIT] == 80.0
 
 
-async def test_uc07_manual_profile_never_engages_the_reserve(hass):
+async def test_uc07_manual_profile_never_engages_the_reserve(hass, freezer):
     """UC07 alternate flow 1a: under `Manual`, the reserve's own precondition (R16's "Auto
     profile is active") never holds, regardless of the home-day flag or the solar forecast --
     the active SOC limit resolves as if this use-case weren't coordinating it at all."""
+    freezer.move_to("2026-01-17 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", "below_horizon")
     hass.states.async_set("sensor.solar_forecast", "20.0")
@@ -416,9 +442,9 @@ async def test_uc07_manual_profile_never_engages_the_reserve(hass):
         data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
         option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
     )
-    coordinator.active_profile = PROFILE_MANUAL
-    coordinator.active_mode = MODE_SOLAR
-    coordinator.home_day_flag = True
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -426,10 +452,11 @@ async def test_uc07_manual_profile_never_engages_the_reserve(hass):
     assert coordinator.data.active_soc_limit == 80.0  # default -- reserve never engages
 
 
-async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass):
+async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass, freezer):
     """UC05/UC07 mutual-exclusivity case: a departure deadline resolved for tomorrow lifts an
     already-active reserve cap on the very same cycle it becomes resolved (R9's precondition
     ceasing to hold), not one cycle later."""
+    freezer.move_to("2026-01-17 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", "below_horizon")
     hass.states.async_set("sensor.solar_forecast", "20.0")
@@ -438,9 +465,9 @@ async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass):
         data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
         option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
     )
-    coordinator.active_profile = PROFILE_AUTO
-    coordinator.active_mode = MODE_OFF
-    coordinator.home_day_flag = True
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
+    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
 
     # Reserve engaged first.
     await coordinator.async_refresh()
@@ -450,7 +477,9 @@ async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass):
     # A departure deadline resolves for TOMORROW (the home-day override, since R14 row 3's
     # home-day flag is already True) -- same-cycle mutual-exclusivity lift, no other input
     # changes.
-    coordinator.departure_home_day_override = dt_util.now().time()
+    seed_owned_entity(
+        hass, "time.smart_charging_departure_home_day", dt_util.now().time().isoformat()
+    )
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 

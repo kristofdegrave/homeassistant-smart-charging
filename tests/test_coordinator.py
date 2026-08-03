@@ -1,6 +1,7 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
 from datetime import time as time_of_day
+from datetime import timedelta
 
 import pytest
 from homeassistant.const import Platform
@@ -64,7 +65,7 @@ from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
-from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom, seed_today_deadline
+from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom
 
 
 class _FakeNumeric:
@@ -164,7 +165,14 @@ def _config():
 
 
 def _seed_today_deadline(coord, hours_from_now):
-    seed_today_deadline(coord, hours_from_now=hours_from_now)
+    """This file constructs SmartChargingCoordinator directly with a _FakeStore, so there is
+    no real time.smart_charging_departure_<dow> entity for tests.helpers.seed_today_deadline
+    to seed -- seed the coordinator's own field directly instead, same as this file's other
+    direct-construction tests."""
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = (
+        now_dt + timedelta(hours=hours_from_now)
+    ).time()
 
 
 def _seed_ample_peak_headroom(coord, kw=AMPLE_PEAK_HEADROOM_KW):

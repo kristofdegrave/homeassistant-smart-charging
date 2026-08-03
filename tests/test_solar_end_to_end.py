@@ -29,6 +29,7 @@ from tests.helpers import (
     entry_options_base,
     seed_ample_peak_headroom,
     seed_charger_states,
+    seed_owned_entity,
 )
 
 
@@ -109,7 +110,7 @@ async def test_uc01_closed_loop_holds_steady_once_charging_started(hass):
     # to net_w on each raw reading -- the default 4-sample rolling average (R10) would blend
     # in stale pre-charging readings and mask that cancellation, unrelated to what's under test.
     coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 1})
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     # solar_w = 2645 W = 11.5 A ideal -> round up (fixed, R1) -> 12 A, same as the main
     # success test, so a real charger drawing 12 A (2760 W) against 2645 W of solar
@@ -130,7 +131,7 @@ async def test_uc01_main_success_starts_and_recomputes_each_cycle(hass):
     """UC01 steps 1-3: starts within one cycle at >= the 150 W start threshold, rounding up,
     and recomputes the set-point every following cycle as surplus changes."""
     coordinator, calls = await _setup(hass)
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     # surplus = 2645 W = 11.5 A ideal -> round up (fixed, R1) -> 12 A.
     await _cycle(hass, coordinator, charger_w=2645.0)
@@ -151,7 +152,7 @@ async def test_uc01_2a_cooldown_blocks_start_until_it_elapses(hass):
     coordinator, calls = await _setup(
         hass, **{CONF_SOLAR_HOLD_MIN: 0.0, CONF_SOLAR_COOLDOWN_MIN: 2.0}
     )
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     # Charging -> surplus drops below threshold -> Hold (min current).
     await _cycle(hass, coordinator, charger_w=2760.0)
@@ -184,7 +185,7 @@ async def test_uc01_3a_grid_fallback_holds_at_minimum_and_draws_from_grid(hass):
     shortfall from the grid -- while charging continues (this is a set-point condition
     within Charging, not a transition to Hold)."""
     coordinator, calls = await _setup(hass)
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     await _cycle(hass, coordinator, charger_w=2760.0)
     assert calls[-1]["value"] == 12.0
@@ -202,7 +203,7 @@ async def test_uc01_3b_post_surplus_hold_resumes_or_stops_after_the_hold_period(
     charging (hold cancelled), and if the hold period elapses while surplus is still low
     the System stops (0 A) and starts the solar-mode cooldown."""
     coordinator, calls = await _setup(hass, **{CONF_SOLAR_COOLDOWN_MIN: 5.0})
-    coordinator.active_mode = MODE_SOLAR
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     await _cycle(hass, coordinator, charger_w=2760.0)
     assert calls[-1]["value"] == 12.0
@@ -232,7 +233,7 @@ async def test_uc02_main_success_starts_and_recomputes_with_round_down_default(h
     surplus into a whole-ampere set-point with the default round-down strategy (never
     importing), recomputing every following cycle."""
     coordinator, calls = await _setup(hass)
-    coordinator.active_mode = MODE_SOLAR_ONLY
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     # surplus = 1955 W = 8.5 A ideal -> round down (default, R2) -> 8 A.
     await _cycle(hass, coordinator, charger_w=1955.0)
@@ -254,7 +255,7 @@ async def test_uc02_3a_surplus_below_threshold_stops_immediately_no_hold_no_fall
     here: it's the same idle/cooldown-gate code path already proven end-to-end by UC01's
     2a test above, plus `tests/modes/test_solar_only.py`'s own cooldown coverage.)"""
     coordinator, calls = await _setup(hass)
-    coordinator.active_mode = MODE_SOLAR_ONLY
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     await _cycle(hass, coordinator, charger_w=1955.0)
     assert calls[-1]["value"] == 8.0
@@ -271,7 +272,7 @@ async def test_uc02_3b_round_up_strategy_accepts_bounded_grid_import(hass):
     System rounds up to the next whole ampere instead of the default round-down, accepting
     a bounded grid top-up to use all available surplus."""
     coordinator, calls = await _setup(hass, **{CONF_SOLAR_ONLY_STRATEGY: ROUND_UP})
-    coordinator.active_mode = MODE_SOLAR_ONLY
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     # surplus = 1955 W = 8.5 A ideal -> round up -> 9 A (vs. 8 A under the default strategy).
     await _cycle(hass, coordinator, charger_w=1955.0)
@@ -287,7 +288,7 @@ async def test_uc02_3c_round_nearest_strategy_pendel_behavior(hass):
     coordinator, calls = await _setup(
         hass, **{CONF_SOLAR_ONLY_STRATEGY: ROUND_NEAREST, CONF_SOLAR_ONLY_MIDPOINT: 0.5}
     )
-    coordinator.active_mode = MODE_SOLAR_ONLY
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     # surplus = 1932 W = 8.4 A ideal -- below the 50% midpoint -> rounds down to 8 A.
     await _cycle(hass, coordinator, charger_w=1932.0)
