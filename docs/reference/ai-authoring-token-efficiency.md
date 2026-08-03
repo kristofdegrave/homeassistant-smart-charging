@@ -41,9 +41,10 @@ Everything below targets one of these two.
   every run that follows. Batch edits; avoid cosmetic churn.
 - **Bound the loop, not the turn.** Prefer capping *how many times* a run repeats
   (cycles, retries) over shrinking a single run's turn ceiling. A too-low turn ceiling
-  causes truncation and a re-run, which costs more than it saved — this is why the fix pass
-  runs at 50 turns, not 20 (`.github/workflows/_ai-fix.yml`), and why any automatic
-  review↔fix cap belongs on the *cycle count*, not the per-pass turns.
+  causes truncation and a re-run, which costs more than it saved — this is why the fix pass's
+  derived ceiling (`.github/workflows/_ai-fix.yml`) starts well above the 20-turn ceiling that
+  was once hit mid-work, and why any automatic review↔fix cap belongs on the *cycle count*, not
+  the per-pass turns.
 
 ## Checklist — authoring a skill (`.claude/skills/`)
 
@@ -73,9 +74,11 @@ Everything below targets one of these two.
 - [ ] `--allowed-tools` is the minimum the task needs; each grant has a comment saying why.
 - [ ] `max_turns` is set high enough to finish in one pass (avoid truncation re-runs) and no
       higher; if a run regularly hits the ceiling, raise it — a hit ceiling means a wasted run.
-      (`_ai-draft.yml` derives this per run from context label + the issue's project-board Size
-      field rather than a flat constant — board hygiene is load-bearing for that path; see its
-      "Resolve max_turns from context + Size" step.)
+      (`_ai-draft.yml`, `_ai-review.yml`, and `_ai-fix.yml` all derive this per run from a
+      workload shape — the issue's context label for the drafter, the changed paths for
+      review/fix — plus the linked issue's project-board Size field, rather than a flat
+      constant — board hygiene is load-bearing for these paths; see each file's "Resolve
+      max_turns from context/workload + Size" step.)
 - [ ] Any automatic repeat (review↔fix, retries) has an explicit cap and a terminal state
       (e.g. the loop's cycle cap + `needs-approval` escalation in `_ai-review.yml`), so it
       cannot run away.
