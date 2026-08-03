@@ -1,7 +1,7 @@
 # ADR-0018: Entity-to-coordinator access via RA3's Store (pull-based read, Manager-initiated write)
 
 Date: 2026-08-03
-Status: Proposed
+Status: Accepted
 
 ## Context
 

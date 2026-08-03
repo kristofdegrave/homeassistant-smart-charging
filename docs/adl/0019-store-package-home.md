@@ -1,7 +1,7 @@
 # ADR-0019: Package home for the RA3 Config/State Store
 
 Date: 2026-08-03
-Status: Proposed
+Status: Accepted
 
 ## Context
 
