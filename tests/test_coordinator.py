@@ -1292,6 +1292,29 @@ async def test_manual_profile_never_changes_mode_regardless_of_urgency(hass, fre
     assert result.active_mode == MODE_SOLAR
 
 
+async def test_manual_profile_solar_only_baseline_dry_run(hass, freezer):
+    """Same shape as test_manual_profile_never_changes_mode_regardless_of_urgency, for
+    MODE_SOLAR_ONLY specifically -- the one mode the ModeHandler-registry unification
+    (ADR-0012 T3.3) had no existing dry-run coverage for, since every other baseline-mode
+    deadline test above exercises Off/Power/Solar/Captar but never SolarOnly."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_SOLAR_ONLY
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)  # would be urgent, if Auto
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert coord._required_current.urgent is True
+    assert result.active_mode == MODE_SOLAR_ONLY
+
+
 async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freezer):
     """R5/C3 row 1: urgency raises the effective peak limit to max_peak_kw, above the
     monthly-tracked peak it would otherwise be capped to."""
