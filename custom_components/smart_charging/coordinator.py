@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import time as time_of_day
 from datetime import timedelta
 
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -64,6 +65,10 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    OWNED_SUFFIX_TARGET_CURRENT,
     PEAK_WINDOW_SECONDS,
     PROFILE_AUTO,
     PROFILE_MANUAL,
@@ -146,7 +151,7 @@ class CycleResult:
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     """Runs the control cycle every interval, dispatching to the active mode (M1)."""
 
-    def __init__(self, hass: HomeAssistant, *, adapters, config, interval_s: int) -> None:
+    def __init__(self, hass: HomeAssistant, *, adapters, store, config, interval_s: int) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -154,6 +159,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             update_interval=timedelta(seconds=interval_s),
         )
         self._adapters = adapters
+        self._store = store
         self._config = config
         self._interval_s = interval_s
         # ADR-0012: one thin adapter per mode, looked up by active_mode instead of the old
@@ -627,6 +633,24 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects any
         value outside the enum before this is ever called."""
         self.active_mode = mode
+
+    async def _read_owned_entities(self) -> None:
+        """RA3 (ADR-0018): reads all eight owned control-entity values through the Store once
+        per cycle. A None read leaves the field unchanged -- not a fault: owned entities are
+        internal, and a startup-race/transient-unavailable read is not the same kind of
+        missing data as a hardware adapter returning None (ADR-0007)."""
+        mode = await self._store.read(Platform.SELECT, OWNED_SUFFIX_MODE, str)
+        if mode is not None:
+            self.set_active_mode(mode)
+        profile = await self._store.read(Platform.SELECT, OWNED_SUFFIX_PROFILE, str)
+        if profile is not None:
+            self.set_active_profile(profile)
+        target_current = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float)
+        if target_current is not None:
+            self.set_target_current(target_current)
+        soc_limit = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
+        if soc_limit is not None:
+            self.set_soc_limit_override(soc_limit)
 
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether
