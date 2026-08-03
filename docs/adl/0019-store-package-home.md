@@ -16,14 +16,20 @@ config-entry data/options and owned-entity state; the Coordinator reads through 
 can write through it) but explicitly left its package home open, naming this as the same
 question ADR-0010 and ADR-0015 each needed their own ADR to answer.
 
-The Resource-Access layer already has a placement precedent worth citing directly rather than
-re-deriving: `adapters/` today holds not only the thirteen `Adapter`-protocol hardware roles
-(`base.py`'s `read()`/`write(value)` shape) but also `adapters/notify.py`'s `NotifyAdapter` —
-the Notification Resource Access (V11) class, which does not implement the `Adapter` protocol at
-all (it sends a notification and awaits an actionable response, not a per-role value read/write).
-`adapters/` is, in practice, already the home for "reaches one external resource," not strictly
-for "implements the `Adapter` protocol." The Store (V13) is Resource Access under the same
-system-design classification as V1 and V11.
+`adapters/` today holds fourteen `Adapter`-protocol hardware roles (`base.py`'s
+`read()`/`write(value)` shape, `@runtime_checkable`) plus `adapters/notify.py`'s `NotifyAdapter` —
+the Notification Resource Access (V11) class. `NotifyAdapter` *does* implement that same
+`read()`/`write(value)` shape — its own docstring frames this as "a one-line typing widening, not
+a structural change": `write` takes a `NotificationRequest` dataclass rather than the
+`float | str | bool | time` union `base.py` declares today, and `read` returns the captured
+action response. So the existing precedent is narrower than "any Resource-Access class, any
+shape": `adapters/` has so far only ever held classes that keep the `Adapter` protocol's two-method
+read/write pair, widening the *value type* it carries but not the method surface. The Store (V13)
+is a different case — reading config-entry data, options, and up to eight owned-entity roles (and
+writing some of them) is not obviously expressible as one `read()`/`write(value)` pair; its exact
+interface shape is the implementation spec's job, not this ADR's. What this ADR can say with
+certainty, independent of that shape question, is system-design.md's own classification: V1
+(adapters), V11 (notification), and V13 (Store) are the same Resource-Access layer.
 
 Two forces constrain the choice:
 
@@ -42,14 +48,14 @@ Two forces constrain the choice:
 Add the Store class to `custom_components/smart_charging/adapters/store.py`, alongside the
 hardware-role adapters and `notify.py`. `tests/adapters/test_store.py` joins the existing mirror.
 
-- Pro: Matches the precedent `adapters/notify.py` already set — this package is already where a
-  Resource-Access class lives regardless of whether it implements the per-role `Adapter`
-  protocol, so the Store joining it extends an established pattern rather than starting a new
-  one. Costs nothing: no new subpackage, no import churn, no renamed package.
-- Con: `adapters/` is named for the `Adapter` protocol, and now two of its members (`notify.py`,
-  `store.py`) don't implement it — the package name describes a shrinking fraction of its own
-  contents. This cost already exists today because of `notify.py`; this option accepts it rather
-  than introduces it, but does not fix it either.
+- Pro: Matches system-design.md's own grouping of V1/V11/V13 as one Resource-Access layer, and
+  costs nothing today: no new subpackage, no import churn, no renamed package.
+- Con: Unlike `notify.py`, the Store is not guaranteed to fit the `Adapter` protocol's
+  `read()`/`write(value)` shape — it may need several differently-named methods (config data,
+  options, per-role owned-entity reads/writes) rather than one pair. If it doesn't,
+  `adapters/store.py` would be the first member of this package that isn't even loosely
+  `Adapter`-shaped, a real (if deferred) cost against ADR-0002/ADR-0003's description of
+  `adapters/` as "one class per role, sharing the `Adapter` protocol."
 
 ### Option B — Top-level `store.py`, sibling to `coordinator.py` and `entity.py`
 
@@ -73,46 +79,54 @@ Access classes sit under one directory whose name matches the system-design laye
 
 - Pro: Full structural consistency — the tree states the Resource-Access layer with no naming
   mismatch and no split, mirroring how `engines/`/`managers/` each got a layer-named home.
-- Con: Moves already-merged, working code (thirteen hardware-role adapters, `notify.py`, and
-  every import site across `coordinator.py`, the Vehicle-Limit Manager design, and their tests)
-  for a naming improvement, not a behavior change — the same cost ADR-0015's Option B weighed
-  and rejected for `coordinator.py`, at a larger scale here (more files, more import sites). It
-  also has no caller today: nothing about the Store's own shape requires `adapters/` to be
-  renamed first.
+- Con: Moves already-merged, working code (fourteen hardware-role adapters, `notify.py`, and
+  every import site across `coordinator.py` and their tests) for a naming improvement, not a
+  behavior change — the same cost ADR-0015's Option B weighed and rejected for `coordinator.py`,
+  at a larger scale here (more files, more import sites). It also has no caller today: nothing
+  about the Store's own shape requires `adapters/` to be renamed first.
 
 ## Decision
 
-Option A. The `adapters/notify.py` precedent is decisive: this codebase has already established
-that `adapters/` is where a Resource-Access class lives, independent of whether it implements the
-`Adapter` protocol's per-role read/write shape — the Store joining it as `adapters/store.py`
-extends a pattern already in production rather than choosing between "purity" and "practicality"
-for the first time. Option B is rejected because it would split the Resource-Access layer across
-two locations for a class that has exactly the same relationship to the rest of `adapters/` that
-`notify.py` already has — there is no principled reason to place the Store differently from its
-nearest sibling. Option C is rejected for the reason ADR-0015 already established for
-`coordinator.py`: renaming and relocating working, merged, well-cited code buys a naming
-consistency the Store's own implementation does not need, at a real (and here, larger) cost, with
-nothing about this decision requiring it as a prerequisite.
+Option A. system-design.md's own classification is decisive, not a code precedent: V1, V11, and
+V13 are one Resource-Access layer, and `adapters/` is that layer's existing home. Option A's Con —
+the Store may not fit the `Adapter` protocol's method shape the way `notify.py` does — is accepted
+rather than avoided, because Option B does not actually avoid it: splitting the Store out to the
+package root would still leave the same question (does its interface look like an `Adapter`?)
+unanswered, while additionally scattering the Resource-Access layer across two locations for no
+compensating benefit. Between the two real choices, joining `adapters/` costs nothing today and
+keeps every Resource-Access class discoverable in one place; if the Store's eventual interface
+turns out not to share `Adapter`'s shape, that is a fact about the Store, not a reason to place it
+somewhere the design doesn't consider a Resource-Access layer at all. Option C is rejected for the
+reason ADR-0015 already established for `coordinator.py`: renaming and relocating working, merged,
+well-cited code buys a naming consistency the Store's own implementation does not need, at a real
+(and here, larger) cost, with nothing about this decision requiring it as a prerequisite.
 
 ## Consequences
 
-- The Store lives at `custom_components/smart_charging/adapters/store.py`, joining the thirteen
+- The Store lives at `custom_components/smart_charging/adapters/store.py`, joining the fourteen
   hardware-role adapters and `notify.py`; `tests/adapters/test_store.py` mirrors it per
   ADR-0002/ADR-0009. No existing file moves.
 - **The rule for future contributors:** `adapters/` is the home for every Resource-Access class
   system-design.md names (hardware roles, Notification RA, the Store), not only classes
-  implementing the `Adapter` protocol. A future Resource-Access addition follows the Store/
-  `notify.py` precedent rather than asking whether it "really" belongs in `adapters/`.
+  implementing the `Adapter` protocol. A future Resource-Access addition follows the
+  system-design classification, not a search for an `Adapter`-shaped precedent.
+- **ADR-0002/ADR-0003's description of `adapters/** — "one class per role, sharing the `Adapter`
+  protocol" — is relaxed by this decision, not merely extended, if the Store's interface (decided
+  by its own implementation spec, not here) turns out not to share that protocol's
+  `read()`/`write(value)` shape. `notify.py` only ever widened the *value type* the shared shape
+  carries; the Store may be the first member with a genuinely different method surface. Neither
+  ADR-0002 nor ADR-0003's Context/Decision text is edited (the immutability rule) — this
+  Consequence is the record of the relaxation.
 - `adapters/__init__.py`'s exports (if any) and its factory (`factory.py`, which builds
   hardware-role adapters from config-entry role mappings per ADR-0003) are unaffected — the Store
   is a separate class with its own construction, not a role the factory produces; the
   implementation spec that builds it decides how the Coordinator/Managers obtain a Store
-  instance.
+  instance, and what its own read/write method surface looks like.
 - This unblocks the RA3 Store implementation spec — it can now cite an exact file path
   (`adapters/store.py`) rather than leaving the Store's location as an open question inherited
   from ADR-0018.
 - ADR-0002, ADR-0010, and ADR-0015 are **extended, not superseded**: none of their placements
   change; this ADR only fills the gap ADR-0018 left open.
-- If `adapters/` later grows enough non-`Adapter`-shaped members that the naming mismatch this
-  ADR accepts becomes actively confusing, revisiting toward Option C stays available as its own
-  ADR — this decision does not foreclose it, it just isn't justified by one class today.
+- If `adapters/` later grows enough non-`Adapter`-shaped members that the mismatch this ADR
+  accepts becomes actively confusing, revisiting toward Option C stays available as its own ADR —
+  this decision does not foreclose it, it just isn't justified by one class today.
