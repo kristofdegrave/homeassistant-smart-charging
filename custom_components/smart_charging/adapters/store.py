@@ -5,13 +5,13 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from ..const import DOMAIN
 
-T = TypeVar("T", str, float)
+T = TypeVar("T", str, float, bool)
 
 
 class Store:
@@ -42,4 +42,6 @@ class Store:
                 return float(state.state)
             except (ValueError, TypeError):
                 return None
+        if value_type is bool:
+            return state.state == STATE_ON
         return state.state

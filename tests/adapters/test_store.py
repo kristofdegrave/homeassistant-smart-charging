@@ -66,3 +66,15 @@ async def test_read_float_non_numeric_returns_none(hass):
     )
     store = Store(hass, "entry1")
     assert await store.read(Platform.NUMBER, "target_current", float) is None
+
+
+async def test_read_bool_on_returns_true(hass):
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    store = Store(hass, "entry1")
+    assert await store.read(Platform.SWITCH, "home_day", bool) is True
+
+
+async def test_read_bool_off_returns_false(hass):
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "off")
+    store = Store(hass, "entry1")
+    assert await store.read(Platform.SWITCH, "home_day", bool) is False
