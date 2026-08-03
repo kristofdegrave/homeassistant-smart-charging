@@ -7,6 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .adapters.factory import build_adapters
+from .adapters.store import Store
 from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -127,8 +128,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
     }
 
+    store = Store(hass, entry.entry_id)
     coordinator = SmartChargingCoordinator(
-        hass, adapters=adapters, config=config, interval_s=interval_s
+        hass, adapters=adapters, store=store, config=config, interval_s=interval_s
     )
 
     # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.
@@ -140,7 +142,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_DEFAULT_SOC_LIMIT: default_soc_limit,
     }
 
-    # First refresh AFTER platforms so the number entity can seed target_current on add.
+    # First refresh AFTER platforms: so the number entity can seed target_current on add, and
+    # so the Store's first _read_owned_entities() read (ADR-0018) finds the owned entities
+    # already registered.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await coordinator.async_config_entry_first_refresh()
 

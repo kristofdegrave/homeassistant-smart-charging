@@ -14,48 +14,17 @@ from custom_components.smart_charging.number import (
 )
 
 
-class _StubCoordinator:
-    def __init__(self):
-        self._target_current = None
-        self._soc_limit_override = None
-        self.refreshed = False
-
-    @property
-    def soc_limit_override(self):
-        return self._soc_limit_override
-
-    def set_soc_limit_override(self, value):
-        self._soc_limit_override = value
-
-    @property
-    def target_current(self):
-        return self._target_current
-
-    def set_target_current(self, value):
-        self._target_current = value
-
-    async def async_request_refresh(self):
-        self.refreshed = True
-
-
-async def test_set_value_pushes_to_coordinator(hass):
-    coord = _StubCoordinator()
-    entity = TargetCurrentNumber(
-        entry_id="abc", coordinator=coord, min_a=6.0, max_a=16.0, default=10.0
-    )
+async def test_set_value_writes_only_its_own_state(hass):
+    """ADR-0018: TargetCurrentNumber no longer references the coordinator at all."""
+    entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=10.0)
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
     await entity.async_set_native_value(12.0)
-    assert coord.target_current == 12.0
-    assert coord.refreshed is True
     assert entity.native_value == 12.0
 
 
 def test_init_seeds_bounds_and_default():
-    coord = _StubCoordinator()
-    entity = TargetCurrentNumber(
-        entry_id="abc", coordinator=coord, min_a=6.0, max_a=16.0, default=10.0
-    )
+    entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=10.0)
     assert entity.native_min_value == 6.0
     assert entity.native_max_value == 16.0
     assert entity.native_value == 10.0
@@ -66,33 +35,25 @@ def test_init_clamps_out_of_range_default_target_current():
     """config_flow validates default_target_current with vol.Coerce(float) only, no
     [min_a, max_a] range -- an out-of-range configured default must clamp here too
     (ADR-0014 criterion 6, entity-side clamp, distinct from the coordinator's own)."""
-    entity = TargetCurrentNumber(
-        entry_id="abc", coordinator=_StubCoordinator(), min_a=6.0, max_a=16.0, default=99.0
-    )
+    entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=99.0)
     assert entity.native_value == 16.0
 
 
 def test_init_clamps_out_of_range_default_target_current_below_minimum():
     """Same clamp as above, exercised on the below-minimum side too -- the plan's own test
     body only covers the above-maximum case, so this closes the min(default, min_a) half."""
-    entity = TargetCurrentNumber(
-        entry_id="abc", coordinator=_StubCoordinator(), min_a=6.0, max_a=16.0, default=1.0
-    )
+    entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=1.0)
     assert entity.native_value == 6.0
 
 
-async def test_added_to_hass_seeds_coordinator_with_default_when_no_restored_state(hass):
-    coord = _StubCoordinator()
-    entity = TargetCurrentNumber(
-        entry_id="abc", coordinator=coord, min_a=6.0, max_a=16.0, default=10.0
-    )
+async def test_added_to_hass_seeds_default_when_no_restored_state(hass):
+    entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=10.0)
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
-    assert coord.target_current == 10.0
     assert entity.native_value == 10.0
 
 
-async def test_added_to_hass_restores_previous_value_and_seeds_coordinator(hass):
+async def test_added_to_hass_restores_previous_value(hass):
     entity_id = "number.target_current"
     mock_restore_cache_with_extra_data(
         hass,
@@ -109,31 +70,24 @@ async def test_added_to_hass_restores_previous_value_and_seeds_coordinator(hass)
             ),
         ),
     )
-    coord = _StubCoordinator()
-    entity = TargetCurrentNumber(
-        entry_id="abc", coordinator=coord, min_a=6.0, max_a=16.0, default=10.0
-    )
+    entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=10.0)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
     assert entity.native_value == 13.0
-    assert coord.target_current == 13.0
 
 
-async def test_soc_limit_override_set_value_pushes_to_coordinator(hass):
-    coord = _StubCoordinator()
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+async def test_soc_limit_override_set_value_writes_only_its_own_state(hass):
+    """ADR-0018: SocLimitOverrideNumber no longer references the coordinator at all."""
+    entity = SocLimitOverrideNumber(entry_id="abc", default=80.0)
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
     await entity.async_set_native_value(90.0)
-    assert coord.soc_limit_override == 90.0
-    assert coord.refreshed is True
     assert entity.native_value == 90.0
 
 
 def test_soc_limit_override_init_seeds_bounds_and_default():
-    coord = _StubCoordinator()
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity = SocLimitOverrideNumber(entry_id="abc", default=80.0)
     assert entity.native_min_value == 50.0
     assert entity.native_max_value == 100.0
     assert entity.native_value == 80.0
@@ -143,15 +97,13 @@ def test_soc_limit_override_init_seeds_bounds_and_default():
 async def test_soc_limit_override_added_to_hass_seeds_default_when_no_restored_state(
     hass,
 ):
-    coord = _StubCoordinator()
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity = SocLimitOverrideNumber(entry_id="abc", default=80.0)
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
-    assert coord.soc_limit_override == 80.0
     assert entity.native_value == 80.0
 
 
-async def test_soc_limit_override_added_to_hass_restores_previous_value_and_seeds_coordinator(
+async def test_soc_limit_override_added_to_hass_restores_previous_value(
     hass,
 ):
     entity_id = "number.soc_limit_override"
@@ -170,13 +122,11 @@ async def test_soc_limit_override_added_to_hass_restores_previous_value_and_seed
             ),
         ),
     )
-    coord = _StubCoordinator()
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity = SocLimitOverrideNumber(entry_id="abc", default=80.0)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
     assert entity.native_value == 95.0
-    assert coord.soc_limit_override == 95.0
 
 
 async def test_soc_limit_override_added_to_hass_clamps_restored_value_above_max(hass):
@@ -196,13 +146,11 @@ async def test_soc_limit_override_added_to_hass_clamps_restored_value_above_max(
             ),
         ),
     )
-    coord = _StubCoordinator()
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity = SocLimitOverrideNumber(entry_id="abc", default=80.0)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
     assert entity.native_value == 100.0
-    assert coord.soc_limit_override == 100.0
 
 
 async def test_soc_limit_override_added_to_hass_clamps_restored_value_below_min(hass):
@@ -222,17 +170,15 @@ async def test_soc_limit_override_added_to_hass_clamps_restored_value_below_min(
             ),
         ),
     )
-    coord = _StubCoordinator()
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=coord, default=80.0)
+    entity = SocLimitOverrideNumber(entry_id="abc", default=80.0)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="number")
     await platform.async_add_entities([entity])
     assert entity.native_value == 50.0
-    assert coord.soc_limit_override == 50.0
 
 
 def test_init_clamps_out_of_range_default_soc_limit():
     """config_flow validates default_soc_limit with vol.Coerce(float) only, no 50-100 range --
     an out-of-range configured default must clamp here too."""
-    entity = SocLimitOverrideNumber(entry_id="abc", coordinator=_StubCoordinator(), default=30.0)
+    entity = SocLimitOverrideNumber(entry_id="abc", default=30.0)
     assert entity.native_value == SOC_LIMIT_OVERRIDE_MIN

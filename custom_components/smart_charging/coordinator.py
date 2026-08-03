@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import time as time_of_day
 from datetime import timedelta
 
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -64,6 +65,14 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_DEPARTURE_DOW,
+    OWNED_SUFFIX_DEPARTURE_HOLIDAY,
+    OWNED_SUFFIX_DEPARTURE_HOME_DAY,
+    OWNED_SUFFIX_HOME_DAY,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    OWNED_SUFFIX_TARGET_CURRENT,
     PEAK_WINDOW_SECONDS,
     PROFILE_AUTO,
     PROFILE_MANUAL,
@@ -146,7 +155,7 @@ class CycleResult:
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     """Runs the control cycle every interval, dispatching to the active mode (M1)."""
 
-    def __init__(self, hass: HomeAssistant, *, adapters, config, interval_s: int) -> None:
+    def __init__(self, hass: HomeAssistant, *, adapters, store, config, interval_s: int) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -154,6 +163,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             update_interval=timedelta(seconds=interval_s),
         )
         self._adapters = adapters
+        self._store = store
         self._config = config
         self._interval_s = interval_s
         # ADR-0012: one thin adapter per mode, looked up by active_mode instead of the old
@@ -167,15 +177,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
             MODE_CAPTAR: _CaptarModeHandler(config),
         }
-        # Single source of truth for the setpoint is the number entity, which seeds this on
-        # add (restored value, else configured default). 0 A is the safe default for cycle 0.
+        # Single source of truth for the setpoint is the number entity, read through the
+        # Store each cycle (_read_owned_entities, ADR-0018). 0 A is the safe default for
+        # cycle 0, before the first read.
         self.target_current: float = 0.0
-        # Single source of truth for these is their owning entity (select/number), which seeds
-        # them on add (restored value, else configured default) before the first refresh --
-        # this MODE_POWER default only matters for a coordinator instance never wired to a
-        # select entity (e.g. a unit test constructing one directly).
+        # Read through the Store each cycle (_read_owned_entities, ADR-0018) -- this
+        # MODE_POWER default only matters for a coordinator instance never wired to a Store
+        # read (e.g. a unit test constructing one directly).
         self.active_mode: str = MODE_POWER
-        # Mirrors active_mode (R16): seeded Manual, written by select.smart_charging_profile.
+        # Mirrors active_mode (R16): read through the Store each cycle, from
+        # select.smart_charging_profile.
         self.active_profile: str = PROFILE_MANUAL
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
         # R8's lifecycle state, threaded across cycles -- cleared only via
@@ -187,12 +198,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
         self._soc_gate = SocGateResolver()
-        # R9/R14 inputs -- single source of truth is meant to be the owning entity
-        # (switch.smart_charging_home_day / time.smart_charging_departure_*, mirroring
-        # ModeSelect/ProfileSelect's own push-on-change), but that entity->coordinator wiring
-        # is not yet threaded (tracked separately, issue #402); until then these default
-        # conservatively (no home day, no configured deadline anywhere), and tests set them
-        # directly, the same way they already set soc_limit_override.
+        # R9/R14 inputs -- read through the Store each cycle (_read_owned_entities,
+        # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
+        # These constructor defaults (no home day, no configured deadline anywhere) only
+        # matter before the first read.
         self.home_day_flag: bool = False
         self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
         self.departure_holiday_override: time_of_day | None = None
@@ -222,6 +231,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
     async def _run_cycle(self) -> CycleResult:
+        await self._read_owned_entities()
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -627,6 +637,46 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects any
         value outside the enum before this is ever called."""
         self.active_mode = mode
+
+    async def _read_owned_entities(self) -> None:
+        """RA3 (ADR-0018): reads all eight owned control-entity values through the Store once
+        per cycle. A None read leaves the field unchanged -- not a fault: owned entities are
+        internal, and a startup-race/transient-unavailable read is not the same kind of
+        missing data as a hardware adapter returning None (ADR-0007)."""
+        profile = await self._store.read(Platform.SELECT, OWNED_SUFFIX_PROFILE, str)
+        if profile is not None:
+            self.set_active_profile(profile)
+        # Only Manual dispatches via the selector (coordinator.py's own long-standing rule,
+        # applied below at the `auto_dispatchable` check) -- under Auto, self.active_mode is
+        # select_mode()'s own resolution, carried across cycles; re-reading the selector's
+        # raw (stale, user-facing) value here every cycle would fight that resolution and
+        # falsely register as a mode *change* to _reset_mode_state_if_changed() right below,
+        # silently discarding R7/R11 timers and R3's breach cooldown every single cycle.
+        if self.active_profile != PROFILE_AUTO:
+            mode = await self._store.read(Platform.SELECT, OWNED_SUFFIX_MODE, str)
+            if mode is not None:
+                self.set_active_mode(mode)
+        target_current = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float)
+        if target_current is not None:
+            self.set_target_current(target_current)
+        soc_limit = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
+        if soc_limit is not None:
+            self.set_soc_limit_override(soc_limit)
+        home_day = await self._store.read(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, bool)
+        if home_day is not None:
+            self.home_day_flag = home_day
+        for weekday, suffix in enumerate(OWNED_SUFFIX_DEPARTURE_DOW):  # Monday=0 .. Sunday=6
+            value = await self._store.read(Platform.TIME, suffix, time_of_day)
+            if value is not None:
+                self.departure_dow_defaults[weekday] = value
+        holiday = await self._store.read(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY, time_of_day)
+        if holiday is not None:
+            self.departure_holiday_override = holiday
+        home_day_override = await self._store.read(
+            Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY, time_of_day
+        )
+        if home_day_override is not None:
+            self.departure_home_day_override = home_day_override
 
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether

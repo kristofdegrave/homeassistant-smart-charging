@@ -54,6 +54,20 @@ DAY_SUN = "sun"
 DEPARTURE_OVERRIDE_HOLIDAY = "holiday"
 DEPARTURE_OVERRIDE_HOME_DAY = "home_day"
 
+# Owned control-entity unique_id suffixes (RA3 Store, ADR-0018/0019) -- shared between each
+# entity module's _attr_unique_id and store.py's read() calls, so the two sides can't drift.
+OWNED_SUFFIX_MODE = "mode"
+OWNED_SUFFIX_PROFILE = "profile"
+OWNED_SUFFIX_TARGET_CURRENT = "target_current"
+OWNED_SUFFIX_SOC_LIMIT_OVERRIDE = "soc_limit_override"
+OWNED_SUFFIX_HOME_DAY = "home_day"
+OWNED_SUFFIX_DEPARTURE_HOLIDAY = f"departure_{DEPARTURE_OVERRIDE_HOLIDAY}"
+OWNED_SUFFIX_DEPARTURE_HOME_DAY = f"departure_{DEPARTURE_OVERRIDE_HOME_DAY}"
+# Monday=0 .. Sunday=6 (Python's date.weekday()), matching time.py's DAY_OF_WEEK_DEFAULTS order.
+OWNED_SUFFIX_DEPARTURE_DOW = [
+    f"departure_{d}" for d in (DAY_MON, DAY_TUE, DAY_WED, DAY_THU, DAY_FRI, DAY_SAT, DAY_SUN)
+]
+
 # Adapter role keys (the coordinator's/factory's per-role dict; RA1 extension for ROLE_EV_SOC).
 ROLE_EV_SOC = "ev_soc"
 ROLE_CHARGER_CURRENT = "charger_current"

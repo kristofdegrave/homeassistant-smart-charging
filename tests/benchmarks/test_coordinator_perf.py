@@ -56,6 +56,13 @@ class _FakeStatus:
         return self._canonical
 
 
+class _FakeStore:
+    """Every read() returns None -- _read_owned_entities() becomes a no-op (ADR-0018)."""
+
+    async def read(self, entity_domain, unique_id_suffix, value_type):
+        return None
+
+
 def _adapters():
     return {
         ROLE_CHARGER_CURRENT: _FakeNumeric(0.0),
@@ -94,7 +101,9 @@ def _write_report(name, payload):
 
 
 async def test_power_mode_cycle_perf(hass):
-    coord = SmartChargingCoordinator(hass, adapters=_adapters(), config=_config(), interval_s=30)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore()
+    )
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
 
