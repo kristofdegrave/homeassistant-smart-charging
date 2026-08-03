@@ -1,5 +1,7 @@
 """HA-harness tests for the RA3 Store (ADR-0018/0019)."""
 
+from datetime import time as time_of_day
+
 from homeassistant.const import Platform
 from homeassistant.helpers import entity_registry as er
 
@@ -78,3 +80,23 @@ async def test_read_bool_off_returns_false(hass):
     _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "off")
     store = Store(hass, "entry1")
     assert await store.read(Platform.SWITCH, "home_day", bool) is False
+
+
+async def test_read_time_parses_isoformat(hass):
+    _register(
+        hass, Platform.TIME, "smart_charging_departure_mon", "entry1_departure_mon", "06:00:00"
+    )
+    store = Store(hass, "entry1")
+    assert await store.read(Platform.TIME, "departure_mon", time_of_day) == time_of_day(6, 0)
+
+
+async def test_read_time_invalid_isoformat_returns_none(hass):
+    _register(
+        hass,
+        Platform.TIME,
+        "smart_charging_departure_mon",
+        "entry1_departure_mon",
+        "not-a-time",
+    )
+    store = Store(hass, "entry1")
+    assert await store.read(Platform.TIME, "departure_mon", time_of_day) is None

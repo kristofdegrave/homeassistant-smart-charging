@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import time
 from typing import TypeVar
 
 from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -11,7 +12,7 @@ from homeassistant.helpers import entity_registry as er
 
 from ..const import DOMAIN
 
-T = TypeVar("T", str, float, bool)
+T = TypeVar("T", str, float, bool, time)
 
 
 class Store:
@@ -44,4 +45,9 @@ class Store:
                 return None
         if value_type is bool:
             return state.state == STATE_ON
+        if value_type is time:
+            try:
+                return time.fromisoformat(state.state)
+            except ValueError:
+                return None
         return state.state
