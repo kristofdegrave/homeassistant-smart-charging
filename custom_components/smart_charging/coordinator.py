@@ -65,6 +65,10 @@ from .const import (
     MODE_POWER,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    OWNED_SUFFIX_DEPARTURE_DOW,
+    OWNED_SUFFIX_DEPARTURE_HOLIDAY,
+    OWNED_SUFFIX_DEPARTURE_HOME_DAY,
+    OWNED_SUFFIX_HOME_DAY,
     OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PROFILE,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
@@ -651,6 +655,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         soc_limit = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
         if soc_limit is not None:
             self.set_soc_limit_override(soc_limit)
+        home_day = await self._store.read(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, bool)
+        if home_day is not None:
+            self.home_day_flag = home_day
+        for weekday, suffix in enumerate(OWNED_SUFFIX_DEPARTURE_DOW):  # Monday=0 .. Sunday=6
+            value = await self._store.read(Platform.TIME, suffix, time_of_day)
+            if value is not None:
+                self.departure_dow_defaults[weekday] = value
+        holiday = await self._store.read(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY, time_of_day)
+        if holiday is not None:
+            self.departure_holiday_override = holiday
+        home_day_override = await self._store.read(
+            Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY, time_of_day
+        )
+        if home_day_override is not None:
+            self.departure_home_day_override = home_day_override
 
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether

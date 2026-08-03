@@ -1,5 +1,7 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+from datetime import time as time_of_day
+
 import pytest
 from homeassistant.const import Platform
 from homeassistant.core import callback
@@ -1432,3 +1434,51 @@ async def test_read_owned_entities_clamps_target_current_via_existing_setter(has
     )
     await coord._read_owned_entities()
     assert coord.target_current == 16.0
+
+
+async def test_read_owned_entities_updates_home_day_flag(hass):
+    store = _FakeStore({(Platform.SWITCH, "home_day"): True})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.home_day_flag is True
+
+
+async def test_read_owned_entities_updates_departure_dow_defaults(hass):
+    store = _FakeStore({(Platform.TIME, "departure_mon"): time_of_day(6, 0)})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.departure_dow_defaults[0] == time_of_day(6, 0)  # Monday=0
+
+
+async def test_read_owned_entities_updates_departure_holiday_override(hass):
+    store = _FakeStore({(Platform.TIME, "departure_holiday"): time_of_day(7, 30)})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.departure_holiday_override == time_of_day(7, 30)
+
+
+async def test_read_owned_entities_updates_departure_home_day_override(hass):
+    store = _FakeStore({(Platform.TIME, "departure_home_day"): time_of_day(8, 0)})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.departure_home_day_override == time_of_day(8, 0)
+
+
+async def test_read_owned_entities_leaves_departure_dow_default_unchanged_when_store_returns_none(
+    hass,
+):
+    store = _FakeStore({})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.departure_dow_defaults[0] = time_of_day(6, 0)
+    await coord._read_owned_entities()
+    assert coord.departure_dow_defaults[0] == time_of_day(6, 0)
