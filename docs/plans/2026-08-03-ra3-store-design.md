@@ -103,6 +103,22 @@ async def _read_owned_entities(self) -> None:
         self.departure_home_day_override = home_day_override
 ```
 
+**Why these stay coordinator fields, not local values used directly:** all eight are read from
+`self` at several points scattered through `_run_cycle`, not once right after being set —
+`self.active_mode` alone at ~36 sites (mode dispatch, the SOC-gate check, `CycleResult`
+construction, …), and `self.home_day_flag`/`self.departure_*` each at two separate
+`resolve_departure_deadline` calls (today's and tomorrow's deadline, `coordinator.py:358-365` /
+`:410-417`) with unrelated logic (SOC-Target resolution) in between. Keeping them as fields means
+none of those existing downstream read sites change at all — only the entity-facing write path
+does. Four of the eight (`active_mode`/`active_profile`/`target_current`/`soc_limit_override`)
+have been coordinator fields since ADR-0014; the other four (`home_day_flag`/`departure_*`) were
+already declared this way in `__init__` before this spec, waiting on exactly this wiring (the
+"tracked separately, issue #402" comment at `coordinator.py:190-195`). Converting any of them to
+pure local variables threaded as explicit parameters through every downstream call site would be a
+materially larger, riskier diff for no behavioral difference — and would be redesigning the
+Coordinator's internal data-flow shape, not populating it via a new mechanism, which is this
+slice's actual job.
+
 Each field keeps its current value when the Store returns `None` (success criterion 4) — the
 `if x is not None:` guard is the whole mechanism, no separate fault branch. `set_active_mode`/
 `set_active_profile`/`set_target_current`/`set_soc_limit_override`'s *bodies* (the clamping logic)
