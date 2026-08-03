@@ -117,20 +117,25 @@ Clients — the dashboard consumes them read-only.
 
 Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisive validation of the
 cut: none is a service. Deadline urgency (UC05) is the Deadline Engine plus the Billing-Protection
-Engine's ceiling-raise and the Profile Engine's own escalation row, all invoked in the Coordinator's
-normal cycle. The solar step-up (UC06) is the SOC-Target Engine alone, gated by a plain "profile is
-`Auto`" input flag the Coordinator already holds (R8) — no Profile Engine call. The solar-reserve
-cap (UC07) splits across two services: the SOC-Target Engine writes row 1 of the active-SOC-limit
-lookup, while declining opportunistic overnight top-up is simply another row of the Profile
-Engine's own mode-selection table (R9) — not a second call, since mode selection is already the
-Profile Engine's job. All three "happen" inside the one cycle the Coordinator already runs.
+Engine's ceiling-raise and the `Auto` Profile Engine's own escalation row, all invoked in the
+Coordinator's normal cycle. The solar step-up (UC06) is the only Engine whose *decision* changes —
+SOC-Target's, gated by plain input flags the Coordinator already holds (the active profile and the
+previous cycle's active mode; R8) — but UC06 still rides the full cycle (conditioning, mode
+dispatch, both clamps, invariants), so it is not a one-use-case-to-one-engine mapping either (see
+§6's smell note). The solar-reserve cap (UC07) splits across two services: the SOC-Target Engine
+writes row 1 of the active-SOC-limit lookup, while declining opportunistic overnight top-up is the
+`Auto` Profile Engine declining to match row 4 of its own mode-selection table (R9) — not a second
+call, since mode selection is already the Profile Engine's job. The Coordinator evaluates R9's
+five-part reserve condition once and passes the resulting flag to both, the same input-not-a-call
+pattern capability gating uses (below) — the condition is not independently re-evaluated inside
+either engine. All three "happen" inside the one cycle the Coordinator already runs.
 
 ### Engines — reusable policy scoped to one volatility (never orchestrate, never do I/O)
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
 | **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A) |
-| **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table, whose rows already cover escalating to `Captar`/`Power` under deadline urgency (R5) and declining a mode for opportunistic overnight top-up while the reserve cap (R9) holds — both are mode-selection *outcomes*, not separate engine calls |
+| **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
 | **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, and what it is willing to spend (R5/R14/R15) |
 | **Billing-Protection Engine** | V6 | Effective peak limit and the R3 peak clamp (skippable only by `Power`'s R17 opt-out) |
@@ -145,11 +150,12 @@ I/O and no Engine calls another Engine.** Cross-engine composition and all I/O a
 job (it reads once, then feeds each engine) — see the call rules in [§4](#4-static-architecture).
 
 - **Pure/leaf Engines** hold no cross-cycle state: the Charging-Mode Engines, the Profile Engines,
-  the SOC-Target, Deadline, Billing-Protection, Grid-Safety, and Capability-Gate Engines. Data in,
-  decision out.
+  the Deadline, Billing-Protection, Grid-Safety, and Capability-Gate Engines. Data in, decision out.
 - **Stateful Engines** operate over cross-cycle state that the **Manager owns and threads in and
   out** — the state is a parameter, never HA-held inside the engine, so the engine stays testable
-  in isolation. Three engines are stateful: **Signal-Conditioning** (the R10 smoothing window),
+  in isolation. Four engines are stateful: **SOC-Target** (the R8 step-up's own progression —
+  whether a step has already been applied — threaded by the Coordinator alongside the plain
+  profile/mode input flags below), **Signal-Conditioning** (the R10 smoothing window),
   **Cycle-Invariant** (the R11 cooldown/hold timers), and the **Peak-Demand Tracker** (the running
   [monthly peak demand](../analysis/system-overview.md#ubiquitous-language)). The Tracker's result
   is surfaced as the owned `sensor.smart_charging_monthly_peak_kw`, but that *write* is the Coordinator's, via
@@ -163,11 +169,14 @@ the smoothing state is still the Coordinator's, threaded into a conditioning rou
 
 **R8's solar step-up is realized entirely inside the SOC-Target Engine, not the Profile Engine.**
 Raising the active SOC limit in steps (R8) is a SOC-limit computation, not a mode-selection
-decision, so it stays inside SOC-Target's own volatility (V4). Its `Auto`-only gate is a plain
-boolean input — which profile is active — that the Coordinator already reads and passes to
-SOC-Target directly, the same input-not-a-call pattern the capability-gating aside below uses.
-This is why R8 needs no Profile→SOC-Target edge, unlike R9's top-up decline, which stays inside
-Profile because it *is* a mode-selection outcome (a row of the table above), not a call to another
+decision, so it stays inside SOC-Target's own volatility (V4). Its `Auto`-only gate is plain input
+flags the Coordinator already holds — the active profile, and the previous cycle's active mode
+(`resolution-rules.md`'s "while charging in a solar mode" condition; the Profile Engine's own mode
+for *this* cycle isn't resolved yet at this point in the sequence, so SOC-Target reads a one-cycle-
+old value, matching R8's own "next control cycle" framing) — passed to SOC-Target directly, the
+same input-not-a-call pattern the capability-gating aside below uses. This is why R8 needs no
+Profile→SOC-Target edge, unlike R9's top-up decline, which stays inside Profile because it *is* a
+mode-selection outcome (declining to match row 4 of the table above), not a call to another
 engine.
 
 **Capability gating (R18) has two realizations, only one of which is the Engine.** At *runtime* the
@@ -338,13 +347,14 @@ sequenceDiagram
     SC-->>C: smoothed readings + supply voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
-    C->>SOC: resolve active SOC limit (R7: cap→step-up→default, cap row uses tomorrow's deadline)
+    C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag below; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
     C->>DL: required current & urgency? (R5/R15, using active SOC limit)
     DL-->>C: urgency flag + required current
     C->>Cap: available modes for declared capabilities (R18)
     Cap-->>C: available modes
-    C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus, available modes)
+    Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)
+    C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (smoothed readings, SOC limit, config)
     M-->>C: desired current
@@ -465,15 +475,15 @@ Every requirement is reachable from at least one service:
   monthly peak → Peak-Demand Tracker.
 - **R5/R15** → Deadline Engine (+ Billing-Protection ceiling raise + `Auto` Profile escalation +
   Notification for unreachable). **R14** → Deadline Engine's deadline resolution.
-- **R6/C2** → Vehicle-Limit Manager. **R7/R8** → SOC-Target Engine (R8's `Auto`-only gate is a
-  plain input flag, not a Profile call — see §3). **R9** has two halves: SOC-Target Engine
-  (lowering the limit to the reserve cap) **and** the `Auto` Profile Engine (declining
-  opportunistic overnight top-up, as a row of its own mode-selection table) — one `Auto` decision,
-  two services.
+- **R6/C2** → Vehicle-Limit Manager. **R7/R8** → SOC-Target Engine (R8's `Auto`-only gate is plain
+  input flags — active profile + previous cycle's active mode — not a Profile call; see §3).
+  **R9** has two halves: SOC-Target Engine (lowering the limit to the reserve cap) **and** the
+  `Auto` Profile Engine (declining to match row 4 of its own mode-selection table) — one shared
+  reserve-condition input (evaluated once by the Coordinator, §3), two services.
 - **R10/NF4** → Signal-Conditioning Engine. **R11/C1** → Cycle-Invariant Engine.
 - **R12/R13** → Notification Manager (+ home-day flag as owned state). **R16** → Profile Engines
-  (its mode-selection table also realizes R5's escalation row and R9's top-up-decline row; R8's
-  step-up is realized entirely in SOC-Target Engine, above).
+  (its mode-selection table also realizes R5's escalation row and R9's top-up-decline half; R8's
+  step-up and R9's cap-lowering half are both realized entirely in SOC-Target Engine, above).
 - **R18** → Capability-Gate Engine. **R19** → dashboard + config-flow Clients over the Store.
 - **NF3** → Resource-Access (adapter) layer. Fault handling (ADR-0007) → Coordinator routing a
   `None`/exception into the Cycle-Invariant stop path **and** setting the owned Fault/OK status
