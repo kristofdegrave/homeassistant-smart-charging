@@ -49,6 +49,7 @@ from custom_components.smart_charging.const import (
     OWNED_SUFFIX_HOME_DAY,
     OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     OWNED_SUFFIX_TARGET_CURRENT,
     PROFILE_AUTO,
     PROFILE_MANUAL,
@@ -1451,6 +1452,30 @@ async def test_read_owned_entities_clamps_target_current_via_existing_setter(has
     )
     await coord._read_owned_entities()
     assert coord.target_current == 16.0
+
+
+async def test_read_owned_entities_updates_active_profile(hass):
+    """ADR-0018: the coordinator reads active_profile through the Store, via its own
+    setter -- the mutation point (set_active_profile) is unchanged, only the caller is."""
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_PROFILE): PROFILE_AUTO})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.active_profile == PROFILE_AUTO
+
+
+async def test_read_owned_entities_clamps_soc_limit_override_via_existing_setter(hass):
+    """The Store-read value still goes through set_soc_limit_override's own clamp
+    (ADR-0014) -- confirms the mutation point didn't change, only its caller."""
+    store = _FakeStore(
+        {(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 150.0}
+    )  # SOC_LIMIT_OVERRIDE_MAX is 100.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
 
 
 async def test_read_owned_entities_updates_home_day_flag(hass):
