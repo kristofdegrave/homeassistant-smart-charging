@@ -91,21 +91,24 @@ pair (V6, V11, V12). Every service is classified as one of the five Method roles
 | Client | What it does | Realizes |
 | --- | --- | --- |
 | **Control-interval timer** | Fires the control cycle every [control interval](../analysis/system-overview.md#ubiquitous-language) | `control-cycle.md` trigger |
-| **Owned control entities** | The user sets [active profile](../analysis/system-overview.md#ubiquitous-language)/[mode](../analysis/system-overview.md#ubiquitous-language), default SOC limit, [Power target current](../analysis/system-overview.md#ubiquitous-language), departure times, [home-day flag](../analysis/system-overview.md#ubiquitous-language) directly (ADR-0004), through the Store like every other Client below | R16, R6, R17, R14, R13 |
+| **Owned control entities** | The user sets [active profile](../analysis/system-overview.md#ubiquitous-language)/[mode](../analysis/system-overview.md#ubiquitous-language), default SOC limit, [Power target current](../analysis/system-overview.md#ubiquitous-language), departure times, [home-day flag](../analysis/system-overview.md#ubiquitous-language) (ADR-0004), through the Store like the dashboard and config flow below | R16, R6, R17, R14, R13 |
 | **Runtime dashboard** | Observes charging status + every runtime-classified entity and edits them in place — **UC11** | R19 |
 | **Install-time config flow / options flow** | Maps adapter roles, declares capabilities, sets install-time thresholds (data); tunes options anytime | R18, R19, ADR-0003/0005 |
 | **External event sources** | Charger connect/disconnect transitions; a user-made vehicle charge-limit change; a mobile-app notification action | UC08, UC09, UC10 |
 
 The owned control entities, the config flow, and the dashboard are all Clients, not Managers: they
-read/write entities and config-entry buckets through the Store, but hold no orchestration or
-policy. UC11 has no service of its own for exactly this reason — it is a Client rendering owned
-entities and adapter-role read-backs (R19's "no dashboard-specific logic per new entity" is a
-direct consequence). None of the three triggers a Manager directly — the Control-interval timer is
-the Coordinator's only trigger (§4 rule 1), and the Coordinator reads every owned control entity's
-current value through the Store on its own cycle, the same way it reads hardware through the
-Adapters. A user action here takes effect on the Coordinator's next scheduled cycle, not
-immediately — the control interval is already short enough that no use-case in this design needs
-sub-cycle responsiveness to a user-set value.
+read/write owned/runtime entities and config-entry buckets through the Store, but hold no
+orchestration or policy. UC11 has no service of its own for exactly this reason — it is a Client
+rendering owned entities (via the Store) and adapter-role read-backs (via the Adapters, read-only —
+R19's "no dashboard-specific logic per new entity" is a direct consequence). None of the three
+triggers a Manager directly — the Control-interval timer is the Coordinator's only trigger (§4
+rule 1), and the Coordinator reads every owned control entity's current value through the Store on
+its own cycle, the same way it reads hardware through the Adapters. A user action here takes effect
+on the Coordinator's next scheduled cycle, not immediately — NF1 already requires the coordinator
+to hold none of this state itself, and R11's mode-switch timer reset keys off the *active mode*
+the Profile Engine returns each cycle (which the Coordinator already diffs against the prior
+cycle), not off a push notification, so no use-case loses anything by reading on the next cycle
+instead of being pushed to immediately.
 
 The integration also owns **diagnostic output entities** the Coordinator *writes* (never the
 user): `sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor (ADR-0007), and any
@@ -273,12 +276,16 @@ flowchart TD
 
 **Allowed call directions (one-way only):**
 
-1. `Client → Manager` — Clients trigger Managers; a Manager never calls a Client. Only the
-   Control-interval timer and External event sources trigger a Manager this way; the owned control
-   entities, the dashboard, and the config flow are the exception that proves the rule — all three
-   touch only the Store, holding no orchestration, so none of them calls a Manager and none is
-   called by one. The Coordinator (a Manager) reaches the owned control entities' current values
-   itself, through the Store (rule 2/3 below) — never the reverse.
+1. `Client → Manager` — Clients trigger Managers; a Manager never calls a Client. Every genuine
+   trigger source (the Control-interval timer, the Notification Manager's own reminder/evening-time
+   checks in [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08), and External
+   event sources) reaches a Manager this way; the owned control entities, the dashboard, and the
+   config flow are the exception that proves the rule — none of the three is a trigger source, and
+   none holds orchestration, so none of them calls a Manager and none is called by one. Their state
+   access — reading or writing owned/runtime entities and config-entry buckets — goes only through
+   the Store (the dashboard additionally reads adapter-role read-backs, read-only, for display). The
+   Coordinator (a Manager) reaches the owned control entities' current values itself, through the
+   Store (rule 2/3 below) — never the reverse.
 2. `Manager → {Engine, Resource Access}` — Managers orchestrate. They read inputs through Resource
    Access, feed them to pure Engines, and write results through Resource Access.
 3. `Resource Access → Resource` — adapters/notification/store access reach the external thing.
@@ -334,7 +341,7 @@ sequenceDiagram
 
     T->>C: control interval fires
     C->>S: read owned control-entity values (profile, mode, SOC override, target current, departure times, home-day flag)
-    S-->>C: current values (user-set since last cycle, if any)
+    S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
     C->>SC: smooth net/solar (R10) + resolve voltage (NF4)
@@ -513,7 +520,16 @@ stands unchanged. Two decisions this design makes explicit are candidates for *n
   calls; events map to HA automation triggers). It deserves its own ADR before the Notification and
   Vehicle-Limit Managers are built.
 
-Both are recorded as follow-ups per the write-adr cycle; this design does not open them.
+Both are recorded as follow-ups per the write-adr cycle; this design does not open them. (This
+table covers only ADRs 0001–0009, written before this design existed — see [§1](#1-relationship-to-the-analysis-docs-and-to-the-adrs).
+ADRs 0010 and later were written after and are not reconciled here.)
+
+**Known divergence surfaced by this revision, not resolved here:** ADR-0016 (entity-to-coordinator
+writes via HA events) decided the owned control entities push an inward event the Coordinator
+subscribes to — the opposite of [§4](#4-static-architecture) rule 1 as revised, which now reserves
+`Client → Manager` for genuine trigger sources and routes the owned control entities' state through
+the Store only. ADR-0016 needs its own superseding ADR to reconcile with this design; this document
+does not open or decide that ADR.
 
 ---
 
