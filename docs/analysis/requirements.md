@@ -81,6 +81,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The safety margin is always respected: net import stays at or below the effective peak limit in force minus the safety margin, even while meeting a deadline.
 - [ ] The active SOC limit itself is never raised by deadline logic — when a lower limit is in force (e.g. a solar step-up not yet reset), the system only accelerates toward that lower limit. This never involves the solar-reserve cap (R9): a departure deadline and that cap are mutually exclusive.
 - [ ] When even charging at the maximum permitted rate cannot meet the deadline, the system charges at that maximum and sends the user a notification that the deadline is unreachable.
+- [ ] The deadline every criterion above is judged against is the next occurrence of the departure deadline (R14) — never an occurrence that has already passed today. A departure time earlier in the day than the current time therefore never engages urgency or the unreachable notification on that basis alone; it is judged as the next day's occurrence, with the full time remaining until then.
 
 ---
 
@@ -203,7 +204,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R14 — Configurable departure times
 
 **Priority:** Must
-**What:** The system targets a departure time for the current day, resolved from a per-day-of-week default, optional public-holiday and home-day overrides, or an external sensor. Any of these may resolve to "no deadline". Applies only while the deadline capability is present (R18).
+**What:** The system targets the next occurrence of the departure time, resolved from a per-day-of-week default, optional public-holiday and home-day overrides, or an external sensor. The resolution is per calendar date, and the deadline in force is the next occurrence still ahead of the current time — today's while it has not yet arrived, otherwise tomorrow's. Any of these may resolve to "no deadline". Applies only while the deadline capability is present (R18).
 
 **Acceptance criteria:**
 
@@ -211,10 +212,13 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] A default departure time is user-configurable for each day of the week (defaults: 06:00 Mon–Fri; no deadline Sat–Sun).
 - [ ] Public-holiday and home-day (home-day flag, R13) departure times can each be configured and override the day-of-week default; both default to no deadline. If a day is both, the public-holiday override takes precedence.
 - [ ] Public holidays are recognised from a configured source (e.g. a holiday calendar sensor, NF3).
-- [ ] When an external departure-time sensor is configured (NF3), its value takes precedence over all configured values.
-- [ ] Any resolved departure time may be "no deadline", in which case no deadline applies that day and R5 does not force charging.
-- [ ] The active departure time is resolved in priority order — external sensor, then public-holiday / home-day override, then day-of-week default — and feeds the deadline guarantee (R5) and plug-in reminder (R12).
-- [ ] The same resolution, evaluated one day ahead (tomorrow's day-of-week, holiday status, and home-day flag), feeds the solar-reserve cap's precondition (R9): a deadline resolved for tomorrow takes priority over the cap.
+- [ ] When an external departure-time sensor is configured (NF3), its value takes precedence over all configured values; it is read as a time-of-day and applied to whichever calendar date is being resolved.
+- [ ] Any resolved departure time may be "no deadline", in which case that date imposes no deadline and R5 does not force charging.
+- [ ] The departure time for a given calendar date is resolved in priority order — external sensor, then public-holiday / home-day override, then day-of-week default.
+- [ ] The departure deadline in force is the next occurrence of that resolution still ahead of the current time: today's resolved departure time while it is strictly in the future, otherwise the same priority order re-evaluated for tomorrow's calendar date — re-evaluated, not today's time shifted by 24 hours, so a different day-of-week default, public-holiday status, or home-day flag for tomorrow is honoured. This resolved deadline feeds the deadline guarantee (R5) and plug-in reminder (R12).
+- [ ] A departure time whose time-of-day has already passed today never yields a deadline in the past: at or after that moment the deadline resolves to tomorrow's occurrence, so the time remaining to the deadline is always positive and no deadline is reported unreachable (R5) purely because its time-of-day has passed.
+- [ ] The lookahead extends one day only: when today's remaining occurrence and tomorrow's both resolve to "no deadline", no deadline applies — a departure time further out becomes the deadline only once the days roll over. One day covers both consumers: R5 concerns the deadline the current charging session must meet, and R12's lead time (default 8 hours) is assumed to be shorter than a day — a lead time configured at 24 hours or more is outside what this lookahead serves.
+- [ ] The same per-date resolution, evaluated one day ahead (tomorrow's day-of-week, holiday status, and home-day flag), feeds the solar-reserve cap's precondition (R9): a deadline resolved for tomorrow takes priority over the cap. That precondition is always evaluated for tomorrow's calendar date, independently of which date the next-occurrence resolution above selects.
 
 ---
 

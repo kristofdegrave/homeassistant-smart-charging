@@ -13,7 +13,7 @@
 
 - The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`), state of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`), and the dispatched mode has computed its own desired current for this cycle (`control-cycle.md`, step 4). The **baseline mode** — the mode that would be active absent any deadline-driven mode escalation — is the dispatched mode itself under `Manual` (which never escalates the mode), or whichever mode Auto mode-selection's rows 3–5 would otherwise select under `Auto`.
 - The [deadline capability](../system-overview.md#ubiquitous-language) is present (R18). When it is absent this use-case never applies at all — no deadline is ever resolved, so urgency cannot arise.
-- A [departure deadline](../system-overview.md#ubiquitous-language) is resolved for today — not "no deadline" (`resolution-rules.md`).
+- A [departure deadline](../system-overview.md#ubiquitous-language) is resolved — not "no deadline" (`resolution-rules.md`). That deadline is the next occurrence still ahead of now, so it may fall later today or on the following day (e.g. an overnight session plugged in at 22:00 for a 06:00 departure), and the time remaining to it is always positive.
 
 ## Trigger
 
@@ -21,7 +21,7 @@ A [control cycle](../system-overview.md#ubiquitous-language)'s [required current
 
 ## Main success scenario
 
-1. **Given** a departure deadline is resolved for today, the car is connected at home below the active SOC limit, and the dispatched mode has computed its own desired current for this cycle.
+1. **Given** a departure deadline is resolved (its next occurrence still ahead of now), the car is connected at home below the active SOC limit, and the dispatched mode has computed its own desired current for this cycle.
 2. **When** the control cycle's required-current computation (`resolution-rules.md`) exceeds the baseline mode's own desired current, **then** the System is in deadline urgency (R5).
 3. **And** the coordinator raises the effective peak limit ceiling to the [maximum peak](../system-overview.md#ubiquitous-language) (`resolution-rules.md`) — the lever available under every profile — so a mode whose own request was being held back by the normal ceiling (e.g. `Captar`, `Power`) can draw more, up to whatever it already requests; a mode whose own request never depended on peak headroom (e.g. `Solar`, `SolarOnly`) draws no differently.
 4. **And** the car reaches the active SOC limit by the deadline whenever the dispatched mode's own request, once unclamped by the raised ceiling, is at or above the required current.
@@ -50,6 +50,11 @@ Given deadline urgency is in effect (step 2), and — even with the ceiling rais
 When a control cycle runs
 Then the System delivers the maximum permitted rate and notifies the user that the departure deadline is unreachable at the current rate.
 
+**The departure deadline is reached while the car is still short of the active SOC limit.**
+Given deadline urgency is in effect (step 2, in either the Urgent or Unreachable state) and state of charge is still below the active SOC limit
+When the resolved departure time is reached
+Then the departure deadline resolves to its next occurrence (`resolution-rules.md`, R14), the time remaining jumps to the interval until that occurrence, and the required current drops accordingly — so the next control cycle returns the System to Normal, or leaves it in Urgent if even that longer interval is not enough, and no further unreachable notification is sent for the deadline that has just passed. Recording or announcing that a deadline was actually *missed* is out of scope: the earlier unreachable notification was the warning (R5).
+
 ## Postconditions
 
 - While deadline urgency holds, the delivered charger current is the dispatched mode's own request (under `Auto` with the CapTar capability present, `Captar`'s own maximum-current request; under `Auto` without the CapTar capability, `Power`'s own configured target-current request; under `Manual`, whichever mode is active), clamped to the maximum permitted rate under the raised ceiling — bounded above by that rate (itself bounded by C1 and C4); high-tariff charging is permitted for as long as urgency holds.
@@ -67,6 +72,8 @@ Deadline urgency is itself a re-evaluated-every-cycle condition, not a value the
 - **Unreachable** — the required current exceeds the maximum permitted rate even with every available lever; the System delivers the maximum permitted rate and has notified the user.
 
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected" precondition and exits this use-case's scope from any state, returning to Normal on reconnect; the active SOC limit resets to the default at that point (R7), independently of this use-case. Reaching the active SOC limit, or the departure deadline resolving to "no deadline," also returns the System to Normal from any state, since urgency is only ever defined relative to a deadline that still applies.
+
+The deadline being reached is likewise a change in conditions, not a state of its own. Once it is, the resolved deadline becomes the next occurrence (`resolution-rules.md`, R14) and the time remaining jumps to the interval until then, so the required current drops. A car still short of its active SOC limit at departure time therefore returns to Normal — or stays in Urgent — on the next cycle rather than remaining Unreachable indefinitely, and the unreachable notification is not repeated for the deadline that has passed (exception flow above).
 
 | State | Delivered current | Leaves when |
 | --- | --- | --- |
