@@ -62,6 +62,7 @@ from .const import (
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     PEAK_WINDOW_SECONDS,
+    ROLE_NOTIFICATION_TARGET,
 )
 from .coordinator import SmartChargingCoordinator
 
@@ -141,6 +142,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_DEFAULT_TARGET_CURRENT: default_target_current,
         CONF_DEFAULT_SOC_LIMIT: default_soc_limit,
     }
+
+    # issue #498: NotifyAdapter registers a bus listener at construction; without unsubscribing
+    # it here, each reload (setup -> unload -> setup) leaked another one. `async_on_unload`
+    # fires on unload (including a reload's own unload half and setup-retry teardown), the
+    # same hook already used below for the update listener.
+    notify_adapter = adapters.get(ROLE_NOTIFICATION_TARGET)
+    if notify_adapter is not None:
+        entry.async_on_unload(notify_adapter.close)
 
     # First refresh AFTER platforms: so the number entity can seed target_current on add, and
     # so the Store's first _read_owned_entities() read (ADR-0018) finds the owned entities

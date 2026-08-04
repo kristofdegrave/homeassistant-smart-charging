@@ -3,6 +3,9 @@
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.smart_charging.adapters.notify import (
+    EVENT_MOBILE_APP_NOTIFICATION_ACTION,
+)
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -12,6 +15,7 @@ from custom_components.smart_charging.const import (
     CONF_EV_SOC_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
+    CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
@@ -364,3 +368,47 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         for e in er.async_entries_for_config_entry(registry, entry.entry_id)
     }
     assert registered == expected_by_domain
+
+
+async def test_reload_does_not_leak_the_notify_adapters_action_listener(hass):
+    """issue #498: `NotifyAdapter._unsub` was stored but never called, so each config-entry
+    reload (setup->unload->setup) registered another bus listener without unsubscribing the
+    old one -- a per-reload listener leak. Reloads (not just a bare unload) so this actually
+    exercises the leak the issue reports."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    baseline = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    after_setup = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+    assert after_setup - baseline == 1
+
+    for _ in range(2):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        after_reload = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+        assert after_reload - baseline == 1
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    after_unload = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+    assert after_unload == baseline
+
+
+async def test_unload_without_a_notification_target_mapped_still_succeeds(hass):
+    """Every existing entry predates the notify-target mapping (it's optional, NF3) -- the
+    common no-`NotifyAdapter` case must unload cleanly too, not just the mapped case above."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.entry_id not in hass.data[DOMAIN]
