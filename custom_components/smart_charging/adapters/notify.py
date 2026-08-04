@@ -54,10 +54,15 @@ class NotifyAdapter:
         self._entity_id = entity_id
         self._current_tag: str | None = None
         self._last_action: str | None = None
-        # Stored so a future teardown (Task 5.2) can unsubscribe; this task does not call it.
+        # Unsubscribed via close() -- the factory's owner calls it on config-entry unload
+        # (issue #498), so a reload doesn't leave a dangling bus listener behind.
         self._unsub = hass.bus.async_listen(
             EVENT_MOBILE_APP_NOTIFICATION_ACTION, self._handle_action
         )
+
+    def close(self) -> None:
+        """Unsubscribe the action-event listener (issue #498's per-reload leak fix)."""
+        self._unsub()
 
     @callback
     def _handle_action(self, event: Event) -> None:
@@ -88,6 +93,11 @@ class NotifyAdapter:
                     {_DATA_KEY_ACTION: action, _DATA_KEY_TITLE: action} for action in value.actions
                 ],
             }
+        # A non-actionable send (e.g. the R5 deadline-unreachable notice) does not supersede
+        # a still-outstanding actionable prompt -- issue #498 review: clearing `_current_tag`
+        # here would make `_handle_action` drop a genuine answer that arrives for the prompt
+        # still in flight. `_current_tag`/`_last_action` are therefore only ever reset by a
+        # *new actionable* write (above) or consumed by `read()` (below).
         await self._hass.services.async_call("notify", "send_message", service_data, blocking=True)
 
     async def read(self) -> str | None:
@@ -96,5 +106,15 @@ class NotifyAdapter:
         The stale-response guard (design doc §6 / success criterion 2): a response
         tagged to a superseded notification -- filtered out in _handle_action, so it
         never reaches here -- or no response yet, returns None, never a stale value.
+
+        The returned answer is consumed (issue #498): once read, it is cleared so it
+        is valid for exactly one read() of its own tag/prompt cycle, not replayed on
+        every subsequent call. This narrows design doc §4/§6's "returns the last captured
+        actionable response" to "returns it once" -- a deliberate fix-scoped deviation
+        (issue #498), not yet reflected back into the design doc; the not-yet-built
+        `notification_manager.py` consumer should call `read()` exactly once per resolved
+        prompt-state transition, not poll it speculatively.
         """
-        return self._last_action
+        action = self._last_action
+        self._last_action = None
+        return action

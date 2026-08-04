@@ -128,6 +128,89 @@ async def test_read_is_none_after_a_non_actionable_write(hass):
     assert await adapter.read() is None
 
 
+async def test_read_consumes_the_answer_so_it_is_not_replayed(hass):
+    """A captured answer is valid for exactly one read() -- issue #498's "replay forever"
+    bug came from read() never expiring the answer it returned."""
+    calls = _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(
+        NotificationRequest(
+            message="Home tomorrow?", actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO]
+        )
+    )
+    await hass.async_block_till_done()
+    current_tag = calls[0]["data"]["tag"]
+
+    hass.bus.async_fire(
+        EVENT_MOBILE_APP_NOTIFICATION_ACTION, {"tag": current_tag, "action": ACTION_HOMEDAY_YES}
+    )
+    await hass.async_block_till_done()
+
+    assert await adapter.read() == ACTION_HOMEDAY_YES
+    # Second read, no new event in between -- the answer must not replay.
+    assert await adapter.read() is None
+
+
+async def test_non_actionable_write_does_not_drop_a_still_pending_actionable_prompt(hass):
+    """code-reviewer finding on issue #498's fix: a non-actionable send (e.g. the R5
+    deadline-unreachable notice) shares this one adapter with UC08's actionable prompt but
+    does not supersede it. An earlier draft of the fix cleared `_current_tag` on every
+    non-actionable write, which made `_handle_action` drop a genuine answer arriving for the
+    still-outstanding actionable tag -- this pins the corrected behavior."""
+    calls = _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(
+        NotificationRequest(
+            message="Home tomorrow?", actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO]
+        )
+    )
+    await hass.async_block_till_done()
+    current_tag = calls[0]["data"]["tag"]
+
+    # An unrelated, non-actionable notification is delivered while the prompt above is
+    # still awaiting an answer.
+    await adapter.write(NotificationRequest(message="Deadline unreachable"))
+    await hass.async_block_till_done()
+
+    # The user's real answer, for the still-outstanding actionable tag, arrives after that.
+    hass.bus.async_fire(
+        EVENT_MOBILE_APP_NOTIFICATION_ACTION, {"tag": current_tag, "action": ACTION_HOMEDAY_YES}
+    )
+    await hass.async_block_till_done()
+
+    assert await adapter.read() == ACTION_HOMEDAY_YES
+
+
+async def test_a_later_foreign_tag_event_does_not_overwrite_a_captured_answer(hass):
+    """Pins the `_handle_action` docstring's claim: filtering happens there (not just in
+    `read()`), so a foreign action arriving after the real answer can't clobber it."""
+    calls = _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(
+        NotificationRequest(
+            message="Home tomorrow?", actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO]
+        )
+    )
+    await hass.async_block_till_done()
+    current_tag = calls[0]["data"]["tag"]
+
+    hass.bus.async_fire(
+        EVENT_MOBILE_APP_NOTIFICATION_ACTION, {"tag": current_tag, "action": ACTION_HOMEDAY_YES}
+    )
+    await hass.async_block_till_done()
+
+    # A foreign event (some other actionable notification's response) fires afterwards.
+    hass.bus.async_fire(
+        EVENT_MOBILE_APP_NOTIFICATION_ACTION, {"tag": "some-other-tag", "action": ACTION_HOMEDAY_NO}
+    )
+    await hass.async_block_till_done()
+
+    assert await adapter.read() == ACTION_HOMEDAY_YES
+
+
 async def test_registers_the_action_listener_exactly_once(hass):
     _register_capture(hass)
     baseline = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
@@ -144,3 +227,17 @@ async def test_registers_the_action_listener_exactly_once(hass):
     # One listener registered at construction; repeated write() calls do not add more.
     after = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
     assert after - baseline == 1
+
+
+async def test_close_unsubscribes_the_action_listener(hass):
+    """issue #498: `_unsub` was stored but never called -- each reload leaked a listener.
+    `close()` is the adapter's own teardown hook (wired into `async_unload_entry`)."""
+    baseline = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+    assert hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0) - baseline == 1
+
+    adapter.close()
+
+    after = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
+    assert after == baseline

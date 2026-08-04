@@ -4,6 +4,7 @@ import pytest
 
 from custom_components.smart_charging.adapters.boolean import BooleanReadAdapter
 from custom_components.smart_charging.adapters.factory import build_adapters
+from custom_components.smart_charging.adapters.notify import NotifyAdapter
 from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
     NumericReadWriteAdapter,
@@ -24,6 +25,7 @@ from custom_components.smart_charging.const import (
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
     CONF_NET_POWER_ENTITY,
+    CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
@@ -38,6 +40,7 @@ from custom_components.smart_charging.const import (
     ROLE_HOME_DAY_EXTERNAL,
     ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
+    ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -274,3 +277,25 @@ async def test_vehicle_charge_limit_empty_string_treated_as_absent(hass):
     data[CONF_VEHICLE_CHARGE_LIMIT_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_VEHICLE_CHARGE_LIMIT not in adapters
+
+
+async def test_factory_builds_notification_target_role_when_configured(hass):
+    """issue #498: NotifyAdapter/ROLE_NOTIFICATION_TARGET were implemented and tested but
+    never wired into the factory, the single construction point (ADR-0003)."""
+    data = _data()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_NOTIFICATION_TARGET], NotifyAdapter)
+    assert adapters[ROLE_NOTIFICATION_TARGET]._entity_id == "notify.mobile_app_phone"
+
+
+async def test_notification_target_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_NOTIFICATION_TARGET not in adapters
+
+
+async def test_notification_target_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_NOTIFICATION_TARGET not in adapters
