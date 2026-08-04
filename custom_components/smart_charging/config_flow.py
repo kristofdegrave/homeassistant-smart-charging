@@ -359,7 +359,10 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Edit the entity-role mappings (DATA) with re-validation; reloads on save (ADR-0005)."""
         entry = self._get_reconfigure_entry()
         if user_input is None:
-            return self.async_show_form(step_id="reconfigure", data_schema=MAPPING_SCHEMA)
+            return self.async_show_form(
+                step_id="reconfigure",
+                data_schema=self.add_suggested_values_to_schema(MAPPING_SCHEMA, entry.data),
+            )
 
         errors = _mapping_errors(user_input)
         if errors:

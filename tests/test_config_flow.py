@@ -262,6 +262,86 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     assert dict(entry.options) == original_options
 
 
+def _suggested_values(result):
+    """Map schema key -> its prefilled suggested_value (absent keys omitted)."""
+    return {
+        key.schema: key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+
+
+_RECONFIGURE_ENTRY_DATA = {
+    CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+    "charger_status_entity": "sensor.evse",
+    "net_power_entity": "sensor.net_power",
+    "charger_power_entity": "sensor.charger_power",
+    CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
+    CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff",
+    CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app",
+    CONF_CAR_HOME_ENTITY: "person.driver",
+    CONF_CAPTAR_AVAILABLE: False,
+    CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
+}
+
+
+async def test_reconfigure_form_prefills_existing_mappings(hass):
+    # Issue #499: the blank reconfigure form must be prefilled from entry.data, otherwise
+    # any optional mapping the user doesn't retype is silently dropped on save.
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    suggested = _suggested_values(result)
+    assert suggested[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
+    assert suggested[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
+    assert suggested[CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
+    assert suggested[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
+    assert suggested[CONF_CAR_HOME_ENTITY] == "person.driver"
+    # A bool field with a schema-level default (captar_available) must also prefill from
+    # entry.data, not fall back to the schema default -- otherwise reconfiguring would
+    # silently flip it back to True and re-trigger the ev_soc-required guard.
+    assert suggested[CONF_CAPTAR_AVAILABLE] is False
+
+
+async def test_reconfigure_preserves_unretyped_optional_mappings(hass):
+    # Issue #499: submitting exactly what a prefilled form round-trips back (the
+    # rendered suggested values, unchanged) must not null out any optional mapping --
+    # only the field the user actually edits (charger_current_entity here) should change.
+    # Built from the rendered schema's own suggested values, so this fails for the right
+    # reason if the prefill regresses: reverting the fix blanks every suggested value below.
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+
+    new_mapping = dict(_suggested_values(result))
+    # connected_states/charging_states have no stored raw value to prefill (known gap,
+    # tracked separately) -- the user must always retype these two required fields.
+    new_mapping[CONF_CONNECTED_STATES] = "Connected"
+    new_mapping[CONF_CHARGING_STATES] = "Charging"
+    new_mapping[CONF_CHARGER_CURRENT_ENTITY] = "number.new_charger_current"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
+    assert entry.data[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
+    assert entry.data[CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
+    assert entry.data[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
+    assert entry.data[CONF_CAR_HOME_ENTITY] == "person.driver"
+
+
 async def test_ev_soc_is_optional_when_solar_not_installed(hass):
     # Design doc §3/§8: with the Solar-installed toggle left False (its default), ev_soc
     # is optional -- an install without it still produces a valid entry. CapTar available
