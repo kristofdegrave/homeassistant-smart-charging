@@ -24,8 +24,11 @@ active mode and never chooses it (NF1); mode choice belongs to the [profile](sys
 ## Trigger
 
 A timer firing every control interval (configurable via `input_number.sc_control_interval_s`,
-default 10 s). The cycle is otherwise stateless between firings except for the rolling
-smoothing window and the rapid-cycling timers, which persist across cycles.
+default 10 s). The cycle carries no decision state between firings; a handful of named flags and
+accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling timers,
+the step-up/reserve context threaded in step 4, and the
+[missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
+homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
 
@@ -96,7 +99,12 @@ flowchart TD
    `sensor.smart_charging_active_soc_limit` and emits `ActiveSocLimitChanged` when it differs from
    the prior cycle's (consumed by [UC09](use-cases/UC09-sync-charge-limit-with-car.md)). That
    resolution is homed in `resolution-rules.md` (R7); this step only fixes *when* in the cycle it
-   is resolved, materialized, and change-detected. Then the coordinator determines the resolved
+   is resolved, materialized, and change-detected. Immediately after it, and for the same reason, the
+   coordinator updates the [missed-deadline hold](system-overview.md#ubiquitous-language) (R5,
+   `resolution-rules.md`, which is authoritative for its engage and clear conditions): after the
+   active SOC limit is resolved, since the hold's conditions compare against that resolved value, and
+   before the mode and peak decisions below, which consume whether deadline urgency is in effect.
+   Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose row 1 compares against this resolved active SOC limit) under
    `Auto` — calls the matching module, passing the smoothed readings and the resolved voltage, and
@@ -172,4 +180,5 @@ limit) is homed in `resolution-rules.md` (the resolution table) and applied by
 the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, step 4) and
 change-detected to emit `ActiveSocLimitChanged`. **R5** (departure deadline guarantee) is homed in
 `resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md); this document
-supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from normal operation.
+supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from normal operation,
+and fixes where in the cycle the missed-deadline hold is updated (step 4) — not what it means.

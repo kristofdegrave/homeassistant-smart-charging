@@ -264,7 +264,13 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   readout additionally serves as the entity the `ActiveSocLimitChanged` domain event fires on
   (ADR-0011), the single cross-cycle change signal [UC09](use-cases/UC09-sync-charge-limit-with-car.md)
   consumes to sync the vehicle. If a future use-case needs the resolved departure deadline
-  materialized likewise, it would add the row and its references then.
+  materialized likewise, it would add the row and its references then. The
+  [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) is
+  likewise **deliberately not materialized**, even though [UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)
+  reads it across a use-case boundary: it is coordinator-internal session state with no configuration
+  input and no consumer outside the resolution rules, and — unlike the plug-in reminder's de-dup
+  condition, whose `binary_sensor` exists for the dashboard (R19) — no requirement asks for it to be
+  observable. A future use-case or dashboard row needing it would add the row then.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
   `charger_current` role. Both are read/write: `vehicle_charge_limit` is read back by UC09 to

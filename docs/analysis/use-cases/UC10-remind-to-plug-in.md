@@ -53,7 +53,7 @@ Then the System sends no reminder — there is nothing left for the driver to pl
 
 **No upcoming departure deadline.**
 Given the car is home, disconnected, and below the active SOC limit
-When the next departure time resolves to "no deadline" for every day the resolution rule considers (`resolution-rules.md`, R14)
+When the next departure time resolves to "no deadline" for both dates the resolution rule considers — today's still-future occurrence and tomorrow's (`resolution-rules.md`, R14)
 Then the System sends no reminder — there is no departure to be ready for.
 
 ## Postconditions
