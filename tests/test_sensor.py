@@ -81,7 +81,10 @@ async def test_monthly_peak_sensor_defaults_to_zero_when_coordinator_data_lacks_
 
 class _StubPeakCoordinator:
     """Minimal CoordinatorEntity-compatible stub -- `async_add_listener` is required by
-    CoordinatorEntity.async_added_to_hass, which the restore-path tests below exercise."""
+    CoordinatorEntity.async_added_to_hass, which the restore-path tests below exercise.
+    `seed_monthly_peak`/`monthly_peak_period_month` delegate to the real `PeakDemandState`
+    (ADR-0012, #496) -- the sensor must call these instead of reaching into `_peak_demand`'s
+    private fields directly, and the stub exercises the real semantics rather than a copy."""
 
     def __init__(self, data=None):
         self.data = data
@@ -89,6 +92,13 @@ class _StubPeakCoordinator:
 
     def async_add_listener(self, update_callback, context=None):
         return lambda: None
+
+    def seed_monthly_peak(self, kw, month):
+        self._peak_demand.seed(kw, month)
+
+    @property
+    def monthly_peak_period_month(self):
+        return self._peak_demand.period_month
 
 
 async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass):
@@ -120,6 +130,34 @@ async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass
     assert coord._peak_demand.tracked_month == (2026, 7)
     assert coord._peak_demand.window == ()
     assert sensor.extra_state_attributes == {"period_month": "2026-07"}
+
+
+async def test_monthly_peak_sensor_restores_kw_when_period_month_is_malformed(hass):
+    """A malformed `period_month` (e.g. from a corrupted store) must not raise out of entity
+    setup -- the kW value still restores, tracked_month is simply left untouched (#496)."""
+    entity_id = "sensor.smart_charging_monthly_peak_kw"
+    mock_restore_cache_with_extra_data(
+        hass,
+        (
+            (
+                State(entity_id, "3.4"),
+                {
+                    "native_value": 3.4,
+                    "native_unit_of_measurement": "kW",
+                    "period_month": "not-a-month",
+                },
+            ),
+        ),
+    )
+    coord = _StubPeakCoordinator()
+    sensor = MonthlyPeakSensor(entry_id="abc", coordinator=coord)
+    sensor.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="sensor")
+    await platform.async_add_entities([sensor])
+
+    assert sensor.native_value == 3.4
+    assert coord._peak_demand.tracked_kw == 3.4
+    assert coord._peak_demand.tracked_month is None
 
 
 async def test_monthly_peak_sensor_starts_cold_when_no_restored_state(hass):

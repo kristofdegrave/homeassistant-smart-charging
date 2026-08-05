@@ -92,11 +92,10 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
 
     @property
     def extra_restore_state_data(self) -> _MonthlyPeakExtraStoredData:
-        peak_demand = getattr(self.coordinator, "_peak_demand", None)
-        month = peak_demand.tracked_month if peak_demand is not None else None
-        period_month = f"{month[0]:04d}-{month[1]:02d}" if month else None
         return _MonthlyPeakExtraStoredData(
-            self.native_value, self.native_unit_of_measurement, period_month
+            self.native_value,
+            self.native_unit_of_measurement,
+            self.coordinator.monthly_peak_period_month,
         )
 
     async def async_added_to_hass(self) -> None:
@@ -108,10 +107,14 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
         if data is None or data.native_value is None:
             return
         self._attr_native_value = float(data.native_value)
-        self.coordinator._peak_demand.tracked_kw = self._attr_native_value
+        month = None
         if data.period_month:
-            year, month = (int(part) for part in data.period_month.split("-"))
-            self.coordinator._peak_demand.tracked_month = (year, month)
+            try:
+                year, month_num = (int(part) for part in data.period_month.split("-"))
+                month = (year, month_num)
+            except ValueError:
+                pass  # malformed stored value -- restore the kW, leave tracked_month as-is
+        self.coordinator.seed_monthly_peak(self._attr_native_value, month)
 
     @property
     def native_value(self) -> float:
@@ -122,9 +125,7 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:
-        peak_demand = getattr(self.coordinator, "_peak_demand", None)
-        month = peak_demand.tracked_month if peak_demand is not None else None
-        return {"period_month": f"{month[0]:04d}-{month[1]:02d}" if month else None}
+        return {"period_month": self.coordinator.monthly_peak_period_month}
 
 
 class EffectivePeakLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):

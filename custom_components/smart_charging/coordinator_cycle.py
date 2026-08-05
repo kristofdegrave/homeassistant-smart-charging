@@ -81,6 +81,28 @@ class PeakDemandState:
         )
         return self.tracked_kw
 
+    def seed(self, kw: float, month: tuple[int, int] | None) -> None:
+        """Seed `tracked_kw`/`tracked_month` from a `MonthlyPeakSensor` restore (#496) -- the
+        only other write path onto these fields besides `update()` itself, kept on this class
+        so both stay behind one owner instead of a caller reaching into the fields directly.
+        A faithful restore: no clamp, since `update()` itself can legitimately produce a
+        negative `tracked_kw` on a net-export month (peak_demand_tracker.py's own contract).
+        `month` is left unchanged when the restored state carries no `period_month` (an older
+        stored value) -- the 15-minute `window` is deliberately never seeded (design doc
+        Sec 6.4), matching `update()`'s own reset-on-rollover behavior."""
+        self.tracked_kw = kw
+        if month is not None:
+            self.tracked_month = month
+
+    @property
+    def period_month(self) -> str | None:
+        """`tracked_month` formatted as `"YYYY-MM"`, or None -- the one place that formats it,
+        so callers (the coordinator's own read-direction boundary) never need to know
+        `tracked_month`'s tuple shape."""
+        if self.tracked_month is None:
+            return None
+        return f"{self.tracked_month[0]:04d}-{self.tracked_month[1]:02d}"
+
 
 class ModeHandler(Protocol):
     """One thin adapter per mode module, wrapping its existing pure step()/desired_current()
