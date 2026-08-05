@@ -2,7 +2,7 @@
 
 import pytest
 
-from custom_components.smart_charging.modes._amp_step import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
+from custom_components.smart_charging.const import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.solar_only import SolarOnlyState, step
 

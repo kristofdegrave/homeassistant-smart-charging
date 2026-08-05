@@ -81,10 +81,12 @@ from .const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
+    ROUND_DOWN,
+    ROUND_NEAREST,
+    ROUND_UP,
     STATE_CHARGING,
     STATE_CONNECTED,
 )
-from .modes._amp_step import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
 
 # Threshold/default keys stored in config-entry OPTIONS (ADR-0005), not data.
 OPTION_KEYS = (

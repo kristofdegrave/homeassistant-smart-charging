@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ._amp_step import ROUND_UP, round_amp_step
+from ..const import ROUND_UP
+from ._amp_step import round_amp_step
 from ._phase import Phase
 
 

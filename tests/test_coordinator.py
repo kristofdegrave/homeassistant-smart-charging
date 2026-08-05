@@ -65,6 +65,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    ROUND_DOWN,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
     STATE_CHARGING,
@@ -72,7 +73,6 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
-from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
 from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom
