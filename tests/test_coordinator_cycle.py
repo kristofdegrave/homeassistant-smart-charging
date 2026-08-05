@@ -267,7 +267,6 @@ def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
     # strategy-threading tests.
     config = {
         CONF_SOLAR_ONLY_START_THRESHOLD_W: 1300.0,
-        CONF_MIN_CURRENT: 6.0,
         CONF_SOLAR_COOLDOWN_MIN: 2.0,
         CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
         CONF_SOLAR_ONLY_MIDPOINT: 0.5,

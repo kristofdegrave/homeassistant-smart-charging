@@ -171,7 +171,6 @@ class _SolarOnlyModeHandler:
             state,
             ctx.now,
             start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
-            min_a=self._config[CONF_MIN_CURRENT],
             cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
             strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
             midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],

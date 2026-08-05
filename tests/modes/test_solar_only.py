@@ -8,7 +8,6 @@ from custom_components.smart_charging.modes.solar_only import SolarOnlyState, st
 
 DEFAULTS = dict(
     start_threshold_w=1300.0,
-    min_a=6.0,
     cooldown_minutes=2.0,
     strategy=ROUND_DOWN,
     midpoint=0.5,
@@ -22,13 +21,24 @@ DEFAULTS = dict(
 # than leaving it implicit; if this executor pass or the review after it decides the gap
 # is worth closing, the fix is raising the default threshold to 1380 W (E8's floor stays
 # the actual invariant either way -- this is a threshold-tuning question, not a bug).
+#
+# `min_a` is *not* one of this module's own parameters (issue #501): unlike `Solar`,
+# `SolarOnly` has no grid fallback (UC02 3a/step()'s own docstring) so it never floors
+# a below-minimum ideal current up to the minimum itself -- E8 (the coordinator's
+# `apply_floor_cap`, downstream) is the only place that touches the minimum for this
+# mode, and it floors down to 0 A, not up.
+# MINIMUM_CURRENT_A mirrors E8's configured min_a; this module never sees it -- it exists
+# only so the test below can spell out *why* 5.0 A (not 6.0 A) is below the minimum.
+MINIMUM_CURRENT_A = 6.0
 
 
 def test_at_exactly_the_default_threshold_ideal_current_is_below_minimum():
     # Documents the 1300 W vs 1380 W boundary gap above rather than hiding it.
     desired, state = step(surplus_w=1300.0, state=SolarOnlyState.idle(), now=0.0, **DEFAULTS)
     assert state.phase == Phase.CHARGING
-    assert desired < DEFAULTS["min_a"]  # E8 (coordinator, unchanged) floors this to 0 A
+    # 1300 W / 230 V = 5.652 A ideal -> round_down = 5.0 A, below MINIMUM_CURRENT_A.
+    assert desired == 5.0
+    assert desired < MINIMUM_CURRENT_A  # E8 (coordinator, unchanged) floors this to 0 A
 
 
 def test_idle_below_threshold():

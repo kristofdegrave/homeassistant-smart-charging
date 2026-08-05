@@ -237,7 +237,9 @@ jobs:
         run: |
           set -euo pipefail
           file="${{ steps.claude.outputs.execution_file }}"
-          is_error=$( [ -n "$file" ] && [ -f "$file" ] && jq -r 'map(select(.type == "result")) | last | .is_error // true' "$file" || echo true)
+          # NOT '.is_error // true': jq's // treats boolean false like null/absent, so a
+          # genuinely successful run (is_error: false) would read as an error.
+          is_error=$( [ -n "$file" ] && [ -f "$file" ] && jq -r 'map(select(.type == "result")) | last | (.is_error != false)' "$file" || echo true)
           if [ "$is_error" = "true" ]; then
             echo "success=false" >> "$GITHUB_OUTPUT"
           else
