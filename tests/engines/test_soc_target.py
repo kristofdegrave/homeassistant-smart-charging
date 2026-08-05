@@ -1,6 +1,7 @@
 """Plain-pytest tests for the SOC-Target engine (E3): full R7 three-row resolution,
 R8's solar step-up lifecycle, and R9's solar-reserve trigger."""
 
+from custom_components.smart_charging.const import PROFILE_AUTO, PROFILE_MANUAL
 from custom_components.smart_charging.engines.soc_target import (
     SolarStepUpState,
     resolve_active_soc_limit,
@@ -151,7 +152,7 @@ def test_clears_when_no_longer_solar_charging():
 def test_reserve_active_when_all_conditions_hold():
     assert (
         resolve_solar_reserve_active(
-            profile="Auto",
+            profile=PROFILE_AUTO,
             home_day_flag=True,
             sun_is_down=True,
             forecast_kwh=15.0,
@@ -165,7 +166,7 @@ def test_reserve_active_when_all_conditions_hold():
 def test_reserve_inactive_under_manual():
     assert (
         resolve_solar_reserve_active(
-            profile="Manual",
+            profile=PROFILE_MANUAL,
             home_day_flag=True,
             sun_is_down=True,
             forecast_kwh=15.0,
@@ -180,7 +181,7 @@ def test_reserve_inactive_when_deadline_resolved_for_tomorrow():
     # R9/UC07: mutually exclusive with a departure deadline resolved for tomorrow.
     assert (
         resolve_solar_reserve_active(
-            profile="Auto",
+            profile=PROFILE_AUTO,
             home_day_flag=True,
             sun_is_down=True,
             forecast_kwh=15.0,
@@ -194,7 +195,7 @@ def test_reserve_inactive_when_deadline_resolved_for_tomorrow():
 def test_reserve_inactive_when_forecast_at_or_below_threshold():
     assert (
         resolve_solar_reserve_active(
-            profile="Auto",
+            profile=PROFILE_AUTO,
             home_day_flag=True,
             sun_is_down=True,
             forecast_kwh=12.0,
@@ -208,7 +209,7 @@ def test_reserve_inactive_when_forecast_at_or_below_threshold():
 def test_reserve_inactive_when_home_day_flag_clear():
     assert (
         resolve_solar_reserve_active(
-            profile="Auto",
+            profile=PROFILE_AUTO,
             home_day_flag=False,
             sun_is_down=True,
             forecast_kwh=15.0,
@@ -222,7 +223,7 @@ def test_reserve_inactive_when_home_day_flag_clear():
 def test_reserve_inactive_while_sun_is_up():
     assert (
         resolve_solar_reserve_active(
-            profile="Auto",
+            profile=PROFILE_AUTO,
             home_day_flag=True,
             sun_is_down=False,
             forecast_kwh=15.0,

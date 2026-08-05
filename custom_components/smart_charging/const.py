@@ -2,6 +2,12 @@
 
 DOMAIN = "smart_charging"
 
+# hass.data[DOMAIN][entry_id] dict keys (__init__.py's setup-time payload). DATA_COORDINATOR
+# is the one bare-string-shaped key in that dict; every sibling key is a CONF_* constant
+# (issue #508) -- named here so both __init__.py's writer and every reader (sensor.py,
+# tests) stay in lockstep.
+DATA_COORDINATOR = "coordinator"
+
 # Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
 # and the config flow's `vol.In(...)` validator (Task 3.2). Plain strings, not an Enum:
 # `strategy` round-trips through HA config-entry storage, which needs bare str values.
@@ -49,6 +55,10 @@ MODE_CAPTAR = "Captar"
 # Profile names (select.profile options; also the coordinator's active_profile values, R16).
 PROFILE_MANUAL = "Manual"
 PROFILE_AUTO = "Auto"
+
+# Charging-status sensor values (ADR-0007): Fault when the last cycle faulted, else OK.
+STATUS_FAULT = "Fault"
+STATUS_OK = "OK"
 
 # Departure-time entity id-suffixes (time.py platform; unique_id/translation_key building
 # blocks, R14). Day-of-week suffixes double as Python's own Monday-first ordering.
@@ -147,6 +157,13 @@ CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
 CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
 # required when vehicle_charge_limit is mapped (design §9.1)
 CONF_CAR_HOME_ENTITY = "car_home_entity"
+
+# Config-flow error codes (config_flow.py's mapping-step guards). Values must match
+# strings.json/translations/en.json's config.error keys exactly (issue #508) --
+# tests/test_config_flow_translations.py walks every one of these against that section.
+ERROR_REQUIRED_WHEN_SOLAR_INSTALLED = "required_when_solar_installed"
+ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE = "required_when_captar_available"
+ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED = "required_when_vehicle_limit_mapped"
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
 #     values, editable anytime via Configure without re-running setup. ADR-0005 names

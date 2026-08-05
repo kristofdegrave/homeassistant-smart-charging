@@ -19,8 +19,10 @@ from custom_components.smart_charging.const import (
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_INSTALLED,
+    DATA_COORDINATOR,
     DOMAIN,
     MODE_CAPTAR,
+    STATUS_OK,
 )
 from custom_components.smart_charging.modes._phase import Phase
 from tests.helpers import (
@@ -89,7 +91,7 @@ async def _setup(hass, **option_overrides):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     _seed_ample_peak_headroom(coordinator)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_CAPTAR)
     return coordinator, calls
@@ -122,7 +124,7 @@ async def test_uc03_main_success_starts_at_max_current_within_headroom(hass):
     assert calls[-1]["value"] == 16.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
     assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_CAPTAR
-    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
     # C3: the effective-peak-limit sensor reflects the configured max_peak_kw this cycle
     # (min(monthly_peak_kw, max_peak_kw) with the ample seeded peak) -- ties this set-point
     # to the clamp bound that produced it, the whole point of this suite.

@@ -2,7 +2,7 @@
 
 from datetime import time as time_of_day
 
-from homeassistant.const import Platform
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.smart_charging.adapters.store import Store
@@ -44,7 +44,7 @@ async def test_read_unavailable_returns_none(hass):
         Platform.NUMBER,
         "smart_charging_target_current",
         "entry1_target_current",
-        "unavailable",
+        STATE_UNAVAILABLE,
     )
     store = Store(hass, "entry1")
     assert await store.read(Platform.NUMBER, "target_current", float) is None
@@ -52,7 +52,11 @@ async def test_read_unavailable_returns_none(hass):
 
 async def test_read_unknown_returns_none(hass):
     _register(
-        hass, Platform.NUMBER, "smart_charging_target_current", "entry1_target_current", "unknown"
+        hass,
+        Platform.NUMBER,
+        "smart_charging_target_current",
+        "entry1_target_current",
+        STATE_UNKNOWN,
     )
     store = Store(hass, "entry1")
     assert await store.read(Platform.NUMBER, "target_current", float) is None

@@ -22,6 +22,7 @@ from datetime import time
 
 from homeassistant.components.time import TimeEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -73,7 +74,7 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
-        if last is not None and last.state not in (None, "unknown", "unavailable"):
+        if last is not None and last.state not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
             self._attr_native_value = time.fromisoformat(last.state)
 
     async def async_set_value(self, value: time) -> None:

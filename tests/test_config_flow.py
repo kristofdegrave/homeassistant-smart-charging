@@ -42,6 +42,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+    DATA_COORDINATOR,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
@@ -59,6 +60,9 @@ from custom_components.smart_charging.const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
+    ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
+    ERROR_REQUIRED_WHEN_SOLAR_INSTALLED,
+    ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -257,7 +261,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     await hass.async_block_till_done()
 
     original_options = dict(entry.options)
-    original_coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    original_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -292,7 +296,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     # (config_flow.py) and the generic update-listener __init__.py registers for any entry
     # update (_async_reload_entry) -- so this assertion only fails if reload-on-change were
     # removed from *both*; either path alone still satisfies ADR-0008 and keeps this green.
-    new_coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    new_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     assert new_coordinator is not original_coordinator
     # ...and prove the reload actually picked up the new mapping, not just that *some*
     # reload happened against stale data.
@@ -400,7 +404,7 @@ async def test_solar_installed_true_requires_ev_soc(hass):
         hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_EV_SOC_ENTITY]
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
 
 
 async def test_solar_installed_true_with_ev_soc_succeeds(hass):
@@ -436,7 +440,7 @@ async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     assert coordinator._config[CONF_SOLAR_INSTALLED] is False
 
 
@@ -502,7 +506,7 @@ async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_solar_installed"
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
 
 
 async def test_reconfigure_rejects_solar_installed_true_without_solar_forecast(hass):
@@ -539,7 +543,7 @@ async def test_reconfigure_rejects_solar_installed_true_without_solar_forecast(h
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == "required_when_solar_installed"
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
 
 
 async def test_captar_available_defaults_true(hass):
@@ -554,7 +558,7 @@ async def test_captar_available_true_requires_ev_soc(hass):
     # guard on the same field.
     result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_EV_SOC_ENTITY] == "required_when_captar_available"
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE
 
 
 async def test_captar_available_false_does_not_require_ev_soc(hass):
@@ -584,7 +588,7 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     assert coordinator._config[CONF_CAPTAR_AVAILABLE] is True
 
 
@@ -623,7 +627,7 @@ async def test_solar_forecast_required_when_solar_installed(hass):
         hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_SOLAR_FORECAST_ENTITY]
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == "required_when_solar_installed"
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
 
 
 async def test_solar_forecast_not_required_when_solar_not_installed(hass):
@@ -699,7 +703,7 @@ async def test_vehicle_limit_mapped_without_car_home_is_rejected(hass):
         hass, overrides={CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit"}
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_CAR_HOME_ENTITY] == "required_when_vehicle_limit_mapped"
+    assert result["errors"][CONF_CAR_HOME_ENTITY] == ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED
 
 
 async def test_vehicle_limit_mapped_with_car_home_is_accepted(hass):
@@ -757,7 +761,7 @@ async def test_pre_field_entry_reads_vehicle_limit_and_car_home_as_absent(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     assert ROLE_VEHICLE_CHARGE_LIMIT not in coordinator._adapters
     assert ROLE_CAR_HOME not in coordinator._adapters
 
@@ -796,7 +800,7 @@ async def test_reconfigure_rejects_vehicle_limit_mapped_without_car_home(hass):
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_CAR_HOME_ENTITY] == "required_when_vehicle_limit_mapped"
+    assert result["errors"][CONF_CAR_HOME_ENTITY] == ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED
 
 
 async def test_options_flow_edits_solar_forecast_threshold(hass):
