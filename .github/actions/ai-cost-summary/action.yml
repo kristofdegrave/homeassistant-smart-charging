@@ -55,7 +55,7 @@ runs:
         out=$(get '.usage.output_tokens')
         cread=$(get '.usage.cache_read_input_tokens')
         cwrite=$(get '.usage.cache_creation_input_tokens')
-        err=$(get '.is_error')
+        err=$(jq -r 'if .is_error == null then "n/a" else (.is_error | tostring) end' <<<"$r")
 
         dur="n/a"
         if [[ "$dur_ms" =~ ^[0-9]+$ ]]; then dur="$(( dur_ms / 1000 ))s"; fi
