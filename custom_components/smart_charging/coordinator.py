@@ -691,6 +691,20 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             max(value, self._config[CONF_MIN_CURRENT]), self._config[CONF_MAX_CURRENT]
         )
 
+    def seed_monthly_peak(self, kw: float, month: tuple[int, int] | None) -> None:
+        """Coordinator's own boundary for seeding `_peak_demand` from MonthlyPeakSensor's
+        restored state (ADR-0012) -- the intended write path for sensor.py, replacing its
+        previous direct reach into `_peak_demand`'s private fields (#496). Delegates the actual
+        clamping/assignment to `PeakDemandState.seed()` itself, so `_peak_demand`'s fields stay
+        owned by one method regardless of which module calls in."""
+        self._peak_demand.seed(kw, month)
+
+    @property
+    def monthly_peak_period_month(self) -> str | None:
+        """The read-direction counterpart to `seed_monthly_peak` (#496) -- lets sensor.py read
+        the tracked month without reaching into `_peak_demand`'s private fields itself."""
+        return self._peak_demand.period_month
+
     def set_active_profile(self, profile: str) -> None:
         """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
         path for select.py; the field itself stays a plain writable attribute (design doc §2,

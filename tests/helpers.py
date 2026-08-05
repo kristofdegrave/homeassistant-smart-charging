@@ -119,8 +119,7 @@ def seed_ample_peak_headroom(coordinator, kw=AMPLE_PEAK_HEADROOM_KW):
     (the same shape a MonthlyPeakSensor restore would seed, Task 4.2) -- keeps R3's clamp
     out of the way of tests that exercise unrelated behavior, not R3 itself."""
     now_dt = dt_util.now()
-    coordinator._peak_demand.tracked_month = (now_dt.year, now_dt.month)
-    coordinator._peak_demand.tracked_kw = kw
+    coordinator.seed_monthly_peak(kw, (now_dt.year, now_dt.month))
 
 
 def seed_owned_entity(hass, entity_id: str, state: str) -> None:
