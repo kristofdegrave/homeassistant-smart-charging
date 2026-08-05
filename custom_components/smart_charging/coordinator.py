@@ -93,19 +93,15 @@ from .coordinator_cycle import (
     _PowerModeHandler,
     _SolarModeHandler,
     _SolarOnlyModeHandler,
+    resolve_deadline_urgency,
 )
 from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
     resolve_effective_peak_limit,
 )
-from .engines.capability_gate import resolve_available_modes
 from .engines.cycle_invariant import apply_floor_cap
-from .engines.deadline import (
-    RequiredCurrentResult,
-    resolve_departure_deadline,
-    resolve_required_current,
-)
+from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import (
@@ -115,7 +111,6 @@ from .engines.soc_target import (
 )
 from .modes import captar, solar, solar_only
 from .modes._phase import Phase
-from .profiles.auto import select_mode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -357,16 +352,22 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         today_weekday = now_dt.weekday()
         tomorrow_weekday = (today_weekday + 1) % 7
 
+        # R14's four-row table, evaluated for a given weekday -- shared by both today's
+        # deadline (urgency, below) and tomorrow's (R9's one-day-ahead precondition, UC07),
+        # so the other six args can never drift apart between the two call sites (#506).
+        def resolve_deadline_for(weekday: int) -> time_of_day | None:
+            return resolve_departure_deadline(
+                external_configured,
+                external,
+                is_holiday=False,
+                holiday_override=self.departure_holiday_override,
+                home_day_flag=self.home_day_flag,
+                home_day_override=self.departure_home_day_override,
+                day_of_week_default=self.departure_dow_defaults.get(weekday),
+            )
+
         # R9's precondition (UC07): the same R14 table evaluated one day ahead.
-        deadline_tomorrow = resolve_departure_deadline(
-            external_configured,
-            external,
-            is_holiday=False,
-            holiday_override=self.departure_holiday_override,
-            home_day_flag=self.home_day_flag,
-            home_day_override=self.departure_home_day_override,
-            day_of_week_default=self.departure_dow_defaults.get(tomorrow_weekday),
-        )
+        deadline_tomorrow = resolve_deadline_for(tomorrow_weekday)
         forecast_kwh = (
             await self._adapters[ROLE_SOLAR_FORECAST].read()
             if ROLE_SOLAR_FORECAST in self._adapters
@@ -395,30 +396,30 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             )
         ctx.active_soc_limit = active_soc_limit
 
-        # R5/R14/R15: today's departure deadline and the required-current/urgency it drives.
-        # Guarded on ev_soc being known -- without an SOC reading (disconnected, or a
-        # non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring
-        # R14's own "no deadline resolved -> urgency never applies" shape. `auto_dispatchable`
-        # is also this cycle's own gate for actually resolving Auto's active mode below --
-        # computed once here and reused there, rather than repeating the same conjunction, so
-        # the two can never drift apart. When it's False (disconnected, or Auto with no ev_soc
-        # role mapped at all), Auto simply keeps whatever active_mode it last resolved -- a
-        # deliberate, scope-truthful simplification, same as required-current's own guard above.
+        # `auto_dispatchable` is also this cycle's own gate for actually resolving Auto's
+        # active mode below -- computed once here and reused there (and inside
+        # resolve_deadline_urgency), rather than repeating the same conjunction, so the two
+        # can never drift apart. When it's False (disconnected, or Auto with no ev_soc role
+        # mapped at all), Auto simply keeps whatever active_mode it last resolved -- a
+        # deliberate, scope-truthful simplification, same as required-current's own guard
+        # inside resolve_deadline_urgency.
         auto_dispatchable = (
             self.active_profile == PROFILE_AUTO
             and status in CHARGEABLE_STATES
             and ev_soc is not None
         )
-        if status in CHARGEABLE_STATES and ev_soc is not None:
-            deadline_today = resolve_departure_deadline(
-                external_configured,
-                external,
-                is_holiday=False,
-                holiday_override=self.departure_holiday_override,
-                home_day_flag=self.home_day_flag,
-                home_day_override=self.departure_home_day_override,
-                day_of_week_default=self.departure_dow_defaults.get(today_weekday),
-            )
+        # R5/R14/R15: today's departure deadline and the required-current/urgency it drives
+        # (ADR-0006 steps 3-6, extracted per #506 -- see resolve_deadline_urgency's own
+        # docstring for the guard/dedup rationale). Only the adapter/HA reads (today's
+        # deadline, the sensed battery capacity) stay here; everything else moves to
+        # coordinator_cycle.py, pure and HA-import-free (ADR-0012's boundary). Computed once
+        # here and passed into resolve_deadline_urgency as `deadline_resolvable` rather than
+        # re-derived from status/ev_soc on the other side of the module boundary -- a second,
+        # separately written copy of the same predicate is exactly the lockstep-editing
+        # hazard #506 exists to remove.
+        deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
+        if deadline_resolvable:
+            deadline_today = resolve_deadline_for(today_weekday)
             sensed_capacity_kwh = (
                 await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
                 if ROLE_EV_BATTERY_CAPACITY in self._adapters
@@ -431,62 +432,40 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 if sensed_capacity_kwh is not None
                 else self._config.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH)
             )
-            if auto_dispatchable:
-                # The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
-                # (urgent=False) every cycle -- never Captar's own already-escalated request,
-                # per resolution-rules.md's explicit warning against that (it would make urgency
-                # look satisfied the instant it engages and revert every cycle).
-                available_modes = resolve_available_modes(
-                    solar_available=self._config.get(CONF_SOLAR_INSTALLED, False),
-                    captar_available=self._config.get(
-                        CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE
-                    ),
-                )
-                baseline_mode = select_mode(
-                    soc=ev_soc,
-                    active_soc_limit=active_soc_limit,
-                    available_modes=available_modes,
-                    urgent=False,
-                    solar_capability_present=self._config.get(CONF_SOLAR_INSTALLED, False),
-                    sun_is_up=sun_is_up,
-                    solar_surplus_sufficient=surplus_w
-                    >= self._config[CONF_SOLAR_START_THRESHOLD_W],
-                    sun_is_down=sun_is_down,
-                    low_tariff_active=low_tariff_active,
-                    solar_reserve_active=solar_reserve_active,
-                )
-            else:
-                baseline_mode = self.active_mode
-            baseline_desired_a = self._mode_desired_current(
-                baseline_mode,
+        else:
+            deadline_today = None
+            effective_battery_capacity_kwh = 0.0  # unused: deadline_resolvable=False makes
+            # resolve_deadline_urgency short-circuit before this value is ever read.
+        deadline_urgency = resolve_deadline_urgency(
+            deadline_resolvable=deadline_resolvable,
+            ev_soc=ev_soc,
+            active_mode=self.active_mode,
+            active_soc_limit=active_soc_limit,
+            deadline_today=deadline_today,
+            now_dt=now_dt,
+            effective_battery_capacity_kwh=effective_battery_capacity_kwh,
+            voltage=voltage,
+            surplus_w=surplus_w,
+            max_current_a=self._config[CONF_MAX_CURRENT],
+            auto_dispatchable=auto_dispatchable,
+            solar_installed=self._config.get(CONF_SOLAR_INSTALLED, False),
+            captar_available=self._config.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
+            solar_start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
+            sun_is_up=sun_is_up,
+            sun_is_down=sun_is_down,
+            low_tariff_active=low_tariff_active,
+            solar_reserve_active=solar_reserve_active,
+            mode_desired_current=lambda mode: self._mode_desired_current(
+                mode,
                 status=status,
                 ev_soc=ev_soc,
                 active_soc_limit=active_soc_limit,
                 surplus_w=surplus_w,
                 voltage=voltage,
                 now=now,
-            )
-            required = resolve_required_current(
-                deadline_today,
-                # engines/deadline.py combines this with a naive `time` (the departure-time
-                # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
-                # doesn't raise (both sides represent the same local wall clock either way).
-                # Wall-clock subtraction on the two DST-transition days a year can be off by
-                # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
-                now_dt.replace(tzinfo=None),
-                soc=ev_soc,
-                active_soc_limit=active_soc_limit,
-                ev_battery_capacity_kwh=effective_battery_capacity_kwh,
-                voltage=voltage,
-                baseline_desired_a=baseline_desired_a,
-                # A deliberate simplification of "maximum permitted rate"'s full peak-clamp-fitted
-                # definition (system-overview.md glossary) down to C1's hard ceiling -- refining
-                # this to the actual peak-fitted rate is tracked follow-up work (issue #367),
-                # not this task's job; it only affects when DeadlineUnreachableNotified fires.
-                maximum_permitted_rate_a=self._config[CONF_MAX_CURRENT],
-            )
-        else:
-            required = RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)
+            ),
+        )
+        required = deadline_urgency.required
         # Exposed for Task 5.3's own use (the effective-peak-limit `urgent` parameter and Auto
         # mode-selection's escalation) and for tests, the same way `_step_up_state` already is.
         self._required_current = required
@@ -495,10 +474,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: required.required_a}
             )
 
-        # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
-        # Urgent (UC05's Postconditions) -- this `or` makes that explicit even though
-        # `unreachable` implies `urgent` by construction, per the required-current formula.
-        urgent = required.urgent or required.unreachable
+        urgent = deadline_urgency.urgent
         ctx.urgent = urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW), urgent=urgent
@@ -509,22 +485,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # its dataclass default (0.0) until this final, real value lands here. No ModeHandler
         # reads this field today; if one later does, thread the provisional value onto ctx too.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
-        if auto_dispatchable:
+        if auto_dispatchable and deadline_urgency.resolved_mode is not None:
             # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
             # never changes here while Manual, even under urgency) -- only Auto resolves its
-            # own mode, via the real (non-baseline) urgent this time.
-            self.active_mode = select_mode(
-                soc=ev_soc,
-                active_soc_limit=active_soc_limit,
-                available_modes=available_modes,
-                urgent=urgent,
-                solar_capability_present=self._config.get(CONF_SOLAR_INSTALLED, False),
-                sun_is_up=sun_is_up,
-                solar_surplus_sufficient=surplus_w >= self._config[CONF_SOLAR_START_THRESHOLD_W],
-                sun_is_down=sun_is_down,
-                low_tariff_active=low_tariff_active,
-                solar_reserve_active=solar_reserve_active,
-            )
+            # own mode, via resolve_deadline_urgency's real (non-baseline) urgent resolution.
+            # The explicit None-check is defense in depth: `resolved_mode` is None exactly
+            # when `auto_dispatchable` was False inside resolve_deadline_urgency too (the two
+            # booleans are computed from the same inputs), so this should never trigger --
+            # but self.active_mode is typed `str`, and silently assigning None would surface
+            # far downstream as a `KeyError` on the mode-handler lookup instead of here.
+            self.active_mode = deadline_urgency.resolved_mode
 
         # Checked again here, after Auto's own mode resolution above -- catches a same-cycle
         # Auto escalation/revert in time for this cycle's own dispatch below, not one cycle
