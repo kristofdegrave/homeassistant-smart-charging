@@ -127,6 +127,22 @@ async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
     assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
 
 
+async def test_second_config_entry_aborts_single_instance_allowed(hass):
+    """ADR-0013: two config entries would both drive the same charger and register duplicate
+    owned entities with `_2` object_id suffixes, breaking ADR-0013's documented stable
+    entity_ids (#500). `manifest.json`'s `single_config_entry` makes HA core itself abort a
+    second install attempt once one entry already exists."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "single_instance_allowed"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1  # no `_2` entry ever created
+
+
 async def test_overlapping_state_charging_wins(hass):
     """A raw state listed in both buckets resolves to charging (ADR-0005 install-step rule)."""
     result = await hass.config_entries.flow.async_init(
