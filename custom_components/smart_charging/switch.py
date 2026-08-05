@@ -10,6 +10,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 
+from .const import OWNED_SUFFIX_HOME_DAY
 from .entity import SmartChargingEntity
 
 
@@ -20,11 +21,10 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
     is not the point, only ever expiring at the day's own boundary is."""
 
     _attr_translation_key = "home_day"
-    _object_id_suffix = "home_day"
+    _object_id_suffix = OWNED_SUFFIX_HOME_DAY
 
     def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_home_day"
         self._attr_is_on = False
         self._unsub_midnight_reset: CALLBACK_TYPE | None = None
 

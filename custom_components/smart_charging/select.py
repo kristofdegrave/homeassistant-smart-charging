@@ -30,13 +30,31 @@ CAPTAR_MODE_OPTIONS = [MODE_CAPTAR]
 PROFILE_OPTIONS = [PROFILE_MANUAL, PROFILE_AUTO]
 
 
-class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
+class _RestoreOptionMixin:
+    """Shared restore + select body for select entities that restore their last option
+    into `_attr_current_option` when it's still a valid member of `_attr_options`
+    (issue #507). Must appear before `RestoreEntity` in a subclass's bases so its
+    `async_added_to_hass` override's `super()` call resolves onward to
+    `RestoreEntity.async_added_to_hass` (the actual restore-state read)."""
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in self._attr_options:
+            self._attr_current_option = last.state
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+
+class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, SelectEntity):
     """User-set active charging mode. Option list is gated by Solar installed and CapTar
     available (design doc §3/§4, R18 scoped), composing independently -- each mode family
     is only offered when its own config-time toggle is True."""
 
     _attr_translation_key = "mode"
-    _object_id_suffix = "mode"
+    _object_id_suffix = OWNED_SUFFIX_MODE
 
     def __init__(
         self,
@@ -45,7 +63,6 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         captar_available: bool = False,
     ) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_MODE}"
         options = list(BASE_MODE_OPTIONS)
         if solar_installed:
             options += SOLAR_MODE_OPTIONS
@@ -54,39 +71,18 @@ class ModeSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
         self._attr_options = options
         self._attr_current_option = BASE_MODE_OPTIONS[0]
 
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last is not None and last.state in self._attr_options:
-            self._attr_current_option = last.state
 
-    async def async_select_option(self, option: str) -> None:
-        self._attr_current_option = option
-        self.async_write_ha_state()
-
-
-class ProfileSelect(SmartChargingEntity, RestoreEntity, SelectEntity):
+class ProfileSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, SelectEntity):
     """User-set charging profile -- `Manual` (the mode selector drives dispatch) or `Auto`
     (E2's own mode-selection drives dispatch, R16). Mirrors `ModeSelect` (design doc §4)."""
 
     _attr_translation_key = "profile"
-    _object_id_suffix = "profile"
+    _object_id_suffix = OWNED_SUFFIX_PROFILE
     _attr_options = PROFILE_OPTIONS
 
     def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
-        self._attr_unique_id = f"{entry_id}_{OWNED_SUFFIX_PROFILE}"
         self._attr_current_option = PROFILE_MANUAL
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last is not None and last.state in self._attr_options:
-            self._attr_current_option = last.state
-
-    async def async_select_option(self, option: str) -> None:
-        self._attr_current_option = option
-        self.async_write_ha_state()
 
 
 async def async_setup_entry(

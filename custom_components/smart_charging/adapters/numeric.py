@@ -1,27 +1,19 @@
 """Numeric read and read/write adapters (ADR-0003)."""
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant
+from ._read_only import _ReadOnlyAdapter
 
 
-class NumericReadAdapter:
+class NumericReadAdapter(_ReadOnlyAdapter):
     """Reads a numeric entity's native value; None if missing/unavailable/non-numeric."""
 
-    def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
-        self._hass = hass
-        self._entity_id = entity_id
-
     async def read(self) -> float | None:
-        state = self._hass.states.get(self._entity_id)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        state = self._live_state()
+        if state is None:
             return None
         try:
             return float(state.state)
         except (ValueError, TypeError):
             return None
-
-    async def write(self, value: float) -> None:
-        raise NotImplementedError("read-only role")
 
 
 class NumericReadWriteAdapter(NumericReadAdapter):

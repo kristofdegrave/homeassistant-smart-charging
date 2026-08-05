@@ -16,17 +16,15 @@ from dataclasses import dataclass
 
 from ..const import ROUND_UP
 from ._amp_step import round_amp_step
+from ._mode_state import ModeState, cooldown_done, unknown_phase_error
 from ._phase import Phase
 
 
 @dataclass(frozen=True)
-class SolarState:
-    phase: Phase
-    phase_started_at: float = 0.0
-
-    @classmethod
-    def idle(cls) -> SolarState:
-        return cls(phase=Phase.IDLE)
+class SolarState(ModeState):
+    """No fields of its own -- `@dataclass(frozen=True)` is re-declared (rather than a
+    bare `class SolarState(ModeState): pass`) so `SolarState` keeps its own frozen
+    `__setattr__`/`__eq__`/`__hash__`, exact dataclass parity with the pre-#507 shape."""
 
 
 def step(
@@ -52,11 +50,10 @@ def step(
     ideal_a = surplus_w / voltage
 
     if state.phase in (Phase.IDLE, Phase.COOLDOWN):
-        elapsed = now - state.phase_started_at
-        cooldown_done = state.phase == Phase.IDLE or elapsed >= cooldown_minutes * 60
-        if surplus_w >= start_threshold_w and cooldown_done:
+        is_cooldown_done = cooldown_done(state, now, cooldown_minutes)
+        if surplus_w >= start_threshold_w and is_cooldown_done:
             return _charging_setpoint(ideal_a, min_a), SolarState(Phase.CHARGING, now)
-        if state.phase == Phase.COOLDOWN and cooldown_done:
+        if state.phase == Phase.COOLDOWN and is_cooldown_done:
             return 0.0, SolarState.idle()
         return 0.0, state
 
@@ -72,7 +69,7 @@ def step(
             return 0.0, SolarState(Phase.COOLDOWN, now)
         return min_a, state
 
-    raise ValueError(f"unknown SolarState.phase: {state.phase!r}")
+    raise unknown_phase_error(state)
 
 
 def _charging_setpoint(ideal_a: float, min_a: float) -> float:

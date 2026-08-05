@@ -17,17 +17,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ._mode_state import ModeState, cooldown_done, unknown_phase_error
 from ._phase import Phase
 
 
 @dataclass(frozen=True)
-class CaptarState:
-    phase: Phase
-    phase_started_at: float = 0.0
-
-    @classmethod
-    def idle(cls) -> CaptarState:
-        return cls(phase=Phase.IDLE)
+class CaptarState(ModeState):
+    """No fields of its own -- see `SolarState`'s docstring (`modes/solar.py`) for why
+    `@dataclass(frozen=True)` is re-declared rather than a bare subclass."""
 
 
 def step(
@@ -42,11 +39,9 @@ def step(
     ceiling by design.
     """
     if state.phase in (Phase.IDLE, Phase.COOLDOWN):
-        elapsed = now - state.phase_started_at
-        cooldown_done = state.phase == Phase.IDLE or elapsed >= cooldown_minutes * 60
-        if cooldown_done:
+        if cooldown_done(state, now, cooldown_minutes):
             return max_a, CaptarState(Phase.CHARGING, now)
         return 0.0, state
     if state.phase == Phase.CHARGING:
         return max_a, state  # coordinator may still force a cooldown transition
-    raise ValueError(f"unknown CaptarState.phase: {state.phase!r}")
+    raise unknown_phase_error(state)
