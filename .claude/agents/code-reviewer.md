@@ -59,7 +59,7 @@ Always read:
   belongs in an enum (`enum.StrEnum` when the value must still compare/serialize as a plain str) or
   a named constant — never repeated literals. Exception: a value that must round-trip through HA
   config-entry storage or `vol.In(...)` as a bare str can use module-level string constants instead
-  of an enum (see `modes/_amp_step.py`'s `ROUND_UP`/`ROUND_DOWN`/`ROUND_NEAREST`) — flag repeated
+  of an enum (see `const.py`'s `ROUND_UP`/`ROUND_DOWN`/`ROUND_NEAREST`) — flag repeated
   bare literals either way, just not the choice of constants over enum in that specific case.
 
 **(5) Safety not weakened**

@@ -2,12 +2,8 @@
 
 import pytest
 
-from custom_components.smart_charging.modes._amp_step import (
-    ROUND_DOWN,
-    ROUND_NEAREST,
-    ROUND_UP,
-    round_amp_step,
-)
+from custom_components.smart_charging.const import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
+from custom_components.smart_charging.modes._amp_step import round_amp_step
 
 
 def test_round_up_uses_all_surplus_accepting_grid_topup():

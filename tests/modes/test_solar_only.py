@@ -2,7 +2,7 @@
 
 import pytest
 
-from custom_components.smart_charging.modes._amp_step import ROUND_NEAREST, ROUND_UP
+from custom_components.smart_charging.const import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.solar_only import SolarOnlyState, step
 
@@ -10,7 +10,7 @@ DEFAULTS = dict(
     start_threshold_w=1300.0,
     min_a=6.0,
     cooldown_minutes=2.0,
-    strategy="round_down",
+    strategy=ROUND_DOWN,
     midpoint=0.5,
 )
 
