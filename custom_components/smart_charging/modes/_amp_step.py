@@ -7,12 +7,9 @@ of each mode's state-machine logic without coupling the two modes together (NF2)
 
 import math
 
-# Plain strings, not an Enum: `strategy` round-trips through HA config-entry storage and
-# `vol.In(...)` (Task 3.2), both of which need bare str values. These constants exist so
-# call sites reference a name instead of retyping the literal.
-ROUND_UP = "round_up"
-ROUND_DOWN = "round_down"
-ROUND_NEAREST = "round_nearest"
+# Strategy constants live in const.py, not here (issue #502) -- imported only for this
+# module's own comparisons below; other call sites should import from `..const` directly.
+from ..const import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
 
 
 def round_amp_step(ideal_a: float, strategy: str, midpoint: float = 0.5) -> float:

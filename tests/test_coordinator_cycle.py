@@ -13,6 +13,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
+    ROUND_DOWN,
     STATE_CHARGING,
     STATE_CONNECTED,
     STATE_DISCONNECTED,
@@ -30,7 +31,6 @@ from custom_components.smart_charging.coordinator_cycle import (
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes import captar, solar, solar_only
-from custom_components.smart_charging.modes._amp_step import ROUND_DOWN
 from custom_components.smart_charging.modes._phase import Phase
 
 
@@ -267,7 +267,6 @@ def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
     # strategy-threading tests.
     config = {
         CONF_SOLAR_ONLY_START_THRESHOLD_W: 1300.0,
-        CONF_MIN_CURRENT: 6.0,
         CONF_SOLAR_COOLDOWN_MIN: 2.0,
         CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
         CONF_SOLAR_ONLY_MIDPOINT: 0.5,

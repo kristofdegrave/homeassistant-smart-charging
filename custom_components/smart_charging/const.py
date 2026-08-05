@@ -1,8 +1,16 @@
 """Constants for the Smart Charging integration."""
 
-from .modes._amp_step import ROUND_DOWN
-
 DOMAIN = "smart_charging"
+
+# Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
+# and the config flow's `vol.In(...)` validator (Task 3.2). Plain strings, not an Enum:
+# `strategy` round-trips through HA config-entry storage, which needs bare str values.
+# Live here (a leaf module) rather than in `modes/_amp_step.py` so that other modules --
+# including `const.py` itself, for DEFAULT_SOLAR_ONLY_STRATEGY below -- can reference them
+# without importing a private submodule of `modes` (issue #502).
+ROUND_UP = "round_up"
+ROUND_DOWN = "round_down"
+ROUND_NEAREST = "round_nearest"
 
 # Domain events (ADR-0011). Past-tense PascalCase payload, snake_case HA event type.
 EVENT_ACTIVE_SOC_LIMIT_CHANGED = "smart_charging_active_soc_limit_changed"
@@ -156,7 +164,7 @@ CONF_SOLAR_START_THRESHOLD_W = "solar_start_threshold_w"  # R1 (Solar)
 CONF_SOLAR_ONLY_START_THRESHOLD_W = "solar_only_start_threshold_w"  # R2 (SolarOnly)
 CONF_SOLAR_HOLD_MIN = "solar_hold_min"  # R1 post-surplus hold duration
 CONF_SOLAR_COOLDOWN_MIN = "solar_cooldown_min"  # R1/R2 cooldown duration
-CONF_SOLAR_ONLY_STRATEGY = "solar_only_strategy"  # R2: "round_up" | "round_down" | "round_nearest"
+CONF_SOLAR_ONLY_STRATEGY = "solar_only_strategy"  # R2: ROUND_UP | ROUND_DOWN | ROUND_NEAREST
 CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"  # R2 round_nearest fractional threshold
 # Config-flow-time default for the "Default charge limit" number entity's initial value
 # (SocLimitOverrideNumber). The two are kept independently overridable (R6): this is the

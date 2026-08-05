@@ -5,6 +5,10 @@ surplus below the start threshold stops immediately (UC02's defining difference
 from its sibling UC01). No SOC-related phase either -- see Solar's module
 docstring (modes/solar.py) for why that's the coordinator's job, not this
 module's.
+
+No `min_a` parameter, unlike `Solar.step()`: `SolarOnly` has no grid fallback (UC02
+3a), so a below-minimum ideal current is requested as-is and floored to 0 A by the
+coordinator's E8 stage (`apply_floor_cap`) downstream, the same as every other mode.
 """
 
 from __future__ import annotations
@@ -30,7 +34,6 @@ def step(
     state: SolarOnlyState,
     now: float,
     start_threshold_w: float,
-    min_a: float,
     cooldown_minutes: float,
     strategy: str,
     midpoint: float = 0.5,
@@ -39,7 +42,8 @@ def step(
     """Return (desired_current, next_state) for one control cycle (UC02).
 
     No `max_a` parameter, for the same reason as `Solar.step()` -- E8 remains the
-    single place the upper-bound invariant is enforced.
+    single place the upper-bound invariant is enforced. Same story for the
+    lower bound -- see the module docstring's `min_a` note.
     """
     ideal_a = surplus_w / voltage
 

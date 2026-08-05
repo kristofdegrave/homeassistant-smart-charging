@@ -20,8 +20,9 @@ from custom_components.smart_charging.const import (
     DOMAIN,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
+    ROUND_NEAREST,
+    ROUND_UP,
 )
-from custom_components.smart_charging.modes._amp_step import ROUND_NEAREST, ROUND_UP
 from custom_components.smart_charging.modes._phase import Phase
 from tests.helpers import (
     capture_charger_current_writes,
