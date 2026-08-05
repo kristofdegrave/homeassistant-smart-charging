@@ -1,12 +1,13 @@
 """Presence (car_home) read adapter: maps a presence entity's state to a bool (ADR-0003)."""
 
-from homeassistant.const import STATE_HOME, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant
+from homeassistant.const import STATE_HOME, STATE_ON
+
+from ._read_only import _ReadOnlyAdapter
 
 _HOME_STATES = (STATE_HOME, STATE_ON)
 
 
-class PresenceReadAdapter:
+class PresenceReadAdapter(_ReadOnlyAdapter):
     """Reads a presence/device_tracker/binary_sensor entity as car-at-home (True/False).
 
     None when the entity is missing/unavailable/unknown -- for this role that is not the
@@ -18,15 +19,8 @@ class PresenceReadAdapter:
     zone that isn't "home" is still "not at home" for the C2 gate this role backs.
     """
 
-    def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
-        self._hass = hass
-        self._entity_id = entity_id
-
     async def read(self) -> bool | None:
-        state = self._hass.states.get(self._entity_id)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        state = self._live_state()
+        if state is None:
             return None
         return state.state in _HOME_STATES
-
-    async def write(self, value: bool) -> None:
-        raise NotImplementedError("car_home is read-only")

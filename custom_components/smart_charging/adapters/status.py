@@ -1,10 +1,11 @@
 """Charger-status adapter: translates raw hardware states to canonical ones (ADR-0003)."""
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 
+from ._read_only import _ReadOnlyAdapter
 
-class StatusReadAdapter:
+
+class StatusReadAdapter(_ReadOnlyAdapter):
     """Reads a status entity and maps its raw state to a canonical charger state.
 
     Returns None when the entity is missing/unavailable/unknown OR when the raw
@@ -12,15 +13,11 @@ class StatusReadAdapter:
     """
 
     def __init__(self, hass: HomeAssistant, entity_id: str, translation: dict[str, str]) -> None:
-        self._hass = hass
-        self._entity_id = entity_id
+        super().__init__(hass, entity_id)
         self._translation = translation
 
     async def read(self) -> str | None:
-        state = self._hass.states.get(self._entity_id)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        state = self._live_state()
+        if state is None:
             return None
         return self._translation.get(state.state)
-
-    async def write(self, value: str) -> None:
-        raise NotImplementedError("status is read-only")

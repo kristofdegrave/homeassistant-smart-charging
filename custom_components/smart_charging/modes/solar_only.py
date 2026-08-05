@@ -16,17 +16,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ._amp_step import round_amp_step
+from ._mode_state import ModeState, cooldown_done, unknown_phase_error
 from ._phase import Phase
 
 
 @dataclass(frozen=True)
-class SolarOnlyState:
-    phase: Phase
-    phase_started_at: float = 0.0
-
-    @classmethod
-    def idle(cls) -> SolarOnlyState:
-        return cls(phase=Phase.IDLE)
+class SolarOnlyState(ModeState):
+    """No fields of its own -- see `SolarState`'s docstring (`modes/solar.py`) for why
+    `@dataclass(frozen=True)` is re-declared rather than a bare subclass."""
 
 
 def step(
@@ -48,11 +45,10 @@ def step(
     ideal_a = surplus_w / voltage
 
     if state.phase in (Phase.IDLE, Phase.COOLDOWN):
-        elapsed = now - state.phase_started_at
-        cooldown_done = state.phase == Phase.IDLE or elapsed >= cooldown_minutes * 60
-        if surplus_w >= start_threshold_w and cooldown_done:
+        is_cooldown_done = cooldown_done(state, now, cooldown_minutes)
+        if surplus_w >= start_threshold_w and is_cooldown_done:
             return round_amp_step(ideal_a, strategy, midpoint), SolarOnlyState(Phase.CHARGING, now)
-        if state.phase == Phase.COOLDOWN and cooldown_done:
+        if state.phase == Phase.COOLDOWN and is_cooldown_done:
             return 0.0, SolarOnlyState.idle()
         return 0.0, state
 
@@ -61,4 +57,4 @@ def step(
             return 0.0, SolarOnlyState(Phase.COOLDOWN, now)  # immediate -- no hold
         return round_amp_step(ideal_a, strategy, midpoint), state
 
-    raise ValueError(f"unknown SolarOnlyState.phase: {state.phase!r}")
+    raise unknown_phase_error(state)

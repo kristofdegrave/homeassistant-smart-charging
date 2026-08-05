@@ -1,10 +1,11 @@
 """Boolean-flag read adapter (ADR-0003 extension, Task 2.1/RA2)."""
 
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant
+from homeassistant.const import STATE_OFF, STATE_ON
+
+from ._read_only import _ReadOnlyAdapter
 
 
-class BooleanReadAdapter:
+class BooleanReadAdapter(_ReadOnlyAdapter):
     """Reads a boolean-flag entity's native on/off state.
 
     Added for the `home_day_external` role (design doc §4 note): its mapped entity is a
@@ -20,19 +21,12 @@ class BooleanReadAdapter:
     `on` nor `off` -- the ADR-0007 fault signal, same as every other read adapter.
     """
 
-    def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
-        self._hass = hass
-        self._entity_id = entity_id
-
     async def read(self) -> bool | None:
-        state = self._hass.states.get(self._entity_id)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        state = self._live_state()
+        if state is None:
             return None
         if state.state == STATE_ON:
             return True
         if state.state == STATE_OFF:
             return False
         return None
-
-    async def write(self, value: bool) -> None:
-        raise NotImplementedError("read-only role")

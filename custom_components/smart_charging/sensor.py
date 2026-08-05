@@ -17,16 +17,41 @@ from .const import DATA_COORDINATOR, DOMAIN, MODE_OFF, STATUS_FAULT, STATUS_OK
 from .entity import SmartChargingEntity
 
 
-class ChargingStatusSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
-    """Reports Fault when the last cycle faulted (ADR-0007), else OK."""
-
-    _attr_translation_key = "status"
-    _object_id_suffix = "status"
+class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
+    """Base for every owned entity whose value the coordinator pushes each cycle
+    (Task 4.3, C3), rather than the user setting/restoring it -- folds `SmartChargingEntity`
+    and `CoordinatorEntity` into one shared `__init__` so subclasses only need their own
+    when they have extra construction to do (`MonthlyPeakSensor`'s seed value)."""
 
     def __init__(self, entry_id: str, coordinator) -> None:
         SmartChargingEntity.__init__(self, entry_id)
         CoordinatorEntity.__init__(self, coordinator)
-        self._attr_unique_id = f"{entry_id}_status"
+
+
+class _CoordinatorFieldSensor(_CoordinatorPushMixin, SensorEntity):
+    """Declarative diagnostic sensor (issue #507): reads `_coordinator_field` off
+    `coordinator.data` each cycle, falling back to `_field_default` when data is None or
+    the field is absent. Covers the three diagnostic sensors with no bespoke restore or
+    value-mapping logic of their own; `ChargingStatusSensor` (maps a bool to Fault/OK)
+    and `MonthlyPeakSensor` (restore-seeded, falls back to its own last value) keep
+    their own `native_value` and use `_CoordinatorPushMixin` directly instead."""
+
+    _coordinator_field: str
+    _field_default: Any = None
+
+    @property
+    def native_value(self) -> Any:
+        data = self.coordinator.data
+        if data is not None:
+            return getattr(data, self._coordinator_field, self._field_default)
+        return self._field_default
+
+
+class ChargingStatusSensor(_CoordinatorPushMixin, SensorEntity):
+    """Reports Fault when the last cycle faulted (ADR-0007), else OK."""
+
+    _attr_translation_key = "status"
+    _object_id_suffix = "status"
 
     @property
     def native_value(self) -> str:
@@ -36,23 +61,13 @@ class ChargingStatusSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity)
         return STATUS_OK
 
 
-class ActiveModeSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
+class ActiveModeSensor(_CoordinatorFieldSensor):
     """Reports the resolved active mode from the last cycle (Task 4.3, plan §5.1)."""
 
     _attr_translation_key = "active_mode"
     _object_id_suffix = "active_mode"
-
-    def __init__(self, entry_id: str, coordinator) -> None:
-        SmartChargingEntity.__init__(self, entry_id)
-        CoordinatorEntity.__init__(self, coordinator)
-        self._attr_unique_id = f"{entry_id}_active_mode"
-
-    @property
-    def native_value(self) -> str:
-        data = self.coordinator.data
-        if data is not None:
-            return getattr(data, "active_mode", MODE_OFF)
-        return MODE_OFF
+    _coordinator_field = "active_mode"
+    _field_default = MODE_OFF
 
 
 @dataclass
@@ -72,7 +87,7 @@ class _MonthlyPeakExtraStoredData(SensorExtraStoredData):
         return cls(base.native_value, base.native_unit_of_measurement, restored.get("period_month"))
 
 
-class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
+class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
     """Diagnostic: the coordinator's tracked monthly peak, kW (C3). Restoring this
     sensor's prior value + `period_month` attribute seeds the coordinator's
     Peak-Demand Tracker's `(tracked_kw, tracked_month)` across a restart instead of
@@ -85,9 +100,7 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
 
     def __init__(self, entry_id: str, coordinator) -> None:
-        SmartChargingEntity.__init__(self, entry_id)
-        CoordinatorEntity.__init__(self, coordinator)
-        self._attr_unique_id = f"{entry_id}_monthly_peak_kw"
+        super().__init__(entry_id, coordinator)
         self._attr_native_value = 0.0
 
     @property
@@ -128,7 +141,7 @@ class MonthlyPeakSensor(SmartChargingEntity, CoordinatorEntity, RestoreSensor):
         return {"period_month": self.coordinator.monthly_peak_period_month}
 
 
-class EffectivePeakLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
+class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
     """Diagnostic: resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw, urgent), kW (C3).
     No restore needed -- recomputed from MonthlyPeakSensor's own restored value on the
     first post-restart cycle."""
@@ -136,39 +149,17 @@ class EffectivePeakLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEnt
     _attr_translation_key = "effective_peak_limit"
     _object_id_suffix = "effective_peak_limit"
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
-
-    def __init__(self, entry_id: str, coordinator) -> None:
-        SmartChargingEntity.__init__(self, entry_id)
-        CoordinatorEntity.__init__(self, coordinator)
-        self._attr_unique_id = f"{entry_id}_effective_peak_limit"
-
-    @property
-    def native_value(self) -> float | None:
-        data = self.coordinator.data
-        if data is not None:
-            return getattr(data, "effective_peak_limit_kw", None)
-        return None
+    _coordinator_field = "effective_peak_limit_kw"
 
 
-class ActiveSocLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
+class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     """Diagnostic: the coordinator's resolved active SOC limit from the last cycle (R7).
     No restore needed -- recomputed each cycle from the SOC-limit-override/solar-reserve/
     solar-step-up three-row table (Task 5.1 wires the full resolution)."""
 
     _attr_translation_key = "active_soc_limit"
     _object_id_suffix = "active_soc_limit"
-
-    def __init__(self, entry_id: str, coordinator) -> None:
-        SmartChargingEntity.__init__(self, entry_id)
-        CoordinatorEntity.__init__(self, coordinator)
-        self._attr_unique_id = f"{entry_id}_active_soc_limit"
-
-    @property
-    def native_value(self) -> float | None:
-        data = self.coordinator.data
-        if data is not None:
-            return getattr(data, "active_soc_limit", None)
-        return None
+    _coordinator_field = "active_soc_limit"
 
 
 async def async_setup_entry(

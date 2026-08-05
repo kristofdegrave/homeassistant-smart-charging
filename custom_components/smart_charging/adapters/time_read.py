@@ -2,12 +2,12 @@
 
 from datetime import time
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ._read_only import _ReadOnlyAdapter
 
-class TimeReadAdapter:
+
+class TimeReadAdapter(_ReadOnlyAdapter):
     """Reads a time-of-day entity's native value.
 
     Added for the `departure_external` role (design doc §4 note): its mapped entity's
@@ -23,15 +23,8 @@ class TimeReadAdapter:
     also R14's own "external sensor currently reports no deadline" case.
     """
 
-    def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
-        self._hass = hass
-        self._entity_id = entity_id
-
     async def read(self) -> time | None:
-        state = self._hass.states.get(self._entity_id)
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        state = self._live_state()
+        if state is None:
             return None
         return dt_util.parse_time(state.state)
-
-    async def write(self, value: time) -> None:
-        raise NotImplementedError("read-only role")
