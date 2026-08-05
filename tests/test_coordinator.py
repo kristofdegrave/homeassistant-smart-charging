@@ -1,5 +1,6 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+import logging
 from datetime import time as time_of_day
 from datetime import timedelta
 
@@ -76,6 +77,12 @@ from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
 from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom
 
+# ADR-0007 fault-path log text (issue #504) -- named here, not repeated as bare literals,
+# since two tests below assert against the exact strings coordinator.py logs.
+_FAULT_WRITE_SWALLOW_LOG = "smart_charging failed to write 0 A during fault"
+_REQUIRED_ADAPTER_NONE_REASON = "required adapter returned None"
+_EV_SOC_MISSING_REASON = "ev_soc required while a solar mode is active but missing/None"
+
 
 class _FakeNumeric:
     def __init__(self, value):
@@ -103,6 +110,27 @@ class _RaisingNumeric:
 
     async def write(self, value):
         raise AssertionError("should not be called by a raising read")
+
+
+class _RaisingWriteNumeric:
+    """Read succeeds; write raises -- for testing _safe_write_zero's exception swallow and
+    the write-adapter-faults-during-early-fault-return paths (ADR-0007, issue #504). Unlike
+    _RaisingNumeric (which fails the *read* and is never expected to reach write()), this
+    fakes a charger current adapter whose write-back itself fails while ROLE_CHARGER_CURRENT
+    is being force-zeroed during an already-detected fault. Mirrors _FakeNumeric by recording
+    every write attempt (before raising), so a test can still assert how many zero-write
+    attempts a fault path made."""
+
+    def __init__(self, value=0.0):
+        self._value = value
+        self.written = []
+
+    async def read(self):
+        return self._value
+
+    async def write(self, value):
+        self.written.append(value)
+        raise RuntimeError("charger write failed")
 
 
 class _FakeStore:
@@ -283,6 +311,132 @@ async def test_adr0007_recovers_after_fault(hass):
     result = await coord._async_update_data()
     assert result.fault is False
     assert coord._was_faulted is False
+
+
+def _fault_warnings(caplog):
+    """Only this module's own WARNING records -- excludes anything an unrelated logger (e.g.
+    HA framework) might emit during a cycle, which would otherwise inflate/deflate the count
+    this file's caplog assertions rely on."""
+    return [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == coordinator_module.__name__
+    ]
+
+
+async def test_adr0007_logs_fault_once_per_outage_not_per_cycle(hass, caplog):
+    """ADR-0007: 'each outage logs once at warning level (not once per cycle, to avoid log
+    spam)'. Drive three consecutive faulted cycles of the SAME outage and assert the WARNING
+    is logged exactly once -- a regression to per-cycle logging (i.e. `_log_fault` warning on
+    every faulted cycle instead of only the first) would currently pass green, since no
+    existing test inspects caplog (issue #504). A new outage after a recovery must still log
+    again, proving this is "once per outage", not "once ever"; the recovery itself must log
+    its own once-only INFO message (the ADR's other half of this same sentence)."""
+    adapters = _adapters(status=None)  # unmapped/unavailable -> fault
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        for _ in range(3):  # same outage, three consecutive cycles
+            result = await coord._async_update_data()
+            assert result.fault is True
+
+    warnings = _fault_warnings(caplog)
+    assert len(warnings) == 1, "expected one WARNING for the whole outage, not one per cycle"
+    assert _REQUIRED_ADAPTER_NONE_REASON in warnings[0].getMessage()
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger=coordinator_module.__name__):
+        adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_CHARGING)  # recover
+        result = await coord._async_update_data()
+    assert result.fault is False
+    recovery_infos = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.INFO and r.name == coordinator_module.__name__
+    ]
+    assert len(recovery_infos) == 1, "recovery must log its own once-only INFO message"
+    assert "recovered from fault" in recovery_infos[0].getMessage()
+
+    caplog.clear()
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(None)  # a new outage, after the recovery above
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        result = await coord._async_update_data()
+        assert result.fault is True
+
+    warnings = _fault_warnings(caplog)
+    assert len(warnings) == 1, "a new outage after a recovery must log again, not stay suppressed"
+
+
+async def test_adr0007_safe_write_zero_swallows_write_exception(hass, caplog):
+    """ADR-0007's fault path must not itself raise if the write-back adapter is unavailable:
+    _safe_write_zero's try/except must swallow the write exception (logged via
+    _LOGGER.exception) rather than let it escape _async_update_data (issue #504)."""
+    adapters = _adapters(status=STATE_CHARGING)
+    adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()  # forces the outer cycle-exception fault path
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+
+    with caplog.at_level(logging.ERROR, logger=coordinator_module.__name__):
+        result = await coord._async_update_data()  # must not raise
+
+    assert result.fault is True
+    assert result.commanded_current == 0.0
+    assert _FAULT_WRITE_SWALLOW_LOG in caplog.text
+
+
+@pytest.mark.parametrize(
+    "status,ev_soc,expected_reason",
+    [
+        # required-adapter-None early-fault return (coordinator.py's `status is None or
+        # net_w is None or charger_w is None` branch).
+        (None, 50.0, _REQUIRED_ADAPTER_NONE_REASON),
+        # ev_soc-missing early-fault return, only reachable with a solar mode active.
+        (STATE_CHARGING, None, _EV_SOC_MISSING_REASON),
+    ],
+)
+async def test_adr0007_write_adapter_fault_during_run_cycle_early_fault_return_does_not_escape(
+    hass, caplog, status, ev_soc, expected_reason
+):
+    """Neither of `_run_cycle`'s early-fault returns (the required-adapter-None branch and the
+    ev_soc-missing-while-a-solar-mode-is-active branch) call `_safe_write_zero` -- they call
+    `self._write(0.0)` directly. If ROLE_CHARGER_CURRENT's write itself raises during one of
+    these, the exception must still be rescued (by the outer `_async_update_data` try/except,
+    which re-attempts the zero-write via `_safe_write_zero` and swallows it there) rather than
+    propagate out of `_async_update_data` -- previously untested for this specific path
+    (issue #504). Asserting `expected_reason`'s branch-specific WARNING (logged by `_log_fault`
+    before either early return ever reaches its `self._write(0.0)` call) is what binds this
+    test to the intended branch -- without it, a fall-through to the normal end-of-cycle write
+    (which raises the same way and produces the same fault=True/0.0/swallow-log outcome) would
+    pass just as easily, silently no longer exercising the early return at all."""
+    adapters = _adapters(status=status, ev_soc=ev_soc)
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch also faults
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        result = await coord._async_update_data()  # must not raise
+
+    assert result.fault is True
+    assert result.commanded_current == 0.0
+    assert expected_reason in caplog.text, "expected reason implies the early-return branch fired"
+    assert _FAULT_WRITE_SWALLOW_LOG in caplog.text
+    # Two zero-write attempts: the early return's own `self._write(0.0)` (which raised), then
+    # the outer handler's `_safe_write_zero` retry (which also raised and was swallowed there).
+    assert adapters[ROLE_CHARGER_CURRENT].written == [0.0, 0.0]
 
 
 async def test_nf4_grid_voltage_none_is_not_fault(hass):
