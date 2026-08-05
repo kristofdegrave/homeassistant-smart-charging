@@ -1,6 +1,6 @@
 """Plain-pytest tests for the coordinator's internal cycle-decomposition units (ADR-0012)."""
 
-from datetime import datetime
+from datetime import datetime, time
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -13,6 +13,10 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
+    MODE_CAPTAR,
+    MODE_OFF,
+    MODE_POWER,
+    MODE_SOLAR,
     ROUND_DOWN,
     STATE_CHARGING,
     STATE_CONNECTED,
@@ -28,6 +32,7 @@ from custom_components.smart_charging.coordinator_cycle import (
     _PowerModeHandler,
     _SolarModeHandler,
     _SolarOnlyModeHandler,
+    resolve_deadline_urgency,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes import captar, solar, solar_only
@@ -431,3 +436,182 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
     )
     assert changed is False
     assert limit == 80.0
+
+
+# --- resolve_deadline_urgency (ADR-0006 steps 3-6; extracted per #506) ---
+
+
+def _base_deadline_urgency_kwargs(**overrides):
+    """Shared defaults for resolve_deadline_urgency's many keyword arguments -- each test
+    below overrides only the handful that matter for its scenario, mirroring the production
+    function's own shared-kwargs dedup rationale (#506)."""
+    kwargs = dict(
+        deadline_resolvable=True,
+        ev_soc=50.0,
+        active_mode=MODE_OFF,
+        active_soc_limit=80.0,
+        deadline_today=None,
+        now_dt=datetime(2026, 7, 27, 10, 0),
+        effective_battery_capacity_kwh=10.0,
+        voltage=230.0,
+        surplus_w=0.0,
+        max_current_a=32.0,
+        auto_dispatchable=False,
+        solar_installed=False,
+        captar_available=True,
+        solar_start_threshold_w=1000.0,
+        sun_is_up=False,
+        sun_is_down=False,
+        low_tariff_active=False,
+        solar_reserve_active=False,
+        mode_desired_current=lambda mode: 0.0,
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+def test_resolve_deadline_urgency_short_circuits_when_not_resolvable():
+    """`deadline_resolvable=False` (the coordinator's own, already-computed `status in
+    CHARGEABLE_STATES and ev_soc is not None` check -- disconnected, or ev_soc unknown/
+    unmapped) short-circuits before ever calling `mode_desired_current`: no baseline-mode dry
+    run, no deadline/urgency computation at all, mirroring the original inline guard exactly.
+    The function itself no longer re-derives this from `status`/`ev_soc` (#506 Minor 1: a
+    second copy of the same predicate on this side of the module boundary was the exact
+    lockstep-editing hazard #506 exists to remove) -- the coordinator-level guard is covered
+    end-to-end by tests/test_coordinator.py's own disconnected/no-ev_soc scenarios."""
+
+    def _fail_if_called(mode):
+        raise AssertionError("mode_desired_current must not be called when not resolvable")
+
+    result = resolve_deadline_urgency(
+        **_base_deadline_urgency_kwargs(
+            deadline_resolvable=False,
+            ev_soc=None,
+            auto_dispatchable=False,
+            mode_desired_current=_fail_if_called,
+        )
+    )
+    assert result.required.required_a is None
+    assert result.required.urgent is False
+    assert result.required.unreachable is False
+    assert result.urgent is False
+    assert result.resolved_mode is None
+
+
+def test_resolve_deadline_urgency_no_deadline_resolved_means_no_urgency():
+    """`deadline_today=None` (R14's own "no deadline" outcome) means resolve_required_current
+    returns required_a=None/urgent=False/unreachable=False regardless of SOC/capacity --
+    mirrored here even under Auto dispatch, where baseline/real mode selection still runs
+    (deadline is not a precondition for mode selection itself, only for urgency)."""
+    result = resolve_deadline_urgency(
+        **_base_deadline_urgency_kwargs(
+            deadline_today=None,
+            auto_dispatchable=True,
+            solar_installed=True,
+            sun_is_up=True,
+            surplus_w=2000.0,
+            solar_start_threshold_w=1000.0,
+        )
+    )
+    assert result.required.required_a is None
+    assert result.urgent is False
+    # Both select_mode calls see the same urgent=False input and identical remaining
+    # arguments -- row 3 (solar capability + sun up + sufficient surplus) fires for both,
+    # so the real resolution matches the baseline exactly (#506's dedup, made observable).
+    assert result.resolved_mode == MODE_SOLAR
+
+
+def test_resolve_deadline_urgency_manual_profile_baseline_is_the_active_mode_itself():
+    """When Auto isn't dispatching (Manual profile, or Auto with no ev_soc role mapped),
+    the baseline is simply the already-active mode (NF2: Manual's own selection), never
+    routed through `select_mode` -- and `resolved_mode` stays None since only Auto ever
+    reassigns `active_mode` from this result."""
+    calls = []
+
+    def fake_mode_desired_current(mode):
+        calls.append(mode)
+        return 5.0  # Power's own baseline desired current in this scenario
+
+    result = resolve_deadline_urgency(
+        **_base_deadline_urgency_kwargs(
+            active_mode=MODE_POWER,
+            auto_dispatchable=False,
+            deadline_today=time(11, 0),
+            ev_soc=50.0,
+            active_soc_limit=80.0,
+            effective_battery_capacity_kwh=10.0,
+            mode_desired_current=fake_mode_desired_current,
+        )
+    )
+    assert calls == [MODE_POWER]  # baseline dry-run used the active mode, not a selected one
+    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (5.0 A)
+    assert result.urgent is True
+    assert result.resolved_mode is None  # Manual: coordinator never reassigns active_mode
+
+
+def test_resolve_deadline_urgency_escalates_from_baseline_off_to_captar_when_urgent():
+    """Auto dispatch, required current exceeds the row-3/4/5 baseline (Off, since neither
+    solar nor low-tariff/sun-down conditions match) -- the real (non-baseline) select_mode
+    call sees the escalated `urgent=True` and jumps straight to row 2 (Captar), proving the
+    two select_mode calls inside resolve_deadline_urgency use the real, not the baseline,
+    urgent value for the final resolution (#506)."""
+    calls = []
+
+    def fake_mode_desired_current(mode):
+        calls.append(mode)
+        return 0.0  # Off's own baseline desired current is always 0 A
+
+    result = resolve_deadline_urgency(
+        **_base_deadline_urgency_kwargs(
+            active_mode=MODE_OFF,
+            auto_dispatchable=True,
+            deadline_today=time(11, 0),
+            ev_soc=50.0,
+            active_soc_limit=80.0,
+            effective_battery_capacity_kwh=10.0,
+            solar_installed=False,
+            captar_available=True,
+            sun_is_up=False,
+            sun_is_down=False,  # row 4 doesn't match at baseline -- falls through to Off
+            low_tariff_active=False,
+            solar_reserve_active=False,
+            mode_desired_current=fake_mode_desired_current,
+        )
+    )
+    assert calls == [MODE_OFF]  # baseline (rows 3-5, urgent=False) resolved to Off
+    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (0 A)
+    assert result.required.urgent is True
+    assert result.required.unreachable is False  # 13.04 A < max_current_a (32.0)
+    assert result.urgent is True
+    assert result.resolved_mode == MODE_CAPTAR  # row 2: urgent -> Captar (available)
+
+
+def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_deadline():
+    """Auto dispatch where the baseline mode's own desired current (Solar, row 3) already
+    exceeds what the deadline requires -- urgent stays False and the real select_mode call,
+    seeing the identical (urgent=False) input as the baseline call, resolves to the same
+    mode. Proves the two calls agree when nothing escalates, not just when it does."""
+
+    def fake_mode_desired_current(mode):
+        return 16.0 if mode == MODE_SOLAR else 0.0
+
+    result = resolve_deadline_urgency(
+        **_base_deadline_urgency_kwargs(
+            active_mode=MODE_OFF,
+            auto_dispatchable=True,
+            deadline_today=time(11, 0),
+            ev_soc=79.0,
+            active_soc_limit=80.0,
+            effective_battery_capacity_kwh=10.0,
+            solar_installed=True,
+            captar_available=True,
+            sun_is_up=True,
+            surplus_w=2000.0,
+            solar_start_threshold_w=1000.0,
+            mode_desired_current=fake_mode_desired_current,
+        )
+    )
+    # energy_needed = 10 * (80-79)/100 = 0.1 kWh over 1h = 100 W = 0.435 A < baseline (16 A)
+    assert result.required.urgent is False
+    assert result.urgent is False
+    assert result.resolved_mode == MODE_SOLAR  # same row-3 match as the baseline, unchanged

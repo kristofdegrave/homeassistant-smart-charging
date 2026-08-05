@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any, Protocol
 
 from .const import (
@@ -22,10 +22,13 @@ from .const import (
     CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
 )
+from .engines.capability_gate import resolve_available_modes
+from .engines.deadline import RequiredCurrentResult, resolve_required_current
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
 from .engines.soc_target import SolarStepUpState, resolve_active_soc_limit
 from .modes import captar, power, solar, solar_only
+from .profiles.auto import select_mode
 
 _WATTS_PER_KILOWATT = 1000.0
 
@@ -228,3 +231,127 @@ class SocGateResolver:
         changed = limit != self._last_limit
         self._last_limit = limit
         return limit, changed
+
+
+@dataclass(frozen=True)
+class DeadlineUrgencyResult:
+    """Outcome of ADR-0006 steps 3-6 (deadline/urgency resolution, #506): the
+    required-current/urgency determination (R5/R15) and, when Auto actually dispatches this
+    cycle, its freshly resolved active mode. `resolved_mode` is None whenever
+    `auto_dispatchable` was False -- the coordinator only ever assigns `self.active_mode`
+    from it in that case, mirroring the original inline `if auto_dispatchable:` guard around
+    the real (non-baseline) `select_mode()` call. Firing `DeadlineUnreachableNotified` off
+    `required.unreachable` stays the coordinator's own job (ADR-0009/0010: HA I/O stays
+    coordinator-side), the same boundary `SocGateResolver` already draws for
+    `ActiveSocLimitChanged`."""
+
+    required: RequiredCurrentResult
+    urgent: bool
+    resolved_mode: str | None
+
+
+def resolve_deadline_urgency(
+    *,
+    deadline_resolvable: bool,
+    ev_soc: float | None,
+    active_mode: str,
+    active_soc_limit: float,
+    deadline_today: time | None,
+    now_dt: datetime,
+    effective_battery_capacity_kwh: float,
+    voltage: float,
+    surplus_w: float,
+    max_current_a: float,
+    auto_dispatchable: bool,
+    solar_installed: bool,
+    captar_available: bool,
+    solar_start_threshold_w: float,
+    sun_is_up: bool,
+    sun_is_down: bool,
+    low_tariff_active: bool,
+    solar_reserve_active: bool,
+    mode_desired_current: Callable[[str], float],
+) -> DeadlineUrgencyResult:
+    """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
+    (ADR-0006 steps 3-6; ADR-0012-style extraction, #506). `deadline_resolvable` is the
+    coordinator's own `status in CHARGEABLE_STATES and ev_soc is not None` check, computed
+    ONCE there and passed in rather than re-derived here from `status`/`ev_soc` -- the
+    coordinator already branches on that exact predicate to decide whether to even read
+    today's deadline/sensed battery capacity (both async, HA-bound), so a second, separately
+    written copy of the same condition on this side of the module boundary would be exactly
+    the kind of lockstep-editing hazard #506 exists to remove. Without it (disconnected, or a
+    non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring R14's
+    own "no deadline resolved -> urgency never applies" shape. All adapter/HA reads (today's
+    resolved deadline, the sensed battery capacity) happen in the coordinator before this is
+    called -- this function only ever receives already-resolved plain values, per
+    ADR-0009/0010's HA-free boundary.
+
+    The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
+    (urgent=False) every cycle -- never Captar's own already-escalated request, per
+    resolution-rules.md's explicit warning against that (it would make urgency look satisfied
+    the instant it engages and revert every cycle). `select_mode` is called at most twice here
+    -- baseline (urgent=False) and, only when Auto actually dispatches, the real resolution
+    (the real `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift
+    apart between the two calls (#506's named duplication-risk).
+    """
+    if not deadline_resolvable:
+        return DeadlineUrgencyResult(
+            required=RequiredCurrentResult(required_a=None, urgent=False, unreachable=False),
+            urgent=False,
+            resolved_mode=None,
+        )
+
+    baseline_mode = active_mode
+    common_select_kwargs: dict[str, Any] = {}
+    if auto_dispatchable:
+        available_modes = resolve_available_modes(
+            solar_available=solar_installed, captar_available=captar_available
+        )
+        common_select_kwargs = dict(
+            soc=ev_soc,
+            active_soc_limit=active_soc_limit,
+            available_modes=available_modes,
+            solar_capability_present=solar_installed,
+            sun_is_up=sun_is_up,
+            solar_surplus_sufficient=surplus_w >= solar_start_threshold_w,
+            sun_is_down=sun_is_down,
+            low_tariff_active=low_tariff_active,
+            solar_reserve_active=solar_reserve_active,
+        )
+        baseline_mode = select_mode(urgent=False, **common_select_kwargs)
+
+    baseline_desired_a = mode_desired_current(baseline_mode)
+
+    required = resolve_required_current(
+        deadline_today,
+        # engines/deadline.py combines this with a naive `time` (the departure-time
+        # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
+        # doesn't raise (both sides represent the same local wall clock either way).
+        # Wall-clock subtraction on the two DST-transition days a year can be off by
+        # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
+        now_dt.replace(tzinfo=None),
+        soc=ev_soc,
+        active_soc_limit=active_soc_limit,
+        ev_battery_capacity_kwh=effective_battery_capacity_kwh,
+        voltage=voltage,
+        baseline_desired_a=baseline_desired_a,
+        # A deliberate simplification of "maximum permitted rate"'s full peak-clamp-fitted
+        # definition (system-overview.md glossary) down to C1's hard ceiling -- refining
+        # this to the actual peak-fitted rate is tracked follow-up work (issue #367),
+        # not this task's job; it only affects when DeadlineUnreachableNotified fires.
+        maximum_permitted_rate_a=max_current_a,
+    )
+
+    # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
+    # Urgent (UC05's Postconditions) -- this `or` makes that explicit even though
+    # `unreachable` implies `urgent` by construction, per the required-current formula.
+    urgent = required.urgent or required.unreachable
+
+    resolved_mode = None
+    if auto_dispatchable:
+        # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
+        # never changes here while Manual, even under urgency) -- only Auto resolves its
+        # own mode, via the real (non-baseline) urgent this time.
+        resolved_mode = select_mode(urgent=urgent, **common_select_kwargs)
+
+    return DeadlineUrgencyResult(required=required, urgent=urgent, resolved_mode=resolved_mode)
