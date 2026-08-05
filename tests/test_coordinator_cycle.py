@@ -119,6 +119,43 @@ def test_peak_demand_state_resets_window_and_tracked_kw_on_month_rollover():
     assert state.window == (1000.0,)  # only this cycle's sample -- last month's were cleared
 
 
+def test_peak_demand_state_seed_sets_tracked_kw_and_month():
+    """PeakDemandState.seed (#496) -- the coordinator's `seed_monthly_peak` boundary delegates
+    here, so `_peak_demand`'s fields stay owned by this class regardless of which module seeds
+    them (a MonthlyPeakSensor restore, `update()`'s own bookkeeping)."""
+    state = PeakDemandState()
+    state.seed(3.4, (2026, 7))
+    assert state.tracked_kw == 3.4
+    assert state.tracked_month == (2026, 7)
+
+
+def test_peak_demand_state_seed_leaves_month_unchanged_when_none():
+    state = PeakDemandState()
+    state.tracked_month = (2026, 6)
+    state.seed(3.4, None)
+    assert state.tracked_kw == 3.4
+    assert state.tracked_month == (2026, 6)
+
+
+def test_peak_demand_state_seed_is_a_faithful_restore_not_a_clamp():
+    """A negative kW passes through unchanged -- `update()` itself can produce one on a
+    net-export month, so the seed path must not silently floor it to zero."""
+    state = PeakDemandState()
+    state.seed(-1.0, (2026, 7))
+    assert state.tracked_kw == -1.0
+
+
+def test_peak_demand_state_period_month_formats_tracked_month():
+    state = PeakDemandState()
+    state.tracked_month = (2026, 7)
+    assert state.period_month == "2026-07"
+
+
+def test_peak_demand_state_period_month_is_none_when_untracked():
+    state = PeakDemandState()
+    assert state.period_month is None
+
+
 def test_mode_handler_protocol_is_satisfied_by_each_adapter():
     """Every _*ModeHandler (ADR-0012 Sec 3.4) satisfies the ModeHandler Protocol's single
     desired_current(ctx, state) -> (current, new_state) shape -- a structural check that all

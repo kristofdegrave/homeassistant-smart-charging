@@ -1443,6 +1443,41 @@ async def test_set_target_current_passes_through_in_range_value(hass):
     assert coord.target_current == 10.0
 
 
+async def test_seed_monthly_peak_sets_tracked_kw_and_month(hass):
+    """ADR-0012: the coordinator's own boundary for seeding `_peak_demand` from
+    MonthlyPeakSensor's restored state -- the intended write path for sensor.py, replacing
+    its direct reach into `_peak_demand`'s private fields (#496)."""
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.seed_monthly_peak(3.4, (2026, 7))
+    assert coord._peak_demand.tracked_kw == 3.4
+    assert coord._peak_demand.tracked_month == (2026, 7)
+
+
+async def test_seed_monthly_peak_leaves_month_unchanged_when_none(hass):
+    """A restore with no `period_month` attribute (older stored state) seeds only the kW
+    value, matching sensor.py's own restore-path branching."""
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord._peak_demand.tracked_month = (2026, 6)
+    coord.seed_monthly_peak(3.4, None)
+    assert coord._peak_demand.tracked_kw == 3.4
+    assert coord._peak_demand.tracked_month == (2026, 6)
+
+
+async def test_seed_monthly_peak_passes_a_negative_kw_through_unchanged(hass):
+    """A faithful restore, not a clamp -- `PeakDemandState.update()` can itself produce a
+    negative `tracked_kw` on a net-export month (peak_demand_tracker.py's own contract), so
+    the seed path must not silently floor a legitimately-negative restored value to zero."""
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.seed_monthly_peak(-1.0, (2026, 7))
+    assert coord._peak_demand.tracked_kw == -1.0
+
+
 # --- Task 4.1 (ADR-0012 coordinator decomposition): explicit ADR-0006 clamp-integrity check,
 # made permanent regression tests rather than a one-time manual read (plan Step 4). ---
 #
