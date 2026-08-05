@@ -378,9 +378,29 @@ System→vehicle branch follows in Phase 4. Each task drives M2 through its **pu
 in the HA harness (not by faking HA listener plumbing — that is Phase 5's job); tests construct M2 with
 a small adapter map and call the reaction directly.
 
+> **Correction — ADR-0018 supersedes this phase's `soc_limit_override` access shape.** This plan was
+> authored 2026-07-21; **ADR-0018** (Accepted 2026-08-03) postdates it and settles that owned
+> control-entity state — `soc_limit_override` named explicitly among the eight — is reached through
+> **RA3's `Store`**, in both directions, and that no coordinator setter (ADR-0014's shape) is added.
+> The `get_default_soc_limit` / `set_default_soc_limit` constructor callbacks this plan shows below
+> (Tasks 3.1, 3.2, 3.3, 4.1 and their Phase 5 wiring) are therefore **retired**: M2 takes an injected
+> `store` instead, reads the default with
+> `await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)` at the point of
+> use, and adopts through the Store's write half. Both callbacks were also async-hostile —
+> `Store.read()` is a coroutine returning `float | None`, which `Callable[[], float]` cannot express,
+> and the adoption write must be awaited rather than fire-and-forget.
+>
+> Task 3.1 below is updated to the corrected shape. **Tasks 3.2/3.3/4.1/5.1 still show the retired
+> callbacks in their snippets** — the Store's write half does not exist yet (`adapters/store.py` has
+> `read()` only), and specifying it (clamp placement, `number.set_value` vs `Store.write()`, error
+> handling) is those tasks' own design work, not a review-fix edit. Whoever picks up Task 3.2 must
+> re-derive those snippets against ADR-0018 rather than copy them. The `RestoreNumber`/stale
+> `native_value` reasoning in Task 5.1 stays valid — it belongs *inside* the Store's write half.
+
 ### Task 3.1: M2 skeleton + the echo-guard state
 
-**ADR honored:** system-design §4 rule 5 / ADR-0011 (Manager, no M1 coupling). **Test boundary:** HA
+**ADR honored:** system-design §4 rule 5 / ADR-0011 (Manager, no M1 coupling); **ADR-0015**
+(`managers/` package home); **ADR-0018** (owned-entity state via RA3's Store). **Test boundary:** HA
 harness, `tests/managers/test_vehicle_limit.py`.
 
 **Files:**
@@ -392,14 +412,16 @@ harness, `tests/managers/test_vehicle_limit.py`.
 ```python
 """HA-harness tests for the Vehicle-Limit Manager (M2 — UC09/R6/ADR-0011)."""
 
+from homeassistant.const import Platform
+
 from custom_components.smart_charging.const import (
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     ROLE_CAR_HOME,
     ROLE_CHARGER_STATUS,
     ROLE_VEHICLE_CHARGE_LIMIT,
     STATE_CONNECTED,
-    STATE_DISCONNECTED,
 )
-from custom_components.smart_charging.vehicle_limit import VehicleLimitManager
+from custom_components.smart_charging.managers.vehicle_limit import VehicleLimitManager
 
 
 class _RWAdapter:
@@ -423,20 +445,36 @@ class _ReadAdapter:
         return self.value
 
 
+class _FakeStore:
+    """Stands in for adapters/store.py's Store (ADR-0018) — mirrors the double in
+    tests/test_coordinator.py."""
+
+    def __init__(self, values):
+        self._values = values
+        self.writes = []
+
+    async def read(self, entity_domain, unique_id_suffix, value_type):
+        return self._values.get((entity_domain, unique_id_suffix))
+
+
 def _manager(hass, *, vehicle=80.0, home=True, status=STATE_CONNECTED, soc_override=80.0):
     adapters = {
         ROLE_VEHICLE_CHARGE_LIMIT: _RWAdapter(vehicle),
         ROLE_CAR_HOME: _ReadAdapter(home),
         ROLE_CHARGER_STATUS: _ReadAdapter(status),
     }
-    return VehicleLimitManager(
-        hass, adapters=adapters, entry_id="abc", get_default_soc_limit=lambda: soc_override
-    )
+    store = _FakeStore({(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): soc_override})
+    return VehicleLimitManager(hass, adapters=adapters, entry_id="abc", store=store)
 
 
 async def test_manager_starts_with_no_recorded_write(hass):
     m = _manager(hass)
     assert m._last_written_limit is None  # echo guard initialises empty (design §6)
+
+
+async def test_manager_starts_with_no_recorded_status(hass):
+    m = _manager(hass)
+    assert m._last_status is None  # disconnect detection is edge-based (design §5.3)
 ```
 
 **Step 2: Run** → FAIL (`ImportError`).
@@ -450,17 +488,22 @@ A Manager (system-design §4 rule 5 / ADR-0011): triggered by HA state changes a
 ActiveSocLimitChanged event, it reads inputs through adapters and writes the vehicle
 through the vehicle_charge_limit adapter / adopts manual changes into
 number.smart_charging_soc_limit_override. It NEVER calls or is called by the Coordinator.
-No control-cycle logic, no clamps, no set-point — see design 2026-07-21-vehicle-limit-manager.
+No control-cycle logic, no clamps, no set-point — see
+docs/plans/2026-07-21-vehicle-limit-manager-design.md.
+
+Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA3's Store
+(ADR-0018), never a coordinator reference, setter, or event.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 
 from homeassistant.core import HomeAssistant
 
-from .const import (
+from ..adapters.base import Adapter
+from ..adapters.store import Store
+from ..const import (
     CHARGEABLE_STATES,
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
@@ -482,19 +525,20 @@ class VehicleLimitManager:
         self,
         hass: HomeAssistant,
         *,
-        adapters: dict,
+        adapters: dict[str, Adapter],
         entry_id: str,
-        get_default_soc_limit: Callable[[], float],
-        set_default_soc_limit: Callable[[float], None] | None = None,
+        store: Store,
     ) -> None:
         self._hass = hass
         self._adapters = adapters
         self._entry_id = entry_id
-        self._get_default_soc_limit = get_default_soc_limit
-        self._set_default_soc_limit = set_default_soc_limit
+        self._store = store
         self._last_written_limit: float | None = None
         self._last_status: str | None = None
 ```
+
+(`entry_id` is kept even though `Store` holds its own: M2's three domain events are entry-scoped
+(§7), so it needs the id for their payloads.)
 
 **Step 4: Run** → PASS. **Step 5: Commit**
 
