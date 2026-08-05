@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MODE_OFF
+from .const import DATA_COORDINATOR, DOMAIN, MODE_OFF, STATUS_FAULT, STATUS_OK
 from .entity import SmartChargingEntity
 
 
@@ -32,8 +32,8 @@ class ChargingStatusSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity)
     def native_value(self) -> str:
         data = self.coordinator.data
         if data is not None and getattr(data, "fault", False):
-            return "Fault"
-        return "OK"
+            return STATUS_FAULT
+        return STATUS_OK
 
 
 class ActiveModeSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity):
@@ -174,7 +174,7 @@ class ActiveSocLimitSensor(SmartChargingEntity, CoordinatorEntity, SensorEntity)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     async_add_entities(
         [
             ChargingStatusSensor(entry.entry_id, coordinator),

@@ -17,11 +17,13 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_STRATEGY,
+    DATA_COORDINATOR,
     DOMAIN,
     MODE_SOLAR,
     MODE_SOLAR_ONLY,
     ROUND_NEAREST,
     ROUND_UP,
+    STATUS_OK,
 )
 from custom_components.smart_charging.modes._phase import Phase
 from tests.helpers import (
@@ -75,7 +77,7 @@ async def _setup(hass, **option_overrides):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     _seed_ample_peak_headroom(coordinator)
     return coordinator, calls
 
@@ -138,7 +140,7 @@ async def test_uc01_main_success_starts_and_recomputes_each_cycle(hass):
     await _cycle(hass, coordinator, charger_w=2645.0)
     assert calls[-1]["value"] == 12.0
     assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_SOLAR
-    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
 
     # surplus drops to 1840 W = 8.0 A ideal exactly -> round up -> 8 A: the set-point
     # re-tracks the (lower) available surplus rather than sticking at 12 A.

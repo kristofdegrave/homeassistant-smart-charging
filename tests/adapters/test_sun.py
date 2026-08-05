@@ -3,19 +3,24 @@
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
-from custom_components.smart_charging.adapters.sun import SUN_ENTITY_ID, SunReadAdapter
+from custom_components.smart_charging.adapters.sun import (
+    SUN_ENTITY_ID,
+    SUN_STATE_ABOVE_HORIZON,
+    SUN_STATE_BELOW_HORIZON,
+    SunReadAdapter,
+)
 
 
 async def test_reads_above_horizon(hass):
-    hass.states.async_set(SUN_ENTITY_ID, "above_horizon")
+    hass.states.async_set(SUN_ENTITY_ID, SUN_STATE_ABOVE_HORIZON)
     adapter = SunReadAdapter(hass)
-    assert await adapter.read() == "above_horizon"
+    assert await adapter.read() == SUN_STATE_ABOVE_HORIZON
 
 
 async def test_reads_below_horizon(hass):
-    hass.states.async_set(SUN_ENTITY_ID, "below_horizon")
+    hass.states.async_set(SUN_ENTITY_ID, SUN_STATE_BELOW_HORIZON)
     adapter = SunReadAdapter(hass)
-    assert await adapter.read() == "below_horizon"
+    assert await adapter.read() == SUN_STATE_BELOW_HORIZON
 
 
 async def test_read_absent_entity_returns_none(hass):
@@ -38,4 +43,4 @@ async def test_read_unknown_returns_none(hass):
 async def test_read_only_write_raises_not_implemented(hass):
     adapter = SunReadAdapter(hass)
     with pytest.raises(NotImplementedError):
-        await adapter.write("above_horizon")
+        await adapter.write(SUN_STATE_ABOVE_HORIZON)

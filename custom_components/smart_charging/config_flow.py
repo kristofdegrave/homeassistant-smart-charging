@@ -81,6 +81,9 @@ from .const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
+    ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
+    ERROR_REQUIRED_WHEN_SOLAR_INSTALLED,
+    ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     ROUND_DOWN,
     ROUND_NEAREST,
     ROUND_UP,
@@ -287,11 +290,11 @@ def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
     reconfigure steps so flipping either toggle through either path is rejected the
     same way. Both must be False for ev_soc to stay optional."""
     if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_EV_SOC_ENTITY):
-        return {CONF_EV_SOC_ENTITY: "required_when_solar_installed"}
+        return {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_INSTALLED}
     if user_input.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE) and not user_input.get(
         CONF_EV_SOC_ENTITY
     ):
-        return {CONF_EV_SOC_ENTITY: "required_when_captar_available"}
+        return {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE}
     return None
 
 
@@ -300,7 +303,7 @@ def _solar_forecast_missing_error(user_input: dict) -> dict[str, str] | None:
     (R9's precondition is inert without the solar capability) -- same
     required_when_solar_installed-style guard ev_soc's own guard uses."""
     if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_SOLAR_FORECAST_ENTITY):
-        return {CONF_SOLAR_FORECAST_ENTITY: "required_when_solar_installed"}
+        return {CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_INSTALLED}
     return None
 
 
@@ -310,7 +313,7 @@ def _car_home_missing_error(user_input: dict) -> dict[str, str] | None:
     if user_input.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY) and not user_input.get(
         CONF_CAR_HOME_ENTITY
     ):
-        return {CONF_CAR_HOME_ENTITY: "required_when_vehicle_limit_mapped"}
+        return {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED}
     return None
 
 

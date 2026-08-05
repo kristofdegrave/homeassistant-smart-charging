@@ -10,6 +10,10 @@ from homeassistant.core import callback
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging import coordinator as coordinator_module
+from custom_components.smart_charging.adapters.sun import (
+    SUN_STATE_ABOVE_HORIZON,
+    SUN_STATE_BELOW_HORIZON,
+)
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
@@ -1121,7 +1125,7 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
     (already-maximum) desired current would make urgency look satisfied instantly and
     revert every cycle -- this test drives that exact scenario and asserts urgency holds."""
     freezer.move_to("2026-01-15 12:00:00")
-    adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0, sun_state="above_horizon")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0, sun_state=SUN_STATE_ABOVE_HORIZON)
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
@@ -1145,7 +1149,7 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
 async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
     mutual-exclusivity clause)."""
-    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state="below_horizon")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state=SUN_STATE_BELOW_HORIZON)
     adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
     config = _config()
     coord = SmartChargingCoordinator(
@@ -1262,7 +1266,7 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     as though low_tariff_active is always True -- baseline selects Captar (16 A, exceeds
     the ~10.87 A the deadline below requires), so urgency never engages."""
     freezer.move_to("2026-01-15 12:00:00")
-    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state="below_horizon")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON)
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
     config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
@@ -1285,7 +1289,7 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     falls through to Off (0 A), so the same deadline as above now reads urgent."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(
-        status=STATE_CHARGING, ev_soc=70.0, sun_state="below_horizon", low_tariff=False
+        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
     )
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
@@ -1308,7 +1312,7 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
     """A mapped ROLE_LOW_TARIFF reading True behaves the same as the unmapped default."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(
-        status=STATE_CHARGING, ev_soc=70.0, sun_state="below_horizon", low_tariff=True
+        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=True
     )
     config = _config()
     config[CONF_SOLAR_INSTALLED] = False
@@ -1334,7 +1338,11 @@ async def test_auto_profile_selects_solar_when_surplus_sufficient(hass):
     """Row 3: solar capability present, sun up, surplus above threshold -> Solar, no
     urgency in the way (no deadline seeded)."""
     adapters = _adapters(
-        status=STATE_CHARGING, ev_soc=50.0, net_w=100.0, charger_w=500.0, sun_state="above_horizon"
+        status=STATE_CHARGING,
+        ev_soc=50.0,
+        net_w=100.0,
+        charger_w=500.0,
+        sun_state=SUN_STATE_ABOVE_HORIZON,
     )
     config = _config()
     config[CONF_SOLAR_INSTALLED] = True

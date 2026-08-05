@@ -20,6 +20,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.smart_charging.adapters.sun import (
+    SUN_STATE_ABOVE_HORIZON,
+    SUN_STATE_BELOW_HORIZON,
+)
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
@@ -36,6 +40,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
+    DATA_COORDINATOR,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
@@ -130,7 +135,7 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     _seed_ample_peak_headroom(coordinator)
     return coordinator
 
@@ -282,7 +287,8 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, fr
     is about step-up, not deadline urgency."""
     freezer.move_to("2026-01-17 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=50.0, net_w=100.0, charger_w=500.0)
-    hass.states.async_set("sun.sun", "above_horizon")  # sufficient surplus keeps Auto in Solar
+    # Sufficient surplus keeps Auto in Solar.
+    hass.states.async_set("sun.sun", SUN_STATE_ABOVE_HORIZON)
     coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
@@ -409,7 +415,7 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass, freezer):
     freezer.move_to("2026-01-17 12:00:00")
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=50.0)
-    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
     coordinator = await _setup(
         hass,
@@ -438,7 +444,7 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass, freezer):
     assert calls[-1]["value"] == 0.0
 
     # Normal: the sun comes back up -- the reserve's own precondition lapses.
-    hass.states.async_set("sun.sun", "above_horizon")
+    hass.states.async_set("sun.sun", SUN_STATE_ABOVE_HORIZON)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 80.0  # default limit resolves again
@@ -451,7 +457,7 @@ async def test_uc07_manual_profile_never_engages_the_reserve(hass, freezer):
     the active SOC limit resolves as if this use-case weren't coordinating it at all."""
     freezer.move_to("2026-01-17 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=50.0)
-    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")
     coordinator = await _setup(
         hass,
@@ -474,7 +480,7 @@ async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass, fr
     ceasing to hold), not one cycle later."""
     freezer.move_to("2026-01-17 12:00:00")
     _seed_states(hass, status="Charging", ev_soc=50.0)
-    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")
     coordinator = await _setup(
         hass,

@@ -23,6 +23,10 @@ doc Sec7, ADR-0009): it tests ``notification_state.py``'s pure UC08 prompt-lifec
 state machine (prior state, observed inputs, and an injected clock -- no HA imports), so
 its tests are plain pytest too.
 
+``test_config_flow_translations.py`` is a deliberate root-level exception (issue #508): it
+only reads ``const.py`` and the integration's own JSON translation files off disk, needing
+no ``hass`` fixture at all, so its tests are plain pytest too.
+
 This file deliberately stays HA-free -- it is imported for every test under ``tests/``,
 including the pure-logic dirs above. The shared end-to-end test helpers (config-entry
 seeding, coordinator seeding, etc.) that the HA-harness suites need live in
@@ -39,7 +43,12 @@ _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 # Root-level test files that are pure logic despite living outside _PURE_DIRS
 # (ADR-0012/0013; test_notification_state.py per the notifications design doc Sec7).
 _PURE_FILES = frozenset(
-    {"test_coordinator_cycle.py", "test_entity.py", "test_notification_state.py"}
+    {
+        "test_coordinator_cycle.py",
+        "test_entity.py",
+        "test_notification_state.py",
+        "test_config_flow_translations.py",
+    }
 )
 
 

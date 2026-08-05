@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.smart_charging.adapters.notify import (
     EVENT_MOBILE_APP_NOTIFICATION_ACTION,
 )
+from custom_components.smart_charging.adapters.sun import SUN_STATE_BELOW_HORIZON
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -26,12 +27,15 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    DATA_COORDINATOR,
     DOMAIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     PROFILE_AUTO,
+    STATUS_FAULT,
+    STATUS_OK,
 )
 from tests.helpers import (
     capture_charger_current_writes,
@@ -61,7 +65,7 @@ async def test_end_to_end_commands_target_current(hass):
     # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1),
     # so the setup cycle wrote 0 A -- pin that down before selecting Power explicitly, same
     # as a real install's first manual step.
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     assert coordinator.active_mode == MODE_OFF
     assert calls[-1]["value"] == 0.0
     seed_ample_peak_headroom(coordinator)
@@ -73,7 +77,7 @@ async def test_end_to_end_commands_target_current(hass):
     assert calls and calls[-1]["entity_id"] == "number.charger_current"
     assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
-    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
 
 
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
@@ -103,7 +107,7 @@ async def test_end_to_end_disconnect_forces_zero_and_fault(hass):
 
     assert calls and calls[-1]["entity_id"] == "number.charger_current"
     assert calls[-1]["value"] == 0.0
-    assert hass.states.get("sensor.smart_charging_status").state == "Fault"
+    assert hass.states.get("sensor.smart_charging_status").state == STATUS_FAULT
 
 
 async def test_select_entity_is_registered_on_setup(hass):
@@ -156,13 +160,13 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     seed_ample_peak_headroom(coordinator)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
     assert hass.states.get("sensor.smart_charging_active_mode").state == MODE_SOLAR
     assert calls[-1]["value"] == 11.0
 
@@ -190,7 +194,7 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     config = coordinator._config
     assert config[CONF_SAFETY_MARGIN_W] == 500.0
     assert config[CONF_MAX_PEAK_KW] == 7.5
@@ -217,12 +221,12 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert hass.states.get("sensor.smart_charging_status").state == "OK"
+    assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
     assert calls[-1]["value"] == 10.0  # default_target_current, unclamped by R3.
 
 
@@ -247,7 +251,7 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     config = coordinator._config
     assert config[CONF_EV_BATTERY_CAPACITY_KWH] == 60.0
     assert config[CONF_MAX_SOLAR_SOC] == 90.0
@@ -270,7 +274,7 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
     unfrozen, this precondition would depend on the real wall-clock weekday."""
     freezer.move_to("2026-01-17 12:00:00")
     seed_charger_states(hass, status="Charging")
-    hass.states.async_set("sun.sun", "below_horizon")
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
     data = entry_data_base()
     data[CONF_SOLAR_FORECAST_ENTITY] = "sensor.solar_forecast"
@@ -282,7 +286,7 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
     await coordinator.async_refresh()

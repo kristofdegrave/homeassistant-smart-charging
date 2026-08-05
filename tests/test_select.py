@@ -1,4 +1,11 @@
-"""HA-harness test for the mode selector (C2)."""
+"""HA-harness test for the mode selector (C2).
+
+Deliberately pins the raw option strings ("Off"/"Power"/"Solar"/.../"Manual"/"Auto") rather
+than importing MODE_*/PROFILE_* from const.py (issue #508 scope note): these are the
+entity's user-facing external contract (select.mode/select.profile's actual state values),
+so a test asserting against the same constants the entity is built from wouldn't catch a
+constant-value regression -- pinning the literal is the point here, not an oversight.
+"""
 
 import pytest
 from homeassistant.core import State

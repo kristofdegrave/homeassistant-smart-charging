@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
+from custom_components.smart_charging.const import STATUS_FAULT, STATUS_OK
 from custom_components.smart_charging.coordinator_cycle import PeakDemandState
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
@@ -22,15 +23,15 @@ from custom_components.smart_charging.sensor import (
 async def test_status_reflects_fault_flag(hass):
     coord = SimpleNamespace(data=SimpleNamespace(fault=True))
     sensor = ChargingStatusSensor(entry_id="abc", coordinator=coord)
-    assert sensor.native_value == "Fault"
+    assert sensor.native_value == STATUS_FAULT
     coord.data = SimpleNamespace(fault=False)
-    assert sensor.native_value == "OK"
+    assert sensor.native_value == STATUS_OK
 
 
 async def test_status_defaults_to_ok_when_no_data_yet(hass):
     coord = SimpleNamespace(data=None)
     sensor = ChargingStatusSensor(entry_id="abc", coordinator=coord)
-    assert sensor.native_value == "OK"
+    assert sensor.native_value == STATUS_OK
 
 
 def test_unique_id_scoped_to_entry():
