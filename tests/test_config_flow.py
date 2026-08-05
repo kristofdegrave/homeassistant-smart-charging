@@ -59,9 +59,13 @@ from custom_components.smart_charging.const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
+    ROLE_CAR_HOME,
+    ROLE_CHARGER_CURRENT,
+    ROLE_VEHICLE_CHARGE_LIMIT,
     STATE_CHARGING,
     STATE_CONNECTED,
 )
+from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
 USER_INPUT = {
     "charger_current_entity": "number.charger_current",
@@ -232,23 +236,28 @@ async def test_options_flow_rejects_a_data_key(hass):
 
 async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     """async_step_reconfigure is the only sanctioned path to remap entity roles
-    (ADR-0005) — it must replace data, leave options untouched, and reload the entry."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-            "charger_status_entity": "sensor.evse",
-            "net_power_entity": "sensor.net_power",
-            "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
-        },
-        options={
-            CONF_GRID_SAFETY_OFFSET_A: 2.0,
-            CONF_CONTROL_INTERVAL_S: DEFAULT_CONTROL_INTERVAL_S,
-        },
-    )
+    (ADR-0005) — it must replace data, leave options untouched, and reload the entry
+    (ADR-0008: a mapping change tears down and recreates the coordinator). The entry is
+    fully set up first so the reload is observable as a real side effect -- a brand-new
+    coordinator instance replacing the old one -- rather than asserted only via the flow's
+    own ABORT/reconfigure_successful result, which says nothing about whether a reload
+    actually happened."""
+    seed_charger_states(hass, status="Charging")
+    hass.states.async_set("sensor.new_evse", "Charging")
+    hass.states.async_set("number.new_charger_current", "0.0")
+
+    data = entry_data_base()
+    # CONF_CAPTAR_AVAILABLE defaults to True (DEFAULT_CAPTAR_AVAILABLE) and neither this
+    # entry nor the reconfigure submission below maps ev_soc -- turn it off so the
+    # required_when_captar_available guard doesn't reject the reconfigure submission.
+    data[CONF_CAPTAR_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
     original_options = dict(entry.options)
+    original_coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -269,6 +278,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
 
     assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
     assert entry.data[CONF_STATUS_TRANSLATION] == {
@@ -276,6 +286,19 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
         "Charging": STATE_CHARGING,
     }
     assert dict(entry.options) == original_options
+    # ADR-0008's central consequence: the reconfigure must trigger a full config-entry
+    # reload, which recreates the coordinator from scratch. This entry's reload is actually
+    # driven by two redundant paths -- async_update_reload_and_abort's own schedule_reload
+    # (config_flow.py) and the generic update-listener __init__.py registers for any entry
+    # update (_async_reload_entry) -- so this assertion only fails if reload-on-change were
+    # removed from *both*; either path alone still satisfies ADR-0008 and keeps this green.
+    new_coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    assert new_coordinator is not original_coordinator
+    # ...and prove the reload actually picked up the new mapping, not just that *some*
+    # reload happened against stale data.
+    assert (
+        new_coordinator._adapters[ROLE_CHARGER_CURRENT]._entity_id == "number.new_charger_current"
+    )
 
 
 def _suggested_values(result):
@@ -395,14 +418,26 @@ async def test_solar_installed_true_with_ev_soc_succeeds(hass):
 
 
 async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
-    # An entry created before this task predates CONF_SOLAR_INSTALLED entirely --
-    # reading it must default to False, not KeyError (design doc §8).
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={k: v for k, v in USER_INPUT.items() if k not in (CONF_SOLAR_INSTALLED,)},
-        options={},
-    )
-    assert entry.data.get(CONF_SOLAR_INSTALLED, False) is False
+    # An entry created before this task predates CONF_SOLAR_INSTALLED entirely -- setup
+    # must default it to False, not KeyError (design doc §8). Exercised through the real
+    # async_setup_entry wiring (__init__.py's `entry.data.get(CONF_SOLAR_INSTALLED, False)`
+    # threaded into the coordinator's config), not a bare dict.get replicated in the test
+    # itself -- that would pass even if the integration's own default fell back to True.
+    # Kept alongside this file's other CONF_SOLAR_INSTALLED config-flow tests (ADR-0009's
+    # "mirrors the module under test" is a default, not a hard split) rather than moved to
+    # test_init.py's own "setup threads options into coordinator config" family, since this
+    # one is specifically about a config-flow-era field, not an options-flow threading case.
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    assert CONF_SOLAR_INSTALLED not in data  # sanity: this entry genuinely predates the toggle
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    assert coordinator._config[CONF_SOLAR_INSTALLED] is False
 
 
 async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
@@ -532,14 +567,25 @@ async def test_captar_available_false_does_not_require_ev_soc(hass):
 
 
 async def test_pre_toggle_entry_defaults_captar_available_true(hass):
-    # An entry created before this task predates CONF_CAPTAR_AVAILABLE entirely -- reading
-    # it must default to True (design doc §3), not KeyError.
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={k: v for k, v in USER_INPUT.items() if k != CONF_CAPTAR_AVAILABLE},
-        options={},
-    )
-    assert entry.data.get(CONF_CAPTAR_AVAILABLE, True) is True
+    # An entry created before this task predates CONF_CAPTAR_AVAILABLE entirely -- setup
+    # must default it to True (design doc §3), not KeyError. Exercised through the real
+    # async_setup_entry wiring (__init__.py's
+    # `entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE)` threaded into the
+    # coordinator's config), not a bare dict.get replicated in the test itself -- that would
+    # pass even if the integration's own default flipped to False. Kept alongside this
+    # file's other CONF_CAPTAR_AVAILABLE config-flow tests rather than moved to
+    # test_init.py, same rationale as test_pre_toggle_entry_defaults_solar_installed_false.
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    assert CONF_CAPTAR_AVAILABLE not in data  # sanity: this entry genuinely predates the toggle
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    assert coordinator._config[CONF_CAPTAR_AVAILABLE] is True
 
 
 async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass):
@@ -691,9 +737,29 @@ async def test_neither_vehicle_limit_nor_car_home_is_accepted(hass):
 async def test_pre_field_entry_reads_vehicle_limit_and_car_home_as_absent(hass):
     # An entry created before these fields must not KeyError -- no migration needed
     # (design doc §8), mirroring the ev_soc/captar_available pre-toggle-entry tests above.
-    entry = MockConfigEntry(domain=DOMAIN, data=dict(USER_INPUT), options={})
-    assert entry.data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY) is None
-    assert entry.data.get(CONF_CAR_HOME_ENTITY) is None
+    # Exercised through the real async_setup_entry -> build_adapters wiring
+    # (adapters/factory.py's `data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY)` /
+    # `data.get(CONF_CAR_HOME_ENTITY)` guards), not a bare dict.get replicated in the test
+    # itself -- that would pass even if the factory's own guards were deleted outright.
+    # tests/adapters/test_factory.py's test_car_home_role_absent_when_not_configured /
+    # test_vehicle_charge_limit_role_absent_when_not_configured already cover the factory
+    # guard itself in isolation; the role-absence assertions below are this test's covering
+    # detail -- what's unique here is that a full config-entry setup (async_setup_entry,
+    # the `assert await hass.config_entries.async_setup(...)` line) succeeds end-to-end for
+    # a pre-field entry without KeyError.
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in data
+    assert CONF_CAR_HOME_ENTITY not in data
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    assert ROLE_VEHICLE_CHARGE_LIMIT not in coordinator._adapters
+    assert ROLE_CAR_HOME not in coordinator._adapters
 
 
 async def test_reconfigure_rejects_vehicle_limit_mapped_without_car_home(hass):
