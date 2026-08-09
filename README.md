@@ -9,23 +9,27 @@ capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 (three-phase later).
 
 > **Status: Power/Solar/SolarOnly/Captar modes, Auto profile, deadline & SOC
-> management.** This project follows an analysis-first, spec-driven
-> methodology — the documents under [`docs/analysis/`](docs/analysis/) are the
-> source of truth for the full design. The current code implements the
-> **Power**, **Solar**, **SolarOnly**, and **Captar** modes (selectable
-> manually via `select.smart_charging_mode`, or automatically by the **Auto**
-> profile via `select.smart_charging_profile`): a target-current control loop
-> with grid-safety clamping (never exceed the configured grid ceiling),
+> management, evening home-day prompt.** This project follows an
+> analysis-first, spec-driven methodology — the documents under
+> [`docs/analysis/`](docs/analysis/) are the source of truth for the full
+> design. The current code implements the **Power**, **Solar**,
+> **SolarOnly**, and **Captar** modes (selectable manually via
+> `select.smart_charging_mode`, or automatically by the **Auto** profile via
+> `select.smart_charging_profile`): a target-current control loop with
+> grid-safety clamping (never exceed the configured grid ceiling),
 > solar-surplus-driven charging with start/hold/cooldown behaviour, and
 > capacity-tariff (CapTar) peak protection — a monthly-peak-aware charging
 > mode with its own grace/cooldown behaviour, plus an opt-in peak-respecting
 > clamp available to `Power` mode too. Deadline-aware SOC management resolves
 > a departure-time-driven active charge limit (default limit, solar step-up,
 > and overnight solar-reserve cap) and escalates charging urgency as the
-> configured departure time approaches. Notifications, vehicle
-> charge-limit sync, and the runtime dashboard are **not implemented yet** —
-> see [Deferred](#deferred-not-in-this-mvp) below. See
-> [CLAUDE.md](CLAUDE.md) for the working method.
+> configured departure time approaches. An evening prompt asks whether the EV
+> will be home tomorrow and sets `switch.smart_charging_home_day`
+> accordingly; delivering a deadline-unreachable notice (R5) is gated on the
+> not-yet-built Deadline Engine. Vehicle charge-limit sync and the runtime
+> dashboard are **not implemented yet** — see
+> [Deferred](#deferred-not-in-this-mvp) below. See [CLAUDE.md](CLAUDE.md) for
+> the working method.
 
 ## Installation (HACS custom repository)
 
@@ -69,7 +73,10 @@ sets the initial thresholds:
 | Power mode respects the peak limit | Opt-out (default on, R17): when enabled, `Power` mode also clamps to the effective peak limit instead of only the grid ceiling |
 | Default EV battery capacity (kWh) | Fallback used by the required-current/urgency formula when no EV battery capacity entity is mapped |
 | Solar step-up maximum SOC (%), step size, trigger threshold (percentage points) | How far and how often the active charge limit steps up above the default while solar surplus persists |
-| Solar-reserve SOC cap (%), forecast threshold (kWh) | Overnight cap on the active charge limit, and the next-day forecast (kWh) below which the reserve activates |
+| Solar-reserve SOC cap (%), forecast threshold (kWh) | Overnight cap on the active charge limit, and the next-day forecast (kWh) below which the reserve activates — the same forecast threshold also gates the evening home-day prompt below |
+| Notification target entity (optional) | `notify`-domain entity the evening home-day prompt is sent to; unmapped leaves the prompt inert |
+| Evening home-day prompt enabled | Toggle (default on) for the evening prompt asking whether the EV will be home tomorrow |
+| Evening home-day prompt time | Local time of day the prompt is sent, once solar forecast/home-day preconditions hold |
 
 Nine `time` entities (`time.smart_charging_departure_mon` … `_sun`, plus
 `_holiday` and `_home_day` overrides) and `switch.smart_charging_home_day`
@@ -78,6 +85,13 @@ configure *when* the EV must be ready: one departure time per day of the week
 holidays, and an override used whenever `switch.smart_charging_home_day` is
 on (a daily flag that resets at local midnight, settable directly or via the
 optional external home-day entity above).
+
+When a notification target is mapped and the evening prompt is enabled, an
+actionable "Will the car be home tomorrow?" notification is sent at the
+configured prompt time once the solar forecast exceeds its threshold, the
+home-day flag isn't already set by an external source, and the EV is
+connected at home. Answering "Yes" turns `switch.smart_charging_home_day`
+on; answering "No", or not answering before local midnight, leaves it off.
 
 Entity-role mappings can be changed later via **Reconfigure** (this re-validates
 and reloads the integration). Thresholds and the control interval can be changed
@@ -113,8 +127,9 @@ adjustment.
 
 ## Deferred (not in this MVP)
 
-Notifications; vehicle charge-limit sync; the runtime dashboard. These are
-later slices of [`docs/design/project-plan.md`](docs/design/project-plan.md).
+R5's deadline-unreachable notice delivery (gated on the not-yet-built Deadline
+Engine); vehicle charge-limit sync; the runtime dashboard. These are later
+slices of [`docs/design/project-plan.md`](docs/design/project-plan.md).
 
 ## What it does
 
