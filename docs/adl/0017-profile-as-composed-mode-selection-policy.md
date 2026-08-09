@@ -1,7 +1,7 @@
 # ADR-0017: Mode-selection policy Protocol and registry for `profiles/`
 
 Date: 2026-08-03
-Status: Proposed
+Status: Accepted
 
 ## Context
 
