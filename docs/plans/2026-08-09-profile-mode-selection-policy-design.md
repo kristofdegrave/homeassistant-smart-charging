@@ -4,12 +4,20 @@
 **Status:** draft (issue #478, part of #308; ADR-0017)
 **Type:** implementation design (a slice of an architectural decision — not a new decision)
 
+**ADR-0017 status correction (done).** ADR-0017 was merged (#487) still marked `Status: Proposed`
+— the same class of pre-merge oversight ADR-0012/0014/0016/0018/0019 each had, fixed in their own
+implementation-spec PRs (most recently `2026-08-03-ra3-store-design.md`'s Task 0 for ADR-0018/0019).
+`docs/adl/0017-profile-as-composed-mode-selection-policy.md` and `docs/adl/README.md` are already
+corrected to `Accepted` as part of authoring this design doc — not a pending step for Task 1 to
+redo (the paired plan's Task 0 records this for the commit-message trail only).
+
 This document is the implementation spec [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md)
-itself calls for once Accepted ("An implementation spec and TDD plan for the `profiles/`
-restructure can follow ... building the `ModeSelectionPolicy` Protocol and registry this Decision
-describes rather than a three-role split"). It derives the concrete files, signatures, and
-TDD build order for that Protocol/registry — no service, call direction, or behavior beyond what
-ADR-0017 and `system-design.md`'s E2 revision already decided.
+itself calls for ("An implementation spec and TDD plan for the `profiles/`
+restructure can follow once this ADR is Accepted ... building the `ModeSelectionPolicy` Protocol
+and registry this Decision describes rather than a three-role split"). It derives the concrete
+files, signatures, and TDD build order for that Protocol/registry — no service, call direction, or
+behavior beyond what ADR-0017 and `system-design.md`'s E2 revision already decided, and does not
+fully realize either (§4 states the remaining gap explicitly).
 
 **This is a pure internal-boundary refactor: no observable behavior change.**
 `select.smart_charging_profile` still offers exactly `Manual`/`Auto`; `Auto`'s mode-selection table
@@ -27,10 +35,13 @@ instead of a bare free-function import.
 ADR-0017 decided **Option A**: one `ModeSelectionPolicy` Protocol, with `Manual`/`Auto` as two
 registry-keyed instances stored inside `profiles/` itself, keyed by the existing
 `PROFILE_MANUAL`/`PROFILE_AUTO` constants. It explicitly rejected a three-role composed `Profile`
-(Option C) — SOC-limit coordination (R8/R9's step-up half) stays entirely inside the unchanged
-SOC-Target Engine, and the escalation lever (R5) and top-up decline (R9's other half) are already
-rows of the one `Auto` mode-selection table, not separate objects. Neither of those is touched by
-this slice.
+(Option C) — SOC-limit coordination (both R8's step-up and R9's cap-lowering half,
+`system-design.md:506-508`) stays entirely inside the unchanged SOC-Target Engine, and the
+escalation lever (R5) and top-up decline (R9's other half) are already rows of the one `Auto`
+mode-selection table, not separate objects. Neither of those is touched by this slice. This is
+also `project-plan.md`'s E2 task ("Profile Engines (`Manual`, `Auto`)"; its own integration
+checkpoint "⎔ M1 passes available modes to E2 (`Auto`); C2 reuses the same facts") — this spec
+derives the concrete restructure of that already-built task, not a new one.
 
 A second, narrower fork was resolved with the human partner before drafting this doc: how far the
 registry reaches into the coordinator's existing profile-branching.
@@ -72,12 +83,12 @@ route through the registry rather than a direct `select_mode` import.**
    selection."
 4. `coordinator_cycle.py`'s `resolve_deadline_urgency` calls `PROFILE_POLICIES[PROFILE_AUTO].select(...)`
    instead of importing and calling `select_mode` directly, at both its baseline (`urgent=False`)
-   and real (`urgent=urgent`) call sites. `tests/test_coordinator_cycle.py`'s four existing
+   and real (`urgent=urgent`) call sites. `tests/test_coordinator_cycle.py`'s five existing
    `resolve_deadline_urgency` tests pass unchanged — this is the "no behavior change" proof (§2 of
    ADR-0017's Consequences), verified by an existing, not a rewritten, test suite.
 5. No file outside `profiles/` and `coordinator_cycle.py`'s two call sites changes. In particular,
-   `coordinator.py`'s three `active_profile == PROFILE_AUTO` branches (R8's gate, `auto_dispatchable`,
-   the Store-read suppression) are untouched — confirmed by an explicit read, not just a green suite
+   `coordinator.py`'s three `active_profile`-branching checks (R8's gate and `auto_dispatchable`,
+   both `== PROFILE_AUTO`; the Store-read suppression, `!= PROFILE_AUTO`) are untouched — confirmed by an explicit read, not just a green suite
    (§1's fork table; same discipline the coordinator-setter-encapsulation design doc used).
 6. `tests/test_engine_purity.py`'s structural guard (no `homeassistant.*` import under `profiles/`)
    passes for the two new files without modification to the guard itself.
@@ -91,13 +102,15 @@ route through the registry rather than a direct `select_mode` import.**
 """ModeSelectionPolicy Protocol and the Manual/Auto registry (ADR-0017). Pure -- no HA imports,
 no cross-engine calls (mirrors profiles/auto.py's existing purity, ADR-0009/0010)."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from ..const import PROFILE_AUTO, PROFILE_MANUAL
 from .auto import AutoPolicy
 from .manual import ManualPolicy
 
 
+@runtime_checkable  # matches adapters/base.py's Adapter Protocol -- makes `isinstance(x,
+# ModeSelectionPolicy)` a real, testable conformance check, not just a static-typing fiction
 class ModeSelectionPolicy(Protocol):
     """One role: given this cycle's observable conditions, which mode is active. The one
     decision ADR-0017 identified as genuinely profiles/'s own (Context) -- SOC-limit
@@ -105,11 +118,14 @@ class ModeSelectionPolicy(Protocol):
     Protocol's own Auto implementation's table rows), not as separate Profile roles."""
 
     def select(self, **kwargs: Any) -> str:
-        """Return the active mode. Each implementation's own kwargs it actually reads may
-        differ (Auto reads all of select_mode()'s existing parameters; Manual reads only
-        active_mode) -- callers pass the union kwargs supported by any registered policy;
-        an implementation ignores what it doesn't need, same shape select_mode() itself
-        already extends to Manual's superset call site (design doc, §1's fork)."""
+        """Return the active mode. Each implementation reads only the kwargs it needs; the
+        two implementations' actual parameter sets differ (Auto requires select_mode()'s
+        full 10 parameters and rejects unknown ones -- it does not filter -- while Manual
+        accepts and ignores anything besides active_mode). A caller must therefore pass
+        exactly the selected policy's own kwargs, not a union of both -- there is only ever
+        one production call site this slice (§4), and it only ever resolves to AutoPolicy,
+        so this is not yet exercised both ways; a future caller that looks up either entry
+        generically would need to build each policy's own kwargs, not one shared dict."""
         ...
 
 
@@ -147,8 +163,8 @@ class AutoPolicy:
 ```
 
 No `profiles/__init__.py` change — every other package in this codebase (`modes/`, `engines/`,
-`managers/`, `store/`) keeps its `__init__.py` empty and puts real content in named modules; this
-slice follows that existing convention rather than introducing a new one.
+`managers/`, `adapters/`) keeps its `__init__.py` empty and puts real content in named modules;
+this slice follows that existing convention rather than introducing a new one.
 
 ---
 
@@ -165,6 +181,19 @@ resolves to the same entry would be exactly the kind of seam-for-its-own-sake AD
 warns against (Option C's mistake, applied one level down). A future slice that generalizes
 `auto_dispatchable` beyond a hardcoded `Auto` check is the point at which this call site would
 gain a real `active_profile`-keyed lookup — out of scope here.
+
+**This slice only partly realizes ADR-0017's Decision and `project-plan.md`'s E2 task.** ADR-0017's
+own Decision text is "the Coordinator holds the active profile as exactly this key ... and looks up
+the policy each cycle **instead of branching on it**" — a lookup resolved from *data* (the stored
+profile key), not a fixed code identity. This slice ships the registry and its data-addressable
+keys, but the one production call site still resolves through a hardcoded `PROFILE_AUTO` literal,
+and all three `active_profile`-branching checks in `coordinator.py` (the R8 gate, `auto_dispatchable`,
+and the Store-read suppression) are untouched (§1's scope table). The registry seam ADR-0017 wants
+for a future third profile or config-flow UI now exists inside `profiles/`, but nothing in
+`coordinator.py` reads a profile key dynamically yet — that generalization is real follow-up work,
+not something this slice's "no behavior change" scope can claim to have finished. A later slice
+should revisit `auto_dispatchable`'s hardcoded `Auto` check once a second profile actually needs to
+dispatch through it.
 
 ```python
 # coordinator_cycle.py, was:
@@ -184,8 +213,8 @@ from .profiles.policy import PROFILE_POLICIES
 ```
 
 `common_select_kwargs`'s own construction (`coordinator_cycle.py:310-320`) is unchanged — it
-already carries exactly `select_mode`'s parameter set, which `AutoPolicy.select` accepts unchanged
-via `**kwargs`.
+already carries `select_mode`'s parameter set minus `urgent` (passed separately at each of the two
+call sites), which `AutoPolicy.select` accepts unchanged via `**kwargs`.
 
 ---
 
@@ -201,12 +230,17 @@ via `**kwargs`.
 - **New: `tests/profiles/test_policy.py`** — `PROFILE_POLICIES` has exactly two keys
   (`PROFILE_MANUAL`, `PROFILE_AUTO`); `PROFILE_POLICIES[PROFILE_MANUAL]` is a `ManualPolicy`
   instance and `PROFILE_POLICIES[PROFILE_AUTO]` is an `AutoPolicy` instance (`isinstance` checks);
-  `PROFILE_POLICIES[PROFILE_AUTO].select(**kwargs)` matches `select_mode(**kwargs)` for at least
-  one representative kwargs set (proving `AutoPolicy` genuinely delegates, not a re-implementation
-  that could drift).
+  both also satisfy `isinstance(policy, ModeSelectionPolicy)` (the `@runtime_checkable` Protocol
+  itself) — the actual Protocol-conformance proof the conventions promise, not just a check against
+  each other's concrete class;
+  `PROFILE_POLICIES[PROFILE_AUTO].select(**kwargs)` matches `select_mode(**kwargs)` across the same
+  five representative row scenarios `test_auto.py` already covers, plus a `monkeypatch`-based test
+  asserting `AutoPolicy.select` actually calls the real `select_mode` (not just produces an equal
+  result) — the two together are what prove genuine delegation, not a re-implementation that
+  happens to agree on a handful of inputs.
 - **Unchanged: `tests/profiles/test_auto.py`** — all 12 existing `select_mode()` tests pass with
   no edit; this is `AutoPolicy`'s own correctness proof by construction (§2, criterion 2).
-- **Unchanged: `tests/test_coordinator_cycle.py`**'s four `resolve_deadline_urgency` tests
+- **Unchanged: `tests/test_coordinator_cycle.py`**'s five `resolve_deadline_urgency` tests
   (`test_resolve_deadline_urgency_short_circuits_when_not_resolvable`,
   `..._no_deadline_resolved_means_no_urgency`, `..._manual_profile_baseline_is_the_active_mode_itself`,
   `..._escalates_from_baseline_off_to_captar_when_urgent`, `..._no_escalation_when_baseline_already_meets_deadline`)
@@ -261,11 +295,9 @@ tests/
   existing two-option enum untouched.
 - **R8/R9's SOC-Target-side logic** (`resolve_solar_step_up`, `SocGateResolver`) — ADR-0017 Context:
   not a Profile Engine decision; untouched by construction (§1's scope table).
-- **`docs/adl/0017-...md`'s `Status: Proposed` field.** Left as-is: the ADR is merged and this spec
-  builds on its Decision, but its status field wasn't part of this slice's own review cycle (unlike
-  the coordinator-setter-encapsulation design doc's ADR-0014 fix, which was that slice's own
-  reviewer-flagged correction). Several other merged ADRs in this repo (0013, 0015, 0020) carry the
-  same pre-existing `Proposed` status-field gap — a repo-wide oversight, not specific to ADR-0017,
+- **The 0013/0015/0020 `Status: Proposed` backlog.** ADR-0017 itself is corrected to `Accepted` as
+  part of authoring this spec (top of doc). Several other merged ADRs in this repo (0013, 0015,
+  0020) carry the same pre-existing status-field gap — a repo-wide oversight, but not ADR-0017's,
   and not this slice's to fix.
 
 ---
@@ -273,8 +305,9 @@ tests/
 ## 8. Next step
 
 This design feeds the `writing-plans` skill to produce the ordered, test-driven implementation
-plan (`2026-08-09-profile-mode-selection-policy.md`). Build order: `ManualPolicy` +
-`tests/profiles/test_manual.py` → `AutoPolicy` + registry (`policy.py`) +
-`tests/profiles/test_policy.py` → `coordinator_cycle.py` call-site swap → full regression pass,
-including the explicit untouched-code check named in §2's criterion 5. No `custom_components/`
-code is written until the paired plan exists and is approved.
+plan (`2026-08-09-profile-mode-selection-policy.md`). Build order: ADR-0017's status correction
+(already done, recorded as Task 0) → `ManualPolicy` + `tests/profiles/test_manual.py` →
+`AutoPolicy` + registry (`policy.py`) + `tests/profiles/test_policy.py` → `coordinator_cycle.py`
+call-site swap (with its own failing test proving the swap, not just behavior preservation) → full
+regression pass, including the explicit untouched-code check named in §2's criterion 5. No
+`custom_components/` code is written until the paired plan exists and is approved.

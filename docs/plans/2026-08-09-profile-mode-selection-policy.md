@@ -38,6 +38,21 @@ ADR-0009/0010), `ruff`.
 
 ---
 
+## Task 0: Correct ADR-0017's status (already done)
+
+**ADR honored:** ADR-0017. **Test boundary:** none — documentation fix.
+
+**Files:** `docs/adl/0017-profile-as-composed-mode-selection-policy.md`, `docs/adl/README.md` —
+already edited while authoring this plan's paired design doc; nothing left to do here.
+
+ADR-0017 merged (#487) still marked `Status: Proposed` — the same pre-merge oversight class
+ADR-0012/0014/0016/0018/0019 each had, fixed in their own implementation-spec PRs. Both files on
+disk already read `Status: Accepted` / the corrected `README.md` row before Task 1 starts — an
+executing agent should confirm this (one grep) rather than expect a diff to make here. These edits
+land in the same commit as Task 1 below, alongside the design/plan docs themselves.
+
+---
+
 ## Task 1: `ManualPolicy`
 
 **ADR honored:** ADR-0017. **Test boundary:** plain pytest (`tests/profiles/test_manual.py`, new).
@@ -63,8 +78,9 @@ def test_select_returns_active_mode_unchanged():
 
 def test_select_ignores_every_other_kwarg():
     """Manual's own contract: no automatic mode change regardless of observable conditions
-    (NF1) -- proven here by passing Auto's full kwarg set alongside active_mode and
-    confirming none of it changes the result."""
+    (R16's Manual criterion, requirements.md; NF1's general no-automatic-changes rule
+    applies via its own parenthetical) -- proven here by passing Auto's full kwarg set
+    alongside active_mode and confirming none of it changes the result."""
     result = ManualPolicy().select(
         active_mode=MODE_OFF,
         urgent=True,
@@ -134,6 +150,8 @@ EOF
 """Plain-pytest tests for the ModeSelectionPolicy Protocol and PROFILE_POLICIES registry
 (E2, ADR-0017)."""
 
+from unittest.mock import patch
+
 from custom_components.smart_charging.const import (
     MODE_CAPTAR,
     MODE_OFF,
@@ -142,7 +160,7 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.profiles.auto import AutoPolicy, select_mode
 from custom_components.smart_charging.profiles.manual import ManualPolicy
-from custom_components.smart_charging.profiles.policy import PROFILE_POLICIES
+from custom_components.smart_charging.profiles.policy import ModeSelectionPolicy, PROFILE_POLICIES
 
 
 def test_registry_has_exactly_the_two_built_in_profiles():
@@ -159,36 +177,102 @@ def test_registry_auto_entry_is_an_auto_policy():
     assert isinstance(PROFILE_POLICIES[PROFILE_AUTO], AutoPolicy)
 
 
-def test_auto_policy_delegates_to_select_mode_unchanged():
-    """AutoPolicy must not re-implement resolution-rules.md's table -- it delegates, so the
-    table can never drift between the free function and the Protocol adapter."""
-    modes = frozenset({MODE_OFF, MODE_CAPTAR})
-    kwargs = dict(
-        soc=50.0,
-        active_soc_limit=80.0,
-        available_modes=modes,
-        urgent=True,
-        solar_capability_present=True,
-        sun_is_up=False,
-        solar_surplus_sufficient=False,
-        sun_is_down=True,
-        low_tariff_active=True,
+def test_both_registry_entries_satisfy_the_mode_selection_policy_protocol():
+    """Protocol conformance, proven against the Protocol itself (not just against each
+    other's concrete class) -- only possible because ModeSelectionPolicy is
+    @runtime_checkable, matching adapters/base.py's Adapter Protocol precedent."""
+    assert isinstance(PROFILE_POLICIES[PROFILE_MANUAL], ModeSelectionPolicy)
+    assert isinstance(PROFILE_POLICIES[PROFILE_AUTO], ModeSelectionPolicy)
+
+
+_AUTO_ROWS = [
+    # Same five representative rows as tests/profiles/test_auto.py's own table coverage.
+    dict(
+        soc=80.0, active_soc_limit=80.0, available_modes=frozenset({MODE_OFF, MODE_CAPTAR}),
+        urgent=False, solar_capability_present=True, sun_is_up=False,
+        solar_surplus_sufficient=False, sun_is_down=True, low_tariff_active=True,
         solar_reserve_active=False,
-    )
-    assert AutoPolicy().select(**kwargs) == select_mode(**kwargs) == MODE_CAPTAR
+    ),  # row 1: Off
+    dict(
+        soc=50.0, active_soc_limit=80.0, available_modes=frozenset({MODE_OFF, MODE_CAPTAR}),
+        urgent=True, solar_capability_present=True, sun_is_up=False,
+        solar_surplus_sufficient=False, sun_is_down=True, low_tariff_active=True,
+        solar_reserve_active=False,
+    ),  # row 2: Captar (urgent)
+    dict(
+        soc=50.0, active_soc_limit=80.0, available_modes=frozenset({MODE_OFF, MODE_CAPTAR}),
+        urgent=False, solar_capability_present=True, sun_is_up=True,
+        solar_surplus_sufficient=True, sun_is_down=False, low_tariff_active=True,
+        solar_reserve_active=False,
+    ),  # row 3: Solar
+    dict(
+        soc=50.0, active_soc_limit=80.0, available_modes=frozenset({MODE_OFF, MODE_CAPTAR}),
+        urgent=False, solar_capability_present=True, sun_is_up=False,
+        solar_surplus_sufficient=False, sun_is_down=True, low_tariff_active=True,
+        solar_reserve_active=False,
+    ),  # row 4: Captar (overnight top-up)
+    dict(
+        soc=50.0, active_soc_limit=80.0, available_modes=frozenset({MODE_OFF}),
+        urgent=False, solar_capability_present=True, sun_is_up=False,
+        solar_surplus_sufficient=False, sun_is_down=False, low_tariff_active=False,
+        solar_reserve_active=False,
+    ),  # row 5: Off (otherwise)
+]
+
+
+@pytest.mark.parametrize("kwargs", _AUTO_ROWS)
+def test_auto_policy_matches_select_mode_across_every_table_row(kwargs):
+    """AutoPolicy must not re-implement resolution-rules.md's table -- checked across all
+    five representative rows, not just one, so a re-implementation that happens to agree on
+    a single input can't slip through."""
+    assert AutoPolicy().select(**kwargs) == select_mode(**kwargs)
+
+
+def test_auto_policy_actually_calls_select_mode():
+    """Proves genuine delegation (a call, not just an equal result) -- a re-implementation
+    that duplicated the table would pass every _AUTO_ROWS case above without ever calling
+    the real select_mode."""
+    with patch(
+        "custom_components.smart_charging.profiles.auto.select_mode",
+        wraps=select_mode,
+    ) as spy:
+        AutoPolicy().select(**_AUTO_ROWS[0])
+        spy.assert_called_once_with(**_AUTO_ROWS[0])
 ```
+
+(add `import pytest` to this file's imports.)
 
 **Step 2: Run to verify failure** — `pytest tests/profiles/test_policy.py -v`: fails with
 `ModuleNotFoundError: No module named 'custom_components.smart_charging.profiles.policy'` (and
 `ImportError: cannot import name 'AutoPolicy'` once `policy.py` exists but before `AutoPolicy` is
-added to `auto.py`).
+added to `auto.py`); `test_auto_policy_actually_calls_select_mode` additionally needs `AutoPolicy`
+to exist before it can even fail on the right assertion (the spy) rather than on the import.
 
 **Step 3: Implement**
 
-In `profiles/auto.py`, append (the existing `select_mode()` function and its docstring/imports at
-the top of the file are **unchanged**):
+In `profiles/auto.py`, append the `AutoPolicy` class (`select_mode()`'s own body is **unchanged**)
+and correct its module docstring's now-stale first line (`"""Auto profile mode-selection (E2).
+Pure -- no HA imports, no cross-engine calls.` followed by `` `Manual` needs no module here
+(resolution-rules.md: "`Manual` needs no table"); the coordinator already reads
+`select.smart_charging_mode` directly for that case. ``) — the second sentence goes false the
+moment `profiles/manual.py` exists:
 
 ```python
+"""Auto profile mode-selection (E2). Pure -- no HA imports, no cross-engine calls.
+
+`profiles/manual.py`'s ManualPolicy covers `Manual` (ADR-0017) -- not called from this
+module, but no longer true that "Manual needs no module here".
+"""
+
+from typing import Any
+
+from ..const import MODE_CAPTAR, MODE_OFF, MODE_POWER, MODE_SOLAR
+
+
+def select_mode(...):  # UNCHANGED -- body not reproduced here, see design doc §3
+    ...
+
+
 class AutoPolicy:
     """Thin ModeSelectionPolicy adapter over the existing select_mode() free function
     (ADR-0017) -- no table logic duplicated or moved."""
@@ -197,21 +281,21 @@ class AutoPolicy:
         return select_mode(**kwargs)
 ```
 
-(add `from typing import Any` to `auto.py`'s existing import block.)
-
 New `profiles/policy.py`:
 
 ```python
 """ModeSelectionPolicy Protocol and the Manual/Auto registry (ADR-0017). Pure -- no HA imports,
 no cross-engine calls (mirrors profiles/auto.py's existing purity, ADR-0009/0010)."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from ..const import PROFILE_AUTO, PROFILE_MANUAL
 from .auto import AutoPolicy
 from .manual import ManualPolicy
 
 
+@runtime_checkable  # matches adapters/base.py's Adapter Protocol -- makes isinstance() against
+# this Protocol a real conformance check (tests/profiles/test_policy.py), not a typing-only claim
 class ModeSelectionPolicy(Protocol):
     """One role: given this cycle's observable conditions, which mode is active -- the one
     decision ADR-0017 identified as genuinely profiles/'s own. SOC-limit coordination and
@@ -219,8 +303,10 @@ class ModeSelectionPolicy(Protocol):
     implementation's table rows), not as separate Profile roles."""
 
     def select(self, **kwargs: Any) -> str:
-        """Return the active mode. Each implementation reads only the kwargs it needs and
-        ignores the rest, so both registry entries share one call shape."""
+        """Return the active mode. Each implementation reads only the kwargs it needs; a
+        caller must pass exactly the selected policy's own kwargs, not a union of both
+        registered policies' parameter sets (Auto's select_mode() rejects unknown kwargs --
+        design doc §3's Protocol docstring)."""
         ...
 
 
@@ -254,16 +340,54 @@ EOF
 
 **ADR honored:** ADR-0017. **Test boundary:** plain pytest — the existing
 `tests/test_coordinator_cycle.py` `resolve_deadline_urgency` tests must pass **unchanged** (no
-edit to that test file at all in this task; that is the proof).
+edit to that test file at all in this task; that is the "no behavior change" proof), plus one new
+test proving the call site genuinely routes through the registry (the "actually swapped, not just
+behaviorally equivalent" proof — see Step 1).
 
 **Files:**
 - Edit: `custom_components/smart_charging/coordinator_cycle.py`
+- Edit: `tests/test_coordinator_cycle.py` (one new test only — no existing test edited)
 
-**Step 1: Confirm the pre-existing tests currently pass** (baseline, before touching production
-code): `pytest tests/test_coordinator_cycle.py -v` — all `resolve_deadline_urgency`-prefixed tests
-green against today's direct `select_mode` import.
+**Step 1: Write the failing test.** The five existing `resolve_deadline_urgency` tests would stay
+green even if this task's implementation were skipped entirely (they assert on behavior, not on
+which import path produced it) — they prove "no regression," not "the swap happened." Add a test
+that fails against today's direct `select_mode` import and only passes once the registry is
+actually consulted:
 
-**Step 2: Implement** — in `coordinator_cycle.py`:
+```python
+from unittest.mock import patch
+
+def test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry():
+    """Proves the call site genuinely routes through PROFILE_POLICIES[PROFILE_AUTO] -- the
+    five behavior-preservation tests above would stay green even if this task's edit were
+    skipped, since they assert on resolve_deadline_urgency's output, not its import path."""
+    with patch(
+        "custom_components.smart_charging.coordinator_cycle.PROFILE_POLICIES"
+    ) as mock_policies:
+        mock_policies.__getitem__.return_value.select.return_value = MODE_OFF
+        resolve_deadline_urgency(
+            **_base_deadline_urgency_kwargs(
+                auto_dispatchable=True,
+                deadline_today=time(11, 0),
+                ev_soc=50.0,
+                active_soc_limit=80.0,
+            )
+        )
+        mock_policies.__getitem__.assert_called_with(PROFILE_AUTO)
+        assert mock_policies.__getitem__.return_value.select.called
+```
+
+(`PROFILE_AUTO` needs importing into the test file if not already present.)
+
+**Step 2: Run to verify failure** — `pytest tests/test_coordinator_cycle.py -k consults_the_auto_policy_registry -v`:
+fails, since `coordinator_cycle.py` still imports and calls `select_mode` directly, never touching
+a `PROFILE_POLICIES` name.
+
+**Step 3: Confirm the five pre-existing tests currently pass** (baseline, before touching
+production code): `pytest tests/test_coordinator_cycle.py -v` — all `resolve_deadline_urgency`-prefixed
+tests green against today's direct `select_mode` import.
+
+**Step 4: Implement** — in `coordinator_cycle.py`:
 
 ```python
 # was:
@@ -291,16 +415,18 @@ ever runs when `auto_dispatchable` is already `True`, which itself is gated on t
 `Auto` in `coordinator.py` (design doc §4). Do not thread a new `active_profile` parameter through
 this function to "generalize" the lookup — that is explicitly out of scope (design doc §7).
 
-**Step 3: Run to verify the existing suite still passes, with zero test-file edits**:
-`pytest tests/test_coordinator_cycle.py -v` — every `resolve_deadline_urgency`-prefixed test
+**Step 5: Run to verify pass** — `pytest tests/test_coordinator_cycle.py -v`: the new
+`test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry` now passes, and every
+pre-existing `resolve_deadline_urgency`-prefixed test
 (`test_resolve_deadline_urgency_short_circuits_when_not_resolvable`,
 `..._no_deadline_resolved_means_no_urgency`, `..._manual_profile_baseline_is_the_active_mode_itself`,
 `..._escalates_from_baseline_off_to_captar_when_urgent`,
-`..._no_escalation_when_baseline_already_meets_deadline`) passes unchanged. If any fails, the
-call-site swap changed observable behavior — stop and re-examine before proceeding; this task must
-not edit the test file to make it pass.
+`..._no_escalation_when_baseline_already_meets_deadline`) still passes with **no edit to their own
+bodies** — the only test-file change this task makes is the one new test added in Step 1. If any
+of the five fails, the call-site swap changed observable behavior — stop and re-examine before
+proceeding; this task must not edit an existing test's body to make it pass.
 
-**Step 4:** Full suite (`pytest tests/ -q`), `ruff check .`, `ruff format --check .`, then commit:
+**Step 6:** Full suite (`pytest tests/ -q`), `ruff check .`, `ruff format --check .`, then commit:
 
 ```
 git commit --author="Claude <noreply@anthropic.com>" -m "$(cat <<'EOF'
@@ -320,8 +446,9 @@ EOF
 
 ## Task 4: Regression + untouched-code check
 
-**ADR honored:** ADR-0017. **Test boundary:** full existing suite, plain pytest + HA harness (no
-files in this task's scope are HA-coupled, but the full suite includes both).
+**ADR honored:** ADR-0017. **Test boundary:** full existing suite, both tiers (no file in this
+task's own scope is HA-coupled, but the full-suite run includes plain-pytest and HA-harness
+tests alike).
 
 **Files:** none changed — verification only.
 
@@ -331,13 +458,13 @@ skips/xfails.
 **Step 2:** `ruff check .` and `ruff format --check .` clean.
 
 **Step 3: Explicit untouched-code check** (design doc §2, criterion 5) — read the post-refactor
-`coordinator.py` and confirm none of its three `active_profile == PROFILE_AUTO` branches changed:
+`coordinator.py` and confirm none of its three `active_profile`-branching checks changed:
 - The R8 solar-step-up gate (`is_solar_mode_charging = self.active_profile == PROFILE_AUTO and ...`).
 - The `auto_dispatchable` gate (`self.active_profile == PROFILE_AUTO and status in CHARGEABLE_STATES ...`).
 - `_read_owned_entities`'s Store-read suppression (`if self.active_profile != PROFILE_AUTO: ...`).
 
 Also confirm `profiles/auto.py`'s `select_mode()` function body is byte-for-byte unchanged from
-before Task 1 (only `AutoPolicy` and an `Any` import were added, at the end of the file).
+before Task 2 (only `AutoPolicy`, its docstring correction, and an `Any` import were added).
 
 **Step 4:** No commit — this task is a verification checkpoint. If any check fails, fix in the
 task that introduced the regression (re-open that task), not here.
