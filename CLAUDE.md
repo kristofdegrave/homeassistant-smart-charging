@@ -148,6 +148,26 @@ Use the `write-adr` skill for the full cycle. In short:
 
 ---
 
+## Task issues (`development`/`testing` context label)
+
+Every task issue filed against an approved `docs/plans/<slice>.md` TDD plan — the kind that gets
+the `development` or `testing` context label and, once ready, `needs-draft` — must include a line
+in its body of the **exact** form:
+
+```text
+Plan: docs/plans/<file>.md#T<task-number>
+```
+
+This is parsed by `.github/workflows/_ai-draft.yml` as the sole containment mechanism that lets the
+automated drafter act on untrusted issue-body text: the line must be anchored (nothing else on it —
+no backticks, no trailing `(PR #NNN)` prose, no surrounding sentence) so it resolves to exactly one
+plan file and one task id. `<task-number>` matches the plan doc's own task numbering (e.g. `T3.1`,
+`T5`). Everything else about the task — rationale, blockers, PR back-references — belongs in the
+surrounding prose; only this one line needs the strict form. Get it right when the issue is filed;
+retrofitting it after a failed `needs-draft` run just wastes a cycle.
+
+---
+
 ## Flow document standard
 
 Each flow doc: Purpose → Trigger → **Domain events** → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
