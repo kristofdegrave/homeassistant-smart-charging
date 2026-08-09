@@ -47,7 +47,7 @@ jobs:
           pct=$(python -c "import xml.etree.ElementTree as ET; print(round(float(ET.parse('coverage.xml').getroot().get('line-rate')) * 100))")
           echo "percentage=$pct" >> "$GITHUB_OUTPUT"
       - name: Update coverage badge gist
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: c567fdec00982c4da95cfe92f80caf81
