@@ -1,9 +1,10 @@
 """HA-harness tests for the Vehicle-Limit Manager (M2 -- UC09/R6/ADR-0011).
 
 Covers the skeleton constructor/echo-guard state (Task 3.1, corrected to ADR-0018's Store
-access shape) and the disconnect-reset reaction (Task 3.2, UC09 steps 7-8, R6 AC 3). Drives
-M2 through its public reaction methods directly (not HA listener plumbing -- that is Phase
-5's job).
+access shape), the disconnect-reset reaction (Task 3.2, UC09 steps 7-8, R6 AC 3), and the
+Vehicle->System manual-adoption reaction (Task 3.3, UC09 steps 4-6, R6 AC 5). Drives M2
+through its public reaction methods directly (not HA listener plumbing -- that is Phase 5's
+job).
 """
 
 from homeassistant.const import Platform
@@ -181,19 +182,38 @@ async def test_manual_change_is_adopted_as_default(hass):
 
 async def test_echo_of_own_write_is_ignored(hass):
     """UC09 exception flow / R6 AC (echo guard): a report equal to our last write -> no
-    adoption -- the vehicle is reflecting back a write M2 itself just made."""
+    adoption, and no ManualChargeLimitAdopted -- the vehicle is reflecting back a write M2
+    itself just made, not a manual change."""
     m = _manager(hass, vehicle=80.0)
     await m.on_status_changed(STATE_CONNECTED)
     await m.on_status_changed(STATE_DISCONNECTED)  # records _last_written_limit = 80.0
-    m._store.writes.clear()
+    m._store.writes.clear()  # the disconnect-reset above reads the Store, never writes it
+    events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
 
     await m.on_vehicle_limit_changed(80.0)  # the vehicle reflects it back
 
     assert m._store.writes == []
+    assert len(events) == 0
+
+
+async def test_adoption_does_not_update_the_echo_guard(hass):
+    """design §6: the echo guard tracks the System's own writes to the vehicle (§5.1/§5.3),
+    never a vehicle-originated adoption -- otherwise a later, identical manual report would be
+    wrongly swallowed as an echo of an adoption it never was."""
+    m = _manager(hass)
+
+    await m.on_vehicle_limit_changed(70.0)
+    assert m._last_written_limit is None
+
+    m._store.writes.clear()
+    await m.on_vehicle_limit_changed(70.0)  # a second, identical report is still adopted
+    assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0)]
 
 
 async def test_manual_change_adopted_even_when_away(hass):
-    """UC09 alt 5a: C2 gates only System->vehicle writes, never read+adopt."""
+    """UC09 alt 5a: C2 gates only System->vehicle writes, never read+adopt --
+    on_vehicle_limit_changed does not consult car_home at all today, so this also guards
+    against Task 4.1's System->vehicle write accidentally sharing this reaction's code path."""
     m = _manager(hass, home=False)
 
     await m.on_vehicle_limit_changed(60.0)
@@ -201,13 +221,23 @@ async def test_manual_change_adopted_even_when_away(hass):
     assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 60.0)]
 
 
-async def test_adoption_clamps_into_the_number_range(hass):
+async def test_adoption_clamps_above_the_number_range(hass):
     """R6 AC 1: the default SOC limit lives in 50-100."""
     m = _manager(hass)
 
     await m.on_vehicle_limit_changed(120.0)
 
     assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 100.0)]
+
+
+async def test_adoption_clamps_below_the_number_range(hass):
+    """R6 AC 1, the floor half -- catches a clamp written with only an upper bound
+    (e.g. min(reported, MAX) with the floor silently dropped)."""
+    m = _manager(hass)
+
+    await m.on_vehicle_limit_changed(20.0)
+
+    assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 50.0)]
 
 
 async def test_none_report_is_ignored(hass):
@@ -221,7 +251,8 @@ async def test_none_report_is_ignored(hass):
 
 async def test_adoption_event_not_fired_when_store_write_fails(hass):
     """Store.write's bool return gates the domain event (mirrors _write_vehicle/
-    EVENT_VEHICLE_CHARGE_LIMIT_RESET) -- a failed adoption write must not report success."""
+    EVENT_VEHICLE_CHARGE_LIMIT_RESET) -- a failed adoption write must not report success, but
+    the write must still have been attempted (not an early no-op)."""
     store = _FakeStore(
         {(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 80.0}, write_succeeds=False
     )
@@ -230,4 +261,5 @@ async def test_adoption_event_not_fired_when_store_write_fails(hass):
 
     await m.on_vehicle_limit_changed(70.0)
 
+    assert store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0)]
     assert len(events) == 0

@@ -82,8 +82,13 @@ class VehicleLimitManager:
 
     async def on_vehicle_limit_changed(self, reported: float | None) -> None:
         """React to a vehicle-side charge-limit change (design §5.2). Adopt unless it is our
-        own echo. Holds regardless of car_home (C2 gates only System->vehicle writes, never
-        this read+adopt direction)."""
+        own echo.
+
+        Holds regardless of car_home (C2 gates only System->vehicle writes, never this
+        read+adopt direction). Deliberately never updates `_last_written_limit` -- the echo
+        guard tracks only the System's own writes to the vehicle (§5.1/§5.3), not a
+        vehicle-originated adoption.
+        """
         if reported is None:
             return
         if self._last_written_limit is not None and reported == self._last_written_limit:
