@@ -9,8 +9,8 @@ capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 (three-phase later).
 
 > **Status: Power/Solar/SolarOnly/Captar modes, Auto profile, deadline & SOC
-> management, evening home-day prompt.** This project follows an
-> analysis-first, spec-driven methodology — the documents under
+> management, evening home-day prompt, vehicle-limit sync.** This project
+> follows an analysis-first, spec-driven methodology — the documents under
 > [`docs/analysis/`](docs/analysis/) are the source of truth for the full
 > design. The current code implements the **Power**, **Solar**,
 > **SolarOnly**, and **Captar** modes (selectable manually via
@@ -26,10 +26,11 @@ capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 > configured departure time approaches. An evening prompt asks whether the EV
 > will be home tomorrow and sets `switch.smart_charging_home_day`
 > accordingly; delivering a deadline-unreachable notice (R5) is gated on the
-> not-yet-built Deadline Engine. Vehicle charge-limit sync and the runtime
-> dashboard are **not implemented yet** — see
-> [Deferred](#deferred-not-in-this-mvp) below. See [CLAUDE.md](CLAUDE.md) for
-> the working method.
+> not-yet-built Deadline Engine. When mapped, the vehicle's own charge-limit
+> setting is kept in sync with the System's active charge limit in both
+> directions (vehicle-limit sync). The runtime dashboard is **not implemented
+> yet** — see [Deferred](#deferred-not-in-this-mvp) below. See
+> [CLAUDE.md](CLAUDE.md) for the working method.
 
 ## Installation (HACS custom repository)
 
@@ -60,6 +61,8 @@ sets the initial thresholds:
 | External departure-time entity (optional) | External `sensor`/`input_datetime` overriding the built-in day-of-week departure-time entities |
 | External home-day entity (optional) | External `binary_sensor`/`input_boolean` overriding `switch.smart_charging_home_day` |
 | Low-tariff entity (optional) | `binary_sensor`/`input_boolean` reporting whether a low grid tariff is currently active; unmapped defaults to "always active" (single-tariff households) |
+| Vehicle charge-limit entity (optional; requires car_home when mapped) | Settable `number` entity on the vehicle itself; when mapped, kept in sync with the System's active charge limit in both directions (UC09) |
+| Car-home presence entity (required when vehicle charge-limit entity is mapped) | `device_tracker`/`person`/`binary_sensor` reporting whether the car is at home; gates System-initiated writes to the vehicle charge-limit entity (C2) |
 | Nominal grid voltage, min/max current, grid ceiling, grid safety offset, default target current | Thresholds, editable anytime afterwards via **Configure** |
 | Smoothing window | Rolling-window sample count for surplus smoothing (R10) |
 | Solar start threshold, SolarOnly start threshold | Surplus power (W) required to start charging in each mode |
@@ -125,11 +128,28 @@ currently in force (kW); `sensor.smart_charging_active_soc_limit` reports the
 resolved active charge limit (%) after any solar step-up/solar-reserve
 adjustment.
 
+When the vehicle charge-limit entity is mapped (which requires car-home to be
+mapped too), the Vehicle-Limit Manager keeps the vehicle's own charge-limit
+setting in sync with the System in both directions (UC09, R6): whenever
+`sensor.smart_charging_active_soc_limit` changes while the car is connected
+and at home, the new value is written to the vehicle; a change made directly
+on the vehicle or its app — whether at home or away — is instead adopted as
+the new `number.smart_charging_soc_limit_override` default (clamped to its
+50–100 range) rather than overwritten on the next cycle; and on disconnect the
+vehicle is reset to that default. Writes the System itself made are
+recognised on read-back (an echo guard) so the two directions never
+oscillate. Away from home, System-initiated writes are suppressed (C2); the
+resolved value reaches the vehicle on the next active-SOC-limit change that
+occurs while the car is connected at home (not automatically on return —
+reading and adopting a manual change is unaffected by this gate either way).
+Unmapping the vehicle charge-limit entity disables this sync entirely without
+affecting charger-current control.
+
 ## Deferred (not in this MVP)
 
 R5's deadline-unreachable notice delivery (gated on the not-yet-built Deadline
-Engine); vehicle charge-limit sync; the runtime dashboard. These are later
-slices of [`docs/design/project-plan.md`](docs/design/project-plan.md).
+Engine) and the runtime dashboard. These are later slices of
+[`docs/design/project-plan.md`](docs/design/project-plan.md).
 
 ## What it does
 
