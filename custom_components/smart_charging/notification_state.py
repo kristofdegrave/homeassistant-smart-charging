@@ -4,9 +4,9 @@ Per docs/plans/2026-07-21-notifications-design.md Sec7: the Not-sent/Pending/
 Answered-yes/Answered-no/Timed-out lifecycle
 (docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md "State model") is a pure function
 of (prior state, observed inputs, now) with no I/O -- structurally identical to the mode
-state machines in ``modes/``. This module decides; ``notification_manager.py`` (HA harness)
-observes the preconditions/trigger and carries out the send/write effects this module only
-signals.
+state machines in ``modes/``. This module decides; ``managers/notification_manager.py``
+(HA harness, ADR-0015) observes the preconditions/trigger and carries out the send/write
+effects this module only signals.
 
 ``evaluate_prompt`` takes the prior state **together with the calendar date that state
 belongs to** (``prior_date``) -- the anchor a caller (the Notification Manager) must persist

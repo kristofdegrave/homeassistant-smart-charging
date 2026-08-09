@@ -1,0 +1,225 @@
+"""Notification Manager (M3, V11) -- UC08 evening home-day prompt orchestration.
+
+A Manager (system-design Sec4 rule 5 / ADR-0011): reads RA1/RA2 adapter roles, sends and
+reads back the actionable prompt through RA4 (adapters/notify.py), and writes the
+resolved answer through the RA3 Store (ADR-0018) onto switch.smart_charging_home_day.
+Decides nothing itself -- notification_state.evaluate_prompt (M3's pure logic, plain
+pytest, docs/plans/2026-07-21-notifications-design.md Sec7) is the single source of the
+UC08 lifecycle; this module only observes the preconditions/trigger and carries out the
+send/write effects that function only signals. This module NEVER calls or is called by
+the Coordinator (M1) -- system-design Sec4 rule 5 -- and imports nothing from
+coordinator.py.
+
+Per the design doc Sec5: midnight is a per-evaluation wall-clock comparison
+(`dt_util.now()` date rollover), driven by the caller's own tick (Task 5.2, not built
+here) -- no new HA timer/scheduler primitive. `async_evaluate`'s `now` parameter defaults
+to `dt_util.now()` for production callers and is overridable by tests, the same shape
+`evaluate_prompt` itself takes explicitly.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Mapping
+from datetime import date, datetime, time
+from typing import Any
+
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+
+from ..adapters.base import Adapter
+from ..adapters.notify import NotificationRequest
+from ..adapters.store import Store
+from ..const import (
+    ACTION_HOMEDAY_NO,
+    ACTION_HOMEDAY_YES,
+    CHARGEABLE_STATES,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
+    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_EVENING_PROMPT_TIME,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+    OWNED_SUFFIX_HOME_DAY,
+    ROLE_CHARGER_STATUS,
+    ROLE_HOME_DAY_EXTERNAL,
+    ROLE_NOTIFICATION_TARGET,
+    ROLE_SOLAR_FORECAST,
+)
+from ..notification_state import PromptState, evaluate_prompt
+
+_LOGGER = logging.getLogger(__name__)
+
+# UC08 main success scenario step 2's actionable prompt text -- no analysis doc catalogues an
+# exact wording, so it is this Manager's own presentation detail, not a cited anchor.
+_PROMPT_TITLE = "Smart Charging"
+_PROMPT_MESSAGE = "Will the car be home tomorrow?"
+
+
+class NotificationManager:
+    """Notification Manager (M3). Holds the UC08 prompt lifecycle state + evening options.
+
+    `_state`/`_date` are `evaluate_prompt`'s own persisted (prior_state, prior_date) pair
+    (notification_state.py module docstring) -- this Manager is exactly the caller that
+    docstring describes as owning that anchor across ticks.
+
+    Known gap, not addressed by this task: `_state`/`_date` are in-memory only and reset to
+    Not-sent on every HA restart, so a restart between a prompt being sent and midnight can
+    cause a second prompt the same evening (UC08's "at most once per evening" is only
+    guaranteed within one HA session). Restart persistence for this lifecycle is not part of
+    the notifications design doc and is left for a follow-up if it proves to matter in
+    practice.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        *,
+        adapters: dict[str, Adapter],
+        entry_id: str,
+        store: Store,
+        config: Mapping[str, Any],
+    ) -> None:
+        # `hass`/`entry_id` are unused by this task -- held for Task 6.1's
+        # DeadlineUnreachableNotified bus subscription, which needs both (hass.bus.async_listen
+        # and entry-scoped filtering, the same shape VehicleLimitManager's _fire uses entry_id
+        # for). Kept now rather than added back in 6.1, since every other Manager's constructor
+        # already takes both.
+        self._hass = hass
+        self._adapters = adapters
+        self._entry_id = entry_id
+        self._store = store
+        # .get(..., DEFAULT_*) -- design doc §3: "an entry that predates these keys reads
+        # each with its DEFAULT_* fallback, no config-entry migration is needed", the same
+        # pattern __init__.py/coordinator.py already use for every options-bucket value.
+        self._enabled = bool(
+            config.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED)
+        )
+        self._threshold_kwh = float(
+            config.get(CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH)
+        )
+        self._prompt_time = time.fromisoformat(
+            config.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME)
+        )
+        self._state = PromptState.NOT_SENT
+        # Seeded lazily on the first tick (below), from that tick's own `now` -- not here from
+        # the real wall clock, which would make this Manager's behavior depend on which day it
+        # happens to be constructed, not just the `now` its own tests and caller supply.
+        self._date: date | None = None
+
+    async def async_evaluate(self, now: datetime | None = None) -> None:
+        """Run one UC08 evaluation tick (Task 5.2's scheduled caller supplies `now`; tests
+        override it directly). No-ops entirely when the notification target isn't mapped --
+        RA4 is this use-case's only delivery channel, so M3 has nothing to do without it.
+
+        `now` is normalized to local time -- Task 5.2's `async_track_time_interval` caller
+        hands its callback a UTC-aware datetime, and both the prompt-time-of-day comparison
+        and the midnight date rollover (`evaluate_prompt`) are local-clock concepts.
+        """
+        now = dt_util.as_local(now) if now is not None else dt_util.now()
+        if self._date is None:
+            self._date = now.date()
+        notify_adapter = self._adapters.get(ROLE_NOTIFICATION_TARGET)
+        if notify_adapter is None:
+            _LOGGER.debug("notification_target not mapped -- M3 stays inert")
+            return
+
+        # RA4's read() consumes the answer it returns (adapters/notify.py docstring) -- only
+        # call it while a prompt is actually outstanding, matching that contract.
+        response = None
+        if self._state is PromptState.PENDING:
+            response = await notify_adapter.read()
+
+        forecast_kwh = await self._read_float(ROLE_SOLAR_FORECAST)
+        external_flag_set = await self._read_bool(ROLE_HOME_DAY_EXTERNAL)
+        status = await self._read_status()
+        connected_at_home = status in CHARGEABLE_STATES
+
+        evaluation = evaluate_prompt(
+            self._state,
+            self._date,
+            now,
+            enabled=self._enabled,
+            forecast_kwh=forecast_kwh,
+            threshold_kwh=self._threshold_kwh,
+            external_flag_set=external_flag_set,
+            connected_at_home=connected_at_home,
+            prompt_time=self._prompt_time,
+            response=response,
+        )
+
+        if response is not None and evaluation.next_state is PromptState.TIMED_OUT:
+            # The day rolled over between the driver's answer and this tick observing it
+            # (notification_state.py's finalize-on-rollover branch ignores `response`
+            # entirely once today > prior_date) -- an answer given before midnight is lost
+            # here, not adopted. Not this Manager's to fix (the finalize decision belongs to
+            # evaluate_prompt), but silence would hide a real, if narrow, loss of UC08's
+            # "answer counts if given before midnight" -- log it so it's at least visible.
+            _LOGGER.warning(
+                "A prompt response (%s) arrived before midnight but wasn't observed until "
+                "after -- the evening timed out and the response was not adopted",
+                response,
+            )
+
+        if evaluation.should_send:
+            try:
+                await notify_adapter.write(
+                    NotificationRequest(
+                        message=_PROMPT_MESSAGE,
+                        title=_PROMPT_TITLE,
+                        actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO],
+                    )
+                )
+            except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors
+                # VehicleLimitManager._write_vehicle); the notify entity/integration may be
+                # transiently gone. Not raising here also means `_state` is not advanced
+                # below -- nothing was actually sent, so the lifecycle stays Not-sent and
+                # retries on the next tick, rather than raising once and then silently
+                # never trying again.
+                _LOGGER.debug("notification_target write failed: %s", err)
+                return
+
+        if evaluation.write_home_day_flag:
+            # Store.write is itself best-effort (never raises, ADR-0018) -- only its bool
+            # result can signal failure. Logged at warning, not silently accepted: the
+            # driver's "yes" answer has already been consumed by RA4's read() above and
+            # cannot be re-observed on a later tick, so a failed write here is otherwise an
+            # unrecoverable, invisible loss of UC08's postcondition ("flag set on yes").
+            if not await self._store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True):
+                _LOGGER.warning(
+                    "Failed to write home-day flag after a 'yes' answer -- flag left unset"
+                )
+
+        self._state = evaluation.next_state
+        self._date = evaluation.next_date
+
+    async def _read_float(self, role: str) -> float:
+        """Missing/unavailable solar_forecast reads as 0.0 -- fails closed against UC08's
+        forecast gate (never triggers on an absent reading) rather than guessing a value
+        that could send an unwarranted prompt."""
+        adapter = self._adapters.get(role)
+        if adapter is None:
+            return 0.0
+        value = await adapter.read()
+        return value if value is not None else 0.0
+
+    async def _read_bool(self, role: str) -> bool:
+        """An unmapped home_day_external role reads as False -- UC08's own default when no
+        external source is configured at all. A *mapped* role's read() returning None (an
+        ADR-0003 fault signal: unavailable/unknown entity) also folds to False here, which
+        is a deliberate fail-open choice, not a second instance of the same default: it
+        risks a redundant prompt on a transient reading (harmless -- the driver can still
+        answer "no") rather than risking a silently-skipped evening on a real external
+        home-day flag misread as absent."""
+        adapter = self._adapters.get(role)
+        if adapter is None:
+            return False
+        value = await adapter.read()
+        return bool(value)
+
+    async def _read_status(self) -> str | None:
+        adapter = self._adapters.get(ROLE_CHARGER_STATUS)
+        if adapter is None:
+            return None
+        return await adapter.read()
