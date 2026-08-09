@@ -21,17 +21,17 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .adapters.base import Adapter
-from .adapters.notify import NotificationRequest
-from .adapters.store import Store
-from .const import (
+from ..adapters.base import Adapter
+from ..adapters.notify import NotificationRequest
+from ..adapters.store import Store
+from ..const import (
     ACTION_HOMEDAY_NO,
     ACTION_HOMEDAY_YES,
     CHARGEABLE_STATES,
@@ -47,7 +47,7 @@ from .const import (
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
 )
-from .notification_state import PromptState, evaluate_prompt
+from ..notification_state import PromptState, evaluate_prompt
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,6 +81,11 @@ class NotificationManager:
         store: Store,
         config: Mapping[str, Any],
     ) -> None:
+        # `hass`/`entry_id` are unused by this task -- held for Task 6.1's
+        # DeadlineUnreachableNotified bus subscription, which needs both (hass.bus.async_listen
+        # and entry-scoped filtering, the same shape VehicleLimitManager's _fire uses entry_id
+        # for). Kept now rather than added back in 6.1, since every other Manager's constructor
+        # already takes both.
         self._hass = hass
         self._adapters = adapters
         self._entry_id = entry_id
@@ -98,13 +103,23 @@ class NotificationManager:
             config.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME)
         )
         self._state = PromptState.NOT_SENT
-        self._date = dt_util.now().date()
+        # Seeded lazily on the first tick (below), from that tick's own `now` -- not here from
+        # the real wall clock, which would make this Manager's behavior depend on which day it
+        # happens to be constructed, not just the `now` its own tests and caller supply.
+        self._date: date | None = None
 
     async def async_evaluate(self, now: datetime | None = None) -> None:
         """Run one UC08 evaluation tick (Task 5.2's scheduled caller supplies `now`; tests
         override it directly). No-ops entirely when the notification target isn't mapped --
-        RA4 is this use-case's only delivery channel, so M3 has nothing to do without it."""
-        now = now or dt_util.now()
+        RA4 is this use-case's only delivery channel, so M3 has nothing to do without it.
+
+        `now` is normalized to local time -- Task 5.2's `async_track_time_interval` caller
+        hands its callback a UTC-aware datetime, and both the prompt-time-of-day comparison
+        and the midnight date rollover (`evaluate_prompt`) are local-clock concepts.
+        """
+        now = dt_util.as_local(now) if now is not None else dt_util.now()
+        if self._date is None:
+            self._date = now.date()
         notify_adapter = self._adapters.get(ROLE_NOTIFICATION_TARGET)
         if notify_adapter is None:
             _LOGGER.debug("notification_target not mapped -- M3 stays inert")
@@ -133,6 +148,19 @@ class NotificationManager:
             prompt_time=self._prompt_time,
             response=response,
         )
+
+        if response is not None and evaluation.next_state is PromptState.TIMED_OUT:
+            # The day rolled over between the driver's answer and this tick observing it
+            # (notification_state.py's finalize-on-rollover branch ignores `response`
+            # entirely once today > prior_date) -- an answer given before midnight is lost
+            # here, not adopted. Not this Manager's to fix (the finalize decision belongs to
+            # evaluate_prompt), but silence would hide a real, if narrow, loss of UC08's
+            # "answer counts if given before midnight" -- log it so it's at least visible.
+            _LOGGER.warning(
+                "A prompt response (%s) arrived before midnight but wasn't observed until "
+                "after -- the evening timed out and the response was not adopted",
+                response,
+            )
 
         if evaluation.should_send:
             try:

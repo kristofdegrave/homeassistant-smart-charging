@@ -111,9 +111,9 @@ class NotifyAdapter:
         is valid for exactly one read() of its own tag/prompt cycle, not replayed on
         every subsequent call. This narrows design doc §4/§6's "returns the last captured
         actionable response" to "returns it once" -- a deliberate fix-scoped deviation
-        (issue #498), not yet reflected back into the design doc; the not-yet-built
-        `notification_manager.py` consumer should call `read()` exactly once per resolved
-        prompt-state transition, not poll it speculatively.
+        (issue #498), not yet reflected back into the design doc; `managers/notification_manager.py`
+        calls `read()` exactly once per resolved prompt-state transition, not polling it
+        speculatively.
         """
         action = self._last_action
         self._last_action = None

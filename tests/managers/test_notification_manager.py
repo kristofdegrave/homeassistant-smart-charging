@@ -10,9 +10,11 @@ Anchors: docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md (preconditions, 
 model), docs/plans/2026-07-21-notifications-design.md Sec4/Sec5/Sec6/Sec7.
 """
 
+import logging
 from datetime import date, datetime, time, timedelta
 
 from homeassistant.const import Platform
+from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.adapters.notify import (
     EVENT_MOBILE_APP_NOTIFICATION_ACTION,
@@ -36,7 +38,7 @@ from custom_components.smart_charging.const import (
     STATE_CONNECTED,
     STATE_DISCONNECTED,
 )
-from custom_components.smart_charging.notification_manager import NotificationManager
+from custom_components.smart_charging.managers.notification_manager import NotificationManager
 from custom_components.smart_charging.notification_state import PromptState
 
 PROMPT_TIME = time(18, 0, 0)
@@ -349,9 +351,12 @@ async def test_failed_home_day_flag_write_is_logged(hass, caplog):
     )
     await hass.async_block_till_done()
 
-    await manager.async_evaluate(EVENING + timedelta(minutes=5))
+    with caplog.at_level(logging.WARNING):
+        await manager.async_evaluate(EVENING + timedelta(minutes=5))
 
-    assert "home-day flag" in caplog.text.lower()
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("home-day flag" in r.message.lower() for r in warnings)
+    assert manager._state is PromptState.ANSWERED_YES
 
 
 async def test_unmapped_solar_forecast_role_stays_not_sent(hass):
@@ -420,6 +425,38 @@ async def test_unavailable_charger_status_reading_stays_not_sent(hass):
 
     assert calls == []
     assert manager._state is PromptState.NOT_SENT
+
+
+async def test_unavailable_home_day_external_reading_sends_normally(hass):
+    """Fail-OPEN default (deliberate, unlike the other two roles' fail-closed reads):
+    home_day_external is mapped but read() returns None (ADR-0003 fault signal) -> folds
+    to False, same as unmapped, so the prompt still sends -- a transient misread must not
+    silently skip a genuine evening (design: the driver can always answer "no")."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass, home_day_external=None)
+
+    await manager.async_evaluate(EVENING)
+
+    assert len(calls) == 1
+
+
+async def test_now_normalizes_a_utc_aware_datetime_to_local_prompt_time(hass):
+    """Task 5.2's async_track_time_interval caller hands its callback a UTC-aware
+    datetime -- the prompt-time-of-day comparison and midnight rollover are local-clock
+    concepts (notification_state.py), so `now` must be normalized to local time, not
+    compared against `prompt_time`/the date boundary in UTC."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+
+    # EVENING is naive local wall-clock time (18:30); as_local() attaches HA's configured
+    # local zone, as_utc() then converts to the equivalent aware UTC instant -- the same
+    # round trip the fix must reverse to compare correctly against PROMPT_TIME/the date.
+    utc_now = dt_util.as_utc(dt_util.as_local(EVENING))
+
+    await manager.async_evaluate(utc_now)
+
+    assert len(calls) == 1
+    assert manager._state is PromptState.PENDING
 
 
 async def test_unmapped_home_day_external_role_sends_normally(hass):
