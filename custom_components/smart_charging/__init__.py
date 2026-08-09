@@ -184,6 +184,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if notify_adapter is not None:
         entry.async_on_unload(notify_adapter.close)
 
+    # R5 delivery (Task 6.1): M3 subscribes to the Coordinator's own DeadlineUnreachableNotified
+    # bus event BEFORE the first refresh below -- unlike the tick/M2's listeners, which are
+    # deliberately registered after (they read owned entities the Store/platforms must exist
+    # for first), this listener consumes a plain bus event, and the first refresh is exactly
+    # the earliest point that event could fire (an already-unreachable deadline at boot).
+    # Registering after it would silently lose that first, permanently-latched delivery
+    # opportunity (on_deadline_unreachable's notify-once latch, Task 6.1) with no re-fire to
+    # recover on.
+    for unsub in notification_manager.register_listeners():
+        entry.async_on_unload(unsub)
+
     # First refresh AFTER platforms: so the number entity can seed target_current on add, and
     # so the Store's first _read_owned_entities() read (ADR-0018) finds the owned entities
     # already registered. M3's tick is registered here too, for the same reason (its own
