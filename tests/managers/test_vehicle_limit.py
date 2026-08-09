@@ -102,6 +102,31 @@ async def test_manager_starts_with_no_recorded_status(hass):
     assert m._last_status is None
 
 
+async def test_prime_status_seeds_last_status_from_the_adapter(hass):
+    """Task 5.1 / design §5.3: a freshly registered state-change listener only observes
+    FUTURE changes -- without priming, a reload/restart with the vehicle already connected
+    would lose the connected->disconnected edge on the very next disconnect (the "before"
+    side of the edge was never observed). `prime_status` seeds `_last_status` from the
+    ROLE_CHARGER_STATUS adapter's current reading, called once at setup before
+    `register_listeners` starts watching for changes."""
+    m = _manager(hass, status=STATE_CONNECTED)
+
+    await m.prime_status()
+
+    assert m._last_status == STATE_CONNECTED
+
+
+async def test_prime_status_leaves_last_status_none_when_unmapped_or_unknown(hass):
+    """A None reading (unmapped/unavailable/unknown) primes to None, not a canonical
+    state -- the first later real reading still starts the edge from scratch, same as the
+    unprimed skeleton default (design §5.3)."""
+    m = _manager(hass, status=None)
+
+    await m.prime_status()
+
+    assert m._last_status is None
+
+
 async def test_disconnect_from_connected_resets_vehicle_to_default(hass):
     """UC09 step 8 / R6 AC 3: connected->disconnected writes the default (80%) to the vehicle."""
     m = _manager(hass, vehicle=65.0, soc_override=80.0)

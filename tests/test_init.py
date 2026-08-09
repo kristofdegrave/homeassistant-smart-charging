@@ -7,6 +7,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
+    async_capture_events,
     async_fire_time_changed,
 )
 
@@ -15,8 +16,10 @@ from custom_components.smart_charging.adapters.notify import (
 )
 from custom_components.smart_charging.adapters.sun import SUN_STATE_BELOW_HORIZON
 from custom_components.smart_charging.const import (
+    ACTIVE_SOC_LIMIT_ENTITY,
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_CAR_HOME_ENTITY,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_EV_BATTERY_CAPACITY_KWH,
@@ -36,20 +39,30 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    CONF_STATUS_TRANSLATION,
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     DATA_COORDINATOR,
     DATA_NOTIFICATION_MANAGER,
+    DATA_VEHICLE_LIMIT_MANAGER,
     DEFAULT_CONTROL_INTERVAL_S,
     DOMAIN,
+    EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
+    EVENT_VEHICLE_CHARGE_LIMIT_RESET,
+    EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
     PROFILE_AUTO,
+    STATE_CHARGING,
+    STATE_CONNECTED,
+    STATE_DISCONNECTED,
     STATUS_FAULT,
     STATUS_OK,
 )
 from tests.helpers import (
     capture_charger_current_writes,
+    capture_service_calls,
     entry_data_base,
     entry_options_base,
     seed_ample_peak_headroom,
@@ -553,3 +566,175 @@ async def test_unload_without_a_notification_target_mapped_still_succeeds(hass):
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.entry_id not in hass.data[DOMAIN]
+
+
+# --- Task 5.1: M2 (Vehicle-Limit Manager) construction + its three state-change listeners ---
+
+_VEHICLE_LIMIT_DATA_OVERRIDES = {
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit",
+    CONF_CAR_HOME_ENTITY: "device_tracker.car",
+    CONF_STATUS_TRANSLATION: {
+        "Charging": STATE_CHARGING,
+        "Connected": STATE_CONNECTED,
+        "Disconnected": STATE_DISCONNECTED,
+    },
+}
+
+
+def _vehicle_writes(calls):
+    """Filter a live number.set_value capture (tests/helpers.py's capture_service_calls) down
+    to the mapped vehicle entity, so they aren't confused with the real
+    number.charger_current writes M1 also issues during the same setup cycle. A plain
+    filter, not its own capture, so it can be called after the actions under test append to
+    the still-live `calls` list (issue #340 review)."""
+    return [call for call in calls if call.get("entity_id") == "number.car_limit"]
+
+
+async def _setup_vehicle_limit_entry(hass, *, status="Connected", home="home"):
+    data = entry_data_base(**_VEHICLE_LIMIT_DATA_OVERRIDES)
+    seed_charger_states(hass, status=status)
+    hass.states.async_set("number.car_limit", "65")
+    hass.states.async_set("device_tracker.car", home)
+
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_vehicle_limit_manager_constructed_when_mapped(hass):
+    """Task 5.1: setup constructs M2 only when vehicle_charge_limit is mapped."""
+    entry = await _setup_vehicle_limit_entry(hass)
+
+    assert hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER] is not None
+
+
+async def test_no_vehicle_limit_manager_when_unmapped(hass):
+    """UC09 precondition / design §5.4 success criterion 6: no vehicle_charge_limit mapping
+    -> M2 stays uninstantiated and registers no listeners at all -- driving the
+    active-SOC-limit sensor afterwards must not raise (no manager to react) or write
+    anything (there is no vehicle adapter to write through in the first place)."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER] is None
+
+    hass.states.async_set(ACTIVE_SOC_LIMIT_ENTITY, "90")
+    await hass.async_block_till_done()  # must not raise
+
+
+async def test_vehicle_limit_listener_adopts_a_manual_vehicle_change(hass):
+    """UC09 steps 4-6 / R6 AC 5: driving the mapped vehicle_charge_limit entity reaches M2's
+    adoption reaction, writing the real owned soc_limit_override entity through the Store."""
+    await _setup_vehicle_limit_entry(hass)
+    events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
+
+    hass.states.async_set("number.car_limit", "55")
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    assert hass.states.get("number.smart_charging_soc_limit_override").state == "55.0"
+
+
+async def test_vehicle_limit_listener_ignores_an_unavailable_vehicle_reading(hass):
+    """ADR-0003: the vehicle-change listener re-reads through ROLE_VEHICLE_CHARGE_LIMIT
+    (NumericReadAdapter's own None-coercion for missing/unavailable/non-numeric) rather than
+    parsing `event.data["new_state"].state` directly -- a raw "unavailable" transition would
+    otherwise reach `on_vehicle_limit_changed` as the literal string "unavailable", not
+    `None`, and crash on `float(...)` inside the reaction -- this pins the
+    read-through-the-adapter choice at the wiring layer, distinguishing it from that
+    regression."""
+    await _setup_vehicle_limit_entry(hass)
+    events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
+
+    hass.states.async_set("number.car_limit", "unavailable")
+    await hass.async_block_till_done()
+
+    assert len(events) == 0
+    assert hass.states.get("number.smart_charging_soc_limit_override").state == "80.0"
+
+
+async def test_vehicle_limit_listener_resets_vehicle_on_disconnect(hass):
+    """UC09 steps 7-8 / R6 AC 3: driving the mapped charger_status entity to a disconnect
+    edge reaches M2's reset reaction, which reads the canonical status through the
+    ROLE_CHARGER_STATUS adapter (translation applied) and writes the vehicle's default.
+
+    Setup seeds `_last_status` from the already-current "Connected" reading via
+    `prime_status` (Task 5.1) -- without it, a freshly registered listener would only ever
+    observe changes after subscription, never the state that was already current, and this
+    single disconnect transition would be silently missed (design §5.3)."""
+    await _setup_vehicle_limit_entry(hass, status="Connected")
+    calls = capture_service_calls(hass, "number", "set_value")
+    events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_RESET)
+
+    hass.states.async_set("sensor.evse", "Disconnected")
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    assert _vehicle_writes(calls) == [{"entity_id": "number.car_limit", "value": 80.0}]
+
+
+async def test_vehicle_limit_listener_writes_vehicle_on_active_soc_limit_change(hass):
+    """UC09 step 2 / R6 AC 2: driving the materialized active-SOC-limit sensor reaches M2's
+    System->vehicle write reaction (connected + at home, C2)."""
+    await _setup_vehicle_limit_entry(hass, status="Charging", home="home")
+    calls = capture_service_calls(hass, "number", "set_value")
+    events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_SYNCED)
+
+    hass.states.async_set(ACTIVE_SOC_LIMIT_ENTITY, "90")
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    assert _vehicle_writes(calls) == [{"entity_id": "number.car_limit", "value": 90.0}]
+
+
+async def test_vehicle_limit_listener_does_not_write_when_away(hass):
+    """UC09 alt 2a / R6 AC 4 / C2: away -> the active-SOC-limit listener must not write."""
+    await _setup_vehicle_limit_entry(hass, status="Charging", home="not_home")
+    calls = capture_service_calls(hass, "number", "set_value")
+
+    hass.states.async_set(ACTIVE_SOC_LIMIT_ENTITY, "90")
+    await hass.async_block_till_done()
+
+    assert _vehicle_writes(calls) == []
+
+
+async def test_unload_cancels_vehicle_limit_listeners(hass):
+    """ADR-0008: M2's listeners live only while the entry is loaded -- unload tears them
+    down, so a subsequent vehicle-side change no longer reaches the manager's reaction at
+    all. Spies on the reaction itself (not the resulting event/Store write) so a
+    leaked-but-failing write can't make this pass for the wrong reason -- Store.write
+    swallows every failure and returns False, which would otherwise also read as "no
+    event fired"."""
+    entry = await _setup_vehicle_limit_entry(hass)
+    manager = hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER]
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    with patch.object(manager, "on_vehicle_limit_changed", AsyncMock()) as reaction:
+        hass.states.async_set("number.car_limit", "55")
+        await hass.async_block_till_done()
+
+    reaction.assert_not_called()
+
+
+async def test_reload_does_not_double_register_vehicle_limit_listeners(hass):
+    """ADR-0008: a reload tears down and re-registers exactly once -- two reloads followed by
+    one vehicle-side change must adopt exactly once, not two or three times (the same
+    per-reload leak class issue #498 fixed for NotifyAdapter's bus listener)."""
+    entry = await _setup_vehicle_limit_entry(hass)
+
+    for _ in range(2):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+
+    events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
+    hass.states.async_set("number.car_limit", "55")
+    await hass.async_block_till_done()
+
+    assert len(events) == 1

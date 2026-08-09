@@ -11,22 +11,27 @@ Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA
 (ADR-0018), never a coordinator reference, setter, or event.
 
 Task 3.3 scope adds the Vehicle->System manual-adoption reaction (UC09 steps 4-6, R6 AC 5),
-alongside Task 3.2's disconnect-reset (UC09 steps 7-8, R6 AC 3). Task 4.1 (this scope) adds
-the System->vehicle write branch (UC09 step 2, R6 AC 2/4), gated on connected AND car_home
-(C2) -- dormant in production until E3/M1 materialize sensor.smart_charging_active_soc_limit
-and fire the change onto it (design §0); tested here against a simulated reading.
+alongside Task 3.2's disconnect-reset (UC09 steps 7-8, R6 AC 3). Task 4.1 added the
+System->vehicle write branch (UC09 step 2, R6 AC 2/4), gated on connected AND car_home (C2).
+Task 5.1 (this scope) adds `register_listeners`, wiring the three reactions above to real HA
+state changes at setup (design §5.4) -- M2 self-wires its own triggers rather than a
+dedicated C6 client (design §9.5).
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers.event import async_track_state_change_event
 
 from ..adapters.base import Adapter
+from ..adapters.numeric import NumericReadAdapter
 from ..adapters.store import Store
 from ..const import (
+    ACTIVE_SOC_LIMIT_ENTITY,
     ATTR_ENTRY_ID,
     ATTR_LIMIT,
     CHARGEABLE_STATES,
@@ -126,6 +131,55 @@ class VehicleLimitManager:
         value = float(new_limit)
         if await self._write_vehicle(value):
             self._fire(EVENT_VEHICLE_CHARGE_LIMIT_SYNCED, value)
+
+    async def prime_status(self) -> None:
+        """Seed `_last_status` from the ROLE_CHARGER_STATUS adapter's current reading
+        (design §5.3). Call once at setup, before `register_listeners` subscribes to future
+        changes: `async_track_state_change_event` only fires on changes observed AFTER
+        registration, so an unprimed manager on a reload/restart with the vehicle already
+        connected would never see the "before" side of the next connected->disconnected
+        edge, silently skipping UC09 steps 7-8's reset. A `None` reading (unmapped/
+        unavailable/unknown) primes to `None`, same as the unprimed skeleton default --
+        the edge simply starts from scratch on the first later real reading.
+        """
+        self._last_status = await self._adapters[ROLE_CHARGER_STATUS].read()
+
+    def register_listeners(
+        self, *, vehicle_entity_id: str, status_entity_id: str
+    ) -> list[Callable[[], None]]:
+        """Wire M2's three triggers (design §5.4): the mapped `vehicle_charge_limit` and
+        `charger_status` entities, and the materialized active-SOC-limit sensor. Called once
+        at setup, only when `vehicle_charge_limit` is mapped (Task 5.1) -- the caller registers
+        each returned unsub via `entry.async_on_unload` so a reload tears down and
+        re-registers cleanly (ADR-0008).
+
+        The two hardware-backed roles are read back through their own adapters rather than by
+        parsing `event.data["new_state"].state` directly, so the adapter's numeric-coercion/
+        status-translation/None semantics stay the single source of truth (ADR-0003) -- the
+        same reasoning `_write_vehicle` already applies on the write side. The active-SOC-limit
+        sensor is an owned diagnostic entity (E3/M1) with no adapter of its own, so it is read
+        through a private `NumericReadAdapter` instead.
+        """
+        active_soc_limit_reader = NumericReadAdapter(self._hass, ACTIVE_SOC_LIMIT_ENTITY)
+
+        async def _on_vehicle_event(_event: Event) -> None:
+            await self.on_vehicle_limit_changed(
+                await self._adapters[ROLE_VEHICLE_CHARGE_LIMIT].read()
+            )
+
+        async def _on_status_event(_event: Event) -> None:
+            await self.on_status_changed(await self._adapters[ROLE_CHARGER_STATUS].read())
+
+        async def _on_active_soc_limit_event(_event: Event) -> None:
+            await self.on_active_soc_limit_changed(await active_soc_limit_reader.read())
+
+        return [
+            async_track_state_change_event(self._hass, [vehicle_entity_id], _on_vehicle_event),
+            async_track_state_change_event(self._hass, [status_entity_id], _on_status_event),
+            async_track_state_change_event(
+                self._hass, [ACTIVE_SOC_LIMIT_ENTITY], _on_active_soc_limit_event
+            ),
+        ]
 
     async def _reset_to_default(self) -> None:
         default = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
