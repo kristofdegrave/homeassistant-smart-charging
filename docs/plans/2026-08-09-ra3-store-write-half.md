@@ -63,24 +63,26 @@ restore-state mechanism persists it). **Test boundary:** HA harness,
 The existing `_register` helper in this file registers an entity id + state string, which is enough
 for `read()` but **not** for a service call — no entity object exists to receive
 `async_set_native_value`. The write tests therefore set up the real config entry, so the genuine
-`SocLimitOverrideNumber` is registered. Add near the existing helper:
+`SocLimitOverrideNumber` is registered.
+
+`tests/adapters/test_store.py` already imports `DOMAIN` and `Platform`; extend that existing import
+block rather than adding a second one. Add `from pytest_homeassistant_custom_component.common import
+MockConfigEntry`, `OWNED_SUFFIX_SOC_LIMIT_OVERRIDE` (extend the existing `const` import), and
+`from tests.helpers import entry_data_base, entry_options_base`. Then, near the existing `_register`
+helper:
 
 ```python
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-from custom_components.smart_charging.const import (
-    DOMAIN,
-    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
-)
-from tests.helpers import entry_data_base, entry_options_base
-
 SOC_LIMIT_ENTITY_ID = "number.smart_charging_soc_limit_override"
 
 
 async def _setup_entry(hass):
     """Set up the real integration so the genuine SocLimitOverrideNumber entity exists --
     a registry row + a seeded state string (this file's `_register`) is enough for read(),
-    but a service call needs a real entity object to dispatch to."""
+    but a service call needs a real entity object to dispatch to. Unlike
+    tests/test_init.py's setup, this does not call seed_charger_states() first -- the
+    hardware adapters are left unmapped, so the coordinator's first cycle logs missing-entity
+    warnings for them (absorbed by its own ADR-0007 fault path) and does nothing else; harmless
+    noise for these tests, which only exercise the owned number entity."""
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -120,6 +122,14 @@ async def test_write_unregistered_entity_returns_false(hass):
     """Startup race: nothing registered for this suffix -- a benign no-op, same as read()."""
     store = Store(hass, "entry1")
     assert await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
+
+
+async def test_write_unsupported_domain_returns_false(hass):
+    """Scope guard (design doc): only `number` is supported today -- a wrong domain must not
+    issue a number.set_value against an entity that cannot take it."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+    assert await store.write(Platform.SWITCH, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
 ```
 
 > If `hass.data["entity_components"]` proves awkward to reach in this harness version, the second
@@ -128,20 +138,17 @@ async def test_write_unregistered_entity_returns_false(hass):
 > point of the test is *only* that the entity's own subsequent state write preserves the value.
 > Do not weaken it into a second copy of the first test.
 
-**Step 2: Run to verify failure** — `pytest tests/adapters/test_store.py -k write -v`: all three
+**Step 2: Run to verify failure** — `pytest tests/adapters/test_store.py -k write -v`: all four
 fail with `AttributeError: 'Store' object has no attribute 'write'`.
 
-**Step 3: Implement** — add to `adapters/store.py`:
+**Step 3: Implement** — `adapters/store.py` already imports `from homeassistant.const import
+STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN`; extend that import with `ATTR_ENTITY_ID, Platform`
+rather than adding a second `homeassistant.const` import line. Add a new top-level import for
+`from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE`, and a module-level
+`import logging` + `_LOGGER = logging.getLogger(__name__)` (this module has neither yet). Then add
+the method to the `Store` class:
 
 ```python
-import logging
-
-from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE
-from homeassistant.const import ATTR_ENTITY_ID, Platform
-
-_LOGGER = logging.getLogger(__name__)
-
-
     async def write(self, entity_domain: str, unique_id_suffix: str, value: float) -> bool:
         """Set `value` on this entry's owned `entity_domain` entity identified by
         `unique_id_suffix`. Returns True if applied, False otherwise; never raises
@@ -176,7 +183,7 @@ red-green, not shipped ahead of the tests that force it.)
 **Step 4: Run to verify pass**, full suite, `ruff` clean, commit.
 
 ```bash
-git add custom_components/smart_charging/adapters/store.py tests/adapters/test_store.py docs/plans/2026-08-09-ra3-store-write-half-design.md docs/plans/2026-08-09-ra3-store-write-half.md
+git add custom_components/smart_charging/adapters/store.py tests/adapters/test_store.py
 git commit --author="Claude <noreply@anthropic.com>" -m "$(cat <<'EOF'
 feat: RA3 Store.write() for owned number entities (ADR-0018)
 
@@ -216,14 +223,17 @@ async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchange
 
 
 async def test_write_service_failure_returns_false(hass):
-    """A failing service call (entry mid-unload, entity gone) is best-effort, not fatal."""
+    """A raising service call is best-effort, not fatal -- whatever the cause (this test
+    doesn't assert *which* failure mode raises; the out-of-range test above already covers
+    the one real, reproducible raise). ServiceRegistry declares __slots__, so patch.object
+    on the instance would raise AttributeError before the test body runs -- patch the class."""
     entry = await _setup_entry(hass)
     store = Store(hass, entry.entry_id)
 
     async def _boom(*args, **kwargs):
         raise HomeAssistantError("service unavailable")
 
-    with patch.object(hass.services, "async_call", _boom):
+    with patch.object(type(hass.services), "async_call", _boom):
         assert await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
 ```
 
@@ -249,8 +259,8 @@ backstop the design doc relies on would not exist.
                 blocking=True,
             )
         except Exception as err:  # noqa: BLE001 - best-effort owned-entity write (ADR-0018);
-            # an out-of-range value or an entry mid-unload must not break a Manager's
-            # reaction path, and is not an ADR-0007 hardware fault either.
+            # an out-of-range value must not break a Manager's reaction path, and is not an
+            # ADR-0007 hardware fault either.
             _LOGGER.debug("Store.write %s failed: %s", entity_id, err)
             return False
         return True
@@ -285,6 +295,10 @@ EOF
   `await self._store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, adopted)` with
   `adopted = min(max(float(reported), SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)`, replacing
   its retired `_set_default_soc_limit` setter-callback snippet (whose `_SOC_MIN`/`_SOC_MAX`
-  constants never landed — `const.py` has `SOC_LIMIT_OVERRIDE_MIN`/`_MAX` instead).
+  constants never landed — `const.py` has `SOC_LIMIT_OVERRIDE_MIN`/`_MAX` instead). That update
+  should gate `EVENT_MANUAL_CHARGE_LIMIT_ADOPTED` on `Store.write`'s return value (`if await
+  self._store.write(...): self._fire(...)`), the same pattern `_write_vehicle`/
+  `EVENT_VEHICLE_CHARGE_LIMIT_RESET` already use, rather than firing unconditionally as the
+  retired snippet did.
 - **Write support for `bool`/`str`/`time` owned entities** (M3's `home_day_flag`, etc.) — no caller
   yet; one task per value shape when one appears, per the design doc's deferrals.

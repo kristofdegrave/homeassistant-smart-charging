@@ -33,12 +33,14 @@ build-out per value shape is established precedent here, not a new compromise.
    `native_value` and its HA state both reflect the new value, and HA's own restore-state
    mechanism (ADR-0004) will persist it across a restart — the write goes *through* the entity,
    never around it.
-3. A write that cannot be applied — entity not registered yet, `number` service unavailable,
-   value rejected by the entity's own bounds — **returns a failure indication and does not
-   raise**, so a Manager's reaction path cannot be broken by an owned entity being transiently
-   absent.
-4. `number.py`, `select.py`, `time.py`, `switch.py`, `coordinator.py` and `vehicle_limit.py` are
-   **unchanged** by this addendum. It adds one method to one existing module.
+3. A write that cannot be applied — entity not registered yet, or a value rejected by the entity's
+   own bounds — **returns a failure indication and does not raise**, so a Manager's reaction path
+   cannot be broken by an owned entity being transiently absent or by an unclamped caller. (A
+   registered-but-dead entity, e.g. mid-unload, is not distinguished from success by this minimal
+   addition — see the Error handling section.)
+4. `number.py`, `select.py`, `time.py`, `switch.py`, `coordinator.py`, `const.py`, `__init__.py` and
+   `managers/vehicle_limit.py` are **unchanged** by this addendum. It adds one method to one
+   existing module.
 
 ## Interface
 
@@ -63,7 +65,7 @@ async def write(self, entity_domain: str, unique_id_suffix: str, value: float) -
   from each other or from the entity's own `_object_id_suffix` (CLAUDE.md: no magic strings).
 - Returning `bool` rather than `None` matches the caller's existing shape: `VehicleLimitManager`'s
   `_write_vehicle` already returns a success flag and gates its follow-on domain event on it
-  (`vehicle_limit.py:83`, `if await self._write_vehicle(default): self._fire(...)`).
+  (`vehicle_limit.py:83-84`, `if await self._write_vehicle(default): self._fire(...)`).
 
 ## Entity resolution — identical to `read()`
 
@@ -126,16 +128,29 @@ debug log, matching `_write_vehicle`'s own broad catch at `vehicle_limit.py:94-9
 | Failure | Cause | Result |
 | --- | --- | --- |
 | Entity not registered | Startup race; owned entity's platform not yet set up | `False`, no service call |
-| Service unavailable / entity absent from the state machine | Entry mid-unload or mid-reload | `False`, logged at debug |
-| Value outside the entity's `native_min_value`/`native_max_value` | Caller passed an unclamped value; HA's `number` component validates the range and raises | `False`, logged at debug |
+| Value outside the entity's `native_min_value`/`native_max_value` | Caller passed an unclamped value; HA's `number` component validates the range and raises `ServiceValidationError` before touching the entity | `False`, logged at debug |
+
+A registered-but-dead entity (entry mid-unload/mid-reload: the `unique_id_suffix` still resolves in
+the entity registry, but no live entity object backs it) is **not** a third failure mode with its
+own row. HA's entity-service dispatch only logs a missing/unavailable referenced entity and then
+iterates an empty entity list — `hass.services.async_call` does not raise for it. `Store.write`
+therefore returns `True` for that case: the service call completed without error, even though
+nothing was actually written. This is accepted, not hidden — a Manager already tolerates a next-cycle
+read (ADR-0018's freshness Con) discovering the write silently didn't take, the same way it already
+tolerates a `None` from the Store's own read half. A stronger guarantee would need a post-call state
+read to confirm the value actually landed, which this minimal, real-caller-driven addition does not
+build (deferred below, alongside the other value shapes).
 
 This mirrors both sides of the existing contract. `Store.read()` already documents "never raises
 (mirrors `NumericReadAdapter.read()`, ADR-0003)"; keeping `write()` symmetric means the whole Store
-surface is total. And `Adapter.write()`'s contract (`adapters/base.py:22-24`) is *permitted* to
-raise — which is precisely why its only real caller, `VehicleLimitManager._write_vehicle`, wraps it
-in a try/except and converts it to a boolean. Putting that conversion inside `Store.write` instead
-of at each Manager call site means the best-effort contract is guaranteed once, at the Resource
-Access boundary, rather than re-implemented (or forgotten) by every future Manager.
+surface is total. `Adapter.write()`'s own contract (`adapters/base.py:22-24`) only states that a
+read-only role raises `NotImplementedError`; it says nothing about I/O-failure behavior. The actual
+precedent for an unguarded, possibly-raising write is `NumericReadWriteAdapter.write`
+(`adapters/numeric.py:22-28`), an unguarded blocking service call — exactly the shape `Store.write`
+wraps here. `VehicleLimitManager._write_vehicle` wraps that adapter call in a try/except and
+converts it to a boolean; putting the same conversion inside `Store.write` instead of at each
+Manager call site means the best-effort contract is guaranteed once, at the Resource Access
+boundary, rather than re-implemented (or forgotten) by every future Manager.
 
 Deliberately **not** an ADR-0007 fault: ADR-0007's fault path is for external hardware. The read
 half's success criterion 4 already established that owned entities are internal and a transient
@@ -172,13 +187,24 @@ logged and reported to the caller, never escalated.
 
 | Piece | Service |
 | --- | --- |
-| `adapters/store.py` `Store.write` | Resource Access, **V13 — Config/State Store access** (`system-design.md` §3: "reads **and writes** owned-entity state via HA's entity registry (ADR-0004/0005)") — the write half of the same service the read half realizes; `project-plan.md` **RA3** |
+| `adapters/store.py` `Store.write` | Resource Access, **V13 — Config/State Store access** (`system-design.md` §3: "reads **and writes** owned-entity state via HA's entity registry (ADR-0004\0005)") — the write half of the same service the read half realizes; `project-plan.md` **RA3** |
 | The `number` entity the write lands on | C2 (owned control entities, Clients) — unchanged by this spec |
 | Future caller `VehicleLimitManager.on_vehicle_limit_changed` | Manager, **M2 — Vehicle-Limit Manager (V12)**; built by its own plan's Task 3.3, not here |
 
 No new service, no new call direction, no new volatility: `system-design.md` §3 already names
 writes as part of V13's scope, and ADR-0018 already routes Manager→owned-entity writes through it.
 This adds one method to one existing file.
+
+**The write→read round trip this closes, named explicitly.** Once Task 3.3 calls `Store.write`, an
+adopted value does not reach the Coordinator immediately — it is observed on the Coordinator's next
+scheduled cycle, the same freshness Con ADR-0018 already accepted for the read half. That cycle then
+recomputes and re-emits `ActiveSocLimitChanged`, which (once Task 4.1 exists) drives M2's own
+System→vehicle write of the value it just adopted, back to the vehicle it came from. This is benign,
+not a loop: M2's echo guard (`_last_written_limit`) recognizes that write as its own and does not
+re-adopt it. No `async_request_refresh()` call is added here to shorten that latency — ADR-0018's
+Option C (a standing state-change subscription for immediate responsiveness) was rejected precisely
+because no use-case in this design needs sub-cycle responsiveness for an owned-entity change; this
+addition doesn't reopen that question.
 
 ## Testing approach (ADR-0009)
 
@@ -196,9 +222,10 @@ testable at all: the assertion is against the real entity's own state, so a mech
 stamped the state machine would pass criterion 1 and still be caught here on the next entity
 write.
 
-Coverage: successful write (real entity's state changes); unregistered `unique_id_suffix` →
-`False`, no raise; a non-`number` `entity_domain` → `False`, no raise; a service failure →
-`False`, no raise; an out-of-range value → `False`, no raise, entity's value unchanged.
+Coverage: successful write (real entity's state changes); the write survives the entity's own next
+state write (goes through the entity, not around it); unregistered `unique_id_suffix` → `False`, no
+raise; a non-`number` `entity_domain` → `False`, no raise; a service failure → `False`, no raise; an
+out-of-range value → `False`, no raise, entity's value unchanged.
 
 ## Packaging
 
@@ -225,4 +252,9 @@ Coverage: successful write (real entity's state changes); unregistered `unique_i
 - **Task 3.3 of the Vehicle-Limit Manager plan** — the first caller. That plan is separately
   approved and must be updated to call `Store.write` (with the `SOC_LIMIT_OVERRIDE_MIN`/`_MAX`
   clamp this document places in the Manager) instead of the retired `_set_default_soc_limit`
-  setter-callback snippet. Not done here.
+  setter-callback snippet. Not done here. That update must also resolve one open point the retired
+  snippet left implicit: whether `EVENT_MANUAL_CHARGE_LIMIT_ADOPTED` fires unconditionally (the
+  retired snippet's own shape) or only `if await self._store.write(...)`, gated the same way
+  `_write_vehicle`/`EVENT_VEHICLE_CHARGE_LIMIT_RESET` already gate on a successful write
+  (`vehicle_limit.py:83-84`) — `Store.write`'s `bool` return exists specifically to make that gating
+  possible, so Task 3.3 should use it rather than fire the event regardless of outcome.
