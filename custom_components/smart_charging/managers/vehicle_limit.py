@@ -132,6 +132,18 @@ class VehicleLimitManager:
         if await self._write_vehicle(value):
             self._fire(EVENT_VEHICLE_CHARGE_LIMIT_SYNCED, value)
 
+    async def prime_status(self) -> None:
+        """Seed `_last_status` from the ROLE_CHARGER_STATUS adapter's current reading
+        (design §5.3). Call once at setup, before `register_listeners` subscribes to future
+        changes: `async_track_state_change_event` only fires on changes observed AFTER
+        registration, so an unprimed manager on a reload/restart with the vehicle already
+        connected would never see the "before" side of the next connected->disconnected
+        edge, silently skipping UC09 steps 7-8's reset. A `None` reading (unmapped/
+        unavailable/unknown) primes to `None`, same as the unprimed skeleton default --
+        the edge simply starts from scratch on the first later real reading.
+        """
+        self._last_status = await self._adapters[ROLE_CHARGER_STATUS].read()
+
     def register_listeners(
         self, *, vehicle_entity_id: str, status_entity_id: str
     ) -> list[Callable[[], None]]:

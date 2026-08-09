@@ -199,9 +199,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # M2's three listeners (ADR-0008: live only while the entry is loaded -- a reload tears
     # down via async_on_unload and re-registers on the next setup, same as every listener
-    # above). Registered after platforms so number.smart_charging_soc_limit_override already
-    # exists for the disconnect-reset/adoption reactions to read/write through the Store.
+    # above). Registered after platforms AND after the coordinator's first refresh, so
+    # number.smart_charging_soc_limit_override already exists for the disconnect-reset/
+    # adoption reactions to read/write through the Store; a consequence is that the first
+    # refresh's own active-SOC-limit publication is never itself observed as a "change" by
+    # M2 (same as `prime_status` below, C2-gated either way -- it converges on the next
+    # real change, not left stale). `prime_status` runs first: a freshly registered listener
+    # only observes changes AFTER it subscribes, so without priming, a reload/restart with
+    # the vehicle already connected would lose the connected->disconnected edge on the next
+    # disconnect (design §5.3).
     if vehicle_limit_manager is not None:
+        await vehicle_limit_manager.prime_status()
         for unsub in vehicle_limit_manager.register_listeners(
             vehicle_entity_id=entry.data[CONF_VEHICLE_CHARGE_LIMIT_ENTITY],
             status_entity_id=entry.data[CONF_CHARGER_STATUS_ENTITY],

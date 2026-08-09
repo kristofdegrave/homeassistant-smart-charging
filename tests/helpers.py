@@ -96,22 +96,31 @@ def seed_charger_states(hass, *, status, net_w=0.0, charger_w=0.0, ev_soc=50.0, 
     hass.states.async_set("sensor.ev_soc", str(ev_soc))
 
 
-def capture_charger_current_writes(hass):
-    """Capture number.set_value calls targeting the charger-current entity.
+def capture_service_calls(hass, domain: str, service: str):
+    """Capture every call_service event for one domain/service pair, regardless of which
+    entity is targeted or whether any real entity backs it.
 
-    The real `number` platform (loaded via PLATFORMS) registers its own set_value
-    service handler on setup, so a fake `hass.services.async_register` stand-in gets
-    clobbered; listen for the call_service event instead -- it fires for every call
-    regardless of which handler is installed.
+    Listening on the bus event itself (rather than registering a fake service handler, or
+    checking the target's resulting state) works uniformly whether the target is a real
+    owned entity (whose own real handler would otherwise clobber a fake one) or an
+    externally-mapped adapter target with no backing entity object at all (whose state
+    can't be checked directly) -- `capture_charger_current_writes` below is this function
+    specialised to the one domain/service every end-to-end suite already relied on before
+    a second call site needed the same shape (issue #340 review).
     """
     calls = []
 
     def _record(event):
-        if event.data["domain"] == "number" and event.data["service"] == "set_value":
+        if event.data["domain"] == domain and event.data["service"] == service:
             calls.append(event.data["service_data"])
 
     hass.bus.async_listen("call_service", _record)
     return calls
+
+
+def capture_charger_current_writes(hass):
+    """Capture number.set_value calls targeting the charger-current entity."""
+    return capture_service_calls(hass, "number", "set_value")
 
 
 def seed_ample_peak_headroom(coordinator, kw=AMPLE_PEAK_HEADROOM_KW):
