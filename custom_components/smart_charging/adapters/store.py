@@ -1,12 +1,14 @@
-"""RA3: reads owned control-entity state through the entity registry + HA state machine
-(ADR-0018/0019)."""
+"""RA3: reads and writes owned control-entity state through the entity registry + HA state
+machine (ADR-0018/0019)."""
 
 from __future__ import annotations
 
+import logging
 from datetime import time
 from typing import TypeVar
 
-from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE
+from homeassistant.const import ATTR_ENTITY_ID, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -14,14 +16,23 @@ from ..const import DOMAIN
 
 T = TypeVar("T", str, float, bool, time)
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class Store:
     """One instance per config entry (mirrors the Adapter factory's per-entry scoping,
-    ADR-0003) -- read() only ever resolves this entry's own owned entities."""
+    ADR-0003) -- read() and write() only ever resolve this entry's own owned entities."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self._hass = hass
         self._entry_id = entry_id
+
+    def _resolve(self, entity_domain: str, unique_id_suffix: str) -> str | None:
+        """Shared entity-id resolution for read() and write() -- the one place both halves'
+        f"{entry_id}_{unique_id_suffix}" lookup lives, so they cannot drift apart."""
+        return er.async_get(self._hass).async_get_entity_id(
+            entity_domain, DOMAIN, f"{self._entry_id}_{unique_id_suffix}"
+        )
 
     async def read(
         self, entity_domain: str, unique_id_suffix: str, value_type: type[T]
@@ -30,9 +41,7 @@ class Store:
         registry, read its HA state, and coerce to value_type. None if unregistered,
         missing/unknown/unavailable, or the value doesn't coerce -- never raises (mirrors
         NumericReadAdapter.read(), ADR-0003)."""
-        entity_id = er.async_get(self._hass).async_get_entity_id(
-            entity_domain, DOMAIN, f"{self._entry_id}_{unique_id_suffix}"
-        )
+        entity_id = self._resolve(entity_domain, unique_id_suffix)
         if entity_id is None:
             return None
         state = self._hass.states.get(entity_id)
@@ -51,3 +60,35 @@ class Store:
             except ValueError:
                 return None
         return state.state
+
+    async def write(self, entity_domain: str, unique_id_suffix: str, value: float) -> bool:
+        """Set `value` on this entry's owned `entity_domain` entity identified by
+        `unique_id_suffix`. Returns True if applied, False otherwise; never raises
+        (symmetric with read(), and the best-effort contract VehicleLimitManager's
+        _write_vehicle expects -- ADR-0003/ADR-0018).
+
+        Only the `number` domain is supported: this is the one value shape a caller needs
+        today (M2 -> soc_limit_override). Other domains return False rather than issuing a
+        number.set_value against an entity that cannot take it -- see the design doc's
+        deferrals.
+        """
+        if entity_domain != Platform.NUMBER:
+            _LOGGER.debug("Store.write: unsupported entity domain %s", entity_domain)
+            return False
+        entity_id = self._resolve(entity_domain, unique_id_suffix)
+        if entity_id is None:
+            return False
+        # Best-effort (ADR-0018): an out-of-range value or any other service-call failure
+        # must not break a Manager's reaction path, and is not an ADR-0007 hardware fault
+        # either -- caught broadly and reported to the caller, never escalated.
+        try:
+            await self._hass.services.async_call(
+                Platform.NUMBER,
+                SERVICE_SET_VALUE,
+                {ATTR_ENTITY_ID: entity_id, ATTR_VALUE: value},
+                blocking=True,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Store.write %s failed: %s", entity_id, err)
+            return False
+        return True
