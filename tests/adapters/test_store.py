@@ -4,9 +4,13 @@ from datetime import time as time_of_day
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.adapters.store import Store
-from custom_components.smart_charging.const import DOMAIN
+from custom_components.smart_charging.const import DOMAIN, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE
+from tests.helpers import entry_data_base, entry_options_base
+
+SOC_LIMIT_ENTITY_ID = "number.smart_charging_soc_limit_override"
 
 
 def _register(hass, entity_domain: str, object_id: str, unique_id: str, state: str) -> None:
@@ -104,3 +108,59 @@ async def test_read_time_invalid_isoformat_returns_none(hass):
     )
     store = Store(hass, "entry1")
     assert await store.read(Platform.TIME, "departure_mon", time_of_day) is None
+
+
+async def _setup_entry(hass):
+    """Set up the real integration so the genuine SocLimitOverrideNumber entity exists --
+    a registry row + a seeded state string (this file's `_register`) is enough for read(),
+    but a service call needs a real entity object to dispatch to. Unlike tests/test_init.py's
+    setup, this does not call seed_charger_states() first -- the hardware adapters are left
+    unmapped, so the coordinator's first cycle logs missing-entity warnings for them (absorbed
+    by its own ADR-0007 fault path) and does nothing else; harmless noise for these tests,
+    which only exercise the owned number entity."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_write_sets_the_real_number_entity(hass):
+    """ADR-0018 write half: the value reaches the real entity (native_value + HA state), not
+    just the state machine -- so RestoreNumber persists it (ADR-0004)."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+
+    assert await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is True
+    await hass.async_block_till_done()
+
+    assert float(hass.states.get(SOC_LIMIT_ENTITY_ID).state) == 70.0
+
+
+async def test_write_goes_through_the_entity_not_around_it(hass):
+    """The value survives the entity writing its own state again -- a direct
+    hass.states.async_set would be reverted here, since _attr_native_value would be stale."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+    await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0)
+    await hass.async_block_till_done()
+
+    entity = hass.data["entity_components"][Platform.NUMBER].get_entity(SOC_LIMIT_ENTITY_ID)
+    entity.async_write_ha_state()
+    await hass.async_block_till_done()
+
+    assert float(hass.states.get(SOC_LIMIT_ENTITY_ID).state) == 70.0
+
+
+async def test_write_unregistered_entity_returns_false(hass):
+    """Startup race: nothing registered for this suffix -- a benign no-op, same as read()."""
+    store = Store(hass, "entry1")
+    assert await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
+
+
+async def test_write_unsupported_domain_returns_false(hass):
+    """Scope guard (design doc): only `number` is supported today -- a wrong domain must not
+    issue a number.set_value against an entity that cannot take it."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+    assert await store.write(Platform.SWITCH, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
