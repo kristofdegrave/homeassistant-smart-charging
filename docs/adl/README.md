@@ -26,5 +26,6 @@ template.
 | [0017](0017-profile-as-composed-mode-selection-policy.md) | Mode-selection policy Protocol and registry for `profiles/` | Proposed |
 | [0018](0018-entity-to-coordinator-access-via-ra3-store.md) | Entity-to-coordinator access via RA3's Store (pull-based read, Manager-initiated write) | Accepted |
 | [0019](0019-store-package-home.md) | Package home for the RA3 Config/State Store | Accepted |
+| [0020](0020-skillspector-advisory-pr-scan.md) | Advisory SkillSpector scan feeding the workflow-reviewer AI review | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
