@@ -8,6 +8,8 @@ DOMAIN = "smart_charging"
 # reader (sensor.py, tests) stay in lockstep.
 DATA_COORDINATOR = "coordinator"
 DATA_NOTIFICATION_MANAGER = "notification_manager"
+# None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY is unmapped -- M2 stays uninstantiated (Task 5.1).
+DATA_VEHICLE_LIMIT_MANAGER = "vehicle_limit_manager"
 
 # Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
 # and the config flow's `vol.In(...)` validator (Task 3.2). Plain strings, not an Enum:

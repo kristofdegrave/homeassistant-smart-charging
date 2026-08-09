@@ -14,6 +14,7 @@ from .adapters.store import Store
 from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
@@ -43,8 +44,10 @@ from .const import (
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     DATA_COORDINATOR,
     DATA_NOTIFICATION_MANAGER,
+    DATA_VEHICLE_LIMIT_MANAGER,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -75,6 +78,7 @@ from .const import (
 )
 from .coordinator import SmartChargingCoordinator
 from .managers.notification_manager import NotificationManager
+from .managers.vehicle_limit import VehicleLimitManager
 
 PLATFORMS = [
     Platform.NUMBER,
@@ -152,11 +156,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     notification_manager = NotificationManager(
         hass, adapters=adapters, entry_id=entry.entry_id, store=store, config=config
     )
+    # M2 is only constructed when vehicle_charge_limit is mapped (UC09 precondition) --
+    # design §9.5: M2 self-wires its own three listeners below, mirroring the M1/M3
+    # self-wiring precedent in this same function, rather than a dedicated C6 client.
+    vehicle_limit_manager = (
+        VehicleLimitManager(hass, adapters=adapters, entry_id=entry.entry_id, store=store)
+        if entry.data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY)
+        else None
+    )
 
     # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         DATA_COORDINATOR: coordinator,
         DATA_NOTIFICATION_MANAGER: notification_manager,
+        DATA_VEHICLE_LIMIT_MANAGER: vehicle_limit_manager,
         CONF_MIN_CURRENT: min_current,
         CONF_MAX_CURRENT: max_current,
         CONF_DEFAULT_TARGET_CURRENT: default_target_current,
@@ -183,6 +196,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass, notification_manager.async_evaluate, timedelta(seconds=interval_s)
         )
     )
+
+    # M2's three listeners (ADR-0008: live only while the entry is loaded -- a reload tears
+    # down via async_on_unload and re-registers on the next setup, same as every listener
+    # above). Registered after platforms so number.smart_charging_soc_limit_override already
+    # exists for the disconnect-reset/adoption reactions to read/write through the Store.
+    if vehicle_limit_manager is not None:
+        for unsub in vehicle_limit_manager.register_listeners(
+            vehicle_entity_id=entry.data[CONF_VEHICLE_CHARGE_LIMIT_ENTITY],
+            status_entity_id=entry.data[CONF_CHARGER_STATUS_ENTITY],
+        ):
+            entry.async_on_unload(unsub)
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
