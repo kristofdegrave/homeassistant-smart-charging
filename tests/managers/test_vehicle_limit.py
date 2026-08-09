@@ -1,10 +1,12 @@
 """HA-harness tests for the Vehicle-Limit Manager (M2 -- UC09/R6/ADR-0011).
 
 Covers the skeleton constructor/echo-guard state (Task 3.1, corrected to ADR-0018's Store
-access shape), the disconnect-reset reaction (Task 3.2, UC09 steps 7-8, R6 AC 3), and the
-Vehicle->System manual-adoption reaction (Task 3.3, UC09 steps 4-6, R6 AC 5). Drives M2
-through its public reaction methods directly (not HA listener plumbing -- that is Phase 5's
-job).
+access shape), the disconnect-reset reaction (Task 3.2, UC09 steps 7-8, R6 AC 3), the
+Vehicle->System manual-adoption reaction (Task 3.3, UC09 steps 4-6, R6 AC 5), and the
+System->vehicle write-on-change reaction (Task 4.1, UC09 step 2, R6 AC 2/4, C2-gated --
+dormant until E3/M1 materialize sensor.smart_charging_active_soc_limit, design §0). Drives
+M2 through its public reaction methods directly (not HA listener plumbing -- that is Phase
+5's job).
 """
 
 from homeassistant.const import Platform
@@ -15,6 +17,7 @@ from custom_components.smart_charging.const import (
     ATTR_LIMIT,
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
+    EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     ROLE_CAR_HOME,
     ROLE_CHARGER_STATUS,
@@ -263,3 +266,137 @@ async def test_adoption_event_not_fired_when_store_write_fails(hass):
 
     assert store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0)]
     assert len(events) == 0
+
+
+async def test_soc_limit_change_writes_vehicle_when_connected_at_home(hass):
+    """UC09 step 2 / R6 AC 2: connected + at home -> write the new limit + sync event
+    (Task 4.1, dormant until E3/M1 materialize sensor.smart_charging_active_soc_limit)."""
+    m = _manager(hass, home=True, status=STATE_CONNECTED)
+    events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_SYNCED)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == [90.0]
+    assert m._last_written_limit == 90.0
+    assert len(events) == 1
+    assert events[0].data == {ATTR_ENTRY_ID: "abc", ATTR_LIMIT: 90.0}
+
+
+async def test_soc_limit_change_writes_vehicle_when_connected_charging_at_home(hass):
+    """design §5.1/C2: the guard's "connected" covers both connected and charging."""
+    m = _manager(hass, home=True, status=STATE_CHARGING)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == [90.0]
+
+
+async def test_no_write_when_away(hass):
+    """UC09 alt 2a / R6 AC 4: away -> no System write to the vehicle (C2)."""
+    m = _manager(hass, home=False, status=STATE_CHARGING)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == []
+    assert m._last_written_limit is None
+
+
+async def test_no_write_when_car_home_is_unknown(hass):
+    """design §4: a car_home read of None means "cannot confirm home" -> suppress the write,
+    same as an explicit False (fail-safe, C2)."""
+    adapters = {
+        ROLE_VEHICLE_CHARGE_LIMIT: _RWAdapter(80.0),
+        ROLE_CAR_HOME: _ReadAdapter(None),
+        ROLE_CHARGER_STATUS: _ReadAdapter(STATE_CHARGING),
+    }
+    store = _FakeStore({(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 80.0})
+    m = VehicleLimitManager(hass, adapters=adapters, entry_id="abc", store=store)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == []
+
+
+async def test_no_write_when_disconnected(hass):
+    """UC09 alt 2a / R6 AC 4/C2: disconnected -> no System write, even if car_home is True."""
+    m = _manager(hass, home=True, status=STATE_DISCONNECTED)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == []
+
+
+async def test_no_write_when_charger_status_is_unknown(hass):
+    """design §4: an unavailable/unknown charger_status read (None) is not a chargeable state
+    -- fails safe, same as an explicit disconnected reading (C2)."""
+    m = _manager(hass, home=True, status=None)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == []
+
+
+async def test_no_write_when_car_home_role_is_unmapped(hass):
+    """§3/§9.1: car_home is required whenever vehicle_charge_limit is mapped at config time, but
+    the runtime guard must not crash/assume True if it is somehow absent -- fail-safe (C2)."""
+    adapters = {
+        ROLE_VEHICLE_CHARGE_LIMIT: _RWAdapter(80.0),
+        ROLE_CHARGER_STATUS: _ReadAdapter(STATE_CHARGING),
+    }
+    store = _FakeStore({(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 80.0})
+    m = VehicleLimitManager(hass, adapters=adapters, entry_id="abc", store=store)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == []
+
+
+async def test_active_soc_limit_none_report_is_ignored(hass):
+    """A missing/unavailable sensor read is not a resolved-limit change (mirrors
+    on_vehicle_limit_changed's None handling, design §5.1)."""
+    m = _manager(hass, home=True, status=STATE_CHARGING)
+
+    await m.on_active_soc_limit_changed(None)
+
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == []
+
+
+async def test_write_then_reflect_back_settles_without_a_second_write(hass):
+    """UC09 exception flow: §5.1 write -> vehicle echoes -> §5.2 echo guard suppresses
+    re-adoption and no second write occurs (settling loop, design §6)."""
+    m = _manager(hass, home=True, status=STATE_CHARGING)
+    adoption_events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
+
+    await m.on_active_soc_limit_changed(90.0)  # System write records 90
+    await m.on_vehicle_limit_changed(90.0)  # vehicle reflects 90 back
+
+    assert len(adoption_events) == 0  # not re-adopted
+    assert m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].writes == [90.0]  # no second write
+
+
+async def test_active_soc_limit_write_failure_is_swallowed(hass):
+    """A vehicle unreachable at the moment of a resolved-limit change is best-effort, same as
+    the disconnect-reset branch (design §5.1, mirrors §5.3). The failed write must not report
+    success -- no VehicleChargeLimitSynced fires (mirrors
+    test_adoption_event_not_fired_when_store_write_fails)."""
+    m = _manager(hass, home=True, status=STATE_CHARGING)
+    events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_SYNCED)
+
+    async def _boom(_value):
+        raise RuntimeError("vehicle offline")
+
+    m._adapters[ROLE_VEHICLE_CHARGE_LIMIT].write = _boom
+
+    await m.on_active_soc_limit_changed(90.0)  # must not raise
+
+    assert m._last_written_limit is None
+    assert len(events) == 0
+
+
+async def test_active_soc_limit_change_is_a_noop_when_vehicle_adapter_is_unmapped(hass):
+    """design success-criterion 6: no vehicle_charge_limit role configured -> M2 stays inert."""
+    m = _manager_without_vehicle_adapter(hass)
+
+    await m.on_active_soc_limit_changed(90.0)
+
+    assert m._last_written_limit is None
