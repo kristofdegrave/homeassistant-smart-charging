@@ -1,6 +1,6 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
-from datetime import timedelta
+from datetime import time, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.helpers import entity_registry as er
@@ -21,6 +21,8 @@ from custom_components.smart_charging.const import (
     CONF_DEFAULT_SOC_LIMIT,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
     CONF_NOTIFICATION_TARGET_ENTITY,
@@ -35,6 +37,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     DATA_COORDINATOR,
+    DATA_NOTIFICATION_MANAGER,
     DEFAULT_CONTROL_INTERVAL_S,
     DOMAIN,
     MODE_CAPTAR,
@@ -417,13 +420,17 @@ async def test_reload_does_not_leak_the_notify_adapters_action_listener(hass):
     assert after_unload == baseline
 
 
-async def test_setup_schedules_the_notification_manager_tick(hass):
-    """Task 5.2: M3's periodic evaluation runs on the same control interval (design Sec5's
-    C1-style timer, not a bespoke schedule of its own)."""
+async def test_setup_schedules_the_notification_manager_tick_on_the_configured_interval(hass):
+    """Task 5.2: M3's periodic evaluation runs on the same control interval M1 uses (design
+    Sec5's C1-style timer, not a bespoke schedule of its own) -- a non-default interval, to
+    catch an implementation that hardcodes DEFAULT_CONTROL_INTERVAL_S instead of reading the
+    entry's own configured value."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    options = entry_options_base()
+    options[CONF_CONTROL_INTERVAL_S] = 60
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
     entry.add_to_hass(hass)
 
     with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
@@ -435,8 +442,12 @@ async def test_setup_schedules_the_notification_manager_tick(hass):
             hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_CONTROL_INTERVAL_S)
         )
         await hass.async_block_till_done()
+        assert mock_evaluate.call_count == 0  # too soon for the configured 60 s interval
 
-    assert mock_evaluate.call_count >= 1
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+        await hass.async_block_till_done()
+
+    assert mock_evaluate.call_count == 1
 
 
 async def test_unload_cancels_the_notification_manager_tick(hass):
@@ -462,10 +473,37 @@ async def test_unload_cancels_the_notification_manager_tick(hass):
     assert mock_evaluate.call_count == 0
 
 
+async def test_reload_does_not_double_schedule_the_notification_manager_tick(hass):
+    """issue #498 fixed exactly this class of bug for NotifyAdapter's bus listener -- the
+    same per-reload leak risk applies to the tick's own async_on_unload registration.
+    Reload twice, then fire one interval: exactly one call, not two or three."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        for _ in range(2):
+            assert await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_CONTROL_INTERVAL_S)
+        )
+        await hass.async_block_till_done()
+
+    assert mock_evaluate.call_count == 1
+
+
 async def test_setup_without_a_notification_target_still_schedules_the_tick(hass):
-    """M3 itself no-ops without a mapped notification target (its own inertness contract) --
-    but setup still schedules the tick unconditionally, the same way the coordinator's own
-    cycle runs regardless of which hardware roles are mapped."""
+    """Setup schedules the tick unconditionally, the same way the coordinator's own cycle
+    runs regardless of which hardware roles are mapped -- M3's own inertness without a
+    mapped notification target is that module's own contract (tests/managers/
+    test_notification_manager.py), not re-proven here since async_evaluate is mocked out."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
@@ -479,7 +517,28 @@ async def test_setup_without_a_notification_target_still_schedules_the_tick(hass
         )
         await hass.async_block_till_done()
 
-    assert mock_evaluate.call_count >= 1
+    assert mock_evaluate.call_count == 1
+
+
+async def test_setup_threads_evening_prompt_options_into_notification_manager_config(hass):
+    """Task 5.2: the evening-prompt options must reach M3's own config, not just fall back to
+    its internal defaults -- deleting the __init__.py lines that thread them would not fail
+    any tick/schedule test, since those mock async_evaluate out entirely."""
+    seed_charger_states(hass, status="Charging")
+    options = entry_options_base()
+    options[CONF_EVENING_PROMPT_ENABLED] = False
+    options[CONF_EVENING_PROMPT_TIME] = "20:30:00"
+    options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] = 9.0
+
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    manager = hass.data[DOMAIN][entry.entry_id][DATA_NOTIFICATION_MANAGER]
+    assert manager._enabled is False
+    assert manager._prompt_time == time(20, 30, 0)
+    assert manager._threshold_kwh == 9.0
 
 
 async def test_unload_without_a_notification_target_mapped_still_succeeds(hass):

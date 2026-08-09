@@ -44,6 +44,7 @@ from .const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     DATA_COORDINATOR,
+    DATA_NOTIFICATION_MANAGER,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -151,15 +152,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     notification_manager = NotificationManager(
         hass, adapters=adapters, entry_id=entry.entry_id, store=store, config=config
     )
-    entry.async_on_unload(
-        async_track_time_interval(
-            hass, notification_manager.async_evaluate, timedelta(seconds=interval_s)
-        )
-    )
 
     # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         DATA_COORDINATOR: coordinator,
+        DATA_NOTIFICATION_MANAGER: notification_manager,
         CONF_MIN_CURRENT: min_current,
         CONF_MAX_CURRENT: max_current,
         CONF_DEFAULT_TARGET_CURRENT: default_target_current,
@@ -176,9 +173,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # First refresh AFTER platforms: so the number entity can seed target_current on add, and
     # so the Store's first _read_owned_entities() read (ADR-0018) finds the owned entities
-    # already registered.
+    # already registered. M3's tick is registered here too, for the same reason (its own
+    # Store.write is best-effort/never-raises either way, but there is no reason to open the
+    # window at all when it costs nothing to close).
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await coordinator.async_config_entry_first_refresh()
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass, notification_manager.async_evaluate, timedelta(seconds=interval_s)
+        )
+    )
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
