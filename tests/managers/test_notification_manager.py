@@ -23,6 +23,7 @@ from custom_components.smart_charging.adapters.notify import (
 from custom_components.smart_charging.const import (
     ACTION_HOMEDAY_NO,
     ACTION_HOMEDAY_YES,
+    ATTR_REQUIRED_CURRENT_A,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
@@ -484,13 +485,13 @@ async def test_unmapped_home_day_external_role_sends_normally(hass):
 
 async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass):
     """R5/Task 6.1: on a DeadlineUnreachableNotified bus event, M3 delivers the
-    deadline-unreachable notice via RA4 exactly once per event -- consuming the event's own
-    required_a payload, not re-deriving urgency (ADR-0011 Decision row 1)."""
+    deadline-unreachable notice via RA4 -- consuming the event's own required_a payload,
+    not re-deriving urgency (ADR-0011 Decision row 1)."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass)
     manager.register_listeners()
 
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
     await hass.async_block_till_done()
 
     assert len(calls) == 1
@@ -501,24 +502,31 @@ async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass):
     assert "data" not in calls[0]  # plain notice, not actionable (no tag/actions payload)
 
 
-async def test_deadline_unreachable_notice_delivered_once_per_event(hass):
-    """Two separate DeadlineUnreachableNotified events each deliver their own notice --
-    not latched/deduplicated, unlike the UC08 prompt's own lifecycle state."""
+async def test_deadline_unreachable_notice_is_delivered_only_once(hass):
+    """The Coordinator fires DeadlineUnreachableNotified on every cycle the deadline stays
+    unreachable, not only on the transition edge (const.py) -- without a latch, a single
+    unreachable deadline would deliver one push notification per control cycle. Two events
+    (even with a different required_a, simulating two different cycles' own resolution)
+    must deliver only the first."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass)
     manager.register_listeners()
 
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
     await hass.async_block_till_done()
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 14.0})
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 14.0})
     await hass.async_block_till_done()
 
-    assert len(calls) == 2
+    assert len(calls) == 1
+    assert "12.5" in calls[0]["message"]
 
 
 async def test_deadline_unreachable_delivery_is_a_noop_without_a_notification_target(hass):
     """M3 stays inert without a mapped notification target -- the same contract
-    async_evaluate already has, RA4 being the only delivery channel."""
+    async_evaluate already has, RA4 being the only delivery channel. Asserts on the actual
+    service-call count (not just "must not raise"), so a deleted guard -- which would raise
+    inside the try/except and still not propagate -- can't pass silently."""
+    calls = _register_notify_capture(hass)
     manager = NotificationManager(
         hass,
         adapters={ROLE_SOLAR_FORECAST: _ReadAdapter(20.0)},
@@ -528,25 +536,43 @@ async def test_deadline_unreachable_delivery_is_a_noop_without_a_notification_ta
     )
     manager.register_listeners()
 
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
-    await hass.async_block_till_done()  # must not raise
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    assert calls == []
 
 
 async def test_deadline_unreachable_delivery_failure_is_swallowed(hass):
     """A raising notify.send_message (notify entity/integration transiently gone) is
-    best-effort, not fatal -- mirrors async_evaluate's own send contract."""
+    best-effort, not fatal -- mirrors async_evaluate's own send contract. Asserts the send
+    was actually attempted, not that the manager merely no-oped before trying."""
+    attempts = []
+
+    async def _boom(call):
+        attempts.append(call.data)
+        raise RuntimeError("notify service unavailable")
+
+    hass.services.async_register("notify", "send_message", _boom)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()  # must not raise
+
+    assert len(attempts) == 1
+
+
+async def test_deadline_unreachable_malformed_event_is_ignored(hass):
+    """hass.bus is a shared surface (Developer Tools -> Events, any automation) -- an event
+    of this type missing its required_a payload must not raise out of the listener."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass)
     manager.register_listeners()
 
-    async def _boom(call):
-        calls.append(call.data)
-        raise RuntimeError("notify service unavailable")
-
-    hass.services.async_register("notify", "send_message", _boom)
-
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {})
     await hass.async_block_till_done()  # must not raise
+
+    assert calls == []
 
 
 async def test_deadline_unreachable_listener_unsubscribes(hass):
@@ -557,7 +583,7 @@ async def test_deadline_unreachable_listener_unsubscribes(hass):
     (unsub,) = manager.register_listeners()
 
     unsub()
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
     await hass.async_block_till_done()
 
     assert calls == []

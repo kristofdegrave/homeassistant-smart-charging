@@ -21,7 +21,15 @@ Task 6.1 (this scope) adds R5 delivery: `on_deadline_unreachable`/`register_list
 subscribe to the Coordinator's already-published `DeadlineUnreachableNotified` event
 (coordinator.py, `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`) -- consuming it, never re-deriving
 urgency (ADR-0011). Unlike the UC08 prompt, this is a plain, non-actionable notice with no
-response to capture and no lifecycle state of its own.
+response to capture -- but it does have one bit of lifecycle state, `_deadline_unreachable_
+notified`: const.py documents that the Coordinator fires this event on *every* cycle the
+deadline stays unreachable (design's own R5/ADR-0011 comment), not only on the transition
+edge, while ADR-0011 itself describes the event as having "notify-once semantics" -- a real
+tension between the producer's actual behavior and the documented consumer contract. This
+Manager resolves it on the consumer side (the side ADR-0011 assigns the semantics to):
+deliver once, then suppress further deliveries for the lifetime of this Manager instance
+(reset only by a reload/restart). See the class docstring's "Known gaps" for what this
+does and doesn't cover.
 """
 
 from __future__ import annotations
@@ -81,12 +89,20 @@ class NotificationManager:
     (notification_state.py module docstring) -- this Manager is exactly the caller that
     docstring describes as owning that anchor across ticks.
 
-    Known gap, not addressed by this task: `_state`/`_date` are in-memory only and reset to
-    Not-sent on every HA restart, so a restart between a prompt being sent and midnight can
-    cause a second prompt the same evening (UC08's "at most once per evening" is only
-    guaranteed within one HA session). Restart persistence for this lifecycle is not part of
-    the notifications design doc and is left for a follow-up if it proves to matter in
-    practice.
+    Known gaps, not addressed by this task:
+    - `_state`/`_date` are in-memory only and reset to Not-sent on every HA restart, so a
+      restart between a prompt being sent and midnight can cause a second prompt the same
+      evening (UC08's "at most once per evening" is only guaranteed within one HA session).
+    - `_deadline_unreachable_notified` latches permanently once set -- a deadline that
+      becomes unreachable, resolves (car disconnects, SOC catches up), and later becomes
+      unreachable again on a *different* occasion delivers only the first notice for the
+      lifetime of this Manager instance (until the next reload/restart), not one notice per
+      occasion. The Coordinator's `DeadlineUnreachableNotified` event carries no "resolved"
+      counterpart to re-arm on (it only ever fires while unreachable, const.py), so a
+      correct per-occasion re-arm needs a producer-side signal this task's file scope
+      doesn't include -- tracked as a follow-up, not silently accepted as "done".
+    Restart persistence and the re-arm signal are not part of the notifications design doc
+    and are left for a follow-up if either proves to matter in practice.
     """
 
     def __init__(
@@ -124,6 +140,9 @@ class NotificationManager:
         # the real wall clock, which would make this Manager's behavior depend on which day it
         # happens to be constructed, not just the `now` its own tests and caller supply.
         self._date: date | None = None
+        # R5 delivery's own latch (Task 6.1) -- see the class docstring's "Known gaps" for
+        # why this is a permanent-until-reload latch, not a per-occasion one.
+        self._deadline_unreachable_notified = False
 
     async def async_evaluate(self, now: datetime | None = None) -> None:
         """Run one UC08 evaluation tick (Task 5.2's scheduled caller supplies `now`; tests
@@ -214,15 +233,25 @@ class NotificationManager:
     async def on_deadline_unreachable(self, required_a: float) -> None:
         """React to R5's DeadlineUnreachableNotified (ADR-0011 published event, Decision row
         1: consume it, never re-derive urgency). Delivers a plain (non-actionable) notice via
-        RA4 -- best-effort, same as `async_evaluate`'s send: a delivery failure is logged and
-        swallowed, not raised, since there is no lifecycle state to protect here (unlike the
-        UC08 prompt, this is a fire-and-forget notice with no response to capture).
+        RA4 -- once: the Coordinator fires this event on every cycle the deadline stays
+        unreachable (const.py), not only on the transition edge, so without this latch a
+        single unreachable deadline would deliver one push notification per control cycle
+        for as long as it remains unreachable (class docstring's "Known gaps" covers what
+        this latch does and doesn't do).
+
+        A delivery failure is logged at warning, not swallowed quietly -- unlike the UC08
+        prompt's own best-effort send (which retries every tick, so a debug-level miss is
+        cheap), this is a single, permanently-latched attempt: a failed delivery here is not
+        retried on the next event, since the latch is already set to prevent exactly that.
 
         No-ops when the notification target isn't mapped -- the same inertness contract
         `async_evaluate` already has, RA4 being this Manager's only delivery channel."""
+        if self._deadline_unreachable_notified:
+            return
         notify_adapter = self._adapters.get(ROLE_NOTIFICATION_TARGET)
         if notify_adapter is None:
             return
+        self._deadline_unreachable_notified = True
         try:
             await notify_adapter.write(
                 NotificationRequest(
@@ -231,16 +260,32 @@ class NotificationManager:
                 )
             )
         except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors async_evaluate)
-            _LOGGER.debug("deadline-unreachable notice delivery failed: %s", err)
+            _LOGGER.warning(
+                "Failed to deliver the deadline-unreachable notice (not retried -- the "
+                "notify-once latch is already set): %s",
+                err,
+            )
 
     def register_listeners(self) -> list[Callable[[], None]]:
         """Wire M3's R5 delivery trigger (design Sec9): subscribes to the Coordinator's
         published `DeadlineUnreachableNotified` bus event. Called once at setup; the caller
-        registers the returned unsub via `entry.async_on_unload` (ADR-0008, mirrors
+        registers each returned unsub via `entry.async_on_unload` (ADR-0008, mirrors
         VehicleLimitManager.register_listeners)."""
 
         async def _on_deadline_unreachable(event: Event) -> None:
-            await self.on_deadline_unreachable(event.data[ATTR_REQUIRED_CURRENT_A])
+            required_a = event.data.get(ATTR_REQUIRED_CURRENT_A)
+            if required_a is None:
+                # hass.bus is a shared surface (any automation, or Developer Tools -> Events,
+                # can fire this event type) -- a malformed/foreign payload is silently
+                # skipped rather than raising out of this listener coroutine, the same
+                # ADR-0003-style tolerance the rest of this integration gives external input.
+                _LOGGER.debug(
+                    "%s event missing %s -- ignoring",
+                    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
+                    ATTR_REQUIRED_CURRENT_A,
+                )
+                return
+            await self.on_deadline_unreachable(required_a)
 
         return [
             self._hass.bus.async_listen(

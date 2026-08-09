@@ -599,6 +599,29 @@ async def test_unload_cancels_the_deadline_unreachable_listener(hass):
     assert calls == []
 
 
+async def test_deadline_unreachable_notice_is_delivered_only_once_through_setup(hass):
+    """End-to-end confirmation of the manager's own notify-once latch (tests/managers/
+    test_notification_manager.py's unit-level coverage) -- two events through the real
+    wiring still deliver only the first."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    hass.services.async_register("notify", "send_message", AsyncMock())
+    calls = capture_service_calls(hass, "notify", "send_message")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 14.0})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+
+
 async def test_reload_does_not_double_deliver_the_deadline_unreachable_notice(hass):
     """The same per-reload leak class issue #498 fixed for NotifyAdapter's own bus listener,
     and #534's tick registration already guards against -- reload twice, fire once: exactly
