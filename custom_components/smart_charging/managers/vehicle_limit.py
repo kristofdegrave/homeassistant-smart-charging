@@ -10,8 +10,10 @@ docs/plans/2026-07-21-vehicle-limit-manager-design.md.
 Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA3's Store
 (ADR-0018), never a coordinator reference, setter, or event.
 
-Task 3.2 scope adds the disconnect-reset reaction (UC09 steps 7-8, R6 AC 3). Manual adoption
-and the System->vehicle write are added by the plan's later tasks (3.3/4.1).
+Task 3.3 scope adds the Vehicle->System manual-adoption reaction (UC09 steps 4-6, R6 AC 5),
+alongside Task 3.2's disconnect-reset (UC09 steps 7-8, R6 AC 3). The System->vehicle write
+is added by the plan's later Task 4.1 (dormant until E3/M1 materializes the active-SOC-limit
+sensor).
 """
 
 from __future__ import annotations
@@ -27,9 +29,12 @@ from ..const import (
     ATTR_ENTRY_ID,
     ATTR_LIMIT,
     CHARGEABLE_STATES,
+    EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     ROLE_VEHICLE_CHARGE_LIMIT,
+    SOC_LIMIT_OVERRIDE_MAX,
+    SOC_LIMIT_OVERRIDE_MIN,
     STATE_DISCONNECTED,
 )
 
@@ -74,6 +79,18 @@ class VehicleLimitManager:
         self._last_status = status
         if status == STATE_DISCONNECTED and was_connected:
             await self._reset_to_default()
+
+    async def on_vehicle_limit_changed(self, reported: float | None) -> None:
+        """React to a vehicle-side charge-limit change (design §5.2). Adopt unless it is our
+        own echo. Holds regardless of car_home (C2 gates only System->vehicle writes, never
+        this read+adopt direction)."""
+        if reported is None:
+            return
+        if self._last_written_limit is not None and reported == self._last_written_limit:
+            return  # our own write reflecting back -- echo guard (design §6)
+        adopted = min(max(float(reported), SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
+        if await self._store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, adopted):
+            self._fire(EVENT_MANUAL_CHARGE_LIMIT_ADOPTED, adopted)
 
     async def _reset_to_default(self) -> None:
         default = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)

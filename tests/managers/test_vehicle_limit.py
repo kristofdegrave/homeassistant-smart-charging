@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import async_capture_events
 from custom_components.smart_charging.const import (
     ATTR_ENTRY_ID,
     ATTR_LIMIT,
+    EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     ROLE_CAR_HOME,
@@ -49,21 +50,29 @@ class _FakeStore:
     """Stands in for adapters/store.py's Store (ADR-0018) -- mirrors the double in
     tests/test_coordinator.py."""
 
-    def __init__(self, values):
+    def __init__(self, values, *, write_succeeds=True):
         self._values = values
+        self._write_succeeds = write_succeeds
         self.writes = []
 
     async def read(self, entity_domain, unique_id_suffix, value_type):
         return self._values.get((entity_domain, unique_id_suffix))
 
+    async def write(self, entity_domain, unique_id_suffix, value):
+        self.writes.append((entity_domain, unique_id_suffix, value))
+        return self._write_succeeds
 
-def _manager(hass, *, vehicle=80.0, home=True, status=STATE_CONNECTED, soc_override=80.0):
+
+def _manager(
+    hass, *, vehicle=80.0, home=True, status=STATE_CONNECTED, soc_override=80.0, store=None
+):
     adapters = {
         ROLE_VEHICLE_CHARGE_LIMIT: _RWAdapter(vehicle),
         ROLE_CAR_HOME: _ReadAdapter(home),
         ROLE_CHARGER_STATUS: _ReadAdapter(status),
     }
-    store = _FakeStore({(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): soc_override})
+    if store is None:
+        store = _FakeStore({(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): soc_override})
     return VehicleLimitManager(hass, adapters=adapters, entry_id="abc", store=store)
 
 
@@ -155,3 +164,70 @@ async def test_reset_is_a_noop_when_vehicle_adapter_is_unmapped(hass):
     await m.on_status_changed(STATE_CONNECTED)
     await m.on_status_changed(STATE_DISCONNECTED)
     assert m._last_written_limit is None
+
+
+async def test_manual_change_is_adopted_as_default(hass):
+    """UC09 step 5 / R6 AC 5: a vehicle-side value != our last write -> adopted into
+    soc_limit_override through the Store (ADR-0018), and ManualChargeLimitAdopted fires."""
+    m = _manager(hass)
+    events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
+
+    await m.on_vehicle_limit_changed(70.0)  # user set 70% on the car
+
+    assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0)]
+    assert len(events) == 1
+    assert events[0].data == {ATTR_ENTRY_ID: "abc", ATTR_LIMIT: 70.0}
+
+
+async def test_echo_of_own_write_is_ignored(hass):
+    """UC09 exception flow / R6 AC (echo guard): a report equal to our last write -> no
+    adoption -- the vehicle is reflecting back a write M2 itself just made."""
+    m = _manager(hass, vehicle=80.0)
+    await m.on_status_changed(STATE_CONNECTED)
+    await m.on_status_changed(STATE_DISCONNECTED)  # records _last_written_limit = 80.0
+    m._store.writes.clear()
+
+    await m.on_vehicle_limit_changed(80.0)  # the vehicle reflects it back
+
+    assert m._store.writes == []
+
+
+async def test_manual_change_adopted_even_when_away(hass):
+    """UC09 alt 5a: C2 gates only System->vehicle writes, never read+adopt."""
+    m = _manager(hass, home=False)
+
+    await m.on_vehicle_limit_changed(60.0)
+
+    assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 60.0)]
+
+
+async def test_adoption_clamps_into_the_number_range(hass):
+    """R6 AC 1: the default SOC limit lives in 50-100."""
+    m = _manager(hass)
+
+    await m.on_vehicle_limit_changed(120.0)
+
+    assert m._store.writes == [(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 100.0)]
+
+
+async def test_none_report_is_ignored(hass):
+    """A missing/unavailable vehicle read is not a manual change (design §4/§5)."""
+    m = _manager(hass)
+
+    await m.on_vehicle_limit_changed(None)
+
+    assert m._store.writes == []
+
+
+async def test_adoption_event_not_fired_when_store_write_fails(hass):
+    """Store.write's bool return gates the domain event (mirrors _write_vehicle/
+    EVENT_VEHICLE_CHARGE_LIMIT_RESET) -- a failed adoption write must not report success."""
+    store = _FakeStore(
+        {(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 80.0}, write_succeeds=False
+    )
+    m = _manager(hass, store=store)
+    events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
+
+    await m.on_vehicle_limit_changed(70.0)
+
+    assert len(events) == 0
