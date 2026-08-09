@@ -61,8 +61,8 @@ sets the initial thresholds:
 | External departure-time entity (optional) | External `sensor`/`input_datetime` overriding the built-in day-of-week departure-time entities |
 | External home-day entity (optional) | External `binary_sensor`/`input_boolean` overriding `switch.smart_charging_home_day` |
 | Low-tariff entity (optional) | `binary_sensor`/`input_boolean` reporting whether a low grid tariff is currently active; unmapped defaults to "always active" (single-tariff households) |
-| Vehicle charge-limit entity (optional; requires car_home when mapped) | Settable `number`-like entity on the vehicle itself; when mapped, kept in sync with the System's active charge limit in both directions (UC09) |
-| Car-home presence entity (required when vehicle charge-limit entity is mapped) | `binary_sensor`/`input_boolean` reporting whether the car is at home; gates System-initiated writes to the vehicle charge-limit entity (C2) |
+| Vehicle charge-limit entity (optional; requires car_home when mapped) | Settable `number` entity on the vehicle itself; when mapped, kept in sync with the System's active charge limit in both directions (UC09) |
+| Car-home presence entity (required when vehicle charge-limit entity is mapped) | `device_tracker`/`person`/`binary_sensor` reporting whether the car is at home; gates System-initiated writes to the vehicle charge-limit entity (C2) |
 | Nominal grid voltage, min/max current, grid ceiling, grid safety offset, default target current | Thresholds, editable anytime afterwards via **Configure** |
 | Smoothing window | Rolling-window sample count for surplus smoothing (R10) |
 | Solar start threshold, SolarOnly start threshold | Surplus power (W) required to start charging in each mode |
@@ -128,20 +128,23 @@ currently in force (kW); `sensor.smart_charging_active_soc_limit` reports the
 resolved active charge limit (%) after any solar step-up/solar-reserve
 adjustment.
 
-When the vehicle charge-limit entity and car-home entity are both mapped, the
-Vehicle-Limit Manager keeps the vehicle's own charge-limit setting in sync
-with the System in both directions (UC09, R6): whenever
+When the vehicle charge-limit entity is mapped (which requires car-home to be
+mapped too), the Vehicle-Limit Manager keeps the vehicle's own charge-limit
+setting in sync with the System in both directions (UC09, R6): whenever
 `sensor.smart_charging_active_soc_limit` changes while the car is connected
 and at home, the new value is written to the vehicle; a change made directly
-on the vehicle or its app — while connected, at home or away — is instead
-adopted as the new `number.smart_charging_soc_limit_override` default rather
-than overwritten on the next cycle; and on disconnect the vehicle is reset to
-that default. Writes the System itself made are recognised on read-back (an
-echo guard) so the two directions never oscillate. Away from home, System-
-initiated writes are suppressed (C2) until the car is confirmed connected and
-at home again; reading and adopting a manual change is unaffected by this
-gate. Unmapping the vehicle charge-limit entity disables this sync entirely
-without affecting charger-current control.
+on the vehicle or its app — whether at home or away — is instead adopted as
+the new `number.smart_charging_soc_limit_override` default (clamped to its
+50–100 range) rather than overwritten on the next cycle; and on disconnect the
+vehicle is reset to that default. Writes the System itself made are
+recognised on read-back (an echo guard) so the two directions never
+oscillate. Away from home, System-initiated writes are suppressed (C2); the
+resolved value reaches the vehicle on the next active-SOC-limit change that
+occurs while the car is connected at home (not automatically on return —
+reading and adopting a manual change is unaffected by this gate either way).
+Unmapping the vehicle
+charge-limit entity disables this sync entirely without affecting
+charger-current control.
 
 ## Deferred (not in this MVP)
 
