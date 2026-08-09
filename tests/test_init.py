@@ -17,6 +17,7 @@ from custom_components.smart_charging.adapters.notify import (
 from custom_components.smart_charging.adapters.sun import SUN_STATE_BELOW_HORIZON
 from custom_components.smart_charging.const import (
     ACTIVE_SOC_LIMIT_ENTITY,
+    ATTR_REQUIRED_CURRENT_A,
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CAR_HOME_ENTITY,
@@ -46,6 +47,7 @@ from custom_components.smart_charging.const import (
     DATA_VEHICLE_LIMIT_MANAGER,
     DEFAULT_CONTROL_INTERVAL_S,
     DOMAIN,
+    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
@@ -552,6 +554,73 @@ async def test_setup_threads_evening_prompt_options_into_notification_manager_co
     assert manager._enabled is False
     assert manager._prompt_time == time(20, 30, 0)
     assert manager._threshold_kwh == 9.0
+
+
+async def test_setup_registers_the_deadline_unreachable_listener(hass):
+    """Task 6.1: M3 subscribes to the Coordinator's own DeadlineUnreachableNotified event at
+    setup and delivers the R5 notice via RA4 on receipt."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    hass.services.async_register("notify", "send_message", AsyncMock())
+    calls = capture_service_calls(hass, "notify", "send_message")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0]["entity_id"] == "notify.mobile_app_phone"
+
+
+async def test_unload_cancels_the_deadline_unreachable_listener(hass):
+    """Teardown unsubscribes M3's DeadlineUnreachableNotified listener cleanly (ADR-0008) --
+    no delivery after unload."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    hass.services.async_register("notify", "send_message", AsyncMock())
+    calls = capture_service_calls(hass, "notify", "send_message")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    assert calls == []
+
+
+async def test_reload_does_not_double_deliver_the_deadline_unreachable_notice(hass):
+    """The same per-reload leak class issue #498 fixed for NotifyAdapter's own bus listener,
+    and #534's tick registration already guards against -- reload twice, fire once: exactly
+    one delivery, not two or three."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    hass.services.async_register("notify", "send_message", AsyncMock())
+    calls = capture_service_calls(hass, "notify", "send_message")
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    for _ in range(2):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
 
 
 async def test_unload_without_a_notification_target_mapped_still_succeeds(hass):

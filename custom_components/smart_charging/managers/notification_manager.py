@@ -1,4 +1,5 @@
-"""Notification Manager (M3, V11) -- UC08 evening home-day prompt orchestration.
+"""Notification Manager (M3, V11) -- UC08 evening home-day prompt orchestration, plus R5
+deadline-unreachable notice delivery.
 
 A Manager (system-design Sec4 rule 5 / ADR-0011): reads RA1/RA2 adapter roles, sends and
 reads back the actionable prompt through RA4 (adapters/notify.py), and writes the
@@ -11,21 +12,27 @@ the Coordinator (M1) -- system-design Sec4 rule 5 -- and imports nothing from
 coordinator.py.
 
 Per the design doc Sec5: midnight is a per-evaluation wall-clock comparison
-(`dt_util.now()` date rollover), driven by the caller's own tick (Task 5.2, not built
-here) -- no new HA timer/scheduler primitive. `async_evaluate`'s `now` parameter defaults
-to `dt_util.now()` for production callers and is overridable by tests, the same shape
-`evaluate_prompt` itself takes explicitly.
+(`dt_util.now()` date rollover), driven by the caller's own tick (Task 5.2) -- no new HA
+timer/scheduler primitive. `async_evaluate`'s `now` parameter defaults to `dt_util.now()`
+for production callers and is overridable by tests, the same shape `evaluate_prompt`
+itself takes explicitly.
+
+Task 6.1 (this scope) adds R5 delivery: `on_deadline_unreachable`/`register_listeners`
+subscribe to the Coordinator's already-published `DeadlineUnreachableNotified` event
+(coordinator.py, `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`) -- consuming it, never re-deriving
+urgency (ADR-0011). Unlike the UC08 prompt, this is a plain, non-actionable notice with no
+response to capture and no lifecycle state of its own.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime, time
 from typing import Any
 
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..adapters.base import Adapter
@@ -34,6 +41,7 @@ from ..adapters.store import Store
 from ..const import (
     ACTION_HOMEDAY_NO,
     ACTION_HOMEDAY_YES,
+    ATTR_REQUIRED_CURRENT_A,
     CHARGEABLE_STATES,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
@@ -41,6 +49,7 @@ from ..const import (
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     OWNED_SUFFIX_HOME_DAY,
     ROLE_CHARGER_STATUS,
     ROLE_HOME_DAY_EXTERNAL,
@@ -55,6 +64,14 @@ _LOGGER = logging.getLogger(__name__)
 # exact wording, so it is this Manager's own presentation detail, not a cited anchor.
 _PROMPT_TITLE = "Smart Charging"
 _PROMPT_MESSAGE = "Will the car be home tomorrow?"
+# R5's deadline-unreachable notice (design Sec9) -- also this Manager's own presentation
+# detail; required_a is the current the deadline would need, per DeadlineUnreachableNotified's
+# own payload (ATTR_REQUIRED_CURRENT_A, coordinator.py) -- included for the driver's context,
+# not re-derived (ADR-0011: consume the published event, never recompute urgency).
+_DEADLINE_UNREACHABLE_MESSAGE = (
+    "Charging at the maximum rate but still won't reach your target by departure "
+    "(would need {required_a:.1f} A)."
+)
 
 
 class NotificationManager:
@@ -81,11 +98,11 @@ class NotificationManager:
         store: Store,
         config: Mapping[str, Any],
     ) -> None:
-        # `hass`/`entry_id` are unused by this task -- held for Task 6.1's
-        # DeadlineUnreachableNotified bus subscription, which needs both (hass.bus.async_listen
-        # and entry-scoped filtering, the same shape VehicleLimitManager's _fire uses entry_id
-        # for). Kept now rather than added back in 6.1, since every other Manager's constructor
-        # already takes both.
+        # `entry_id` is unused -- this Manager fires no domain events of its own (unlike
+        # VehicleLimitManager's _fire), so it never needs entry-scoping in a payload. Kept
+        # for the same reason every other Manager's constructor takes it: a consistent shape,
+        # and available if a future task needs it (e.g. diagnostics). `hass` IS used, by
+        # register_listeners' hass.bus.async_listen (Task 6.1).
         self._hass = hass
         self._adapters = adapters
         self._entry_id = entry_id
@@ -193,6 +210,43 @@ class NotificationManager:
 
         self._state = evaluation.next_state
         self._date = evaluation.next_date
+
+    async def on_deadline_unreachable(self, required_a: float) -> None:
+        """React to R5's DeadlineUnreachableNotified (ADR-0011 published event, Decision row
+        1: consume it, never re-derive urgency). Delivers a plain (non-actionable) notice via
+        RA4 -- best-effort, same as `async_evaluate`'s send: a delivery failure is logged and
+        swallowed, not raised, since there is no lifecycle state to protect here (unlike the
+        UC08 prompt, this is a fire-and-forget notice with no response to capture).
+
+        No-ops when the notification target isn't mapped -- the same inertness contract
+        `async_evaluate` already has, RA4 being this Manager's only delivery channel."""
+        notify_adapter = self._adapters.get(ROLE_NOTIFICATION_TARGET)
+        if notify_adapter is None:
+            return
+        try:
+            await notify_adapter.write(
+                NotificationRequest(
+                    message=_DEADLINE_UNREACHABLE_MESSAGE.format(required_a=required_a),
+                    title=_PROMPT_TITLE,
+                )
+            )
+        except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors async_evaluate)
+            _LOGGER.debug("deadline-unreachable notice delivery failed: %s", err)
+
+    def register_listeners(self) -> list[Callable[[], None]]:
+        """Wire M3's R5 delivery trigger (design Sec9): subscribes to the Coordinator's
+        published `DeadlineUnreachableNotified` bus event. Called once at setup; the caller
+        registers the returned unsub via `entry.async_on_unload` (ADR-0008, mirrors
+        VehicleLimitManager.register_listeners)."""
+
+        async def _on_deadline_unreachable(event: Event) -> None:
+            await self.on_deadline_unreachable(event.data[ATTR_REQUIRED_CURRENT_A])
+
+        return [
+            self._hass.bus.async_listen(
+                EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _on_deadline_unreachable
+            )
+        ]
 
     async def _read_float(self, role: str) -> float:
         """Missing/unavailable solar_forecast reads as 0.0 -- fails closed against UC08's

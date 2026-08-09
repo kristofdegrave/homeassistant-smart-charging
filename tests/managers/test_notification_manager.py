@@ -29,6 +29,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+    EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     OWNED_SUFFIX_HOME_DAY,
     ROLE_CHARGER_STATUS,
     ROLE_HOME_DAY_EXTERNAL,
@@ -479,3 +480,84 @@ async def test_unmapped_home_day_external_role_sends_normally(hass):
     await manager.async_evaluate(EVENING)
 
     assert len(calls) == 1
+
+
+async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass):
+    """R5/Task 6.1: on a DeadlineUnreachableNotified bus event, M3 delivers the
+    deadline-unreachable notice via RA4 exactly once per event -- consuming the event's own
+    required_a payload, not re-deriving urgency (ADR-0011 Decision row 1)."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0]["message"] == (
+        "Charging at the maximum rate but still won't reach your target by departure "
+        "(would need 12.5 A)."
+    )
+    assert "data" not in calls[0]  # plain notice, not actionable (no tag/actions payload)
+
+
+async def test_deadline_unreachable_notice_delivered_once_per_event(hass):
+    """Two separate DeadlineUnreachableNotified events each deliver their own notice --
+    not latched/deduplicated, unlike the UC08 prompt's own lifecycle state."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    await hass.async_block_till_done()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 14.0})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 2
+
+
+async def test_deadline_unreachable_delivery_is_a_noop_without_a_notification_target(hass):
+    """M3 stays inert without a mapped notification target -- the same contract
+    async_evaluate already has, RA4 being the only delivery channel."""
+    manager = NotificationManager(
+        hass,
+        adapters={ROLE_SOLAR_FORECAST: _ReadAdapter(20.0)},
+        entry_id="entry1",
+        store=_FakeStore(),
+        config=_config(),
+    )
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    await hass.async_block_till_done()  # must not raise
+
+
+async def test_deadline_unreachable_delivery_failure_is_swallowed(hass):
+    """A raising notify.send_message (notify entity/integration transiently gone) is
+    best-effort, not fatal -- mirrors async_evaluate's own send contract."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    async def _boom(call):
+        calls.append(call.data)
+        raise RuntimeError("notify service unavailable")
+
+    hass.services.async_register("notify", "send_message", _boom)
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    await hass.async_block_till_done()  # must not raise
+
+
+async def test_deadline_unreachable_listener_unsubscribes(hass):
+    """register_listeners' returned unsub actually stops the subscription -- the caller
+    (Task 6.1's __init__.py wiring) registers it via entry.async_on_unload (ADR-0008)."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    (unsub,) = manager.register_listeners()
+
+    unsub()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {"required_current_a": 12.5})
+    await hass.async_block_till_done()
+
+    assert calls == []
