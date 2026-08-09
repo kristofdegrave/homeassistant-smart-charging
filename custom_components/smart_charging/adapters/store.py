@@ -75,10 +75,16 @@ class Store:
         )
         if entity_id is None:
             return False
-        await self._hass.services.async_call(
-            Platform.NUMBER,
-            SERVICE_SET_VALUE,
-            {ATTR_ENTITY_ID: entity_id, ATTR_VALUE: value},
-            blocking=True,
-        )
+        try:
+            await self._hass.services.async_call(
+                Platform.NUMBER,
+                SERVICE_SET_VALUE,
+                {ATTR_ENTITY_ID: entity_id, ATTR_VALUE: value},
+                blocking=True,
+            )
+        except Exception as err:  # noqa: BLE001 - best-effort owned-entity write (ADR-0018);
+            # an out-of-range value must not break a Manager's reaction path, and is not an
+            # ADR-0007 hardware fault either.
+            _LOGGER.debug("Store.write %s failed: %s", entity_id, err)
+            return False
         return True

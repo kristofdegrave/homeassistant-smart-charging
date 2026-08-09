@@ -1,8 +1,10 @@
 """HA-harness tests for the RA3 Store (ADR-0018/0019)."""
 
 from datetime import time as time_of_day
+from unittest.mock import patch
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -164,3 +166,32 @@ async def test_write_unsupported_domain_returns_false(hass):
     entry = await _setup_entry(hass)
     store = Store(hass, entry.entry_id)
     assert await store.write(Platform.SWITCH, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
+
+
+async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchanged(hass):
+    """The clamp is the caller's job (design: Managers hold R6's 50-100 policy) -- the
+    entity's own bounds are the backstop, and a violation is a logged no-op, never an
+    exception escaping into a Manager's reaction path."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+    before = hass.states.get(SOC_LIMIT_ENTITY_ID).state
+
+    assert await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 120.0) is False
+    await hass.async_block_till_done()
+
+    assert hass.states.get(SOC_LIMIT_ENTITY_ID).state == before
+
+
+async def test_write_service_failure_returns_false(hass):
+    """A raising service call is best-effort, not fatal -- whatever the cause (this test
+    doesn't assert *which* failure mode raises; the out-of-range test above already covers
+    the one real, reproducible raise). ServiceRegistry declares __slots__, so patch.object
+    on the instance would raise AttributeError before the test body runs -- patch the class."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+
+    async def _boom(*args, **kwargs):
+        raise HomeAssistantError("service unavailable")
+
+    with patch.object(type(hass.services), "async_call", _boom):
+        assert await store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, 70.0) is False
