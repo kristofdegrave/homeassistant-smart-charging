@@ -11,9 +11,10 @@ Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA
 (ADR-0018), never a coordinator reference, setter, or event.
 
 Task 3.3 scope adds the Vehicle->System manual-adoption reaction (UC09 steps 4-6, R6 AC 5),
-alongside Task 3.2's disconnect-reset (UC09 steps 7-8, R6 AC 3). The System->vehicle write
-is added by the plan's later Task 4.1 (dormant until E3/M1 materializes the active-SOC-limit
-sensor).
+alongside Task 3.2's disconnect-reset (UC09 steps 7-8, R6 AC 3). Task 4.1 (this scope) adds
+the System->vehicle write branch (UC09 step 2, R6 AC 2/4), gated on connected AND car_home
+(C2) -- dormant in production until E3/M1 materialize sensor.smart_charging_active_soc_limit
+and fire the change onto it (design §0); tested here against a simulated reading.
 """
 
 from __future__ import annotations
@@ -31,7 +32,10 @@ from ..const import (
     CHARGEABLE_STATES,
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
+    EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    ROLE_CAR_HOME,
+    ROLE_CHARGER_STATUS,
     ROLE_VEHICLE_CHARGE_LIMIT,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
@@ -96,6 +100,31 @@ class VehicleLimitManager:
         adopted = min(max(float(reported), SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
         if await self._store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, adopted):
             self._fire(EVENT_MANUAL_CHARGE_LIMIT_ADOPTED, adopted)
+
+    async def on_active_soc_limit_changed(self, new_limit: float | None) -> None:
+        """React to a resolved active-SOC-limit change (design §5.1, ADR-0011). Writes the new
+        value to the vehicle iff `charger_status` is connected/charging AND `car_home` is True
+        (C2 -- UC09 alt 2a / R6 AC 4). `new_limit` is read from
+        `sensor.smart_charging_active_soc_limit` by the setup-time listener (Task 5.1); until
+        E3/M1 materialize that entity and fire it, this reaction is never invoked in production
+        (design §0) -- tested here against a simulated reading.
+
+        Reads `charger_status`/`car_home` through their adapters rather than re-deriving the
+        Coordinator's composition (ADR-0011 Option B rejected). A missing role, or a `car_home`
+        read of `None` (cannot confirm home), fails safe -- no write.
+        """
+        if new_limit is None:
+            return
+        status_adapter = self._adapters.get(ROLE_CHARGER_STATUS)
+        status = await status_adapter.read() if status_adapter is not None else None
+        if status not in CHARGEABLE_STATES:
+            return
+        car_home_adapter = self._adapters.get(ROLE_CAR_HOME)
+        car_home = await car_home_adapter.read() if car_home_adapter is not None else None
+        if car_home is not True:  # C2 -- None (cannot confirm) fails safe like False
+            return
+        if await self._write_vehicle(float(new_limit)):
+            self._fire(EVENT_VEHICLE_CHARGE_LIMIT_SYNCED, float(new_limit))
 
     async def _reset_to_default(self) -> None:
         default = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
