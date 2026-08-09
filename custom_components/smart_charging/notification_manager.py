@@ -38,6 +38,9 @@ from .const import (
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_EVENING_PROMPT_TIME,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     OWNED_SUFFIX_HOME_DAY,
     ROLE_CHARGER_STATUS,
     ROLE_HOME_DAY_EXTERNAL,
@@ -60,6 +63,13 @@ class NotificationManager:
     `_state`/`_date` are `evaluate_prompt`'s own persisted (prior_state, prior_date) pair
     (notification_state.py module docstring) -- this Manager is exactly the caller that
     docstring describes as owning that anchor across ticks.
+
+    Known gap, not addressed by this task: `_state`/`_date` are in-memory only and reset to
+    Not-sent on every HA restart, so a restart between a prompt being sent and midnight can
+    cause a second prompt the same evening (UC08's "at most once per evening" is only
+    guaranteed within one HA session). Restart persistence for this lifecycle is not part of
+    the notifications design doc and is left for a follow-up if it proves to matter in
+    practice.
     """
 
     def __init__(
@@ -75,9 +85,18 @@ class NotificationManager:
         self._adapters = adapters
         self._entry_id = entry_id
         self._store = store
-        self._enabled = bool(config[CONF_EVENING_PROMPT_ENABLED])
-        self._threshold_kwh = float(config[CONF_SOLAR_FORECAST_THRESHOLD_KWH])
-        self._prompt_time = time.fromisoformat(config[CONF_EVENING_PROMPT_TIME])
+        # .get(..., DEFAULT_*) -- design doc §3: "an entry that predates these keys reads
+        # each with its DEFAULT_* fallback, no config-entry migration is needed", the same
+        # pattern __init__.py/coordinator.py already use for every options-bucket value.
+        self._enabled = bool(
+            config.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED)
+        )
+        self._threshold_kwh = float(
+            config.get(CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH)
+        )
+        self._prompt_time = time.fromisoformat(
+            config.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME)
+        )
         self._state = PromptState.NOT_SENT
         self._date = dt_util.now().date()
 
@@ -116,16 +135,33 @@ class NotificationManager:
         )
 
         if evaluation.should_send:
-            await notify_adapter.write(
-                NotificationRequest(
-                    message=_PROMPT_MESSAGE,
-                    title=_PROMPT_TITLE,
-                    actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO],
+            try:
+                await notify_adapter.write(
+                    NotificationRequest(
+                        message=_PROMPT_MESSAGE,
+                        title=_PROMPT_TITLE,
+                        actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO],
+                    )
                 )
-            )
+            except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors
+                # VehicleLimitManager._write_vehicle); the notify entity/integration may be
+                # transiently gone. Not raising here also means `_state` is not advanced
+                # below -- nothing was actually sent, so the lifecycle stays Not-sent and
+                # retries on the next tick, rather than raising once and then silently
+                # never trying again.
+                _LOGGER.debug("notification_target write failed: %s", err)
+                return
 
         if evaluation.write_home_day_flag:
-            await self._store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True)
+            # Store.write is itself best-effort (never raises, ADR-0018) -- only its bool
+            # result can signal failure. Logged at warning, not silently accepted: the
+            # driver's "yes" answer has already been consumed by RA4's read() above and
+            # cannot be re-observed on a later tick, so a failed write here is otherwise an
+            # unrecoverable, invisible loss of UC08's postcondition ("flag set on yes").
+            if not await self._store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True):
+                _LOGGER.warning(
+                    "Failed to write home-day flag after a 'yes' answer -- flag left unset"
+                )
 
         self._state = evaluation.next_state
         self._date = evaluation.next_date
@@ -141,8 +177,13 @@ class NotificationManager:
         return value if value is not None else 0.0
 
     async def _read_bool(self, role: str) -> bool:
-        """Missing/unavailable home_day_external reads as False -- no external source has
-        set the flag, UC08's own default absent a mapped role."""
+        """An unmapped home_day_external role reads as False -- UC08's own default when no
+        external source is configured at all. A *mapped* role's read() returning None (an
+        ADR-0003 fault signal: unavailable/unknown entity) also folds to False here, which
+        is a deliberate fail-open choice, not a second instance of the same default: it
+        risks a redundant prompt on a transient reading (harmless -- the driver can still
+        answer "no") rather than risking a silently-skipped evening on a real external
+        home-day flag misread as absent."""
         adapter = self._adapters.get(role)
         if adapter is None:
             return False

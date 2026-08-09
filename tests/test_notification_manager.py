@@ -24,6 +24,9 @@ from custom_components.smart_charging.const import (
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_EVENING_PROMPT_TIME,
+    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     OWNED_SUFFIX_HOME_DAY,
     ROLE_CHARGER_STATUS,
     ROLE_HOME_DAY_EXTERNAL,
@@ -287,3 +290,155 @@ async def test_missing_notification_target_adapter_stays_inert(hass):
     )
     await manager.async_evaluate(EVENING)
     assert manager._state is PromptState.NOT_SENT
+
+
+async def test_missing_config_keys_fall_back_to_defaults(hass):
+    """Design doc §3: an entry that predates these options keys reads each with its
+    DEFAULT_* fallback -- no config-entry migration. A bare dict (no CONF_* keys at all)
+    must not raise KeyError at construction."""
+    manager = NotificationManager(
+        hass,
+        adapters={ROLE_NOTIFICATION_TARGET: NotifyAdapter(hass, "notify.mobile_app_phone")},
+        entry_id="entry1",
+        store=_FakeStore(),
+        config={},
+    )
+    assert manager._enabled == DEFAULT_EVENING_PROMPT_ENABLED
+    assert manager._threshold_kwh == DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
+    assert manager._prompt_time == time.fromisoformat(DEFAULT_EVENING_PROMPT_TIME)
+
+
+async def test_send_failure_does_not_advance_lifecycle_state(hass):
+    """A raising notify.send_message (notify entity/integration transiently gone) is
+    best-effort, not fatal -- the lifecycle must not advance to Pending for a prompt that
+    was never actually delivered, so the next tick retries the send (mirrors
+    VehicleLimitManager._write_vehicle's swallow-and-report contract)."""
+
+    class _RaisingNotifyAdapter:
+        async def read(self):
+            return None
+
+        async def write(self, value):
+            raise RuntimeError("notify service unavailable")
+
+    manager = _manager(hass, notify_adapter=_RaisingNotifyAdapter())
+
+    await manager.async_evaluate(EVENING)  # must not raise
+
+    assert manager._state is PromptState.NOT_SENT
+
+
+async def test_failed_home_day_flag_write_is_logged(hass, caplog):
+    """Store.write() returning False after a "yes" answer (e.g. the switch entity is
+    transiently unregistered) is logged at warning -- the answer was already consumed by
+    RA4's read() and cannot be re-observed on a later tick, so a silent loss would be
+    unrecoverable and invisible."""
+
+    class _FailingStore:
+        async def write(self, entity_domain, unique_id_suffix, value):
+            return False
+
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass, store=_FailingStore())
+    await manager.async_evaluate(EVENING)
+    await hass.async_block_till_done()
+    tag = calls[0]["data"]["tag"]
+
+    hass.bus.async_fire(
+        EVENT_MOBILE_APP_NOTIFICATION_ACTION, {"tag": tag, "action": ACTION_HOMEDAY_YES}
+    )
+    await hass.async_block_till_done()
+
+    await manager.async_evaluate(EVENING + timedelta(minutes=5))
+
+    assert "home-day flag" in caplog.text.lower()
+
+
+async def test_unmapped_solar_forecast_role_stays_not_sent(hass):
+    """Fail-closed default (UC08 1b analog): no solar_forecast role mapped at all ->
+    treated as 0.0 kWh, never exceeds the threshold, no send."""
+    calls = _register_notify_capture(hass)
+    manager = NotificationManager(
+        hass,
+        adapters={
+            ROLE_HOME_DAY_EXTERNAL: _ReadAdapter(False),
+            ROLE_CHARGER_STATUS: _ReadAdapter(STATE_CONNECTED),
+            ROLE_NOTIFICATION_TARGET: NotifyAdapter(hass, "notify.mobile_app_phone"),
+        },
+        entry_id="entry1",
+        store=_FakeStore(),
+        config=_config(),
+    )
+
+    await manager.async_evaluate(EVENING)
+
+    assert calls == []
+    assert manager._state is PromptState.NOT_SENT
+
+
+async def test_unavailable_solar_forecast_reading_stays_not_sent(hass):
+    """Fail-closed default: solar_forecast role mapped but read() returns None (ADR-0003
+    fault signal) -> treated as 0.0 kWh, no send."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass, forecast_kwh=None)
+
+    await manager.async_evaluate(EVENING)
+
+    assert calls == []
+    assert manager._state is PromptState.NOT_SENT
+
+
+async def test_unmapped_charger_status_role_stays_not_sent(hass):
+    """Fail-closed default: no charger_status role mapped -> connected_at_home is False,
+    no send."""
+    calls = _register_notify_capture(hass)
+    manager = NotificationManager(
+        hass,
+        adapters={
+            ROLE_SOLAR_FORECAST: _ReadAdapter(20.0),
+            ROLE_HOME_DAY_EXTERNAL: _ReadAdapter(False),
+            ROLE_NOTIFICATION_TARGET: NotifyAdapter(hass, "notify.mobile_app_phone"),
+        },
+        entry_id="entry1",
+        store=_FakeStore(),
+        config=_config(),
+    )
+
+    await manager.async_evaluate(EVENING)
+
+    assert calls == []
+    assert manager._state is PromptState.NOT_SENT
+
+
+async def test_unavailable_charger_status_reading_stays_not_sent(hass):
+    """Fail-closed default: charger_status role mapped but read() returns None -> not
+    treated as connected, no send."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass, status=None)
+
+    await manager.async_evaluate(EVENING)
+
+    assert calls == []
+    assert manager._state is PromptState.NOT_SENT
+
+
+async def test_unmapped_home_day_external_role_sends_normally(hass):
+    """No home_day_external role mapped at all -> treated as "no external source has set
+    the flag" (UC08's own default absent a mechanism), so the prompt still sends when
+    every other precondition holds."""
+    calls = _register_notify_capture(hass)
+    manager = NotificationManager(
+        hass,
+        adapters={
+            ROLE_SOLAR_FORECAST: _ReadAdapter(20.0),
+            ROLE_CHARGER_STATUS: _ReadAdapter(STATE_CONNECTED),
+            ROLE_NOTIFICATION_TARGET: NotifyAdapter(hass, "notify.mobile_app_phone"),
+        },
+        entry_id="entry1",
+        store=_FakeStore(),
+        config=_config(),
+    )
+
+    await manager.async_evaluate(EVENING)
+
+    assert len(calls) == 1
