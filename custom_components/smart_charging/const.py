@@ -36,6 +36,8 @@ ACTIVE_SOC_LIMIT_ENTITY = "sensor.smart_charging_active_soc_limit"
 EVENT_VEHICLE_CHARGE_LIMIT_SYNCED = "smart_charging_vehicle_charge_limit_synced"
 EVENT_MANUAL_CHARGE_LIMIT_ADOPTED = "smart_charging_manual_charge_limit_adopted"
 EVENT_VEHICLE_CHARGE_LIMIT_RESET = "smart_charging_vehicle_charge_limit_reset"
+ATTR_ENTRY_ID = "entry_id"  # shared entry-scoping key across all three M2 event payloads
+ATTR_LIMIT = "limit"  # M2 event payload key -- the SOC-limit value carried by the event
 
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"
