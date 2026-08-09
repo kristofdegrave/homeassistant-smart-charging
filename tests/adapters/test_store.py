@@ -3,7 +3,7 @@
 from datetime import time as time_of_day
 from unittest.mock import patch
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -11,12 +11,14 @@ from custom_components.smart_charging.adapters.store import Store
 from custom_components.smart_charging.const import (
     DOMAIN,
     OWNED_SUFFIX_HOME_DAY,
+    OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
 )
 from tests.helpers import entry_data_base, entry_options_base
 
 SOC_LIMIT_ENTITY_ID = "number.smart_charging_soc_limit_override"
 HOME_DAY_ENTITY_ID = "switch.smart_charging_home_day"
+MODE_ENTITY_ID = "select.smart_charging_mode"
 
 
 def _register(hass, entity_domain: str, object_id: str, unique_id: str, state: str) -> None:
@@ -165,18 +167,18 @@ async def test_write_unregistered_entity_returns_false(hass):
 
 
 async def test_write_unsupported_domain_returns_false(hass):
-    """Scope guard (design doc): only `number` is supported today -- a wrong domain must not
-    issue a number.set_value against an entity that cannot take it. Targets
-    home_day_flag (a real switch.py entity, OWNED_SUFFIX_HOME_DAY), not soc_limit_override
-    -- the latter lives in the number domain and would return False via the unregistered
-    branch even without the domain guard, making the test vacuous."""
+    """Scope guard (design doc): only `number`/`switch` are supported today -- a wrong domain
+    must not issue a service call against an entity that cannot take it. Targets the mode
+    select (a real select.py entity, OWNED_SUFFIX_MODE), not soc_limit_override/home_day --
+    those live in the now-supported number/switch domains and would return False via the
+    unregistered branch even without the domain guard, making the test vacuous."""
     entry = await _setup_entry(hass)
     store = Store(hass, entry.entry_id)
-    before = hass.states.get(HOME_DAY_ENTITY_ID).state
+    before = hass.states.get(MODE_ENTITY_ID).state
 
-    assert await store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, 70.0) is False
+    assert await store.write(Platform.SELECT, OWNED_SUFFIX_MODE, "Power") is False
 
-    assert hass.states.get(HOME_DAY_ENTITY_ID).state == before
+    assert hass.states.get(MODE_ENTITY_ID).state == before
 
 
 async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchanged(hass):
@@ -191,6 +193,51 @@ async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchange
     await hass.async_block_till_done()
 
     assert hass.states.get(SOC_LIMIT_ENTITY_ID).state == before
+
+
+async def test_write_switch_true_turns_the_real_entity_on(hass):
+    """RA3 Store write half, switch domain (ADR-0018; M3's home_day_flag write, notifications
+    design doc §7): `True` calls `switch.turn_on` against the real HomeDaySwitch entity, going
+    through the entity (not around it) exactly like the `number` case."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+
+    assert await store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True) is True
+    await hass.async_block_till_done()
+
+    assert hass.states.get(HOME_DAY_ENTITY_ID).state == STATE_ON
+
+
+async def test_write_switch_false_turns_the_real_entity_off(hass):
+    """`False` calls `switch.turn_off` -- the mirror case of the `True`/turn_on test above."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+    await store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True)
+    await hass.async_block_till_done()
+
+    assert await store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, False) is True
+    await hass.async_block_till_done()
+
+    assert hass.states.get(HOME_DAY_ENTITY_ID).state == STATE_OFF
+
+
+async def test_write_switch_unregistered_entity_returns_false(hass):
+    """Startup race, switch domain -- same benign no-op as the `number` case."""
+    store = Store(hass, "entry1")
+    assert await store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True) is False
+
+
+async def test_write_switch_service_failure_returns_false(hass):
+    """A raising turn_on/turn_off service call is best-effort, not fatal -- same broad
+    `except Exception` contract the `number` case already relies on."""
+    entry = await _setup_entry(hass)
+    store = Store(hass, entry.entry_id)
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("service unavailable")
+
+    with patch.object(type(hass.services), "async_call", _boom):
+        assert await store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True) is False
 
 
 async def test_write_service_failure_returns_false(hass):

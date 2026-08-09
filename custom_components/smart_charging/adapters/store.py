@@ -8,7 +8,15 @@ from datetime import time
 from typing import TypeVar
 
 from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE
-from homeassistant.const import ATTR_ENTITY_ID, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    Platform,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -61,33 +69,43 @@ class Store:
                 return None
         return state.state
 
-    async def write(self, entity_domain: str, unique_id_suffix: str, value: float) -> bool:
+    async def write(self, entity_domain: str, unique_id_suffix: str, value: float | bool) -> bool:
         """Set `value` on this entry's owned `entity_domain` entity identified by
         `unique_id_suffix`. Returns True if applied, False otherwise; never raises
         (symmetric with read(), and the best-effort contract VehicleLimitManager's
         _write_vehicle expects -- ADR-0003/ADR-0018).
 
-        Only the `number` domain is supported: this is the one value shape a caller needs
-        today (M2 -> soc_limit_override). Other domains return False rather than issuing a
-        number.set_value against an entity that cannot take it -- see the design doc's
-        deferrals.
+        Two value shapes are supported today, one per real caller: a `float` into a
+        `number` entity (M2 -> soc_limit_override), and a `bool` into a `switch` entity
+        (M3 -> home_day_flag, docs/plans/2026-08-09-ra3-store-write-half-design.md's
+        deferral, closed by notifications Task 4.1). Other domains return False rather
+        than issuing a service call against an entity that cannot take it.
         """
-        if entity_domain != Platform.NUMBER:
+        if entity_domain not in (Platform.NUMBER, Platform.SWITCH):
             _LOGGER.debug("Store.write: unsupported entity domain %s", entity_domain)
             return False
         entity_id = self._resolve(entity_domain, unique_id_suffix)
         if entity_id is None:
             return False
+        if entity_domain == Platform.NUMBER:
+            domain, service, service_data = (
+                Platform.NUMBER,
+                SERVICE_SET_VALUE,
+                {ATTR_ENTITY_ID: entity_id, ATTR_VALUE: value},
+            )
+        else:
+            # switch.turn_on/turn_off take no value payload -- the value picks the service,
+            # not a service-call argument (design doc's write-half addendum, switch case).
+            domain, service, service_data = (
+                Platform.SWITCH,
+                SERVICE_TURN_ON if value else SERVICE_TURN_OFF,
+                {ATTR_ENTITY_ID: entity_id},
+            )
         # Best-effort (ADR-0018): an out-of-range value or any other service-call failure
         # must not break a Manager's reaction path, and is not an ADR-0007 hardware fault
         # either -- caught broadly and reported to the caller, never escalated.
         try:
-            await self._hass.services.async_call(
-                Platform.NUMBER,
-                SERVICE_SET_VALUE,
-                {ATTR_ENTITY_ID: entity_id, ATTR_VALUE: value},
-                blocking=True,
-            )
+            await self._hass.services.async_call(domain, service, service_data, blocking=True)
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Store.write %s failed: %s", entity_id, err)
             return False
