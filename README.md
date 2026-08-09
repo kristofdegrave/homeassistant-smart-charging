@@ -142,9 +142,8 @@ oscillate. Away from home, System-initiated writes are suppressed (C2); the
 resolved value reaches the vehicle on the next active-SOC-limit change that
 occurs while the car is connected at home (not automatically on return —
 reading and adopting a manual change is unaffected by this gate either way).
-Unmapping the vehicle
-charge-limit entity disables this sync entirely without affecting
-charger-current control.
+Unmapping the vehicle charge-limit entity disables this sync entirely without
+affecting charger-current control.
 
 ## Deferred (not in this MVP)
 
