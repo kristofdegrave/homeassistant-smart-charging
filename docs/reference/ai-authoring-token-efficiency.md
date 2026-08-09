@@ -84,6 +84,11 @@ Everything below targets one of these two.
       cannot run away.
 - [ ] PR content is treated as untrusted data (this is a correctness/security rule, not a
       cost one, but the worker prompts already carry it — keep it).
+- [ ] A third-party static-analysis report handed to a reviewer as evidence (e.g. the
+      SkillSpector report `_ai-review.yml`'s `skill-scan` job produces, per ADR-0020) is written
+      to a file and read with a tool the run already has, never inlined into the prompt string
+      or echoed to a step's own stdout — the untrusted-content containment above applies to it
+      exactly as it does to PR diff content.
 
 ## How to measure
 
