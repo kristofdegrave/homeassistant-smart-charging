@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_interval
 
 from .adapters.factory import build_adapters
 from .adapters.store import Store
@@ -15,6 +18,8 @@ from .const import (
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_EV_BATTERY_CAPACITY_KWH,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
@@ -43,6 +48,8 @@ from .const import (
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
+    DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_GRID_SAFETY_OFFSET_A,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
@@ -66,6 +73,7 @@ from .const import (
     ROLE_NOTIFICATION_TARGET,
 )
 from .coordinator import SmartChargingCoordinator
+from .managers.notification_manager import NotificationManager
 
 PLATFORMS = [
     Platform.NUMBER,
@@ -128,11 +136,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SOLAR_FORECAST_THRESHOLD_KWH: opts.get(
             CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
         ),
+        # M3's own options (UC08) -- share the same config dict rather than a second one,
+        # since CONF_SOLAR_FORECAST_THRESHOLD_KWH above is already common to both M1 and M3.
+        CONF_EVENING_PROMPT_ENABLED: opts.get(
+            CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED
+        ),
+        CONF_EVENING_PROMPT_TIME: opts.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
     }
 
     store = Store(hass, entry.entry_id)
     coordinator = SmartChargingCoordinator(
         hass, adapters=adapters, store=store, config=config, interval_s=interval_s
+    )
+    notification_manager = NotificationManager(
+        hass, adapters=adapters, entry_id=entry.entry_id, store=store, config=config
+    )
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass, notification_manager.async_evaluate, timedelta(seconds=interval_s)
+        )
     )
 
     # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.

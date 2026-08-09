@@ -1,7 +1,14 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
+from datetime import timedelta
+from unittest.mock import AsyncMock, patch
+
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.smart_charging.adapters.notify import (
     EVENT_MOBILE_APP_NOTIFICATION_ACTION,
@@ -28,6 +35,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     DATA_COORDINATOR,
+    DEFAULT_CONTROL_INTERVAL_S,
     DOMAIN,
     MODE_CAPTAR,
     MODE_OFF,
@@ -44,6 +52,11 @@ from tests.helpers import (
     seed_ample_peak_headroom,
     seed_charger_states,
     seed_owned_entity,
+)
+
+_NOTIFICATION_MANAGER_EVALUATE = (
+    "custom_components.smart_charging.managers.notification_manager"
+    ".NotificationManager.async_evaluate"
 )
 
 # This suite's config entry matches the shared base shape exactly -- no local overrides needed.
@@ -402,6 +415,71 @@ async def test_reload_does_not_leak_the_notify_adapters_action_listener(hass):
     await hass.async_block_till_done()
     after_unload = hass.bus.async_listeners().get(EVENT_MOBILE_APP_NOTIFICATION_ACTION, 0)
     assert after_unload == baseline
+
+
+async def test_setup_schedules_the_notification_manager_tick(hass):
+    """Task 5.2: M3's periodic evaluation runs on the same control interval (design Sec5's
+    C1-style timer, not a bespoke schedule of its own)."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert mock_evaluate.call_count == 0  # no eager tick at setup itself
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_CONTROL_INTERVAL_S)
+        )
+        await hass.async_block_till_done()
+
+    assert mock_evaluate.call_count >= 1
+
+
+async def test_unload_cancels_the_notification_manager_tick(hass):
+    """Teardown cancels M3's scheduled evaluation cleanly -- no further ticks after unload."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_CONTROL_INTERVAL_S * 2)
+        )
+        await hass.async_block_till_done()
+
+    assert mock_evaluate.call_count == 0
+
+
+async def test_setup_without_a_notification_target_still_schedules_the_tick(hass):
+    """M3 itself no-ops without a mapped notification target (its own inertness contract) --
+    but setup still schedules the tick unconditionally, the same way the coordinator's own
+    cycle runs regardless of which hardware roles are mapped."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        async_fire_time_changed(
+            hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_CONTROL_INTERVAL_S)
+        )
+        await hass.async_block_till_done()
+
+    assert mock_evaluate.call_count >= 1
 
 
 async def test_unload_without_a_notification_target_mapped_still_succeeds(hass):
