@@ -1,7 +1,8 @@
-"""Coordinator-internal cycle decomposition (ADR-0012): CycleContext, PeakDemandState,
-SocGateResolver, and the ModeHandler Strategy. Imported only by coordinator.py. Pure -- no HA
-imports (mirrors engines/ purity, ADR-0009/0010), even though these aren't engines themselves
-(system-design Sec 4 rule 4: an engine may not call another engine; these call engines)."""
+"""Coordinator-internal cycle decomposition: CycleContext, PeakDemandState, SocGateResolver, and
+the ModeHandler Strategy (ADR-0012); SolarStepUpGate and resolve_deadline_urgency (ADR-0023).
+Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
+even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
+another engine; these call engines)."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ from datetime import datetime, time
 from typing import Any, Protocol
 
 from .const import (
+    CHARGEABLE_STATES,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_MAX_CURRENT,
     CONF_MIN_CURRENT,
@@ -21,12 +23,17 @@ from .const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
+    PROFILE_AUTO,
 )
 from .engines.capability_gate import resolve_available_modes
 from .engines.deadline import RequiredCurrentResult, resolve_required_current
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
-from .engines.soc_target import SolarStepUpState, resolve_active_soc_limit
+from .engines.soc_target import (
+    SolarStepUpState,
+    resolve_active_soc_limit,
+    resolve_solar_step_up,
+)
 from .modes import captar, power, solar, solar_only
 from .profiles.auto import select_mode
 
@@ -280,6 +287,47 @@ class SocGateResolver:
         changed = limit != self._last_limit
         self._last_limit = limit
         return limit, changed
+
+
+class SolarStepUpGate:
+    """R8 solar step-up gating (ADR-0023), wrapping engines/soc_target.py::resolve_solar_step_up.
+    Owns the SolarStepUpState itself -- moved off the coordinator instance -- and exposes it via
+    the public `state` attribute for SocGateResolver.resolve(step_up_state=...), which already
+    takes it as an argument today. `state` is a plain mutable attribute, not a read-only property
+    wrapping a private field (unlike SocGateResolver's `_last_limit`) -- callers, including
+    tests, seed a starting state directly (`gate.state = SolarStepUpState(...)`), the same
+    public-field precedent PeakDemandState already sets for its own three fields."""
+
+    def __init__(self) -> None:
+        self.state: SolarStepUpState = SolarStepUpState()
+
+    def resolve(
+        self,
+        *,
+        profile: str,
+        mode_is_solar: bool,
+        status: str,
+        soc: float | None,
+        default_limit: float,
+        step_threshold_pp: float,
+        step_pp: float,
+        max_solar_soc: float,
+    ) -> None:
+        """R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- is_solar_mode_charging
+        gates on THIS cycle's profile/mode/status, mirroring the coordinator's own prior inline
+        computation exactly. Mutates self.state in place; callers read .state afterward."""
+        is_solar_mode_charging = (
+            profile == PROFILE_AUTO and mode_is_solar and status in CHARGEABLE_STATES
+        )
+        _, self.state = resolve_solar_step_up(
+            self.state,
+            is_solar_mode_charging=is_solar_mode_charging,
+            soc=soc if soc is not None else 0.0,
+            default_limit=default_limit,
+            step_threshold_pp=step_threshold_pp,
+            step_pp=step_pp,
+            max_solar_soc=max_solar_soc,
+        )
 
 
 @dataclass(frozen=True)
