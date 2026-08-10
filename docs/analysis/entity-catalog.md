@@ -134,6 +134,9 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_effective_peak_limit` | state | — | kW | `min(monthly_peak_demand, maximum_peak)`, raised to the maximum peak during urgency (R5); resolved per `resolution-rules.md` | [effective peak limit](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_active_soc_limit` | state | — | % | resolved active SOC limit per `resolution-rules.md` (Active SOC limit table): solar-reserve cap → solar step-up → default; the entity `ActiveSocLimitChanged` fires on (ADR-0011) | [active SOC limit](system-overview.md#ubiquitous-language) — the resolved value in effect | UC09, (UC11) | control-cycle |
 | `sensor.smart_charging_status` | state | — | — | `OK` / `Fault` (ADR-0007) | integration health status (ADR-0007) | (UC11) | control-cycle |
+| `sensor.smart_charging_solar_surplus_w` | state | — | W | `charger_power − net_power`, computed fresh each control cycle, never stored | [solar surplus](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
+| `sensor.smart_charging_time_to_full` | state | — | min | derived from EV battery capacity (R15), `ev_soc`, the active SOC limit, and the current `charger_current` set-point | [time to full charge](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
+| `sensor.smart_charging_peak_headroom_a` | state | — | A | `effective peak limit − safety margin`, expressed in amperes; resolved per `resolution-rules.md` | [peak headroom](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
 
 ---
 
@@ -145,7 +148,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `number.smart_charging_soc_limit_override` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11 |
 | `input_number.sc_ev_battery_capacity_kwh` | config | install-time | kWh | 75 | EV battery capacity (R15) | resolution-rules | user |
-| `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06 | — |
+| `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06, UC11 | — |
 | `ev_battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules | — |
 | `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09 | — |
 | `vehicle_charge_limit` | adapter role (read/write) | — | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | UC09 | UC09 |
@@ -189,7 +192,7 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11 |
 | `input_number.sc_solar_forecast_threshold_kwh` | config | install-time | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user |
-| `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08 | — |
+| `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, UC11 | — |
 
 ---
 
@@ -271,6 +274,16 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   input and no consumer outside the resolution rules, and — unlike the plug-in reminder's de-dup
   condition, whose `binary_sensor` exists for the dashboard (R19) — no requirement asks for it to be
   observable. A future use-case or dashboard row needing it would add the row then.
+- **`solar surplus`, `time to full charge`, and `peak headroom` are each now surfaced as a
+  diagnostic sensor, added for the UC11 dashboard build (`docs/plans/2026-07-08-runtime-dashboard-design.md`
+  Decisions 3–4).** Like the effective peak limit and active SOC limit above, each is computed
+  fresh every control cycle, never stored: `sensor.smart_charging_solar_surplus_w` from
+  `charger_power − net_power`; `sensor.smart_charging_time_to_full` from the EV battery capacity,
+  `ev_soc`, the active SOC limit, and `charger_current`; `sensor.smart_charging_peak_headroom_a`
+  from the effective peak limit and safety margin. None of the three drives a control decision —
+  they exist purely for dashboard observability (R19). `charger_current` and `net_power` already
+  had `UC11` in their own `Read by` column before this revision (the dashboard's status tiles read
+  them back directly), so neither needed a change here.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
   `charger_current` role. Both are read/write: `vehicle_charge_limit` is read back by UC09 to
