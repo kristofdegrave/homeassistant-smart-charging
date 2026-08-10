@@ -1,7 +1,7 @@
 # ADR-0021: Adapter-role readings surfaced via a single diagnostic sensor's attributes
 
 Date: 2026-08-09
-Status: Proposed
+Status: Accepted
 
 ## Context
 
