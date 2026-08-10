@@ -25,17 +25,23 @@ literal, readable sequence of named calls — and it left the door open for late
 not covered by these four units, that is a new decision to make at that time, not something
 this ADR forecloses or pre-answers."
 
-That time has come. `_run_cycle` is still a single ~360-line method. Everything ADR-0012
-did not name remains inlined directly in it: the initial adapter reads and voltage
-resolution, the R8 solar step-up resolution, the R9 solar-reserve-cap and R14
-departure-deadline read-and-resolve block (shared by today's urgency and tomorrow's
-reserve-cap precondition), the disconnect/`Off`/`Power`/SOC-gated-stop dispatch branches
-that surround the `ModeHandler` lookup, and the two clamp calls plus the floor/cap
-invariant. None of this is a defect ADR-0012 missed — none of it was one of the three named
-violations — but the accumulated inline volume is itself now the problem: every new
-cross-cutting concern this integration has added (deadline urgency, solar reserve, step-up)
-has landed as more lines inside the same method rather than as a new, independently testable
-unit, and `_run_cycle` is difficult to read, extend, or unit-test as a whole.
+That time has come. `_run_cycle` is still a single ~360-line method. None of this is a
+defect ADR-0012 missed — none of it was one of the three named violations — but the
+accumulated inline volume is itself now the problem: every new cross-cutting concern this
+integration has added (deadline urgency, solar reserve, step-up) has landed as more lines
+inside the same method rather than as a new, independently testable unit, and `_run_cycle`
+is difficult to read, extend, or unit-test as a whole. The blocks with real decision logic
+worth naming are: the initial adapter reads and voltage resolution, the R8 solar step-up
+resolution, the R9 solar-reserve-cap and R14 departure-deadline read-and-resolve block
+(shared by today's urgency and tomorrow's reserve-cap precondition), the disconnect/`Off`/
+`Power`/SOC-gated-stop dispatch branches that surround the `ModeHandler` lookup, and the two
+clamp calls plus the floor/cap invariant — this list is not exhaustive of every line in
+`_run_cycle`; net-power smoothing, the two provisional/final `resolve_effective_peak_limit`
+calls, the `auto_dispatchable` predicate, the two `hass.bus.async_fire` HA I/O sites, and the
+final write/fault-recovery/`CycleResult` block stay exactly where they are today (see
+Decision) — each is either a single line with no independent decision to name, or HA I/O
+that ADR-0009/0010 already requires to stay directly in the coordinator's own method body,
+not delegated to a named sub-step.
 
 The forces at play:
 
@@ -65,19 +71,26 @@ three of them: where a block is genuinely pure decision logic with its own state
 `SocGateResolver`), extract it into a small object in `coordinator_cycle.py`; where a block
 is I/O-bound orchestration (adapter reads, or reads mixed with a call into an already-pure
 engine function) with no independent state of its own, extract it into a plain private
-`async def _stepN_...` method on `SmartChargingCoordinator`. Either way, `_run_cycle` itself
-shrinks to a literal, top-to-bottom sequence of named calls — still directly checkable
-against ADR-0006's ten steps, still with the R3/C4 clamps as two distinct calls exactly as
-ADR-0006 requires, still using the `ModeHandler` registry lookup ADR-0012 already
-established for mode dispatch.
+`async def _step_...` method on `SmartChargingCoordinator`, named after what it resolves
+rather than a step number — the extractions are not 1:1 with ADR-0006's ten steps (the R14
+deadline block alone spans several of them), so a numbering scheme would not map cleanly.
+Either way, `_run_cycle` itself shrinks to a literal, top-to-bottom sequence of named calls —
+still directly checkable against ADR-0006's ten steps, still with the R3/C4 clamps as two
+distinct calls exactly as ADR-0006 requires, still using the `ModeHandler` registry lookup
+ADR-0012 already established for mode dispatch. A method that replaces one of `_run_cycle`'s
+two in-cycle fault checks (both currently `return CycleResult(...)` directly) returns a
+sentinel (e.g. `None`) instead, and `_run_cycle` itself performs the early return on that
+sentinel — the ADR-0007 requirement that the coordinator have exactly one fault-handling code
+path stays satisfied by keeping the actual `return` in `_run_cycle`, not scattered across
+extracted methods.
 
 - Pro: Preserves ADR-0006's auditability in full — the sequence is still literal code, not
   data a loop consumes. A step's own signature documents which `CycleContext` fields it
   touches, rather than every step sharing one `apply(ctx) -> ctx` shape.
 - Pro: Naturally represents this cycle's actual (non-uniform) control flow — a step calling
-  `_reset_mode_state_if_changed()` twice, or a fault check returning early, is just two
-  ordinary method calls / an ordinary early `return`, not a special case bolted onto a
-  generic mechanism.
+  `_reset_mode_state_if_changed()` twice is just two ordinary method calls, and a fault
+  check's sentinel-then-return (previous paragraph) is a small, explicit convention at the
+  one call site that needs it, not a mechanism every step must carry.
 - Pro: Every extracted unit — pure object or coordinator method — becomes independently
   testable at a finer grain than "run the whole coordinator," continuing the testability
   gain ADR-0012 started.
@@ -89,7 +102,11 @@ established for mode dispatch.
 
 Replace the remaining inline blocks — and, for uniformity, the three ADR-0012 already
 extracted — with a single list of objects sharing one `apply(ctx) -> ctx` interface,
-iterated by `_run_cycle` in a loop.
+iterated by `_run_cycle` in a loop. Folding `ModeHandler`/`PeakDemandState`/`SocGateResolver`
+into that same uniform list would mean this option actually *supersedes* ADR-0012's Decision
+(which fixed those three as distinct, purpose-built units, not generic pipeline entries)
+rather than extending it — one more reason this option is a bigger structural move than
+Option A.
 
 - Pro: Maximum uniformity — every step has the same shape, and adding, removing, or
   reordering a step becomes a one-line change to the list rather than a code edit at a
@@ -102,9 +119,12 @@ iterated by `_run_cycle` in a loop.
   objects cannot represent a step recurring mid-sequence without either duplicating an
   entry (confusing — is it the same step twice, or two different steps that happen to do
   the same thing?) or splitting it into two distinguishable steps that exist only to be
-  runnable twice. Two fault paths return early, which a generic `apply(ctx) -> ctx` loop
-  cannot express without an added abort/short-circuit signal — the moment the interface
-  needs that, it is no longer the uniform interface Option B was chosen for.
+  runnable twice. Two fault paths return early; Option A localizes this to the one method
+  that needs it (a small sentinel-then-return convention at that single call site, detailed
+  under Option A). Option B's shared `apply(ctx) -> ctx` interface has no equivalent option —
+  every step uses the same signature, so an early-return signal has to become part of what
+  every step can return, whether or not that step ever needs it, eroding the very uniformity
+  Option B exists to provide.
 - Con: `apply(ctx) -> ctx` is identical for every step by construction, so a step's own type
   signature no longer documents which `CycleContext` fields it actually reads or writes —
   a real loss of self-documentation for a control loop that commands physical charging
@@ -121,9 +141,14 @@ iterated by `_run_cycle` in a loop.
 - Pro: Zero migration cost or risk.
 - Con: Does not address the stated problem — a ~360-line method that every new
   cross-cutting concern (notifications, further deadline/urgency work) continues to grow,
-  is hard to read as a whole, and leaves several genuinely testable decisions (R8 step-up
-  gating, R9 reserve-cap gating, the deadline-table read-and-resolve block) untestable
-  except by driving the full coordinator through an HA test harness.
+  and is hard to read as a whole. The pure logic the R8/R9/deadline-table blocks call into
+  (`resolve_solar_step_up`, `resolve_solar_reserve_active`, `resolve_departure_deadline`)
+  is already plain-pytest testable in `engines/`, unaffected by this option either way —
+  what stays untestable in isolation under the status quo is only the surrounding gating
+  predicate and argument marshalling around each of those calls (e.g. the
+  `active_profile == PROFILE_AUTO and is_solar_mode and status in CHARGEABLE_STATES`
+  conjunction), which today can only be exercised by driving the full coordinator through
+  an HA test harness.
 
 ## Decision
 
@@ -153,15 +178,22 @@ decision logic with its own state (per ADR-0012's existing pattern):
     the R3 call gated by the R17 opt-out; this decision does not touch clamp behavior,
     only gives each call site a name.
 
-- **New small stateful objects in `coordinator_cycle.py`**, mirroring `SocGateResolver`, for
-  blocks that are genuinely pure decision logic once their few required inputs are supplied:
+- **New small pure units in `coordinator_cycle.py`** — alongside `CycleContext`/`ModeHandler`/
+  `PeakDemandState`/`SocGateResolver` rather than `engines/soc_target.py` (where the functions
+  they wrap live), since like those four existing units they hold coordinator-cycle gating
+  logic around an engine call, not the engine logic itself — the same "aren't engines
+  themselves" boundary `coordinator_cycle.py`'s own module docstring already draws:
   - R8 solar step-up gating (`is_solar_mode_charging` plus the call into
-    `resolve_solar_step_up`, threading `self._step_up_state`) — the coordinator method
-    supplies the current mode/status/profile; the object owns the gating decision and the
-    state.
-  - R9 solar-reserve-cap gating (the call into `resolve_solar_reserve_active`) — the
-    coordinator method supplies the read values (forecast, deadline-tomorrow result); the
-    object owns the gating decision.
+    `resolve_solar_step_up`) — mirrors `SocGateResolver` exactly: it owns `_step_up_state`
+    (moved off the coordinator, the same way `SocGateResolver` already owns
+    `_last_active_soc_limit`) and exposes it for `SocGateResolver.resolve(step_up_state=...)`,
+    which already takes it as an argument today; the coordinator method supplies only the
+    current mode/status/profile.
+  - R9 solar-reserve-cap gating (the call into `resolve_solar_reserve_active`) — unlike the
+    other three units, this one is stateless: the coordinator method supplies the read values
+    (forecast, deadline-tomorrow result) and gets back a decision with nothing threaded
+    across cycles. It is grouped here as a plain function, not an object, for the same
+    package-boundary reason as the stateful units above, not because it carries state.
 
 `CycleContext` remains the shared data carrier ADR-0012 established; each new unit reads
 from and writes to it exactly as `SocGateResolver`/`PeakDemandState` already do, at the same
@@ -175,18 +207,18 @@ This choice is made over Option B because this cycle's actual control flow — a
 recurs mid-sequence, two early-return fault paths, an opt-out that must never reach a
 second clamp — does not fit a uniform linear pipeline without either hiding that shape
 inside added special-case machinery or forcing every step through an interface that erases
-which data it depends on. It is made over Option C because the stated problem (a
-360-line method, untestable-except-through-the-full-coordinator decision blocks, growing
-edit surface) is real and worsening.
+which data it depends on. It is made over Option C because the stated problem — a
+360-line method, several gating predicates exercisable only through the full coordinator,
+and a growing edit surface for every new cross-cutting concern — is real and worsening.
 
 ## Consequences
 
 - `_run_cycle` becomes a short, literal sequence of named calls — still checkable line by
   line against ADR-0006's ten steps, still with two distinct clamp calls, still dispatching
   through the `ModeHandler` registry.
-- Two new stateful units are added to `coordinator_cycle.py` (R8 step-up gating, R9
-  reserve-cap gating), independently pytest-testable the same way `SocGateResolver` already
-  is — no HA harness required for either.
+- Two new pure units are added to `coordinator_cycle.py` (R8 step-up gating, stateful; R9
+  reserve-cap gating, stateless), independently pytest-testable the same way `SocGateResolver`
+  already is — no HA harness required for either.
 - Several new plain private methods are added to `coordinator.py`; being I/O-bound, they
   are tested the same way the rest of `coordinator.py` is today — via the existing HA-harness
   regression suite (`tests/test_coordinator.py`), not new pure-unit tests. Adding a pure-unit
