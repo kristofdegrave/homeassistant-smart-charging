@@ -210,8 +210,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             await self._safe_write_zero()
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
-    async def _run_cycle(self) -> CycleResult:
-        await self._read_owned_entities()
+    async def _read_cycle_inputs(self) -> tuple[str, float, float, float] | None:
+        """Steps 1 and 3 (ADR-0006): read the three required adapters and resolve voltage (NF4's
+        fallback -- the one role where a None reading is not a fault). Returns None on a missing
+        required adapter; _run_cycle performs the actual fault CycleResult itself, keeping
+        ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
+        extracted methods (ADR-0023)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -224,9 +228,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # Any required role missing -> fault (ADR-0007).
         if status is None or net_w is None or charger_w is None:
+            return None
+        return status, net_w, charger_w, voltage
+
+    async def _run_cycle(self) -> CycleResult:
+        await self._read_owned_entities()
+        inputs = await self._read_cycle_inputs()
+        if inputs is None:
             self._log_fault("required adapter returned None")
             await self._write(0.0)
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
+        status, net_w, charger_w, voltage = inputs
 
         # Peak-Demand Tracker (E5, Task 1.3) + effective-peak-limit resolution (E5, Task 1.2) --
         # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
