@@ -23,7 +23,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Powe
 
 1. **Given** `Power` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no `Power`-mode cooldown is in effect.
 2. **When** a control cycle runs, **then** the System starts charging within one control cycle.
-3. **And** the System requests the configured [Power target current](../system-overview.md#ubiquitous-language) (`sc_power_target_current_a`, default 10 A) — ignoring [solar surplus](../system-overview.md#ubiquitous-language) and the [low-tariff flag](../system-overview.md#ubiquitous-language) entirely. When the peak-protection option (`sc_power_respect_peak`) is enabled (default), the R3 peak clamp (`control-cycle.md`) fits this request on raw readings to the available [peak headroom](../system-overview.md#ubiquitous-language), so [net import](../system-overview.md#ubiquitous-language) stays at or below the [effective peak limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`) minus the [safety margin](../system-overview.md#ubiquitous-language). In every case — with or without the R3 clamp — the grid-supply-ceiling clamp (C4), which `Power` mode can never disable, then fits whatever current remains on raw readings so net import stays below the [grid supply ceiling](../system-overview.md#ubiquitous-language) minus the [grid safety offset](../system-overview.md#ubiquitous-language). This is the same continuous, every-cycle relationship the R3 clamp has to `Captar`'s (UC03) request — not a reactive override for an unusual case — so the current the charger actually draws tracks available grid capacity cycle by cycle, shrinking as other household load rises and recovering as that load falls. Either clamp can only reduce the request, never raise it above the configured target, and the request is always bounded by the minimum and maximum charging current (C1).
+3. **And** the System requests the configured [Power target current](../system-overview.md#ubiquitous-language) (`sc_power_target_current_a`, default 10 A) — ignoring [solar surplus](../system-overview.md#ubiquitous-language) and the [low-tariff flag](../system-overview.md#ubiquitous-language) entirely. When the peak-protection option (`power_respect_peak`) is enabled (default), the R3 peak clamp (`control-cycle.md`) fits this request on raw readings to the available [peak headroom](../system-overview.md#ubiquitous-language), so [net import](../system-overview.md#ubiquitous-language) stays at or below the [effective peak limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`) minus the [safety margin](../system-overview.md#ubiquitous-language). In every case — with or without the R3 clamp — the grid-supply-ceiling clamp (C4), which `Power` mode can never disable, then fits whatever current remains on raw readings so net import stays below the [grid supply ceiling](../system-overview.md#ubiquitous-language) minus the [grid safety offset](../system-overview.md#ubiquitous-language). This is the same continuous, every-cycle relationship the R3 clamp has to `Captar`'s (UC03) request — not a reactive override for an unusual case — so the current the charger actually draws tracks available grid capacity cycle by cycle, shrinking as other household load rises and recovering as that load falls. Either clamp can only reduce the request, never raise it above the configured target, and the request is always bounded by the minimum and maximum charging current (C1).
 
 ## Alternate flows
 
@@ -33,7 +33,7 @@ When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
 **3a — Peak protection disabled** — branches from step 3.
-Given the peak-protection option (`sc_power_respect_peak`) is off
+Given the peak-protection option (`power_respect_peak`) is off
 When the System requests the configured Power target current
 Then the R3 peak clamp is skipped entirely and net import may exceed the effective peak limit, raising the monthly peak demand — bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1).
 
@@ -41,7 +41,7 @@ Then the R3 peak clamp is skipped entirely and net import may exceed the effecti
 
 **Peak / grid-ceiling clamp bounds or stops the set-point.**
 Given the System has requested the configured Power target current in `Power` mode
-When the peak-protection clamp (R3, only while `sc_power_respect_peak` is on) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` would be exceeded on raw readings — for example household load leaves less than the minimum charging current of headroom
+When the peak-protection clamp (R3, only while `power_respect_peak` is on) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` would be exceeded on raw readings — for example household load leaves less than the minimum charging current of headroom
 Then the coordinator reduces the charger current — or, on a sustained R3 breach at the minimum charging current, stops it and starts the `Power`-mode cooldown (R11); a C4 breach clamps down (to 0 A if necessary) without starting a cooldown — so the clamp decides the set-point this cycle, not the mode. This is the normal, every-cycle shape of `Power`'s delivered current, not an unusual case: only the sustained-stop branch at the minimum charging current is exceptional.
 
 **State of charge reaches the active SOC limit.**
@@ -64,7 +64,7 @@ conditions hold, unconditionally — it never reads smoothed inputs, the low-tar
 home-day flag, or the solar forecast. Unlike `Captar` (UC03), which always requests the maximum
 charging current, `Power`'s requested current is itself a user-configured value (default 10 A) —
 the mode does not decide how fast to charge, the user does. The only configurable branch is
-whether the R3 peak clamp applies at all, via `sc_power_respect_peak` (default on); the
+whether the R3 peak clamp applies at all, via `power_respect_peak` (default on); the
 grid-supply-ceiling clamp (C4) always applies regardless of that option, and neither clamp — nor
 the target current itself — can ever exceed the maximum charging current (C1). The configured
 target current is a ceiling on what `Power` *requests*. The ceiling on what it *delivers* each
@@ -86,7 +86,7 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | SOC < active SOC limit & no cooldown → Charging |
-| Charging | configured Power target current requested; if `sc_power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while respecting peak (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Charging | configured Power target current requested; if `power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while respecting peak (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Power`-mode cooldown elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
@@ -110,7 +110,7 @@ stateDiagram-v2
     note right of Charging
         Set-point: request the configured Power
         target current (sc_power_target_current_a,
-        default 10 A). sc_power_respect_peak on
+        default 10 A). power_respect_peak on
         (default): R3 peak clamp first fits it (raw)
         to the peak headroom — net import ≤ effective
         peak limit − safety margin. Off: R3 is

@@ -11,13 +11,13 @@
 
 ## Preconditions
 
-- The evening prompt is enabled (`sc_evening_prompt_enabled` is on).
-- The next-day solar-forecast yield (`solar_forecast`) exceeds the configured threshold (`sc_solar_forecast_threshold_kwh`, default 12 kWh) — the same threshold R9's solar-reserve cap uses. This gate is scoped to R9 only: it does not check R9's other preconditions (`Auto` active, no departure deadline resolved for tomorrow), and it does not consider R14's home-day departure override, which also depends on this flag. A home day with a low forecast is expected to be indicated through an external source (R13) instead; if none is configured, R14's home-day override simply does not apply that day, and the day-of-week default departure time is used.
+- The evening prompt is enabled (`evening_prompt_enabled` is on).
+- The next-day solar-forecast yield (`solar_forecast`) exceeds the configured threshold (`solar_forecast_threshold_kwh`, default 12 kWh) — the same threshold R9's solar-reserve cap uses. This gate is scoped to R9 only: it does not check R9's other preconditions (`Auto` active, no departure deadline resolved for tomorrow), and it does not consider R14's home-day departure override, which also depends on this flag. A home day with a low forecast is expected to be indicated through an external source (R13) instead; if none is configured, R14's home-day override simply does not apply that day, and the day-of-week default departure time is used.
 - No external source has already set the [home-day flag](../system-overview.md#ubiquitous-language) for tomorrow.
 
 ## Trigger
 
-Each evening, the car is connected at home (`charger_status` is `connected` or `charging`) at or after the configured evening prompt time (`sc_evening_prompt_time`, default 18:00) — either because it was already connected when that time arrived, or because it connects afterward, provided this happens before midnight.
+Each evening, the car is connected at home (`charger_status` is `connected` or `charging`) at or after the configured evening prompt time (`evening_prompt_time`, default 18:00) — either because it was already connected when that time arrived, or because it connects afterward, provided this happens before midnight.
 
 ## Main success scenario
 
@@ -87,7 +87,7 @@ Not sent (whether never triggered, or skipped for any of the reasons above), ans
 sequenceDiagram
     actor Driver as EV driver
     participant System
-    Note over System: Car connected at home,<br/>at/after sc_evening_prompt_time
+    Note over System: Car connected at home,<br/>at/after evening_prompt_time
     alt External source already set the home-day flag for tomorrow
         Note over System: Prompt skipped — no notification sent
     else Next-day solar forecast does not exceed the threshold
