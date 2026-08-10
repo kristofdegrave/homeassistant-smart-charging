@@ -29,5 +29,6 @@ template.
 | [0020](0020-skillspector-advisory-pr-scan.md) | Advisory SkillSpector scan feeding the workflow-reviewer AI review | Proposed |
 | [0021](0021-adapter-readings-diagnostic-sensor.md) | Adapter-role readings surfaced via a single diagnostic sensor's attributes | Proposed |
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Proposed |
+| [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
