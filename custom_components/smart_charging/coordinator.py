@@ -94,6 +94,7 @@ from .coordinator_cycle import (
     _SolarModeHandler,
     _SolarOnlyModeHandler,
     resolve_deadline_urgency,
+    resolve_solar_reserve_gate,
 )
 from .engines.billing_protection import (
     PeakBreachTracker,
@@ -106,7 +107,6 @@ from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .engines.soc_target import (
     SolarStepUpState,
-    resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
 from .modes import captar
@@ -370,20 +370,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if ROLE_SOLAR_FORECAST in self._adapters
             else None
         )
-        solar_reserve_active = resolve_solar_reserve_active(
+        ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=self.home_day_flag,
             sun_is_down=sun_is_down,
-            forecast_kwh=forecast_kwh if forecast_kwh is not None else 0.0,
+            forecast_kwh=forecast_kwh,
             forecast_threshold_kwh=self._config.get(
                 CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
             ),
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
-        ctx.solar_reserve_active = solar_reserve_active
         active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
             self.soc_limit_override,
-            solar_reserve_active=solar_reserve_active,
+            solar_reserve_active=ctx.solar_reserve_active,
             solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
             step_up_state=self._step_up_state,
         )
@@ -451,7 +450,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             sun_is_up=sun_is_up,
             sun_is_down=sun_is_down,
             low_tariff_active=low_tariff_active,
-            solar_reserve_active=solar_reserve_active,
+            solar_reserve_active=ctx.solar_reserve_active,
             mode_desired_current=lambda mode: self._mode_desired_current(
                 mode,
                 status=status,
