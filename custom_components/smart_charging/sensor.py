@@ -13,7 +13,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DATA_COORDINATOR, DOMAIN, MODE_OFF, STATUS_FAULT, STATUS_OK
+from .const import (
+    DATA_COORDINATOR,
+    DOMAIN,
+    MODE_OFF,
+    OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
+    STATUS_FAULT,
+    STATUS_OK,
+)
 from .entity import SmartChargingEntity
 
 
@@ -158,7 +165,7 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     solar-step-up three-row table (Task 5.1 wires the full resolution)."""
 
     _attr_translation_key = "active_soc_limit"
-    _object_id_suffix = "active_soc_limit"
+    _object_id_suffix = OWNED_SUFFIX_ACTIVE_SOC_LIMIT
     _coordinator_field = "active_soc_limit"
 
 
