@@ -139,7 +139,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 ### Diagnostic outputs
 
-System-written native `sensor` entities (ADR-0004) that surface, as read-only diagnostic readouts, values the coordinator computes each cycle. They are exposed for observability; they are still computed each cycle, not stored config helpers.
+System-written native `sensor` entities (ADR-0004) that surface, as read-only diagnostic readouts, values the coordinator computes or reads each cycle. They are exposed for observability; they are still computed or read fresh each cycle, not stored config helpers.
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -151,7 +151,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_solar_surplus_w` | state | — | W | `charger_power − net_power`, computed fresh each control cycle, never stored | [solar surplus](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
 | `sensor.smart_charging_time_to_full` | state | — | min | derived from EV battery capacity (R15), `ev_soc`, the active SOC limit, and the current `charger_current` set-point; unavailable while `charger_current` is 0 A, zero once state of charge is at or above the active SOC limit | [time to full charge](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_peak_headroom_a` | state | — | A | `(effective peak limit − safety margin − net import) ÷ supply voltage`, the same raw-reading target the R3 peak-protection clamp holds; resolved per `control-cycle.md` step 5 (the effective peak limit itself is resolved per `resolution-rules.md`) | [peak headroom](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
-| `sensor.smart_charging_adapter_readings` | state | — | — | state is the timestamp of the last successful control-cycle read; `extra_state_attributes` hold one key per currently-wired *read* adapter role, `None` when that role's own reading is unavailable (ADR-0007 semantics), without the entity itself becoming unavailable; per ADR-0021 | adapter-role readings, dashboard-bindable (ADR-0021) | (UC11) | control-cycle |
+| `sensor.smart_charging_adapter_readings` | state | — | timestamp | state is the timestamp of the last successful control-cycle read; its state attributes hold one key per currently-wired *read* adapter role, with no value when that role's own reading is unavailable (ADR-0007 semantics), without the entity itself becoming unavailable; per ADR-0021 | adapter-role readings (ADR-0021) | (UC11) | control-cycle |
 
 ---
 
@@ -306,18 +306,24 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   they exist purely for dashboard observability (R19). `charger_current` and `net_power` already
   had `UC11` in their own `Read by` column before this revision (the dashboard's status tiles read
   them back directly), so neither needed a change here.
-- **`sensor.smart_charging_adapter_readings`** (ADR-0021) mirrors every currently-wired *read*
-  adapter role's current value as an attribute, giving a dashboard something to bind to for
-  hardware-I/O values that have no HA entity of their own (adapter roles are code-level, NF3, not
-  catalogued entities). Unlike the three sensors above, its own entity row doesn't restate which
-  roles it covers — that set is whichever `ROLE_*` constants `adapters/factory.py` wires at a
-  given time (ADR-0021's Context), so this catalog would drift the moment a role is added or
-  removed if it tried to enumerate them here. Adding `UC11` to a role's own `Read by` column
-  (as already done for `ev_soc`/`solar_forecast`, and already present for `charger_power`/
-  `charger_status`/`charger_current`/`net_power`) stays reserved for roles the dashboard's status
-  tiles actually display directly — the sensor exists for general observability, not only for
-  the dashboard, so being one of its mirrored attributes doesn't by itself earn a role a `UC11`
-  reference.
+- **`sensor.smart_charging_adapter_readings`** (ADR-0021, R19) mirrors every currently-wired
+  *read* adapter role's current value as an attribute, giving the dashboard something to bind to
+  for hardware-I/O values that have no HA entity of their own (adapter roles are code-level, NF3,
+  not catalogued entities). Unlike the three sensors above, its own entity row doesn't enumerate
+  which roles it covers — that set is whichever *read* adapter roles the integration currently
+  wires, which grows over time (ADR-0021's Context) — so this catalog would drift the moment a
+  role is added or removed if it tried to list them here. This is also why a role being one of
+  this sensor's mirrored attributes doesn't by itself earn that role's own `Read by` column a
+  `UC11` reference: per this catalog's own rule (preamble) that `Read by` lists only behaviours
+  that read a value **directly**, UC11 reads the sensor, not the role — a `UC11`/`(UC11)`
+  reference on the role's own row stays reserved for the subset the dashboard's status tiles
+  display directly. That subset already carries one: `(UC11)` (a placeholder — UC11 doesn't
+  reference them yet) on `ev_soc`/`solar_forecast`, and a current `UC11` reference on
+  `charger_power`/`charger_status`/`charger_current`/`net_power`, matching UC11's own text.
+  ADR-0021's Consequences ask for this row to describe the entity as "attribute-bearing" rather
+  than a plain `state`/`config` row; `state` is the closest fit in this catalog's own Role
+  vocabulary (preamble) — the Default/range/source cell carries the attribute-bearing shape ADR-0021
+  asks for instead.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
   `charger_current` role. Both are read/write: `vehicle_charge_limit` is read back by UC09 to
