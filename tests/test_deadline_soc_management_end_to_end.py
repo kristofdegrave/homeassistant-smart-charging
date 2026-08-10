@@ -297,7 +297,7 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, fr
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 80.0
-    assert coordinator._step_up_state.stepped_pct is None
+    assert coordinator._step_up_gate.state.stepped_pct is None
     assert coordinator.active_mode == MODE_SOLAR  # Auto keeps selecting Solar (row 3)
 
     # SteppedUp: SOC now within the default 2pp step threshold of the limit.
@@ -305,7 +305,7 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, fr
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 85.0  # default 80 + default step 5
-    assert coordinator._step_up_state.stepped_pct == 85.0
+    assert coordinator._step_up_gate.state.stepped_pct == 85.0
     entity_id = _active_soc_limit_entity_id(hass)
     assert float(hass.states.get(entity_id).state) == 85.0
 
@@ -319,7 +319,7 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, fr
     coordinator.set_active_mode(MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    assert coordinator._step_up_state.stepped_pct is None
+    assert coordinator._step_up_gate.state.stepped_pct is None
     assert coordinator.data.active_soc_limit == 80.0
 
 
@@ -342,7 +342,7 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    assert coordinator._step_up_state.stepped_pct == 85.0
+    assert coordinator._step_up_gate.state.stepped_pct == 85.0
 
     hass.states.async_set("sensor.ev_soc", "76.0")
     # Same one-cycle-lag reasoning as the sibling test above: simulate "last cycle resolved
@@ -351,7 +351,7 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert coordinator._step_up_state.stepped_pct == 85.0  # preserved, not cleared
+    assert coordinator._step_up_gate.state.stepped_pct == 85.0  # preserved, not cleared
     assert coordinator.data.active_soc_limit == 85.0
 
 
@@ -375,13 +375,13 @@ async def test_uc06_no_further_step_once_maximum_already_reached(hass):
     # A prior step-up already clamped to the maximum -- seeded directly on the coordinator,
     # the same way tests/test_coordinator.py's own Task 5.1 suite seeds a pre-existing
     # step-up, since there is no owning entity for this state.
-    coordinator._step_up_state = SolarStepUpState(stepped_pct=100.0)
+    coordinator._step_up_gate.state = SolarStepUpState(stepped_pct=100.0)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
     assert coordinator.data.active_soc_limit == 100.0  # unchanged -- no further step possible
-    assert coordinator._step_up_state.stepped_pct == 100.0
+    assert coordinator._step_up_gate.state.stepped_pct == 100.0
 
 
 async def test_uc06_manual_profile_never_applies_a_step_up(hass):
@@ -396,7 +396,7 @@ async def test_uc06_manual_profile_never_applies_a_step_up(hass):
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert coordinator._step_up_state.stepped_pct is None
+    assert coordinator._step_up_gate.state.stepped_pct is None
     assert coordinator.data.active_soc_limit == 80.0
 
 
