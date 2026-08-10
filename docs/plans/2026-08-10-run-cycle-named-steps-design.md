@@ -2,8 +2,9 @@
 
 **Date:** 2026-08-10
 **Status:** draft (issue #560, ADR-0023)
-**Type:** implementation design (a slice of an already-Accepted architectural decision — not a new
-decision)
+**Type:** implementation design (a slice of an already-drafted architectural decision — not a new
+decision; ADR-0023's own Status flips to Accepted independently of this document, per the
+project's usual post-merge follow-up)
 
 This document is the follow-up docs/plans implementation spec [ADR-0023](../adl/0023-decompose-run-cycle-into-named-steps.md)
 itself calls for ("a `docs/plans` implementation spec and TDD task plan... is the next step... the
@@ -34,12 +35,12 @@ order; it invents no new service, call direction, or behavior.
 | R14 departure-deadline read-and-resolve block + R9 solar-reserve-cap gating | `:328-383` | **In scope** — `_resolve_deadline_and_reserve()`, a coordinator method (§3.2), calling the new pure `resolve_solar_reserve_gate()` function (§4.2) for the R9 decision itself |
 | R5/R14/R15 deadline-urgency call site's own adapter reads | `:417-435` | **In scope** — `_read_deadline_urgency_inputs()`, a coordinator method (§3.3) |
 | Disconnect/`Off`/`Power`/SOC-gated-stop dispatch branches around the `ModeHandler` lookup | `:502-531` | **In scope** — `_dispatch_mode()`, a coordinator method (§3.4); the `ModeHandler` registry lookup itself is untouched, per ADR-0012 |
-| The two clamp calls (R3, C4) + the floor/cap invariant | `:533-566` | **In scope** — `_apply_clamps()`, a coordinator method (§3.5); clamp *behavior*, `_peak_tracker`, and the R17 opt-out are untouched, only the call sites get a name |
+| The two clamp calls (R3, C4) + the floor/cap invariant | `:533-566` | **In scope** — `_apply_peak_clamp()` and `_apply_grid_ceiling_clamp()`, two coordinator methods (§3.5); clamp *behavior*, `_peak_tracker`, and the R17 opt-out are untouched, only the call sites get a name |
 | R8 solar step-up gating | `:306-326` | **In scope** — `SolarStepUpGate`, a new pure class in `coordinator_cycle.py` (§4.1), taking over ownership of `_step_up_state` from the coordinator |
 | The ev_soc read + its own SOC-gated fault check | `:264-280` | **Out of scope** — ADR-0023's Decision does not name this block as its own unit (only the *first* fault check, on the required adapters, gets the sentinel-return treatment); it stays inline in `_run_cycle`, short and already isolated as its own early return |
 | Net-power smoothing, both `resolve_effective_peak_limit` calls, `auto_dispatchable`, the two `hass.bus.async_fire` sites, the final write/`CycleResult` block | throughout | **Out of scope** — ADR-0023's Context explicitly lists these as staying exactly where they are (single-line pure calls, or HA I/O that must stay directly in the coordinator's own method body per ADR-0009/0010) |
 | Mode dispatch's `ModeHandler` registry lookup; `_mode_desired_current`'s baseline dry-run helper | `:515-531`, `:688-726` | **Out of scope** — ADR-0012 territory, untouched; `_mode_desired_current` isn't named anywhere in ADR-0023 |
-| `_peak_tracker` (R3 breach-timer) | `PeakBreachTracker`, threaded through `_apply_clamps` | **Out of scope** — untouched, per ADR-0006/ADR-0012, now per ADR-0023 too |
+| `_peak_tracker` (R3 breach-timer) | `PeakBreachTracker`, threaded through `_apply_peak_clamp` | **Out of scope** — untouched, per ADR-0006/ADR-0012, now per ADR-0023 too |
 
 ---
 
@@ -75,7 +76,7 @@ events, or `CycleResult` fields, across the full pre-existing `tests/test_coordi
 
 ## 3. New coordinator.py methods
 
-All five are `SmartChargingCoordinator` methods (not `coordinator_cycle.py` units) because each
+All six are `SmartChargingCoordinator` methods (not `coordinator_cycle.py` units) because each
 performs `await self._adapters[...].read()` — per ADR-0009/0010, HA/adapter I/O stays
 coordinator-side and cannot become a pure object the way `PeakDemandState`/`SocGateResolver` did.
 
@@ -169,9 +170,13 @@ async def _resolve_deadline_and_reserve(
     return deadline_tomorrow, resolve_deadline_for
 ```
 
-Replaces `coordinator.py:328-383`. `_run_cycle` becomes:
+Replaces `coordinator.py:328-383`, **and** deletes `today_weekday = now_dt.weekday()`
+(`coordinator.py:349`) from that range without replacing it — that line stays inline in
+`_run_cycle` (§3.3 still needs it), the same way `deadline_resolvable` already does.
+`_run_cycle` becomes:
 
 ```python
+today_weekday = now_dt.weekday()  # stays inline -- §3.3 needs it; only tomorrow_weekday moves
 deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(ctx, now_dt)
 active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
     self.soc_limit_override,
@@ -184,6 +189,15 @@ active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
 (The `SocGateResolver.resolve(...)` call itself, and the `ActiveSocLimitChanged` event fire right
 after it, are already a two-line, single-responsibility block today — ADR-0023 does not name them
 as a unit, and they stay inline exactly as `PeakDemandState`'s peak-tracking call already does.)
+
+**Downstream rewire (required, not optional).** `sun_is_up`, `sun_is_down`, `low_tariff_active`,
+and `solar_reserve_active` were `_run_cycle` locals before this extraction and are still read by
+name at the `resolve_deadline_urgency(...)` call site (`coordinator.py:451-454`). Since this
+method now only mutates them onto `ctx` and returns neither, that call site's four matching
+keyword arguments change from the bare local names to `ctx.sun_is_up`, `ctx.sun_is_down`,
+`ctx.low_tariff_active`, `ctx.solar_reserve_active` — the only edit `resolve_deadline_urgency`'s
+own call site needs for this task; the function's signature and every other argument are
+untouched.
 
 ### 3.3 `_read_deadline_urgency_inputs`
 
@@ -217,9 +231,11 @@ async def _read_deadline_urgency_inputs(
     return deadline_today, effective_battery_capacity_kwh
 ```
 
-Replaces `coordinator.py:417-435`. `_run_cycle` becomes:
+Replaces `coordinator.py:418-435` — `:417` (`deadline_resolvable = status in CHARGEABLE_STATES
+and ev_soc is not None`) stays inline. `_run_cycle` becomes:
 
 ```python
+deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
 deadline_today, effective_battery_capacity_kwh = await self._read_deadline_urgency_inputs(
     deadline_resolvable=deadline_resolvable,
     today_weekday=today_weekday,
@@ -233,11 +249,14 @@ exactly as `auto_dispatchable` does — neither is named as its own unit in ADR-
 ### 3.4 `_dispatch_mode`
 
 ```python
-def _dispatch_mode(self, ctx: CycleContext, *, ev_soc: float | None, active_soc_limit: float) -> float:
+def _dispatch_mode(self, ctx: CycleContext) -> float:
     """The disconnect/Off/Power/SOC-gated-stop guards around the ModeHandler registry lookup
     (ADR-0012's lookup itself is untouched -- this method only names the surrounding branches
-    that decide *whether* to look one up at all). Mutates self._mode_state exactly as today;
-    returns the desired current before any clamp."""
+    that decide *whether* to look one up at all). Reads ev_soc/active_soc_limit off ctx rather
+    than as separate parameters -- both are already there (set at coordinator.py:302 and :394,
+    both before this call), and threading them again as loose kwargs would reintroduce the
+    two-sources-of-truth problem CycleContext exists to eliminate. Mutates self._mode_state
+    exactly as today; returns the desired current before any clamp."""
     if ctx.status not in CHARGEABLE_STATES:
         self._mode_state = self._fresh_mode_state()
         return 0.0
@@ -246,7 +265,7 @@ def _dispatch_mode(self, ctx: CycleContext, *, ev_soc: float | None, active_soc_
     if self.active_mode == MODE_POWER:
         desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
         return desired
-    if self._mode_handlers[self.active_mode].is_soc_gated and ev_soc >= active_soc_limit:
+    if self._mode_handlers[self.active_mode].is_soc_gated and ctx.ev_soc >= ctx.active_soc_limit:
         self._mode_state[self.active_mode] = self._mode_handlers[self.active_mode].idle_state()
         return 0.0
     desired, self._mode_state[self.active_mode] = self._mode_handlers[
@@ -258,52 +277,69 @@ def _dispatch_mode(self, ctx: CycleContext, *, ev_soc: float | None, active_soc_
 Replaces `coordinator.py:502-531`. `_run_cycle` becomes:
 
 ```python
-desired = self._dispatch_mode(ctx, ev_soc=ev_soc, active_soc_limit=active_soc_limit)
+desired = self._dispatch_mode(ctx)
 ```
 
-### 3.5 `_apply_clamps`
+### 3.5 `_apply_peak_clamp` / `_apply_grid_ceiling_clamp`
 
 ```python
-def _apply_clamps(
+def _apply_peak_clamp(
     self, desired: float, *, net_w: float, charger_w: float, voltage: float,
     effective_peak_limit_kw: float, now: float,
 ) -> float:
-    """R3 peak clamp (skippable only for Power via its own R17 opt-out) and C4 grid-ceiling
-    clamp (never skippable) -- two distinct call sites exactly as ADR-0006 requires, plus the
-    R11/C1 floor/cap invariant. Mutates self._peak_tracker and, on an R3 force-stop while
-    Captar is active, self._mode_state[MODE_CAPTAR] -- both exactly as today."""
+    """R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out. A separate
+    named call from the C4 clamp (below), per ADR-0006's requirement that the two never merge
+    into one routine (Option A's rejected failure mode: the R17 opt-out silently reaching C4).
+    Mutates self._peak_tracker and, on a force-stop while Captar is active,
+    self._mode_state[MODE_CAPTAR] -- both exactly as today."""
     power_respect_peak = self._config.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK)
-    if not (self.active_mode == MODE_POWER and not power_respect_peak):
-        desired, self._peak_tracker, force_stop = apply_peak_clamp(
-            desired,
-            net_w=net_w,
-            charger_w=charger_w,
-            voltage=voltage,
-            effective_peak_limit_kw=effective_peak_limit_kw,
-            safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
-            min_a=self._config[CONF_MIN_CURRENT],
-            grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
-            tracker=self._peak_tracker,
-            now=now,
-        )
-        if force_stop and self.active_mode == MODE_CAPTAR:
-            desired = 0.0
-            self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
-    desired = clamp_to_ceiling(
+    if self.active_mode == MODE_POWER and not power_respect_peak:
+        return desired
+    desired, self._peak_tracker, force_stop = apply_peak_clamp(
+        desired,
+        net_w=net_w,
+        charger_w=charger_w,
+        voltage=voltage,
+        effective_peak_limit_kw=effective_peak_limit_kw,
+        safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+        min_a=self._config[CONF_MIN_CURRENT],
+        grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
+        tracker=self._peak_tracker,
+        now=now,
+    )
+    if force_stop and self.active_mode == MODE_CAPTAR:
+        desired = 0.0
+        self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
+    return desired
+
+
+def _apply_grid_ceiling_clamp(
+    self, desired: float, *, net_w: float, charger_w: float, voltage: float
+) -> float:
+    """C4 grid-supply-ceiling clamp (E6) -- never skippable, no opt-out of any kind. A
+    separate named call from the R3 clamp (above), per ADR-0006."""
+    return clamp_to_ceiling(
         desired, net_w=net_w, charger_w=charger_w, voltage=voltage,
         ceiling_a=self._config[CONF_GRID_CEILING_A], offset_a=self._config[CONF_GRID_SAFETY_OFFSET_A],
     )
-    return apply_floor_cap(
-        desired, min_a=self._config[CONF_MIN_CURRENT], max_a=self._config[CONF_MAX_CURRENT]
-    )
 ```
 
-Replaces `coordinator.py:533-566`. `_run_cycle` becomes:
+Replaces `coordinator.py:533-563` (the R3 and C4 clamp blocks). ADR-0023's Decision states the two
+clamp calls "each become their own named call at their existing call site" — merging them into one
+method, even internally sequenced, would make the R3/C4 separation unverifiable from `_run_cycle`
+alone, the exact auditability ADR-0006 exists to protect; two names, called one after the other in
+`_run_cycle`, keeps that separation literal. The floor/cap invariant (`coordinator.py:564-566`)
+is already a single call to the pure `apply_floor_cap` function — already a named call, no wrapper
+needed — and stays exactly as it is, unwrapped, immediately after. `_run_cycle` becomes:
 
 ```python
-desired = self._apply_clamps(
+desired = self._apply_peak_clamp(
     desired, net_w=net_w, charger_w=charger_w, voltage=voltage,
     effective_peak_limit_kw=effective_peak_limit_kw, now=now,
+)
+desired = self._apply_grid_ceiling_clamp(desired, net_w=net_w, charger_w=charger_w, voltage=voltage)
+desired = apply_floor_cap(
+    desired, min_a=self._config[CONF_MIN_CURRENT], max_a=self._config[CONF_MAX_CURRENT]
 )
 ```
 
@@ -316,16 +352,18 @@ desired = self._apply_clamps(
 ```python
 class SolarStepUpGate:
     """R8 solar step-up gating (ADR-0023), wrapping engines/soc_target.py::resolve_solar_step_up.
-    Owns the SolarStepUpState itself -- moved off the coordinator instance, the same way
-    SocGateResolver already owns _last_active_soc_limit -- and exposes it via .state for
-    SocGateResolver.resolve(step_up_state=...), which already takes it as an argument today."""
+    Owns the SolarStepUpState itself -- moved off the coordinator instance -- and exposes it via
+    the public `state` attribute for SocGateResolver.resolve(step_up_state=...), which already
+    takes it as an argument today. `state` is a plain mutable attribute, not a read-only property
+    wrapping a private field (unlike SocGateResolver's `_last_limit`) -- several existing tests
+    seed a starting state directly (today: `coord._step_up_state = SolarStepUpState(...)`, e.g.
+    tests/test_coordinator.py:974,1012,1031,1050 and tests/test_deadline_soc_management_end_to_end.py:378),
+    and `coord._step_up_gate.state = SolarStepUpState(...)` must remain a valid mechanical
+    equivalent for that same seeding, the same public-field precedent PeakDemandState already
+    sets for its own three fields."""
 
     def __init__(self) -> None:
-        self._state = SolarStepUpState()
-
-    @property
-    def state(self) -> SolarStepUpState:
-        return self._state
+        self.state = SolarStepUpState()
 
     def resolve(
         self,
@@ -341,12 +379,12 @@ class SolarStepUpGate:
     ) -> None:
         """R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- is_solar_mode_charging
         gates on THIS cycle's profile/mode/status, mirroring the coordinator's own prior inline
-        computation exactly. Mutates self._state in place; callers read .state afterward."""
+        computation exactly. Mutates self.state in place; callers read .state afterward."""
         is_solar_mode_charging = (
             profile == PROFILE_AUTO and mode_is_solar and status in CHARGEABLE_STATES
         )
-        _, self._state = resolve_solar_step_up(
-            self._state,
+        _, self.state = resolve_solar_step_up(
+            self.state,
             is_solar_mode_charging=is_solar_mode_charging,
             soc=soc if soc is not None else 0.0,
             default_limit=default_limit,
@@ -405,10 +443,9 @@ def resolve_solar_reserve_gate(
     )
 ```
 
-Called from `_resolve_deadline_and_reserve` (§3.2). No new imports needed —
-`resolve_solar_reserve_active` is already imported into `coordinator_cycle.py`... **correction:**
-it is not; `coordinator_cycle.py` today imports only `SolarStepUpState, resolve_active_soc_limit`
-from `engines.soc_target`. This task adds `resolve_solar_reserve_active` to that same import line.
+Called from `_resolve_deadline_and_reserve` (§3.2). `coordinator_cycle.py` today imports only
+`SolarStepUpState, resolve_active_soc_limit` from `engines.soc_target`; this task adds
+`resolve_solar_reserve_active` to that same import line.
 
 ---
 
@@ -427,6 +464,13 @@ from `engines.soc_target`. This task adds `resolve_solar_reserve_active` to that
 - `_mode_desired_current` (the baseline dry-run helper, `:688-726`) is **not touched** — ADR-0023
   does not name it, and it already routes through the same `ModeHandler` registry `_dispatch_mode`
   uses (ADR-0012 territory).
+- **`tests/test_coordinator.py` and `tests/test_deadline_soc_management_end_to_end.py`** currently
+  seed/assert `coord._step_up_state`/`coordinator._step_up_state` directly (9 and 8 references
+  respectively). These become `coord._step_up_gate.state`/`coordinator._step_up_gate.state` — the
+  same values, same mutable-attribute semantics, just reached through the new object instead of
+  the old field (§4.1). This is the one place outside `coordinator.py`/`coordinator_cycle.py` this
+  slice touches, the same kind of test-file rewire ADR-0012's own implementation slice needed for
+  `sensor.py`'s `MonthlyPeakSensor` — Task 2.1 (§9 of the paired plan) covers it explicitly.
 
 No entity, config key, adapter role, or domain event changes. `CycleResult` (the public return
 type) is unchanged.
@@ -448,7 +492,7 @@ Both new `coordinator_cycle.py` units are HA-free → **plain pytest**, added to
   `forecast_kwh` is a real float; a `None` forecast reading is treated as `0.0` — anchored
   against `tests/engines/test_soc_target.py`'s own `resolve_solar_reserve_active` fixtures.
 
-The five new `coordinator.py` methods are I/O-bound → tested via the existing HA-harness
+The six new `coordinator.py` methods are I/O-bound → tested via the existing HA-harness
 regression suite (`tests/test_coordinator.py`), not new pure-unit tests, per ADR-0023's
 Consequences. No new HA-harness tests are added for this slice — its whole point is that
 coordinator behavior is identical before/after, the same policy ADR-0012's own implementation
@@ -465,15 +509,21 @@ ADR-0012's own implementation spec caught during its own fresh-agent review.
 custom_components/smart_charging/
   coordinator_cycle.py    # + SolarStepUpGate, resolve_solar_reserve_gate (§4); existing
                           #   CycleContext/ModeHandler/PeakDemandState/SocGateResolver untouched
-  coordinator.py           # _run_cycle delegates to 5 new named methods (§3) plus the existing
+  coordinator.py           # _run_cycle delegates to 6 new named methods (§3) plus the existing
                           #   ADR-0012 units; ten-step order (ADR-0006) and the R3/C4 clamp
                           #   separation unchanged; _peak_tracker untouched; self._step_up_state
-                          #   replaced by self._step_up_gate
+                          #   replaced by self._step_up_gate. Two new imports needed: `datetime`
+                          #   (from the datetime module, for §3.2's now_dt: datetime parameter --
+                          #   today's file imports only `time as time_of_day`/`timedelta`) and
+                          #   `Callable` (from collections.abc, for §3.2/§3.3's
+                          #   resolve_deadline_for parameter/return type).
 ```
 
 `tests/` mirrors 1:1 (ADR-0002/0009): `tests/test_coordinator_cycle.py` gains the two new units'
-tests (no new file); `tests/test_coordinator.py` is unchanged in content but must keep passing in
-full.
+tests (no new file); `tests/test_coordinator.py` and `tests/test_deadline_soc_management_end_to_end.py`
+carry no new *test expectations* — only the mechanical accessor rename `coord._step_up_state` →
+`coord._step_up_gate.state` at every seeding/assertion site (§5, Task 2.1) — and must keep passing
+in full.
 
 ---
 
@@ -497,6 +547,6 @@ full.
 This design feeds the `writing-plans` skill to produce the ordered, test-driven implementation
 plan (`2026-08-10-run-cycle-named-steps.md`). Build order: `coordinator_cycle.py`'s two new units
 (each test-first and independently green) → wire `coordinator.py` to delegate to them and to the
-five new named methods, one extraction at a time, full regression pass after each → a final pass
+six new named methods, one extraction at a time, full regression pass after each → a final pass
 confirming the R3/C4 clamp separation and `_peak_tracker` threading are unchanged. No
 `custom_components/` code is written until the paired plan exists and is approved.

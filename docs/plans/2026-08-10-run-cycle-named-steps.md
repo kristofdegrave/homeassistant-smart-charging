@@ -11,8 +11,10 @@ separate R3/C4 clamp call sites, `_peak_tracker`, and the `ModeHandler` registry
 all untouched.
 
 **Architecture:** Two new pure units added to the existing `coordinator_cycle.py`
-(`SolarStepUpGate`, `resolve_solar_reserve_gate`); five new plain private methods added to
-`SmartChargingCoordinator` in `coordinator.py`. No new module.
+(`SolarStepUpGate`, `resolve_solar_reserve_gate`); six new plain private methods added to
+`SmartChargingCoordinator` in `coordinator.py` (`_read_cycle_inputs`,
+`_resolve_deadline_and_reserve`, `_read_deadline_urgency_inputs`, `_dispatch_mode`,
+`_apply_peak_clamp`, `_apply_grid_ceiling_clamp`). No new module.
 Full design: [`2026-08-10-run-cycle-named-steps-design.md`](2026-08-10-run-cycle-named-steps-design.md).
 
 **Tech Stack:** Python ≥3.12, `pytest` (plain, ADR-0009 — the two new `coordinator_cycle.py` units),
@@ -57,8 +59,14 @@ commit-after-green).
 **Step 1: Write the failing test**
 
 ```python
-from custom_components.smart_charging.const import PROFILE_AUTO, PROFILE_MANUAL, STATE_DISCONNECTED
+from custom_components.smart_charging.const import (
+    PROFILE_AUTO,
+    PROFILE_MANUAL,
+    STATE_CHARGING,
+    STATE_DISCONNECTED,
+)
 from custom_components.smart_charging.coordinator_cycle import SolarStepUpGate
+from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 
 
 def test_solar_step_up_gate_starts_at_default_state():
@@ -67,14 +75,14 @@ def test_solar_step_up_gate_starts_at_default_state():
 
 
 def test_solar_step_up_gate_steps_up_when_solar_mode_charging_and_within_threshold():
-    """Anchored to engines/test_soc_target.py::test_steps_up_once_within_threshold's own
-    fixture values -- the gate must produce the identical resolve_solar_step_up outcome for
-    an equivalent is_solar_mode_charging=True call, proving the wrapper computes the gate
+    """Anchored to tests/engines/test_soc_target.py::test_steps_up_once_within_threshold's
+    own fixture values -- the gate must produce the identical resolve_solar_step_up outcome
+    for an equivalent is_solar_mode_charging=True call, proving the wrapper computes the gate
     correctly, not just that it calls something."""
     gate = SolarStepUpGate()
     gate.resolve(
         profile=PROFILE_AUTO, mode_is_solar=True, status=STATE_CHARGING,
-        soc=78.0, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
+        soc=78.5, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
     )
     assert gate.state == SolarStepUpState(stepped_pct=85.0)
 
@@ -85,7 +93,7 @@ def test_solar_step_up_gate_clears_when_profile_is_manual():
     gate = SolarStepUpGate()
     gate.resolve(
         profile=PROFILE_MANUAL, mode_is_solar=True, status=STATE_CHARGING,
-        soc=78.0, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
+        soc=78.5, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
     )
     assert gate.state == SolarStepUpState()
 
@@ -94,7 +102,7 @@ def test_solar_step_up_gate_clears_when_mode_is_not_solar():
     gate = SolarStepUpGate()
     gate.resolve(
         profile=PROFILE_AUTO, mode_is_solar=False, status=STATE_CHARGING,
-        soc=78.0, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
+        soc=78.5, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
     )
     assert gate.state == SolarStepUpState()
 
@@ -103,7 +111,7 @@ def test_solar_step_up_gate_clears_when_disconnected():
     gate = SolarStepUpGate()
     gate.resolve(
         profile=PROFILE_AUTO, mode_is_solar=True, status=STATE_DISCONNECTED,
-        soc=78.0, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
+        soc=78.5, default_limit=80.0, step_threshold_pp=2.0, step_pp=5.0, max_solar_soc=100.0,
     )
     assert gate.state == SolarStepUpState()
 
@@ -204,18 +212,22 @@ regression only, no new tests this task).
 - Edit: `custom_components/smart_charging/coordinator.py`
 
 **Step 1:** No new test — this task is proven by the existing suite passing unchanged (design doc
-§2's success criterion 6). Confirm `tests/test_coordinator.py` and any other file referencing
-`coordinator._step_up_state` directly first:
+§2's success criterion 6). `tests/test_coordinator.py` (9 references, e.g. lines 974, 999, 1003,
+1012, 1018, 1031, 1036, 1050, 1056) and `tests/test_deadline_soc_management_end_to_end.py` (8
+references, e.g. lines 300, 308, 322, 345, 354, 378, 384, 399, including a write at `:378`) both
+reach into `coordinator._step_up_state` directly for test seeding. Confirm the full set first:
 
 ```bash
 grep -rn "_step_up_state" custom_components/ tests/
 ```
 
-If any test reaches into `coordinator._step_up_state` directly (rather than only through
-`resolve_solar_step_up`'s observable effect on `commanded_current`/`active_soc_limit`), update
-that reference to `coordinator._step_up_gate.state` in this same task — a mechanical rename, not a
+Every reference found in `tests/test_coordinator.py` and
+`tests/test_deadline_soc_management_end_to_end.py` (and any other file the grep turns up) must be
+updated to `coordinator._step_up_gate.state` in this same task — a mechanical rename, not a
 behavior change, the same pattern the ADR-0012 plan used for `MonthlyPeakSensor`'s
-`_peak_tracked_kw`/`_peak_tracked_month` references.
+`_peak_tracked_kw`/`_peak_tracked_month` references. Because `SolarStepUpGate.state` is a plain
+mutable attribute (design doc §4.1), `coord._step_up_gate.state = SolarStepUpState(...)` is a valid
+drop-in replacement for every `coord._step_up_state = SolarStepUpState(...)` write site.
 
 **Step 2: Implement**
 - `__init__`: replace `self._step_up_state: SolarStepUpState = SolarStepUpState()` with
@@ -228,10 +240,11 @@ behavior change, the same pattern the ADR-0012 plan used for `MonthlyPeakSensor`
 - Remove the now-unused `resolve_solar_step_up` import from `coordinator.py` if nothing else
   there calls it (confirm with a grep before removing).
 
-**Step 3: Run the full regression suite** — `pytest tests/test_coordinator.py -v` — must pass
-unchanged. Pay particular attention to any R8 step-up test (search
-`test_coordinator.py`/`test_solar_end_to_end.py` for `step_up`/`stepped_pct`) — these exercise
-exactly this call site.
+**Step 3: Run the full regression suite** — `pytest tests/test_coordinator.py -v` and
+`pytest tests/test_deadline_soc_management_end_to_end.py -v` — both must pass unchanged. Pay
+particular attention to any R8 step-up test (search `test_coordinator.py`/
+`test_deadline_soc_management_end_to_end.py` for `step_up`/`stepped_pct`) — these exercise exactly
+this call site.
 
 **Step 4: Commit** — `refactor: wire SolarStepUpGate into coordinator._run_cycle (ADR-0023)`.
 
@@ -257,7 +270,8 @@ to the `.coordinator_cycle` import; remove the now-unused `resolve_solar_reserve
 from `.engines.soc_target` if nothing else in `coordinator.py` calls it.
 
 **Step 3: Run the full regression suite** — must pass unchanged. Pay particular attention to any
-R9 reserve-cap test (search for `reserve` in `test_coordinator.py`/`test_solar_end_to_end.py`).
+R9 reserve-cap test (search for `reserve` in `test_coordinator.py`/
+`test_deadline_soc_management_end_to_end.py`).
 
 **Step 4: Commit** — `refactor: wire resolve_solar_reserve_gate into coordinator._run_cycle (ADR-0023)`.
 
@@ -311,6 +325,16 @@ only).
 "`_run_cycle` becomes" snippet from §3.2. `resolve_deadline_for` is now a value returned from
 this method rather than a closure defined inline in `_run_cycle` — `_run_cycle` no longer defines
 it itself, only receives and later calls it (Task 6.1 needs it too).
+`today_weekday = now_dt.weekday()` (`coordinator.py:349`) falls inside this replaced range but is
+**not** moved into the new method — leave it as its own inline line in `_run_cycle`, between the
+new method call and the next block (design doc §3.2/§3.3 note), since `_read_deadline_urgency_inputs`
+(Task 6.1) still needs it as a parameter.
+**Required downstream rewire:** `resolve_deadline_urgency(...)` at `coordinator.py:451-454` reads
+`sun_is_up`/`sun_is_down`/`low_tariff_active`/`solar_reserve_active` as `_run_cycle` locals — all
+four are removed by this extraction. Change that call site to read
+`ctx.sun_is_up`/`ctx.sun_is_down`/`ctx.low_tariff_active`/`ctx.solar_reserve_active` instead
+(the new method sets these fields on `ctx`, design doc §3.2). Skipping this rewire leaves a
+`NameError` the existing test suite will catch, but fix it here rather than relying on that.
 
 **Step 3: Run the full regression suite**, particularly `test_deadline_soc_management_end_to_end.py`
 and any test asserting on `ActiveSocLimitChanged`'s firing (this method's output feeds directly
@@ -335,8 +359,10 @@ only).
 (search `test_deadline_soc_management_end_to_end.py`).
 
 **Step 2: Implement** — add `_read_deadline_urgency_inputs` (design doc §3.3); replace
-`_run_cycle:417-435` with the "`_run_cycle` becomes" snippet from §3.3, passing in the
-`resolve_deadline_for` value Task 5.1's method now returns.
+`_run_cycle:418-435` with the "`_run_cycle` becomes" snippet from §3.3 (`:417`,
+`deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None`, stays inline in
+`_run_cycle` — it is the first line of that snippet, not moved into the new method), passing in
+the `resolve_deadline_for` value Task 5.1's method now returns.
 
 **Step 3: Run the full regression suite.**
 
@@ -359,8 +385,12 @@ extraction; every mode-dispatch test in the suite exercises it).
 `pytest tests/test_coordinator.py -k "dispatch or mode or soc_gated or idle" -v` (or equivalent)
 to establish the current-green baseline for this region specifically.
 
-**Step 2: Implement** — add `_dispatch_mode` (design doc §3.4); replace `_run_cycle:502-531` with
-`desired = self._dispatch_mode(ctx, ev_soc=ev_soc, active_soc_limit=active_soc_limit)`.
+**Step 2: Implement** — add `_dispatch_mode` (design doc §3.4); its signature is
+`_dispatch_mode(self, ctx: CycleContext) -> float` — no separate `ev_soc`/`active_soc_limit`
+params, since both are already set on `ctx` by this point in the cycle (`ctx.ev_soc` at
+`coordinator.py:302`, `ctx.active_soc_limit` at `:394`) and the method reads them off `ctx`
+directly, avoiding a second source of truth. Replace `_run_cycle:502-531` with
+`desired = self._dispatch_mode(ctx)`.
 
 **Step 3: Run the full regression suite**, then specifically re-run the Step 1 subset to confirm
 identical pass/fail status (not just "still green overall" — this extraction has five branches,
@@ -370,33 +400,62 @@ and a single misordered `if`/`elif` here would silently change which branch a gi
 
 ---
 
-## Phase 8 — `_apply_clamps`
+## Phase 8 — `_apply_peak_clamp` / `_apply_grid_ceiling_clamp`
 
-### Task 8.1: Extract the R3/C4 clamp calls and the floor/cap invariant
+### Task 8.1: Extract the R3 peak clamp into `_apply_peak_clamp`
 
 **ADR honored:** ADR-0023 (does not touch ADR-0006's clamp separation or the R17 opt-out — only
-the call sites get a name). **Test boundary:** HA harness, `tests/test_coordinator.py` (regression
-only — the second highest-risk extraction; ADR-0012's own implementation plan flagged this exact
-region for a stale-line-reference mistake during its own review).
+the call site gets a name). Per ADR-0023's Decision, the R3 and C4 clamps "each become their own
+named call at their existing call site" — they stay two distinct methods, not one combined
+`_apply_clamps`, so this extraction is deliberately split into two tasks (8.1, 8.2). **Test
+boundary:** HA harness, `tests/test_coordinator.py` (regression only — the second highest-risk
+extraction; ADR-0012's own implementation plan flagged this exact region for a
+stale-line-reference mistake during its own review).
 
 **Files:**
 - Edit: `custom_components/smart_charging/coordinator.py`
 
 **Step 1:** No new test — before implementing, run
-`pytest tests/test_coordinator.py -k "peak or clamp or ceiling or floor or captar" -v` (or
-equivalent) to establish the current-green baseline.
+`pytest tests/test_coordinator.py -k "peak or captar" -v` (or equivalent) to establish the
+current-green baseline.
 
-**Step 2: Implement** — add `_apply_clamps` (design doc §3.5); replace `_run_cycle:533-566` with
-`desired = self._apply_clamps(desired, net_w=net_w, charger_w=charger_w, voltage=voltage, effective_peak_limit_kw=effective_peak_limit_kw, now=now)`.
+**Step 2: Implement** — add `_apply_peak_clamp` (design doc §3.5); replace the R3 clamp block in
+`_run_cycle` with
+`desired = self._apply_peak_clamp(desired, net_w=net_w, charger_w=charger_w, voltage=voltage, effective_peak_limit_kw=effective_peak_limit_kw, now=now)`.
 
 **Step 3: Run the full regression suite**, then re-run the Step 1 subset. **Explicitly re-read**
-the resulting `_apply_clamps` method and confirm: the R3 call and the C4 call are still two
-distinct calls to `apply_peak_clamp`/`clamp_to_ceiling` respectively; only the R3 call is guarded
-by the `power_respect_peak` opt-out; `self._peak_tracker` is still threaded through exactly the R3
-call, not duplicated or dropped. This is the explicit byte-for-byte check design doc §6 and
-ADR-0012's own precedent both call for — do not rely on green tests alone here.
+the resulting `_apply_peak_clamp` method and confirm: it is guarded by the `power_respect_peak`
+(R17) opt-out exactly as before; `self._peak_tracker` is still threaded through it; the
+Captar-force-stop-to-cooldown side effect (`self._mode_state[MODE_CAPTAR] = ...`) is preserved.
+This is the explicit byte-for-byte check design doc §6 and ADR-0012's own precedent both call
+for — do not rely on green tests alone here.
 
-**Step 4: Commit** — `refactor: extract _apply_clamps from _run_cycle (ADR-0023)`.
+**Step 4: Commit** — `refactor: extract _apply_peak_clamp from _run_cycle (ADR-0023)`.
+
+### Task 8.2: Extract the C4 grid-ceiling clamp into `_apply_grid_ceiling_clamp`
+
+**ADR honored:** ADR-0023 (C4 has no opt-out of any kind, unlike R3 — this must remain a
+separate, unconditional call, never merged with `_apply_peak_clamp`). **Test boundary:** HA
+harness, `tests/test_coordinator.py` (regression only).
+
+**Files:**
+- Edit: `custom_components/smart_charging/coordinator.py`
+
+**Step 1:** No new test — before implementing, run
+`pytest tests/test_coordinator.py -k "ceiling or floor" -v` (or equivalent) to establish the
+current-green baseline.
+
+**Step 2: Implement** — add `_apply_grid_ceiling_clamp` (design doc §3.5); replace the C4 clamp
+call in `_run_cycle` with
+`desired = self._apply_grid_ceiling_clamp(desired, net_w=net_w, charger_w=charger_w, voltage=voltage)`,
+followed by the existing bare `apply_floor_cap(...)` call unchanged (already a single named call,
+no wrapper needed).
+
+**Step 3: Run the full regression suite**, then re-run the Step 1 subset. **Explicitly re-read**
+the resulting `_apply_grid_ceiling_clamp` method and confirm it has no `power_respect_peak` or any
+other opt-out — C4 is never skippable, per ADR-0006.
+
+**Step 4: Commit** — `refactor: extract _apply_grid_ceiling_clamp from _run_cycle (ADR-0023)`.
 
 ---
 
@@ -418,7 +477,7 @@ full.
 [ADR-0006](../adl/0006-coordinator-and-data-flow.md)'s ten-step list:
 - The sequence is still a literal, named, top-to-bottom list of calls with no reordering.
 - The R3 clamp and C4 clamp remain two distinct calls, only R3 gated by the R17 opt-out
-  (`_apply_clamps`, Task 8.1).
+  (`_apply_peak_clamp` from Task 8.1, `_apply_grid_ceiling_clamp` from Task 8.2).
 - `_reset_mode_state_if_changed()` is still called exactly twice, at the same two points.
 - The two in-cycle fault paths (`_read_cycle_inputs` returning `None`; the ev_soc-missing check)
   still each construct and return their own `CycleResult` directly in `_run_cycle` — no extracted
