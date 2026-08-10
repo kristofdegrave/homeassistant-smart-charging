@@ -67,6 +67,7 @@ from custom_components.smart_charging.const import (
     ROLE_GRID_VOLTAGE,
     ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
+    ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
     ROUND_DOWN,
@@ -795,6 +796,70 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     result = await coord._async_update_data()
 
     assert result.effective_peak_limit_kw == 3.0
+
+
+async def test_adapter_readings_contains_every_currently_wired_role(hass):
+    """entity-catalog.md:154/ADR-0021 -- one key per currently-wired *read* role, excluding
+    ROLES_ADAPTER_READINGS_EXCLUDED (#602 T4)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0, ev_soc=50.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.adapter_readings[ROLE_CHARGER_STATUS] == STATE_CHARGING
+    assert result.adapter_readings[ROLE_NET_POWER] == 1000.0
+    assert result.adapter_readings[ROLE_CHARGER_POWER] == 2000.0
+    assert result.adapter_readings[ROLE_EV_SOC] == 50.0
+    assert ROLE_NOTIFICATION_TARGET not in result.adapter_readings
+    assert result.adapter_readings_at is not None
+
+
+async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):
+    """A role wired but not read on a given cycle (car disconnected -> ev_soc not read this
+    time) keeps its last-read value rather than disappearing (ADR-0021's "most recently read
+    value") (#602 T4)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()  # cycle 1: ev_soc read and cached
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_DISCONNECTED)  # ev_soc no longer read
+    result = await coord._async_update_data()
+
+    assert result.adapter_readings[ROLE_EV_SOC] == 50.0  # still the cycle-1 cached value
+
+
+async def test_adapter_readings_role_never_read_is_none(hass):
+    adapters = _adapters(status=STATE_DISCONNECTED, ev_soc_role=True, ev_soc=50.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.adapter_readings[ROLE_EV_SOC] is None  # car never connected -> never read
+
+
+async def test_adapter_readings_role_returning_none_does_not_fault(hass):
+    adapters = _adapters(status=STATE_CHARGING, ev_soc_role=True, ev_soc=None)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.fault is False
+    assert result.adapter_readings[ROLE_EV_SOC] is None
+
+
+async def test_adapter_readings_survives_a_faulted_cycle(hass):
+    """A cycle that faults on a required role still reports whichever roles were cached
+    before the fault, not `{}` -- ADR-0021's "last successful read" (#602 T4)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()  # cycle 1: healthy, populates the cache
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeNumeric(None)  # cycle 2: required role faults
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    assert result.adapter_readings[ROLE_NET_POWER] == 1000.0  # cycle-1 cache survives
 
 
 async def test_time_to_full_min_matches_the_glossary_formula(hass):

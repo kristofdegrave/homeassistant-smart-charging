@@ -362,7 +362,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 22 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 23 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
@@ -376,6 +376,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         "solar_surplus_w": "sensor.smart_charging_solar_surplus_w",
         "peak_headroom_a": "sensor.smart_charging_peak_headroom_a",
         "time_to_full": "sensor.smart_charging_time_to_full",
+        "adapter_readings": "sensor.smart_charging_adapter_readings",
         "home_day": "switch.smart_charging_home_day",
         "departure_mon": "time.smart_charging_departure_mon",
         "departure_tue": "time.smart_charging_departure_tue",

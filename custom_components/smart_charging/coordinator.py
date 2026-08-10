@@ -82,6 +82,7 @@ from .const import (
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    ROLES_ADAPTER_READINGS_EXCLUDED,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
 )
@@ -209,6 +210,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # doc Sec 6.4), so it always starts empty here. Owned by PeakDemandState (ADR-0012).
         self._peak_demand = PeakDemandState()
         self._peak_tracker = PeakBreachTracker()
+        # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
+        # cycles (never reset), holding each read role's most recently read value so a role not
+        # read on a given cycle (e.g. `ev_soc` while disconnected) still reports its last known
+        # value instead of disappearing, and a faulted cycle still reports whatever was read
+        # before the fault (#602 T4).
+        self._role_readings: dict[str, Any] = {}
+        self._role_readings_at: datetime | None = None
 
     async def _async_update_data(self) -> CycleResult:
         try:
@@ -216,25 +224,53 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         except Exception as err:  # noqa: BLE001 - every failure funnels to the fault path (ADR-0007)
             self._log_fault(f"cycle exception: {err}")
             await self._safe_write_zero()
-            return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
+            return CycleResult(
+                commanded_current=0.0,
+                fault=True,
+                active_mode=self.active_mode,
+                adapter_readings=self._current_adapter_readings(),
+                adapter_readings_at=self._role_readings_at,
+            )
+
+    def _current_adapter_readings(self) -> dict[str, Any]:
+        """ADR-0021: the persisted role-readings cache, filtered to currently-wired *read*
+        roles -- a role that stops being wired disappears here even though the cache may
+        still hold its stale value internally (#602 T4)."""
+        return {
+            role: self._role_readings.get(role)
+            for role in self._adapters
+            if role not in ROLES_ADAPTER_READINGS_EXCLUDED
+        }
 
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
+        now_dt = dt_util.now()
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
+        self._role_readings[ROLE_CHARGER_STATUS] = status
+        self._role_readings[ROLE_NET_POWER] = net_w
+        self._role_readings[ROLE_CHARGER_POWER] = charger_w
+        self._role_readings_at = now_dt
 
         # Grid voltage is the one role where None is NOT a fault (NF4).
         measured_v = None
         if ROLE_GRID_VOLTAGE in self._adapters:
             measured_v = await self._adapters[ROLE_GRID_VOLTAGE].read()
+            self._role_readings[ROLE_GRID_VOLTAGE] = measured_v
         voltage = resolve_voltage(measured_v, self._config[CONF_NOMINAL_VOLTAGE])
 
         # Any required role missing -> fault (ADR-0007).
         if status is None or net_w is None or charger_w is None:
             self._log_fault("required adapter returned None")
             await self._write(0.0)
-            return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
+            return CycleResult(
+                commanded_current=0.0,
+                fault=True,
+                active_mode=self.active_mode,
+                adapter_readings=self._current_adapter_readings(),
+                adapter_readings_at=self._role_readings_at,
+            )
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
         # below (R10's smoothed control-path value) (#602 T1).
@@ -242,9 +278,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # Peak-Demand Tracker (E5, Task 1.3) + effective-peak-limit resolution (E5, Task 1.2) --
         # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
-        # real wall-clock (dt_util.now()) for month rollover, distinct from the monotonic `now`
-        # the mode state machines use below.
-        now_dt = dt_util.now()
+        # real wall-clock (`now_dt`, read at the top of `_run_cycle`) for month rollover,
+        # distinct from the monotonic `now` the mode state machines use below.
         peak_window_size = self._config.get(
             CONF_PEAK_WINDOW_SIZE, max(1, round(PEAK_WINDOW_SECONDS / self._interval_s))
         )
@@ -275,6 +310,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ev_soc = None
         if status in CHARGEABLE_STATES and ROLE_EV_SOC in self._adapters:
             ev_soc = await self._adapters[ROLE_EV_SOC].read()
+            self._role_readings[ROLE_EV_SOC] = ev_soc
         if (
             self._mode_handlers[self.active_mode].is_soc_gated
             and status in CHARGEABLE_STATES
@@ -289,6 +325,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 monthly_peak_kw=monthly_peak_kw,
                 effective_peak_limit_kw=effective_peak_limit_kw,
                 solar_surplus_w=solar_surplus_w,
+                adapter_readings=self._current_adapter_readings(),
+                adapter_readings_at=self._role_readings_at,
             )
 
         # .get(): a pre-solar config entry predates this option (`DEFAULT_SMOOTHING_WINDOW`
@@ -439,6 +477,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if ROLE_EV_BATTERY_CAPACITY in self._adapters
             else None
         )
+        if ROLE_EV_BATTERY_CAPACITY in self._adapters:
+            self._role_readings[ROLE_EV_BATTERY_CAPACITY] = sensed_capacity_kwh
         effective_battery_capacity_kwh = sensed_capacity_kwh
         if effective_battery_capacity_kwh is None:
             effective_battery_capacity_kwh = self._config.get(
@@ -611,6 +651,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             solar_surplus_w=solar_surplus_w,
             peak_headroom_a=peak_headroom_a,
             time_to_full_min=time_to_full_min,
+            adapter_readings=self._current_adapter_readings(),
+            adapter_readings_at=self._role_readings_at,
         )
 
     def set_soc_limit_override(self, value: float) -> None:

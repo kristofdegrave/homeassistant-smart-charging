@@ -1,9 +1,11 @@
 """HA-harness test for the Fault/OK status sensor (ADR-0007), the active-mode sensor, and
 the peak-protection diagnostic sensors (C3)."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from homeassistant.core import State
+from homeassistant.helpers.entity import EntityCategory
 from pytest_homeassistant_custom_component.common import (
     MockEntityPlatform,
     mock_restore_cache_with_extra_data,
@@ -14,6 +16,7 @@ from custom_components.smart_charging.coordinator_cycle import PeakDemandState
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
     ActiveSocLimitSensor,
+    AdapterReadingsSensor,
     ChargingStatusSensor,
     EffectivePeakLimitSensor,
     MonthlyPeakSensor,
@@ -21,6 +24,8 @@ from custom_components.smart_charging.sensor import (
     SolarSurplusSensor,
     TimeToFullSensor,
 )
+
+_ADAPTER_READINGS_AT = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
 
 
 async def test_status_reflects_fault_flag(hass):
@@ -272,6 +277,37 @@ def test_time_to_full_sensor_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
     assert sensor.unique_id == "abc_time_to_full"
+
+
+async def test_adapter_readings_sensor_reflects_the_timestamp_and_attributes(hass):
+    coord = SimpleNamespace(
+        data=SimpleNamespace(
+            adapter_readings_at=_ADAPTER_READINGS_AT,
+            adapter_readings={"ev_soc": 50.0, "grid_voltage": None},
+        )
+    )
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == _ADAPTER_READINGS_AT
+    assert sensor.extra_state_attributes == {"ev_soc": 50.0, "grid_voltage": None}
+
+
+async def test_adapter_readings_sensor_defaults_to_none_and_empty_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
+
+
+def test_adapter_readings_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_adapter_readings"
+
+
+def test_adapter_readings_sensor_is_diagnostic():
+    coord = SimpleNamespace(data=None)
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
 
 
 def test_active_mode_unique_id_scoped_to_entry():
