@@ -609,36 +609,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # isn't resolved yet at that point).
         self._reset_mode_state_if_changed()
 
-        if status not in CHARGEABLE_STATES:
-            desired = 0.0
-            # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
-            # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
-            self._mode_state = self._fresh_mode_state()
-        elif self.active_mode == MODE_OFF:
-            desired = 0.0
-        elif self.active_mode == MODE_POWER:
-            # ADR-0012: routed through the registry too, for observability/consistency with the
-            # other modes, but MODE_POWER has no entry in _fresh_mode_state() and must not gain
-            # one -- i.e. _PowerModeHandler.is_soc_gated must stay False (design doc Sec 3.4).
-            # Its returned state is discarded, never written to _mode_state. Unchanged
-            # behavior: no SOC gate.
-            desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
-        elif self._mode_handlers[self.active_mode].is_soc_gated and ev_soc >= active_soc_limit:
-            # R7: don't resume until the gate clears. Holding the state at idle() (rather than
-            # dispatching into step()) means the next cycle where this branch stops matching --
-            # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
-            # idle(), re-checking the start threshold normally. No latch, no separate phase.
-            desired = 0.0
-            self._mode_state[self.active_mode] = self._mode_handlers[self.active_mode].idle_state()
-        else:
-            # ADR-0012: one ModeHandler registry lookup replaces the old per-mode
-            # if/elif chain (MODE_SOLAR/MODE_SOLAR_ONLY/MODE_CAPTAR -- the only modes that
-            # can still reach this branch, since MODE_OFF/MODE_POWER/the SOC-gated-stop guard
-            # above all handle their own case first). Each handler wraps its modes/*.py
-            # step()/desired_current() unchanged; only the lookup mechanism changed.
-            desired, self._mode_state[self.active_mode] = self._mode_handlers[
-                self.active_mode
-            ].desired_current(ctx, self._mode_state.get(self.active_mode))
+        desired = self._dispatch_mode(ctx)
 
         # R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
         # Sec 7). `desired` here is the already-computed mode request from dispatch above --
@@ -762,6 +733,47 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         if home_day_override is not None:
             self.departure_home_day_override = home_day_override
+
+    def _dispatch_mode(self, ctx: CycleContext) -> float:
+        """The disconnect/Off/Power/SOC-gated-stop guards around the ModeHandler registry lookup
+        (ADR-0012's lookup itself is untouched -- this method only names the surrounding branches
+        that decide *whether* to look one up at all). Reads ev_soc/active_soc_limit off ctx rather
+        than as separate parameters -- both are already there (set earlier this cycle, before this
+        call), and threading them again as loose kwargs would reintroduce the two-sources-of-truth
+        problem CycleContext exists to eliminate. Mutates self._mode_state exactly as today;
+        returns the desired current before any clamp (ADR-0023)."""
+        if ctx.status not in CHARGEABLE_STATES:
+            # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
+            # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
+            self._mode_state = self._fresh_mode_state()
+            return 0.0
+        if self.active_mode == MODE_OFF:
+            return 0.0
+        if self.active_mode == MODE_POWER:
+            # ADR-0012: routed through the registry too, for observability/consistency with the
+            # other modes, but MODE_POWER has no entry in _fresh_mode_state() and must not gain
+            # one -- i.e. _PowerModeHandler.is_soc_gated must stay False (design doc Sec 3.4).
+            # Its returned state is discarded, never written to _mode_state. Unchanged
+            # behavior: no SOC gate.
+            desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
+            return desired
+        handler = self._mode_handlers[self.active_mode]
+        if handler.is_soc_gated and ctx.ev_soc >= ctx.active_soc_limit:
+            # R7: don't resume until the gate clears. Holding the state at idle() (rather than
+            # dispatching into step()) means the next cycle where this branch stops matching --
+            # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
+            # idle(), re-checking the start threshold normally. No latch, no separate phase.
+            self._mode_state[self.active_mode] = handler.idle_state()
+            return 0.0
+        # ADR-0012: one ModeHandler registry lookup replaces the old per-mode if/elif chain
+        # (MODE_SOLAR/MODE_SOLAR_ONLY/MODE_CAPTAR -- the only modes that can still reach this
+        # branch, since MODE_OFF/MODE_POWER/the SOC-gated-stop guard above all handle their own
+        # case first). Each handler wraps its modes/*.py step()/desired_current() unchanged;
+        # only the lookup mechanism changed.
+        desired, self._mode_state[self.active_mode] = handler.desired_current(
+            ctx, self._mode_state.get(self.active_mode)
+        )
+        return desired
 
     def _fresh_mode_state(self) -> dict:
         """R7/R11: the idle state every SOC-gated mode resets to -- disconnect, mode switch,
