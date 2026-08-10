@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from datetime import time as time_of_day
@@ -268,6 +269,68 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return None
         return status, net_w, charger_w, voltage
 
+    async def _resolve_deadline_and_reserve(
+        self, ctx: CycleContext, now_dt: datetime
+    ) -> tuple[time_of_day | None, Callable[[int], time_of_day | None]]:
+        """R14's departure-external/sun/low-tariff reads and the weekday-parameterised deadline
+        table, plus R9's solar-reserve-cap gating (resolve_solar_reserve_gate,
+        coordinator_cycle.py) -- the two are resolved together because R9's gate needs
+        tomorrow's deadline, this same block's own result. Mutates ctx.sun_is_up/
+        ctx.sun_is_down/ctx.low_tariff_active/ctx.solar_reserve_active in place (ADR-0012's
+        existing "assign onto ctx as each value resolves" pattern) and returns
+        (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use: deadline_tomorrow
+        was already needed by R9's own gate; resolve_deadline_for is the closure a later
+        extraction (issue #560) reuses for today's deadline. is_holiday is hardcoded False --
+        R14's public-holiday source is not wired in yet, so row 2 of R14's table never matches."""
+        external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
+        external = (
+            await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
+        )
+        sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
+        ctx.sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
+        ctx.sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
+        # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
+        # default -- "the signal is omitted and the flag is treated as always active".
+        ctx.low_tariff_active = True
+        if ROLE_LOW_TARIFF in self._adapters:
+            low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
+            if low_tariff_reading is not None:
+                ctx.low_tariff_active = low_tariff_reading
+
+        # R14's four-row table, evaluated for a given weekday -- shared by both today's
+        # deadline (urgency, below) and tomorrow's (R9's one-day-ahead precondition, UC07),
+        # so the other six args can never drift apart between the two call sites (#506).
+        def resolve_deadline_for(weekday: int) -> time_of_day | None:
+            return resolve_departure_deadline(
+                external_configured,
+                external,
+                is_holiday=False,
+                holiday_override=self.departure_holiday_override,
+                home_day_flag=self.home_day_flag,
+                home_day_override=self.departure_home_day_override,
+                day_of_week_default=self.departure_dow_defaults.get(weekday),
+            )
+
+        # R9's precondition (UC07): the same R14 table evaluated one day ahead.
+        tomorrow_weekday = (now_dt.weekday() + 1) % 7
+        deadline_tomorrow = resolve_deadline_for(tomorrow_weekday)
+        forecast_kwh = (
+            await self._adapters[ROLE_SOLAR_FORECAST].read()
+            if ROLE_SOLAR_FORECAST in self._adapters
+            else None
+        )
+        ctx.solar_reserve_active = resolve_solar_reserve_gate(
+            profile=self.active_profile,
+            home_day_flag=self.home_day_flag,
+            sun_is_down=ctx.sun_is_down,
+            forecast_kwh=forecast_kwh,
+            forecast_threshold_kwh=self._config.get(
+                CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
+            ),
+            deadline_tomorrow_resolved=deadline_tomorrow is not None,
+        )
+        return deadline_tomorrow, resolve_deadline_for
+
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
         now_dt = dt_util.now()
@@ -392,67 +455,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             max_solar_soc=self._config.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
         )
 
-        # R14: departure-external role + sun state, shared by both today's and tomorrow's
-        # (one-day-ahead, R9) deadline resolution below. is_holiday is hardcoded False in both
-        # calls -- UC11 (public-holiday recognition) is out of this slice's scope, no holiday
-        # source is wired in yet, so row 2 of R14's table never matches until UC11 lands.
-        external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
-        external = (
-            await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
-        )
-        if external_configured:
-            self._role_readings[ROLE_DEPARTURE_EXTERNAL] = external
-        sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
-        if ROLE_SUN in self._adapters:
-            self._role_readings[ROLE_SUN] = sun_reading
-        sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
-        sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
-        ctx.sun_is_up = sun_is_up
-        ctx.sun_is_down = sun_is_down
-        # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
-        # default -- "the signal is omitted and the flag is treated as always active".
-        low_tariff_active = True
-        if ROLE_LOW_TARIFF in self._adapters:
-            low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
-            self._role_readings[ROLE_LOW_TARIFF] = low_tariff_reading
-            if low_tariff_reading is not None:
-                low_tariff_active = low_tariff_reading
-        ctx.low_tariff_active = low_tariff_active
+        # R5/R14/R15: `today_weekday` stays inline -- _read_deadline_urgency_inputs still
+        # needs it as a parameter once that extraction lands; only `tomorrow_weekday` moves
+        # into _resolve_deadline_and_reserve (ADR-0023).
         today_weekday = now_dt.weekday()
-        tomorrow_weekday = (today_weekday + 1) % 7
-
-        # R14's four-row table, evaluated for a given weekday -- shared by both today's
-        # deadline (urgency, below) and tomorrow's (R9's one-day-ahead precondition, UC07),
-        # so the other six args can never drift apart between the two call sites (#506).
-        def resolve_deadline_for(weekday: int) -> time_of_day | None:
-            return resolve_departure_deadline(
-                external_configured,
-                external,
-                is_holiday=False,
-                holiday_override=self.departure_holiday_override,
-                home_day_flag=self.home_day_flag,
-                home_day_override=self.departure_home_day_override,
-                day_of_week_default=self.departure_dow_defaults.get(weekday),
-            )
-
-        # R9's precondition (UC07): the same R14 table evaluated one day ahead.
-        deadline_tomorrow = resolve_deadline_for(tomorrow_weekday)
-        forecast_kwh = (
-            await self._adapters[ROLE_SOLAR_FORECAST].read()
-            if ROLE_SOLAR_FORECAST in self._adapters
-            else None
-        )
-        if ROLE_SOLAR_FORECAST in self._adapters:
-            self._role_readings[ROLE_SOLAR_FORECAST] = forecast_kwh
-        ctx.solar_reserve_active = resolve_solar_reserve_gate(
-            profile=self.active_profile,
-            home_day_flag=self.home_day_flag,
-            sun_is_down=sun_is_down,
-            forecast_kwh=forecast_kwh,
-            forecast_threshold_kwh=self._config.get(
-                CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
-            ),
-            deadline_tomorrow_resolved=deadline_tomorrow is not None,
+        deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(
+            ctx, now_dt
         )
         active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
             self.soc_limit_override,
@@ -520,9 +528,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             solar_installed=self._config.get(CONF_SOLAR_INSTALLED, False),
             captar_available=self._config.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
             solar_start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
-            sun_is_up=sun_is_up,
-            sun_is_down=sun_is_down,
-            low_tariff_active=low_tariff_active,
+            sun_is_up=ctx.sun_is_up,
+            sun_is_down=ctx.sun_is_down,
+            low_tariff_active=ctx.low_tariff_active,
             solar_reserve_active=ctx.solar_reserve_active,
             mode_desired_current=lambda mode: self._mode_desired_current(
                 mode,
