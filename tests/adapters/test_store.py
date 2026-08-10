@@ -50,6 +50,24 @@ async def test_read_unregistered_entity_returns_none(hass):
     assert await store.read(Platform.SELECT, "mode", str) is None
 
 
+def test_resolve_entity_id_returns_registered_entity_id(hass):
+    """Public entry point a Manager uses to get the real entity_id up front, e.g. to
+    register a state-change listener (issue #562) -- same lookup read()/write() use
+    internally, just without also fetching state."""
+    _register(
+        hass, Platform.SENSOR, "smart_charging_active_soc_limit", "entry1_active_soc_limit", "80"
+    )
+    store = Store(hass, "entry1")
+    assert store.resolve_entity_id(Platform.SENSOR, "active_soc_limit") == (
+        "sensor.smart_charging_active_soc_limit"
+    )
+
+
+def test_resolve_entity_id_unregistered_returns_none(hass):
+    store = Store(hass, "entry1")
+    assert store.resolve_entity_id(Platform.SENSOR, "active_soc_limit") is None
+
+
 async def test_read_unavailable_returns_none(hass):
     _register(
         hass,

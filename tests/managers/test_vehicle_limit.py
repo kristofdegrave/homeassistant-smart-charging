@@ -59,6 +59,12 @@ class _FakeStore:
         self._write_succeeds = write_succeeds
         self.writes = []
 
+    def resolve_entity_id(self, entity_domain, unique_id_suffix):
+        """Not exercised by this file's tests (they drive M2's reactions directly, not
+        `register_listeners`) -- present so a future test constructing a manager with this
+        double and calling `register_listeners` doesn't hit an AttributeError."""
+        return None
+
     async def read(self, entity_domain, unique_id_suffix, value_type):
         return self._values.get((entity_domain, unique_id_suffix))
 

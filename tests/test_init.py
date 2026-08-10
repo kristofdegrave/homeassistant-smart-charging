@@ -16,7 +16,6 @@ from custom_components.smart_charging.adapters.notify import (
 )
 from custom_components.smart_charging.adapters.sun import SUN_STATE_BELOW_HORIZON
 from custom_components.smart_charging.const import (
-    ACTIVE_SOC_LIMIT_ENTITY,
     ATTR_REQUIRED_CURRENT_A,
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -715,7 +714,7 @@ async def test_no_vehicle_limit_manager_when_unmapped(hass):
 
     assert hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER] is None
 
-    hass.states.async_set(ACTIVE_SOC_LIMIT_ENTITY, "90")
+    hass.states.async_set("sensor.smart_charging_active_soc_limit", "90")
     await hass.async_block_till_done()  # must not raise
 
 
@@ -777,7 +776,38 @@ async def test_vehicle_limit_listener_writes_vehicle_on_active_soc_limit_change(
     calls = capture_service_calls(hass, "number", "set_value")
     events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_SYNCED)
 
-    hass.states.async_set(ACTIVE_SOC_LIMIT_ENTITY, "90")
+    hass.states.async_set("sensor.smart_charging_active_soc_limit", "90")
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    assert _vehicle_writes(calls) == [{"entity_id": "number.car_limit", "value": 90.0}]
+
+
+async def test_vehicle_limit_listener_survives_active_soc_limit_id_collision(hass):
+    """Issue #562 regression: register_listeners must resolve the active-SOC-limit sensor's
+    real entity_id through the Store's registry lookup (by unique_id), not a hardcoded
+    literal (ADR-0013's locale/rename concern). Pre-claiming the literal
+    `sensor.smart_charging_active_soc_limit` object_id with an unrelated entity forces HA to
+    assign our sensor a suffixed id (`_2`) instead -- a hardcoded-literal listener would
+    silently watch the wrong (unrelated) entity and never observe the real sensor's changes."""
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        "other_integration",
+        "unrelated_unique_id",
+        suggested_object_id="smart_charging_active_soc_limit",
+    )
+
+    entry = await _setup_vehicle_limit_entry(hass, status="Charging", home="home")
+    calls = capture_service_calls(hass, "number", "set_value")
+    events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_SYNCED)
+
+    real_entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_active_soc_limit"
+    )
+    assert real_entity_id == "sensor.smart_charging_active_soc_limit_2"
+
+    hass.states.async_set(real_entity_id, "90")
     await hass.async_block_till_done()
 
     assert len(events) == 1
@@ -789,7 +819,7 @@ async def test_vehicle_limit_listener_does_not_write_when_away(hass):
     await _setup_vehicle_limit_entry(hass, status="Charging", home="not_home")
     calls = capture_service_calls(hass, "number", "set_value")
 
-    hass.states.async_set(ACTIVE_SOC_LIMIT_ENTITY, "90")
+    hass.states.async_set("sensor.smart_charging_active_soc_limit", "90")
     await hass.async_block_till_done()
 
     assert _vehicle_writes(calls) == []
