@@ -35,9 +35,12 @@ class Store:
         self._hass = hass
         self._entry_id = entry_id
 
-    def _resolve(self, entity_domain: str, unique_id_suffix: str) -> str | None:
+    def resolve_entity_id(self, entity_domain: str, unique_id_suffix: str) -> str | None:
         """Shared entity-id resolution for read() and write() -- the one place both halves'
-        f"{entry_id}_{unique_id_suffix}" lookup lives, so they cannot drift apart."""
+        f"{entry_id}_{unique_id_suffix}" lookup lives, so they cannot drift apart. Public so a
+        Manager needing the real entity_id up front (e.g. to register a state-change listener)
+        resolves it the same way, rather than hardcoding it (ADR-0013's locale-dependent id
+        concern)."""
         return er.async_get(self._hass).async_get_entity_id(
             entity_domain, DOMAIN, f"{self._entry_id}_{unique_id_suffix}"
         )
@@ -49,7 +52,7 @@ class Store:
         registry, read its HA state, and coerce to value_type. None if unregistered,
         missing/unknown/unavailable, or the value doesn't coerce -- never raises (mirrors
         NumericReadAdapter.read(), ADR-0003)."""
-        entity_id = self._resolve(entity_domain, unique_id_suffix)
+        entity_id = self.resolve_entity_id(entity_domain, unique_id_suffix)
         if entity_id is None:
             return None
         state = self._hass.states.get(entity_id)
@@ -84,7 +87,7 @@ class Store:
         if entity_domain not in (Platform.NUMBER, Platform.SWITCH):
             _LOGGER.debug("Store.write: unsupported entity domain %s", entity_domain)
             return False
-        entity_id = self._resolve(entity_domain, unique_id_suffix)
+        entity_id = self.resolve_entity_id(entity_domain, unique_id_suffix)
         if entity_id is None:
             return False
         if entity_domain == Platform.NUMBER:
