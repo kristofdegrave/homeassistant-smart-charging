@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from datetime import time as time_of_day
@@ -493,6 +494,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # its dataclass default (0.0) until this final, real value lands here. No ModeHandler
         # reads this field today; if one later does, thread the provisional value onto ctx too.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
+
+        # entity-catalog.md:153/control-cycle.md step 5 -- the same raw-reading target the R3
+        # clamp itself holds (apply_peak_clamp's own headroom_a), duplicated here rather than
+        # returned from that function to avoid changing its control-path signature for a
+        # display-only need (#602 T2).
+        safety_margin_w = self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W)
+        peak_target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
+        peak_baseline_w = net_w - charger_w
+        peak_headroom_a = math.floor((peak_target_w - peak_baseline_w) / voltage)
         if auto_dispatchable and deadline_urgency.resolved_mode is not None:
             # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
             # never changes here while Manual, even under urgency) -- only Auto resolves its
@@ -588,6 +598,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_peak_limit_kw=effective_peak_limit_kw,
             active_soc_limit=active_soc_limit,
             solar_surplus_w=solar_surplus_w,
+            peak_headroom_a=peak_headroom_a,
         )
 
     def set_soc_limit_override(self, value: float) -> None:

@@ -797,6 +797,33 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     assert result.effective_peak_limit_kw == 3.0
 
 
+async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
+    """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
+    clamp itself computes (#602 T2)."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0  # below headroom (10 A) and above CONF_MIN_CURRENT -- no clamp
+    _seed_ample_peak_headroom(coord, kw=3.56)
+
+    result = await coord._async_update_data()
+
+    # headroom = floor((3560 - 250 - (1000 - 0)) / 230) = floor(2310 / 230) = 10
+    assert result.peak_headroom_a == 10.0
+    assert result.commanded_current == 8.0  # not the clamp outcome -- headroom is unclamped
+
+
+async def test_peak_headroom_a_defaults_to_zero_on_required_role_fault(hass):
+    adapters = _adapters(status=None)
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.peak_headroom_a == 0.0
+
+
 async def test_peak_clamp_reduces_captar_below_headroom(hass):
     """A high household baseline load reduces Captar's requested max-current down to the
     available headroom -- a momentary reduction (still above min_a), not a stop."""
