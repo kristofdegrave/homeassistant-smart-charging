@@ -1,9 +1,11 @@
 """Vehicle-Limit Manager (M2, V12) -- bidirectional vehicle charge-limit sync (UC09/R6).
 
-A Manager (system-design §4 rule 5 / ADR-0011): triggered by HA state changes and the
-ActiveSocLimitChanged event, it reads inputs through adapters and writes the vehicle
-through the vehicle_charge_limit adapter / adopts manual changes into
-number.smart_charging_soc_limit_override. It NEVER calls or is called by the Coordinator.
+A Manager (system-design §4 rule 5 / ADR-0011): triggered by HA state changes, including the
+materialized active-SOC-limit diagnostic sensor's own state changes (the entity the
+ActiveSocLimitChanged event fires alongside -- M2 observes the entity, not the bus event),
+it reads inputs through adapters and writes the vehicle through the vehicle_charge_limit
+adapter / adopts manual changes into number.smart_charging_soc_limit_override. It NEVER
+calls or is called by the Coordinator.
 No control-cycle logic, no clamps, no set-point -- see
 docs/plans/2026-07-21-vehicle-limit-manager-design.md.
 
@@ -28,16 +30,15 @@ from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event
 
 from ..adapters.base import Adapter
-from ..adapters.numeric import NumericReadAdapter
 from ..adapters.store import Store
 from ..const import (
-    ACTIVE_SOC_LIMIT_ENTITY,
     ATTR_ENTRY_ID,
     ATTR_LIMIT,
     CHARGEABLE_STATES,
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
+    OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     ROLE_CAR_HOME,
     ROLE_CHARGER_STATUS,
@@ -109,10 +110,8 @@ class VehicleLimitManager:
     async def on_active_soc_limit_changed(self, new_limit: float | None) -> None:
         """React to a resolved active-SOC-limit change (design §5.1, ADR-0011). Writes the new
         value to the vehicle iff `charger_status` is connected/charging AND `car_home` is True
-        (C2 -- UC09 alt 2a / R6 AC 4). `new_limit` is read from
-        `sensor.smart_charging_active_soc_limit` by the setup-time listener (Task 5.1); until
-        E3/M1 materialize that entity and fire it, this reaction is never invoked in production
-        (design §0) -- tested here by invoking the reaction directly with a simulated reading.
+        (C2 -- UC09 alt 2a / R6 AC 4). `new_limit` is read from the materialized active-SOC-limit
+        diagnostic sensor by the setup-time listener `register_listeners` wires (Task 5.1).
 
         Reads `charger_status`/`car_home` through their adapters rather than re-deriving the
         Coordinator's composition (ADR-0011 Option B rejected). `charger_status` is a mandatory
@@ -157,10 +156,14 @@ class VehicleLimitManager:
         parsing `event.data["new_state"].state` directly, so the adapter's numeric-coercion/
         status-translation/None semantics stay the single source of truth (ADR-0003) -- the
         same reasoning `_write_vehicle` already applies on the write side. The active-SOC-limit
-        sensor is an owned diagnostic entity (E3/M1) with no adapter of its own, so it is read
-        through a private `NumericReadAdapter` instead.
+        sensor is an owned diagnostic entity (E3/M1) with no adapter role of its own, so its real
+        entity_id is resolved through the Store's registry lookup (ADR-0018/0019) rather than a
+        hardcoded id, the same protection ADR-0013 gives every other owned entity against a
+        locale change or rename silently breaking the binding. If it is not yet registered (it
+        always is by the time `__init__.py` calls this, after platform setup), that one listener
+        is simply not registered -- the reaction stays unreachable rather than raising, the same
+        fail-safe M2 already applies when a role is unmapped.
         """
-        active_soc_limit_reader = NumericReadAdapter(self._hass, ACTIVE_SOC_LIMIT_ENTITY)
 
         async def _on_vehicle_event(_event: Event) -> None:
             await self.on_vehicle_limit_changed(
@@ -171,15 +174,29 @@ class VehicleLimitManager:
             await self.on_status_changed(await self._adapters[ROLE_CHARGER_STATUS].read())
 
         async def _on_active_soc_limit_event(_event: Event) -> None:
-            await self.on_active_soc_limit_changed(await active_soc_limit_reader.read())
+            await self.on_active_soc_limit_changed(
+                await self._store.read(Platform.SENSOR, OWNED_SUFFIX_ACTIVE_SOC_LIMIT, float)
+            )
 
-        return [
+        unsubs = [
             async_track_state_change_event(self._hass, [vehicle_entity_id], _on_vehicle_event),
             async_track_state_change_event(self._hass, [status_entity_id], _on_status_event),
-            async_track_state_change_event(
-                self._hass, [ACTIVE_SOC_LIMIT_ENTITY], _on_active_soc_limit_event
-            ),
         ]
+        active_soc_limit_entity_id = self._store.resolve_entity_id(
+            Platform.SENSOR, OWNED_SUFFIX_ACTIVE_SOC_LIMIT
+        )
+        if active_soc_limit_entity_id is not None:
+            unsubs.append(
+                async_track_state_change_event(
+                    self._hass, [active_soc_limit_entity_id], _on_active_soc_limit_event
+                )
+            )
+        else:
+            _LOGGER.debug(
+                "active_soc_limit sensor not yet registered -- System->vehicle sync listener "
+                "not installed this setup"
+            )
+        return unsubs
 
     async def _reset_to_default(self) -> None:
         default = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)

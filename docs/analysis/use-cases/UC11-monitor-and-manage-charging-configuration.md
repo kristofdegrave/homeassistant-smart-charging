@@ -62,7 +62,7 @@ whenever a human looks at or edits the dashboard.
 
 **4a — A capability is absent** — branches from step 4.
 Given any [capability](../system-overview.md#ubiquitous-language) is off (R18) — currently solar
-(`sc_solar_available`) or deadline management (`sc_deadline_available`)
+(`solar_available`) or deadline management (`deadline_available`)
 When the System renders the runtime configuration section
 Then every runtime entity that capability gates is omitted: the solar-dependent entities (e.g. the
 solar-reserve cap default) without the solar capability, and the departure-time rows without the

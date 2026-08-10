@@ -23,7 +23,7 @@ active mode and never chooses it (NF1); mode choice belongs to the [profile](sys
 
 ## Trigger
 
-A timer firing every control interval (configurable via `input_number.sc_control_interval_s`,
+A timer firing every control interval (configurable via `control_interval_s`,
 default 10 s). The cycle carries no decision state between firings; a handful of named flags and
 accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling timers,
 the step-up/reserve context threaded in step 4, and the

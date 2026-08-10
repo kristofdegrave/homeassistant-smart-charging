@@ -1,17 +1,23 @@
 # Entity catalog
 
-The single source of truth for every entity this integration owns and every
-[adapter role](system-overview.md#ubiquitous-language) through which it reaches hardware I/O
-(NF3). Per [ADR-0004](../adl/0004-owned-vs-mapped-entities.md), the integration's owned
-**control and diagnostic** entities are **native platform entities** under the
+The single source of truth for every entity this integration owns, every config-entry value it
+reads, and every [adapter role](system-overview.md#ubiquitous-language) through which it reaches
+hardware I/O (NF3). Per [ADR-0004](../adl/0004-owned-vs-mapped-entities.md), the integration's
+owned **control and diagnostic** entities are **native platform entities** under the
 `smart_charging_` prefix (e.g. `select.smart_charging_profile`,
 `sensor.smart_charging_active_mode`), following the
-[entity-naming convention](system-overview.md#entity-naming-convention); the remaining
-**install-time / tuning** helper rows are still `input_*` helper entities under the legacy
-`sc_` prefix, pending the separate ADR-0005 reconciliation (see Notes). The
+[entity-naming convention](system-overview.md#entity-naming-convention). Per
+[ADR-0005](../adl/0005-config-entry-structure-and-interval.md) (Accepted), declared capabilities
+(R18) and every install-time threshold, default, or the control interval are **not** entities at
+all: they live in the config entry as **data** (capabilities — set at initial setup, changed only
+via the reconfigure flow) or **options** (thresholds/defaults/control interval — changeable
+anytime via Configure), and this catalog lists them by their **config key**, not an entity id (see
+Notes). Two runtime helper values remain an open question under ADR-0004 and
+keep the legacy `sc_` `input_*` helper-entity form for now (see Notes). The
 [glossary](system-overview.md#ubiquitous-language) stays authoritative for each
-term's **meaning**; this catalog is authoritative for each entity's or role's **binding** — its
-id or role name, unit, default/range, and which behaviour reads or writes it.
+term's **meaning**; this catalog is authoritative for each entity's, config key's, or role's
+**binding** — its id/key or role name, unit, default/range, and which behaviour reads or writes
+it.
 
 Entities and adapter roles are organized by **configuration area** (General · EV · Solar ·
 Notification · Deadline / urgency), each divided into functional subgroups. A subgroup lists
@@ -19,21 +25,27 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 
 **How to read it:**
 
-- **Role** — `config` (a user-set helper entity), `adapter role` (an
-  internal, code-level role that reads or writes one piece of hardware I/O; mapped to the user's
-  real upstream entity during config flow — not an HA entity itself, NF3), or `state` (a value the
-  system itself maintains, or that the user sets directly, on a real owned HA entity — e.g. the
-  mode selector or a diagnostic readout). Owned control/diagnostic entities are native
-  `smart_charging_`-prefixed platform entities; the install-time/tuning helpers remain
-  `input_*.sc_*` (see preamble and Notes).
-- **Setup** — whether the row is [install-time or runtime configuration](system-overview.md#ubiquitous-language)
-  (R19): every `config` row gets a classification, as does a `state` row the user sets directly
-  (e.g. the active mode selector, the home-day flag); `—` marks `adapter role` rows (a code-level
-  mapping, not a catalogued entity) and `state` rows that are pure system-computed status
-  (e.g. the monthly peak demand), neither of which carries a runtime/install-time classification.
+- **Role** — `config` (a user-set entity — a native owned entity, or one of the two
+  still-open legacy `sc_` runtime helpers, see Notes), `config-data` / `config-options` (a
+  config-entry value per ADR-0005 — a declared capability or an install-time threshold/default —
+  with **no entity id at all**), `adapter role` (an internal, code-level role that reads or writes
+  one piece of hardware I/O; mapped to the user's real upstream entity during config flow — not an
+  HA entity itself, NF3), or `state` (a value the system itself maintains, or that the user sets
+  directly, on a real owned HA entity — e.g. the mode selector or a diagnostic readout). Owned
+  control/diagnostic entities are native `smart_charging_`-prefixed platform entities.
+- **Setup** — for a `config` or `state` row the user sets directly, whether it is
+  [install-time or runtime configuration](system-overview.md#ubiquitous-language) (R19); for a
+  `config-data` / `config-options` row, the config-entry bucket itself (`data` or `options`, ADR-0005)
+  stands in for this classification, since R19's install-time/runtime axis applies to entities. Like
+  install-time configuration, a `config-data`/`config-options` row is never presented on the runtime
+  dashboard (R19) — it is reached only through the config or reconfigure flow.
+  `—` marks `adapter role` rows (a code-level mapping, not a catalogued entity) and `state` rows
+  that are pure system-computed status (e.g. the monthly peak demand), neither of which carries a
+  runtime/install-time classification.
 - **Id** — for a `config` or `state` row, the real Home Assistant entity id —
-  `smart_charging_`-prefixed for the owned control/diagnostic entities, still `sc_`-prefixed for
-  the install-time/tuning helpers pending ADR-0005; for
+  `smart_charging_`-prefixed for the owned control/diagnostic entities, still legacy `sc_`-prefixed
+  for the two open runtime helpers (see Notes); for a `config-data` / `config-options` row, the
+  **config key** (no entity id, ADR-0005); for
   an `adapter role` row, the internal role name — it names a code-level role, not an HA entity.
 - **Default / range / source** — for a `config` row, its default and range; for an `adapter role`
   row, the upstream entity or source it is mapped to (NF3); for a `state` row, the value's range
@@ -67,28 +79,30 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_boolean.sc_solar_available` | config | install-time | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user |
-| `input_boolean.sc_captar_available` | config | install-time | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user |
-| `input_boolean.sc_deadline_available` | config | install-time | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user |
+| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow) |
+| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow) |
+| `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow) |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
+>
+> **Reconfigure-flow timing note.** R18 requires a capability change to take effect "within the next control cycle." The reconfigure flow reloads the config entry, which restarts the coordinator — the new capability set is therefore in force from the coordinator's first cycle after the reload, satisfying R18 rather than conflicting with it.
 
 ### Core & coordinator
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC11 | user, UC11 |
-| `input_number.sc_control_interval_s` | config | install-time | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user |
-| `input_number.sc_smoothing_window` | config | install-time | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user |
+| `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime) |
+| `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime) |
 | `select.smart_charging_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) — the `Manual` profile's mode-override selection | control-cycle, UC11 | user (Manual), UC11 |
 
 ### Installation
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_grid_supply_ceiling_a` | config | install-time | A | 40 (reference setup) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | control-cycle | user |
-| `input_number.sc_grid_safety_offset_a` | config | install-time | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user |
-| `input_number.sc_nominal_voltage_v` | config | install-time | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user |
+| `grid_supply_ceiling_a` | config-options | options | A | 40 (reference setup) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime) |
+| `grid_safety_offset_a` | config-options | options | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime) |
+| `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user (anytime) |
 | `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
 | `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02, UC11 | — |
 | `low_tariff` | adapter role | — | bool | mapped to the installation's tariff signal (NF3; optional — treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
@@ -99,8 +113,8 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_min_current_a` | config | install-time | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user |
-| `input_number.sc_max_current_a` | config | install-time | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user |
+| `min_current_a` | config-options | options | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user (anytime) |
+| `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime) |
 | `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02, UC11 | — |
 | `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10, UC11 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
@@ -109,19 +123,19 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_safety_margin_w` | config | install-time | W | 250 | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user |
-| `input_number.sc_max_peak_kw` | config | install-time | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user |
-| `input_number.sc_peak_grace_min` | config | install-time | min | 2 | R3 peak-breach grace period | control-cycle | user |
+| `safety_margin_w` | config-options | options | W | 250 | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user (anytime) |
+| `max_peak_kw` | config-options | options | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user (anytime) |
+| `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period | control-cycle | user (anytime) |
 | `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `input_number.sc_captar_cooldown_min` | config | install-time | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user |
+| `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime) |
 
 ### `Power` mode
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11 |
-| `input_boolean.sc_power_respect_peak` | config | install-time | — | on | `Power` peak-protection option (R17) | UC04 | user |
-| `input_number.sc_power_cooldown_min` | config | install-time | min | 10 | `Power`-mode cooldown (R11) | UC04 | user |
+| `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) | UC04 | user (anytime) |
+| `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime) |
 
 ### Diagnostic outputs
 
@@ -144,7 +158,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `number.smart_charging_soc_limit_override` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11 |
-| `input_number.sc_ev_battery_capacity_kwh` | config | install-time | kWh | 75 | EV battery capacity (R15) | resolution-rules | user |
+| `ev_battery_capacity_kwh` | config-options | options | kWh | 75 | EV battery capacity (R15) | resolution-rules | user (anytime) |
 | `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06 | — |
 | `ev_battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules | — |
 | `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09 | — |
@@ -154,41 +168,41 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 
 ## Solar configuration
 
-*All entities in this area are conditional on the solar capability (`sc_solar_available`, R18); when it is off they are not required.*
+*All rows in this area are conditional on the solar capability (`solar_available`, R18); when it is off they are not required.*
 
 ### `Solar` mode
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_start_threshold_w` | config | install-time | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
-| `input_number.sc_solar_hold_min` | config | install-time | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user |
-| `input_number.sc_solar_cooldown_min` | config | install-time | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user |
+| `solar_start_threshold_w` | config-options | options | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime) |
+| `solar_hold_min` | config-options | options | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime) |
+| `solar_cooldown_min` | config-options | options | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime) |
 | `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading (smoothed per R10; not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w`) | control-cycle | — |
 
 ### `SolarOnly` mode
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_only_start_threshold_w` | config | install-time | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user |
-| `input_select.sc_solar_only_rounding_strategy` | config | install-time | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user |
-| `input_number.sc_solar_only_rounding_midpoint_pct` | config | install-time | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user |
+| `solar_only_start_threshold_w` | config-options | options | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user (anytime) |
+| `solar_only_rounding_strategy` | config-options | options | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user (anytime) |
+| `solar_only_rounding_midpoint_pct` | config-options | options | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user (anytime) |
 
-Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
+Also uses `solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
 
 ### Solar SOC step-up
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_max_solar_soc` | config | install-time | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user |
-| `input_number.sc_solar_step_pp` | config | install-time | pp | 5 | solar step-up size (R8) | UC06 | user |
-| `input_number.sc_solar_step_threshold_pp` | config | install-time | pp | 2 | solar step-up trigger gap (R8) | UC06 | user |
+| `max_solar_soc` | config-options | options | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user (anytime) |
+| `solar_step_pp` | config-options | options | pp | 5 | solar step-up size (R8) | UC06 | user (anytime) |
+| `solar_step_threshold_pp` | config-options | options | pp | 2 | solar step-up trigger gap (R8) | UC06 | user (anytime) |
 
 ### Solar-reserve cap
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11 |
-| `input_number.sc_solar_forecast_threshold_kwh` | config | install-time | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user |
+| `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime) |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08 | — |
 
 ---
@@ -199,10 +213,10 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_prompt_timeout_h` | config | install-time | h | 2 | evening prompt timeout (R13) | — | user |
-| `input_number.sc_reminder_lead_h` | config | install-time | h | 8 | plug-in reminder lead time (R12) | UC10 | user |
-| `input_boolean.sc_evening_prompt_enabled` | config | install-time | — | on | evening home-day prompt enable (UC08) | UC08 | user |
-| `input_datetime.sc_evening_prompt_time` | config | install-time | time | 18:00 | evening prompt time (UC08) | UC08 | user |
+| `prompt_timeout_h` | config-options | options | h | 2 | evening prompt timeout (R13) | — | user (anytime) |
+| `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime) |
+| `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (UC08) | UC08 | user (anytime) |
+| `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime) |
 | `binary_sensor.smart_charging_plug_in_reminder` | state | — | bool | `on` while a plug-in reminder is currently due (car home, disconnected, below the active SOC limit, within the lead time of the next departure) | plug-in reminder (R12) | (UC11) | (UC10) |
 
 ---
@@ -212,7 +226,7 @@ Also uses `input_number.sc_solar_cooldown_min` (see `Solar` mode) — R11 applie
 ### Departure times
 
 *All rows in this subgroup are conditional on the [deadline capability](system-overview.md#ubiquitous-language)
-(`sc_deadline_available`, R18); when it is off they are neither offered nor required, and no
+(`deadline_available`, R18); when it is off they are neither offered nor required, and no
 departure deadline is ever resolved. The Home day subgroup below is **not** gated by it — the
 home-day flag also drives the solar-reserve cap (R9).*
 
@@ -238,24 +252,29 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 
 ## Notes
 
-- **Runtime vs. install-time judgment calls.** Where a `config` entity isn't a clear-cut match for
-  either of R19's own examples, this catalog draws the line as follows: an SOC **target** the
-  active-SOC-limit resolution can select as the effective limit
-  (`number.smart_charging_soc_limit_override`,
-  `sc_solar_reserve_soc`) is runtime, since the household changes what SOC it currently wants;
-  an SOC **ceiling/bound** on top of a target (`sc_max_solar_soc`, a step-up ceiling, not itself
-  selectable as the active limit) is install-time, alongside other bounds (`sc_min_current_a`,
-  `sc_max_current_a`). Likewise, a behavioural/algorithm choice that is set once and rarely
-  revisited (`sc_solar_only_rounding_strategy`, `sc_power_respect_peak`,
-  `sc_evening_prompt_enabled`) is install-time, distinct from a value the household dials in for
-  the current session (`sc_power_target_current_a`).
+- **Runtime target vs. install-time/config-entry bound — judgment calls.** Where a value isn't a
+  clear-cut match for either of R19's own entity examples, this catalog draws the line as follows:
+  an SOC **target** the active-SOC-limit resolution can select as the effective limit
+  (`number.smart_charging_soc_limit_override`, `sc_solar_reserve_soc`) is a runtime entity, since
+  the household changes what SOC it currently wants and the two remain open under ADR-0004 (see
+  below). An SOC **ceiling/bound** on top of a target (`max_solar_soc`, a step-up ceiling, not
+  itself selectable as the active limit) is a config-entry **options** value, alongside other
+  bounds (`min_current_a`, `max_current_a`) — same reasoning ADR-0005 applies to thresholds
+  generally. Likewise, a behavioural/algorithm choice that is set once and rarely revisited
+  (`solar_only_rounding_strategy`, `power_respect_peak`, `evening_prompt_enabled`) is a
+  config-entry options value, distinct from a value the household dials in for the current session
+  (`sc_power_target_current_a`, still an open runtime-entity question under ADR-0004). For values
+  ADR-0005's own text does not individually enumerate (e.g. `grid_supply_ceiling_a`,
+  `grid_safety_offset_a`, `nominal_voltage_v`), the rule this catalog applies is ADR-0005's own
+  Consequences test: does changing the value need to re-validate entity/role resolution? If not,
+  it is an options value, regardless of whether it also reads as a set-once installation fact.
 - **`sun.sun`** is read directly by `resolution-rules.md` (the [sun is down](system-overview.md#ubiquitous-language)
   condition) and is the one exception to the map-everything rule: it is a Home Assistant platform
   entity, not a device, so NF3 does not require an adapter role for it.
 - **The `effective peak limit` and the resolved `active SOC limit` are each now surfaced as a
   diagnostic sensor, but are still computed every cycle; the resolved `departure deadline` still
   has no entity.** Each is resolved every cycle by a rule in `resolution-rules.md` (the effective
-  peak limit from `sc_max_peak_kw`/`sensor.smart_charging_monthly_peak_kw`, the active SOC limit
+  peak limit from `max_peak_kw`/`sensor.smart_charging_monthly_peak_kw`, the active SOC limit
   from the active-SOC-limit inputs, the departure deadline from the departure inputs); they are
   computed values, not stored helpers. The effective peak limit's and the active SOC limit's
   computed values are exposed read-only for observability as
@@ -278,18 +297,18 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   by UC11 to display the currently applied set-point on the dashboard (R19) — neither read-back
   changes the command-only nature of `control-cycle`'s own use of these roles.
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
-  `sc_solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
+  `solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
   required, and the `Auto` rule skips the solar mode accordingly.
-- **Captar-dependent entities are conditional on the CapTar capability (R18).** When
-  `sc_captar_available` is off, `sc_captar_cooldown_min` is not required, and the `Auto` rule skips
+- **Captar-dependent rows are conditional on the CapTar capability (R18).** When
+  `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly.
-- **Deadline-dependent entities are conditional on the deadline capability (R18).** When
-  `sc_deadline_available` is off, the *Departure times* subgroup and `sc_reminder_lead_h` are not
+- **Deadline-dependent rows are conditional on the deadline capability (R18).** When
+  `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
   for the full behavioural consequence). Two binding-level notes this catalog is authoritative for:
-  `sc_ev_battery_capacity_kwh` / the `ev_battery_capacity` role still resolve but feed nothing,
+  `ev_battery_capacity_kwh` / the `ev_battery_capacity` role still resolve but feed nothing,
   since the required-current computation is their only consumer; and the *Home day* subgroup and
-  `sc_evening_prompt_*` are **not** gated, because the home-day flag independently drives the
+  `evening_prompt_*` are **not** gated, because the home-day flag independently drives the
   solar-reserve cap (R9). Unlike the solar and CapTar capabilities, this one removes no option from
   `select.smart_charging_mode`.
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
@@ -306,16 +325,21 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   the home-day entities (Deadline / urgency) also drive the solar-reserve cap (R9, Solar); how they
   are set is deliberately left open (R13) — currently via the evening prompt (UC08, Notification) or
   an external source. They are filed under their primary area to avoid duplicate rows.
-- **Owned entities vs. install-time/tuning helpers — ADR-0005 follow-up.** This catalog revision
-  (per ADR-0004) moved only the integration's owned **control and diagnostic** entities to native
-  `smart_charging_` platform entities (the `select`/`number`/`time`/`switch`/`sensor`/`binary_sensor`
-  rows above). Every install-time / tuning threshold and the capability flag are **unchanged here**
-  and stay as `input_*.sc_*` helpers (e.g. `sc_solar_available`, `sc_captar_available`,
-  `sc_deadline_available`, `sc_control_interval_s`,
-  `sc_grid_supply_ceiling_a`, `sc_max_peak_kw`, `sc_min_current_a`/`sc_max_current_a`, the
-  `sc_solar_*` thresholds, `sc_prompt_timeout_h`, `sc_reminder_lead_h`, `sc_evening_prompt_*`).
-  A few runtime user-set values also intentionally stay `sc_` for now because ADR-0004 does not
-  enumerate them among the owned native entities — `sc_power_target_current_a`,
-  `sc_solar_reserve_soc`. Whether any of these helper rows should instead become config-entry
-  data/options rather than entities is a **separate ADR-0005 catalog reconciliation, tracked
-  separately** — it is out of scope for this revision.
+- **Owned entities vs. config-entry data/options — ADR-0005 resolution.** Per
+  [ADR-0004](../adl/0004-owned-vs-mapped-entities.md), only the integration's owned **control and
+  diagnostic** entities are native `smart_charging_` platform entities (the
+  `select`/`number`/`time`/`switch`/`sensor`/`binary_sensor` rows above). Per
+  [ADR-0005](../adl/0005-config-entry-structure-and-interval.md) (Accepted), every declared
+  capability (`solar_available`, `captar_available`, `deadline_available`) is config-entry **data**
+  — set at initial setup, changed only via the reconfigure flow — and every install-time threshold,
+  default, or the control interval (`control_interval_s`, `grid_supply_ceiling_a`, `max_peak_kw`,
+  `min_current_a`/`max_current_a`, the `solar_*` thresholds, `prompt_timeout_h`,
+  `reminder_lead_h`, `evening_prompt_*`, and the rest of the `config-options` rows above) is
+  config-entry **options** — changeable anytime via Configure. Neither bucket has an entity id;
+  this catalog lists them by config key instead. Two runtime user-set values remain an **open
+  question under ADR-0004** — ADR-0005's Decision text enumerates only mappings/tables/capabilities
+  (data) and thresholds/defaults/the control interval (options), and assigns neither of these two;
+  they stay a user-set runtime-entity question that ADR-0004's own follow-up owns — and keep the
+  legacy `sc_` helper-entity form for now, pending a decision on whether they join the owned-entity
+  list: `sc_power_target_current_a`,
+  `sc_solar_reserve_soc`.

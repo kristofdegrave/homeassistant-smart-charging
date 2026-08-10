@@ -19,7 +19,7 @@
 
 ## Trigger
 
-The current time enters the configurable lead time (`input_number.sc_reminder_lead_h`, default 8 hours) before the next departure time (R14), while every precondition above still holds — evaluated every control cycle.
+The current time enters the configurable lead time (`reminder_lead_h`, default 8 hours) before the next departure time (R14), while every precondition above still holds — evaluated every control cycle.
 
 ## Main success scenario
 
