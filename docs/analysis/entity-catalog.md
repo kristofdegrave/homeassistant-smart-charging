@@ -12,7 +12,7 @@ owned **control and diagnostic** entities are **native platform entities** under
 all: they live in the config entry as **data** (capabilities — set at initial setup, changed only
 via the reconfigure flow) or **options** (thresholds/defaults/control interval — changeable
 anytime via Configure), and this catalog lists them by their **config key**, not an entity id (see
-Notes). Two runtime helper values remain an open question under a separate ADR-0004 follow-up and
+Notes). Two runtime helper values remain an open question under ADR-0004 and
 keep the legacy `sc_` `input_*` helper-entity form for now (see Notes). The
 [glossary](system-overview.md#ubiquitous-language) stays authoritative for each
 term's **meaning**; this catalog is authoritative for each entity's, config key's, or role's
@@ -25,7 +25,7 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 
 **How to read it:**
 
-- **Role** — `config` (a user-set helper entity — a native owned entity, or one of the two
+- **Role** — `config` (a user-set entity — a native owned entity, or one of the two
   still-open legacy `sc_` runtime helpers, see Notes), `config-data` / `config-options` (a
   config-entry value per ADR-0005 — a declared capability or an install-time threshold/default —
   with **no entity id at all**), `adapter role` (an internal, code-level role that reads or writes
@@ -36,7 +36,9 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 - **Setup** — for a `config` or `state` row the user sets directly, whether it is
   [install-time or runtime configuration](system-overview.md#ubiquitous-language) (R19); for a
   `config-data` / `config-options` row, the config-entry bucket itself (`data` or `options`, ADR-0005)
-  stands in for this classification, since R19's install-time/runtime axis applies to entities.
+  stands in for this classification, since R19's install-time/runtime axis applies to entities. Like
+  install-time configuration, a `config-data`/`config-options` row is never presented on the runtime
+  dashboard (R19) — it is reached only through the config or reconfigure flow.
   `—` marks `adapter role` rows (a code-level mapping, not a catalogued entity) and `state` rows
   that are pure system-computed status (e.g. the monthly peak demand), neither of which carries a
   runtime/install-time classification.
@@ -164,7 +166,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 
 ## Solar configuration
 
-*All entities in this area are conditional on the solar capability (`solar_available`, R18); when it is off they are not required.*
+*All rows in this area are conditional on the solar capability (`solar_available`, R18); when it is off they are not required.*
 
 ### `Solar` mode
 
@@ -291,10 +293,10 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
   `solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
   required, and the `Auto` rule skips the solar mode accordingly.
-- **Captar-dependent entities are conditional on the CapTar capability (R18).** When
+- **Captar-dependent rows are conditional on the CapTar capability (R18).** When
   `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly.
-- **Deadline-dependent entities are conditional on the deadline capability (R18).** When
+- **Deadline-dependent rows are conditional on the deadline capability (R18).** When
   `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
   for the full behavioural consequence). Two binding-level notes this catalog is authoritative for:
@@ -326,10 +328,12 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   — set at initial setup, changed only via the reconfigure flow — and every install-time threshold,
   default, or the control interval (`control_interval_s`, `grid_supply_ceiling_a`, `max_peak_kw`,
   `min_current_a`/`max_current_a`, the `solar_*` thresholds, `prompt_timeout_h`,
-  `reminder_lead_h`, `evening_prompt_*`, and the rest of the `config-data`/`config-options` rows
-  above) is config-entry **options** — changeable anytime via Configure. Neither has an entity id;
+  `reminder_lead_h`, `evening_prompt_*`, and the rest of the `config-options` rows above) is
+  config-entry **options** — changeable anytime via Configure. Neither bucket has an entity id;
   this catalog lists them by config key instead. Two runtime user-set values remain an **open
-  question under ADR-0004** (not ADR-0005 — they are not thresholds/defaults, they are values the
-  household actively dials in for the current session) and keep the legacy `sc_` helper-entity form
-  for now, pending a decision on whether they join the owned-entity list: `sc_power_target_current_a`,
+  question under ADR-0004** — ADR-0005's Decision text enumerates only mappings/tables/capabilities
+  (data) and thresholds/defaults/the control interval (options), and assigns neither of these two;
+  they stay a user-set runtime-entity question that ADR-0004's own follow-up owns — and keep the
+  legacy `sc_` helper-entity form for now, pending a decision on whether they join the owned-entity
+  list: `sc_power_target_current_a`,
   `sc_solar_reserve_soc`.
