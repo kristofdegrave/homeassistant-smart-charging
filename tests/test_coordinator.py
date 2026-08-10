@@ -797,6 +797,48 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     assert result.effective_peak_limit_kw == 3.0
 
 
+async def test_time_to_full_min_matches_the_glossary_formula(hass):
+    """system-overview.md glossary/entity-catalog.md:152 -- capacity * (limit - soc) / 100,
+    projected at this cycle's own commanded (pre-clamp) current (#602 T3)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert coord.active_mode == MODE_POWER
+
+    # capacity 75 kWh (default), soc 50, limit 80 -> energy_needed = 75*(80-50)/100 = 22.5 kWh
+    # minutes = 22500 Wh / (8 A * 230 V) * 60 = 733.695...
+    assert result.time_to_full_min == pytest.approx(22.5 * 1000 / (8.0 * 230.0) * 60)
+    assert result.commanded_current == 8.0
+
+
+async def test_time_to_full_min_is_none_when_commanded_current_is_zero(hass):
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    _coord, result = await _run(hass, adapters, _config(), target=0.0)
+    assert result.commanded_current == 0.0
+    assert result.time_to_full_min is None
+
+
+async def test_time_to_full_min_is_zero_once_soc_at_or_above_active_limit(hass):
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=80.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.time_to_full_min == 0.0
+
+
+async def test_time_to_full_min_defaults_to_none_on_required_role_fault(hass):
+    adapters = _adapters(status=None)
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.time_to_full_min is None
+
+
+async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_urgency(hass):
+    """Regression guard (#602 T3): promoting the ev_battery_capacity read to run
+    unconditionally must not change deadline-urgency's own resolved value for a cycle
+    where it was already being computed."""
+    config = _config()
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=3000.0, ev_soc=50.0)
+    _coord, result = await _run(hass, adapters, config, target=8.0)
+    assert result.fault is False
+
+
 async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
     """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
     clamp itself computes (#602 T2)."""

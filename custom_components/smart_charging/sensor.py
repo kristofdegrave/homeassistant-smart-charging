@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.components.sensor import RestoreSensor, SensorEntity, SensorExtraStoredData
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfElectricCurrent, UnitOfPower
+from homeassistant.const import UnitOfElectricCurrent, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -20,6 +20,7 @@ from .const import (
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_PEAK_HEADROOM_A,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    OWNED_SUFFIX_TIME_TO_FULL,
     STATUS_FAULT,
     STATUS_OK,
 )
@@ -189,6 +190,16 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
     _coordinator_field = "peak_headroom_a"
 
 
+class TimeToFullSensor(_CoordinatorFieldSensor):
+    """Diagnostic: minutes to the active SOC limit at the current set-point
+    (entity-catalog.md:152, #602)."""
+
+    _attr_translation_key = "time_to_full"
+    _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _coordinator_field = "time_to_full_min"
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -202,5 +213,6 @@ async def async_setup_entry(
             ActiveSocLimitSensor(entry.entry_id, coordinator),
             SolarSurplusSensor(entry.entry_id, coordinator),
             PeakHeadroomSensor(entry.entry_id, coordinator),
+            TimeToFullSensor(entry.entry_id, coordinator),
         ]
     )

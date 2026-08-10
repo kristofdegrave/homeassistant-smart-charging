@@ -19,6 +19,7 @@ from custom_components.smart_charging.sensor import (
     MonthlyPeakSensor,
     PeakHeadroomSensor,
     SolarSurplusSensor,
+    TimeToFullSensor,
 )
 
 
@@ -245,6 +246,32 @@ def test_peak_headroom_sensor_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = PeakHeadroomSensor(entry_id="abc", coordinator=coord)
     assert sensor.unique_id == "abc_peak_headroom_a"
+
+
+async def test_time_to_full_sensor_reflects_the_resolved_value(hass):
+    coord = SimpleNamespace(data=SimpleNamespace(time_to_full_min=42.0))
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 42.0
+
+
+async def test_time_to_full_sensor_reflects_zero_as_a_real_value(hass):
+    """`_CoordinatorFieldSensor`'s `_field_default` only substitutes when the attribute is
+    absent, never when present as 0 -- confirms no bespoke class is needed (#602 T3)."""
+    coord = SimpleNamespace(data=SimpleNamespace(time_to_full_min=0.0))
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 0.0
+
+
+async def test_time_to_full_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_time_to_full_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_time_to_full"
 
 
 def test_active_mode_unique_id_scoped_to_entry():

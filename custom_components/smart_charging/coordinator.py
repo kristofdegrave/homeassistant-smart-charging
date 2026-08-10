@@ -427,24 +427,24 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # separately written copy of the same predicate is exactly the lockstep-editing
         # hazard #506 exists to remove.
         deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
-        if deadline_resolvable:
-            deadline_today = resolve_deadline_for(today_weekday)
-            sensed_capacity_kwh = (
-                await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
-                if ROLE_EV_BATTERY_CAPACITY in self._adapters
-                else None
+        # R15: prefer the sensed role's current reading, falling back to the configured value
+        # both when the role is unmapped and when it currently reads None. Promoted to run
+        # unconditionally rather than only inside `if deadline_resolvable:` -- time_to_full
+        # (#602 T3) needs this value regardless of deadline resolvability; a disclosed, minor
+        # widening of "no new adapter reads" (design doc's Success criteria), justified because
+        # R15 already treats this role as continuously available whenever mapped, not
+        # deadline-specific.
+        sensed_capacity_kwh = (
+            await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
+            if ROLE_EV_BATTERY_CAPACITY in self._adapters
+            else None
+        )
+        effective_battery_capacity_kwh = sensed_capacity_kwh
+        if effective_battery_capacity_kwh is None:
+            effective_battery_capacity_kwh = self._config.get(
+                CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
             )
-            # R15: prefer the sensed role's current reading, falling back to the configured
-            # value both when the role is unmapped and when it currently reads None.
-            effective_battery_capacity_kwh = (
-                sensed_capacity_kwh
-                if sensed_capacity_kwh is not None
-                else self._config.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH)
-            )
-        else:
-            deadline_today = None
-            effective_battery_capacity_kwh = 0.0  # unused: deadline_resolvable=False makes
-            # resolve_deadline_urgency short-circuit before this value is ever read.
+        deadline_today = resolve_deadline_for(today_weekday) if deadline_resolvable else None
         deadline_urgency = resolve_deadline_urgency(
             deadline_resolvable=deadline_resolvable,
             ev_soc=ev_soc,
@@ -551,6 +551,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 self.active_mode
             ].desired_current(ctx, self._mode_state.get(self.active_mode))
 
+        # entity-catalog.md:152/glossary -- projected at this cycle's own commanded (pre-clamp)
+        # current, matching "the charger's current set-point"; unavailable while that's 0 A (no
+        # rate to project from), zero once soc is already at/above the active limit (#602 T3).
+        if ev_soc is None or desired == 0.0:
+            time_to_full_min = None
+        elif ev_soc >= active_soc_limit:
+            time_to_full_min = 0.0
+        else:
+            energy_needed_kwh = effective_battery_capacity_kwh * (active_soc_limit - ev_soc) / 100
+            time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
+
         # R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
         # Sec 7). `desired` here is the already-computed mode request from dispatch above --
         # apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
@@ -599,6 +610,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             active_soc_limit=active_soc_limit,
             solar_surplus_w=solar_surplus_w,
             peak_headroom_a=peak_headroom_a,
+            time_to_full_min=time_to_full_min,
         )
 
     def set_soc_limit_override(self, value: float) -> None:
