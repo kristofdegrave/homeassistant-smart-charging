@@ -110,10 +110,29 @@ class PeakDemandState:
 class ModeHandler(Protocol):
     """One thin adapter per mode module, wrapping its existing pure step()/desired_current()
     unchanged (ADR-0012) -- this decision only changes how the coordinator looks one up, not
-    any mode module's own logic."""
+    any mode module's own logic.
+
+    `is_soc_gated`/`is_solar_mode`/`idle_state()` carry the per-mode facts the coordinator
+    used to branch on by name (`_SOC_GATED_MODES`/`_SOLAR_MODES` tuples, and a
+    Captar-vs-solar ternary picking each mode's idle state). Adding a mode with one of these
+    properties now means giving its handler the right value/method, not adding a new branch
+    or extending a tuple at every call site (issue #561)."""
+
+    is_soc_gated: bool
+    """R7: whether SOC reaching the active limit stops this mode. False for Off/Power."""
+
+    is_solar_mode: bool
+    """R8/R9: whether this mode counts as "charging on solar" for the step-up/reserve-cap
+    Auto-only preconditions. True only for Solar/SolarOnly."""
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         """Return (desired_current_a, new_state); does not mutate ctx or state in place."""
+        ...
+
+    def idle_state(self) -> Any:
+        """This mode's fresh/idle per-mode state (R7/R11) -- what disconnect, a mode switch,
+        and the SOC gate all reset to. Only ever read when `is_soc_gated` is True; Off/Power
+        return None since neither is ever stored in `_mode_state`."""
         ...
 
 
@@ -122,8 +141,14 @@ class _OffModeHandler:
     and passes state through unchanged, mirroring today's MODE_OFF branch, which never
     touches per-mode state (design doc Sec 3.4)."""
 
+    is_soc_gated = False
+    is_solar_mode = False
+
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return 0.0, state
+
+    def idle_state(self) -> None:
+        return None
 
 
 class _PowerModeHandler:
@@ -132,15 +157,24 @@ class _PowerModeHandler:
     anything on CycleContext -- so this handler takes a zero-arg getter bound at construction
     (design doc Sec 3.4) rather than duplicating that value onto CycleContext each cycle."""
 
+    is_soc_gated = False
+    is_solar_mode = False
+
     def __init__(self, target_current_getter: Callable[[], float]) -> None:
         self._target_current_getter = target_current_getter
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return power.desired_current(self._target_current_getter(), ctx.status), state
 
+    def idle_state(self) -> None:
+        return None
+
 
 class _SolarModeHandler:
     """Wraps modes/solar.py::step unchanged."""
+
+    is_soc_gated = True
+    is_solar_mode = True
 
     def __init__(self, config: Mapping[str, Any]) -> None:
         self._config = config
@@ -159,9 +193,15 @@ class _SolarModeHandler:
             voltage=ctx.voltage,
         )
 
+    def idle_state(self) -> solar.SolarState:
+        return solar.SolarState.idle()
+
 
 class _SolarOnlyModeHandler:
     """Wraps modes/solar_only.py::step unchanged."""
+
+    is_soc_gated = True
+    is_solar_mode = True
 
     def __init__(self, config: Mapping[str, Any]) -> None:
         self._config = config
@@ -180,9 +220,15 @@ class _SolarOnlyModeHandler:
             voltage=ctx.voltage,
         )
 
+    def idle_state(self) -> solar_only.SolarOnlyState:
+        return solar_only.SolarOnlyState.idle()
+
 
 class _CaptarModeHandler:
     """Wraps modes/captar.py::step unchanged."""
+
+    is_soc_gated = True
+    is_solar_mode = False
 
     def __init__(self, config: Mapping[str, Any]) -> None:
         self._config = config
@@ -198,6 +244,9 @@ class _CaptarModeHandler:
                 CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
             ),
         )
+
+    def idle_state(self) -> captar.CaptarState:
+        return captar.CaptarState.idle()
 
 
 class SocGateResolver:

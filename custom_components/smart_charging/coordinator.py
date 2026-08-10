@@ -109,23 +109,10 @@ from .engines.soc_target import (
     resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
-from .modes import captar, solar, solar_only
+from .modes import captar
 from .modes._phase import Phase
 
 _LOGGER = logging.getLogger(__name__)
-
-_SOC_GATED_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR)
-_SOLAR_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY)  # R8's (and R9's, Task 5.2) Auto-only precondition
-
-
-def _fresh_mode_state() -> dict:
-    """R7/R11: the idle state every mode with one resets to -- disconnect, mode switch,
-    and the SOC gate all rebuild from this same shape."""
-    return {
-        MODE_SOLAR: solar.SolarState.idle(),
-        MODE_SOLAR_ONLY: solar_only.SolarOnlyState.idle(),
-        MODE_CAPTAR: captar.CaptarState.idle(),
-    }
 
 
 @dataclass
@@ -157,7 +144,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ADR-0012: one thin adapter per mode, looked up by active_mode instead of the old
         # if/elif dispatch chain. MODE_POWER is registered too (for the discard-state branch
         # below, kept as its own elif per design doc Sec 3.4) even though it never goes through
-        # the registry's shared state-write path.
+        # the registry's shared state-write path. `self.active_mode` is always one of these
+        # five keys in practice (profiles/auto.select_mode only returns a registered mode; a
+        # Manual selection is validated against the select entity's own options before it ever
+        # reaches the Store) -- an out-of-registry value would KeyError on lookup (issue #561),
+        # which the coordinator's blanket cycle-exception handler turns into a safe 0 A/Fault
+        # cycle (ADR-0007), same fail-safe outcome the old `in _SOC_GATED_MODES`/`_SOLAR_MODES`
+        # tuple checks reached by a different path for the same never-really-happens case.
         self._mode_handlers: dict[str, ModeHandler] = {
             MODE_OFF: _OffModeHandler(),
             MODE_POWER: _PowerModeHandler(lambda: self.target_current),
@@ -201,7 +194,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         self._last_active_mode: str | None = None
         self._net_window: tuple[float, ...] = ()
-        self._mode_state = _fresh_mode_state()
+        self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
         # M1's OWN 15-minute window (E5, Task 1.3), distinct from R10's `_net_window` above --
         # a MonthlyPeakSensor restore may seed `_peak_demand.tracked_kw`/`.tracked_month` before
@@ -271,7 +264,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ev_soc = None
         if status in CHARGEABLE_STATES and ROLE_EV_SOC in self._adapters:
             ev_soc = await self._adapters[ROLE_EV_SOC].read()
-        if self.active_mode in _SOC_GATED_MODES and status in CHARGEABLE_STATES and ev_soc is None:
+        if (
+            self._mode_handlers[self.active_mode].is_soc_gated
+            and status in CHARGEABLE_STATES
+            and ev_soc is None
+        ):
             self._log_fault("ev_soc required while a solar mode is active but missing/None")
             await self._write(0.0)
             return CycleResult(
@@ -313,7 +310,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
         is_solar_mode_charging = (
             self.active_profile == PROFILE_AUTO
-            and self.active_mode in _SOLAR_MODES
+            and self._mode_handlers[self.active_mode].is_solar_mode
             and status in CHARGEABLE_STATES
         )
         _, self._step_up_state = resolve_solar_step_up(
@@ -506,29 +503,23 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             desired = 0.0
             # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
             # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
-            self._mode_state = _fresh_mode_state()
+            self._mode_state = self._fresh_mode_state()
         elif self.active_mode == MODE_OFF:
             desired = 0.0
         elif self.active_mode == MODE_POWER:
             # ADR-0012: routed through the registry too, for observability/consistency with the
             # other modes, but MODE_POWER has no entry in _fresh_mode_state() and must not gain
-            # one -- its returned state is discarded, never written to _mode_state (design doc
-            # Sec 3.4). Unchanged behavior: no SOC gate.
+            # one -- i.e. _PowerModeHandler.is_soc_gated must stay False (design doc Sec 3.4).
+            # Its returned state is discarded, never written to _mode_state. Unchanged
+            # behavior: no SOC gate.
             desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
-        elif self.active_mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
+        elif self._mode_handlers[self.active_mode].is_soc_gated and ev_soc >= active_soc_limit:
             # R7: don't resume until the gate clears. Holding the state at idle() (rather than
             # dispatching into step()) means the next cycle where this branch stops matching --
             # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
             # idle(), re-checking the start threshold normally. No latch, no separate phase.
             desired = 0.0
-            if self.active_mode == MODE_CAPTAR:
-                self._mode_state[MODE_CAPTAR] = captar.CaptarState.idle()
-            else:
-                self._mode_state[self.active_mode] = (
-                    solar.SolarState.idle()
-                    if self.active_mode == MODE_SOLAR
-                    else solar_only.SolarOnlyState.idle()
-                )
+            self._mode_state[self.active_mode] = self._mode_handlers[self.active_mode].idle_state()
         else:
             # ADR-0012: one ModeHandler registry lookup replaces the old per-mode
             # if/elif chain (MODE_SOLAR/MODE_SOLAR_ONLY/MODE_CAPTAR -- the only modes that
@@ -641,6 +632,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if home_day_override is not None:
             self.departure_home_day_override = home_day_override
 
+    def _fresh_mode_state(self) -> dict:
+        """R7/R11: the idle state every SOC-gated mode resets to -- disconnect, mode switch,
+        and the SOC gate all rebuild from this same shape. Derived from the ModeHandler
+        registry (ADR-0012) rather than a hand-maintained per-mode dict, so a new SOC-gated
+        mode only needs a registry entry with `is_soc_gated = True`, not a new branch here
+        (issue #561)."""
+        return {
+            mode: handler.idle_state()
+            for mode, handler in self._mode_handlers.items()
+            if handler.is_soc_gated
+        }
+
     def _reset_mode_state_if_changed(self) -> None:
         """R11: switching mode resets timers -- fresh state for every mode with one, whether
         or not the incoming mode is one of them (a state nobody is dispatching to is inert
@@ -648,7 +651,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         this twice in the same cycle (Manual's change is already final at the top of the
         cycle; Auto's own mode isn't resolved until later) never double-resets."""
         if self.active_mode != self._last_active_mode:
-            self._mode_state = _fresh_mode_state()
+            self._mode_state = self._fresh_mode_state()
             self._last_active_mode = self.active_mode
 
     def set_target_current(self, value: float) -> None:
@@ -706,7 +709,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         three, thread the real values from `_run_cycle` at that point, not before."""
         if status not in CHARGEABLE_STATES:
             return 0.0
-        if mode in _SOC_GATED_MODES and ev_soc >= active_soc_limit:
+        if self._mode_handlers[mode].is_soc_gated and ev_soc >= active_soc_limit:
             return 0.0
         ctx = CycleContext(
             status=status,
