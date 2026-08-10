@@ -4,6 +4,7 @@ the peak-protection diagnostic sensors (C3)."""
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import State
 from homeassistant.helpers.entity import EntityCategory
 from pytest_homeassistant_custom_component.common import (
@@ -289,6 +290,7 @@ async def test_adapter_readings_sensor_reflects_the_timestamp_and_attributes(has
     sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
     assert sensor.native_value == _ADAPTER_READINGS_AT
     assert sensor.extra_state_attributes == {"ev_soc": 50.0, "grid_voltage": None}
+    assert sensor.device_class == SensorDeviceClass.TIMESTAMP
 
 
 async def test_adapter_readings_sensor_defaults_to_none_and_empty_when_no_data_yet(hass):

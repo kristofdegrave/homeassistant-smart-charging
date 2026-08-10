@@ -237,3 +237,11 @@ new `entity.sensor.<key>.name` entries: `solar_surplus_w` → "Solar surplus",
   automatically once one exists, no code change needed in this slice.
 - `sensor.smart_charging_desired_current` (`entity-catalog.md:147`) — also documented but
   unbuilt; out of scope for this slice, still an open item for whichever follow-up builds it.
+- `adapter_readings` excludes `car_home`, `vehicle_charge_limit`, and `home_day_external`
+  (via `ROLES_ADAPTER_READINGS_EXCLUDED`, discovered during implementation review) — these
+  roles are read by `VehicleLimitManager`/`NotificationManager` (M2/M3), never by the
+  coordinator's own `_run_cycle`, so there is no in-cycle "most recently read value" to
+  mirror without either a second, duplicate read (violating "no new adapter reads") or
+  threading those managers' own reads into this cache (a cross-manager coupling out of
+  #602's scope). Surfacing them is a follow-up for whichever slice next needs them on the
+  dashboard, not resolved here.

@@ -251,7 +251,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._role_readings[ROLE_CHARGER_STATUS] = status
         self._role_readings[ROLE_NET_POWER] = net_w
         self._role_readings[ROLE_CHARGER_POWER] = charger_w
-        self._role_readings_at = now_dt
 
         # Grid voltage is the one role where None is NOT a fault (NF4).
         measured_v = None
@@ -260,7 +259,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._role_readings[ROLE_GRID_VOLTAGE] = measured_v
         voltage = resolve_voltage(measured_v, self._config[CONF_NOMINAL_VOLTAGE])
 
-        # Any required role missing -> fault (ADR-0007).
+        # Any required role missing -> fault (ADR-0007). `_role_readings_at` deliberately does
+        # NOT advance to `now_dt` here -- ADR-0021/entity-catalog.md:154 define the entity's own
+        # state as the timestamp of the LAST SUCCESSFUL cycle, and a required-role fault means
+        # this cycle wasn't one; the cache keeps whichever timestamp a prior successful cycle
+        # set, even though the per-role values just cached above are this cycle's own (possibly
+        # None) readings.
         if status is None or net_w is None or charger_w is None:
             self._log_fault("required adapter returned None")
             await self._write(0.0)
@@ -271,6 +275,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 adapter_readings=self._current_adapter_readings(),
                 adapter_readings_at=self._role_readings_at,
             )
+        self._role_readings_at = now_dt
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
         # below (R10's smoothed control-path value) (#602 T1).
@@ -383,7 +388,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         external = (
             await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
         )
+        if external_configured:
+            self._role_readings[ROLE_DEPARTURE_EXTERNAL] = external
         sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
+        if ROLE_SUN in self._adapters:
+            self._role_readings[ROLE_SUN] = sun_reading
         sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
         sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
         ctx.sun_is_up = sun_is_up
@@ -393,6 +402,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         low_tariff_active = True
         if ROLE_LOW_TARIFF in self._adapters:
             low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
+            self._role_readings[ROLE_LOW_TARIFF] = low_tariff_reading
             if low_tariff_reading is not None:
                 low_tariff_active = low_tariff_reading
         ctx.low_tariff_active = low_tariff_active
@@ -420,6 +430,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if ROLE_SOLAR_FORECAST in self._adapters
             else None
         )
+        if ROLE_SOLAR_FORECAST in self._adapters:
+            self._role_readings[ROLE_SOLAR_FORECAST] = forecast_kwh
         solar_reserve_active = resolve_solar_reserve_active(
             profile=self.active_profile,
             home_day_flag=self.home_day_flag,
@@ -472,12 +484,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # widening of "no new adapter reads" (design doc's Success criteria), justified because
         # R15 already treats this role as continuously available whenever mapped, not
         # deadline-specific.
-        sensed_capacity_kwh = (
-            await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
-            if ROLE_EV_BATTERY_CAPACITY in self._adapters
-            else None
-        )
+        sensed_capacity_kwh = None
         if ROLE_EV_BATTERY_CAPACITY in self._adapters:
+            sensed_capacity_kwh = await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
             self._role_readings[ROLE_EV_BATTERY_CAPACITY] = sensed_capacity_kwh
         effective_battery_capacity_kwh = sensed_capacity_kwh
         if effective_battery_capacity_kwh is None:
@@ -591,17 +600,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 self.active_mode
             ].desired_current(ctx, self._mode_state.get(self.active_mode))
 
-        # entity-catalog.md:152/glossary -- projected at this cycle's own commanded (pre-clamp)
-        # current, matching "the charger's current set-point"; unavailable while that's 0 A (no
-        # rate to project from), zero once soc is already at/above the active limit (#602 T3).
-        if ev_soc is None or desired == 0.0:
-            time_to_full_min = None
-        elif ev_soc >= active_soc_limit:
-            time_to_full_min = 0.0
-        else:
-            energy_needed_kwh = effective_battery_capacity_kwh * (active_soc_limit - ev_soc) / 100
-            time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
-
         # R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
         # Sec 7). `desired` here is the already-computed mode request from dispatch above --
         # apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
@@ -615,7 +613,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 charger_w=charger_w,
                 voltage=voltage,
                 effective_peak_limit_kw=effective_peak_limit_kw,
-                safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+                safety_margin_w=safety_margin_w,
                 min_a=self._config[CONF_MIN_CURRENT],
                 grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
                 tracker=self._peak_tracker,
@@ -636,6 +634,22 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         desired = apply_floor_cap(  # E8 invariant last
             desired, min_a=self._config[CONF_MIN_CURRENT], max_a=self._config[CONF_MAX_CURRENT]
         )
+
+        # entity-catalog.md:152/glossary -- "the charger's current applied rate"/`charger_current`
+        # is the value actually written, i.e. `desired` AFTER every clamp/floor/cap, not the
+        # mode's pre-clamp request -- a clamped or floored-to-0 cycle must not report an ETA
+        # that assumes a rate the charger was never actually set to. `ev_soc >= active_soc_limit`
+        # is checked before the 0 A case so a SOC-gated-stop cycle (which also sets desired=0.0)
+        # still reports 0, not unknown, per entity-catalog.md:152 (#602 T3, code-reviewer finding).
+        if ev_soc is None:
+            time_to_full_min = None
+        elif ev_soc >= active_soc_limit:
+            time_to_full_min = 0.0
+        elif desired == 0.0:
+            time_to_full_min = None
+        else:
+            energy_needed_kwh = effective_battery_capacity_kwh * (active_soc_limit - ev_soc) / 100
+            time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
 
         await self._write(desired)
         if self._was_faulted:

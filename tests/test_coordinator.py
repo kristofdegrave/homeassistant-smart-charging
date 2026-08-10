@@ -70,6 +70,7 @@ from custom_components.smart_charging.const import (
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    ROLES_ADAPTER_READINGS_EXCLUDED,
     ROUND_DOWN,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
@@ -802,11 +803,15 @@ async def test_adapter_readings_contains_every_currently_wired_role(hass):
     """entity-catalog.md:154/ADR-0021 -- one key per currently-wired *read* role, excluding
     ROLES_ADAPTER_READINGS_EXCLUDED (#602 T4)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0, ev_soc=50.0)
+    adapters[ROLE_NOTIFICATION_TARGET] = _FakeNumeric("notify.mobile_app")  # write-only role
     _coord, result = await _run(hass, adapters, _config(), target=8.0)
     assert result.adapter_readings[ROLE_CHARGER_STATUS] == STATE_CHARGING
     assert result.adapter_readings[ROLE_NET_POWER] == 1000.0
     assert result.adapter_readings[ROLE_CHARGER_POWER] == 2000.0
     assert result.adapter_readings[ROLE_EV_SOC] == 50.0
+    assert result.adapter_readings[ROLE_GRID_VOLTAGE] == 230.0
+    assert result.adapter_readings[ROLE_SUN] is None  # sun_state=None default -> read as None
+    assert set(result.adapter_readings) == set(adapters) - ROLES_ADAPTER_READINGS_EXCLUDED
     assert ROLE_NOTIFICATION_TARGET not in result.adapter_readings
     assert result.adapter_readings_at is not None
 
@@ -896,12 +901,27 @@ async def test_time_to_full_min_defaults_to_none_on_required_role_fault(hass):
 
 async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_urgency(hass):
     """Regression guard (#602 T3): promoting the ev_battery_capacity read to run
-    unconditionally must not change deadline-urgency's own resolved value for a cycle
-    where it was already being computed."""
+    unconditionally must not change deadline-urgency's own resolved value for a cycle where
+    it was already being computed -- mirrors
+    test_effective_peak_limit_raises_to_maximum_during_urgency's known-working shape so this
+    guard actually exercises the deadline branch, not just `fault is False`."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=3000.0, ev_soc=50.0)
-    _coord, result = await _run(hass, adapters, config, target=8.0)
+    config[CONF_MAX_PEAK_KW] = 10.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord, kw=1.0)
+
+    result = await coord._async_update_data()
+
     assert result.fault is False
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 10.0
 
 
 async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
@@ -923,6 +943,28 @@ async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
     # headroom = floor((3560 - 250 - (1000 - 0)) / 230) = floor(2310 / 230) = 10
     assert result.peak_headroom_a == 10.0
     assert result.commanded_current == 8.0  # not the clamp outcome -- headroom is unclamped
+
+
+async def test_peak_headroom_a_matches_apply_peak_clamps_own_clamped_outcome(hass):
+    """Drift guard: when the mode's request exceeds headroom (and the clamped result still
+    clears min_a, so no breach/grace-period logic engages), apply_peak_clamp's own clamped
+    output equals its internal headroom_a -- proving the coordinator's duplicated formula
+    (#602 T2) hasn't drifted from engines/billing_protection.py's real behavior."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 16.0  # well above the 10 A headroom -- the clamp engages
+    _seed_ample_peak_headroom(coord, kw=3.56)
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 10.0  # apply_peak_clamp's own clamped outcome
+    assert result.peak_headroom_a == result.commanded_current
 
 
 async def test_peak_headroom_a_defaults_to_zero_on_required_role_fault(hass):

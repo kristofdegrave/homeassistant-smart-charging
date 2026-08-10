@@ -137,10 +137,21 @@ ROLE_VEHICLE_CHARGE_LIMIT = "vehicle_charge_limit"
 ROLE_CAR_HOME = "car_home"
 
 # ADR-0021: adapter_readings mirrors every currently-wired *read* role's most recently read
-# value; write-only roles have no reading to mirror. Explicit set, not a `read()` duck-type
-# check -- ROLE_NOTIFICATION_TARGET's adapter also exposes read(), and ROLE_VEHICLE_CHARGE_LIMIT
-# is read/write.
-ROLES_ADAPTER_READINGS_EXCLUDED = frozenset({ROLE_NOTIFICATION_TARGET})
+# value; a role the coordinator (M1's own _run_cycle) never reads has no value to mirror.
+# Explicit set, not a `read()` duck-type check -- ROLE_NOTIFICATION_TARGET's adapter also
+# exposes read(), and ROLE_VEHICLE_CHARGE_LIMIT is read/write.
+ROLES_ADAPTER_READINGS_EXCLUDED = frozenset(
+    {
+        ROLE_NOTIFICATION_TARGET,  # write-only: nothing reads it to display (ADR-0021's own
+        # example)
+        ROLE_CHARGER_CURRENT,  # write-only from M1's perspective -- _run_cycle only ever
+        # .write()s it, never .read()s it
+        ROLE_CAR_HOME,  # read only by VehicleLimitManager (M2), not M1's _run_cycle -- feeding
+        # cross-manager reads into this cache is out of #602's scope
+        ROLE_VEHICLE_CHARGE_LIMIT,  # ditto (M2)
+        ROLE_HOME_DAY_EXTERNAL,  # read only by NotificationManager, not M1's _run_cycle -- ditto
+    }
+)
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
