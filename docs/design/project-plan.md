@@ -398,7 +398,8 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
   runtime-classified entity and edits them in place, touching **only the Store** and adapter
   read-backs — no dashboard-specific logic per new entity (R19).
 - **Depends on:** C2 (owned control entities), C3 (diagnostics), RA1/RA2 (read-backs), RA3 (Store).
-- **ADR gate:** none (inherits C2/C3's settled native names).
+- **ADR gate:** ADR-0022 (dashboard delivery mechanism; otherwise inherits C2/C3's settled native
+  names).
 - **Testable on its own:** HA harness / Lovelace config — edits flow to the same entities other UCs
   consume; renders read-backs read-only.
 - **Integration checkpoint:** ⎔ an edit in the dashboard changes an owned entity that M1 then reads.
