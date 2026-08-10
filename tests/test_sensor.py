@@ -310,6 +310,28 @@ def test_adapter_readings_sensor_is_diagnostic():
     assert sensor.entity_category == EntityCategory.DIAGNOSTIC
 
 
+def test_all_sensor_object_id_suffixes_are_unique():
+    """T6 integration checkpoint (#602): a static, independent guard for ADR-0013's
+    per-entity object_id pin -- two sensor classes sharing an `_object_id_suffix` would
+    collide at registration (HA's registry dedupes by unique_id), which the runtime
+    `test_every_owned_entity_id_matches_entity_catalog` (test_init.py) would only catch
+    indirectly, via a shrunk registered-entity count."""
+    coord = SimpleNamespace(data=None)
+    sensor_classes = [
+        ChargingStatusSensor,
+        ActiveModeSensor,
+        MonthlyPeakSensor,
+        EffectivePeakLimitSensor,
+        ActiveSocLimitSensor,
+        SolarSurplusSensor,
+        PeakHeadroomSensor,
+        TimeToFullSensor,
+        AdapterReadingsSensor,
+    ]
+    suffixes = [cls(entry_id="abc", coordinator=coord)._object_id_suffix for cls in sensor_classes]
+    assert len(suffixes) == len(set(suffixes))
+
+
 def test_active_mode_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = ActiveModeSensor(entry_id="abc", coordinator=coord)
