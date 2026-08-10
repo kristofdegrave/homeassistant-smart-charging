@@ -52,6 +52,14 @@ MODE_SOLAR = "Solar"
 MODE_SOLAR_ONLY = "SolarOnly"
 MODE_CAPTAR = "Captar"
 
+# R18: which modes each capability offers/makes available. Single source of truth for
+# select.py's option-list construction and capability_gate.py's runtime R18 gate -- a mode
+# gated by an existing capability is added in one place, not duplicated across both.
+# BASE_CAPABLE_MODES needs no capability at all -- always available regardless of R18.
+BASE_CAPABLE_MODES = (MODE_OFF, MODE_POWER)
+SOLAR_CAPABLE_MODES = (MODE_SOLAR, MODE_SOLAR_ONLY)
+CAPTAR_CAPABLE_MODES = (MODE_CAPTAR,)
+
 # Profile names (select.profile options; also the coordinator's active_profile values, R16).
 PROFILE_MANUAL = "Manual"
 PROFILE_AUTO = "Auto"

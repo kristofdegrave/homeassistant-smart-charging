@@ -79,6 +79,8 @@ from custom_components.smart_charging.coordinator import SmartChargingCoordinato
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
+from custom_components.smart_charging.modes.solar import SolarState
+from custom_components.smart_charging.modes.solar_only import SolarOnlyState
 from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom
 
 # ADR-0007 fault-path log text (issue #504) -- named here, not repeated as bare literals,
@@ -487,8 +489,17 @@ async def test_dispatches_to_solar_only_when_selected(hass):
     assert result.active_mode == MODE_SOLAR_ONLY
 
 
-@pytest.mark.parametrize("mode", [MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR])
-async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(hass, mode):
+@pytest.mark.parametrize(
+    ("mode", "idle_state_type"),
+    [
+        (MODE_SOLAR, SolarState),
+        (MODE_SOLAR_ONLY, SolarOnlyState),
+        (MODE_CAPTAR, CaptarState),
+    ],
+)
+async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(
+    hass, mode, idle_state_type
+):
     # Arrange: ev_soc at the configured limit, with ample surplus that would otherwise charge.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=80.0)
 
@@ -497,6 +508,10 @@ async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(
 
     # Assert
     assert result.commanded_current == 0.0
+    # issue #561: pins the state's own TYPE, not just its `.phase` -- a mis-wired
+    # ModeHandler.idle_state() returning the wrong mode's state would still have
+    # phase == Phase.IDLE (all three *State dataclasses expose it) but fail this isinstance.
+    assert isinstance(coord._mode_state[mode], idle_state_type)
     assert coord._mode_state[mode].phase == Phase.IDLE
 
 
