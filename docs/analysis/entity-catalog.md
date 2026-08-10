@@ -84,6 +84,8 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow) |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
+>
+> **Reconfigure-flow timing note.** R18 requires a capability change to take effect "within the next control cycle." The reconfigure flow reloads the config entry, which restarts the coordinator — the new capability set is therefore in force from the coordinator's first cycle after the reload, satisfying R18 rather than conflicting with it.
 
 ### Core & coordinator
 
@@ -261,7 +263,11 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   generally. Likewise, a behavioural/algorithm choice that is set once and rarely revisited
   (`solar_only_rounding_strategy`, `power_respect_peak`, `evening_prompt_enabled`) is a
   config-entry options value, distinct from a value the household dials in for the current session
-  (`sc_power_target_current_a`, still an open runtime-entity question under ADR-0004).
+  (`sc_power_target_current_a`, still an open runtime-entity question under ADR-0004). For values
+  ADR-0005's own text does not individually enumerate (e.g. `grid_supply_ceiling_a`,
+  `grid_safety_offset_a`, `nominal_voltage_v`), the rule this catalog applies is ADR-0005's own
+  Consequences test: does changing the value need to re-validate entity/role resolution? If not,
+  it is an options value, regardless of whether it also reads as a set-once installation fact.
 - **`sun.sun`** is read directly by `resolution-rules.md` (the [sun is down](system-overview.md#ubiquitous-language)
   condition) and is the one exception to the map-everything rule: it is a Home Assistant platform
   entity, not a device, so NF3 does not require an adapter role for it.
