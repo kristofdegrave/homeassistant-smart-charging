@@ -91,12 +91,14 @@ from .coordinator_cycle import (
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
+    SolarStepUpGate,
     _CaptarModeHandler,
     _OffModeHandler,
     _PowerModeHandler,
     _SolarModeHandler,
     _SolarOnlyModeHandler,
     resolve_deadline_urgency,
+    resolve_solar_reserve_gate,
 )
 from .engines.billing_protection import (
     PeakBreachTracker,
@@ -107,11 +109,6 @@ from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
-from .engines.soc_target import (
-    SolarStepUpState,
-    resolve_solar_reserve_active,
-    resolve_solar_step_up,
-)
 from .modes import captar
 from .modes._phase import Phase
 
@@ -179,10 +176,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.active_profile: str = PROFILE_MANUAL
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
         # R8's lifecycle state, threaded across cycles -- cleared only via
-        # resolve_solar_step_up's own is_solar_mode_charging=False branch (Task 5.1), never by
+        # SolarStepUpGate.resolve's own is_solar_mode_charging=False branch (Task 5.1), never by
         # the generic per-mode-switch reset below (that would wrongly clear an in-effect
-        # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a).
-        self._step_up_state: SolarStepUpState = SolarStepUpState()
+        # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a). ADR-0023:
+        # SolarStepUpGate owns the SolarStepUpState itself; `.state` is a plain mutable
+        # attribute, same seeding pattern as before via `self._step_up_gate.state = ...`.
+        self._step_up_gate = SolarStepUpGate()
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
@@ -196,7 +195,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.departure_holiday_override: time_of_day | None = None
         self.departure_home_day_override: time_of_day | None = None
         # R5: the last cycle's required-current/urgency determination -- exposed for Task 5.3's
-        # own use and inspected directly by tests, the same way `_step_up_state` already is.
+        # own use and inspected directly by tests, the same way `_step_up_gate.state` already is.
         self._required_current = RequiredCurrentResult(
             required_a=None, urgent=False, unreachable=False
         )
@@ -242,9 +241,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if role not in ROLES_ADAPTER_READINGS_EXCLUDED
         }
 
-    async def _run_cycle(self) -> CycleResult:
-        await self._read_owned_entities()
-        now_dt = dt_util.now()
+    async def _read_cycle_inputs(self) -> tuple[str, float, float, float] | None:
+        """Steps 1 and 3 (ADR-0006): read the three required adapters and resolve voltage (NF4's
+        fallback -- the one role where a None reading is not a fault). Returns None on a missing
+        required adapter; _run_cycle performs the actual fault CycleResult itself, keeping
+        ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
+        extracted methods (ADR-0023). Also caches each read role's value into
+        `self._role_readings` (ADR-0021, #602 T4) -- `_run_cycle` decides whether to advance
+        `self._role_readings_at`, since that depends on whether this cycle's read succeeded."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -259,15 +263,24 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._role_readings[ROLE_GRID_VOLTAGE] = measured_v
         voltage = resolve_voltage(measured_v, self._config[CONF_NOMINAL_VOLTAGE])
 
-        # Any required role missing -> fault (ADR-0007). `_role_readings_at` deliberately does
-        # NOT advance to `now_dt` here -- ADR-0021/entity-catalog.md:154 define the entity's own
-        # state as the timestamp of the LAST SUCCESSFUL cycle, and a required-role fault means
-        # this cycle wasn't one; the cache keeps whichever timestamp a prior successful cycle
-        # set, even though the per-role values just cached above are this cycle's own (possibly
-        # None) readings.
+        # Any required role missing -> fault (ADR-0007).
         if status is None or net_w is None or charger_w is None:
+            return None
+        return status, net_w, charger_w, voltage
+
+    async def _run_cycle(self) -> CycleResult:
+        await self._read_owned_entities()
+        now_dt = dt_util.now()
+        inputs = await self._read_cycle_inputs()
+        if inputs is None:
             self._log_fault("required adapter returned None")
             await self._write(0.0)
+            # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
+            # ADR-0021/entity-catalog.md:154 define the entity's own state as the timestamp of
+            # the LAST SUCCESSFUL cycle, and a required-role fault means this cycle wasn't one;
+            # the cache keeps whichever timestamp a prior successful cycle set, even though the
+            # per-role values `_read_cycle_inputs` just cached are this cycle's own (possibly
+            # None) readings.
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -275,6 +288,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 adapter_readings=self._current_adapter_readings(),
                 adapter_readings_at=self._role_readings_at,
             )
+        status, net_w, charger_w, voltage = inputs
         self._role_readings_at = now_dt
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
@@ -363,15 +377,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # already this cycle's final value (set externally before the cycle runs); under Auto,
         # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
         # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
-        is_solar_mode_charging = (
-            self.active_profile == PROFILE_AUTO
-            and self._mode_handlers[self.active_mode].is_solar_mode
-            and status in CHARGEABLE_STATES
-        )
-        _, self._step_up_state = resolve_solar_step_up(
-            self._step_up_state,
-            is_solar_mode_charging=is_solar_mode_charging,
-            soc=ev_soc if ev_soc is not None else 0.0,
+        # ADR-0023: SolarStepUpGate computes is_solar_mode_charging internally from these same
+        # inputs and mutates its own `.state` in place; callers read `.state` afterward.
+        self._step_up_gate.resolve(
+            profile=self.active_profile,
+            mode_is_solar=self._mode_handlers[self.active_mode].is_solar_mode,
+            status=status,
+            soc=ev_soc,
             default_limit=self.soc_limit_override,
             step_threshold_pp=self._config.get(
                 CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP
@@ -432,22 +444,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         if ROLE_SOLAR_FORECAST in self._adapters:
             self._role_readings[ROLE_SOLAR_FORECAST] = forecast_kwh
-        solar_reserve_active = resolve_solar_reserve_active(
+        ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=self.home_day_flag,
             sun_is_down=sun_is_down,
-            forecast_kwh=forecast_kwh if forecast_kwh is not None else 0.0,
+            forecast_kwh=forecast_kwh,
             forecast_threshold_kwh=self._config.get(
                 CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
             ),
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
-        ctx.solar_reserve_active = solar_reserve_active
         active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
             self.soc_limit_override,
-            solar_reserve_active=solar_reserve_active,
+            solar_reserve_active=ctx.solar_reserve_active,
             solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
-            step_up_state=self._step_up_state,
+            step_up_state=self._step_up_gate.state,
         )
         if soc_limit_changed:
             self.hass.bus.async_fire(
@@ -512,7 +523,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             sun_is_up=sun_is_up,
             sun_is_down=sun_is_down,
             low_tariff_active=low_tariff_active,
-            solar_reserve_active=solar_reserve_active,
+            solar_reserve_active=ctx.solar_reserve_active,
             mode_desired_current=lambda mode: self._mode_desired_current(
                 mode,
                 status=status,
@@ -525,7 +536,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         required = deadline_urgency.required
         # Exposed for Task 5.3's own use (the effective-peak-limit `urgent` parameter and Auto
-        # mode-selection's escalation) and for tests, the same way `_step_up_state` already is.
+        # mode-selection's escalation) and for tests, the same way `_step_up_gate.state` already is.
         self._required_current = required
         if required.unreachable:
             self.hass.bus.async_fire(

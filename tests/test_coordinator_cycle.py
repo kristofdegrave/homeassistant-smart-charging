@@ -1,4 +1,5 @@
-"""Plain-pytest tests for the coordinator's internal cycle-decomposition units (ADR-0012)."""
+"""Plain-pytest tests for the coordinator's internal cycle-decomposition units
+(ADR-0012, ADR-0023)."""
 
 from datetime import datetime, time
 
@@ -17,6 +18,8 @@ from custom_components.smart_charging.const import (
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
+    PROFILE_AUTO,
+    PROFILE_MANUAL,
     ROUND_DOWN,
     STATE_CHARGING,
     STATE_CONNECTED,
@@ -27,12 +30,14 @@ from custom_components.smart_charging.coordinator_cycle import (
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
+    SolarStepUpGate,
     _CaptarModeHandler,
     _OffModeHandler,
     _PowerModeHandler,
     _SolarModeHandler,
     _SolarOnlyModeHandler,
     resolve_deadline_urgency,
+    resolve_solar_reserve_gate,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes import captar, solar, solar_only
@@ -472,6 +477,108 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
     assert limit == 80.0
 
 
+# --- SolarStepUpGate (ADR-0023, T0.1: R8 solar step-up gating, coordinator.py:306-326) ---
+
+
+def test_solar_step_up_gate_starts_at_default_state():
+    gate = SolarStepUpGate()
+    assert gate.state == SolarStepUpState()
+
+
+def test_solar_step_up_gate_steps_up_when_solar_mode_charging_and_within_threshold():
+    """Anchored to tests/engines/test_soc_target.py::test_steps_up_once_within_threshold's own
+    fixture values -- the gate must produce the identical resolve_solar_step_up outcome for an
+    equivalent is_solar_mode_charging=True call, proving the wrapper computes the gate correctly,
+    not just that it calls something."""
+    gate = SolarStepUpGate()
+    gate.resolve(
+        profile=PROFILE_AUTO,
+        mode_is_solar=True,
+        status=STATE_CHARGING,
+        soc=78.5,
+        default_limit=80.0,
+        step_threshold_pp=2.0,
+        step_pp=5.0,
+        max_solar_soc=100.0,
+    )
+    assert gate.state == SolarStepUpState(stepped_pct=85.0)
+
+
+def test_solar_step_up_gate_clears_when_profile_is_manual():
+    """is_solar_mode_charging's PROFILE_AUTO-only gate (R8) suppresses the step even with a
+    solar mode charging within threshold -- Manual never steps up. Seeds an already-stepped-up
+    state first so this exercises the reset-to-default branch (engines/soc_target.py's
+    is_solar_mode_charging=False row), not merely "starts at default and stays there"."""
+    gate = SolarStepUpGate()
+    gate.state = SolarStepUpState(stepped_pct=85.0)
+    gate.resolve(
+        profile=PROFILE_MANUAL,
+        mode_is_solar=True,
+        status=STATE_CHARGING,
+        soc=78.5,
+        default_limit=80.0,
+        step_threshold_pp=2.0,
+        step_pp=5.0,
+        max_solar_soc=100.0,
+    )
+    assert gate.state == SolarStepUpState()
+
+
+def test_solar_step_up_gate_clears_when_mode_is_not_solar():
+    """Seeded stepped-up (see test above) so this proves the reset branch, not a no-op."""
+    gate = SolarStepUpGate()
+    gate.state = SolarStepUpState(stepped_pct=85.0)
+    gate.resolve(
+        profile=PROFILE_AUTO,
+        mode_is_solar=False,
+        status=STATE_CHARGING,
+        soc=78.5,
+        default_limit=80.0,
+        step_threshold_pp=2.0,
+        step_pp=5.0,
+        max_solar_soc=100.0,
+    )
+    assert gate.state == SolarStepUpState()
+
+
+def test_solar_step_up_gate_clears_when_disconnected():
+    """Seeded stepped-up (see test above) so this proves the reset branch, not a no-op. Also
+    the hard requirement that `state` is a plain assignable public attribute (T2.1 needs
+    `coord._step_up_gate.state = SolarStepUpState(...)` to work as a drop-in test-seeding
+    replacement) -- a read-only property here would fail this seeding step, not just T2.1's."""
+    gate = SolarStepUpGate()
+    gate.state = SolarStepUpState(stepped_pct=85.0)
+    gate.resolve(
+        profile=PROFILE_AUTO,
+        mode_is_solar=True,
+        status=STATE_DISCONNECTED,
+        soc=78.5,
+        default_limit=80.0,
+        step_threshold_pp=2.0,
+        step_pp=5.0,
+        max_solar_soc=100.0,
+    )
+    assert gate.state == SolarStepUpState()
+
+
+def test_solar_step_up_gate_treats_none_soc_as_zero():
+    """Mirrors coordinator.py's own `soc=ev_soc if ev_soc is not None else 0.0` -- a
+    disconnected-adjacent read of None must not raise, and 0.0 never triggers a step (soc=0.0 is
+    never within step_threshold_pp of any positive current_limit here)."""
+    gate = SolarStepUpGate()
+    gate.resolve(
+        profile=PROFILE_AUTO,
+        mode_is_solar=True,
+        status=STATE_CHARGING,
+        soc=None,
+        default_limit=80.0,
+        step_threshold_pp=2.0,
+        step_pp=5.0,
+        max_solar_soc=100.0,
+    )
+    assert gate.state == SolarStepUpState()
+
+
 # --- resolve_deadline_urgency (ADR-0006 steps 3-6; extracted per #506) ---
 
 
@@ -649,3 +756,71 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     assert result.required.urgent is False
     assert result.urgent is False
     assert result.resolved_mode == MODE_SOLAR  # same row-3 match as the baseline, unchanged
+
+
+# --- resolve_solar_reserve_gate (ADR-0023) ---
+
+
+def test_resolve_solar_reserve_gate_active_when_all_conditions_hold():
+    """Anchored to engines/test_soc_target.py::test_reserve_active_when_all_conditions_hold's
+    own fixture values."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=False,
+        )
+        is True
+    )
+
+
+def test_resolve_solar_reserve_gate_treats_none_forecast_as_zero():
+    """Mirrors coordinator.py's own `forecast_kwh if forecast_kwh is not None else 0.0` -- an
+    unmapped/unavailable forecast role must not raise and must never activate the cap."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=None,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=False,
+        )
+        is False
+    )
+
+
+def test_resolve_solar_reserve_gate_inactive_under_manual():
+    """Anchored to engines/test_soc_target.py::test_reserve_inactive_under_manual."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_MANUAL,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=False,
+        )
+        is False
+    )
+
+
+def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow():
+    """Anchored to engines/test_soc_target.py::
+    test_reserve_inactive_when_deadline_resolved_for_tomorrow -- proves
+    deadline_tomorrow_resolved is actually threaded through to the wrapped engine call, not
+    just accepted and ignored (all other tests here pass False)."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=True,
+        )
+        is False
+    )

@@ -1173,7 +1173,7 @@ async def test_active_soc_limit_resolves_via_the_three_row_table(hass):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
-    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    coord._step_up_gate.state = SolarStepUpState(stepped_pct=85.0)
     _seed_ample_peak_headroom(coord)
 
     result = await coord._async_update_data()
@@ -1198,11 +1198,11 @@ async def test_solar_step_up_applies_a_fresh_step_when_soc_nears_the_current_lim
     result = await coord._async_update_data()
 
     assert result.active_soc_limit == 85.0
-    assert coord._step_up_state.stepped_pct == 85.0
+    assert coord._step_up_gate.state.stepped_pct == 85.0
 
 
 async def test_solar_step_up_clears_on_mode_switch_away_from_solar(hass):
-    """Switching from Solar to Power resets self._step_up_state (UC06 exception flow)."""
+    """Switching from Solar to Power resets self._step_up_gate.state (UC06 exception flow)."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
     coord = SmartChargingCoordinator(
@@ -1211,13 +1211,13 @@ async def test_solar_step_up_clears_on_mode_switch_away_from_solar(hass):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
-    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    coord._step_up_gate.state = SolarStepUpState(stepped_pct=85.0)
     _seed_ample_peak_headroom(coord)
 
     coord.active_mode = MODE_POWER
     await coord._async_update_data()
 
-    assert coord._step_up_state == SolarStepUpState()
+    assert coord._step_up_gate.state == SolarStepUpState()
 
 
 async def test_solar_step_up_clears_on_disconnect(hass):
@@ -1230,12 +1230,12 @@ async def test_solar_step_up_clears_on_disconnect(hass):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
-    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    coord._step_up_gate.state = SolarStepUpState(stepped_pct=85.0)
     _seed_ample_peak_headroom(coord)
 
     await coord._async_update_data()
 
-    assert coord._step_up_state == SolarStepUpState()
+    assert coord._step_up_gate.state == SolarStepUpState()
 
 
 async def test_solar_step_up_survives_solar_to_solaronly_switch(hass):
@@ -1249,13 +1249,13 @@ async def test_solar_step_up_survives_solar_to_solaronly_switch(hass):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
-    coord._step_up_state = SolarStepUpState(stepped_pct=85.0)
+    coord._step_up_gate.state = SolarStepUpState(stepped_pct=85.0)
     _seed_ample_peak_headroom(coord)
 
     coord.active_mode = MODE_SOLAR_ONLY
     await coord._async_update_data()
 
-    assert coord._step_up_state == SolarStepUpState(stepped_pct=85.0)
+    assert coord._step_up_gate.state == SolarStepUpState(stepped_pct=85.0)
 
 
 async def test_active_soc_limit_changed_event_fires_on_change(hass):
