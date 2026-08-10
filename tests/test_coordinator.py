@@ -67,8 +67,10 @@ from custom_components.smart_charging.const import (
     ROLE_GRID_VOLTAGE,
     ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
+    ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
+    ROLES_ADAPTER_READINGS_EXCLUDED,
     ROUND_DOWN,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
@@ -756,6 +758,32 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
     assert result.monthly_peak_kw == pytest.approx(3.4)
 
 
+async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
+    """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
+    smoothed control-path `surplus_w` (#602 T1)."""
+    config = _config()
+    config[CONF_SMOOTHING_WINDOW] = 2
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=3000.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()  # cycle 1: window=(1000.0,), smoothed==raw==1000.0
+
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)  # cycle 2: smoothed(1500) != raw(2000)
+    result = await coord._async_update_data()
+
+    assert result.solar_surplus_w == 3000.0 - 2000.0
+
+
+async def test_solar_surplus_w_defaults_to_zero_on_required_role_fault(hass):
+    adapters = _adapters(status=None)
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.solar_surplus_w == 0.0
+
+
 async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(hass):
     config = _config()
     config[CONF_MAX_PEAK_KW] = 4.0
@@ -769,6 +797,180 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     result = await coord._async_update_data()
 
     assert result.effective_peak_limit_kw == 3.0
+
+
+async def test_adapter_readings_contains_every_currently_wired_role(hass):
+    """entity-catalog.md:154/ADR-0021 -- one key per currently-wired *read* role, excluding
+    ROLES_ADAPTER_READINGS_EXCLUDED (#602 T4)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0, ev_soc=50.0)
+    adapters[ROLE_NOTIFICATION_TARGET] = _FakeNumeric("notify.mobile_app")  # write-only role
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.adapter_readings[ROLE_CHARGER_STATUS] == STATE_CHARGING
+    assert result.adapter_readings[ROLE_NET_POWER] == 1000.0
+    assert result.adapter_readings[ROLE_CHARGER_POWER] == 2000.0
+    assert result.adapter_readings[ROLE_EV_SOC] == 50.0
+    assert result.adapter_readings[ROLE_GRID_VOLTAGE] == 230.0
+    assert result.adapter_readings[ROLE_SUN] is None  # sun_state=None default -> read as None
+    assert set(result.adapter_readings) == set(adapters) - ROLES_ADAPTER_READINGS_EXCLUDED
+    assert ROLE_NOTIFICATION_TARGET not in result.adapter_readings
+    assert result.adapter_readings_at is not None
+
+
+async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):
+    """A role wired but not read on a given cycle (car disconnected -> ev_soc not read this
+    time) keeps its last-read value rather than disappearing (ADR-0021's "most recently read
+    value") (#602 T4)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()  # cycle 1: ev_soc read and cached
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_DISCONNECTED)  # ev_soc no longer read
+    result = await coord._async_update_data()
+
+    assert result.adapter_readings[ROLE_EV_SOC] == 50.0  # still the cycle-1 cached value
+
+
+async def test_adapter_readings_role_never_read_is_none(hass):
+    adapters = _adapters(status=STATE_DISCONNECTED, ev_soc_role=True, ev_soc=50.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.adapter_readings[ROLE_EV_SOC] is None  # car never connected -> never read
+
+
+async def test_adapter_readings_role_returning_none_does_not_fault(hass):
+    adapters = _adapters(status=STATE_CHARGING, ev_soc_role=True, ev_soc=None)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.fault is False
+    assert result.adapter_readings[ROLE_EV_SOC] is None
+
+
+async def test_adapter_readings_survives_a_faulted_cycle(hass):
+    """A cycle that faults on a required role still reports whichever roles were cached
+    before the fault, not `{}` -- ADR-0021's "last successful read" (#602 T4)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()  # cycle 1: healthy, populates the cache
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeNumeric(None)  # cycle 2: required role faults
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    assert result.adapter_readings[ROLE_NET_POWER] == 1000.0  # cycle-1 cache survives
+
+
+async def test_time_to_full_min_matches_the_glossary_formula(hass):
+    """system-overview.md glossary/entity-catalog.md:152 -- capacity * (limit - soc) / 100,
+    projected at this cycle's own commanded (pre-clamp) current (#602 T3)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert coord.active_mode == MODE_POWER
+
+    # capacity 75 kWh (default), soc 50, limit 80 -> energy_needed = 75*(80-50)/100 = 22.5 kWh
+    # minutes = 22500 Wh / (8 A * 230 V) * 60 = 733.695...
+    assert result.time_to_full_min == pytest.approx(22.5 * 1000 / (8.0 * 230.0) * 60)
+    assert result.commanded_current == 8.0
+
+
+async def test_time_to_full_min_is_none_when_commanded_current_is_zero(hass):
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    _coord, result = await _run(hass, adapters, _config(), target=0.0)
+    assert result.commanded_current == 0.0
+    assert result.time_to_full_min is None
+
+
+async def test_time_to_full_min_is_zero_once_soc_at_or_above_active_limit(hass):
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=80.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+    assert result.time_to_full_min == 0.0
+
+
+async def test_time_to_full_min_defaults_to_none_on_required_role_fault(hass):
+    adapters = _adapters(status=None)
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.time_to_full_min is None
+
+
+async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_urgency(hass):
+    """Regression guard (#602 T3): promoting the ev_battery_capacity read to run
+    unconditionally must not change deadline-urgency's own resolved value for a cycle where
+    it was already being computed -- mirrors
+    test_effective_peak_limit_raises_to_maximum_during_urgency's known-working shape so this
+    guard actually exercises the deadline branch, not just `fault is False`."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 10.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_ample_peak_headroom(coord, kw=1.0)
+
+    result = await coord._async_update_data()
+
+    assert result.fault is False
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 10.0
+
+
+async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
+    """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
+    clamp itself computes (#602 T2)."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0  # below headroom (10 A) and above CONF_MIN_CURRENT -- no clamp
+    _seed_ample_peak_headroom(coord, kw=3.56)
+
+    result = await coord._async_update_data()
+
+    # headroom = floor((3560 - 250 - (1000 - 0)) / 230) = floor(2310 / 230) = 10
+    assert result.peak_headroom_a == 10.0
+    assert result.commanded_current == 8.0  # not the clamp outcome -- headroom is unclamped
+
+
+async def test_peak_headroom_a_matches_apply_peak_clamps_own_clamped_outcome(hass):
+    """Drift guard: when the mode's request exceeds headroom (and the clamped result still
+    clears min_a, so no breach/grace-period logic engages), apply_peak_clamp's own clamped
+    output equals its internal headroom_a -- proving the coordinator's duplicated formula
+    (#602 T2) hasn't drifted from engines/billing_protection.py's real behavior."""
+    config = _config()
+    config[CONF_MAX_PEAK_KW] = 3.56
+    config[CONF_SAFETY_MARGIN_W] = 250.0
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 16.0  # well above the 10 A headroom -- the clamp engages
+    _seed_ample_peak_headroom(coord, kw=3.56)
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 10.0  # apply_peak_clamp's own clamped outcome
+    assert result.peak_headroom_a == result.commanded_current
+
+
+async def test_peak_headroom_a_defaults_to_zero_on_required_role_fault(hass):
+    adapters = _adapters(status=None)
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.peak_headroom_a == 0.0
 
 
 async def test_peak_clamp_reduces_captar_below_headroom(hass):

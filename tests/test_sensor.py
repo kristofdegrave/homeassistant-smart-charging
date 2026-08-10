@@ -1,9 +1,12 @@
 """HA-harness test for the Fault/OK status sensor (ADR-0007), the active-mode sensor, and
 the peak-protection diagnostic sensors (C3)."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import State
+from homeassistant.helpers.entity import EntityCategory
 from pytest_homeassistant_custom_component.common import (
     MockEntityPlatform,
     mock_restore_cache_with_extra_data,
@@ -14,10 +17,16 @@ from custom_components.smart_charging.coordinator_cycle import PeakDemandState
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
     ActiveSocLimitSensor,
+    AdapterReadingsSensor,
     ChargingStatusSensor,
     EffectivePeakLimitSensor,
     MonthlyPeakSensor,
+    PeakHeadroomSensor,
+    SolarSurplusSensor,
+    TimeToFullSensor,
 )
+
+_ADAPTER_READINGS_AT = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
 
 
 async def test_status_reflects_fault_flag(hass):
@@ -207,6 +216,122 @@ def test_effective_peak_limit_sensor_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = EffectivePeakLimitSensor(entry_id="abc", coordinator=coord)
     assert sensor.unique_id == "abc_effective_peak_limit"
+
+
+async def test_solar_surplus_sensor_reflects_the_resolved_value(hass):
+    coord = SimpleNamespace(data=SimpleNamespace(solar_surplus_w=1200.0))
+    sensor = SolarSurplusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 1200.0
+
+
+async def test_solar_surplus_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = SolarSurplusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_solar_surplus_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = SolarSurplusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_solar_surplus_w"
+
+
+async def test_peak_headroom_sensor_reflects_the_resolved_value(hass):
+    coord = SimpleNamespace(data=SimpleNamespace(peak_headroom_a=10.0))
+    sensor = PeakHeadroomSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 10.0
+
+
+async def test_peak_headroom_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = PeakHeadroomSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_peak_headroom_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = PeakHeadroomSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_peak_headroom_a"
+
+
+async def test_time_to_full_sensor_reflects_the_resolved_value(hass):
+    coord = SimpleNamespace(data=SimpleNamespace(time_to_full_min=42.0))
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 42.0
+
+
+async def test_time_to_full_sensor_reflects_zero_as_a_real_value(hass):
+    """`_CoordinatorFieldSensor`'s `_field_default` only substitutes when the attribute is
+    absent, never when present as 0 -- confirms no bespoke class is needed (#602 T3)."""
+    coord = SimpleNamespace(data=SimpleNamespace(time_to_full_min=0.0))
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 0.0
+
+
+async def test_time_to_full_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_time_to_full_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_time_to_full"
+
+
+async def test_adapter_readings_sensor_reflects_the_timestamp_and_attributes(hass):
+    coord = SimpleNamespace(
+        data=SimpleNamespace(
+            adapter_readings_at=_ADAPTER_READINGS_AT,
+            adapter_readings={"ev_soc": 50.0, "grid_voltage": None},
+        )
+    )
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == _ADAPTER_READINGS_AT
+    assert sensor.extra_state_attributes == {"ev_soc": 50.0, "grid_voltage": None}
+    assert sensor.device_class == SensorDeviceClass.TIMESTAMP
+
+
+async def test_adapter_readings_sensor_defaults_to_none_and_empty_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes == {}
+
+
+def test_adapter_readings_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_adapter_readings"
+
+
+def test_adapter_readings_sensor_is_diagnostic():
+    coord = SimpleNamespace(data=None)
+    sensor = AdapterReadingsSensor(entry_id="abc", coordinator=coord)
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+def test_all_sensor_object_id_suffixes_are_unique():
+    """T6 integration checkpoint (#602): a static, independent guard for ADR-0013's
+    per-entity object_id pin -- two sensor classes sharing an `_object_id_suffix` would
+    collide at registration (HA's registry dedupes by unique_id), which the runtime
+    `test_every_owned_entity_id_matches_entity_catalog` (test_init.py) would only catch
+    indirectly, via a shrunk registered-entity count."""
+    coord = SimpleNamespace(data=None)
+    sensor_classes = [
+        ChargingStatusSensor,
+        ActiveModeSensor,
+        MonthlyPeakSensor,
+        EffectivePeakLimitSensor,
+        ActiveSocLimitSensor,
+        SolarSurplusSensor,
+        PeakHeadroomSensor,
+        TimeToFullSensor,
+        AdapterReadingsSensor,
+    ]
+    suffixes = [cls(entry_id="abc", coordinator=coord)._object_id_suffix for cls in sensor_classes]
+    assert len(suffixes) == len(set(suffixes))
 
 
 def test_active_mode_unique_id_scoped_to_entry():

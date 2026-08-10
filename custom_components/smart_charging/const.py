@@ -93,6 +93,10 @@ OWNED_SUFFIX_DEPARTURE_HOME_DAY = f"departure_{DEPARTURE_OVERRIDE_HOME_DAY}"
 # through the same Store registry lookup so a locale/rename (ADR-0013) can't silently break
 # the Vehicle-Limit Manager's listener the way a hardcoded entity_id would.
 OWNED_SUFFIX_ACTIVE_SOC_LIMIT = "active_soc_limit"
+OWNED_SUFFIX_SOLAR_SURPLUS_W = "solar_surplus_w"
+OWNED_SUFFIX_TIME_TO_FULL = "time_to_full"
+OWNED_SUFFIX_PEAK_HEADROOM_A = "peak_headroom_a"
+OWNED_SUFFIX_ADAPTER_READINGS = "adapter_readings"
 # Monday=0 .. Sunday=6 (Python's date.weekday()), matching time.py's DAY_OF_WEEK_DEFAULTS order.
 OWNED_SUFFIX_DEPARTURE_DOW = [
     f"departure_{d}" for d in (DAY_MON, DAY_TUE, DAY_WED, DAY_THU, DAY_FRI, DAY_SAT, DAY_SUN)
@@ -131,6 +135,23 @@ ACTION_HOMEDAY_NO = "HOMEDAY_NO"
 # RA1-VL + car_home (RA2 role, built early -- M2 is their first consumer).
 ROLE_VEHICLE_CHARGE_LIMIT = "vehicle_charge_limit"
 ROLE_CAR_HOME = "car_home"
+
+# ADR-0021: adapter_readings mirrors every currently-wired *read* role's most recently read
+# value; a role the coordinator (M1's own _run_cycle) never reads has no value to mirror.
+# Explicit set, not a `read()` duck-type check -- ROLE_NOTIFICATION_TARGET's adapter also
+# exposes read(), and ROLE_VEHICLE_CHARGE_LIMIT is read/write.
+ROLES_ADAPTER_READINGS_EXCLUDED = frozenset(
+    {
+        ROLE_NOTIFICATION_TARGET,  # write-only: nothing reads it to display (ADR-0021's own
+        # example)
+        ROLE_CHARGER_CURRENT,  # write-only from M1's perspective -- _run_cycle only ever
+        # .write()s it, never .read()s it
+        ROLE_CAR_HOME,  # read only by VehicleLimitManager (M2), not M1's _run_cycle -- feeding
+        # cross-manager reads into this cache is out of #602's scope
+        ROLE_VEHICLE_CHARGE_LIMIT,  # ditto (M2)
+        ROLE_HOME_DAY_EXTERNAL,  # read only by NotificationManager, not M1's _run_cycle -- ditto
+    }
+)
 
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0

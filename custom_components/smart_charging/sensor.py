@@ -6,10 +6,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.sensor import RestoreSensor, SensorEntity, SensorExtraStoredData
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
+    SensorEntity,
+    SensorExtraStoredData,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPower
+from homeassistant.const import UnitOfElectricCurrent, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -18,6 +24,10 @@ from .const import (
     DOMAIN,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
+    OWNED_SUFFIX_ADAPTER_READINGS,
+    OWNED_SUFFIX_PEAK_HEADROOM_A,
+    OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    OWNED_SUFFIX_TIME_TO_FULL,
     STATUS_FAULT,
     STATUS_OK,
 )
@@ -169,6 +179,55 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     _coordinator_field = "active_soc_limit"
 
 
+class SolarSurplusSensor(_CoordinatorFieldSensor):
+    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151, #602)."""
+
+    _attr_translation_key = "solar_surplus_w"
+    _object_id_suffix = OWNED_SUFFIX_SOLAR_SURPLUS_W
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _coordinator_field = "solar_surplus_w"
+
+
+class PeakHeadroomSensor(_CoordinatorFieldSensor):
+    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md:153, #602)."""
+
+    _attr_translation_key = "peak_headroom_a"
+    _object_id_suffix = OWNED_SUFFIX_PEAK_HEADROOM_A
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _coordinator_field = "peak_headroom_a"
+
+
+class TimeToFullSensor(_CoordinatorFieldSensor):
+    """Diagnostic: minutes to the active SOC limit at the current set-point
+    (entity-catalog.md:152, #602)."""
+
+    _attr_translation_key = "time_to_full"
+    _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _coordinator_field = "time_to_full_min"
+
+
+class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
+    """Diagnostic: adapter-role readings mirrored as attributes (ADR-0021, #602). State is
+    the timestamp of the last successful control-cycle read; not a `_CoordinatorFieldSensor`
+    because it also needs `extra_state_attributes`."""
+
+    _attr_translation_key = "adapter_readings"
+    _object_id_suffix = OWNED_SUFFIX_ADAPTER_READINGS
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC  # ADR-0021's Option C requires this
+
+    @property
+    def native_value(self) -> Any:
+        data = self.coordinator.data
+        return getattr(data, "adapter_readings_at", None) if data is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        return dict(getattr(data, "adapter_readings", {})) if data is not None else {}
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -180,5 +239,9 @@ async def async_setup_entry(
             MonthlyPeakSensor(entry.entry_id, coordinator),
             EffectivePeakLimitSensor(entry.entry_id, coordinator),
             ActiveSocLimitSensor(entry.entry_id, coordinator),
+            SolarSurplusSensor(entry.entry_id, coordinator),
+            PeakHeadroomSensor(entry.entry_id, coordinator),
+            TimeToFullSensor(entry.entry_id, coordinator),
+            AdapterReadingsSensor(entry.entry_id, coordinator),
         ]
     )

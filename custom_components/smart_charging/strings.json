@@ -153,6 +153,18 @@
       },
       "active_soc_limit": {
         "name": "Active charge limit"
+      },
+      "solar_surplus_w": {
+        "name": "Solar surplus"
+      },
+      "peak_headroom_a": {
+        "name": "Peak headroom"
+      },
+      "time_to_full": {
+        "name": "Time to full charge"
+      },
+      "adapter_readings": {
+        "name": "Adapter readings"
       }
     },
     "switch": {
