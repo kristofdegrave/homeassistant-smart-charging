@@ -37,6 +37,7 @@ from custom_components.smart_charging.coordinator_cycle import (
     _SolarModeHandler,
     _SolarOnlyModeHandler,
     resolve_deadline_urgency,
+    resolve_solar_reserve_gate,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes import captar, solar, solar_only
@@ -755,3 +756,71 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     assert result.required.urgent is False
     assert result.urgent is False
     assert result.resolved_mode == MODE_SOLAR  # same row-3 match as the baseline, unchanged
+
+
+# --- resolve_solar_reserve_gate (ADR-0023) ---
+
+
+def test_resolve_solar_reserve_gate_active_when_all_conditions_hold():
+    """Anchored to engines/test_soc_target.py::test_reserve_active_when_all_conditions_hold's
+    own fixture values."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=False,
+        )
+        is True
+    )
+
+
+def test_resolve_solar_reserve_gate_treats_none_forecast_as_zero():
+    """Mirrors coordinator.py's own `forecast_kwh if forecast_kwh is not None else 0.0` -- an
+    unmapped/unavailable forecast role must not raise and must never activate the cap."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=None,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=False,
+        )
+        is False
+    )
+
+
+def test_resolve_solar_reserve_gate_inactive_under_manual():
+    """Anchored to engines/test_soc_target.py::test_reserve_inactive_under_manual."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_MANUAL,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=False,
+        )
+        is False
+    )
+
+
+def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow():
+    """Anchored to engines/test_soc_target.py::
+    test_reserve_inactive_when_deadline_resolved_for_tomorrow -- proves
+    deadline_tomorrow_resolved is actually threaded through to the wrapped engine call, not
+    just accepted and ignored (all other tests here pass False)."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_tomorrow_resolved=True,
+        )
+        is False
+    )

@@ -1,5 +1,6 @@
 """Coordinator-internal cycle decomposition: CycleContext, PeakDemandState, SocGateResolver, and
-the ModeHandler Strategy (ADR-0012); SolarStepUpGate and resolve_deadline_urgency (ADR-0023).
+the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
+resolve_deadline_urgency (ADR-0023).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
 even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
 another engine; these call engines)."""
@@ -32,6 +33,7 @@ from .engines.signal_conditioning import smooth_net_power
 from .engines.soc_target import (
     SolarStepUpState,
     resolve_active_soc_limit,
+    resolve_solar_reserve_active,
     resolve_solar_step_up,
 )
 from .modes import captar, power, solar, solar_only
@@ -328,6 +330,29 @@ class SolarStepUpGate:
             step_pp=step_pp,
             max_solar_soc=max_solar_soc,
         )
+
+
+def resolve_solar_reserve_gate(
+    *,
+    profile: str,
+    home_day_flag: bool,
+    sun_is_down: bool,
+    forecast_kwh: float | None,
+    forecast_threshold_kwh: float,
+    deadline_tomorrow_resolved: bool,
+) -> bool:
+    """R9 solar-reserve-cap gating (ADR-0023) -- a thin wrapper over
+    engines/soc_target.py::resolve_solar_reserve_active, folding the forecast reading's
+    None-to-0.0 default in the one place that needs it. A plain function, not a class, because
+    unlike SolarStepUpGate it is stateless -- nothing is threaded across cycles."""
+    return resolve_solar_reserve_active(
+        profile=profile,
+        home_day_flag=home_day_flag,
+        sun_is_down=sun_is_down,
+        forecast_kwh=forecast_kwh if forecast_kwh is not None else 0.0,
+        forecast_threshold_kwh=forecast_threshold_kwh,
+        deadline_tomorrow_resolved=deadline_tomorrow_resolved,
+    )
 
 
 @dataclass(frozen=True)
