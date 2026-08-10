@@ -88,6 +88,7 @@ from .coordinator_cycle import (
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
+    SolarStepUpGate,
     _CaptarModeHandler,
     _OffModeHandler,
     _PowerModeHandler,
@@ -105,10 +106,6 @@ from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
-from .engines.soc_target import (
-    SolarStepUpState,
-    resolve_solar_step_up,
-)
 from .modes import captar
 from .modes._phase import Phase
 
@@ -171,10 +168,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.active_profile: str = PROFILE_MANUAL
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
         # R8's lifecycle state, threaded across cycles -- cleared only via
-        # resolve_solar_step_up's own is_solar_mode_charging=False branch (Task 5.1), never by
+        # SolarStepUpGate.resolve's own is_solar_mode_charging=False branch (Task 5.1), never by
         # the generic per-mode-switch reset below (that would wrongly clear an in-effect
-        # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a).
-        self._step_up_state: SolarStepUpState = SolarStepUpState()
+        # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a). ADR-0023:
+        # SolarStepUpGate owns the SolarStepUpState itself; `.state` is a plain mutable
+        # attribute, same seeding pattern as before via `self._step_up_gate.state = ...`.
+        self._step_up_gate = SolarStepUpGate()
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
@@ -188,7 +187,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.departure_holiday_override: time_of_day | None = None
         self.departure_home_day_override: time_of_day | None = None
         # R5: the last cycle's required-current/urgency determination -- exposed for Task 5.3's
-        # own use and inspected directly by tests, the same way `_step_up_state` already is.
+        # own use and inspected directly by tests, the same way `_step_up_gate.state` already is.
         self._required_current = RequiredCurrentResult(
             required_a=None, urgent=False, unreachable=False
         )
@@ -308,15 +307,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # already this cycle's final value (set externally before the cycle runs); under Auto,
         # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
         # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
-        is_solar_mode_charging = (
-            self.active_profile == PROFILE_AUTO
-            and self._mode_handlers[self.active_mode].is_solar_mode
-            and status in CHARGEABLE_STATES
-        )
-        _, self._step_up_state = resolve_solar_step_up(
-            self._step_up_state,
-            is_solar_mode_charging=is_solar_mode_charging,
-            soc=ev_soc if ev_soc is not None else 0.0,
+        # ADR-0023: SolarStepUpGate computes is_solar_mode_charging internally from these same
+        # inputs and mutates its own `.state` in place; callers read `.state` afterward.
+        self._step_up_gate.resolve(
+            profile=self.active_profile,
+            mode_is_solar=self._mode_handlers[self.active_mode].is_solar_mode,
+            status=status,
+            soc=ev_soc,
             default_limit=self.soc_limit_override,
             step_threshold_pp=self._config.get(
                 CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP
@@ -384,7 +381,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self.soc_limit_override,
             solar_reserve_active=ctx.solar_reserve_active,
             solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
-            step_up_state=self._step_up_state,
+            step_up_state=self._step_up_gate.state,
         )
         if soc_limit_changed:
             self.hass.bus.async_fire(
@@ -463,7 +460,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         required = deadline_urgency.required
         # Exposed for Task 5.3's own use (the effective-peak-limit `urgent` parameter and Auto
-        # mode-selection's escalation) and for tests, the same way `_step_up_state` already is.
+        # mode-selection's escalation) and for tests, the same way `_step_up_gate.state` already is.
         self._required_current = required
         if required.unreachable:
             self.hass.bus.async_fire(
