@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from datetime import time as time_of_day
-from datetime import timedelta
+from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -125,6 +126,11 @@ class CycleResult:
     monthly_peak_kw: float = 0.0
     effective_peak_limit_kw: float = 0.0
     active_soc_limit: float = 0.0
+    solar_surplus_w: float = 0.0
+    peak_headroom_a: float = 0.0
+    time_to_full_min: float | None = None
+    adapter_readings: dict[str, Any] = field(default_factory=dict)
+    adapter_readings_at: datetime | None = None
 
 
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
@@ -229,6 +235,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             await self._write(0.0)
             return CycleResult(commanded_current=0.0, fault=True, active_mode=self.active_mode)
 
+        # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
+        # below (R10's smoothed control-path value) (#602 T1).
+        solar_surplus_w = charger_w - net_w
+
         # Peak-Demand Tracker (E5, Task 1.3) + effective-peak-limit resolution (E5, Task 1.2) --
         # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
         # real wall-clock (dt_util.now()) for month rollover, distinct from the monotonic `now`
@@ -277,6 +287,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 active_mode=self.active_mode,
                 monthly_peak_kw=monthly_peak_kw,
                 effective_peak_limit_kw=effective_peak_limit_kw,
+                solar_surplus_w=solar_surplus_w,
             )
 
         # .get(): a pre-solar config entry predates this option (`DEFAULT_SMOOTHING_WINDOW`
@@ -576,6 +587,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             monthly_peak_kw=monthly_peak_kw,
             effective_peak_limit_kw=effective_peak_limit_kw,
             active_soc_limit=active_soc_limit,
+            solar_surplus_w=solar_surplus_w,
         )
 
     def set_soc_limit_override(self, value: float) -> None:

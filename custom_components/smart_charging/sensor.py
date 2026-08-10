@@ -18,6 +18,7 @@ from .const import (
     DOMAIN,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
+    OWNED_SUFFIX_SOLAR_SURPLUS_W,
     STATUS_FAULT,
     STATUS_OK,
 )
@@ -169,6 +170,15 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     _coordinator_field = "active_soc_limit"
 
 
+class SolarSurplusSensor(_CoordinatorFieldSensor):
+    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151, #602)."""
+
+    _attr_translation_key = "solar_surplus_w"
+    _object_id_suffix = OWNED_SUFFIX_SOLAR_SURPLUS_W
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _coordinator_field = "solar_surplus_w"
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -180,5 +190,6 @@ async def async_setup_entry(
             MonthlyPeakSensor(entry.entry_id, coordinator),
             EffectivePeakLimitSensor(entry.entry_id, coordinator),
             ActiveSocLimitSensor(entry.entry_id, coordinator),
+            SolarSurplusSensor(entry.entry_id, coordinator),
         ]
     )

@@ -756,6 +756,32 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
     assert result.monthly_peak_kw == pytest.approx(3.4)
 
 
+async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
+    """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
+    smoothed control-path `surplus_w` (#602 T1)."""
+    config = _config()
+    config[CONF_SMOOTHING_WINDOW] = 2
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=3000.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()  # cycle 1: window=(1000.0,), smoothed==raw==1000.0
+
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)  # cycle 2: smoothed(1500) != raw(2000)
+    result = await coord._async_update_data()
+
+    assert result.solar_surplus_w == 3000.0 - 2000.0
+
+
+async def test_solar_surplus_w_defaults_to_zero_on_required_role_fault(hass):
+    adapters = _adapters(status=None)
+    _coord, result = await _run(hass, adapters, _config(), target=10.0)
+    assert result.solar_surplus_w == 0.0
+
+
 async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(hass):
     config = _config()
     config[CONF_MAX_PEAK_KW] = 4.0

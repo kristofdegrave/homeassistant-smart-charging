@@ -17,6 +17,7 @@ from custom_components.smart_charging.sensor import (
     ChargingStatusSensor,
     EffectivePeakLimitSensor,
     MonthlyPeakSensor,
+    SolarSurplusSensor,
 )
 
 
@@ -207,6 +208,24 @@ def test_effective_peak_limit_sensor_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = EffectivePeakLimitSensor(entry_id="abc", coordinator=coord)
     assert sensor.unique_id == "abc_effective_peak_limit"
+
+
+async def test_solar_surplus_sensor_reflects_the_resolved_value(hass):
+    coord = SimpleNamespace(data=SimpleNamespace(solar_surplus_w=1200.0))
+    sensor = SolarSurplusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == 1200.0
+
+
+async def test_solar_surplus_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = SolarSurplusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_solar_surplus_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = SolarSurplusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_solar_surplus_w"
 
 
 def test_active_mode_unique_id_scoped_to_entry():
