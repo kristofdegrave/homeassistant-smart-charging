@@ -279,9 +279,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ctx.sun_is_down/ctx.low_tariff_active/ctx.solar_reserve_active in place (ADR-0012's
         existing "assign onto ctx as each value resolves" pattern) and returns
         (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use: deadline_tomorrow
-        was already needed by R9's own gate; resolve_deadline_for is the closure a later
-        extraction (issue #560) reuses for today's deadline. is_holiday is hardcoded False --
-        R14's public-holiday source is not wired in yet, so row 2 of R14's table never matches."""
+        was already needed by R9's own gate; resolve_deadline_for is the closure
+        `_read_deadline_urgency_inputs` (below) calls for today's deadline. is_holiday is
+        hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
+        table never matches."""
         external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
         external = (
             await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
@@ -330,6 +331,36 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
         return deadline_tomorrow, resolve_deadline_for
+
+    async def _read_deadline_urgency_inputs(
+        self,
+        *,
+        deadline_resolvable: bool,
+        today_weekday: int,
+        resolve_deadline_for: Callable[[int], time_of_day | None],
+    ) -> tuple[time_of_day | None, float]:
+        """The R5/R14/R15 deadline-urgency call site's own adapter reads (today's deadline, the
+        sensed battery capacity) -- must stay coordinator-side even though resolve_deadline_urgency
+        itself is already a pure coordinator_cycle.py function (#506). Deliberately deviates from
+        design doc Sec 3.3's snippet, which gates the sensed-capacity read behind
+        `deadline_resolvable` too: #602 T4 already made that read feed the `_role_readings`
+        diagnostic mirror (ADR-0021) unconditionally, every cycle, so it must not be gated here --
+        doing so would regress that diagnostic to a stale value whenever the deadline isn't
+        resolvable (e.g. disconnected). Only `deadline_today` itself stays gated. Returns
+        (deadline_today, effective_battery_capacity_kwh); deadline_today is None when
+        deadline_resolvable is False, exactly as today (resolve_deadline_urgency short-circuits
+        before reading it)."""
+        sensed_capacity_kwh = None
+        if ROLE_EV_BATTERY_CAPACITY in self._adapters:
+            sensed_capacity_kwh = await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
+            self._role_readings[ROLE_EV_BATTERY_CAPACITY] = sensed_capacity_kwh
+        effective_battery_capacity_kwh = sensed_capacity_kwh
+        if effective_battery_capacity_kwh is None:
+            effective_battery_capacity_kwh = self._config.get(
+                CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
+            )
+        deadline_today = resolve_deadline_for(today_weekday) if deadline_resolvable else None
+        return deadline_today, effective_battery_capacity_kwh
 
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
@@ -455,9 +486,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             max_solar_soc=self._config.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
         )
 
-        # R5/R14/R15: `today_weekday` stays inline -- _read_deadline_urgency_inputs still
-        # needs it as a parameter once that extraction lands; only `tomorrow_weekday` moves
-        # into _resolve_deadline_and_reserve (ADR-0023).
+        # R5/R14/R15: `today_weekday` stays inline -- _read_deadline_urgency_inputs (below)
+        # needs it as a parameter; only `tomorrow_weekday` moved into
+        # _resolve_deadline_and_reserve (ADR-0023).
         today_weekday = now_dt.weekday()
         deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(
             ctx, now_dt
@@ -488,31 +519,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         # R5/R14/R15: today's departure deadline and the required-current/urgency it drives
         # (ADR-0006 steps 3-6, extracted per #506 -- see resolve_deadline_urgency's own
-        # docstring for the guard/dedup rationale). Only the adapter/HA reads (today's
-        # deadline, the sensed battery capacity) stay here; everything else moves to
-        # coordinator_cycle.py, pure and HA-import-free (ADR-0012's boundary). Computed once
-        # here and passed into resolve_deadline_urgency as `deadline_resolvable` rather than
+        # docstring for the guard/dedup rationale). The adapter/HA reads (today's deadline, the
+        # sensed battery capacity) stay coordinator-side, in `_read_deadline_urgency_inputs`
+        # above; everything else moves to coordinator_cycle.py, pure and HA-import-free
+        # (ADR-0012's boundary). `deadline_resolvable` itself is computed once here and passed
+        # into both `_read_deadline_urgency_inputs` and `resolve_deadline_urgency` rather than
         # re-derived from status/ev_soc on the other side of the module boundary -- a second,
-        # separately written copy of the same predicate is exactly the lockstep-editing
-        # hazard #506 exists to remove.
+        # separately written copy of the same predicate is exactly the lockstep-editing hazard
+        # #506 exists to remove. Stays inline in `_run_cycle` rather than moving into
+        # `_read_deadline_urgency_inputs` (ADR-0023, design doc Sec 3.3).
         deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
-        # R15: prefer the sensed role's current reading, falling back to the configured value
-        # both when the role is unmapped and when it currently reads None. Promoted to run
-        # unconditionally rather than only inside `if deadline_resolvable:` -- time_to_full
-        # (#602 T3) needs this value regardless of deadline resolvability; a disclosed, minor
-        # widening of "no new adapter reads" (design doc's Success criteria), justified because
-        # R15 already treats this role as continuously available whenever mapped, not
-        # deadline-specific.
-        sensed_capacity_kwh = None
-        if ROLE_EV_BATTERY_CAPACITY in self._adapters:
-            sensed_capacity_kwh = await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
-            self._role_readings[ROLE_EV_BATTERY_CAPACITY] = sensed_capacity_kwh
-        effective_battery_capacity_kwh = sensed_capacity_kwh
-        if effective_battery_capacity_kwh is None:
-            effective_battery_capacity_kwh = self._config.get(
-                CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
-            )
-        deadline_today = resolve_deadline_for(today_weekday) if deadline_resolvable else None
+        deadline_today, effective_battery_capacity_kwh = await self._read_deadline_urgency_inputs(
+            deadline_resolvable=deadline_resolvable,
+            today_weekday=today_weekday,
+            resolve_deadline_for=resolve_deadline_for,
+        )
         deadline_urgency = resolve_deadline_urgency(
             deadline_resolvable=deadline_resolvable,
             ev_soc=ev_soc,
