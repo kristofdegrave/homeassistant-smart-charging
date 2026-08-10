@@ -153,6 +153,18 @@
       },
       "active_soc_limit": {
         "name": "Actieve laadlimiet"
+      },
+      "solar_surplus_w": {
+        "name": "Zonneoverschot"
+      },
+      "peak_headroom_a": {
+        "name": "Piekruimte"
+      },
+      "time_to_full": {
+        "name": "Tijd tot volledig opgeladen"
+      },
+      "adapter_readings": {
+        "name": "Adapteraflezingen"
       }
     },
     "switch": {
