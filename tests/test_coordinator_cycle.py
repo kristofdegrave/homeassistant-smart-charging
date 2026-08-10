@@ -162,11 +162,12 @@ def test_peak_demand_state_period_month_is_none_when_untracked():
 
 
 def test_mode_handler_protocol_is_satisfied_by_each_adapter():
-    """Every _*ModeHandler (ADR-0012 Sec 3.4) satisfies the ModeHandler Protocol's single
-    desired_current(ctx, state) -> (current, new_state) shape -- a structural check that all
-    five adapters share one call surface, not a behavior test. ModeHandler is a plain (not
-    @runtime_checkable) Protocol per the design doc, so conformance is checked by static typing
-    and by each adapter exposing a callable desired_current, not by isinstance()."""
+    """Every _*ModeHandler (ADR-0012 Sec 3.4) satisfies the ModeHandler Protocol's
+    desired_current(ctx, state) -> (current, new_state) / idle_state() / is_soc_gated /
+    is_solar_mode shape -- a structural check that all five adapters share one call surface,
+    not a behavior test. ModeHandler is a plain (not @runtime_checkable) Protocol per the
+    design doc, so conformance is checked by static typing and by each adapter exposing the
+    right callables/attributes, not by isinstance()."""
     handlers: list[ModeHandler] = [
         _OffModeHandler(),
         _PowerModeHandler(lambda: 10.0),
@@ -176,6 +177,39 @@ def test_mode_handler_protocol_is_satisfied_by_each_adapter():
     ]
     for handler in handlers:
         assert callable(handler.desired_current)
+        assert callable(handler.idle_state)
+        assert isinstance(handler.is_soc_gated, bool)
+        assert isinstance(handler.is_solar_mode, bool)
+
+
+def test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode():
+    """Issue #561: these two per-mode facts replace the coordinator's old
+    _SOC_GATED_MODES/_SOLAR_MODES tuples. Off/Power never gate on SOC and are never "solar
+    modes" for R8/R9's Auto-only preconditions; Solar/SolarOnly are both SOC-gated and solar
+    modes; Captar is SOC-gated but not a solar mode (R8/R9 only ever apply to Solar/SolarOnly,
+    resolution-rules.md)."""
+    assert _OffModeHandler().is_soc_gated is False
+    assert _OffModeHandler().is_solar_mode is False
+    assert _PowerModeHandler(lambda: 10.0).is_soc_gated is False
+    assert _PowerModeHandler(lambda: 10.0).is_solar_mode is False
+    assert _SolarModeHandler({}).is_soc_gated is True
+    assert _SolarModeHandler({}).is_solar_mode is True
+    assert _SolarOnlyModeHandler({}).is_soc_gated is True
+    assert _SolarOnlyModeHandler({}).is_solar_mode is True
+    assert _CaptarModeHandler({}).is_soc_gated is True
+    assert _CaptarModeHandler({}).is_solar_mode is False
+
+
+def test_mode_handler_idle_state_per_mode():
+    """Issue #561: idle_state() replaces the coordinator's old Captar-vs-solar ternary that
+    picked each SOC-gated mode's idle state by name. Off/Power return None -- neither is ever
+    stored in the coordinator's _mode_state (design doc Sec 3.4), so their idle_state() is
+    never actually read; it exists only to satisfy the Protocol uniformly."""
+    assert _OffModeHandler().idle_state() is None
+    assert _PowerModeHandler(lambda: 10.0).idle_state() is None
+    assert _SolarModeHandler({}).idle_state() == solar.SolarState.idle()
+    assert _SolarOnlyModeHandler({}).idle_state() == solar_only.SolarOnlyState.idle()
+    assert _CaptarModeHandler({}).idle_state() == captar.CaptarState.idle()
 
 
 def test_off_mode_handler_always_commands_zero_and_passes_state_through():

@@ -9,24 +9,20 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    BASE_CAPABLE_MODES,
+    CAPTAR_CAPABLE_MODES,
     CONF_CAPTAR_AVAILABLE,
     CONF_SOLAR_INSTALLED,
     DEFAULT_CAPTAR_AVAILABLE,
-    MODE_CAPTAR,
-    MODE_OFF,
-    MODE_POWER,
-    MODE_SOLAR,
-    MODE_SOLAR_ONLY,
     OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PROFILE,
     PROFILE_AUTO,
     PROFILE_MANUAL,
+    SOLAR_CAPABLE_MODES,
 )
 from .entity import SmartChargingEntity
 
-BASE_MODE_OPTIONS = [MODE_OFF, MODE_POWER]
-SOLAR_MODE_OPTIONS = [MODE_SOLAR, MODE_SOLAR_ONLY]
-CAPTAR_MODE_OPTIONS = [MODE_CAPTAR]
+BASE_MODE_OPTIONS = list(BASE_CAPABLE_MODES)
 PROFILE_OPTIONS = [PROFILE_MANUAL, PROFILE_AUTO]
 
 
@@ -65,9 +61,9 @@ class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Select
         super().__init__(entry_id)
         options = list(BASE_MODE_OPTIONS)
         if solar_installed:
-            options += SOLAR_MODE_OPTIONS
+            options += SOLAR_CAPABLE_MODES
         if captar_available:
-            options += CAPTAR_MODE_OPTIONS
+            options += CAPTAR_CAPABLE_MODES
         self._attr_options = options
         self._attr_current_option = BASE_MODE_OPTIONS[0]
 
