@@ -29,11 +29,6 @@ ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key
 EVENT_DEADLINE_UNREACHABLE_NOTIFIED = "smart_charging_deadline_unreachable_notified"
 ATTR_REQUIRED_CURRENT_A = "required_current_a"  # DeadlineUnreachableNotified payload key
 
-# Entity M2 (Vehicle-Limit Manager) subscribes to for the resolved-active-SOC-limit change
-# (ADR-0011). Already materialized by E3/M1 (ActiveSocLimitSensor in sensor.py, fired via
-# EVENT_ACTIVE_SOC_LIMIT_CHANGED in coordinator.py) -- M2 itself is not built by this slice.
-ACTIVE_SOC_LIMIT_ENTITY = "sensor.smart_charging_active_soc_limit"
-
 # Domain events M2 fires on the HA event bus (UC09 "Domain events produced"; DDD->HA mapping). Not
 # consumed by any other Manager (ADR-0011) -- observability/automation only.
 EVENT_VEHICLE_CHARGE_LIMIT_SYNCED = "smart_charging_vehicle_charge_limit_synced"
@@ -94,6 +89,10 @@ OWNED_SUFFIX_SOC_LIMIT_OVERRIDE = "soc_limit_override"
 OWNED_SUFFIX_HOME_DAY = "home_day"
 OWNED_SUFFIX_DEPARTURE_HOLIDAY = f"departure_{DEPARTURE_OVERRIDE_HOLIDAY}"
 OWNED_SUFFIX_DEPARTURE_HOME_DAY = f"departure_{DEPARTURE_OVERRIDE_HOME_DAY}"
+# Diagnostic sensor unique_id suffix (E3/M1, ADR-0011) -- not owned/writable, but resolved
+# through the same Store registry lookup so a locale/rename (ADR-0013) can't silently break
+# the Vehicle-Limit Manager's listener the way a hardcoded entity_id would.
+OWNED_SUFFIX_ACTIVE_SOC_LIMIT = "active_soc_limit"
 # Monday=0 .. Sunday=6 (Python's date.weekday()), matching time.py's DAY_OF_WEEK_DEFAULTS order.
 OWNED_SUFFIX_DEPARTURE_DOW = [
     f"departure_{d}" for d in (DAY_MON, DAY_TUE, DAY_WED, DAY_THU, DAY_FRI, DAY_SAT, DAY_SUN)
