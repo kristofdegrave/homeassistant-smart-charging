@@ -282,12 +282,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         was already needed by R9's own gate; resolve_deadline_for is the closure
         `_read_deadline_urgency_inputs` (below) calls for today's deadline. is_holiday is
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
-        table never matches."""
+        table never matches. Also caches each read role's value into `self._role_readings`
+        (ADR-0021, #602 T4) -- this extraction (ADR-0023, #616) had dropped these four writes,
+        which `_read_cycle_inputs`/`_read_deadline_urgency_inputs` still do for their own reads;
+        restored here (#621) so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/
+        ROLE_SOLAR_FORECAST keep reporting their real reads in
+        `sensor.smart_charging_adapter_readings` instead of a stale/None value forever."""
         external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
         external = (
             await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
         )
+        if external_configured:
+            self._role_readings[ROLE_DEPARTURE_EXTERNAL] = external
         sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
+        if ROLE_SUN in self._adapters:
+            self._role_readings[ROLE_SUN] = sun_reading
         ctx.sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
         ctx.sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
         # issue #376: unmapped (or a None reading) keeps the glossary's own single-tariff
@@ -295,6 +304,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ctx.low_tariff_active = True
         if ROLE_LOW_TARIFF in self._adapters:
             low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
+            self._role_readings[ROLE_LOW_TARIFF] = low_tariff_reading
             if low_tariff_reading is not None:
                 ctx.low_tariff_active = low_tariff_reading
 
@@ -320,6 +330,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if ROLE_SOLAR_FORECAST in self._adapters
             else None
         )
+        if ROLE_SOLAR_FORECAST in self._adapters:
+            self._role_readings[ROLE_SOLAR_FORECAST] = forecast_kwh
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=self.home_day_flag,

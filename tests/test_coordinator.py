@@ -62,6 +62,7 @@ from custom_components.smart_charging.const import (
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
     ROLE_CHARGER_STATUS,
+    ROLE_DEPARTURE_EXTERNAL,
     ROLE_EV_BATTERY_CAPACITY,
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
@@ -814,6 +815,29 @@ async def test_adapter_readings_contains_every_currently_wired_role(hass):
     assert set(result.adapter_readings) == set(adapters) - ROLES_ADAPTER_READINGS_EXCLUDED
     assert ROLE_NOTIFICATION_TARGET not in result.adapter_readings
     assert result.adapter_readings_at is not None
+
+
+async def test_adapter_readings_caches_deadline_and_reserve_block_reads(hass):
+    """ADR-0021/#602 T4's per-role cache must keep mirroring ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/
+    ROLE_LOW_TARIFF/ROLE_SOLAR_FORECAST even though their reads live in
+    `_resolve_deadline_and_reserve` (ADR-0023, #616) rather than `_read_cycle_inputs` --
+    regression test for #621, which found that extraction had silently dropped these four
+    `self._role_readings[...]` writes (they still exist, unwritten, on `_run_cycle`'s old
+    inline block's git history) while `_read_cycle_inputs`/`_read_deadline_urgency_inputs`'s
+    own reads kept caching correctly. A non-None value for each role is asserted so a
+    regression back to "cached as None" (indistinguishable from "never cached") would fail
+    this test, unlike the vacuous `sun_state=None` default the ROLE_SUN row in
+    `test_adapter_readings_contains_every_currently_wired_role` exercises."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state=SUN_STATE_ABOVE_HORIZON)
+    adapters[ROLE_DEPARTURE_EXTERNAL] = _FakeNumeric(time_of_day(20, 0))
+    adapters[ROLE_LOW_TARIFF] = _FakeNumeric(True)
+    adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(15.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.adapter_readings[ROLE_DEPARTURE_EXTERNAL] == time_of_day(20, 0)
+    assert result.adapter_readings[ROLE_SUN] == SUN_STATE_ABOVE_HORIZON
+    assert result.adapter_readings[ROLE_LOW_TARIFF] is True
+    assert result.adapter_readings[ROLE_SOLAR_FORECAST] == 15.0
 
 
 async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):
