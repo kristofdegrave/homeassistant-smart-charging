@@ -1042,13 +1042,96 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
 
 
 async def test_set_active_mode_sets_the_field(hass):
-    """ADR-0014: set_active_mode is the coordinator's own boundary for active_mode -- no
-    clamp (SelectEntity's own options list already gates the enum), just encapsulation."""
+    """ADR-0014: set_active_mode is the coordinator's own boundary for active_mode --
+    encapsulation, plus (issue #569) a registry-membership guard; a recognized value simply
+    passes through."""
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
     )
     coord.set_active_mode(MODE_SOLAR)
     assert coord.active_mode == MODE_SOLAR
+
+
+async def test_set_active_mode_falls_back_to_off_on_unrecognized_value(hass, caplog):
+    """Issue #569: an unexpected stored `active_mode` value (e.g. a stale/corrupted restored
+    option) must not silently become the coordinator's own field only to KeyError later at
+    `self._mode_handlers[self.active_mode]` inside the cycle (issue #561's fault-loop risk).
+    set_active_mode must reject anything outside `self._mode_handlers`' own keys, falling back
+    to MODE_OFF and logging a WARNING -- the same fail-safe outcome as the fault path
+    (ADR-0007), reached explicitly here instead of via a raised KeyError."""
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        coord.set_active_mode("not_a_real_mode")
+
+    assert coord.active_mode == MODE_OFF
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == coordinator_module.__name__
+    ]
+    assert len(warnings) == 1
+    assert "not_a_real_mode" in warnings[0].getMessage()
+
+
+async def test_set_active_mode_warns_once_per_rejected_value_not_per_call(hass, caplog):
+    """ADR-0007's once-per-outage discipline applies here too (mirroring `_log_fault`): a
+    Store-read corrupted mode value is re-read and re-rejected every cycle, so warning on every
+    call would spam the log once per control interval forever. Re-rejecting the SAME bad value
+    logs once; a DIFFERENT bad value (or recovery to a valid mode, then a new bad value) logs
+    again -- the latch tracks the specific rejected value, not just "currently rejecting"."""
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        coord.set_active_mode("bad_one")
+        coord.set_active_mode("bad_one")
+        coord.set_active_mode("bad_one")
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1, "same rejected value repeated must warn only once"
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        coord.set_active_mode("bad_two")  # a different bad value -> warns again
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1, "a newly-different rejected value must warn again"
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        coord.set_active_mode(MODE_SOLAR)  # recovers
+        coord.set_active_mode("bad_one")  # same raw value as before, but after a recovery
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1, "recovering then re-rejecting the same value must warn again"
+
+
+async def test_read_owned_entities_falls_back_to_off_on_unrecognized_stored_mode(hass, caplog):
+    """Same fallback, driven through the real call path (_read_owned_entities, ADR-0018) rather
+    than calling set_active_mode directly -- confirms an unrecognized value read back from the
+    Store can't reach `self._mode_handlers[self.active_mode]` and KeyError the whole cycle, and
+    that a full cycle completes cleanly (no fault, 0 A) rather than raising."""
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): "not_a_real_mode"})
+    adapters = _adapters()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, store=store, config=_config(), interval_s=30
+    )
+    _seed_ample_peak_headroom(coord)
+
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        result = await coord._async_update_data()
+
+    assert coord.active_mode == MODE_OFF
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == coordinator_module.__name__
+    ]
+    assert len(warnings) == 1
+    assert "not_a_real_mode" in warnings[0].getMessage()
+    # The whole cycle must complete cleanly -- MODE_OFF dispatches to 0 A, no fault -- not
+    # raise KeyError and fall through to the generic cycle-exception fault path (issue #569).
+    assert result.fault is False
+    assert result.commanded_current == 0.0
 
 
 async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown(hass):
@@ -1958,12 +2041,12 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
 async def test_read_owned_entities_updates_active_mode(hass):
     """ADR-0018: the coordinator reads active_mode through the Store, via its own setter --
     the mutation point (set_active_mode) is unchanged, only the caller is."""
-    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): "solar"})
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_MODE): MODE_SOLAR})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
     await coord._read_owned_entities()
-    assert coord.active_mode == "solar"
+    assert coord.active_mode == MODE_SOLAR
 
 
 async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_none(hass):
@@ -1972,9 +2055,9 @@ async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_non
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
-    coord.set_active_mode("power")
+    coord.set_active_mode(MODE_POWER)
     await coord._read_owned_entities()
-    assert coord.active_mode == "power"
+    assert coord.active_mode == MODE_POWER
 
 
 async def test_read_owned_entities_clamps_target_current_via_existing_setter(hass):
