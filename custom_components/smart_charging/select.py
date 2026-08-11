@@ -14,6 +14,7 @@ from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_SOLAR_INSTALLED,
     DEFAULT_CAPTAR_AVAILABLE,
+    LABEL_SC_RUNTIME,
     OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PROFILE,
     PROFILE_AUTO,
@@ -51,6 +52,7 @@ class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Select
 
     _attr_translation_key = "mode"
     _object_id_suffix = OWNED_SUFFIX_MODE
+    _owned_labels = frozenset({LABEL_SC_RUNTIME})
 
     def __init__(
         self,
@@ -74,6 +76,7 @@ class ProfileSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Sel
 
     _attr_translation_key = "profile"
     _object_id_suffix = OWNED_SUFFIX_PROFILE
+    _owned_labels = frozenset({LABEL_SC_RUNTIME})
     _attr_options = PROFILE_OPTIONS
 
     def __init__(self, entry_id: str) -> None:

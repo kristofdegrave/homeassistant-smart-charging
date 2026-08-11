@@ -14,6 +14,7 @@ from .const import (
     CONF_MAX_CURRENT,
     CONF_MIN_CURRENT,
     DOMAIN,
+    LABEL_SC_RUNTIME,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     OWNED_SUFFIX_TARGET_CURRENT,
     SOC_LIMIT_OVERRIDE_MAX,
@@ -48,6 +49,7 @@ class TargetCurrentNumber(SmartChargingEntity, _RestoreClampedNumberMixin, Resto
 
     _attr_translation_key = "target_current"
     _object_id_suffix = OWNED_SUFFIX_TARGET_CURRENT
+    _owned_labels = frozenset({LABEL_SC_RUNTIME})
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_native_step = 1.0
 
@@ -68,6 +70,7 @@ class SocLimitOverrideNumber(SmartChargingEntity, _RestoreClampedNumberMixin, Re
 
     _attr_translation_key = "soc_limit_override"
     _object_id_suffix = OWNED_SUFFIX_SOC_LIMIT_OVERRIDE
+    _owned_labels = frozenset({LABEL_SC_RUNTIME})
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_native_step = 1.0
     _attr_native_min_value = SOC_LIMIT_OVERRIDE_MIN

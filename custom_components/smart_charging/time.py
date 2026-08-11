@@ -37,6 +37,7 @@ from .const import (
     DAY_WED,
     DEPARTURE_OVERRIDE_HOLIDAY,
     DEPARTURE_OVERRIDE_HOME_DAY,
+    LABEL_SC_RUNTIME,
 )
 from .entity import SmartChargingEntity
 
@@ -63,6 +64,8 @@ OVERRIDE_DEFAULTS: list[tuple[str, time | None]] = [
 
 class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity):
     """One departure-time entity, parameterized by id-suffix and default (R14)."""
+
+    _owned_labels = frozenset({LABEL_SC_RUNTIME})
 
     def __init__(self, entry_id: str, id_suffix: str, default: time | None) -> None:
         self._attr_translation_key = f"departure_{id_suffix}"

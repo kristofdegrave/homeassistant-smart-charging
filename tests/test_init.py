@@ -141,6 +141,44 @@ async def test_reload_does_not_recreate_the_sc_runtime_label(hass):
     assert lr.async_get(hass).async_get_label_by_name(LABEL_SC_RUNTIME) is not None
 
 
+async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_not(hass):
+    """C5 (#601): every runtime-classified owned entity carries `sc_runtime`; every diagnostic/
+    status sensor carries no labels at all -- the property the dashboard's `auto-entities`
+    filter depends on structurally, per 2026-07-08-runtime-dashboard-design.md Decision 1."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    runtime_suffixes = {
+        "mode",
+        "profile",
+        "target_current",
+        "soc_limit_override",
+        "home_day",
+        "departure_mon",
+        "departure_tue",
+        "departure_wed",
+        "departure_thu",
+        "departure_fri",
+        "departure_sat",
+        "departure_sun",
+        "departure_holiday",
+        "departure_home_day",
+    }
+    for entry_reg in er.async_entries_for_config_entry(registry, entry.entry_id):
+        suffix = entry_reg.unique_id.removeprefix(f"{entry.entry_id}_")
+        if suffix in runtime_suffixes:
+            assert entry_reg.labels == {LABEL_SC_RUNTIME}, f"{suffix}: {entry_reg.labels!r}"
+        else:
+            assert entry_reg.labels == set(), f"{suffix}: {entry_reg.labels!r}"
+
+
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
     """A config entry created before this option existed must still set up (no migration)."""
     seed_charger_states(hass, status="Charging")
