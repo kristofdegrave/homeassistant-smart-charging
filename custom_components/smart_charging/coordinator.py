@@ -585,9 +585,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
         # entity-catalog.md:153/control-cycle.md step 5 -- the same raw-reading target the R3
-        # clamp itself holds (apply_peak_clamp's own headroom_a), duplicated here rather than
-        # returned from that function to avoid changing its control-path signature for a
-        # display-only need (#602 T2).
+        # clamp itself holds (apply_peak_clamp's own headroom_a). Both the CONF_SAFETY_MARGIN_W
+        # read and the resulting computation are duplicated here rather than returned from
+        # _apply_peak_clamp, to avoid changing its control-path signature for a display-only
+        # need (#602 T2) -- keep the two lookups in lockstep if either side changes.
         safety_margin_w = self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W)
         peak_target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
         peak_baseline_w = net_w - charger_w
@@ -611,28 +612,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         desired = self._dispatch_mode(ctx)
 
-        # R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
-        # Sec 7). `desired` here is the already-computed mode request from dispatch above --
-        # apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
-        # disconnect/Off/SOC-gated branches above (all `desired = 0.0`) can never trip
-        # force_stop this cycle, regardless of headroom.
-        power_respect_peak = self._config.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK)
-        if not (self.active_mode == MODE_POWER and not power_respect_peak):
-            desired, self._peak_tracker, force_stop = apply_peak_clamp(
-                desired,
-                net_w=net_w,
-                charger_w=charger_w,
-                voltage=voltage,
-                effective_peak_limit_kw=effective_peak_limit_kw,
-                safety_margin_w=safety_margin_w,
-                min_a=self._config[CONF_MIN_CURRENT],
-                grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
-                tracker=self._peak_tracker,
-                now=now,
-            )
-            if force_stop and self.active_mode == MODE_CAPTAR:
-                desired = 0.0
-                self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
+        desired = self._apply_peak_clamp(
+            desired,
+            net_w=net_w,
+            charger_w=charger_w,
+            voltage=voltage,
+            effective_peak_limit_kw=effective_peak_limit_kw,
+            now=now,
+        )
 
         desired = clamp_to_ceiling(  # E6 (before E8)
             desired,
@@ -773,6 +760,45 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         desired, self._mode_state[self.active_mode] = handler.desired_current(
             ctx, self._mode_state.get(self.active_mode)
         )
+        return desired
+
+    def _apply_peak_clamp(
+        self,
+        desired: float,
+        *,
+        net_w: float,
+        charger_w: float,
+        voltage: float,
+        effective_peak_limit_kw: float,
+        now: float,
+    ) -> float:
+        """R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
+        Sec 7). `desired` here is the already-computed mode request from `_dispatch_mode` --
+        apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
+        disconnect/Off/SOC-gated branches (all `desired = 0.0`) can never trip force_stop this
+        cycle, regardless of headroom. A separate named call from the C4 grid-ceiling clamp
+        below, per ADR-0006's requirement that the two never merge into one routine -- merging
+        them would let the R17 opt-out silently reach C4 too. Mutates self._peak_tracker and, on a
+        force-stop while Captar is active, self._mode_state[MODE_CAPTAR] -- both exactly as
+        before this extraction (ADR-0023)."""
+        power_respect_peak = self._config.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK)
+        if self.active_mode == MODE_POWER and not power_respect_peak:
+            return desired
+        desired, self._peak_tracker, force_stop = apply_peak_clamp(
+            desired,
+            net_w=net_w,
+            charger_w=charger_w,
+            voltage=voltage,
+            effective_peak_limit_kw=effective_peak_limit_kw,
+            safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+            min_a=self._config[CONF_MIN_CURRENT],
+            grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
+            tracker=self._peak_tracker,
+            now=now,
+        )
+        if force_stop and self.active_mode == MODE_CAPTAR:
+            desired = 0.0
+            self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
         return desired
 
     def _fresh_mode_state(self) -> dict:
