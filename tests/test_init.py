@@ -200,6 +200,59 @@ async def test_setup_registers_the_dashboard_panel_and_unload_removes_it(hass):
     assert DASHBOARD_URL_PATH not in hass.data[frontend.DATA_PANELS]
 
 
+async def test_runtime_dashboard_integration_checkpoint(hass):
+    """C5 (#601) T7: ties T0-T5 together end-to-end -- the seam none of their own per-task
+    tests individually covers is a real ADR-0008 reload (unload-then-setup) leaving exactly
+    one panel registered, with labels/panel visibility both intact across it."""
+    assert await async_setup_component(hass, "lovelace", {})
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    runtime_suffixes = {
+        "mode",
+        "profile",
+        "target_current",
+        "soc_limit_override",
+        "home_day",
+        "departure_mon",
+        "departure_tue",
+        "departure_wed",
+        "departure_thu",
+        "departure_fri",
+        "departure_sat",
+        "departure_sun",
+        "departure_holiday",
+        "departure_home_day",
+    }
+    for entry_reg in er.async_entries_for_config_entry(registry, entry.entry_id):
+        suffix = entry_reg.unique_id.removeprefix(f"{entry.entry_id}_")
+        expected_labels = {LABEL_SC_RUNTIME} if suffix in runtime_suffixes else set()
+        assert entry_reg.labels == expected_labels, f"{suffix}: {entry_reg.labels!r}"
+
+    panel = hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH]
+    assert panel.config["mode"] == "yaml"
+    assert panel.show_in_sidebar is True
+    panel_count_before_reload = len(hass.data[frontend.DATA_PANELS])
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert len(hass.data[frontend.DATA_PANELS]) == panel_count_before_reload
+    assert hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH].show_in_sidebar is True
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DASHBOARD_URL_PATH not in hass.data[frontend.DATA_PANELS]
+
+
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
     """A config entry created before this option existed must still set up (no migration)."""
     seed_charger_states(hass, status="Charging")
