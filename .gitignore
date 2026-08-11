@@ -224,3 +224,7 @@ __marimo__/
 # the committed .claude/settings.json also applies to CI (claude-code-action),
 # so broad/destructive allow rules must never be tracked.
 .claude/settings.local.json
+
+# C5 (#601): the runtime dashboard is generated into the package directory at every
+# async_setup_entry (ADR-0022) -- never source, never committed.
+custom_components/smart_charging/dashboard_generated.yaml

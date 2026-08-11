@@ -79,6 +79,7 @@ from .const import (
     ROLE_NOTIFICATION_TARGET,
 )
 from .coordinator import SmartChargingCoordinator
+from .dashboard import async_register_dashboard, async_unregister_dashboard
 from .managers.notification_manager import NotificationManager
 from .managers.vehicle_limit import VehicleLimitManager
 
@@ -237,6 +238,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry.async_on_unload(unsub)
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+
+    # C5 (#601, ADR-0022): regenerated and re-registered on every setup (including a reload's
+    # own setup half) -- after platforms, so the dashboard's fixed tiles/labels reference
+    # entities that already exist.
+    await async_register_dashboard(hass, entry)
     return True
 
 
@@ -247,6 +253,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    await async_unregister_dashboard(hass, entry)
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id)

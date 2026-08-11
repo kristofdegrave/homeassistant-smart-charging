@@ -3,8 +3,10 @@
 from datetime import time, timedelta
 from unittest.mock import AsyncMock, patch
 
+from homeassistant.components import frontend
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
+from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -42,6 +44,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+    DASHBOARD_URL_PATH,
     DATA_COORDINATOR,
     DATA_NOTIFICATION_MANAGER,
     DATA_VEHICLE_LIMIT_MANAGER,
@@ -177,6 +180,24 @@ async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_no
             assert entry_reg.labels == {LABEL_SC_RUNTIME}, f"{suffix}: {entry_reg.labels!r}"
         else:
             assert entry_reg.labels == set(), f"{suffix}: {entry_reg.labels!r}"
+
+
+async def test_setup_registers_the_dashboard_panel_and_unload_removes_it(hass):
+    """C5 (#601): wiring async_register_dashboard/async_unregister_dashboard into
+    async_setup_entry/async_unload_entry."""
+    assert await async_setup_component(hass, "lovelace", {})
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DASHBOARD_URL_PATH in hass.data[frontend.DATA_PANELS]
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DASHBOARD_URL_PATH not in hass.data[frontend.DATA_PANELS]
 
 
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
