@@ -621,13 +621,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             now=now,
         )
 
-        desired = clamp_to_ceiling(  # E6 (before E8)
-            desired,
-            net_w=net_w,
-            charger_w=charger_w,
-            voltage=voltage,
-            ceiling_a=self._config[CONF_GRID_CEILING_A],
-            offset_a=self._config[CONF_GRID_SAFETY_OFFSET_A],
+        desired = self._apply_grid_ceiling_clamp(
+            desired, net_w=net_w, charger_w=charger_w, voltage=voltage
         )
         desired = apply_floor_cap(  # E8 invariant last
             desired, min_a=self._config[CONF_MIN_CURRENT], max_a=self._config[CONF_MAX_CURRENT]
@@ -800,6 +795,22 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             desired = 0.0
             self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
         return desired
+
+    def _apply_grid_ceiling_clamp(
+        self, desired: float, *, net_w: float, charger_w: float, voltage: float
+    ) -> float:
+        """C4 grid-supply-ceiling clamp (E6) -- never skippable, no opt-out of any kind. A
+        separate named call from the R3 clamp above, per ADR-0006 -- merging the two, or adding
+        a shared parameter, would risk the R17 opt-out silently reaching C4 too. Extracted from
+        `_run_cycle` per ADR-0023."""
+        return clamp_to_ceiling(
+            desired,
+            net_w=net_w,
+            charger_w=charger_w,
+            voltage=voltage,
+            ceiling_a=self._config[CONF_GRID_CEILING_A],
+            offset_a=self._config[CONF_GRID_SAFETY_OFFSET_A],
+        )
 
     def _fresh_mode_state(self) -> dict:
         """R7/R11: the idle state every SOC-gated mode resets to -- disconnect, mode switch,
