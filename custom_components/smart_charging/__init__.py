@@ -7,6 +7,7 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import label_registry as lr
 from homeassistant.helpers.event import async_track_time_interval
 
 from .adapters.factory import build_adapters
@@ -73,6 +74,7 @@ from .const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
+    LABEL_SC_RUNTIME,
     PEAK_WINDOW_SECONDS,
     ROLE_NOTIFICATION_TARGET,
 )
@@ -90,6 +92,13 @@ PLATFORMS = [
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    # C5 (#601): the sc_runtime label must exist before any owned entity references it -- an
+    # entity-registry label id with no matching label_registry entry has no display name and
+    # nothing for the dashboard's `auto-entities` filter to resolve. Idempotent across reloads.
+    label_registry = lr.async_get(hass)
+    if label_registry.async_get_label_by_name(LABEL_SC_RUNTIME) is None:
+        label_registry.async_create(LABEL_SC_RUNTIME)
+
     # Mappings/translation live in data; thresholds/defaults + interval in options (ADR-0005).
     adapters = build_adapters(hass, entry.data)
     opts = entry.options

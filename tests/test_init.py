@@ -4,6 +4,7 @@ from datetime import time, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -50,6 +51,7 @@ from custom_components.smart_charging.const import (
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
+    LABEL_SC_RUNTIME,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -108,6 +110,35 @@ async def test_end_to_end_commands_target_current(hass):
     assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
     assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
+
+
+async def test_setup_creates_the_sc_runtime_label(hass):
+    """C5 (#601): the `sc_runtime` label must exist in the label registry before any owned
+    entity references it -- an entity-registry label id with no matching label_registry entry
+    has no display name and nothing for the dashboard's `auto-entities` filter to resolve."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    label = lr.async_get(hass).async_get_label_by_name(LABEL_SC_RUNTIME)
+    assert label is not None
+    assert label.label_id == LABEL_SC_RUNTIME
+
+
+async def test_reload_does_not_recreate_the_sc_runtime_label(hass):
+    """A second setup (ADR-0008 reload) must not raise on an already-existing label."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert lr.async_get(hass).async_get_label_by_name(LABEL_SC_RUNTIME) is not None
 
 
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):
