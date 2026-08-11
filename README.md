@@ -145,10 +145,26 @@ reading and adopting a manual change is unaffected by this gate either way).
 Unmapping the vehicle charge-limit entity disables this sync entirely without
 affecting charger-current control.
 
+## Runtime dashboard
+
+The integration ships a Lovelace dashboard at **Settings → Dashboards → Smart
+Charging** (or the sidebar, if shown), regenerated from the current entity set
+every time the integration starts up or reloads (ADR-0022). It is a **locked**
+dashboard — HA's own UI won't let you edit it in place, and any edit made to
+its underlying file is overwritten on the next reload regardless. If you want
+a different layout, build an ordinary dashboard from the same entities instead
+(every entity it shows is a normal Home Assistant entity, nothing is special
+about how the packaged one displays them).
+
+The dashboard's *Runtime settings* section requires the
+[`auto-entities`](https://github.com/thomasloven/lovelace-auto-entities) HACS
+card — without it, that section renders as a broken card. Install it via HACS
+before setting up the integration if you want that section to work.
+
 ## Deferred (not in this MVP)
 
-R5's deadline-unreachable notice delivery (gated on the not-yet-built Deadline
-Engine) and the runtime dashboard. These are later slices of
+R5's deadline-unreachable notice delivery, gated on the not-yet-built Deadline
+Engine. This is a later slice of
 [`docs/design/project-plan.md`](docs/design/project-plan.md).
 
 ## What it does
