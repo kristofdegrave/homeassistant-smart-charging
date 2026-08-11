@@ -101,6 +101,9 @@ OWNED_SUFFIX_ADAPTER_READINGS = "adapter_readings"
 # Runtime dashboard (C5, #601) -- HA label marking every runtime-classified owned entity for the
 # `auto-entities` card (2026-07-08-runtime-dashboard-design.md Decision 1).
 LABEL_SC_RUNTIME = "sc_runtime"
+DASHBOARD_URL_PATH = "smart-charging"
+DASHBOARD_FILENAME = "dashboard_generated.yaml"
+DASHBOARD_ICON = "mdi:ev-station"
 
 # Monday=0 .. Sunday=6 (Python's date.weekday()), matching time.py's DAY_OF_WEEK_DEFAULTS order.
 OWNED_SUFFIX_DEPARTURE_DOW = [
