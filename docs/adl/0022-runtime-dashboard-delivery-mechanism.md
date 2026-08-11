@@ -1,7 +1,7 @@
 # ADR-0022: Runtime-dashboard delivery mechanism
 
 Date: 2026-08-10
-Status: Proposed
+Status: Accepted
 
 ## Context
 
