@@ -1,4 +1,4 @@
-"""Time-of-day read adapter (ADR-0003 extension, Task 2.1/RA2)."""
+"""Time-of-day read adapter (ADR-0003 extension, RA2)."""
 
 from datetime import time
 
@@ -14,8 +14,8 @@ class TimeReadAdapter(_ReadOnlyAdapter):
     native value is a `datetime.time`, not a float (`NumericReadAdapter`) or a
     user-translated canonical string (`StatusReadAdapter`). Neither existing class fits
     without being reshaped, so this is a new, minimal adapter class of the same shape
-    ADR-0003 already establishes ("one class per role"), flagged for review per the Task
-    2.1 plan instruction rather than silently repurposing either.
+    ADR-0003 already establishes ("one class per role"), rather than repurposing
+    either.
 
     Returns None when the entity is missing/unavailable/unknown OR its native state can't
     be parsed as a time (e.g. a source sensor currently reporting a non-time value like

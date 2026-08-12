@@ -66,14 +66,14 @@ class NotifyAdapter:
         self._entity_id = entity_id
         self._current_tag: str | None = None
         self._last_action: str | None = None
-        # Unsubscribed via close() -- the factory's owner calls it on config-entry unload
-        # (issue #498), so a reload doesn't leave a dangling bus listener behind.
+        # Unsubscribed via close() -- the factory's owner calls it on config-entry unload,
+        # so a reload doesn't leave a dangling bus listener behind.
         self._unsub = hass.bus.async_listen(
             EVENT_MOBILE_APP_NOTIFICATION_ACTION, self._handle_action
         )
 
     def close(self) -> None:
-        """Unsubscribe the action-event listener (issue #498's per-reload leak fix)."""
+        """Unsubscribe the action-event listener, preventing a dangling bus listener on reload."""
         self._unsub()
 
     @callback
@@ -107,7 +107,7 @@ class NotifyAdapter:
                 ],
             }
         # A non-actionable send (e.g. the R5 deadline-unreachable notice) does not supersede
-        # a still-outstanding actionable prompt -- issue #498 review: clearing `_current_tag`
+        # a still-outstanding actionable prompt -- clearing `_current_tag`
         # here would make `_handle_action` drop a genuine answer that arrives for the prompt
         # still in flight. `_current_tag`/`_last_action` are therefore only ever reset by a
         # *new actionable* write (above) or consumed by `read()` (below).
@@ -122,11 +122,11 @@ class NotifyAdapter:
         tagged to a superseded notification -- filtered out in _handle_action, so it
         never reaches here -- or no response yet, returns None, never a stale value.
 
-        The returned answer is consumed (issue #498): once read, it is cleared so it
+        The returned answer is consumed: once read, it is cleared so it
         is valid for exactly one read() of its own tag/prompt cycle, not replayed on
         every subsequent call. This narrows design doc §4/§6's "returns the last captured
-        actionable response" to "returns it once" -- a deliberate fix-scoped deviation
-        (issue #498), not yet reflected back into the design doc; `managers/notification_manager.py`
+        actionable response" to "returns it once" -- a deliberate deviation from the
+        design doc, not yet reflected back into it; `managers/notification_manager.py`
         calls `read()` exactly once per resolved prompt-state transition, not polling it
         speculatively.
         """

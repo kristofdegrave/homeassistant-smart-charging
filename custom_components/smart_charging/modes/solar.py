@@ -24,7 +24,7 @@ from ._phase import Phase
 class SolarState(ModeState):
     """No fields of its own -- `@dataclass(frozen=True)` is re-declared (rather than a
     bare `class SolarState(ModeState): pass`) so `SolarState` keeps its own frozen
-    `__setattr__`/`__eq__`/`__hash__`, exact dataclass parity with the pre-#507 shape."""
+    `__setattr__`/`__eq__`/`__hash__`, exact dataclass parity with the prior shape."""
 
 
 def step(

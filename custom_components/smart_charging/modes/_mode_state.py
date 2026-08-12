@@ -1,4 +1,4 @@
-"""Shared frozen state-dataclass base and helpers for the mode engines (E1, issue #507).
+"""Shared frozen state-dataclass base and helpers for the mode engines (E1).
 
 Every mode engine (`solar.py`, `solar_only.py`, `captar.py`) threads a small frozen
 dataclass of exactly the same shape -- `phase` + `phase_started_at` -- and repeats the

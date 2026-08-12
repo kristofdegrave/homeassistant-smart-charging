@@ -12,8 +12,8 @@ silently revert to its constructor default on every HA restart, contradicting
 `entity-catalog.md`'s own "runtime" persistence classification for these rows (the same
 category `number.smart_charging_soc_limit_override`/`select.smart_charging_mode` are in, both
 of which the codebase already restores). This class therefore mirrors `ModeSelect`
-(`select.py`) and uses `RestoreEntity` -- flagged here as a corrected, task-scoped deviation
-from the design doc's wording rather than a silent departure from it.
+(`select.py`) and uses `RestoreEntity` -- a deliberate, narrow correction of the design
+doc's wording rather than a silent departure from it.
 """
 
 from __future__ import annotations

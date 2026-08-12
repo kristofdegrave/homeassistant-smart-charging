@@ -1,4 +1,4 @@
-"""Boolean-flag read adapter (ADR-0003 extension, Task 2.1/RA2)."""
+"""Boolean-flag read adapter (ADR-0003 extension, RA2)."""
 
 from homeassistant.const import STATE_OFF, STATE_ON
 
@@ -14,8 +14,8 @@ class BooleanReadAdapter(_ReadOnlyAdapter):
     exists to let the user map arbitrary firmware strings onto the three canonical charger
     states -- there is no such user-configured translation here). Neither existing class
     fits without being reshaped, so this is a new, minimal adapter class of the same shape
-    ADR-0003 already establishes ("one class per role"), flagged for review per the Task 2.1
-    plan instruction rather than silently repurposing `StatusReadAdapter`.
+    ADR-0003 already establishes ("one class per role"), rather than repurposing
+    `StatusReadAdapter` to hold a value it wasn't designed for.
 
     Returns None when the entity is missing/unavailable/unknown OR its state is neither
     `on` nor `off` -- the ADR-0007 fault signal, same as every other read adapter.

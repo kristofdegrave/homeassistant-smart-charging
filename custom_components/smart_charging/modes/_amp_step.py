@@ -7,7 +7,7 @@ of each mode's state-machine logic without coupling the two modes together (NF2)
 
 import math
 
-# Strategy constants live in const.py, not here (issue #502) -- imported only for this
+# Strategy constants live in const.py, not here -- imported only for this
 # module's own comparisons below; other call sites should import from `..const` directly.
 from ..const import ROUND_DOWN, ROUND_NEAREST, ROUND_UP
 

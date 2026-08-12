@@ -5,7 +5,7 @@ raises to the maximum peak under deadline urgency (R5/C3, fed by the Deadline
 Engine, E4); row 2 (unchanged) is min(monthly, max), reached only when
 `urgent=False`. Also the R3 peak clamp with its grace-period breach tracker
 (Sec 6.2). The Peak-Demand Tracker is a SEPARATE sibling module,
-`engines/peak_demand_tracker.py` (Task 1.3) -- ADR-0010's Decision names both
+`engines/peak_demand_tracker.py` -- ADR-0010's Decision names both
 modules explicitly and states they "stay two sibling modules ... their
 relationship is recorded by project-plan task E5 bundling them, not by a
 directory."
