@@ -16,43 +16,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .adapters.sun import SUN_STATE_ABOVE_HORIZON, SUN_STATE_BELOW_HORIZON
+from .config import SmartChargingConfig
 from .const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
     CHARGEABLE_STATES,
-    CONF_CAPTAR_AVAILABLE,
-    CONF_EV_BATTERY_CAPACITY_KWH,
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_MAX_CURRENT,
-    CONF_MAX_PEAK_KW,
-    CONF_MAX_SOLAR_SOC,
-    CONF_MIN_CURRENT,
-    CONF_NOMINAL_VOLTAGE,
-    CONF_PEAK_GRACE_MIN,
-    CONF_PEAK_WINDOW_SIZE,
-    CONF_POWER_RESPECT_PEAK,
-    CONF_SAFETY_MARGIN_W,
-    CONF_SMOOTHING_WINDOW,
-    CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    CONF_SOLAR_INSTALLED,
-    CONF_SOLAR_RESERVE_SOC,
-    CONF_SOLAR_START_THRESHOLD_W,
-    CONF_SOLAR_STEP_PP,
-    CONF_SOLAR_STEP_THRESHOLD_PP,
-    DEFAULT_CAPTAR_AVAILABLE,
-    DEFAULT_EV_BATTERY_CAPACITY_KWH,
-    DEFAULT_MAX_PEAK_KW,
-    DEFAULT_MAX_SOLAR_SOC,
-    DEFAULT_PEAK_GRACE_MIN,
-    DEFAULT_POWER_RESPECT_PEAK,
-    DEFAULT_SAFETY_MARGIN_W,
-    DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
-    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
-    DEFAULT_SOLAR_RESERVE_SOC,
-    DEFAULT_SOLAR_STEP_PP,
-    DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
@@ -67,7 +36,6 @@ from .const import (
     OWNED_SUFFIX_PROFILE,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     OWNED_SUFFIX_TARGET_CURRENT,
-    PEAK_WINDOW_SECONDS,
     PROFILE_AUTO,
     PROFILE_MANUAL,
     ROLE_CHARGER_CURRENT,
@@ -130,7 +98,15 @@ class CycleResult:
 class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     """Runs the control cycle every interval, dispatching to the active mode (M1)."""
 
-    def __init__(self, hass: HomeAssistant, *, adapters, store, config, interval_s: int) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        *,
+        adapters,
+        store,
+        config: SmartChargingConfig,
+        interval_s: int,
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -261,7 +237,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if ROLE_GRID_VOLTAGE in self._adapters:
             measured_v = await self._adapters[ROLE_GRID_VOLTAGE].read()
             self._role_readings[ROLE_GRID_VOLTAGE] = measured_v
-        voltage = resolve_voltage(measured_v, self._config[CONF_NOMINAL_VOLTAGE])
+        voltage = resolve_voltage(measured_v, self._config.nominal_voltage)
 
         # Any required role missing -> fault (ADR-0007).
         if status is None or net_w is None or charger_w is None:
@@ -337,9 +313,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             home_day_flag=self.home_day_flag,
             sun_is_down=ctx.sun_is_down,
             forecast_kwh=forecast_kwh,
-            forecast_threshold_kwh=self._config.get(
-                CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
-            ),
+            forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
             deadline_tomorrow_resolved=deadline_tomorrow is not None,
         )
         return deadline_tomorrow, resolve_deadline_for
@@ -368,9 +342,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._role_readings[ROLE_EV_BATTERY_CAPACITY] = sensed_capacity_kwh
         effective_battery_capacity_kwh = sensed_capacity_kwh
         if effective_battery_capacity_kwh is None:
-            effective_battery_capacity_kwh = self._config.get(
-                CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
-            )
+            effective_battery_capacity_kwh = self._config.ev_battery_capacity_kwh
         deadline_today = resolve_deadline_for(today_weekday) if deadline_resolvable else None
         return deadline_today, effective_battery_capacity_kwh
 
@@ -405,15 +377,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
         # real wall-clock (`now_dt`, read at the top of `_run_cycle`) for month rollover,
         # distinct from the monotonic `now` the mode state machines use below.
-        peak_window_size = self._config.get(
-            CONF_PEAK_WINDOW_SIZE, max(1, round(PEAK_WINDOW_SECONDS / self._interval_s))
+        monthly_peak_kw = self._peak_demand.update(
+            net_w, now_dt, window_size=self._config.peak_window_size
         )
-        monthly_peak_kw = self._peak_demand.update(net_w, now_dt, window_size=peak_window_size)
         # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
         # known -- overwritten with the real `urgent` value once required-current resolves.
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw,
-            self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
+            self._config.max_peak_kw,
             urgent=False,
         )
         # R11: catches a Manual mode change here (already final -- set externally before this
@@ -454,11 +425,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 adapter_readings_at=self._role_readings_at,
             )
 
-        # .get(): a pre-solar config entry predates this option (`DEFAULT_SMOOTHING_WINDOW`
-        # applies); smoothing runs every cycle regardless of mode.
-        smoothing_window = self._config.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW)
+        # __init__.py's SmartChargingConfig already applies DEFAULT_SMOOTHING_WINDOW for a
+        # pre-solar config entry that predates this option; smoothing runs every cycle
+        # regardless of mode.
         smoothed_net_w, self._net_window = smooth_net_power(
-            net_w, self._net_window, size=smoothing_window
+            net_w, self._net_window, size=self._config.smoothing_window
         )
         surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
         # the baseline-mode dry-run
@@ -491,11 +462,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             status=status,
             soc=ev_soc,
             default_limit=self.soc_limit_override,
-            step_threshold_pp=self._config.get(
-                CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP
-            ),
-            step_pp=self._config.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
-            max_solar_soc=self._config.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
+            step_threshold_pp=self._config.solar_step_threshold_pp,
+            step_pp=self._config.solar_step_pp,
+            max_solar_soc=self._config.max_solar_soc,
         )
 
         # R5/R14/R15: `today_weekday` stays inline -- _read_deadline_urgency_inputs (below)
@@ -508,7 +477,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
             self.soc_limit_override,
             solar_reserve_active=ctx.solar_reserve_active,
-            solar_reserve_soc=self._config.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
+            solar_reserve_soc=self._config.solar_reserve_soc,
             step_up_state=self._step_up_gate.state,
         )
         if soc_limit_changed:
@@ -556,11 +525,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_battery_capacity_kwh=effective_battery_capacity_kwh,
             voltage=voltage,
             surplus_w=surplus_w,
-            max_current_a=self._config[CONF_MAX_CURRENT],
+            max_current_a=self._config.max_current,
             auto_dispatchable=auto_dispatchable,
-            solar_installed=self._config.get(CONF_SOLAR_INSTALLED, False),
-            captar_available=self._config.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
-            solar_start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
+            solar_installed=self._config.solar_installed,
+            captar_available=self._config.captar_available,
+            solar_start_threshold_w=self._config.solar_start_threshold_w,
             sun_is_up=ctx.sun_is_up,
             sun_is_down=ctx.sun_is_down,
             low_tariff_active=ctx.low_tariff_active,
@@ -587,7 +556,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         urgent = deadline_urgency.urgent
         ctx.urgent = urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
-            monthly_peak_kw, self._config.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW), urgent=urgent
+            monthly_peak_kw, self._config.max_peak_kw, urgent=urgent
         )
         # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
         # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault
@@ -597,12 +566,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
         # entity-catalog.md:153/control-cycle.md step 5 -- the same raw-reading target the R3
-        # clamp itself holds (apply_peak_clamp's own headroom_a). Both the CONF_SAFETY_MARGIN_W
+        # clamp itself holds (apply_peak_clamp's own headroom_a). Both the `safety_margin_w`
         # read and the resulting computation are duplicated here rather than returned from
         # _apply_peak_clamp, to avoid changing its control-path signature for a display-only
         # need -- keep the two lookups in lockstep if either side changes.
-        safety_margin_w = self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W)
-        peak_target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
+        peak_target_w = effective_peak_limit_kw * 1000.0 - self._config.safety_margin_w
         peak_baseline_w = net_w - charger_w
         peak_headroom_a = math.floor((peak_target_w - peak_baseline_w) / voltage)
         if auto_dispatchable and deadline_urgency.resolved_mode is not None:
@@ -640,7 +608,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             desired, net_w=net_w, charger_w=charger_w, voltage=voltage
         )
         desired = apply_floor_cap(  # E8 invariant last
-            desired, min_a=self._config[CONF_MIN_CURRENT], max_a=self._config[CONF_MAX_CURRENT]
+            desired, min_a=self._config.min_current, max_a=self._config.max_current
         )
 
         # entity-catalog.md:152/glossary -- "the charger's current applied rate"/`charger_current`
@@ -821,8 +789,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         them would let the R17 opt-out silently reach C4 too. Mutates self._peak_tracker and, on a
         force-stop while Captar is active, self._mode_state[MODE_CAPTAR] -- both exactly as
         before this extraction (ADR-0023)."""
-        power_respect_peak = self._config.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK)
-        if self.active_mode == MODE_POWER and not power_respect_peak:
+        if self.active_mode == MODE_POWER and not self._config.power_respect_peak:
             return desired
         desired, self._peak_tracker, force_stop = apply_peak_clamp(
             desired,
@@ -830,9 +797,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             charger_w=charger_w,
             voltage=voltage,
             effective_peak_limit_kw=effective_peak_limit_kw,
-            safety_margin_w=self._config.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
-            min_a=self._config[CONF_MIN_CURRENT],
-            grace_period_s=self._config.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN) * 60,
+            safety_margin_w=self._config.safety_margin_w,
+            min_a=self._config.min_current,
+            grace_period_s=self._config.peak_grace_min * 60,
             tracker=self._peak_tracker,
             now=now,
         )
@@ -853,8 +820,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             net_w=net_w,
             charger_w=charger_w,
             voltage=voltage,
-            ceiling_a=self._config[CONF_GRID_CEILING_A],
-            offset_a=self._config[CONF_GRID_SAFETY_OFFSET_A],
+            ceiling_a=self._config.grid_ceiling_a,
+            offset_a=self._config.grid_safety_offset_a,
         )
 
     def _fresh_mode_state(self) -> dict:
@@ -887,9 +854,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ADR-0018, `number.py` never calls this directly: the coordinator reads the stored value
         through the Store each cycle (`_read_owned_entities`) and calls this itself; the only
         other caller is tests."""
-        self.target_current = min(
-            max(value, self._config[CONF_MIN_CURRENT]), self._config[CONF_MAX_CURRENT]
-        )
+        self.target_current = min(max(value, self._config.min_current), self._config.max_current)
 
     def seed_monthly_peak(self, kw: float, month: tuple[int, int] | None) -> None:
         """Coordinator's own boundary for seeding `_peak_demand` from MonthlyPeakSensor's

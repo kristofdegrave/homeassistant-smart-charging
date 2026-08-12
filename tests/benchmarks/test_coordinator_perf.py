@@ -11,18 +11,8 @@ import os
 import time
 import tracemalloc
 
+from custom_components.smart_charging.config import SmartChargingConfig
 from custom_components.smart_charging.const import (
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_MAX_CURRENT,
-    CONF_MAX_PEAK_KW,
-    CONF_MIN_CURRENT,
-    CONF_NOMINAL_VOLTAGE,
-    CONF_PEAK_GRACE_MIN,
-    CONF_PEAK_WINDOW_SIZE,
-    CONF_POWER_RESPECT_PEAK,
-    CONF_SAFETY_MARGIN_W,
-    CONF_SMOOTHING_WINDOW,
     MODE_POWER,
     ROLE_CHARGER_CURRENT,
     ROLE_CHARGER_POWER,
@@ -31,6 +21,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
+from tests.config_factory import make_test_config
 
 _ITERATIONS = 200
 _MAX_AVG_CYCLE_MS = 20.0
@@ -73,20 +64,13 @@ def _adapters():
     }
 
 
-def _config():
-    return {
-        CONF_MIN_CURRENT: 6.0,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 2.0,
-        CONF_NOMINAL_VOLTAGE: 230.0,
-        CONF_SMOOTHING_WINDOW: 5,
-        CONF_MAX_PEAK_KW: 100.0,
-        CONF_SAFETY_MARGIN_W: 250.0,
-        CONF_PEAK_GRACE_MIN: 2.0,
-        CONF_POWER_RESPECT_PEAK: True,
-        CONF_PEAK_WINDOW_SIZE: 5,
-    }
+def _config() -> SmartChargingConfig:
+    """This suite's own SmartChargingConfig baseline, layered on tests/config_factory.py's
+    shared production-DEFAULT_*-seeded factory (issue #570 follow-up: three near-identical
+    per-suite factories collapsed to one). `smoothing_window`/`peak_window_size` are this
+    file's own long-standing baseline values (distinct from the production defaults
+    `make_test_config` otherwise uses)."""
+    return make_test_config(smoothing_window=5, peak_window_size=5)
 
 
 def _write_report(name, payload):

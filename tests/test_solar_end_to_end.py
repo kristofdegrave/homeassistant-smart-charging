@@ -29,6 +29,7 @@ from tests.helpers import (
     capture_charger_current_writes,
     entry_data_base,
     entry_options_base,
+    replace_coordinator_config,
     seed_ample_peak_headroom,
     seed_charger_states,
     seed_owned_entity,
@@ -175,7 +176,7 @@ async def test_uc01_2a_cooldown_blocks_start_until_it_elapses(hass):
 
     # Simulate the cooldown having fully elapsed (avoiding a real 2-minute wall-clock wait)
     # and confirm the System starts on the next qualifying cycle.
-    coordinator._config[CONF_SOLAR_COOLDOWN_MIN] = 0.0
+    replace_coordinator_config(coordinator, solar_cooldown_min=0.0)
     await _cycle(hass, coordinator, charger_w=2760.0)
     assert calls[-1]["value"] == 12.0
     assert coordinator._mode_state[MODE_SOLAR].phase == Phase.CHARGING
@@ -224,7 +225,7 @@ async def test_uc01_3b_post_surplus_hold_resumes_or_stops_after_the_hold_period(
     # (avoiding a real 5-minute wall-clock wait) while surplus is still low.
     await _cycle(hass, coordinator, charger_w=0.0)
     assert coordinator._mode_state[MODE_SOLAR].phase == Phase.HOLD
-    coordinator._config[CONF_SOLAR_HOLD_MIN] = 0.0
+    replace_coordinator_config(coordinator, solar_hold_min=0.0)
     await _cycle(hass, coordinator, charger_w=0.0)
     assert calls[-1]["value"] == 0.0
     assert coordinator._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN

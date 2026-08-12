@@ -12,7 +12,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
-    CONF_CAPTAR_COOLDOWN_MIN,
     CONF_EV_SOC_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_PEAK_GRACE_MIN,
@@ -28,6 +27,7 @@ from tests.helpers import (
     capture_charger_current_writes,
     entry_data_base,
     entry_options_base,
+    replace_coordinator_config,
     seed_ample_peak_headroom,
     seed_charger_states,
     seed_owned_entity,
@@ -152,7 +152,7 @@ async def test_uc03_2a_cooldown_blocks_restart_until_it_elapses(hass):
 
     # Simulate the cooldown having fully elapsed (avoiding a real 10-minute wall-clock wait)
     # and confirm the System starts again on the next qualifying cycle.
-    coordinator._config[CONF_CAPTAR_COOLDOWN_MIN] = 0.0
+    replace_coordinator_config(coordinator, captar_cooldown_min=0.0)
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     assert calls[-1]["value"] == 16.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
@@ -201,7 +201,7 @@ async def test_uc03_sustained_r3_breach_stops_and_starts_cooldown(hass):
 
     # Simulate the grace period having fully elapsed (avoiding a real wall-clock wait) --
     # the same continuing breach now forces a stop and starts the Captar cooldown.
-    coordinator._config[CONF_PEAK_GRACE_MIN] = 0.0
+    replace_coordinator_config(coordinator, peak_grace_min=0.0)
     await _cycle(hass, coordinator, net_w=3600.0, charger_w=0.0)
     assert calls[-1]["value"] == 0.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN

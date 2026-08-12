@@ -4,17 +4,8 @@
 from datetime import datetime, time
 from unittest.mock import patch
 
+from custom_components.smart_charging.config import SmartChargingConfig
 from custom_components.smart_charging.const import (
-    CONF_CAPTAR_COOLDOWN_MIN,
-    CONF_MAX_CURRENT,
-    CONF_MIN_CURRENT,
-    CONF_SOLAR_COOLDOWN_MIN,
-    CONF_SOLAR_HOLD_MIN,
-    CONF_SOLAR_ONLY_MIDPOINT,
-    CONF_SOLAR_ONLY_START_THRESHOLD_W,
-    CONF_SOLAR_ONLY_STRATEGY,
-    CONF_SOLAR_START_THRESHOLD_W,
-    DEFAULT_CAPTAR_COOLDOWN_MIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -23,6 +14,7 @@ from custom_components.smart_charging.const import (
     PROFILE_AUTO,
     PROFILE_MANUAL,
     ROUND_DOWN,
+    ROUND_NEAREST,
     STATE_CHARGING,
     STATE_CONNECTED,
     STATE_DISCONNECTED,
@@ -45,6 +37,18 @@ from custom_components.smart_charging.coordinator_cycle import (
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes import captar, solar, solar_only
 from custom_components.smart_charging.modes._phase import Phase
+from tests.config_factory import make_test_config
+
+
+def _config(**overrides) -> SmartChargingConfig:
+    """This suite's own SmartChargingConfig baseline, layered on tests/config_factory.py's
+    shared production-DEFAULT_*-seeded factory (issue #570 follow-up: three near-identical
+    per-suite factories collapsed to one) -- every field a real setup would populate, since the
+    handlers now read typed attributes rather than `.get(CONF_X, DEFAULT_X)`/bracket lookups on
+    a plain dict. `smoothing_window` is this file's own long-standing baseline (distinct from
+    the production default `make_test_config` otherwise uses). `**overrides` takes the
+    dataclass's own field names."""
+    return make_test_config(smoothing_window=1, **overrides)
 
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
@@ -179,9 +183,9 @@ def test_mode_handler_protocol_is_satisfied_by_each_adapter():
     handlers: list[ModeHandler] = [
         _OffModeHandler(),
         _PowerModeHandler(lambda: 10.0),
-        _SolarModeHandler({}),
-        _SolarOnlyModeHandler({}),
-        _CaptarModeHandler({}),
+        _SolarModeHandler(_config()),
+        _SolarOnlyModeHandler(_config()),
+        _CaptarModeHandler(_config()),
     ]
     for handler in handlers:
         assert callable(handler.desired_current)
@@ -200,12 +204,12 @@ def test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode():
     assert _OffModeHandler().is_solar_mode is False
     assert _PowerModeHandler(lambda: 10.0).is_soc_gated is False
     assert _PowerModeHandler(lambda: 10.0).is_solar_mode is False
-    assert _SolarModeHandler({}).is_soc_gated is True
-    assert _SolarModeHandler({}).is_solar_mode is True
-    assert _SolarOnlyModeHandler({}).is_soc_gated is True
-    assert _SolarOnlyModeHandler({}).is_solar_mode is True
-    assert _CaptarModeHandler({}).is_soc_gated is True
-    assert _CaptarModeHandler({}).is_solar_mode is False
+    assert _SolarModeHandler(_config()).is_soc_gated is True
+    assert _SolarModeHandler(_config()).is_solar_mode is True
+    assert _SolarOnlyModeHandler(_config()).is_soc_gated is True
+    assert _SolarOnlyModeHandler(_config()).is_solar_mode is True
+    assert _CaptarModeHandler(_config()).is_soc_gated is True
+    assert _CaptarModeHandler(_config()).is_solar_mode is False
 
 
 def test_mode_handler_idle_state_per_mode():
@@ -215,9 +219,9 @@ def test_mode_handler_idle_state_per_mode():
     never actually read; it exists only to satisfy the Protocol uniformly."""
     assert _OffModeHandler().idle_state() is None
     assert _PowerModeHandler(lambda: 10.0).idle_state() is None
-    assert _SolarModeHandler({}).idle_state() == solar.SolarState.idle()
-    assert _SolarOnlyModeHandler({}).idle_state() == solar_only.SolarOnlyState.idle()
-    assert _CaptarModeHandler({}).idle_state() == captar.CaptarState.idle()
+    assert _SolarModeHandler(_config()).idle_state() == solar.SolarState.idle()
+    assert _SolarOnlyModeHandler(_config()).idle_state() == solar_only.SolarOnlyState.idle()
+    assert _CaptarModeHandler(_config()).idle_state() == captar.CaptarState.idle()
 
 
 def test_build_mode_handlers_wires_all_five_modes_with_correct_types_and_facts():
@@ -227,7 +231,7 @@ def test_build_mode_handlers_wires_all_five_modes_with_correct_types_and_facts()
     key, each the right handler type, each carrying its documented is_soc_gated/is_solar_mode
     facts (test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode's per-class assertions,
     reached this time through the factory)."""
-    handlers = build_mode_handlers({}, lambda: 10.0)
+    handlers = build_mode_handlers(_config(), lambda: 10.0)
 
     assert set(handlers) == {MODE_OFF, MODE_POWER, MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR}
     assert isinstance(handlers[MODE_OFF], _OffModeHandler)
@@ -248,23 +252,30 @@ def test_build_mode_handlers_wires_all_five_modes_with_correct_types_and_facts()
 
 
 def test_build_mode_handlers_threads_the_same_config_into_solar_only_and_captar_handlers():
-    """A construction-site typo swapping in a stray `{}` for one of the three config-reading
-    handlers (Solar/SolarOnly/Captar) would pass the type/facts checks above unnoticed --
-    pin that build_mode_handlers threads the SAME config mapping object it was given into all
-    three, by round-tripping a real config value through each handler's own dispatch and
-    checking it took effect (a KeyError here would surface at runtime as an ADR-0007 fault)."""
-    config = {
-        CONF_SOLAR_START_THRESHOLD_W: 500.0,
-        CONF_MIN_CURRENT: 6.0,
-        CONF_SOLAR_HOLD_MIN: 5,
-        CONF_SOLAR_COOLDOWN_MIN: 5,
-        CONF_SOLAR_ONLY_START_THRESHOLD_W: 700.0,
-        CONF_SOLAR_ONLY_STRATEGY: "midpoint",
-        CONF_SOLAR_ONLY_MIDPOINT: 0.5,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_CAPTAR_COOLDOWN_MIN: 30,
-    }
+    """A construction-site typo swapping in a stray fresh config for one of the three
+    config-reading handlers (Solar/SolarOnly/Captar) would pass the type/facts checks above
+    unnoticed -- pin that build_mode_handlers threads the SAME SmartChargingConfig OBJECT
+    (not just an equal copy) into all three, both directly (identity) and behaviorally (by
+    round-tripping a real config value through each handler's own dispatch and checking it
+    took effect). The identity half matters beyond this test: tests/helpers.py's
+    `replace_coordinator_config` relies on every mode handler holding the exact object
+    `coordinator._config` points to, not a separate copy, to propagate a config change
+    end-to-end."""
+    config = _config(
+        solar_start_threshold_w=500.0,
+        min_current=6.0,
+        solar_hold_min=5,
+        solar_cooldown_min=5,
+        solar_only_start_threshold_w=700.0,
+        solar_only_strategy=ROUND_NEAREST,
+        solar_only_midpoint=0.5,
+        max_current=16.0,
+        captar_cooldown_min=30,
+    )
     handlers = build_mode_handlers(config, lambda: 10.0)
+    assert handlers[MODE_SOLAR]._config is config
+    assert handlers[MODE_SOLAR_ONLY]._config is config
+    assert handlers[MODE_CAPTAR]._config is config
     ctx = CycleContext(
         status=STATE_CHARGING,
         net_w=0.0,
@@ -282,11 +293,11 @@ def test_build_mode_handlers_threads_the_same_config_into_solar_only_and_captar_
     captar_current, _ = handlers[MODE_CAPTAR].desired_current(ctx, captar.CaptarState.idle())
 
     # Below both configured start thresholds -- both solar handlers stay idle at 0 A, proving
-    # THEIR OWN configured threshold (not a stray {} default) gated the decision.
+    # THEIR OWN configured threshold (not a stray fresh-config default) gated the decision.
     assert solar_current == 0.0
     assert solar_only_current == 0.0
-    # Captar's own configured max_a (CONF_MAX_CURRENT) is what it commands once idle -> active.
-    assert captar_current == config[CONF_MAX_CURRENT]
+    # Captar's own configured max_current is what it commands once idle -> active.
+    assert captar_current == config.max_current
 
 
 def test_build_mode_handlers_power_handler_reads_target_current_getter_live():
@@ -294,7 +305,7 @@ def test_build_mode_handlers_power_handler_reads_target_current_getter_live():
     value at construction time -- the getter is coordinator.py's `lambda: self.target_current`,
     which changes across cycles."""
     current = [5.0]
-    handlers = build_mode_handlers({}, lambda: current[0])
+    handlers = build_mode_handlers(_config(), lambda: current[0])
     ctx = CycleContext(
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
     )
@@ -371,12 +382,12 @@ def test_solar_mode_handler_delegates_to_modes_solar_step():
     # 6 A expectation) -- hardcoded here as the anchor, not recomputed by calling solar.step
     # again, so this test actually proves correct delegation rather than mirroring the
     # implementation.
-    config = {
-        CONF_SOLAR_START_THRESHOLD_W: 150.0,
-        CONF_MIN_CURRENT: 6.0,
-        CONF_SOLAR_HOLD_MIN: 5.0,
-        CONF_SOLAR_COOLDOWN_MIN: 2.0,
-    }
+    config = _config(
+        solar_start_threshold_w=150.0,
+        min_current=6.0,
+        solar_hold_min=5.0,
+        solar_cooldown_min=2.0,
+    )
     handler = _SolarModeHandler(config)
     ctx = CycleContext(
         status=STATE_CHARGING,
@@ -399,12 +410,12 @@ def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
     # threaded through -- code-reviewer finding on PR #451). round_down floors 6.304 A to
     # 6 A, matching the pattern tests/modes/test_solar_only.py uses for its own
     # strategy-threading tests.
-    config = {
-        CONF_SOLAR_ONLY_START_THRESHOLD_W: 1300.0,
-        CONF_SOLAR_COOLDOWN_MIN: 2.0,
-        CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
-        CONF_SOLAR_ONLY_MIDPOINT: 0.5,
-    }
+    config = _config(
+        solar_only_start_threshold_w=1300.0,
+        solar_cooldown_min=2.0,
+        solar_only_strategy=ROUND_DOWN,
+        solar_only_midpoint=0.5,
+    )
     handler = _SolarOnlyModeHandler(config)
     ctx = CycleContext(
         status=STATE_CHARGING,
@@ -424,10 +435,9 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     # Idle -> charging always requests max_a (tests/modes/test_captar.py's
     # test_idle_starts_charging_immediately_requesting_max_current anchors this 32 A
     # expectation) -- captar.step has no surplus/voltage dependency, unlike its siblings.
-    # cooldown_minutes=1.0 is deliberately distinct from DEFAULT_CAPTAR_COOLDOWN_MIN (10.0)
-    # so this test and the fallback test below are behaviorally distinguishable
+    # cooldown_minutes=1.0 is deliberately distinct from this file's _config() default (10.0)
     # (code-reviewer finding on PR #451); exercised via the cooldown-elapsing assertions.
-    config = {CONF_MAX_CURRENT: 32.0, CONF_CAPTAR_COOLDOWN_MIN: 1.0}
+    config = _config(max_current=32.0, captar_cooldown_min=1.0)
     handler = _CaptarModeHandler(config)
     ctx = CycleContext(
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, now_dt=None
@@ -437,7 +447,7 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     assert new_state.phase == Phase.CHARGING
 
     # Prove cooldown_minutes=1.0 is actually threaded through, not just present in the
-    # config dict: at 59s (< 1 min) cooldown still blocks; at 61s (> 1 min) it's re-armed.
+    # config object: at 59s (< 1 min) cooldown still blocks; at 61s (> 1 min) it's re-armed.
     cooldown_state = captar.CaptarState(Phase.COOLDOWN, phase_started_at=0.0)
     blocked, _ = handler.desired_current(ctx, cooldown_state)
     assert blocked == 0.0
@@ -449,42 +459,10 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     assert rearmed_state.phase == Phase.CHARGING
 
 
-def test_captar_mode_handler_uses_default_cooldown_when_config_key_absent():
-    """_CaptarModeHandler falls back to DEFAULT_CAPTAR_COOLDOWN_MIN when the config mapping
-    omits CONF_CAPTAR_COOLDOWN_MIN (design doc Sec 3.4's .get(..., DEFAULT_CAPTAR_COOLDOWN_MIN)
-    call) -- distinct from the other four handlers' plain bracket lookups, which require the
-    key to be present. Proven via the cooldown phase (idle/charging never read
-    cooldown_minutes at all -- code-reviewer finding on PR #451): just before
-    DEFAULT_CAPTAR_COOLDOWN_MIN elapses, cooldown still blocks; just after, it re-arms."""
-    config = {CONF_MAX_CURRENT: 32.0}
-    handler = _CaptarModeHandler(config)
-    cooldown_state = captar.CaptarState(Phase.COOLDOWN, phase_started_at=0.0)
-
-    still_blocked_now = DEFAULT_CAPTAR_COOLDOWN_MIN * 60 - 1
-    ctx_before = CycleContext(
-        status=STATE_CHARGING,
-        net_w=0.0,
-        charger_w=0.0,
-        voltage=230.0,
-        now=still_blocked_now,
-        now_dt=None,
-    )
-    current, new_state = handler.desired_current(ctx_before, cooldown_state)
-    assert current == 0.0
-    assert new_state.phase == Phase.COOLDOWN
-
-    rearmed_now = DEFAULT_CAPTAR_COOLDOWN_MIN * 60 + 1
-    ctx_after = CycleContext(
-        status=STATE_CHARGING,
-        net_w=0.0,
-        charger_w=0.0,
-        voltage=230.0,
-        now=rearmed_now,
-        now_dt=None,
-    )
-    current, new_state = handler.desired_current(ctx_after, cooldown_state)
-    assert current == 32.0
-    assert new_state.phase == Phase.CHARGING
+# issue #570: `test_captar_mode_handler_uses_default_cooldown_when_config_key_absent` (the
+# fallback-when-the-key-is-absent case) was removed here -- SmartChargingConfig.captar_cooldown_min
+# is now a required, always-populated field (resolved once in __init__.py), so "the config key is
+# absent" is no longer a reachable state for _CaptarModeHandler to fall back from.
 
 
 def test_soc_gate_resolver_first_call_always_reports_changed():
