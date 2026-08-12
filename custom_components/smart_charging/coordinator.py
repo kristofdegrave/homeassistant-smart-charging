@@ -549,8 +549,23 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # mode-selection's escalation, and for tests, the same way `_step_up_gate.state` already is.
         self._required_current = required
         if required.unreachable:
+            # engines/deadline.py deliberately saturates required_a to float('inf') once a
+            # same-day deadline has already passed (design doc Sec6) -- that stays the pure
+            # engine's own documented contract, untouched here. But float('inf') must never
+            # cross this boundary: it doesn't round-trip through HA's JSON websocket encoding,
+            # and notification_manager.py formats it straight into user-facing text (issue
+            # #650). Cap it to maximum_permitted_rate_a -- the same bound the engine compared
+            # required_a against to set `unreachable` in the first place, so "would need at
+            # least max_current A" is exactly true, not an arbitrary numeric artifact like
+            # sys.float_info.max would be. NaN needs no separate branch: it can never reach
+            # here since `nan > maximum_permitted_rate_a` is always False, which would leave
+            # `unreachable` False and this block unentered.
+            notified_required_a = (
+                self._config.max_current if math.isinf(required.required_a) else required.required_a
+            )
             self.hass.bus.async_fire(
-                EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: required.required_a}
+                EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
+                {ATTR_REQUIRED_CURRENT_A: notified_required_a},
             )
 
         urgent = deadline_urgency.urgent

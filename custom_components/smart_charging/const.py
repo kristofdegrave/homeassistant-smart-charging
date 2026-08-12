@@ -19,6 +19,11 @@ ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key
 # not only on the Normal/Urgent -> Unreachable transition edge (UC05's domain-events section).
 EVENT_DEADLINE_UNREACHABLE_NOTIFIED = "smart_charging_deadline_unreachable_notified"
 ATTR_REQUIRED_CURRENT_A = "required_current_a"  # DeadlineUnreachableNotified payload key
+# Always finite: engines/deadline.py's resolve_required_current may internally saturate
+# this to float('inf') once a same-day deadline has already passed (its own documented
+# contract), but coordinator.py caps that to CONF_MAX_CURRENT before firing this event --
+# a non-finite value would neither format sensibly into notification text nor round-trip
+# through HA's JSON websocket encoding (issue #650).
 
 # Domain events M2 fires on the HA event bus (UC09 "Domain events produced"; DDD->HA mapping). Not
 # consumed by any other Manager (ADR-0011) -- observability/automation only.

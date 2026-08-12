@@ -1555,6 +1555,47 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
     assert len(events) == 2
 
 
+async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_current(
+    hass, freezer
+):
+    """Issue #650: engines/deadline.py deliberately saturates `required_a` to
+    `float('inf')` once a same-day deadline has already passed (its own documented
+    design-doc-Sec6 behavior, left unchanged here). But `float('inf')` must never reach
+    the `DeadlineUnreachableNotified` payload -- it doesn't round-trip through HA's JSON
+    websocket encoding, and notification_manager.py formats it directly into user-facing
+    text ('would need inf A'). The boundary cap belongs here, in the coordinator, at the
+    point the engine's pure output crosses into the published event payload -- not inside
+    the engine itself."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    config = _config()  # CONF_MAX_CURRENT=16.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=-1)  # deadline already passed -> engine saturates
+    _seed_ample_peak_headroom(coord)
+
+    events = []
+
+    @callback
+    def _record(event):
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
+
+    await coord._async_update_data()
+
+    # The engine's own result is untouched (still saturates to inf, per its documented
+    # contract) -- only the published payload is capped.
+    assert coord._required_current.required_a == float("inf")
+    assert len(events) == 1
+    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
+    assert events[0].data[ATTR_REQUIRED_CURRENT_A] != float("inf")
+
+
 # --- ROLE_LOW_TARIFF (issue #376): Auto row 4's low-tariff input ---
 
 
