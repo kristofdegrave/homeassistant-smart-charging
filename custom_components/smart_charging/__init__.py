@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -47,9 +48,6 @@ from .const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
-    DATA_COORDINATOR,
-    DATA_NOTIFICATION_MANAGER,
-    DATA_VEHICLE_LIMIT_MANAGER,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -74,7 +72,6 @@ from .const import (
     DEFAULT_SOLAR_START_THRESHOLD_W,
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
-    DOMAIN,
     LABEL_SC_RUNTIME,
     PEAK_WINDOW_SECONDS,
     ROLE_NOTIFICATION_TARGET,
@@ -95,7 +92,27 @@ PLATFORMS = [
 ]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+@dataclass
+class SmartChargingRuntimeData:
+    """This entry's config-entry-scoped runtime state, set once onto `entry.runtime_data`
+    (issue #568). `vehicle_limit_manager` (M2) is None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY
+    is unmapped (Task 5.1) -- every other field is always populated."""
+
+    coordinator: SmartChargingCoordinator
+    notification_manager: NotificationManager
+    vehicle_limit_manager: VehicleLimitManager | None
+    min_current: float
+    max_current: float
+    default_target_current: float
+    default_soc_limit: float
+
+
+# Current HA idiom for a typed entry.runtime_data (issue #568) -- every platform's
+# async_setup_entry types its `entry` parameter with this alias instead of a bare ConfigEntry.
+type SmartChargingConfigEntry = ConfigEntry[SmartChargingRuntimeData]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry) -> bool:
     # C5 (#601): the sc_runtime label must exist before any owned entity references it -- an
     # entity-registry label id with no matching label_registry entry has no display name and
     # nothing for the dashboard's `auto-entities` filter to resolve. Idempotent across reloads.
@@ -178,16 +195,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else None
     )
 
-    # Keyed by the same CONF_* constants number.py reads, so the two sides can't drift apart.
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        DATA_COORDINATOR: coordinator,
-        DATA_NOTIFICATION_MANAGER: notification_manager,
-        DATA_VEHICLE_LIMIT_MANAGER: vehicle_limit_manager,
-        CONF_MIN_CURRENT: min_current,
-        CONF_MAX_CURRENT: max_current,
-        CONF_DEFAULT_TARGET_CURRENT: default_target_current,
-        CONF_DEFAULT_SOC_LIMIT: default_soc_limit,
-    }
+    # Typed config-entry-scoped runtime state (issue #568) -- number.py reads the same four
+    # values back off entry.runtime_data, so the two sides can't drift apart.
+    entry.runtime_data = SmartChargingRuntimeData(
+        coordinator=coordinator,
+        notification_manager=notification_manager,
+        vehicle_limit_manager=vehicle_limit_manager,
+        min_current=min_current,
+        max_current=max_current,
+        default_target_current=default_target_current,
+        default_soc_limit=default_soc_limit,
+    )
 
     # issue #498: NotifyAdapter registers a bus listener at construction; without unsubscribing
     # it here, each reload (setup -> unload -> setup) leaked another one. `async_on_unload`
@@ -254,17 +272,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_reload_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry) -> None:
     # Fires on any entry update, not only options — a reconfigure (data) update also lands
     # here in addition to its own reload, which is harmless since HA serializes reloads.
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         # Only torn down once the platform unload actually succeeds -- if it doesn't, the
         # entry stays loaded and the dashboard must stay registered along with it.
         await async_unregister_dashboard(hass, entry)
-        hass.data[DOMAIN].pop(entry.entry_id)
     return unloaded

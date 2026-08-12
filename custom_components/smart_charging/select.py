@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
+from . import SmartChargingConfigEntry
 from .const import (
     BASE_CAPABLE_MODES,
     CAPTAR_CAPABLE_MODES,
@@ -85,7 +85,7 @@ class ProfileSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Sel
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     async_add_entities(
         [

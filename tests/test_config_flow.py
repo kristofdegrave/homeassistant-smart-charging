@@ -42,7 +42,6 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
-    DATA_COORDINATOR,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
@@ -261,7 +260,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     await hass.async_block_till_done()
 
     original_options = dict(entry.options)
-    original_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    original_coordinator = entry.runtime_data.coordinator
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -296,7 +295,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     # (config_flow.py) and the generic update-listener __init__.py registers for any entry
     # update (_async_reload_entry) -- so this assertion only fails if reload-on-change were
     # removed from *both*; either path alone still satisfies ADR-0008 and keeps this green.
-    new_coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    new_coordinator = entry.runtime_data.coordinator
     assert new_coordinator is not original_coordinator
     # ...and prove the reload actually picked up the new mapping, not just that *some*
     # reload happened against stale data.
@@ -440,7 +439,7 @@ async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     assert coordinator._config[CONF_SOLAR_INSTALLED] is False
 
 
@@ -588,7 +587,7 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     assert coordinator._config[CONF_CAPTAR_AVAILABLE] is True
 
 
@@ -761,7 +760,7 @@ async def test_pre_field_entry_reads_vehicle_limit_and_car_home_as_absent(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     assert ROLE_VEHICLE_CHARGE_LIMIT not in coordinator._adapters
     assert ROLE_CAR_HOME not in coordinator._adapters
 

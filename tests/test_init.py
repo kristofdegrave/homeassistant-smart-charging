@@ -4,6 +4,7 @@ from datetime import time, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.components import frontend
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from homeassistant.setup import async_setup_component
@@ -45,9 +46,6 @@ from custom_components.smart_charging.const import (
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     DASHBOARD_URL_PATH,
-    DATA_COORDINATOR,
-    DATA_NOTIFICATION_MANAGER,
-    DATA_VEHICLE_LIMIT_MANAGER,
     DEFAULT_CONTROL_INTERVAL_S,
     DOMAIN,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
@@ -100,7 +98,7 @@ async def test_end_to_end_commands_target_current(hass):
     # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1),
     # so the setup cycle wrote 0 A -- pin that down before selecting Power explicitly, same
     # as a real install's first manual step.
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     assert coordinator.active_mode == MODE_OFF
     assert calls[-1]["value"] == 0.0
     seed_ample_peak_headroom(coordinator)
@@ -333,7 +331,7 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     seed_ample_peak_headroom(coordinator)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     await coordinator.async_refresh()
@@ -367,7 +365,7 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     config = coordinator._config
     assert config[CONF_SAFETY_MARGIN_W] == 500.0
     assert config[CONF_MAX_PEAK_KW] == 7.5
@@ -394,7 +392,7 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -424,7 +422,7 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     config = coordinator._config
     assert config[CONF_EV_BATTERY_CAPACITY_KWH] == 60.0
     assert config[CONF_MAX_SOLAR_SOC] == 90.0
@@ -459,7 +457,7 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
     await coordinator.async_refresh()
@@ -696,7 +694,7 @@ async def test_setup_threads_evening_prompt_options_into_notification_manager_co
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    manager = hass.data[DOMAIN][entry.entry_id][DATA_NOTIFICATION_MANAGER]
+    manager = entry.runtime_data.notification_manager
     assert manager._enabled is False
     assert manager._prompt_time == time(20, 30, 0)
     assert manager._threshold_kwh == 9.0
@@ -803,7 +801,12 @@ async def test_unload_without_a_notification_target_mapped_still_succeeds(hass):
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
-    assert entry.entry_id not in hass.data[DOMAIN]
+    # HA's own ConfigEntry.async_unload deletes `entry.runtime_data` after a successful
+    # unload (object.__delattr__) -- the direct successor to the old assertion that this
+    # entry's `hass.data[DOMAIN]` bookkeeping was cleaned up (issue #568 removed that
+    # bookkeeping entirely in favor of runtime_data).
+    assert not hasattr(entry, "runtime_data")
+    assert entry.state is ConfigEntryState.NOT_LOADED
 
 
 # --- Task 5.1: M2 (Vehicle-Limit Manager) construction + its three state-change listeners ---
@@ -845,7 +848,7 @@ async def test_vehicle_limit_manager_constructed_when_mapped(hass):
     """Task 5.1: setup constructs M2 only when vehicle_charge_limit is mapped."""
     entry = await _setup_vehicle_limit_entry(hass)
 
-    assert hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER] is not None
+    assert entry.runtime_data.vehicle_limit_manager is not None
 
 
 async def test_no_vehicle_limit_manager_when_unmapped(hass):
@@ -859,7 +862,7 @@ async def test_no_vehicle_limit_manager_when_unmapped(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER] is None
+    assert entry.runtime_data.vehicle_limit_manager is None
 
     hass.states.async_set("sensor.smart_charging_active_soc_limit", "90")
     await hass.async_block_till_done()  # must not raise
@@ -980,7 +983,7 @@ async def test_unload_cancels_vehicle_limit_listeners(hass):
     swallows every failure and returns False, which would otherwise also read as "no
     event fired"."""
     entry = await _setup_vehicle_limit_entry(hass)
-    manager = hass.data[DOMAIN][entry.entry_id][DATA_VEHICLE_LIMIT_MANAGER]
+    manager = entry.runtime_data.vehicle_limit_manager
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

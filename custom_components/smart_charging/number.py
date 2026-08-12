@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 from homeassistant.components.number import RestoreNumber
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import SmartChargingConfigEntry
 from .const import (
-    CONF_DEFAULT_SOC_LIMIT,
-    CONF_DEFAULT_TARGET_CURRENT,
-    CONF_MAX_CURRENT,
-    CONF_MIN_CURRENT,
-    DOMAIN,
     LABEL_SC_RUNTIME,
     OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
     OWNED_SUFFIX_TARGET_CURRENT,
@@ -86,20 +81,20 @@ class SocLimitOverrideNumber(SmartChargingEntity, _RestoreClampedNumberMixin, Re
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    data = hass.data[DOMAIN][entry.entry_id]
+    runtime_data = entry.runtime_data
     async_add_entities(
         [
             TargetCurrentNumber(
                 entry_id=entry.entry_id,
-                min_a=data[CONF_MIN_CURRENT],
-                max_a=data[CONF_MAX_CURRENT],
-                default=data[CONF_DEFAULT_TARGET_CURRENT],
+                min_a=runtime_data.min_current,
+                max_a=runtime_data.max_current,
+                default=runtime_data.default_target_current,
             ),
             SocLimitOverrideNumber(
                 entry_id=entry.entry_id,
-                default=data[CONF_DEFAULT_SOC_LIMIT],
+                default=runtime_data.default_soc_limit,
             ),
         ]
     )
