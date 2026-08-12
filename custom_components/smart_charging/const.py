@@ -160,8 +160,8 @@ ROLES_ADAPTER_READINGS_EXCLUDED = frozenset(
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
 DEFAULT_CONTROL_INTERVAL_S = 10
-# E5 15-minute averaging window (design doc Sec 6.4), shared by coordinator.py's own fallback
-# and __init__.py's setup-time CONF_PEAK_WINDOW_SIZE derivation so the two can't drift apart.
+# E5 15-minute averaging window (design doc Sec 6.4) -- __init__.py's setup-time
+# `peak_window_size` derivation (SmartChargingConfig, issue #570) is this constant's only reader.
 PEAK_WINDOW_SECONDS = 900
 
 # --- Config entry DATA — entity-role mappings + state-translation only.
@@ -213,7 +213,6 @@ CONF_GRID_SAFETY_OFFSET_A = "grid_safety_offset_a"  # C4 safety margin below the
 CONF_DEFAULT_TARGET_CURRENT = "default_target_current"
 CONF_CONTROL_INTERVAL_S = "control_interval_s"
 CONF_SMOOTHING_WINDOW = "smoothing_window"  # R10 rolling-window sample count
-CONF_PEAK_WINDOW_SIZE = "peak_window_size"  # E5 15-min window sample count, derived at setup
 CONF_SOLAR_START_THRESHOLD_W = "solar_start_threshold_w"  # R1 (Solar)
 CONF_SOLAR_ONLY_START_THRESHOLD_W = "solar_only_start_threshold_w"  # R2 (SolarOnly)
 CONF_SOLAR_HOLD_MIN = "solar_hold_min"  # R1 post-surplus hold duration
@@ -251,6 +250,7 @@ DEFAULT_SOLAR_COOLDOWN_MIN = 2.0
 DEFAULT_SOLAR_ONLY_STRATEGY = ROUND_DOWN
 DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a percent
 DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by `SocLimitOverrideNumber`
+DEFAULT_SOLAR_INSTALLED = False
 DEFAULT_CAPTAR_AVAILABLE = True
 DEFAULT_SAFETY_MARGIN_W = 250.0
 DEFAULT_MAX_PEAK_KW = 4.0

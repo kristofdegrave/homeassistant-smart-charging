@@ -34,7 +34,6 @@ from custom_components.smart_charging.const import (
     CONF_MAX_SOLAR_SOC,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
-    CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SOLAR_FORECAST_ENTITY,
@@ -317,7 +316,7 @@ async def test_select_entity_is_registered_on_setup(hass):
 
 async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
     """T6.1: the new Solar/SolarOnly options must be threaded into the coordinator's
-    config dict -- without it, dispatching to Solar mode KeyErrors on
+    config object -- without it, dispatching to Solar mode KeyErrors on
     CONF_SOLAR_START_THRESHOLD_W (coordinator.py reads it unconditionally, no default)."""
     calls = capture_charger_current_writes(hass)
     seed_charger_states(hass, status="Charging")
@@ -344,9 +343,10 @@ async def test_end_to_end_solar_mode_uses_configured_thresholds(hass):
 
 async def test_setup_threads_captar_and_peak_protection_options_into_coordinator_config(hass):
     """T6.1: setup must wire the Captar-cooldown/peak-protection/R17 options (Phase 3's config
-    keys, consumed via `self._config.get(...)` in coordinator.py's Task 5.1 wiring) into the
-    coordinator's config dict as non-default overrides, plus a `peak_window_size` derived from
-    `control_interval_s` -- not just fall back to the coordinator's own internal defaults."""
+    keys, read as typed `SmartChargingConfig` fields in coordinator.py's Task 5.1 wiring, issue
+    #570) into the coordinator's config object as non-default overrides, plus a
+    `peak_window_size` derived from `control_interval_s` -- not just fall back to
+    __init__.py's own DEFAULT_* fallbacks."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
@@ -367,13 +367,13 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
 
     coordinator = entry.runtime_data.coordinator
     config = coordinator._config
-    assert config[CONF_SAFETY_MARGIN_W] == 500.0
-    assert config[CONF_MAX_PEAK_KW] == 7.5
-    assert config[CONF_PEAK_GRACE_MIN] == 3.0
-    assert config[CONF_CAPTAR_COOLDOWN_MIN] == 15.0
-    assert config[CONF_POWER_RESPECT_PEAK] is False
+    assert config.safety_margin_w == 500.0
+    assert config.max_peak_kw == 7.5
+    assert config.peak_grace_min == 3.0
+    assert config.captar_cooldown_min == 15.0
+    assert config.power_respect_peak is False
     # 900s (15-minute) window / 60s control interval -- design doc Sec 6.4.
-    assert config[CONF_PEAK_WINDOW_SIZE] == 15
+    assert config.peak_window_size == 15
 
 
 async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
@@ -405,9 +405,9 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
     """#327 (T6.1): setup must wire the Deadline & SOC Management epic's options (Phase 3's
     CONF_EV_BATTERY_CAPACITY_KWH/CONF_MAX_SOLAR_SOC/CONF_SOLAR_STEP_PP/
     CONF_SOLAR_STEP_THRESHOLD_PP/CONF_SOLAR_RESERVE_SOC/CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    consumed via `self._config.get(...)` in coordinator.py's R8/R9/R15 wiring) into the
-    coordinator's config dict as non-default overrides, not just fall back to the coordinator's
-    own internal defaults."""
+    read as typed `SmartChargingConfig` fields in coordinator.py's R8/R9/R15 wiring, issue
+    #570) into the coordinator's config object as non-default overrides, not just fall back
+    to __init__.py's own DEFAULT_* fallbacks."""
     seed_charger_states(hass, status="Charging")
     options = entry_options_base()
     options[CONF_EV_BATTERY_CAPACITY_KWH] = 60.0
@@ -424,12 +424,49 @@ async def test_setup_threads_deadline_and_soc_management_options_into_coordinato
 
     coordinator = entry.runtime_data.coordinator
     config = coordinator._config
-    assert config[CONF_EV_BATTERY_CAPACITY_KWH] == 60.0
-    assert config[CONF_MAX_SOLAR_SOC] == 90.0
-    assert config[CONF_SOLAR_STEP_PP] == 10.0
-    assert config[CONF_SOLAR_STEP_THRESHOLD_PP] == 5.0
-    assert config[CONF_SOLAR_RESERVE_SOC] == 70.0
-    assert config[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 20.0
+    assert config.ev_battery_capacity_kwh == 60.0
+    assert config.max_solar_soc == 90.0
+    assert config.solar_step_pp == 10.0
+    assert config.solar_step_threshold_pp == 5.0
+    assert config.solar_reserve_soc == 70.0
+    assert config.solar_forecast_threshold_kwh == 20.0
+
+
+async def test_setup_falls_back_to_every_default_for_a_pre_solar_entry(hass):
+    """Issue #570: `SmartChargingConfig` is built exactly once in __init__.py, applying every
+    field's DEFAULT_* fallback there and nowhere else -- pin that against regression for a
+    representative sample of the fields the two dict-wiring tests above only ever exercise as
+    NON-default overrides. `entry_options_base()` (tests/helpers.py) carries none of these
+    keys, mirroring a real config entry that predates them (no migration needed, design doc
+    §3) -- exactly the scenario the removed `self._config.get(CONF_X, DEFAULT_X)` fallbacks
+    used to cover inside coordinator.py/coordinator_cycle.py before this issue."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    config = entry.runtime_data.coordinator._config
+    assert config.solar_installed is False
+    assert config.captar_available is True
+    assert config.smoothing_window == 4
+    assert config.solar_start_threshold_w == 150.0
+    assert config.solar_only_start_threshold_w == 1300.0
+    assert config.solar_hold_min == 5.0
+    assert config.solar_cooldown_min == 2.0
+    assert config.safety_margin_w == 250.0
+    assert config.max_peak_kw == 4.0
+    assert config.peak_grace_min == 2.0
+    assert config.captar_cooldown_min == 10.0
+    assert config.power_respect_peak is True
+    assert config.ev_battery_capacity_kwh == 75.0
+    assert config.max_solar_soc == 100.0
+    assert config.solar_step_pp == 5.0
+    assert config.solar_step_threshold_pp == 2.0
+    assert config.solar_reserve_soc == 60.0
+    assert config.solar_forecast_threshold_kwh == 12.0
+    assert config.evening_prompt_enabled is True
+    assert config.evening_prompt_time == "18:00:00"
 
 
 async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass, freezer):

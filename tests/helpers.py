@@ -16,6 +16,7 @@ under ``tests/``, including the pure-logic dirs (ADR-0009) -- transitively requi
 collection time.
 """
 
+import dataclasses
 from datetime import timedelta
 
 from homeassistant.util import dt as dt_util
@@ -38,6 +39,7 @@ from custom_components.smart_charging.const import (
     STATE_CHARGING,
     STATE_CONNECTED,
 )
+from custom_components.smart_charging.coordinator_cycle import build_mode_handlers
 
 # Keeps R3's clamp out of the way of tests that exercise unrelated behavior, not R3 itself.
 AMPLE_PEAK_HEADROOM_KW = 100.0
@@ -121,6 +123,25 @@ def capture_service_calls(hass, domain: str, service: str):
 def capture_charger_current_writes(hass):
     """Capture number.set_value calls targeting the charger-current entity."""
     return capture_service_calls(hass, "number", "set_value")
+
+
+def replace_coordinator_config(coordinator, **overrides) -> None:
+    """Issue #570: `coordinator._config` is now a frozen `SmartChargingConfig`, not a mutable
+    dict -- a test that used to do `coordinator._config[CONF_X] = value` in place (relying on
+    `coordinator._config` and each config-reading `_*ModeHandler`'s own `self._config` sharing
+    the SAME mutable dict object, built once by `build_mode_handlers`) can no longer just
+    rebind `coordinator._config` to a fresh `dataclasses.replace(...)` instance: the mode
+    handlers built at construction still hold the OLD object. Rebuilding the whole
+    `_mode_handlers` registry via the same `build_mode_handlers` factory coordinator.py's own
+    `__init__` uses (rather than reaching into each handler's private `_config` attribute)
+    re-threads the new object through every handler at once, and stays correct even if a
+    future handler's constructor signature changes -- the handlers are stateless (all
+    per-mode state lives in `coordinator._mode_state`, untouched here), so discarding and
+    rebuilding them mid-test is safe."""
+    coordinator._config = dataclasses.replace(coordinator._config, **overrides)
+    coordinator._mode_handlers = build_mode_handlers(
+        coordinator._config, lambda: coordinator.target_current
+    )
 
 
 def seed_ample_peak_headroom(coordinator, kw=AMPLE_PEAK_HEADROOM_KW):
