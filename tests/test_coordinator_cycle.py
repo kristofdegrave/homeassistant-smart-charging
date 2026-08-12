@@ -2,6 +2,7 @@
 (ADR-0012, ADR-0023)."""
 
 from datetime import datetime, time
+from unittest.mock import patch
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -845,6 +846,34 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     assert result.required.urgent is False
     assert result.urgent is False
     assert result.resolved_mode == MODE_SOLAR  # same row-3 match as the baseline, unchanged
+
+
+def test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry():
+    """Proves BOTH call sites (baseline urgent=False, and the real resolution) genuinely route
+    through PROFILE_POLICIES[PROFILE_AUTO] -- the five behavior-preservation tests above would
+    stay green even if only one of the two call sites were swapped (or neither), since they
+    assert on resolve_deadline_urgency's output, not its import path (ADR-0017 T3)."""
+    with patch(
+        "custom_components.smart_charging.coordinator_cycle.PROFILE_POLICIES"
+    ) as mock_policies:
+        mock_policies.__getitem__.return_value.select.return_value = MODE_OFF
+        result = resolve_deadline_urgency(
+            **_base_deadline_urgency_kwargs(
+                auto_dispatchable=True,
+                deadline_today=time(11, 0),
+                ev_soc=50.0,
+                active_soc_limit=80.0,
+            )
+        )
+        # auto_dispatchable=True with no deadline slack (see the sibling escalation test above
+        # for the same energy-needed math) makes both call sites fire: the baseline dry run
+        # (urgent=False) and the real resolution (urgent=True, once required exceeds baseline).
+        mock_policies.__getitem__.assert_called_with(PROFILE_AUTO)
+        select = mock_policies.__getitem__.return_value.select
+        assert [call.kwargs["urgent"] for call in select.call_args_list] == [False, True]
+        # The registry's return value is what actually lands in resolved_mode -- not just
+        # looked up and ignored.
+        assert result.resolved_mode == MODE_OFF
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---
