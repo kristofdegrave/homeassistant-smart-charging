@@ -54,10 +54,10 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     solar_forecast, low_tariff, car_home, vehicle_charge_limit, and notification_target
     are all optional at the factory level (NF4 / RA1 / RA1-VL / RA2 / RA4 extensions);
     sun is built unconditionally with
-    no entity mapping at all (issue #376: `sun.sun` is a core Home Assistant entity, not
+    no entity mapping at all (`sun.sun` is a core Home Assistant entity, not
     something the user maps); every other role is required. An optional role's absence is
     only a fault where its consuming engine/manager actually needs it (e.g. ev_soc while a
-    solar mode is active, Task 5.1's job) -- the factory itself never requires any of them.
+    solar mode is active) -- the factory itself never requires any of them.
     """
     adapters: dict[str, Adapter] = {
         ROLE_CHARGER_CURRENT: NumericReadWriteAdapter(hass, data[CONF_CHARGER_CURRENT_ENTITY]),
@@ -66,7 +66,7 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
         ),
         ROLE_NET_POWER: NumericReadAdapter(hass, data[CONF_NET_POWER_ENTITY]),
         ROLE_CHARGER_POWER: NumericReadAdapter(hass, data[CONF_CHARGER_POWER_ENTITY]),
-        ROLE_SUN: SunReadAdapter(hass),  # issue #376: no entity mapping, always built
+        ROLE_SUN: SunReadAdapter(hass),  # no entity mapping, always built
     }
     if data.get(CONF_GRID_VOLTAGE_ENTITY):
         adapters[ROLE_GRID_VOLTAGE] = NumericReadAdapter(hass, data[CONF_GRID_VOLTAGE_ENTITY])

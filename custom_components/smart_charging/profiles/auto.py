@@ -1,8 +1,10 @@
 """Auto profile mode-selection (E2). Pure -- no HA imports, no cross-engine calls.
 
-`Manual` needs no module here (resolution-rules.md: "`Manual` needs no table"); the
-coordinator already reads `select.smart_charging_mode` directly for that case.
+`profiles/manual.py`'s ManualPolicy covers `Manual` (ADR-0017) -- not called from this
+module, but no longer true that "Manual needs no module here".
 """
+
+from typing import Any
 
 from ..const import MODE_CAPTAR, MODE_OFF, MODE_POWER, MODE_SOLAR
 
@@ -47,3 +49,11 @@ def select_mode(
         return MODE_CAPTAR
 
     return MODE_OFF
+
+
+class AutoPolicy:
+    """Thin ModeSelectionPolicy adapter over the existing select_mode() free function
+    (ADR-0017) -- no table logic duplicated or moved."""
+
+    def select(self, **kwargs: Any) -> str:
+        return select_mode(**kwargs)

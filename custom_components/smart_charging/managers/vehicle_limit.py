@@ -12,10 +12,10 @@ docs/plans/2026-07-21-vehicle-limit-manager-design.md.
 Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA3's Store
 (ADR-0018), never a coordinator reference, setter, or event.
 
-Task 3.3 scope adds the Vehicle->System manual-adoption reaction (UC09 steps 4-6, R6 AC 5),
-alongside Task 3.2's disconnect-reset (UC09 steps 7-8, R6 AC 3). Task 4.1 added the
-System->vehicle write branch (UC09 step 2, R6 AC 2/4), gated on connected AND car_home (C2).
-Task 5.1 (this scope) adds `register_listeners`, wiring the three reactions above to real HA
+Covers the Vehicle->System manual-adoption reaction (UC09 steps 4-6, R6 AC 5),
+the disconnect-reset (UC09 steps 7-8, R6 AC 3), the
+System->vehicle write branch (UC09 step 2, R6 AC 2/4, gated on connected AND car_home (C2)),
+and `register_listeners`, wiring the three reactions above to real HA
 state changes at setup (design §5.4) -- M2 self-wires its own triggers rather than a
 dedicated C6 client (design §9.5).
 """
@@ -111,7 +111,7 @@ class VehicleLimitManager:
         """React to a resolved active-SOC-limit change (design §5.1, ADR-0011). Writes the new
         value to the vehicle iff `charger_status` is connected/charging AND `car_home` is True
         (C2 -- UC09 alt 2a / R6 AC 4). `new_limit` is read from the materialized active-SOC-limit
-        diagnostic sensor by the setup-time listener `register_listeners` wires (Task 5.1).
+        diagnostic sensor by the setup-time listener `register_listeners` wires.
 
         Reads `charger_status`/`car_home` through their adapters rather than re-deriving the
         Coordinator's composition (ADR-0011 Option B rejected). `charger_status` is a mandatory
@@ -148,7 +148,7 @@ class VehicleLimitManager:
     ) -> list[Callable[[], None]]:
         """Wire M2's three triggers (design §5.4): the mapped `vehicle_charge_limit` and
         `charger_status` entities, and the materialized active-SOC-limit sensor. Called once
-        at setup, only when `vehicle_charge_limit` is mapped (Task 5.1) -- the caller registers
+        at setup, only when `vehicle_charge_limit` is mapped -- the caller registers
         each returned unsub via `entry.async_on_unload` so a reload tears down and
         re-registers cleanly (ADR-0008).
 

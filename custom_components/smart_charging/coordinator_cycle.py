@@ -3,7 +3,9 @@ the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate
 resolve_deadline_urgency (ADR-0023).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
 even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
-another engine; these call engines)."""
+another engine; these call engines).
+The five _*ModeHandler classes stay private -- build_mode_handlers() is the only construction
+site coordinator.py may reach across the module boundary for."""
 
 from __future__ import annotations
 
@@ -24,6 +26,11 @@ from .const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
+    MODE_CAPTAR,
+    MODE_OFF,
+    MODE_POWER,
+    MODE_SOLAR,
+    MODE_SOLAR_ONLY,
     PROFILE_AUTO,
 )
 from .engines.capability_gate import resolve_available_modes
@@ -37,7 +44,7 @@ from .engines.soc_target import (
     resolve_solar_step_up,
 )
 from .modes import captar, power, solar, solar_only
-from .profiles.auto import select_mode
+from .profiles.policy import PROFILE_POLICIES
 
 _WATTS_PER_KILOWATT = 1000.0
 
@@ -53,7 +60,7 @@ class CycleContext:
     charger_w: float
     voltage: float
     now: float
-    now_dt: datetime | None  # None only in the Task 3.3 dry-run construction
+    now_dt: datetime | None  # None only in the baseline-mode dry-run construction
     ev_soc: float | None = None
     surplus_w: float = 0.0
     monthly_peak_kw: float = 0.0
@@ -68,8 +75,8 @@ class CycleContext:
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place
 class PeakDemandState:
-    """Owns the coordinator's monthly-peak-demand bookkeeping (project-plan E5 / Power-MVP Task
-    1.3), replacing the three loose _peak_window/_peak_tracked_kw/_peak_tracked_month fields
+    """Owns the coordinator's monthly-peak-demand bookkeeping (project-plan E5),
+    replacing the three loose _peak_window/_peak_tracked_kw/_peak_tracked_month fields
     ADR-0012 flagged. Distinct from _peak_tracker (PeakBreachTracker, the R3 clamp's own
     breach-timer state) -- untouched by this decision, still threaded through the step-7 clamp
     call directly."""
@@ -94,7 +101,7 @@ class PeakDemandState:
         return self.tracked_kw
 
     def seed(self, kw: float, month: tuple[int, int] | None) -> None:
-        """Seed `tracked_kw`/`tracked_month` from a `MonthlyPeakSensor` restore (#496) -- the
+        """Seed `tracked_kw`/`tracked_month` from a `MonthlyPeakSensor` restore -- the
         only other write path onto these fields besides `update()` itself, kept on this class
         so both stay behind one owner instead of a caller reaching into the fields directly.
         A faithful restore: no clamp, since `update()` itself can legitimately produce a
@@ -125,7 +132,7 @@ class ModeHandler(Protocol):
     used to branch on by name (`_SOC_GATED_MODES`/`_SOLAR_MODES` tuples, and a
     Captar-vs-solar ternary picking each mode's idle state). Adding a mode with one of these
     properties now means giving its handler the right value/method, not adding a new branch
-    or extending a tuple at every call site (issue #561)."""
+    or extending a tuple at every call site."""
 
     is_soc_gated: bool
     """R7: whether SOC reaching the active limit stops this mode. False for Off/Power."""
@@ -258,6 +265,28 @@ class _CaptarModeHandler:
         return captar.CaptarState.idle()
 
 
+def build_mode_handlers(
+    config: Mapping[str, Any], target_current_getter: Callable[[], float]
+) -> dict[str, ModeHandler]:
+    """The ModeHandler registry's only construction site -- coordinator.py calls
+    this instead of importing the five _*ModeHandler classes directly, keeping them private to
+    this module. `target_current_getter` is threaded straight through to _PowerModeHandler
+    (design doc Sec 3.4's own zero-arg getter, bound live rather than snapshotted); `config` to
+    every handler that reads config values (all but Off/Power).
+
+    Deliberately deviates from design doc Sec 3.4's own snippet, which shows coordinator.py
+    building this same dict inline in `__init__` -- moved here instead so
+    coordinator.py no longer needs to import the five private classes to do it; the wiring
+    itself (which handler gets `config` vs. the getter) is unchanged from that snippet."""
+    return {
+        MODE_OFF: _OffModeHandler(),
+        MODE_POWER: _PowerModeHandler(target_current_getter),
+        MODE_SOLAR: _SolarModeHandler(config),
+        MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
+        MODE_CAPTAR: _CaptarModeHandler(config),
+    }
+
+
 class SocGateResolver:
     """Owns SOC-limit resolution + change detection (ADR-0012), replacing the inline
     resolve_active_soc_limit call + _last_active_soc_limit comparison. Pure -- no hass.bus
@@ -357,12 +386,13 @@ def resolve_solar_reserve_gate(
 
 @dataclass(frozen=True)
 class DeadlineUrgencyResult:
-    """Outcome of ADR-0006 steps 3-6 (deadline/urgency resolution, #506): the
+    """Outcome of ADR-0006 steps 3-6 (deadline/urgency resolution): the
     required-current/urgency determination (R5/R15) and, when Auto actually dispatches this
     cycle, its freshly resolved active mode. `resolved_mode` is None whenever
     `auto_dispatchable` was False -- the coordinator only ever assigns `self.active_mode`
     from it in that case, mirroring the original inline `if auto_dispatchable:` guard around
-    the real (non-baseline) `select_mode()` call. Firing `DeadlineUnreachableNotified` off
+    the real (non-baseline) call to the Auto policy's `select()` (ADR-0017). Firing
+    `DeadlineUnreachableNotified` off
     `required.unreachable` stays the coordinator's own job (ADR-0009/0010: HA I/O stays
     coordinator-side), the same boundary `SocGateResolver` already draws for
     `ActiveSocLimitChanged`."""
@@ -395,13 +425,13 @@ def resolve_deadline_urgency(
     mode_desired_current: Callable[[str], float],
 ) -> DeadlineUrgencyResult:
     """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
-    (ADR-0006 steps 3-6; ADR-0012-style extraction, #506). `deadline_resolvable` is the
+    (ADR-0006 steps 3-6; ADR-0012-style extraction). `deadline_resolvable` is the
     coordinator's own `status in CHARGEABLE_STATES and ev_soc is not None` check, computed
     ONCE there and passed in rather than re-derived here from `status`/`ev_soc` -- the
     coordinator already branches on that exact predicate to decide whether to even read
     today's deadline/sensed battery capacity (both async, HA-bound), so a second, separately
     written copy of the same condition on this side of the module boundary would be exactly
-    the kind of lockstep-editing hazard #506 exists to remove. Without it (disconnected, or a
+    the kind of lockstep-editing hazard this design exists to remove. Without it (disconnected, or a
     non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring R14's
     own "no deadline resolved -> urgency never applies" shape. All adapter/HA reads (today's
     resolved deadline, the sensed battery capacity) happen in the coordinator before this is
@@ -411,10 +441,11 @@ def resolve_deadline_urgency(
     The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
     (urgent=False) every cycle -- never Captar's own already-escalated request, per
     resolution-rules.md's explicit warning against that (it would make urgency look satisfied
-    the instant it engages and revert every cycle). `select_mode` is called at most twice here
-    -- baseline (urgent=False) and, only when Auto actually dispatches, the real resolution
-    (the real `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift
-    apart between the two calls (#506's named duplication-risk).
+    the instant it engages and revert every cycle). The Auto policy's `select()`
+    (`PROFILE_POLICIES[PROFILE_AUTO]`, ADR-0017) is consulted at most twice here -- baseline
+    (urgent=False) and, only when Auto actually dispatches, the real resolution (the real
+    `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift apart between
+    the two calls.
     """
     if not deadline_resolvable:
         return DeadlineUrgencyResult(
@@ -440,7 +471,7 @@ def resolve_deadline_urgency(
             low_tariff_active=low_tariff_active,
             solar_reserve_active=solar_reserve_active,
         )
-        baseline_mode = select_mode(urgent=False, **common_select_kwargs)
+        baseline_mode = PROFILE_POLICIES[PROFILE_AUTO].select(urgent=False, **common_select_kwargs)
 
     baseline_desired_a = mode_desired_current(baseline_mode)
 
@@ -459,8 +490,8 @@ def resolve_deadline_urgency(
         baseline_desired_a=baseline_desired_a,
         # A deliberate simplification of "maximum permitted rate"'s full peak-clamp-fitted
         # definition (system-overview.md glossary) down to C1's hard ceiling -- refining
-        # this to the actual peak-fitted rate is tracked follow-up work (issue #367),
-        # not this task's job; it only affects when DeadlineUnreachableNotified fires.
+        # this to the actual peak-fitted rate is deferred follow-up work, not handled
+        # here; it only affects when DeadlineUnreachableNotified fires.
         maximum_permitted_rate_a=max_current_a,
     )
 
@@ -474,6 +505,6 @@ def resolve_deadline_urgency(
         # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
         # never changes here while Manual, even under urgency) -- only Auto resolves its
         # own mode, via the real (non-baseline) urgent this time.
-        resolved_mode = select_mode(urgent=urgent, **common_select_kwargs)
+        resolved_mode = PROFILE_POLICIES[PROFILE_AUTO].select(urgent=urgent, **common_select_kwargs)
 
     return DeadlineUrgencyResult(required=required, urgent=urgent, resolved_mode=resolved_mode)

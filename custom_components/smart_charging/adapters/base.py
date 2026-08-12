@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 class Adapter(Protocol):
     """One mapped hardware role. Numeric roles return floats; status returns a canonical state.
 
-    Widened for Task 2.1 (RA2) to also cover the `bool`-typed `home_day_external` role
+    Widened to also cover RA2's `bool`-typed `home_day_external` role
     (`BooleanReadAdapter`) and the `time`-typed `departure_external` role
     (`TimeReadAdapter`) -- neither fits `NumericReadAdapter`/`StatusReadAdapter` cleanly
     (design doc §4 note), so this Protocol's value union grows rather than either of

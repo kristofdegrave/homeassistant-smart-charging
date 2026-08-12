@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SmartChargingConfigEntry
 from .const import (
+    ATTR_PERIOD_MONTH,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_ADAPTER_READINGS,
@@ -34,7 +35,7 @@ from .entity import SmartChargingEntity
 
 class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
     """Base for every owned entity whose value the coordinator pushes each cycle
-    (Task 4.3, C3), rather than the user setting/restoring it -- folds `SmartChargingEntity`
+    (C3), rather than the user setting/restoring it -- folds `SmartChargingEntity`
     and `CoordinatorEntity` into one shared `__init__` so subclasses only need their own
     when they have extra construction to do (`MonthlyPeakSensor`'s seed value)."""
 
@@ -44,21 +45,25 @@ class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
 
 
 class _CoordinatorFieldSensor(_CoordinatorPushMixin, SensorEntity):
-    """Declarative diagnostic sensor (issue #507): reads `_coordinator_field` off
-    `coordinator.data` each cycle, falling back to `_field_default` when data is None or
-    the field is absent. Covers the three diagnostic sensors with no bespoke restore or
-    value-mapping logic of their own; `ChargingStatusSensor` (maps a bool to Fault/OK)
-    and `MonthlyPeakSensor` (restore-seeded, falls back to its own last value) keep
-    their own `native_value` and use `_CoordinatorPushMixin` directly instead."""
+    """Base for diagnostic sensors that mirror a single named `CycleResult` field each
+    cycle, falling back to `_field_default` only when there is no cycle result yet
+    (`coordinator.data is None`). Subclasses implement `_coordinator_value` as a plain
+    attribute access (e.g. `data.active_mode`), not a string-keyed `getattr`, so a
+    renamed/removed `CycleResult` field raises `AttributeError` instead of silently
+    degrading to the default. `ChargingStatusSensor` (maps a bool to
+    Fault/OK) and `MonthlyPeakSensor` (restore-seeded, falls back to its own last value)
+    keep their own `native_value` and use `_CoordinatorPushMixin` directly instead."""
 
-    _coordinator_field: str
     _field_default: Any = None
+
+    def _coordinator_value(self, data: Any) -> Any:
+        raise NotImplementedError
 
     @property
     def native_value(self) -> Any:
         data = self.coordinator.data
         if data is not None:
-            return getattr(data, self._coordinator_field, self._field_default)
+            return self._coordinator_value(data)
         return self._field_default
 
 
@@ -71,18 +76,20 @@ class ChargingStatusSensor(_CoordinatorPushMixin, SensorEntity):
     @property
     def native_value(self) -> str:
         data = self.coordinator.data
-        if data is not None and getattr(data, "fault", False):
+        if data is not None and data.fault:
             return STATUS_FAULT
         return STATUS_OK
 
 
 class ActiveModeSensor(_CoordinatorFieldSensor):
-    """Reports the resolved active mode from the last cycle (Task 4.3, plan §5.1)."""
+    """Reports the resolved active mode from the last cycle."""
 
     _attr_translation_key = "active_mode"
     _object_id_suffix = "active_mode"
-    _coordinator_field = "active_mode"
     _field_default = MODE_OFF
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.active_mode
 
 
 @dataclass
@@ -92,14 +99,16 @@ class _MonthlyPeakExtraStoredData(SensorExtraStoredData):
     period_month: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {**super().as_dict(), "period_month": self.period_month}
+        return {**super().as_dict(), ATTR_PERIOD_MONTH: self.period_month}
 
     @classmethod
     def from_dict(cls, restored: dict[str, Any]) -> _MonthlyPeakExtraStoredData | None:
         base = SensorExtraStoredData.from_dict(restored)
         if base is None:
             return None
-        return cls(base.native_value, base.native_unit_of_measurement, restored.get("period_month"))
+        return cls(
+            base.native_value, base.native_unit_of_measurement, restored.get(ATTR_PERIOD_MONTH)
+        )
 
 
 class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
@@ -148,12 +157,12 @@ class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
     def native_value(self) -> float:
         data = self.coordinator.data
         if data is not None:
-            return getattr(data, "monthly_peak_kw", self._attr_native_value)
+            return data.monthly_peak_kw
         return self._attr_native_value
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:
-        return {"period_month": self.coordinator.monthly_peak_period_month}
+        return {ATTR_PERIOD_MONTH: self.coordinator.monthly_peak_period_month}
 
 
 class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
@@ -164,49 +173,59 @@ class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "effective_peak_limit"
     _object_id_suffix = "effective_peak_limit"
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
-    _coordinator_field = "effective_peak_limit_kw"
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.effective_peak_limit_kw
 
 
 class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     """Diagnostic: the coordinator's resolved active SOC limit from the last cycle (R7).
     No restore needed -- recomputed each cycle from the SOC-limit-override/solar-reserve/
-    solar-step-up three-row table (Task 5.1 wires the full resolution)."""
+    solar-step-up three-row table."""
 
     _attr_translation_key = "active_soc_limit"
     _object_id_suffix = OWNED_SUFFIX_ACTIVE_SOC_LIMIT
-    _coordinator_field = "active_soc_limit"
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.active_soc_limit
 
 
 class SolarSurplusSensor(_CoordinatorFieldSensor):
-    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151, #602)."""
+    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151)."""
 
     _attr_translation_key = "solar_surplus_w"
     _object_id_suffix = OWNED_SUFFIX_SOLAR_SURPLUS_W
     _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _coordinator_field = "solar_surplus_w"
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.solar_surplus_w
 
 
 class PeakHeadroomSensor(_CoordinatorFieldSensor):
-    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md:153, #602)."""
+    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md:153)."""
 
     _attr_translation_key = "peak_headroom_a"
     _object_id_suffix = OWNED_SUFFIX_PEAK_HEADROOM_A
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
-    _coordinator_field = "peak_headroom_a"
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.peak_headroom_a
 
 
 class TimeToFullSensor(_CoordinatorFieldSensor):
     """Diagnostic: minutes to the active SOC limit at the current set-point
-    (entity-catalog.md:152, #602)."""
+    (entity-catalog.md:152)."""
 
     _attr_translation_key = "time_to_full"
     _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
-    _coordinator_field = "time_to_full_min"
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.time_to_full_min
 
 
 class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
-    """Diagnostic: adapter-role readings mirrored as attributes (ADR-0021, #602). State is
+    """Diagnostic: adapter-role readings mirrored as attributes (ADR-0021). State is
     the timestamp of the last successful control-cycle read; not a `_CoordinatorFieldSensor`
     because it also needs `extra_state_attributes`."""
 
@@ -218,12 +237,12 @@ class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
     @property
     def native_value(self) -> Any:
         data = self.coordinator.data
-        return getattr(data, "adapter_readings_at", None) if data is not None else None
+        return data.adapter_readings_at if data is not None else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self.coordinator.data
-        return dict(getattr(data, "adapter_readings", {})) if data is not None else {}
+        return dict(data.adapter_readings) if data is not None else {}
 
 
 async def async_setup_entry(

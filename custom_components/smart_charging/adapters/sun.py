@@ -1,4 +1,4 @@
-"""Sun-state adapter (ADR-0003 extension, issue #376).
+"""Sun-state adapter (ADR-0003 extension).
 
 Unlike every other role, `sun.sun` needs no config-flow entity mapping -- it is a core
 Home Assistant entity, always present once the (auto-loaded) `sun` integration is set up.
