@@ -201,6 +201,7 @@ async def test_options_flow_round_trip_updates_options_not_data(hass):
     options_result = await hass.config_entries.options.async_configure(
         options_result["flow_id"], new_options
     )
+    await hass.async_block_till_done()
     assert options_result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_GRID_SAFETY_OFFSET_A] == 3.5
     assert entry.options[CONF_CONTROL_INTERVAL_S] == 15
@@ -455,6 +456,7 @@ async def test_options_flow_edits_solar_thresholds(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**_current_options(entry), CONF_SOLAR_START_THRESHOLD_W: 200.0}
     )
+    await hass.async_block_till_done()
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
@@ -606,6 +608,7 @@ async def test_options_flow_edits_peak_protection_thresholds(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**_current_options(entry), CONF_MAX_PEAK_KW: 5.0}
     )
+    await hass.async_block_till_done()
     assert entry.options[CONF_MAX_PEAK_KW] == 5.0
 
 
@@ -615,6 +618,7 @@ async def test_power_respect_peak_can_be_turned_off(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**_current_options(entry), CONF_POWER_RESPECT_PEAK: False}
     )
+    await hass.async_block_till_done()
     assert entry.options[CONF_POWER_RESPECT_PEAK] is False
 
 
@@ -692,6 +696,7 @@ async def test_options_flow_edits_the_new_thresholds(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**_current_options(entry), CONF_SOLAR_RESERVE_SOC: 55.0}
     )
+    await hass.async_block_till_done()
     assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
 
 
@@ -811,6 +816,7 @@ async def test_options_flow_edits_solar_forecast_threshold(hass):
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {**_current_options(entry), CONF_SOLAR_FORECAST_THRESHOLD_KWH: 15.0}
     )
+    await hass.async_block_till_done()
     assert entry.options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 15.0
 
 
@@ -865,6 +871,7 @@ async def test_options_flow_round_trips_evening_prompt_options(hass):
             CONF_EVENING_PROMPT_TIME: "19:30:00",
         },
     )
+    await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_EVENING_PROMPT_ENABLED] is False
     assert entry.options[CONF_EVENING_PROMPT_TIME] == "19:30:00"
