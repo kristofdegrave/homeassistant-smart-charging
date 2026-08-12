@@ -81,7 +81,7 @@ class Store:
         Two value shapes are supported today, one per real caller: a `float` into a
         `number` entity (M2 -> soc_limit_override), and a `bool` into a `switch` entity
         (M3 -> home_day_flag, docs/plans/2026-08-09-ra3-store-write-half-design.md's
-        deferral, closed by notifications Task 4.1). Other domains return False rather
+        deferral, now closed). Other domains return False rather
         than issuing a service call against an entity that cannot take it.
         """
         if entity_domain not in (Platform.NUMBER, Platform.SWITCH):

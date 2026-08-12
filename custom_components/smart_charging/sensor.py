@@ -35,7 +35,7 @@ from .entity import SmartChargingEntity
 
 class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
     """Base for every owned entity whose value the coordinator pushes each cycle
-    (Task 4.3, C3), rather than the user setting/restoring it -- folds `SmartChargingEntity`
+    (C3), rather than the user setting/restoring it -- folds `SmartChargingEntity`
     and `CoordinatorEntity` into one shared `__init__` so subclasses only need their own
     when they have extra construction to do (`MonthlyPeakSensor`'s seed value)."""
 
@@ -50,7 +50,7 @@ class _CoordinatorFieldSensor(_CoordinatorPushMixin, SensorEntity):
     (`coordinator.data is None`). Subclasses implement `_coordinator_value` as a plain
     attribute access (e.g. `data.active_mode`), not a string-keyed `getattr`, so a
     renamed/removed `CycleResult` field raises `AttributeError` instead of silently
-    degrading to the default (issue #565). `ChargingStatusSensor` (maps a bool to
+    degrading to the default. `ChargingStatusSensor` (maps a bool to
     Fault/OK) and `MonthlyPeakSensor` (restore-seeded, falls back to its own last value)
     keep their own `native_value` and use `_CoordinatorPushMixin` directly instead."""
 
@@ -82,7 +82,7 @@ class ChargingStatusSensor(_CoordinatorPushMixin, SensorEntity):
 
 
 class ActiveModeSensor(_CoordinatorFieldSensor):
-    """Reports the resolved active mode from the last cycle (Task 4.3, plan §5.1)."""
+    """Reports the resolved active mode from the last cycle."""
 
     _attr_translation_key = "active_mode"
     _object_id_suffix = "active_mode"
@@ -181,7 +181,7 @@ class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
 class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     """Diagnostic: the coordinator's resolved active SOC limit from the last cycle (R7).
     No restore needed -- recomputed each cycle from the SOC-limit-override/solar-reserve/
-    solar-step-up three-row table (Task 5.1 wires the full resolution)."""
+    solar-step-up three-row table."""
 
     _attr_translation_key = "active_soc_limit"
     _object_id_suffix = OWNED_SUFFIX_ACTIVE_SOC_LIMIT
@@ -191,7 +191,7 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
 
 
 class SolarSurplusSensor(_CoordinatorFieldSensor):
-    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151, #602)."""
+    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151)."""
 
     _attr_translation_key = "solar_surplus_w"
     _object_id_suffix = OWNED_SUFFIX_SOLAR_SURPLUS_W
@@ -202,7 +202,7 @@ class SolarSurplusSensor(_CoordinatorFieldSensor):
 
 
 class PeakHeadroomSensor(_CoordinatorFieldSensor):
-    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md:153, #602)."""
+    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md:153)."""
 
     _attr_translation_key = "peak_headroom_a"
     _object_id_suffix = OWNED_SUFFIX_PEAK_HEADROOM_A
@@ -214,7 +214,7 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
 
 class TimeToFullSensor(_CoordinatorFieldSensor):
     """Diagnostic: minutes to the active SOC limit at the current set-point
-    (entity-catalog.md:152, #602)."""
+    (entity-catalog.md:152)."""
 
     _attr_translation_key = "time_to_full"
     _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
@@ -225,7 +225,7 @@ class TimeToFullSensor(_CoordinatorFieldSensor):
 
 
 class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
-    """Diagnostic: adapter-role readings mirrored as attributes (ADR-0021, #602). State is
+    """Diagnostic: adapter-role readings mirrored as attributes (ADR-0021). State is
     the timestamp of the last successful control-cycle read; not a `_CoordinatorFieldSensor`
     because it also needs `extra_state_attributes`."""
 

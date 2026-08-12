@@ -29,8 +29,8 @@ PROFILE_OPTIONS = [PROFILE_MANUAL, PROFILE_AUTO]
 
 class _RestoreOptionMixin:
     """Shared restore + select body for select entities that restore their last option
-    into `_attr_current_option` when it's still a valid member of `_attr_options`
-    (issue #507). Must appear before `RestoreEntity` in a subclass's bases so its
+    into `_attr_current_option` when it's still a valid member of `_attr_options`.
+    Must appear before `RestoreEntity` in a subclass's bases so its
     `async_added_to_hass` override's `super()` call resolves onward to
     `RestoreEntity.async_added_to_hass` (the actual restore-state read)."""
 

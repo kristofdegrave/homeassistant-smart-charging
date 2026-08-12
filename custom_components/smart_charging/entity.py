@@ -24,7 +24,7 @@ class SmartChargingEntity(Entity):
         )
         # ADR-0013's only listed Con is keeping this and `_object_id_suffix` in sync by
         # hand at each call site; deriving unique_id from the same suffix here removes
-        # that risk structurally (issue #507). Subclasses that set `_object_id_suffix`
+        # that risk structurally. Subclasses that set `_object_id_suffix`
         # as an instance attribute (e.g. `SmartChargingDepartureTime`) must do so before
         # calling `super().__init__()`.
         if self._object_id_suffix is not None:

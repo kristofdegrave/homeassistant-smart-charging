@@ -3,11 +3,11 @@
 DOMAIN = "smart_charging"
 
 # Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
-# and the config flow's `vol.In(...)` validator (Task 3.2). Plain strings, not an Enum:
+# and the config flow's `vol.In(...)` validator. Plain strings, not an Enum:
 # `strategy` round-trips through HA config-entry storage, which needs bare str values.
 # Live here (a leaf module) rather than in `modes/_amp_step.py` so that other modules --
 # including `const.py` itself, for DEFAULT_SOLAR_ONLY_STRATEGY below -- can reference them
-# without importing a private submodule of `modes` (issue #502).
+# without importing a private submodule of `modes`.
 ROUND_UP = "round_up"
 ROUND_DOWN = "round_down"
 ROUND_NEAREST = "round_nearest"
@@ -15,7 +15,7 @@ ROUND_NEAREST = "round_nearest"
 # Domain events (ADR-0011). Past-tense PascalCase payload, snake_case HA event type.
 EVENT_ACTIVE_SOC_LIMIT_CHANGED = "smart_charging_active_soc_limit_changed"
 ATTR_ACTIVE_SOC_LIMIT = "active_soc_limit"  # ActiveSocLimitChanged payload key
-# R5/ADR-0011: fires every cycle resolve_required_current's `unreachable` is True (Task 5.2),
+# R5/ADR-0011: fires every cycle resolve_required_current's `unreachable` is True,
 # not only on the Normal/Urgent -> Unreachable transition edge (UC05's domain-events section).
 EVENT_DEADLINE_UNREACHABLE_NOTIFIED = "smart_charging_deadline_unreachable_notified"
 ATTR_REQUIRED_CURRENT_A = "required_current_a"  # DeadlineUnreachableNotified payload key
@@ -30,8 +30,7 @@ ATTR_LIMIT = "limit"  # M2 event payload key -- the SOC-limit value carried by t
 
 # `MonthlyPeakSensor`'s (sensor.py) extra-restore-data / extra-state-attribute key for the
 # "YYYY-MM" period the tracked kW belongs to (design doc Sec 6.4) -- named once here so the
-# restore round-trip (`_MonthlyPeakExtraStoredData`) and the live attribute stay in lockstep
-# (issue #565).
+# restore round-trip (`_MonthlyPeakExtraStoredData`) and the live attribute stay in lockstep.
 ATTR_PERIOD_MONTH = "period_month"
 
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
@@ -114,18 +113,18 @@ ROLE_CHARGER_STATUS = "charger_status"
 ROLE_NET_POWER = "net_power"
 ROLE_CHARGER_POWER = "charger_power"
 ROLE_GRID_VOLTAGE = "grid_voltage"
-# RA1 extension (Task 2.1, R15): sensed EV battery capacity, optional at the factory level.
+# RA1 extension (R15): sensed EV battery capacity, optional at the factory level.
 ROLE_EV_BATTERY_CAPACITY = "ev_battery_capacity"
-# RA2 (Task 2.1, R14): external departure-deadline override, optional at the factory level.
+# RA2 (R14): external departure-deadline override, optional at the factory level.
 ROLE_DEPARTURE_EXTERNAL = "departure_external"
-# RA2 (Task 2.1, R9/R13): external home-day-flag source, optional at the factory level.
+# RA2 (R9/R13): external home-day-flag source, optional at the factory level.
 ROLE_HOME_DAY_EXTERNAL = "home_day_external"
-# RA2 (Task 2.1, R9): next-day solar forecast, required only when CONF_SOLAR_INSTALLED.
+# RA2 (R9): next-day solar forecast, required only when CONF_SOLAR_INSTALLED.
 ROLE_SOLAR_FORECAST = "solar_forecast"
-# issue #376: built unconditionally by the factory, no config_flow entry -- sun.sun is a
+# Built unconditionally by the factory, no config_flow entry -- sun.sun is a
 # core Home Assistant entity, always present once the (auto-loaded) sun integration is set up.
 ROLE_SUN = "sun"
-# issue #376: optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
+# Optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
 # None reading keeps the glossary's single-tariff "always active" default.
 ROLE_LOW_TARIFF = "low_tariff"
 # RA4 (notifications design doc §3): message dispatch + simulated action response.
@@ -152,7 +151,7 @@ ROLES_ADAPTER_READINGS_EXCLUDED = frozenset(
         ROLE_CHARGER_CURRENT,  # write-only from M1's perspective -- _run_cycle only ever
         # .write()s it, never .read()s it
         ROLE_CAR_HOME,  # read only by VehicleLimitManager (M2), not M1's _run_cycle -- feeding
-        # cross-manager reads into this cache is out of #602's scope
+        # cross-manager reads into this cache is deliberately out of scope
         ROLE_VEHICLE_CHARGE_LIMIT,  # ditto (M2)
         ROLE_HOME_DAY_EXTERNAL,  # read only by NotificationManager, not M1's _run_cycle -- ditto
     }
@@ -178,7 +177,7 @@ CONF_CHARGER_POWER_ENTITY = "charger_power_entity"
 CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
 CONF_SOLAR_INSTALLED = "solar_installed"  # bool, default False -- design doc §3, R18 scoped
-CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped (#215)
+CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped
 # optional at the factory level (NF3) -- design doc §3, R15
 CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"
 # optional at the factory level (NF3) -- design doc §3, R14
@@ -187,7 +186,7 @@ CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"
 CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 # required only when CONF_SOLAR_INSTALLED (R9 needs it) -- design doc §3
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
-# optional at the factory level (NF3) -- issue #376, Auto mode-selection row 4 (R16)
+# optional at the factory level (NF3) -- Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
 # RA4 role mapping (notifications design doc §3) -- required for M3 to deliver at all, though
 # the factory-level role built from it stays optional (NF3) like its siblings above.
@@ -197,7 +196,7 @@ CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC
 CONF_CAR_HOME_ENTITY = "car_home_entity"
 
 # Config-flow error codes (config_flow.py's mapping-step guards). Values must match
-# strings.json/translations/en.json's config.error keys exactly (issue #508) --
+# strings.json/translations/en.json's config.error keys exactly --
 # tests/test_config_flow_translations.py walks every one of these against that section.
 ERROR_REQUIRED_WHEN_SOLAR_INSTALLED = "required_when_solar_installed"
 ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE = "required_when_captar_available"

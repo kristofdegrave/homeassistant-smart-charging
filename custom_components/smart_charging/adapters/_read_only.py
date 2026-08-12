@@ -1,4 +1,4 @@
-"""Shared base for read-only adapter roles (ADR-0003, issue #507).
+"""Shared base for read-only adapter roles (ADR-0003).
 
 Every read-only role shares two things: the "missing/unavailable/unknown -> None"
 state guard (the ADR-0007 fault signal) and a `write()` that always raises
