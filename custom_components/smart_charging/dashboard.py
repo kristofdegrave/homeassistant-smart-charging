@@ -34,10 +34,12 @@ from .const import (
     DASHBOARD_URL_PATH,
     LABEL_SC_RUNTIME,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
+    OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PEAK_HEADROOM_A,
     OWNED_SUFFIX_PROFILE,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     OWNED_SUFFIX_TIME_TO_FULL,
+    PROFILE_MANUAL,
 )
 
 _TITLE = "Smart Charging"
@@ -47,6 +49,7 @@ _TITLE = "Smart Charging"
 _ACTIVE_SOC_LIMIT_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_ACTIVE_SOC_LIMIT}"
 _ACTIVE_MODE_ENTITY = "sensor.smart_charging_active_mode"
 _EFFECTIVE_PEAK_LIMIT_ENTITY = "sensor.smart_charging_effective_peak_limit"
+_MODE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_MODE}"
 _PEAK_HEADROOM_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_PEAK_HEADROOM_A}"
 _PROFILE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_PROFILE}"
 _SOLAR_SURPLUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
@@ -94,16 +97,33 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
 
 
 def _runtime_settings_cards() -> list[dict]:
-    # Deliberately no `exclude: label: sc_install` clause here (present in the
-    # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
-    # reasoning, no entity is ever labelled sc_install, so the clause can never match anything.
+    # T8 (2026-08-13 addendum): select.smart_charging_mode only has an effect under the
+    # Manual profile (system-overview.md's glossary already scopes it that way; Auto's own E2
+    # drives dispatch instead) -- gated on its own conditional card rather than left editable
+    # unconditionally in the label-driven list below.
+    mode_gate_card = {
+        "type": "conditional",
+        "conditions": [
+            {"condition": "state", "entity_id": _PROFILE_ENTITY, "state": PROFILE_MANUAL}
+        ],
+        "card": {"type": "entities", "entities": [_MODE_ENTITY]},
+    }
     return [
+        mode_gate_card,
         {
             "type": "custom:auto-entities",
             "card": {"type": "entities", "title": "Runtime settings"},
-            "filter": {"include": [{"label": LABEL_SC_RUNTIME}]},
+            # Deliberately no `exclude: label: sc_install` clause here (present in the
+            # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
+            # reasoning, no entity is ever labelled sc_install, so that clause can never match
+            # anything. This exclude is a different, legitimate one: mode is rendered by the
+            # conditional card above instead, so the auto-entities list must not duplicate it.
+            "filter": {
+                "include": [{"label": LABEL_SC_RUNTIME}],
+                "exclude": [{"entity_id": _MODE_ENTITY}],
+            },
             "sort": {"method": "friendly_name"},
-        }
+        },
     ]
 
 

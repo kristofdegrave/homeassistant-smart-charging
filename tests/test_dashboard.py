@@ -114,17 +114,31 @@ def test_power_flow_section_omits_the_markdown_card_when_solar_forecast_is_the_e
     assert len(cards) == 4
 
 
-def test_runtime_settings_section_is_a_single_label_filtered_auto_entities_card():
+def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card():
     cards = _cards(build_dashboard_config(_entry()), "Runtime settings")
 
-    assert len(cards) == 1
-    card = cards[0]
-    assert card["type"] == "custom:auto-entities"
-    assert card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME}]
+    assert len(cards) == 2
+    conditional_card, auto_entities_card = cards
+
+    # T8 (2026-08-13 addendum): the mode selector only makes sense under the Manual profile
+    # (system-overview.md's glossary already scopes it that way) -- gated on its own card
+    # rather than left in the label-driven list unconditionally.
+    assert conditional_card["type"] == "conditional"
+    assert conditional_card["conditions"] == [
+        {"condition": "state", "entity_id": "select.smart_charging_profile", "state": "Manual"}
+    ]
+    assert conditional_card["card"] == {
+        "type": "entities",
+        "entities": ["select.smart_charging_mode"],
+    }
+
+    assert auto_entities_card["type"] == "custom:auto-entities"
+    assert auto_entities_card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME}]
     # Regression guard for the deliberate deviation from the 2026-07-08 design doc's sketch
-    # (Decision 1's own reasoning: no entity is ever labelled sc_install, so the clause the
-    # doc's YAML sketch showed can never match anything).
-    assert "exclude" not in card["filter"]
+    # (Decision 1's own reasoning: no entity is ever labelled sc_install, so that clause can
+    # never match anything) -- this exclude is a different, legitimate one: mode is rendered by
+    # the conditional card above instead, so the auto-entities list must not duplicate it.
+    assert auto_entities_card["filter"]["exclude"] == [{"entity_id": "select.smart_charging_mode"}]
 
 
 async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_path):
