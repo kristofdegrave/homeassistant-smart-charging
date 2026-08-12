@@ -3,8 +3,11 @@
 from datetime import time, timedelta
 from unittest.mock import AsyncMock, patch
 
+from homeassistant.components import frontend
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import label_registry as lr
+from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -41,12 +44,14 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+    DASHBOARD_URL_PATH,
     DEFAULT_CONTROL_INTERVAL_S,
     DOMAIN,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     EVENT_MANUAL_CHARGE_LIMIT_ADOPTED,
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
+    LABEL_SC_RUNTIME,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -105,6 +110,144 @@ async def test_end_to_end_commands_target_current(hass):
     assert calls[-1]["value"] == 10.0
     # ...and the status sensor is OK.
     assert hass.states.get("sensor.smart_charging_status").state == STATUS_OK
+
+
+async def test_setup_creates_the_sc_runtime_label(hass):
+    """C5 (#601): the `sc_runtime` label must exist in the label registry before any owned
+    entity references it -- an entity-registry label id with no matching label_registry entry
+    has no display name and nothing for the dashboard's `auto-entities` filter to resolve."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    label = lr.async_get(hass).async_get_label_by_name(LABEL_SC_RUNTIME)
+    assert label is not None
+    assert label.label_id == LABEL_SC_RUNTIME
+
+
+async def test_reload_does_not_recreate_the_sc_runtime_label(hass):
+    """A second setup (ADR-0008 reload) must not raise on an already-existing label."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert lr.async_get(hass).async_get_label_by_name(LABEL_SC_RUNTIME) is not None
+
+
+async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_not(hass):
+    """C5 (#601): every runtime-classified owned entity carries `sc_runtime`; every diagnostic/
+    status sensor carries no labels at all -- the property the dashboard's `auto-entities`
+    filter depends on structurally, per 2026-07-08-runtime-dashboard-design.md Decision 1."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    runtime_suffixes = {
+        "mode",
+        "profile",
+        "target_current",
+        "soc_limit_override",
+        "home_day",
+        "departure_mon",
+        "departure_tue",
+        "departure_wed",
+        "departure_thu",
+        "departure_fri",
+        "departure_sat",
+        "departure_sun",
+        "departure_holiday",
+        "departure_home_day",
+    }
+    for entry_reg in er.async_entries_for_config_entry(registry, entry.entry_id):
+        suffix = entry_reg.unique_id.removeprefix(f"{entry.entry_id}_")
+        if suffix in runtime_suffixes:
+            assert entry_reg.labels == {LABEL_SC_RUNTIME}, f"{suffix}: {entry_reg.labels!r}"
+        else:
+            assert entry_reg.labels == set(), f"{suffix}: {entry_reg.labels!r}"
+
+
+async def test_setup_registers_the_dashboard_panel_and_unload_removes_it(hass):
+    """C5 (#601): wiring async_register_dashboard/async_unregister_dashboard into
+    async_setup_entry/async_unload_entry."""
+    assert await async_setup_component(hass, "lovelace", {})
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DASHBOARD_URL_PATH in hass.data[frontend.DATA_PANELS]
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DASHBOARD_URL_PATH not in hass.data[frontend.DATA_PANELS]
+
+
+async def test_runtime_dashboard_integration_checkpoint(hass):
+    """C5 (#601) T7: ties T0-T5 together end-to-end -- the seam none of their own per-task
+    tests individually covers is a real ADR-0008 reload (unload-then-setup) leaving exactly
+    one panel registered, with labels/panel visibility both intact across it."""
+    assert await async_setup_component(hass, "lovelace", {})
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    runtime_suffixes = {
+        "mode",
+        "profile",
+        "target_current",
+        "soc_limit_override",
+        "home_day",
+        "departure_mon",
+        "departure_tue",
+        "departure_wed",
+        "departure_thu",
+        "departure_fri",
+        "departure_sat",
+        "departure_sun",
+        "departure_holiday",
+        "departure_home_day",
+    }
+    for entry_reg in er.async_entries_for_config_entry(registry, entry.entry_id):
+        suffix = entry_reg.unique_id.removeprefix(f"{entry.entry_id}_")
+        expected_labels = {LABEL_SC_RUNTIME} if suffix in runtime_suffixes else set()
+        assert entry_reg.labels == expected_labels, f"{suffix}: {entry_reg.labels!r}"
+
+    panel = hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH]
+    assert panel.config["mode"] == "yaml"
+    assert panel.show_in_sidebar is True
+    panel_count_before_reload = len(hass.data[frontend.DATA_PANELS])
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert len(hass.data[frontend.DATA_PANELS]) == panel_count_before_reload
+    assert hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH].show_in_sidebar is True
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert DASHBOARD_URL_PATH not in hass.data[frontend.DATA_PANELS]
 
 
 async def test_setup_falls_back_to_default_soc_limit_for_pre_solar_entries(hass):

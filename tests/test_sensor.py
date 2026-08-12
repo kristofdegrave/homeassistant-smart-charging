@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.core import State
 from homeassistant.helpers.entity import EntityCategory
 from pytest_homeassistant_custom_component.common import (
@@ -92,6 +92,49 @@ async def test_coordinator_field_sensor_raises_when_data_lacks_its_field(hass, s
     sensor = sensor_cls(entry_id="abc", coordinator=coord)
     with pytest.raises(AttributeError):
         _ = sensor.native_value
+
+
+@pytest.mark.parametrize(
+    "sensor_cls, device_class, unit",
+    [
+        (MonthlyPeakSensor, SensorDeviceClass.POWER, "kW"),
+        (EffectivePeakLimitSensor, SensorDeviceClass.POWER, "kW"),
+        (SolarSurplusSensor, SensorDeviceClass.POWER, "W"),
+        (PeakHeadroomSensor, SensorDeviceClass.CURRENT, "A"),
+    ],
+)
+def test_diagnostic_sensor_has_statistics_and_diagnostic_classification(
+    sensor_cls, device_class, unit
+):
+    """#649: without device_class/state_class HA records no long-term statistics for these
+    sensors; each one's own docstring calls itself diagnostic, so entity_category must
+    match. The unit is pinned alongside device_class since HA statistics only make sense
+    for a unit/device_class pair that agree."""
+    coord = SimpleNamespace(data=None)
+    sensor = sensor_cls(entry_id="abc", coordinator=coord)
+    assert sensor.device_class == device_class
+    assert sensor.native_unit_of_measurement == unit
+    assert sensor.state_class == SensorStateClass.MEASUREMENT
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+async def test_monthly_peak_sensor_is_registered_with_valid_statistics_metadata(hass):
+    """Platform-level guard (code-reviewer finding on #649): asserting the bare class
+    attributes cannot catch an invalid unit/device_class/state_class combination, since
+    HA only validates that triple when the entity's state is actually written. Registering
+    through a real platform confirms HA accepts it."""
+    coord = _StubPeakCoordinator(data=SimpleNamespace(monthly_peak_kw=3.4))
+    coord.last_update_success = True
+    sensor = MonthlyPeakSensor(entry_id="abc", coordinator=coord)
+    entity_id = "sensor.smart_charging_monthly_peak_kw"
+    sensor.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="sensor")
+    await platform.async_add_entities([sensor])
+
+    state = hass.states.get(entity_id)
+    assert state.attributes["device_class"] == SensorDeviceClass.POWER
+    assert state.attributes["state_class"] == SensorStateClass.MEASUREMENT
+    assert state.attributes["unit_of_measurement"] == "kW"
 
 
 async def test_monthly_peak_sensor_reflects_the_tracked_value(hass):

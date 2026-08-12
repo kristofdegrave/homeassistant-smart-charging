@@ -212,6 +212,58 @@ Power target current is already native as `number.smart_charging_target_current`
 the solar-reserve cap remains a config-option with no entity to label, an existing ADR-0004 open
 question this spec does not resolve).
 
+## Addendum (2026-08-13) — two UX refinements from reviewing against the Slim Laden reference
+
+The 2026-07-08 design doc's own Open questions named this exact moment: "revisit only if the
+built-in cards prove visually insufficient once a real dashboard is built and reviewed against the
+[Slim Laden] reference for UX parity." Reviewing the built dashboard against that reference surfaced
+two refinements — neither is new behavior invented for this addendum; both are derived from
+decisions this spec (or the glossary) already made.
+
+### Mode selector only editable under the `Manual` profile
+
+`system-overview.md`'s glossary already scopes `select.smart_charging_mode` to "the `Manual`
+profile's mode-override selection" — it has no effect under `Auto` (E2 drives dispatch instead, per
+`ModeSelect`'s own docstring in `select.py`). The dashboard was showing/allowing edits to it
+unconditionally; this is a dashboard-side correction to match behavior the domain model already
+states, not a new rule.
+
+**Mechanism:** `select.smart_charging_mode` is pulled out of the label-driven `auto-entities` list
+(via that card's own `exclude` filter, keyed on `entity_id` — not the `label: sc_install` clause
+Decision 1 already rejected, a different, legitimate exclude) and rendered as its own `entities`
+card, gated via that card's own `visibility` key (the native idiom for a single gated card inside a
+`sections` view — a wrapping `type: conditional` card also works but adds a needless nesting level)
+on `select.smart_charging_profile == "Manual"`:
+
+```yaml
+type: entities
+entities:
+  - select.smart_charging_mode
+visibility:
+  - condition: state
+    entity: select.smart_charging_profile
+    state: Manual
+```
+
+Note the condition key is `entity`, not `entity_id` — the Lovelace `visibility`/`conditional` schema
+differs from the automation/script condition schema here; a missing `entity` key resolves the
+checked state as `unavailable` and the card silently never renders (caught in this addendum's own
+fresh-agent review, not in the first draft).
+
+The entity keeps its `sc_runtime` label (entity-registry classification is orthogonal to which card
+renders it) — only the dashboard's own filter/placement changes.
+
+### Departure-time settings move to a second dashboard tab
+
+HA renders `>1` entries in a YAML dashboard's `views` list as tabs automatically — no new
+registration mechanism needed, ADR-0022's Option C is unaffected. `build_dashboard_config` now
+returns two views: `overview` (unchanged three sections, minus the departure-time rows) and
+`deadline` (one section, the nine departure-time entities). Both filter by `label: sc_runtime`
+plus `domain: time` (`auto-entities` ANDs the keys of one `include` filter object) — this stays
+label-driven, not a hardcoded list, matching Decision 1's own extensibility property. The overview
+tab's own `auto-entities` card gains a matching `exclude: [{domain: time}]` so the nine departure
+entities don't render twice.
+
 ## Testing approach (ADR-0009)
 
 `dashboard.py` imports `homeassistant.components.frontend`/`lovelace` directly → **HA harness**
@@ -251,6 +303,13 @@ second setup (simulating reload) does not raise and does not duplicate the panel
   question resolves.
 - **R19 AC4 for the nine departure-time entities** — not fully satisfied; see the disclosed
   deviation in the Label application section (a pre-existing C2 gap, not introduced or fixed here).
+- **R19 AC3 for `select.smart_charging_mode` under the `Auto` profile** — this addendum's mode gate
+  (above) makes the entity invisible on the dashboard while `Auto` is active, whereas R19 AC3 reads
+  "every runtime entity is both visible and settable from the dashboard" with no profile carve-out.
+  The behavioral rationale (the glossary already scopes the entity to `Manual`; it has no effect
+  under `Auto`) is sound, but the requirement text itself is not amended by this spec — a follow-up
+  issue against R19 AC3's wording, or a switch to an always-visible-but-disabled rendering, is left
+  open rather than silently treating the AC as met.
 - **Mushroom cards, tablet-specific sizing** — already deferred by the 2026-07-08 design doc; nothing
   here reopens either.
 - **Deleting the generated YAML file on unload** — deliberately not done (see `dashboard.py` table);
