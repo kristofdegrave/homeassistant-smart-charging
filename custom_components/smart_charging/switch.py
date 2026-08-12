@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 
 from . import SmartChargingConfigEntry
-from .const import OWNED_SUFFIX_HOME_DAY
+from .const import LABEL_SC_RUNTIME, OWNED_SUFFIX_HOME_DAY
 from .entity import SmartChargingEntity
 
 
@@ -22,6 +22,7 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
 
     _attr_translation_key = "home_day"
     _object_id_suffix = OWNED_SUFFIX_HOME_DAY
+    _owned_labels = frozenset({LABEL_SC_RUNTIME})
 
     def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
