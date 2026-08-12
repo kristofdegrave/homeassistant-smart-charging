@@ -29,23 +29,32 @@ def _entry(**data_overrides):
     return MockConfigEntry(domain=DOMAIN, data=entry_data_base(**data_overrides))
 
 
-def _view(config):
-    (view,) = config["views"]
-    return view
+def _view(config, path):
+    for view in config["views"]:
+        if view["path"] == path:
+            return view
+    raise AssertionError(f"no view at path {path!r}")
 
 
-def _cards(config, section_title):
-    for section in _view(config)["sections"]:
+def _cards(config, section_title, view_path="overview"):
+    for section in _view(config, view_path)["sections"]:
         if section["title"] == section_title:
             return section["cards"]
-    raise AssertionError(f"no section titled {section_title!r}")
+    raise AssertionError(f"no section titled {section_title!r} in view {view_path!r}")
 
 
-def test_the_view_is_a_sections_view_at_the_dashboard_url_path():
-    view = _view(build_dashboard_config(_entry()))
+def test_there_are_exactly_two_sections_views_overview_and_deadline():
+    """T9 (2026-08-13 addendum): HA renders >1 views in a YAML dashboard as tabs natively --
+    no new registration mechanism needed beyond ADR-0022's Option C."""
+    config = build_dashboard_config(_entry())
 
-    assert view["type"] == "sections"
-    assert view["path"] == DASHBOARD_URL_PATH
+    assert [v["path"] for v in config["views"]] == ["overview", "deadline"]
+    assert all(v["type"] == "sections" for v in config["views"])
+
+
+def test_the_overview_view_is_titled_smart_charging():
+    view = _view(build_dashboard_config(_entry()), "overview")
+
     assert view["title"] == "Smart Charging"
 
 
@@ -136,9 +145,26 @@ def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card()
     assert auto_entities_card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME}]
     # Regression guard for the deliberate deviation from the 2026-07-08 design doc's sketch
     # (Decision 1's own reasoning: no entity is ever labelled sc_install, so that clause can
-    # never match anything) -- this exclude is a different, legitimate one: mode is rendered by
-    # the conditional card above instead, so the auto-entities list must not duplicate it.
-    assert auto_entities_card["filter"]["exclude"] == [{"entity_id": "select.smart_charging_mode"}]
+    # never match anything). The two excludes here are different, legitimate ones: mode is
+    # rendered by the conditional card above instead (T8), and the nine departure-time
+    # entities move to the deadline tab instead (T9) -- neither should duplicate here.
+    assert auto_entities_card["filter"]["exclude"] == [
+        {"entity_id": "select.smart_charging_mode"},
+        {"domain": "time"},
+    ]
+
+
+def test_deadline_view_has_one_section_with_a_time_domain_auto_entities_card():
+    view = _view(build_dashboard_config(_entry()), "deadline")
+
+    assert len(view["sections"]) == 1
+    section = view["sections"][0]
+    cards = section["cards"]
+    assert len(cards) == 1
+    card = cards[0]
+    assert card["type"] == "custom:auto-entities"
+    assert card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME, "domain": "time"}]
+    assert "exclude" not in card["filter"]
 
 
 async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_path):

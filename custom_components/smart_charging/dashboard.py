@@ -116,25 +116,44 @@ def _runtime_settings_cards() -> list[dict]:
             # Deliberately no `exclude: label: sc_install` clause here (present in the
             # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
             # reasoning, no entity is ever labelled sc_install, so that clause can never match
-            # anything. This exclude is a different, legitimate one: mode is rendered by the
-            # conditional card above instead, so the auto-entities list must not duplicate it.
+            # anything. The two excludes below are different, legitimate ones: mode is rendered
+            # by the conditional card above instead (T8), and the nine departure-time entities
+            # move to the deadline tab instead (T9) -- neither should duplicate here.
             "filter": {
                 "include": [{"label": LABEL_SC_RUNTIME}],
-                "exclude": [{"entity_id": _MODE_ENTITY}],
+                "exclude": [{"entity_id": _MODE_ENTITY}, {"domain": "time"}],
             },
             "sort": {"method": "friendly_name"},
         },
     ]
 
 
+def _deadline_cards() -> list[dict]:
+    # T9 (2026-08-13 addendum): still label-driven, not a hardcoded list (Decision 1's
+    # extensibility property) -- narrowed to the time domain via the same include filter
+    # object (auto-entities ANDs the keys within one include entry).
+    return [
+        {
+            "type": "custom:auto-entities",
+            "card": {"type": "entities", "title": "Departure times"},
+            "filter": {"include": [{"label": LABEL_SC_RUNTIME, "domain": "time"}]},
+            "sort": {"method": "friendly_name"},
+        }
+    ]
+
+
 def build_dashboard_config(entry: ConfigEntry) -> dict:
-    """Return the full Lovelace `views` config for the runtime dashboard (ADR-0022)."""
+    """Return the full Lovelace `views` config for the runtime dashboard (ADR-0022).
+
+    Two views (T9, 2026-08-13 addendum) -- HA renders `views` of length >1 as tabs natively,
+    so no new registration mechanism is needed beyond ADR-0022's Option C.
+    """
     return {
         "title": _TITLE,
         "views": [
             {
                 "title": _TITLE,
-                "path": DASHBOARD_URL_PATH,
+                "path": "overview",
                 "type": "sections",
                 "sections": [
                     {
@@ -153,7 +172,19 @@ def build_dashboard_config(entry: ConfigEntry) -> dict:
                         "cards": _runtime_settings_cards(),
                     },
                 ],
-            }
+            },
+            {
+                "title": "Deadline",
+                "path": "deadline",
+                "type": "sections",
+                "sections": [
+                    {
+                        "type": "grid",
+                        "title": "Departure times",
+                        "cards": _deadline_cards(),
+                    },
+                ],
+            },
         ],
     }
 
