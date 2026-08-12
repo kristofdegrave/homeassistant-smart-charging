@@ -88,9 +88,9 @@ PLATFORMS = [
 
 @dataclass
 class SmartChargingRuntimeData:
-    """This entry's config-entry-scoped runtime state, set once onto `entry.runtime_data`
-    (issue #568). `vehicle_limit_manager` (M2) is None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY
-    is unmapped (Task 5.1) -- every other field is always populated."""
+    """This entry's config-entry-scoped runtime state, set once onto `entry.runtime_data`.
+    `vehicle_limit_manager` (M2) is None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY
+    is unmapped -- every other field is always populated."""
 
     coordinator: SmartChargingCoordinator
     notification_manager: NotificationManager
@@ -101,7 +101,7 @@ class SmartChargingRuntimeData:
     default_soc_limit: float
 
 
-# Current HA idiom for a typed entry.runtime_data (issue #568) -- every platform's
+# Current HA idiom for a typed entry.runtime_data -- every platform's
 # async_setup_entry types its `entry` parameter with this alias instead of a bare ConfigEntry.
 type SmartChargingConfigEntry = ConfigEntry[SmartChargingRuntimeData]
 
@@ -182,7 +182,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         else None
     )
 
-    # Typed config-entry-scoped runtime state (issue #568) -- number.py reads the same four
+    # Typed config-entry-scoped runtime state -- number.py reads the same four
     # values back off entry.runtime_data, so the two sides can't drift apart.
     entry.runtime_data = SmartChargingRuntimeData(
         coordinator=coordinator,
@@ -194,7 +194,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         default_soc_limit=default_soc_limit,
     )
 
-    # issue #498: NotifyAdapter registers a bus listener at construction; without unsubscribing
+    # NotifyAdapter registers a bus listener at construction; without unsubscribing
     # it here, each reload (setup -> unload -> setup) leaked another one. `async_on_unload`
     # fires on unload (including a reload's own unload half and setup-retry teardown), the
     # same hook already used below for the update listener.
@@ -202,13 +202,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     if notify_adapter is not None:
         entry.async_on_unload(notify_adapter.close)
 
-    # R5 delivery (Task 6.1): M3 subscribes to the Coordinator's own DeadlineUnreachableNotified
+    # R5 delivery: M3 subscribes to the Coordinator's own DeadlineUnreachableNotified
     # bus event BEFORE the first refresh below -- unlike the tick/M2's listeners, which are
     # deliberately registered after (they read owned entities the Store/platforms must exist
     # for first), this listener consumes a plain bus event, and the first refresh is exactly
     # the earliest point that event could fire (an already-unreachable deadline at boot).
     # Registering after it would silently lose that first, permanently-latched delivery
-    # opportunity (on_deadline_unreachable's notify-once latch, Task 6.1) with no re-fire to
+    # opportunity (on_deadline_unreachable's notify-once latch) with no re-fire to
     # recover on.
     for unsub in notification_manager.register_listeners():
         entry.async_on_unload(unsub)

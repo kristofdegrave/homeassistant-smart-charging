@@ -19,8 +19,8 @@ from .entity import SmartChargingEntity
 
 class _RestoreClampedNumberMixin:
     """Shared restore + set body for number entities that restore their last value on
-    `async_added_to_hass`, clamped to `[_attr_native_min_value, _attr_native_max_value]`
-    (issue #507). Must appear before `RestoreNumber` in a subclass's bases so its
+    `async_added_to_hass`, clamped to `[_attr_native_min_value, _attr_native_max_value]`.
+    Must appear before `RestoreNumber` in a subclass's bases so its
     `async_added_to_hass` override's `super()` call resolves onward to
     `RestoreEntity.async_added_to_hass` (the actual restore-state read)."""
 

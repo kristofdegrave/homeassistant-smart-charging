@@ -6,7 +6,7 @@ bundling them, not by a directory"). Deliberately does NOT import
 signal_conditioning.smooth_net_power -- an engine may not call another engine
 (system-design Sec 4 rule 4). The coordinator (M1) is responsible for smoothing
 net_power over its OWN dedicated ~15-minute window (distinct from R10's short
-window) before calling this function; see design doc Sec 6.4 and plan Task 5.1.
+window) before calling this function; see design doc Sec 6.4.
 """
 
 from __future__ import annotations
