@@ -4,6 +4,7 @@ the peak-protection diagnostic sensors (C3)."""
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import pytest
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.core import State
 from homeassistant.helpers.entity import EntityCategory
@@ -12,7 +13,7 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
-from custom_components.smart_charging.const import STATUS_FAULT, STATUS_OK
+from custom_components.smart_charging.const import ATTR_PERIOD_MONTH, STATUS_FAULT, STATUS_OK
 from custom_components.smart_charging.coordinator_cycle import PeakDemandState
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
@@ -43,6 +44,15 @@ async def test_status_defaults_to_ok_when_no_data_yet(hass):
     assert sensor.native_value == STATUS_OK
 
 
+async def test_status_raises_when_coordinator_data_lacks_fault_field(hass):
+    """Direct attribute access (issue #565): a renamed/removed `fault` field on
+    `CycleResult` must raise `AttributeError`, not silently report OK."""
+    coord = SimpleNamespace(data=SimpleNamespace())
+    sensor = ChargingStatusSensor(entry_id="abc", coordinator=coord)
+    with pytest.raises(AttributeError):
+        _ = sensor.native_value
+
+
 def test_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = ChargingStatusSensor(entry_id="abc", coordinator=coord)
@@ -63,11 +73,25 @@ async def test_active_mode_defaults_to_off_when_no_data_yet(hass):
     assert sensor.native_value == "Off"
 
 
-async def test_active_mode_defaults_to_off_when_coordinator_data_lacks_field(hass):
-    """Today's CycleResult has no active_mode field yet (added in Task 5.1)."""
+@pytest.mark.parametrize(
+    "sensor_cls",
+    [
+        ActiveModeSensor,
+        EffectivePeakLimitSensor,
+        ActiveSocLimitSensor,
+        SolarSurplusSensor,
+        PeakHeadroomSensor,
+        TimeToFullSensor,
+    ],
+)
+async def test_coordinator_field_sensor_raises_when_data_lacks_its_field(hass, sensor_cls):
+    """Direct attribute access (issue #565): every `_CoordinatorFieldSensor` subclass must
+    raise `AttributeError` when its CycleResult field is renamed/removed, instead of
+    silently falling back to `_field_default`."""
     coord = SimpleNamespace(data=SimpleNamespace())
-    sensor = ActiveModeSensor(entry_id="abc", coordinator=coord)
-    assert sensor.native_value == "Off"
+    sensor = sensor_cls(entry_id="abc", coordinator=coord)
+    with pytest.raises(AttributeError):
+        _ = sensor.native_value
 
 
 async def test_monthly_peak_sensor_reflects_the_tracked_value(hass):
@@ -82,11 +106,13 @@ async def test_monthly_peak_sensor_defaults_to_zero_when_no_data_yet(hass):
     assert sensor.native_value == 0.0
 
 
-async def test_monthly_peak_sensor_defaults_to_zero_when_coordinator_data_lacks_field(hass):
-    """Today's CycleResult has no monthly_peak_kw field yet (added in Task 5.1)."""
+async def test_monthly_peak_sensor_raises_when_coordinator_data_lacks_field(hass):
+    """Direct attribute access (issue #565): a renamed/removed `monthly_peak_kw` field on
+    `CycleResult` must raise `AttributeError` instead of silently reporting 0.0."""
     coord = SimpleNamespace(data=SimpleNamespace())
     sensor = MonthlyPeakSensor(entry_id="abc", coordinator=coord)
-    assert sensor.native_value == 0.0
+    with pytest.raises(AttributeError):
+        _ = sensor.native_value
 
 
 class _StubPeakCoordinator:
@@ -124,7 +150,7 @@ async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass
                 {
                     "native_value": 3.4,
                     "native_unit_of_measurement": "kW",
-                    "period_month": "2026-07",
+                    ATTR_PERIOD_MONTH: "2026-07",
                 },
             ),
         ),
@@ -139,7 +165,7 @@ async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass
     assert coord._peak_demand.tracked_kw == 3.4
     assert coord._peak_demand.tracked_month == (2026, 7)
     assert coord._peak_demand.window == ()
-    assert sensor.extra_state_attributes == {"period_month": "2026-07"}
+    assert sensor.extra_state_attributes == {ATTR_PERIOD_MONTH: "2026-07"}
 
 
 async def test_monthly_peak_sensor_restores_kw_when_period_month_is_malformed(hass):
@@ -154,7 +180,7 @@ async def test_monthly_peak_sensor_restores_kw_when_period_month_is_malformed(ha
                 {
                     "native_value": 3.4,
                     "native_unit_of_measurement": "kW",
-                    "period_month": "not-a-month",
+                    ATTR_PERIOD_MONTH: "not-a-month",
                 },
             ),
         ),
@@ -180,7 +206,7 @@ async def test_monthly_peak_sensor_starts_cold_when_no_restored_state(hass):
 
     assert sensor.native_value == 0.0
     assert coord._peak_demand.tracked_kw == 0.0
-    assert sensor.extra_state_attributes == {"period_month": None}
+    assert sensor.extra_state_attributes == {ATTR_PERIOD_MONTH: None}
 
 
 async def test_monthly_peak_sensor_extra_state_attributes_reflect_live_coordinator_month(hass):
@@ -189,9 +215,9 @@ async def test_monthly_peak_sensor_extra_state_attributes_reflect_live_coordinat
     coord = _StubPeakCoordinator()
     coord._peak_demand.tracked_month = (2026, 7)
     sensor = MonthlyPeakSensor(entry_id="abc", coordinator=coord)
-    assert sensor.extra_state_attributes == {"period_month": "2026-07"}
+    assert sensor.extra_state_attributes == {ATTR_PERIOD_MONTH: "2026-07"}
     coord._peak_demand.tracked_month = (2026, 8)
-    assert sensor.extra_state_attributes == {"period_month": "2026-08"}
+    assert sensor.extra_state_attributes == {ATTR_PERIOD_MONTH: "2026-08"}
 
 
 def test_monthly_peak_sensor_unique_id_scoped_to_entry():
@@ -261,8 +287,8 @@ async def test_time_to_full_sensor_reflects_the_resolved_value(hass):
 
 
 async def test_time_to_full_sensor_reflects_zero_as_a_real_value(hass):
-    """`_CoordinatorFieldSensor`'s `_field_default` only substitutes when the attribute is
-    absent, never when present as 0 -- confirms no bespoke class is needed (#602 T3)."""
+    """`_CoordinatorFieldSensor`'s `_field_default` only substitutes when there is no cycle
+    result yet (`coordinator.data is None`), never when the field is present as 0 (#602 T3)."""
     coord = SimpleNamespace(data=SimpleNamespace(time_to_full_min=0.0))
     sensor = TimeToFullSensor(entry_id="abc", coordinator=coord)
     assert sensor.native_value == 0.0
@@ -353,12 +379,6 @@ async def test_active_soc_limit_sensor_reflects_the_resolved_value(hass):
 
 async def test_active_soc_limit_sensor_defaults_to_none_when_no_data_yet(hass):
     coord = SimpleNamespace(data=None)
-    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
-    assert sensor.native_value is None
-
-
-async def test_active_soc_limit_sensor_defaults_to_none_when_coordinator_data_lacks_field(hass):
-    coord = SimpleNamespace(data=SimpleNamespace())
     sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
     assert sensor.native_value is None
 

@@ -28,6 +28,12 @@ EVENT_VEHICLE_CHARGE_LIMIT_RESET = "smart_charging_vehicle_charge_limit_reset"
 ATTR_ENTRY_ID = "entry_id"  # shared entry-scoping key across all three M2 event payloads
 ATTR_LIMIT = "limit"  # M2 event payload key -- the SOC-limit value carried by the event
 
+# `MonthlyPeakSensor`'s (sensor.py) extra-restore-data / extra-state-attribute key for the
+# "YYYY-MM" period the tracked kW belongs to (design doc Sec 6.4) -- named once here so the
+# restore round-trip (`_MonthlyPeakExtraStoredData`) and the live attribute stay in lockstep
+# (issue #565).
+ATTR_PERIOD_MONTH = "period_month"
+
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"
 STATE_CONNECTED = "connected"

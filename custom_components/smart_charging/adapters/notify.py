@@ -9,6 +9,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from homeassistant.components.notify import (
+    ATTR_DATA,
+    ATTR_MESSAGE,
+    ATTR_TITLE,
+    SERVICE_SEND_MESSAGE,
+)
+from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 
 # HA's standard mobile-app action event (human-partner decision 2, design doc §6) -- fired
@@ -18,10 +25,15 @@ EVENT_MOBILE_APP_NOTIFICATION_ACTION = "mobile_app_notification_action"
 # Shared "tag"/"action" key names: HA uses the same field names in both the
 # notify.send_message actionable-notification service-call data and the resulting
 # mobile_app_notification_action event's payload, so one pair of constants covers both.
+# These are mobile_app-specific (not defined in homeassistant.components.notify), unlike
+# the top-level "message"/"title"/"data" fields above, which use HA's own ATTR_* constants.
 _DATA_KEY_TAG = "tag"
 _DATA_KEY_ACTION = "action"
 _DATA_KEY_ACTIONS = "actions"
-_DATA_KEY_TITLE = "title"
+# The per-action button label (mobile_app's own "title" field on each action dict) is a
+# distinct schema from the top-level notification title (ATTR_TITLE below) even though HA
+# happens to spell both "title" -- kept as its own constant so the two never get conflated.
+_ACTION_BUTTON_LABEL_KEY = "title"
 
 
 @dataclass
@@ -81,16 +93,17 @@ class NotifyAdapter:
         self._last_action = action
 
     async def write(self, value: NotificationRequest) -> None:
-        service_data: dict = {"entity_id": self._entity_id, "message": value.message}
+        service_data: dict = {ATTR_ENTITY_ID: self._entity_id, ATTR_MESSAGE: value.message}
         if value.title is not None:
-            service_data[_DATA_KEY_TITLE] = value.title
+            service_data[ATTR_TITLE] = value.title
         if value.actions:
             self._current_tag = uuid.uuid4().hex
             self._last_action = None
-            service_data["data"] = {
+            service_data[ATTR_DATA] = {
                 _DATA_KEY_TAG: self._current_tag,
                 _DATA_KEY_ACTIONS: [
-                    {_DATA_KEY_ACTION: action, _DATA_KEY_TITLE: action} for action in value.actions
+                    {_DATA_KEY_ACTION: action, _ACTION_BUTTON_LABEL_KEY: action}
+                    for action in value.actions
                 ],
             }
         # A non-actionable send (e.g. the R5 deadline-unreachable notice) does not supersede
@@ -98,7 +111,9 @@ class NotifyAdapter:
         # here would make `_handle_action` drop a genuine answer that arrives for the prompt
         # still in flight. `_current_tag`/`_last_action` are therefore only ever reset by a
         # *new actionable* write (above) or consumed by `read()` (below).
-        await self._hass.services.async_call("notify", "send_message", service_data, blocking=True)
+        await self._hass.services.async_call(
+            Platform.NOTIFY, SERVICE_SEND_MESSAGE, service_data, blocking=True
+        )
 
     async def read(self) -> str | None:
         """Return the action captured for the current actionable tag, else None.

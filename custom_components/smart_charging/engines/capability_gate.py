@@ -8,7 +8,7 @@ drift apart. This function exists so the Auto profile (E2) can ask the identical
 without a config-flow dependency.
 """
 
-from custom_components.smart_charging.const import (
+from ..const import (
     BASE_CAPABLE_MODES,
     CAPTAR_CAPABLE_MODES,
     SOLAR_CAPABLE_MODES,
