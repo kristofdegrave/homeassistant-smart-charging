@@ -3,7 +3,9 @@ the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate
 resolve_deadline_urgency (ADR-0023).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
 even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
-another engine; these call engines)."""
+another engine; these call engines).
+The five _*ModeHandler classes stay private -- build_mode_handlers() is the only construction
+site coordinator.py may reach across the module boundary for (issue #567)."""
 
 from __future__ import annotations
 
@@ -24,6 +26,11 @@ from .const import (
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_START_THRESHOLD_W,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
+    MODE_CAPTAR,
+    MODE_OFF,
+    MODE_POWER,
+    MODE_SOLAR,
+    MODE_SOLAR_ONLY,
     PROFILE_AUTO,
 )
 from .engines.capability_gate import resolve_available_modes
@@ -256,6 +263,28 @@ class _CaptarModeHandler:
 
     def idle_state(self) -> captar.CaptarState:
         return captar.CaptarState.idle()
+
+
+def build_mode_handlers(
+    config: Mapping[str, Any], target_current_getter: Callable[[], float]
+) -> dict[str, ModeHandler]:
+    """The ModeHandler registry's only construction site (issue #567) -- coordinator.py calls
+    this instead of importing the five _*ModeHandler classes directly, keeping them private to
+    this module. `target_current_getter` is threaded straight through to _PowerModeHandler
+    (design doc Sec 3.4's own zero-arg getter, bound live rather than snapshotted); `config` to
+    every handler that reads config values (all but Off/Power).
+
+    Deliberately deviates from design doc Sec 3.4's own snippet, which shows coordinator.py
+    building this same dict inline in `__init__` -- issue #567 moved that construction here so
+    coordinator.py no longer needs to import the five private classes to do it; the wiring
+    itself (which handler gets `config` vs. the getter) is unchanged from that snippet."""
+    return {
+        MODE_OFF: _OffModeHandler(),
+        MODE_POWER: _PowerModeHandler(target_current_getter),
+        MODE_SOLAR: _SolarModeHandler(config),
+        MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
+        MODE_CAPTAR: _CaptarModeHandler(config),
+    }
 
 
 class SocGateResolver:

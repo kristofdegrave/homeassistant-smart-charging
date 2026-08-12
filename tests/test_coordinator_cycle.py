@@ -18,6 +18,7 @@ from custom_components.smart_charging.const import (
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
+    MODE_SOLAR_ONLY,
     PROFILE_AUTO,
     PROFILE_MANUAL,
     ROUND_DOWN,
@@ -36,6 +37,7 @@ from custom_components.smart_charging.coordinator_cycle import (
     _PowerModeHandler,
     _SolarModeHandler,
     _SolarOnlyModeHandler,
+    build_mode_handlers,
     resolve_deadline_urgency,
     resolve_solar_reserve_gate,
 )
@@ -215,6 +217,93 @@ def test_mode_handler_idle_state_per_mode():
     assert _SolarModeHandler({}).idle_state() == solar.SolarState.idle()
     assert _SolarOnlyModeHandler({}).idle_state() == solar_only.SolarOnlyState.idle()
     assert _CaptarModeHandler({}).idle_state() == captar.CaptarState.idle()
+
+
+def test_build_mode_handlers_wires_all_five_modes_with_correct_types_and_facts():
+    """Issue #567: build_mode_handlers is coordinator.py's only way to construct the mode-handler
+    registry -- it must not import the five _*ModeHandler classes directly across the module
+    boundary. Pins the same wiring coordinator.__init__ used to do by hand: one entry per mode
+    key, each the right handler type, each carrying its documented is_soc_gated/is_solar_mode
+    facts (test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode's per-class assertions,
+    reached this time through the factory)."""
+    handlers = build_mode_handlers({}, lambda: 10.0)
+
+    assert set(handlers) == {MODE_OFF, MODE_POWER, MODE_SOLAR, MODE_SOLAR_ONLY, MODE_CAPTAR}
+    assert isinstance(handlers[MODE_OFF], _OffModeHandler)
+    assert isinstance(handlers[MODE_POWER], _PowerModeHandler)
+    assert isinstance(handlers[MODE_SOLAR], _SolarModeHandler)
+    assert isinstance(handlers[MODE_SOLAR_ONLY], _SolarOnlyModeHandler)
+    assert isinstance(handlers[MODE_CAPTAR], _CaptarModeHandler)
+
+    for mode, is_soc_gated, is_solar_mode in (
+        (MODE_OFF, False, False),
+        (MODE_POWER, False, False),
+        (MODE_SOLAR, True, True),
+        (MODE_SOLAR_ONLY, True, True),
+        (MODE_CAPTAR, True, False),
+    ):
+        assert handlers[mode].is_soc_gated is is_soc_gated
+        assert handlers[mode].is_solar_mode is is_solar_mode
+
+
+def test_build_mode_handlers_threads_the_same_config_into_solar_only_and_captar_handlers():
+    """A construction-site typo swapping in a stray `{}` for one of the three config-reading
+    handlers (Solar/SolarOnly/Captar) would pass the type/facts checks above unnoticed --
+    pin that build_mode_handlers threads the SAME config mapping object it was given into all
+    three, by round-tripping a real config value through each handler's own dispatch and
+    checking it took effect (a KeyError here would surface at runtime as an ADR-0007 fault)."""
+    config = {
+        CONF_SOLAR_START_THRESHOLD_W: 500.0,
+        CONF_MIN_CURRENT: 6.0,
+        CONF_SOLAR_HOLD_MIN: 5,
+        CONF_SOLAR_COOLDOWN_MIN: 5,
+        CONF_SOLAR_ONLY_START_THRESHOLD_W: 700.0,
+        CONF_SOLAR_ONLY_STRATEGY: "midpoint",
+        CONF_SOLAR_ONLY_MIDPOINT: 0.5,
+        CONF_MAX_CURRENT: 16.0,
+        CONF_CAPTAR_COOLDOWN_MIN: 30,
+    }
+    handlers = build_mode_handlers(config, lambda: 10.0)
+    ctx = CycleContext(
+        status=STATE_CHARGING,
+        net_w=0.0,
+        charger_w=0.0,
+        voltage=230.0,
+        now=0.0,
+        now_dt=None,
+        surplus_w=400.0,  # below CONF_SOLAR_START_THRESHOLD_W/CONF_SOLAR_ONLY_START_THRESHOLD_W
+    )
+
+    solar_current, _ = handlers[MODE_SOLAR].desired_current(ctx, solar.SolarState.idle())
+    solar_only_current, _ = handlers[MODE_SOLAR_ONLY].desired_current(
+        ctx, solar_only.SolarOnlyState.idle()
+    )
+    captar_current, _ = handlers[MODE_CAPTAR].desired_current(ctx, captar.CaptarState.idle())
+
+    # Below both configured start thresholds -- both solar handlers stay idle at 0 A, proving
+    # THEIR OWN configured threshold (not a stray {} default) gated the decision.
+    assert solar_current == 0.0
+    assert solar_only_current == 0.0
+    # Captar's own configured max_a (CONF_MAX_CURRENT) is what it commands once idle -> active.
+    assert captar_current == config[CONF_MAX_CURRENT]
+
+
+def test_build_mode_handlers_power_handler_reads_target_current_getter_live():
+    """_PowerModeHandler must be wired to the live getter passed in, not a snapshot of its
+    value at construction time -- the getter is coordinator.py's `lambda: self.target_current`,
+    which changes across cycles."""
+    current = [5.0]
+    handlers = build_mode_handlers({}, lambda: current[0])
+    ctx = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
+    )
+
+    desired_before, _ = handlers[MODE_POWER].desired_current(ctx, None)
+    current[0] = 12.0
+    desired_after, _ = handlers[MODE_POWER].desired_current(ctx, None)
+
+    assert desired_before == 5.0
+    assert desired_after == 12.0
 
 
 def test_off_mode_handler_always_commands_zero_and_passes_state_through():

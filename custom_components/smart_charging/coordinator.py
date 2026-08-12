@@ -59,8 +59,6 @@ from .const import (
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
-    MODE_SOLAR,
-    MODE_SOLAR_ONLY,
     OWNED_SUFFIX_DEPARTURE_DOW,
     OWNED_SUFFIX_DEPARTURE_HOLIDAY,
     OWNED_SUFFIX_DEPARTURE_HOME_DAY,
@@ -93,11 +91,7 @@ from .coordinator_cycle import (
     PeakDemandState,
     SocGateResolver,
     SolarStepUpGate,
-    _CaptarModeHandler,
-    _OffModeHandler,
-    _PowerModeHandler,
-    _SolarModeHandler,
-    _SolarOnlyModeHandler,
+    build_mode_handlers,
     resolve_deadline_urgency,
     resolve_solar_reserve_gate,
 )
@@ -153,17 +147,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # the registry's shared state-write path. `self.active_mode` is always one of these
         # five keys in practice (profiles/auto.select_mode only returns a registered mode; a
         # Manual selection is validated against the select entity's own options before it ever
-        # reaches the Store) -- an out-of-registry value would KeyError on lookup (issue #561),
-        # which the coordinator's blanket cycle-exception handler turns into a safe 0 A/Fault
-        # cycle (ADR-0007), same fail-safe outcome the old `in _SOC_GATED_MODES`/`_SOLAR_MODES`
-        # tuple checks reached by a different path for the same never-really-happens case.
-        self._mode_handlers: dict[str, ModeHandler] = {
-            MODE_OFF: _OffModeHandler(),
-            MODE_POWER: _PowerModeHandler(lambda: self.target_current),
-            MODE_SOLAR: _SolarModeHandler(config),
-            MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
-            MODE_CAPTAR: _CaptarModeHandler(config),
-        }
+        # reaches the Store) -- an out-of-registry value would otherwise KeyError on lookup.
+        # `set_active_mode` (below) now guards against that directly, rejecting any value
+        # outside this registry's keys and falling back to MODE_OFF with a warning rather
+        # than letting it KeyError deep inside the cycle every tick (issue #569). The five
+        # handlers themselves are built by `build_mode_handlers` (coordinator_cycle.py),
+        # which keeps the concrete `_*ModeHandler` classes private to that module.
+        self._mode_handlers: dict[str, ModeHandler] = build_mode_handlers(
+            config, lambda: self.target_current
+        )
         # Single source of truth for the setpoint is the number entity, read through the
         # Store each cycle (_read_owned_entities, ADR-0018). 0 A is the safe default for
         # cycle 0, before the first read.
@@ -201,6 +193,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             required_a=None, urgent=False, unreachable=False
         )
         self._last_active_mode: str | None = None
+        # Latches the last raw value set_active_mode rejected (issue #569) -- None once a valid
+        # mode is set again. Lets set_active_mode log its warning once per bad-value "outage"
+        # rather than once per cycle (ADR-0007's once-per-outage discipline, same idea as
+        # `_was_faulted`/`_log_fault` below), since a corrupted Store-read value would otherwise
+        # re-reject identically every cycle.
+        self._last_rejected_mode: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
@@ -613,8 +611,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # when `auto_dispatchable` was False inside resolve_deadline_urgency too (the two
             # booleans are computed from the same inputs), so this should never trigger --
             # but self.active_mode is typed `str`, and silently assigning None would surface
-            # far downstream as a `KeyError` on the mode-handler lookup instead of here.
-            self.active_mode = deadline_urgency.resolved_mode
+            # far downstream as a `KeyError` on the mode-handler lookup instead of here. Routed
+            # through set_active_mode (issue #569) rather than a direct assignment, so this
+            # site gets the same registry-membership guard as the Store-read path -- keeping
+            # `self.active_mode`'s one mutation point (ADR-0014) genuinely singular.
+            self.set_active_mode(deadline_urgency.resolved_mode)
 
         # Checked again here, after Auto's own mode resolution above -- catches a same-cycle
         # Auto escalation/revert in time for this cycle's own dispatch below, not one cycle
@@ -678,14 +679,44 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         """Coordinator's own boundary for `soc_limit_override` (ADR-0014). Clamps to
         `[SOC_LIMIT_OVERRIDE_MIN, SOC_LIMIT_OVERRIDE_MAX]` -- the same bound
         `SocLimitOverrideNumber` already enforces on its own restored value, now also enforced at
-        the coordinator's own field."""
+        the coordinator's own field. Since ADR-0018, `number.py` never calls this directly: the
+        coordinator reads the stored value through the Store each cycle (`_read_owned_entities`)
+        and calls this itself; the only other caller is tests."""
         self.soc_limit_override = min(max(value, SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
 
     def set_active_mode(self, mode: str) -> None:
-        """Coordinator's own boundary for `active_mode` (ADR-0014) -- the intended write path for
-        select.py; the field itself stays a plain writable attribute (ADR-0014's design doc §2,
-        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects any
-        value outside the enum before this is ever called."""
+        """Coordinator's own boundary for `active_mode` (ADR-0014) -- the field itself stays a
+        plain writable attribute (ADR-0014's design doc §2, criterion 1) but this is its only
+        mutation point. Since ADR-0018, `select.py` never calls this directly: the coordinator
+        reads the stored option through the Store each cycle (`_read_owned_entities`) and calls
+        this itself. The other production caller is `_run_cycle`'s own Auto-mode resolution
+        (`self.set_active_mode(deadline_urgency.resolved_mode)`); tests call it directly too.
+
+        Unlike `SelectEntity`'s own `options` list (which rejects an out-of-enum value before
+        ever reaching this method), a value read back from the Store has no such gate --
+        a stale/corrupted restored option would otherwise reach `self._mode_handlers` unchecked
+        and KeyError every cycle (issue #569, a fault loop rather than ADR-0007's intended clean
+        0 A/Fault outcome). Falls back to `MODE_OFF` and logs a warning instead -- deliberately
+        without raising `CycleResult.fault`: this is a corrupted/unrecognized *setting*, a
+        different class of defect than a hardware adapter returning `None` (ADR-0007's fault
+        path), and `_read_owned_entities`' docstring's "a None read is not a fault" rationale
+        does not extend to it. The warning is only re-logged when the rejected raw value
+        changes (`_last_rejected_mode`, mirroring `_log_fault`'s once-per-outage discipline,
+        ADR-0007) -- a corrupted stored option would otherwise re-read and re-reject identically
+        every cycle, one warning per control interval forever."""
+        if mode not in self._mode_handlers:
+            if mode != self._last_rejected_mode:
+                _LOGGER.warning(
+                    "smart_charging: select.smart_charging_mode has an unrecognized value %r; "
+                    "falling back to %s until a valid option (%s) is selected again",
+                    mode,
+                    MODE_OFF,
+                    ", ".join(sorted(self._mode_handlers)),
+                )
+                self._last_rejected_mode = mode
+            mode = MODE_OFF
+        else:
+            self._last_rejected_mode = None
         self.active_mode = mode
 
     async def _read_owned_entities(self) -> None:
@@ -851,7 +882,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         configured `[CONF_MIN_CURRENT, CONF_MAX_CURRENT]` bound -- previously enforced only by
         `TargetCurrentNumber`'s own native_min_value/native_max_value, bypassable by any other
         caller writing the field directly. Never the write path for a commanded stop -- ADR-0007's
-        fault path writes 0 A via `self._write(0.0)` directly, not through this field."""
+        fault path writes 0 A via `self._write(0.0)` directly, not through this field. Since
+        ADR-0018, `number.py` never calls this directly: the coordinator reads the stored value
+        through the Store each cycle (`_read_owned_entities`) and calls this itself; the only
+        other caller is tests."""
         self.target_current = min(
             max(value, self._config[CONF_MIN_CURRENT]), self._config[CONF_MAX_CURRENT]
         )
@@ -871,10 +905,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return self._peak_demand.period_month
 
     def set_active_profile(self, profile: str) -> None:
-        """Coordinator's own boundary for `active_profile` (ADR-0014) -- the intended write
-        path for select.py; the field itself stays a plain writable attribute (design doc §2,
-        criterion 1). No range to clamp: `SelectEntity`'s own `options` list already rejects
-        any value outside the enum before this is ever called."""
+        """Coordinator's own boundary for `active_profile` (ADR-0014) -- the field itself stays
+        a plain writable attribute (design doc §2, criterion 1). No range to clamp:
+        `SelectEntity`'s own `options` list already rejects any value outside the enum before
+        it is ever stored. Since ADR-0018, `select.py` never calls this directly: the
+        coordinator reads the stored option through the Store each cycle
+        (`_read_owned_entities`) and calls this itself; the only other caller is tests."""
         self.active_profile = profile
 
     def _mode_desired_current(
