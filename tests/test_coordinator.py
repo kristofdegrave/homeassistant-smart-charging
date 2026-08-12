@@ -863,6 +863,61 @@ async def test_adapter_readings_survives_a_faulted_cycle(hass):
     assert result.adapter_readings[ROLE_NET_POWER] == 1000.0  # cycle-1 cache survives
 
 
+async def test_ev_soc_fault_does_not_advance_adapter_readings_at(hass, freezer):
+    """Issue #648: the ev_soc-fault early return must NOT advance `_role_readings_at` to this
+    cycle's own timestamp, exactly like the required-role fault path a few lines above it
+    (coordinator.py's own comment: "the cache keeps whichever timestamp a prior successful
+    cycle set"). ADR-0021/entity-catalog.md:154 define
+    `sensor.smart_charging_adapter_readings`'s state as the timestamp of the LAST SUCCESSFUL
+    cycle -- an ev_soc fault means this cycle wasn't one, so the timestamp must stay at
+    cycle 1's value, not jump to cycle 2's, even though cycle 2's required-adapter read (status/
+    net_w/charger_w) itself succeeded."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    healthy = await coord._async_update_data()  # cycle 1: healthy, records the timestamp
+    assert healthy.fault is False
+    assert healthy.adapter_readings_at is not None
+
+    freezer.move_to("2026-01-15 12:00:30")  # cycle 2: one interval later
+    adapters[ROLE_EV_SOC] = _FakeNumeric(None)  # car still connected, ev_soc goes unavailable
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    # Must stay at cycle 1's timestamp, not advance to cycle 2's -- repro: solar mode active,
+    # car connected, sensor.ev_soc unavailable -> adapter_readings_at must NOT show a fresh
+    # timestamp while status is Fault.
+    assert result.adapter_readings_at == healthy.adapter_readings_at
+
+
+async def test_adapter_readings_at_advances_on_a_second_successful_cycle(hass, freezer):
+    """Regression guard for #648's fix: a genuinely successful second cycle must still
+    advance `adapter_readings_at` to its own timestamp -- the positive-direction counterpart
+    to `test_ev_soc_fault_does_not_advance_adapter_readings_at`, so a future change that moves
+    the assignment into a branch that never runs on a healthy cycle would be caught here."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    cycle1 = await coord._async_update_data()
+    assert cycle1.fault is False
+
+    freezer.move_to("2026-01-15 12:00:30")
+    cycle2 = await coord._async_update_data()
+
+    assert cycle2.fault is False
+    assert cycle2.adapter_readings_at > cycle1.adapter_readings_at
+
+
 async def test_time_to_full_min_matches_the_glossary_formula(hass):
     """system-overview.md glossary/entity-catalog.md:152 -- capacity * (limit - soc) / 100,
     projected at this cycle's own commanded (pre-clamp) current (#602 T3)."""
