@@ -134,3 +134,32 @@ Test boundary throughout: HA harness (ADR-0009) — every task touches `entity.p
   per-task tests miss. If it fails, the fix belongs to whichever task actually owns the gap; commit
   the fix there, not here.
 - Green, commit: `test: runtime dashboard integration checkpoint (#601)`.
+
+## T8 — Mode selector gated on the `Manual` profile (design doc Addendum 2026-08-13)
+
+- Failing test (`tests/test_dashboard.py`): the overview view's *Runtime settings*
+  `custom:auto-entities` card's filter now carries `exclude: [{entity_id: "select.smart_charging_mode"}]`
+  alongside the existing `include: [{label: sc_runtime}]`.
+- Failing test: the same section's cards also contain a `type: conditional` card, gated on
+  `condition: state, entity_id: select.smart_charging_profile, state: Manual`, wrapping a
+  `type: entities` card listing exactly `select.smart_charging_mode`.
+- Add the exclude clause and the new conditional card to `_runtime_settings_cards()`.
+- Green, commit: `feat: gate the mode selector on the Manual profile (#601)`.
+
+## T9 — Departure-time settings move to a second dashboard tab (design doc Addendum 2026-08-13)
+
+- Failing test (`tests/test_dashboard.py`): `build_dashboard_config(entry)["views"]` has exactly
+  two entries — `views[0]["path"] == "overview"` (the existing three sections, minus the nine
+  departure-time entities from *Runtime settings*'s auto-entities card, via an added
+  `exclude: [{domain: "time"}]`), and `views[1]["path"] == "deadline"` with one section whose
+  single `custom:auto-entities` card filters on `include: [{label: sc_runtime, domain: "time"}]`.
+- Failing test: with `views` now a list of two, `_view()`/`_cards()` test helpers must be updated to
+  take a view index — check both views' section/card shapes are otherwise unchanged from T3–T8.
+- Add the second view to `build_dashboard_config`; adjust the overview auto-entities filter.
+- Green, commit: `feat: move departure-time settings to a second dashboard tab (#601)`.
+
+## T10 — Re-review before merge
+
+- The `code-reviewer` fresh-agent review already ran once (T0–T7); T8/T9 add real new logic
+  (a conditional card, a second view) after that review closed, so it gets its own pass rather than
+  merging unreviewed. Post findings via `submit-pr-review` (local mode), address, re-push.
