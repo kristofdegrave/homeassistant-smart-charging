@@ -9,23 +9,14 @@ site coordinator.py may reach across the module boundary for."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Any, Protocol
 
+from .config import SmartChargingConfig
 from .const import (
     CHARGEABLE_STATES,
-    CONF_CAPTAR_COOLDOWN_MIN,
-    CONF_MAX_CURRENT,
-    CONF_MIN_CURRENT,
-    CONF_SOLAR_COOLDOWN_MIN,
-    CONF_SOLAR_HOLD_MIN,
-    CONF_SOLAR_ONLY_MIDPOINT,
-    CONF_SOLAR_ONLY_START_THRESHOLD_W,
-    CONF_SOLAR_ONLY_STRATEGY,
-    CONF_SOLAR_START_THRESHOLD_W,
-    DEFAULT_CAPTAR_COOLDOWN_MIN,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -192,7 +183,7 @@ class _SolarModeHandler:
     is_soc_gated = True
     is_solar_mode = True
 
-    def __init__(self, config: Mapping[str, Any]) -> None:
+    def __init__(self, config: SmartChargingConfig) -> None:
         self._config = config
 
     def desired_current(
@@ -202,10 +193,10 @@ class _SolarModeHandler:
             ctx.surplus_w,
             state,
             ctx.now,
-            start_threshold_w=self._config[CONF_SOLAR_START_THRESHOLD_W],
-            min_a=self._config[CONF_MIN_CURRENT],
-            hold_minutes=self._config[CONF_SOLAR_HOLD_MIN],
-            cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
+            start_threshold_w=self._config.solar_start_threshold_w,
+            min_a=self._config.min_current,
+            hold_minutes=self._config.solar_hold_min,
+            cooldown_minutes=self._config.solar_cooldown_min,
             voltage=ctx.voltage,
         )
 
@@ -219,7 +210,7 @@ class _SolarOnlyModeHandler:
     is_soc_gated = True
     is_solar_mode = True
 
-    def __init__(self, config: Mapping[str, Any]) -> None:
+    def __init__(self, config: SmartChargingConfig) -> None:
         self._config = config
 
     def desired_current(
@@ -229,10 +220,10 @@ class _SolarOnlyModeHandler:
             ctx.surplus_w,
             state,
             ctx.now,
-            start_threshold_w=self._config[CONF_SOLAR_ONLY_START_THRESHOLD_W],
-            cooldown_minutes=self._config[CONF_SOLAR_COOLDOWN_MIN],
-            strategy=self._config[CONF_SOLAR_ONLY_STRATEGY],
-            midpoint=self._config[CONF_SOLAR_ONLY_MIDPOINT],
+            start_threshold_w=self._config.solar_only_start_threshold_w,
+            cooldown_minutes=self._config.solar_cooldown_min,
+            strategy=self._config.solar_only_strategy,
+            midpoint=self._config.solar_only_midpoint,
             voltage=ctx.voltage,
         )
 
@@ -246,7 +237,7 @@ class _CaptarModeHandler:
     is_soc_gated = True
     is_solar_mode = False
 
-    def __init__(self, config: Mapping[str, Any]) -> None:
+    def __init__(self, config: SmartChargingConfig) -> None:
         self._config = config
 
     def desired_current(
@@ -255,10 +246,8 @@ class _CaptarModeHandler:
         return captar.step(
             state,
             ctx.now,
-            max_a=self._config[CONF_MAX_CURRENT],
-            cooldown_minutes=self._config.get(
-                CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN
-            ),
+            max_a=self._config.max_current,
+            cooldown_minutes=self._config.captar_cooldown_min,
         )
 
     def idle_state(self) -> captar.CaptarState:
@@ -266,7 +255,7 @@ class _CaptarModeHandler:
 
 
 def build_mode_handlers(
-    config: Mapping[str, Any], target_current_getter: Callable[[], float]
+    config: SmartChargingConfig, target_current_getter: Callable[[], float]
 ) -> dict[str, ModeHandler]:
     """The ModeHandler registry's only construction site -- coordinator.py calls
     this instead of importing the five _*ModeHandler classes directly, keeping them private to
