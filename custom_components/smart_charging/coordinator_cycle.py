@@ -404,7 +404,7 @@ def resolve_deadline_urgency(
     surplus_w: float,
     max_current_a: float,
     auto_dispatchable: bool,
-    solar_installed: bool,
+    solar_available: bool,
     captar_available: bool,
     solar_start_threshold_w: float,
     sun_is_up: bool,
@@ -447,13 +447,13 @@ def resolve_deadline_urgency(
     common_select_kwargs: dict[str, Any] = {}
     if auto_dispatchable:
         available_modes = resolve_available_modes(
-            solar_available=solar_installed, captar_available=captar_available
+            solar_available=solar_available, captar_available=captar_available
         )
         common_select_kwargs = dict(
             soc=ev_soc,
             active_soc_limit=active_soc_limit,
             available_modes=available_modes,
-            solar_capability_present=solar_installed,
+            solar_capability_present=solar_available,
             sun_is_up=sun_is_up,
             solar_surplus_sufficient=surplus_w >= solar_start_threshold_w,
             sun_is_down=sun_is_down,

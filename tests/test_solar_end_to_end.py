@@ -12,9 +12,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.smart_charging.const import (
     CONF_EV_SOC_ENTITY,
     CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_HOLD_MIN,
-    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_STRATEGY,
     DOMAIN,
@@ -41,7 +41,7 @@ def _entry_data():
     own Solar/SolarOnly-specific overrides on top of the shared base shape."""
     return entry_data_base(
         **{
-            CONF_SOLAR_INSTALLED: True,
+            CONF_SOLAR_AVAILABLE: True,
             CONF_EV_SOC_ENTITY: "sensor.ev_soc",
         }
     )

@@ -25,10 +25,10 @@ from custom_components.smart_charging.const import (
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
+    DEFAULT_SOLAR_AVAILABLE,
     DEFAULT_SOLAR_COOLDOWN_MIN,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
-    DEFAULT_SOLAR_INSTALLED,
     DEFAULT_SOLAR_ONLY_MIDPOINT,
     DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
     DEFAULT_SOLAR_ONLY_STRATEGY,
@@ -45,7 +45,7 @@ def make_test_config(**overrides) -> SmartChargingConfig:
     entry always supplies these, so `const.py` has no fallback to borrow). `**overrides` takes
     the dataclass's own field names."""
     defaults = dict(
-        solar_installed=DEFAULT_SOLAR_INSTALLED,
+        solar_available=DEFAULT_SOLAR_AVAILABLE,
         captar_available=DEFAULT_CAPTAR_AVAILABLE,
         min_current=6.0,
         max_current=16.0,

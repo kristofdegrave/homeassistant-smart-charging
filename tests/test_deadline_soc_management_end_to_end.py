@@ -33,9 +33,9 @@ from custom_components.smart_charging.const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
@@ -173,7 +173,7 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(
         hass,
-        data_overrides={CONF_CAPTAR_AVAILABLE: True, CONF_SOLAR_INSTALLED: False},
+        data_overrides={CONF_CAPTAR_AVAILABLE: True, CONF_SOLAR_AVAILABLE: False},
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
@@ -232,7 +232,7 @@ async def test_uc05_auto_profile_without_captar_escalates_to_power_not_captar(ha
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(
         hass,
-        data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_INSTALLED: False},
+        data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False},
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
@@ -288,7 +288,7 @@ async def test_uc06_solar_step_up_lifecycle_baseline_steppedup_baseline(hass, fr
     _seed_states(hass, status="Charging", ev_soc=50.0, net_w=100.0, charger_w=500.0)
     # Sufficient surplus keeps Auto in Solar.
     hass.states.async_set("sun.sun", SUN_STATE_ABOVE_HORIZON)
-    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
+    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_AVAILABLE: True})
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
@@ -331,7 +331,7 @@ async def test_uc06_step_up_survives_a_solar_to_solaronly_switch(hass):
     re-derived fresh from the default limit (which would also apply a step at a higher SOC,
     making the two cases indistinguishable)."""
     _seed_states(hass, status="Charging", ev_soc=78.5)
-    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
+    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_AVAILABLE: True})
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     # R8's step-up check reads active_mode with a one-cycle lag under Auto
     # (coordinator.py:322-326) -- seeding the real selector has no effect on active_mode
@@ -361,7 +361,7 @@ async def test_uc06_no_further_step_once_maximum_already_reached(hass):
     _seed_states(hass, status="Charging", ev_soc=98.0)
     coordinator = await _setup(
         hass,
-        data_overrides={CONF_SOLAR_INSTALLED: True},
+        data_overrides={CONF_SOLAR_AVAILABLE: True},
         option_overrides={CONF_MAX_SOLAR_SOC: 100.0},
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
@@ -388,7 +388,7 @@ async def test_uc06_manual_profile_never_applies_a_step_up(hass):
     mode is selected" (R8/R16) -- SOC within the step threshold, charging in Solar, but under
     `Manual` the active SOC limit stays the plain default."""
     _seed_states(hass, status="Charging", ev_soc=78.5)
-    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_INSTALLED: True})
+    coordinator = await _setup(hass, data_overrides={CONF_SOLAR_AVAILABLE: True})
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 

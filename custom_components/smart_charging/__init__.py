@@ -36,10 +36,10 @@ from .const import (
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_HOLD_MIN,
-    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
@@ -62,10 +62,10 @@ from .const import (
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_AVAILABLE,
     DEFAULT_SOLAR_COOLDOWN_MIN,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
-    DEFAULT_SOLAR_INSTALLED,
     DEFAULT_SOLAR_ONLY_MIDPOINT,
     DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
     DEFAULT_SOLAR_ONLY_STRATEGY,
@@ -138,7 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     # coordinator.py/coordinator_cycle.py read this frozen dataclass's typed fields, never
     # re-defaulting or re-indexing any of them a second time.
     config = SmartChargingConfig(
-        solar_installed=entry.data.get(CONF_SOLAR_INSTALLED, DEFAULT_SOLAR_INSTALLED),
+        solar_available=entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE),
         captar_available=entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
         min_current=min_current,
         max_current=max_current,

@@ -1424,7 +1424,7 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0, sun_state=SUN_STATE_ABOVE_HORIZON)
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1565,7 +1565,7 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON)
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1589,7 +1589,7 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
         status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
     )
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1612,7 +1612,7 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
         status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=True
     )
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1642,7 +1642,7 @@ async def test_auto_profile_selects_solar_when_surplus_sufficient(hass):
         sun_state=SUN_STATE_ABOVE_HORIZON,
     )
     config = _config()
-    config = dataclasses.replace(config, solar_installed=True)
+    config = dataclasses.replace(config, solar_available=True)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1662,7 +1662,7 @@ async def test_auto_profile_escalates_to_captar_under_urgency(hass, freezer):
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=True)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1686,7 +1686,7 @@ async def test_auto_escalation_resets_captar_state_the_same_cycle(hass, freezer)
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=True)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1716,7 +1716,7 @@ async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_ur
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, solar_available=False)
     config = dataclasses.replace(config, captar_available=False)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
