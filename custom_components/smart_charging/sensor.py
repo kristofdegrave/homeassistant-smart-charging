@@ -12,16 +12,14 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorExtraStoredData,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfElectricCurrent, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import SmartChargingConfigEntry
 from .const import (
-    DATA_COORDINATOR,
-    DOMAIN,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_ADAPTER_READINGS,
@@ -229,9 +227,9 @@ class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
         [
             ChargingStatusSensor(entry.entry_id, coordinator),
