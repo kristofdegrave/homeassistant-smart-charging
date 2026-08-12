@@ -74,7 +74,10 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last is not None and last.state not in (None, STATE_UNKNOWN, STATE_UNAVAILABLE):
-            self._attr_native_value = time.fromisoformat(last.state)
+            try:
+                self._attr_native_value = time.fromisoformat(last.state)
+            except ValueError:
+                pass  # malformed restored state -- keep the constructor default
 
     async def async_set_value(self, value: time) -> None:
         self._attr_native_value = value
