@@ -44,7 +44,7 @@ from .engines.soc_target import (
     resolve_solar_step_up,
 )
 from .modes import captar, power, solar, solar_only
-from .profiles.auto import select_mode
+from .profiles.policy import PROFILE_POLICIES
 
 _WATTS_PER_KILOWATT = 1000.0
 
@@ -391,7 +391,8 @@ class DeadlineUrgencyResult:
     cycle, its freshly resolved active mode. `resolved_mode` is None whenever
     `auto_dispatchable` was False -- the coordinator only ever assigns `self.active_mode`
     from it in that case, mirroring the original inline `if auto_dispatchable:` guard around
-    the real (non-baseline) `select_mode()` call. Firing `DeadlineUnreachableNotified` off
+    the real (non-baseline) call to the Auto policy's `select()` (ADR-0017). Firing
+    `DeadlineUnreachableNotified` off
     `required.unreachable` stays the coordinator's own job (ADR-0009/0010: HA I/O stays
     coordinator-side), the same boundary `SocGateResolver` already draws for
     `ActiveSocLimitChanged`."""
@@ -440,10 +441,11 @@ def resolve_deadline_urgency(
     The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
     (urgent=False) every cycle -- never Captar's own already-escalated request, per
     resolution-rules.md's explicit warning against that (it would make urgency look satisfied
-    the instant it engages and revert every cycle). `select_mode` is called at most twice here
-    -- baseline (urgent=False) and, only when Auto actually dispatches, the real resolution
-    (the real `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift
-    apart between the two calls (#506's named duplication-risk).
+    the instant it engages and revert every cycle). The Auto policy's `select()`
+    (`PROFILE_POLICIES[PROFILE_AUTO]`, ADR-0017) is consulted at most twice here -- baseline
+    (urgent=False) and, only when Auto actually dispatches, the real resolution (the real
+    `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift apart between
+    the two calls (#506's named duplication-risk).
     """
     if not deadline_resolvable:
         return DeadlineUrgencyResult(
@@ -469,7 +471,7 @@ def resolve_deadline_urgency(
             low_tariff_active=low_tariff_active,
             solar_reserve_active=solar_reserve_active,
         )
-        baseline_mode = select_mode(urgent=False, **common_select_kwargs)
+        baseline_mode = PROFILE_POLICIES[PROFILE_AUTO].select(urgent=False, **common_select_kwargs)
 
     baseline_desired_a = mode_desired_current(baseline_mode)
 
@@ -503,6 +505,6 @@ def resolve_deadline_urgency(
         # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
         # never changes here while Manual, even under urgency) -- only Auto resolves its
         # own mode, via the real (non-baseline) urgent this time.
-        resolved_mode = select_mode(urgent=urgent, **common_select_kwargs)
+        resolved_mode = PROFILE_POLICIES[PROFILE_AUTO].select(urgent=urgent, **common_select_kwargs)
 
     return DeadlineUrgencyResult(required=required, urgent=urgent, resolved_mode=resolved_mode)
