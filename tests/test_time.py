@@ -1,8 +1,10 @@
 """HA-harness tests for the departure-time entities (C2, R14)."""
 
+import logging
 from datetime import time
 
 import pytest
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import State
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -116,6 +118,36 @@ async def test_restores_a_previously_set_value_across_restart(hass):
     platform = MockEntityPlatform(hass, domain="time")
     await platform.async_add_entities([entity])
     assert entity.native_value == time(7, 30)
+
+
+async def test_malformed_restored_state_keeps_the_constructor_default(hass, caplog):
+    """A malformed restored state (e.g. a corrupted registry entry) must not raise out of
+    entity setup -- the constructor default is kept, mirroring adapters/store.py,
+    adapters/time_read.py, and sensor.py's guarded restore paths (#571)."""
+    entity_id = "time.smart_charging_departure_mon"
+    mock_restore_cache(hass, (State(entity_id, "not-a-time"),))
+    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="time")
+    with caplog.at_level(logging.ERROR):
+        await platform.async_add_entities([entity])
+    assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+    # Harness-independent signal: on the unguarded code, HA's entity_platform catches the
+    # ValueError, logs it, and calls add_to_platform_abort() -- the entity never finishes
+    # setup and its state is never written.
+    assert hass.states.get(entity_id) is not None
+    assert entity.native_value == WEEKDAY_DEFAULT
+
+
+@pytest.mark.parametrize("sentinel_state", [STATE_UNKNOWN, STATE_UNAVAILABLE])
+async def test_sentinel_restored_state_keeps_the_constructor_default(hass, sentinel_state):
+    entity_id = "time.smart_charging_departure_mon"
+    mock_restore_cache(hass, (State(entity_id, sentinel_state),))
+    entity = SmartChargingDepartureTime(entry_id="abc", id_suffix=DAY_MON, default=WEEKDAY_DEFAULT)
+    entity.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="time")
+    await platform.async_add_entities([entity])
+    assert entity.native_value == WEEKDAY_DEFAULT
 
 
 async def test_no_restored_state_keeps_the_constructor_default(hass):
