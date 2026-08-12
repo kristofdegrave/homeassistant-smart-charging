@@ -2,15 +2,6 @@
 
 DOMAIN = "smart_charging"
 
-# hass.data[DOMAIN][entry_id] dict keys (__init__.py's setup-time payload). DATA_COORDINATOR/
-# DATA_NOTIFICATION_MANAGER are the two bare-string-shaped keys in that dict; every sibling
-# key is a CONF_* constant (issue #508) -- named here so both __init__.py's writer and every
-# reader (sensor.py, tests) stay in lockstep.
-DATA_COORDINATOR = "coordinator"
-DATA_NOTIFICATION_MANAGER = "notification_manager"
-# None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY is unmapped -- M2 stays uninstantiated (Task 5.1).
-DATA_VEHICLE_LIMIT_MANAGER = "vehicle_limit_manager"
-
 # Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
 # and the config flow's `vol.In(...)` validator (Task 3.2). Plain strings, not an Enum:
 # `strategy` round-trips through HA config-entry storage, which needs bare str values.

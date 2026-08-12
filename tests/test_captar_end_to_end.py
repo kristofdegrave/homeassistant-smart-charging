@@ -19,7 +19,6 @@ from custom_components.smart_charging.const import (
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_INSTALLED,
-    DATA_COORDINATOR,
     DOMAIN,
     MODE_CAPTAR,
     STATUS_OK,
@@ -76,7 +75,7 @@ def _effective_peak_limit_state(hass):
     """Look up the diagnostic EffectivePeakLimitSensor by unique_id, not entity_id -- its
     friendly-name-derived entity_id depends on the select.mode-style translation entry T6.3
     (translations/strings) adds, not this task (see tests/test_init.py's identical note)."""
-    entry_id = next(iter(hass.data[DOMAIN]))
+    entry_id = hass.config_entries.async_entries(DOMAIN)[0].entry_id
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_effective_peak_limit")
     return hass.states.get(entity_id)
@@ -91,7 +90,7 @@ async def _setup(hass, **option_overrides):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     _seed_ample_peak_headroom(coordinator)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_CAPTAR)
     return coordinator, calls
