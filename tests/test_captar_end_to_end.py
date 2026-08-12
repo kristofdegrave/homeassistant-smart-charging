@@ -17,7 +17,7 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_GRACE_MIN,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
-    CONF_SOLAR_INSTALLED,
+    CONF_SOLAR_AVAILABLE,
     DOMAIN,
     MODE_CAPTAR,
     STATUS_OK,
@@ -39,7 +39,7 @@ def _entry_data():
     own Captar-specific overrides on top of the shared base shape."""
     return entry_data_base(
         **{
-            CONF_SOLAR_INSTALLED: False,
+            CONF_SOLAR_AVAILABLE: False,
             CONF_CAPTAR_AVAILABLE: True,
             CONF_EV_SOC_ENTITY: "sensor.ev_soc",
         }

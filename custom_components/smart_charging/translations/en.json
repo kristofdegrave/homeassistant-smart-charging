@@ -12,7 +12,7 @@
           "net_power_entity": "Net grid power entity",
           "charger_power_entity": "Charger power entity",
           "grid_voltage_entity": "Grid voltage entity (optional)",
-          "solar_installed": "Solar installed",
+          "solar_available": "Solar installed",
           "captar_available": "CapTar available",
           "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
           "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
@@ -63,7 +63,7 @@
           "net_power_entity": "Net grid power entity",
           "charger_power_entity": "Charger power entity",
           "grid_voltage_entity": "Grid voltage entity (optional)",
-          "solar_installed": "Solar installed",
+          "solar_available": "Solar installed",
           "captar_available": "CapTar available",
           "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
           "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
@@ -78,7 +78,7 @@
       }
     },
     "error": {
-      "required_when_solar_installed": "Required when Solar is installed",
+      "required_when_solar_available": "Required when Solar is installed",
       "required_when_captar_available": "Required when CapTar is available",
       "required_when_vehicle_limit_mapped": "Required when the vehicle charge-limit entity is mapped"
     }

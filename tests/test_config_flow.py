@@ -32,9 +32,9 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
@@ -60,7 +60,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
-    ERROR_REQUIRED_WHEN_SOLAR_INSTALLED,
+    ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
@@ -393,46 +393,46 @@ async def test_ev_soc_is_optional_when_solar_not_installed(hass):
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_EV_SOC_ENTITY not in result["data"]
-    assert result["data"][CONF_SOLAR_INSTALLED] is False
+    assert result["data"][CONF_SOLAR_AVAILABLE] is False
 
 
-async def test_solar_installed_true_requires_ev_soc(hass):
+async def test_solar_available_true_requires_ev_soc(hass):
     # Design doc §3: flipping Solar installed to True without mapping ev_soc must be
     # rejected by the flow itself (config-time guard), not deferred to a runtime fault.
     result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_EV_SOC_ENTITY]
+        hass, overrides={CONF_SOLAR_AVAILABLE: True}, omit=[CONF_EV_SOC_ENTITY]
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
-async def test_solar_installed_true_with_ev_soc_succeeds(hass):
+async def test_solar_available_true_with_ev_soc_succeeds(hass):
     result = await _run_user_flow(
         hass,
         overrides={
-            CONF_SOLAR_INSTALLED: True,
+            CONF_SOLAR_AVAILABLE: True,
             CONF_EV_SOC_ENTITY: "sensor.ev_soc",
             CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
         },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_SOLAR_INSTALLED] is True
+    assert result["data"][CONF_SOLAR_AVAILABLE] is True
     assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
 
 
-async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
-    # An entry created before this task predates CONF_SOLAR_INSTALLED entirely -- setup
+async def test_pre_toggle_entry_defaults_solar_available_false(hass):
+    # An entry created before this task predates CONF_SOLAR_AVAILABLE entirely -- setup
     # must default it to False, not KeyError (design doc §8). Exercised through the real
-    # async_setup_entry wiring (__init__.py's `entry.data.get(CONF_SOLAR_INSTALLED, False)`
+    # async_setup_entry wiring (__init__.py's `entry.data.get(CONF_SOLAR_AVAILABLE, False)`
     # threaded into the coordinator's config), not a bare dict.get replicated in the test
     # itself -- that would pass even if the integration's own default fell back to True.
-    # Kept alongside this file's other CONF_SOLAR_INSTALLED config-flow tests (ADR-0009's
+    # Kept alongside this file's other CONF_SOLAR_AVAILABLE config-flow tests (ADR-0009's
     # "mirrors the module under test" is a default, not a hard split) rather than moved to
     # test_init.py's own "setup threads options into coordinator config" family, since this
     # one is specifically about a config-flow-era field, not an options-flow threading case.
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
-    assert CONF_SOLAR_INSTALLED not in data  # sanity: this entry genuinely predates the toggle
+    assert CONF_SOLAR_AVAILABLE not in data  # sanity: this entry genuinely predates the toggle
 
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
@@ -440,7 +440,7 @@ async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
     await hass.async_block_till_done()
 
     coordinator = entry.runtime_data.coordinator
-    assert coordinator._config.solar_installed is False
+    assert coordinator._config.solar_available is False
 
 
 async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
@@ -458,21 +458,21 @@ async def test_options_flow_edits_solar_thresholds(hass):
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
-async def test_solar_installed_error_preserves_previously_entered_values(hass):
-    # The re-shown form on the required_when_solar_installed rejection must not drop
+async def test_solar_available_error_preserves_previously_entered_values(hass):
+    # The re-shown form on the required_when_solar_available rejection must not drop
     # what the user already typed -- otherwise flipping the toggle back on and refilling
     # every mapping is the only way to recover (a real UX regression, not just cosmetic).
     result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_EV_SOC_ENTITY]
+        hass, overrides={CONF_SOLAR_AVAILABLE: True}, omit=[CONF_EV_SOC_ENTITY]
     )
     assert result["type"] == FlowResultType.FORM
 
     suggested = {key.schema: key.description for key in result["data_schema"].schema}
     assert suggested[CONF_CHARGER_CURRENT_ENTITY]["suggested_value"] == "number.charger_current"
-    assert suggested[CONF_SOLAR_INSTALLED]["suggested_value"] is True
+    assert suggested[CONF_SOLAR_AVAILABLE]["suggested_value"] is True
 
 
-async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
+async def test_reconfigure_rejects_solar_available_true_without_ev_soc(hass):
     # Design doc §3: the config-time guard must hold on reconfigure too -- otherwise a
     # user can bypass it entirely by flipping the toggle through Reconfigure instead of
     # the initial install form.
@@ -500,18 +500,18 @@ async def test_reconfigure_rejects_solar_installed_true_without_ev_soc(hass):
         CONF_CHARGING_STATES: "Charging",
         "net_power_entity": "sensor.net_power",
         "charger_power_entity": "sensor.charger_power",
-        CONF_SOLAR_INSTALLED: True,
+        CONF_SOLAR_AVAILABLE: True,
     }
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
-async def test_reconfigure_rejects_solar_installed_true_without_solar_forecast(hass):
+async def test_reconfigure_rejects_solar_available_true_without_solar_forecast(hass):
     # Design doc §3: the solar_forecast guard must also hold on reconfigure, mirroring
     # the ev_soc guard's own reconfigure test above -- otherwise a user could bypass it
-    # by flipping CONF_SOLAR_INSTALLED on through Reconfigure instead of the install form.
+    # by flipping CONF_SOLAR_AVAILABLE on through Reconfigure instead of the install form.
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -536,13 +536,13 @@ async def test_reconfigure_rejects_solar_installed_true_without_solar_forecast(h
         CONF_CHARGING_STATES: "Charging",
         "net_power_entity": "sensor.net_power",
         "charger_power_entity": "sensor.charger_power",
-        CONF_SOLAR_INSTALLED: True,
+        CONF_SOLAR_AVAILABLE: True,
         CONF_EV_SOC_ENTITY: "sensor.ev_soc",
     }
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
 async def test_captar_available_defaults_true(hass):
@@ -553,7 +553,7 @@ async def test_captar_available_defaults_true(hass):
 
 async def test_captar_available_true_requires_ev_soc(hass):
     # Design doc §3: flipping CapTar available to True (or leaving its default) without
-    # mapping ev_soc must be rejected by the flow itself, exactly like CONF_SOLAR_INSTALLED's
+    # mapping ev_soc must be rejected by the flow itself, exactly like CONF_SOLAR_AVAILABLE's
     # guard on the same field.
     result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
     assert result["type"] == FlowResultType.FORM
@@ -577,7 +577,7 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
     # coordinator's config), not a bare dict.get replicated in the test itself -- that would
     # pass even if the integration's own default flipped to False. Kept alongside this
     # file's other CONF_CAPTAR_AVAILABLE config-flow tests rather than moved to
-    # test_init.py, same rationale as test_pre_toggle_entry_defaults_solar_installed_false.
+    # test_init.py, same rationale as test_pre_toggle_entry_defaults_solar_available_false.
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     assert CONF_CAPTAR_AVAILABLE not in data  # sanity: this entry genuinely predates the toggle
@@ -618,20 +618,20 @@ async def test_power_respect_peak_can_be_turned_off(hass):
     assert entry.options[CONF_POWER_RESPECT_PEAK] is False
 
 
-async def test_solar_forecast_required_when_solar_installed(hass):
-    # Design doc §3: solar_forecast is required only when CONF_SOLAR_INSTALLED is True
+async def test_solar_forecast_required_when_solar_available(hass):
+    # Design doc §3: solar_forecast is required only when CONF_SOLAR_AVAILABLE is True
     # (R9's precondition is inert without the solar capability) -- same
-    # required_when_solar_installed-style guard ev_soc already uses.
+    # required_when_solar_available-style guard ev_soc already uses.
     result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_INSTALLED: True}, omit=[CONF_SOLAR_FORECAST_ENTITY]
+        hass, overrides={CONF_SOLAR_AVAILABLE: True}, omit=[CONF_SOLAR_FORECAST_ENTITY]
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_INSTALLED
+    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
 async def test_solar_forecast_not_required_when_solar_not_installed(hass):
     result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_INSTALLED: False}, omit=[CONF_SOLAR_FORECAST_ENTITY]
+        hass, overrides={CONF_SOLAR_AVAILABLE: False}, omit=[CONF_SOLAR_FORECAST_ENTITY]
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
 

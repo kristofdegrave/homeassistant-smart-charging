@@ -41,11 +41,11 @@ from .const import (
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_SOLAR_HOLD_MIN,
-    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
@@ -82,7 +82,7 @@ from .const import (
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
-    ERROR_REQUIRED_WHEN_SOLAR_INSTALLED,
+    ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     ROUND_DOWN,
     ROUND_NEAREST,
@@ -149,7 +149,7 @@ MAPPING_SCHEMA = vol.Schema(
         vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
         vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
         vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_SOLAR_INSTALLED, default=False): bool,
+        vol.Optional(CONF_SOLAR_AVAILABLE, default=False): bool,
         vol.Optional(CONF_CAPTAR_AVAILABLE, default=True): bool,
         vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor"),
         vol.Optional(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor"),
@@ -289,8 +289,8 @@ def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
     mapped -- a config-time guard, not a runtime fault. Shared by the install and
     reconfigure steps so flipping either toggle through either path is rejected the
     same way. Both must be False for ev_soc to stay optional."""
-    if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_EV_SOC_ENTITY):
-        return {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_INSTALLED}
+    if user_input.get(CONF_SOLAR_AVAILABLE) and not user_input.get(CONF_EV_SOC_ENTITY):
+        return {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
     if user_input.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE) and not user_input.get(
         CONF_EV_SOC_ENTITY
     ):
@@ -299,11 +299,11 @@ def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
 
 
 def _solar_forecast_missing_error(user_input: dict) -> dict[str, str] | None:
-    """Design doc §3: solar_forecast is required only when CONF_SOLAR_INSTALLED is True
+    """Design doc §3: solar_forecast is required only when CONF_SOLAR_AVAILABLE is True
     (R9's precondition is inert without the solar capability) -- same
-    required_when_solar_installed-style guard ev_soc's own guard uses."""
-    if user_input.get(CONF_SOLAR_INSTALLED) and not user_input.get(CONF_SOLAR_FORECAST_ENTITY):
-        return {CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_INSTALLED}
+    required_when_solar_available-style guard ev_soc's own guard uses."""
+    if user_input.get(CONF_SOLAR_AVAILABLE) and not user_input.get(CONF_SOLAR_FORECAST_ENTITY):
+        return {CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
     return None
 
 

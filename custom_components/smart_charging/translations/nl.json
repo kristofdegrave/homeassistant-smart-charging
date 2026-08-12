@@ -12,7 +12,7 @@
           "net_power_entity": "Netto vermogen-entiteit",
           "charger_power_entity": "Vermogen-entiteit van de lader",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
-          "solar_installed": "Zonne-energie geïnstalleerd",
+          "solar_available": "Zonne-energie geïnstalleerd",
           "captar_available": "CapTar beschikbaar",
           "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
           "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
@@ -63,7 +63,7 @@
           "net_power_entity": "Netto vermogen-entiteit",
           "charger_power_entity": "Vermogen-entiteit van de lader",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
-          "solar_installed": "Zonne-energie geïnstalleerd",
+          "solar_available": "Zonne-energie geïnstalleerd",
           "captar_available": "CapTar beschikbaar",
           "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
           "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
@@ -78,7 +78,7 @@
       }
     },
     "error": {
-      "required_when_solar_installed": "Verplicht wanneer Zonne-energie is geïnstalleerd",
+      "required_when_solar_available": "Verplicht wanneer Zonne-energie is geïnstalleerd",
       "required_when_captar_available": "Verplicht wanneer CapTar beschikbaar is",
       "required_when_vehicle_limit_mapped": "Verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld"
     }

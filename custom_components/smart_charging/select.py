@@ -12,8 +12,9 @@ from .const import (
     BASE_CAPABLE_MODES,
     CAPTAR_CAPABLE_MODES,
     CONF_CAPTAR_AVAILABLE,
-    CONF_SOLAR_INSTALLED,
+    CONF_SOLAR_AVAILABLE,
     DEFAULT_CAPTAR_AVAILABLE,
+    DEFAULT_SOLAR_AVAILABLE,
     OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PROFILE,
     PROFILE_AUTO,
@@ -55,12 +56,12 @@ class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Select
     def __init__(
         self,
         entry_id: str,
-        solar_installed: bool = False,
+        solar_available: bool = False,
         captar_available: bool = False,
     ) -> None:
         super().__init__(entry_id)
         options = list(BASE_MODE_OPTIONS)
-        if solar_installed:
+        if solar_available:
             options += SOLAR_CAPABLE_MODES
         if captar_available:
             options += CAPTAR_CAPABLE_MODES
@@ -88,7 +89,7 @@ async def async_setup_entry(
         [
             ModeSelect(
                 entry_id=entry.entry_id,
-                solar_installed=entry.data.get(CONF_SOLAR_INSTALLED, False),
+                solar_available=entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE),
                 captar_available=entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
             ),
             ProfileSelect(
