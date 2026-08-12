@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import label_registry as lr
 from homeassistant.helpers.event import async_track_time_interval
 
 from .adapters.factory import build_adapters
@@ -71,12 +73,16 @@ from .const import (
     DEFAULT_SOLAR_START_THRESHOLD_W,
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
+    LABEL_SC_RUNTIME,
     PEAK_WINDOW_SECONDS,
     ROLE_NOTIFICATION_TARGET,
 )
 from .coordinator import SmartChargingCoordinator
+from .dashboard import async_register_dashboard, async_unregister_dashboard
 from .managers.notification_manager import NotificationManager
 from .managers.vehicle_limit import VehicleLimitManager
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [
     Platform.NUMBER,
@@ -108,6 +114,13 @@ type SmartChargingConfigEntry = ConfigEntry[SmartChargingRuntimeData]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry) -> bool:
+    # C5 (#601): the sc_runtime label must exist before any owned entity references it -- an
+    # entity-registry label id with no matching label_registry entry has no display name and
+    # nothing for the dashboard's `auto-entities` filter to resolve. Idempotent across reloads.
+    label_registry = lr.async_get(hass)
+    if label_registry.async_get_label_by_name(LABEL_SC_RUNTIME) is None:
+        label_registry.async_create(LABEL_SC_RUNTIME)
+
     # Mappings/translation live in data; thresholds/defaults + interval in options (ADR-0005).
     adapters = build_adapters(hass, entry.data)
     opts = entry.options
@@ -262,6 +275,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
             entry.async_on_unload(unsub)
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+
+    # C5 (#601, ADR-0022): regenerated and re-registered on every setup (including a reload's
+    # own setup half) -- after platforms, so the dashboard's fixed tiles/labels reference
+    # entities that already exist. A Client with no service of its own (system-design.md)
+    # must not take the whole control loop down if the frontend/lovelace internals it depends
+    # on (ADR-0022's own accepted risk) ever break -- caught narrowly and logged instead.
+    try:
+        await async_register_dashboard(hass, entry)
+    except Exception:  # deliberately broad -- see comment above
+        _LOGGER.exception("Failed to register the runtime dashboard")
     return True
 
 
@@ -272,4 +295,9 @@ async def _async_reload_entry(hass: HomeAssistant, entry: SmartChargingConfigEnt
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        # Only torn down once the platform unload actually succeeds -- if it doesn't, the
+        # entry stays loaded and the dashboard must stay registered along with it.
+        await async_unregister_dashboard(hass, entry)
+    return unloaded
