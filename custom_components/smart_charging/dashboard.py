@@ -7,12 +7,12 @@ regenerated and re-registered on every `async_setup_entry` per ADR-0022.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+import yaml
 from homeassistant.components import frontend, lovelace
 from homeassistant.components.lovelace.const import (
-    CONF_ICON,
-    CONF_MODE,
     CONF_REQUIRE_ADMIN,
     CONF_SHOW_IN_SIDEBAR,
     CONF_TITLE,
@@ -20,6 +20,7 @@ from homeassistant.components.lovelace.const import (
 )
 from homeassistant.components.lovelace.dashboard import CONF_FILENAME, LovelaceYAML
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_ICON, CONF_MODE
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -32,17 +33,24 @@ from .const import (
     DASHBOARD_ICON,
     DASHBOARD_URL_PATH,
     LABEL_SC_RUNTIME,
+    OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
+    OWNED_SUFFIX_PEAK_HEADROOM_A,
+    OWNED_SUFFIX_PROFILE,
+    OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    OWNED_SUFFIX_TIME_TO_FULL,
 )
 
 _TITLE = "Smart Charging"
 
-_ACTIVE_SOC_LIMIT_ENTITY = "sensor.smart_charging_active_soc_limit"
+# "active_mode"/"effective_peak_limit" have no OWNED_SUFFIX_* constant (sensor.py itself pins
+# them as bare literals) -- consistent with that existing precedent, not a new deviation.
+_ACTIVE_SOC_LIMIT_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_ACTIVE_SOC_LIMIT}"
 _ACTIVE_MODE_ENTITY = "sensor.smart_charging_active_mode"
 _EFFECTIVE_PEAK_LIMIT_ENTITY = "sensor.smart_charging_effective_peak_limit"
-_PEAK_HEADROOM_ENTITY = "sensor.smart_charging_peak_headroom_a"
-_PROFILE_ENTITY = "select.smart_charging_profile"
-_SOLAR_SURPLUS_ENTITY = "sensor.smart_charging_solar_surplus_w"
-_TIME_TO_FULL_ENTITY = "sensor.smart_charging_time_to_full"
+_PEAK_HEADROOM_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_PEAK_HEADROOM_A}"
+_PROFILE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_PROFILE}"
+_SOLAR_SURPLUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+_TIME_TO_FULL_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_TIME_TO_FULL}"
 
 
 def _tile(entity_id: str) -> dict:
@@ -52,7 +60,7 @@ def _tile(entity_id: str) -> dict:
 def _charging_status_cards(entry: ConfigEntry) -> list[dict]:
     cards = [_tile(entry.data[CONF_CHARGER_STATUS_ENTITY])]
     ev_soc_entity = entry.data.get(CONF_EV_SOC_ENTITY)
-    if ev_soc_entity is not None:
+    if ev_soc_entity:
         cards.append(_tile(ev_soc_entity))
     cards += [
         _tile(_PROFILE_ENTITY),
@@ -72,7 +80,7 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
         _tile(_EFFECTIVE_PEAK_LIMIT_ENTITY),
     ]
     solar_forecast_entity = entry.data.get(CONF_SOLAR_FORECAST_ENTITY)
-    if solar_forecast_entity is not None:
+    if solar_forecast_entity:
         cards.append(
             {
                 "type": "markdown",
@@ -136,18 +144,23 @@ def _package_dir() -> Path:
 
 async def async_register_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Write the generated YAML and register/update the locked dashboard panel (ADR-0022)."""
-    import yaml as yaml_lib
-
     config = build_dashboard_config(entry)
     yaml_path = _package_dir() / DASHBOARD_FILENAME
 
     def _write() -> None:
-        yaml_path.write_text(yaml_lib.safe_dump(config, sort_keys=False), encoding="utf-8")
+        # Atomic: write to a same-directory temp file, then rename -- os.replace is atomic on
+        # both POSIX and Windows, so the frontend never observes a partially-written file.
+        tmp_path = yaml_path.with_suffix(f"{yaml_path.suffix}.tmp")
+        tmp_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+        os.replace(tmp_path, yaml_path)
 
     await hass.async_add_executor_job(_write)
 
+    # Guards `update=` on the panel registration below (frontend.DATA_PANELS is what that
+    # actually protects) -- `lovelace_data.dashboards` can diverge from it (e.g. a partially
+    # failed prior setup).
+    already_registered = DASHBOARD_URL_PATH in hass.data.get(frontend.DATA_PANELS, {})
     lovelace_data = hass.data[lovelace.LOVELACE_DATA]
-    already_registered = DASHBOARD_URL_PATH in lovelace_data.dashboards
     lovelace_data.dashboards[DASHBOARD_URL_PATH] = LovelaceYAML(
         hass,
         DASHBOARD_URL_PATH,

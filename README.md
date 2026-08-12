@@ -28,8 +28,8 @@ capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 > accordingly; delivering a deadline-unreachable notice (R5) is gated on the
 > not-yet-built Deadline Engine. When mapped, the vehicle's own charge-limit
 > setting is kept in sync with the System's active charge limit in both
-> directions (vehicle-limit sync). The runtime dashboard is **not implemented
-> yet** — see [Deferred](#deferred-not-in-this-mvp) below. See
+> directions (vehicle-limit sync). A runtime dashboard is registered
+> automatically — see [Runtime dashboard](#runtime-dashboard) below. See
 > [CLAUDE.md](CLAUDE.md) for the working method.
 
 ## Installation (HACS custom repository)

@@ -48,8 +48,13 @@ class SmartChargingEntity(Entity):
             return
         registry = er.async_get(self.hass)
         existing = registry.async_get(self.entity_id)
+        if existing is None:
+            # Every `_owned_labels`-carrying class also sets `_object_id_suffix`, so
+            # `unique_id` is always set and the entity is always already registered by this
+            # point -- unreachable in practice, but async_update_entity raises KeyError on an
+            # unregistered entity_id, so guard rather than let that surprise a future caller.
+            return
         # C5 (#601): merge, never assign the bare set -- `async_update_entity`'s `labels`
         # parameter replaces the stored set, so a bare assignment would silently erase any
         # label the user attached themselves on the very next reload.
-        current_labels = existing.labels if existing is not None else frozenset()
-        registry.async_update_entity(self.entity_id, labels=current_labels | self._owned_labels)
+        registry.async_update_entity(self.entity_id, labels=existing.labels | self._owned_labels)

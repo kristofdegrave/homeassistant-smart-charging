@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -82,6 +83,8 @@ from .coordinator import SmartChargingCoordinator
 from .dashboard import async_register_dashboard, async_unregister_dashboard
 from .managers.notification_manager import NotificationManager
 from .managers.vehicle_limit import VehicleLimitManager
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [
     Platform.NUMBER,
@@ -241,8 +244,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # C5 (#601, ADR-0022): regenerated and re-registered on every setup (including a reload's
     # own setup half) -- after platforms, so the dashboard's fixed tiles/labels reference
-    # entities that already exist.
-    await async_register_dashboard(hass, entry)
+    # entities that already exist. A Client with no service of its own (system-design.md)
+    # must not take the whole control loop down if the frontend/lovelace internals it depends
+    # on (ADR-0022's own accepted risk) ever break -- caught narrowly and logged instead.
+    try:
+        await async_register_dashboard(hass, entry)
+    except Exception:  # deliberately broad -- see comment above
+        _LOGGER.exception("Failed to register the runtime dashboard")
     return True
 
 
@@ -253,8 +261,10 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    await async_unregister_dashboard(hass, entry)
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
+        # Only torn down once the platform unload actually succeeds -- if it doesn't, the
+        # entry stays loaded and the dashboard must stay registered along with it.
+        await async_unregister_dashboard(hass, entry)
         hass.data[DOMAIN].pop(entry.entry_id)
     return unloaded

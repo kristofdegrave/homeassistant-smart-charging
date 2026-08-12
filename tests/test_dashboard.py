@@ -1,4 +1,8 @@
-"""Tests for the runtime dashboard's generated Lovelace config and registration (C5, #601)."""
+"""Tests for the runtime dashboard's generated Lovelace config and registration (C5, #601).
+
+`_package_dir` is redirected to `tmp_path` for every HA-harness test via the autouse fixture
+in `tests/conftest.py` -- no per-test monkeypatch needed here.
+"""
 
 import yaml
 from homeassistant.components import frontend, lovelace
@@ -25,12 +29,24 @@ def _entry(**data_overrides):
     return MockConfigEntry(domain=DOMAIN, data=entry_data_base(**data_overrides))
 
 
-def _cards(config, section_title):
+def _view(config):
     (view,) = config["views"]
-    for section in view["sections"]:
+    return view
+
+
+def _cards(config, section_title):
+    for section in _view(config)["sections"]:
         if section["title"] == section_title:
             return section["cards"]
     raise AssertionError(f"no section titled {section_title!r}")
+
+
+def test_the_view_is_a_sections_view_at_the_dashboard_url_path():
+    view = _view(build_dashboard_config(_entry()))
+
+    assert view["type"] == "sections"
+    assert view["path"] == DASHBOARD_URL_PATH
+    assert view["title"] == "Smart Charging"
 
 
 def test_charging_status_section_has_the_seven_documented_tiles():
@@ -58,6 +74,15 @@ def test_charging_status_section_omits_the_battery_tile_when_ev_soc_is_unset():
     assert all(c["entity"] is not None for c in cards)
 
 
+def test_charging_status_section_omits_the_battery_tile_when_ev_soc_is_the_empty_string():
+    """A reconfigure flow can persist an unmapped optional role as `""` rather than omitting
+    the key entirely -- must be treated the same as unset, not templated into a broken tile."""
+    entry = _entry(**{CONF_EV_SOC_ENTITY: ""})
+    cards = _cards(build_dashboard_config(entry), "Charging status")
+
+    assert len(cards) == 6
+
+
 def test_power_flow_section_has_the_four_tiles_plus_a_conditional_markdown_card():
     entry = _entry(**{CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast_tomorrow"})
     cards = _cards(build_dashboard_config(entry), "Power flow")
@@ -69,12 +94,21 @@ def test_power_flow_section_has_the_four_tiles_plus_a_conditional_markdown_card(
         "sensor.smart_charging_effective_peak_limit",
     ]
     assert len(cards) == 5
-    assert cards[4]["type"] == "markdown"
+    markdown_card = cards[4]
+    assert markdown_card["type"] == "markdown"
+    assert "states('sensor.solar_forecast_tomorrow')" in markdown_card["content"]
 
 
 def test_power_flow_section_omits_the_markdown_card_when_solar_forecast_is_unset():
     entry = _entry()
     assert CONF_SOLAR_FORECAST_ENTITY not in entry.data
+    cards = _cards(build_dashboard_config(entry), "Power flow")
+
+    assert len(cards) == 4
+
+
+def test_power_flow_section_omits_the_markdown_card_when_solar_forecast_is_the_empty_string():
+    entry = _entry(**{CONF_SOLAR_FORECAST_ENTITY: ""})
     cards = _cards(build_dashboard_config(entry), "Power flow")
 
     assert len(cards) == 4
@@ -93,8 +127,7 @@ def test_runtime_settings_section_is_a_single_label_filtered_auto_entities_card(
     assert "exclude" not in card["filter"]
 
 
-async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_path, monkeypatch):
-    monkeypatch.setattr("custom_components.smart_charging.dashboard._package_dir", lambda: tmp_path)
+async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_path):
     assert await async_setup_component(hass, "lovelace", {})
     entry = _entry()
 
@@ -112,8 +145,7 @@ async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_p
     assert panel.sidebar_title == "Smart Charging"
 
 
-async def test_register_dashboard_twice_does_not_raise_or_duplicate(hass, tmp_path, monkeypatch):
-    monkeypatch.setattr("custom_components.smart_charging.dashboard._package_dir", lambda: tmp_path)
+async def test_register_dashboard_twice_does_not_raise_or_duplicate(hass):
     assert await async_setup_component(hass, "lovelace", {})
     entry = _entry()
 
@@ -126,8 +158,7 @@ async def test_register_dashboard_twice_does_not_raise_or_duplicate(hass, tmp_pa
     assert DASHBOARD_URL_PATH in hass.data[frontend.DATA_PANELS]
 
 
-async def test_unregister_dashboard_removes_the_panel(hass, tmp_path, monkeypatch):
-    monkeypatch.setattr("custom_components.smart_charging.dashboard._package_dir", lambda: tmp_path)
+async def test_unregister_dashboard_removes_the_panel(hass):
     assert await async_setup_component(hass, "lovelace", {})
     entry = _entry()
     await async_register_dashboard(hass, entry)
