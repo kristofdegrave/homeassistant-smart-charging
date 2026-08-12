@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .adapters.factory import build_adapters
 from .adapters.store import Store
+from .config import SmartChargingConfig
 from .const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
@@ -32,7 +33,6 @@ from .const import (
     CONF_MIN_CURRENT,
     CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_GRACE_MIN,
-    CONF_PEAK_WINDOW_SIZE,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -65,6 +65,7 @@ from .const import (
     DEFAULT_SOLAR_COOLDOWN_MIN,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
+    DEFAULT_SOLAR_INSTALLED,
     DEFAULT_SOLAR_ONLY_MIDPOINT,
     DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
     DEFAULT_SOLAR_ONLY_STRATEGY,
@@ -129,62 +130,77 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     default_soc_limit = opts.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
     interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
     # E5's 15-minute averaging window expressed in cycle counts (design doc Sec 6.4) -- derived
-    # here, once, from the same control interval the coordinator ticks on, so it can't drift from
-    # coordinator.py's own fallback (PEAK_WINDOW_SECONDS, shared).
+    # here, once, from the same control interval the coordinator ticks on (issue #570: the only
+    # other reader of PEAK_WINDOW_SECONDS was coordinator.py's own now-removed duplicate fallback).
     peak_window_size = max(1, round(PEAK_WINDOW_SECONDS / interval_s))
-    config = {
-        CONF_SOLAR_INSTALLED: entry.data.get(CONF_SOLAR_INSTALLED, False),
-        CONF_CAPTAR_AVAILABLE: entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
-        CONF_MIN_CURRENT: min_current,
-        CONF_MAX_CURRENT: max_current,
-        CONF_GRID_CEILING_A: opts[CONF_GRID_CEILING_A],
-        CONF_GRID_SAFETY_OFFSET_A: opts.get(
-            CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A
-        ),
-        CONF_NOMINAL_VOLTAGE: opts[CONF_NOMINAL_VOLTAGE],
-        CONF_SMOOTHING_WINDOW: opts.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
-        CONF_PEAK_WINDOW_SIZE: peak_window_size,
-        CONF_SOLAR_START_THRESHOLD_W: opts.get(
+    # Issue #570: the ONE place every option is resolved with its DEFAULT_* fallback (an entry
+    # that predates a given key reads that key's default, no config-entry migration needed) --
+    # coordinator.py/coordinator_cycle.py read this frozen dataclass's typed fields, never
+    # re-defaulting or re-indexing any of them a second time.
+    config = SmartChargingConfig(
+        solar_installed=entry.data.get(CONF_SOLAR_INSTALLED, DEFAULT_SOLAR_INSTALLED),
+        captar_available=entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
+        min_current=min_current,
+        max_current=max_current,
+        grid_ceiling_a=opts[CONF_GRID_CEILING_A],
+        grid_safety_offset_a=opts.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
+        nominal_voltage=opts[CONF_NOMINAL_VOLTAGE],
+        smoothing_window=opts.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
+        peak_window_size=peak_window_size,
+        solar_start_threshold_w=opts.get(
             CONF_SOLAR_START_THRESHOLD_W, DEFAULT_SOLAR_START_THRESHOLD_W
         ),
-        CONF_SOLAR_ONLY_START_THRESHOLD_W: opts.get(
+        solar_only_start_threshold_w=opts.get(
             CONF_SOLAR_ONLY_START_THRESHOLD_W, DEFAULT_SOLAR_ONLY_START_THRESHOLD_W
         ),
-        CONF_SOLAR_HOLD_MIN: opts.get(CONF_SOLAR_HOLD_MIN, DEFAULT_SOLAR_HOLD_MIN),
-        CONF_SOLAR_COOLDOWN_MIN: opts.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
-        CONF_SOLAR_ONLY_STRATEGY: opts.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
-        CONF_SOLAR_ONLY_MIDPOINT: opts.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),
-        CONF_SAFETY_MARGIN_W: opts.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
-        CONF_MAX_PEAK_KW: opts.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
-        CONF_PEAK_GRACE_MIN: opts.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
-        CONF_CAPTAR_COOLDOWN_MIN: opts.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
-        CONF_POWER_RESPECT_PEAK: opts.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
-        CONF_EV_BATTERY_CAPACITY_KWH: opts.get(
+        solar_hold_min=opts.get(CONF_SOLAR_HOLD_MIN, DEFAULT_SOLAR_HOLD_MIN),
+        solar_cooldown_min=opts.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
+        solar_only_strategy=opts.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
+        solar_only_midpoint=opts.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),
+        safety_margin_w=opts.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+        max_peak_kw=opts.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW),
+        peak_grace_min=opts.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
+        captar_cooldown_min=opts.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
+        power_respect_peak=opts.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
+        ev_battery_capacity_kwh=opts.get(
             CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
         ),
-        CONF_MAX_SOLAR_SOC: opts.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
-        CONF_SOLAR_STEP_PP: opts.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
-        CONF_SOLAR_STEP_THRESHOLD_PP: opts.get(
+        max_solar_soc=opts.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
+        solar_step_pp=opts.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
+        solar_step_threshold_pp=opts.get(
             CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP
         ),
-        CONF_SOLAR_RESERVE_SOC: opts.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
-        CONF_SOLAR_FORECAST_THRESHOLD_KWH: opts.get(
+        solar_reserve_soc=opts.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
+        solar_forecast_threshold_kwh=opts.get(
             CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
         ),
-        # M3's own options (UC08) -- share the same config dict rather than a second one,
-        # since CONF_SOLAR_FORECAST_THRESHOLD_KWH above is already common to both M1 and M3.
-        CONF_EVENING_PROMPT_ENABLED: opts.get(
+        evening_prompt_enabled=opts.get(
             CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED
         ),
-        CONF_EVENING_PROMPT_TIME: opts.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
-    }
+        evening_prompt_time=opts.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
+    )
 
     store = Store(hass, entry.entry_id)
     coordinator = SmartChargingCoordinator(
         hass, adapters=adapters, store=store, config=config, interval_s=interval_s
     )
+    # M3 (issue #570 scope excludes managers/notification_manager.py) keeps its own small
+    # Mapping -- the three VALUES below come from the same, already-resolved
+    # SmartChargingConfig fields above, so they can't drift from what the coordinator sees.
+    # NotificationManager's own `.get(CONF_X, DEFAULT_X)` on this dict is still a second,
+    # separate DEFAULT_* resolution in principle (unreachable today since every key is always
+    # supplied here) -- folding M3 onto SmartChargingConfig too is tracked as a follow-up,
+    # not this issue's scope.
     notification_manager = NotificationManager(
-        hass, adapters=adapters, entry_id=entry.entry_id, store=store, config=config
+        hass,
+        adapters=adapters,
+        entry_id=entry.entry_id,
+        store=store,
+        config={
+            CONF_EVENING_PROMPT_ENABLED: config.evening_prompt_enabled,
+            CONF_SOLAR_FORECAST_THRESHOLD_KWH: config.solar_forecast_threshold_kwh,
+            CONF_EVENING_PROMPT_TIME: config.evening_prompt_time,
+        },
     )
     # M2 is only constructed when vehicle_charge_limit is mapped (UC09 precondition) --
     # design §9.5: M2 self-wires its own three listeners below, mirroring the M1/M3

@@ -441,7 +441,7 @@ async def test_pre_toggle_entry_defaults_solar_installed_false(hass):
     await hass.async_block_till_done()
 
     coordinator = entry.runtime_data.coordinator
-    assert coordinator._config[CONF_SOLAR_INSTALLED] is False
+    assert coordinator._config.solar_installed is False
 
 
 async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
@@ -590,7 +590,7 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
     await hass.async_block_till_done()
 
     coordinator = entry.runtime_data.coordinator
-    assert coordinator._config[CONF_CAPTAR_AVAILABLE] is True
+    assert coordinator._config.captar_available is True
 
 
 async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass):

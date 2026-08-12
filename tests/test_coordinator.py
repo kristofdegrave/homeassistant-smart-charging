@@ -1,5 +1,6 @@
 """HA-harness tests for the control cycle (M1, ADR-0006/0007)."""
 
+import dataclasses
 import logging
 from datetime import time as time_of_day
 from datetime import timedelta
@@ -14,33 +15,10 @@ from custom_components.smart_charging.adapters.sun import (
     SUN_STATE_ABOVE_HORIZON,
     SUN_STATE_BELOW_HORIZON,
 )
+from custom_components.smart_charging.config import SmartChargingConfig
 from custom_components.smart_charging.const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
-    CONF_CAPTAR_AVAILABLE,
-    CONF_CAPTAR_COOLDOWN_MIN,
-    CONF_EV_BATTERY_CAPACITY_KWH,
-    CONF_GRID_CEILING_A,
-    CONF_GRID_SAFETY_OFFSET_A,
-    CONF_MAX_CURRENT,
-    CONF_MAX_PEAK_KW,
-    CONF_MAX_SOLAR_SOC,
-    CONF_MIN_CURRENT,
-    CONF_NOMINAL_VOLTAGE,
-    CONF_PEAK_GRACE_MIN,
-    CONF_PEAK_WINDOW_SIZE,
-    CONF_POWER_RESPECT_PEAK,
-    CONF_SAFETY_MARGIN_W,
-    CONF_SMOOTHING_WINDOW,
-    CONF_SOLAR_COOLDOWN_MIN,
-    CONF_SOLAR_HOLD_MIN,
-    CONF_SOLAR_INSTALLED,
-    CONF_SOLAR_ONLY_MIDPOINT,
-    CONF_SOLAR_ONLY_START_THRESHOLD_W,
-    CONF_SOLAR_ONLY_STRATEGY,
-    CONF_SOLAR_START_THRESHOLD_W,
-    CONF_SOLAR_STEP_PP,
-    CONF_SOLAR_STEP_THRESHOLD_PP,
     DEFAULT_CAPTAR_AVAILABLE,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
@@ -72,7 +50,6 @@ from custom_components.smart_charging.const import (
     ROLE_SOLAR_FORECAST,
     ROLE_SUN,
     ROLES_ADAPTER_READINGS_EXCLUDED,
-    ROUND_DOWN,
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
     STATE_CHARGING,
@@ -84,6 +61,7 @@ from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
 from custom_components.smart_charging.modes.solar import SolarState
 from custom_components.smart_charging.modes.solar_only import SolarOnlyState
+from tests.config_factory import make_test_config
 from tests.helpers import AMPLE_PEAK_HEADROOM_KW, seed_ample_peak_headroom
 
 # ADR-0007 fault-path log text (issue #504) -- named here, not repeated as bare literals,
@@ -184,30 +162,22 @@ def _adapters(
     return adapters
 
 
-def _config():
-    return {
-        CONF_MIN_CURRENT: 6.0,
-        CONF_MAX_CURRENT: 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 2.0,
-        CONF_NOMINAL_VOLTAGE: 230.0,
-        CONF_SMOOTHING_WINDOW: 1,
-        CONF_SOLAR_START_THRESHOLD_W: 100.0,
-        CONF_SOLAR_ONLY_START_THRESHOLD_W: 100.0,
-        CONF_SOLAR_HOLD_MIN: 5.0,
-        CONF_SOLAR_COOLDOWN_MIN: 2.0,
-        CONF_SOLAR_ONLY_STRATEGY: ROUND_DOWN,
-        CONF_SOLAR_ONLY_MIDPOINT: 0.5,
-        CONF_MAX_PEAK_KW: 100.0,
-        CONF_SAFETY_MARGIN_W: 250.0,
-        CONF_PEAK_GRACE_MIN: 2.0,
-        CONF_CAPTAR_COOLDOWN_MIN: 5.0,
-        CONF_POWER_RESPECT_PEAK: True,
-        CONF_PEAK_WINDOW_SIZE: 1,
-        CONF_MAX_SOLAR_SOC: 100.0,
-        CONF_SOLAR_STEP_PP: 5.0,
-        CONF_SOLAR_STEP_THRESHOLD_PP: 2.0,
-    }
+def _config(**overrides) -> SmartChargingConfig:
+    """This suite's own SmartChargingConfig baseline, layered on tests/config_factory.py's
+    shared production-DEFAULT_*-seeded factory (issue #570 follow-up: three near-identical
+    per-suite factories collapsed to one). The four overrides below are THIS file's own
+    long-standing baseline values, deliberately distinct from the production defaults
+    `make_test_config` otherwise uses, so existing test expectations are unchanged. `**overrides`
+    takes the dataclass's own field names (not CONF_* constants) -- pass e.g.
+    `_config(max_peak_kw=7.5)` for a non-default value, or mutate an already-built config with
+    `dataclasses.replace`."""
+    return make_test_config(
+        smoothing_window=1,
+        solar_start_threshold_w=100.0,
+        solar_only_start_threshold_w=100.0,
+        captar_cooldown_min=5.0,
+        **overrides,
+    )
 
 
 def _seed_today_deadline(coord, hours_from_now):
@@ -660,8 +630,10 @@ async def test_mode_switch_resets_the_incoming_modes_state(hass):
     """Multi-cycle by nature (a reset is only observable by comparing state across a
     switch); each phase below is its own Arrange/Act/Assert."""
     config = _config()
-    config[CONF_SOLAR_HOLD_MIN] = 0.0  # Hold -> Cooldown transitions on the very next cycle
-    config[CONF_SOLAR_COOLDOWN_MIN] = 5.0  # long enough that real test wall-clock never clears it
+    # Hold -> Cooldown transitions on the very next cycle.
+    config = dataclasses.replace(config, solar_hold_min=0.0)
+    # Long enough that the real test wall-clock never clears it.
+    config = dataclasses.replace(config, solar_cooldown_min=5.0)
 
     ample = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     idle_surplus = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
@@ -705,8 +677,8 @@ async def test_grid_ceiling_still_clamps_a_solar_request(hass):
     # Arrange: surplus = 2645W = 11.5A ideal; Solar rounds up -> 12A pre-clamp.
     # headroom = floor(0 + 11.5) = 11A -> clamped from 12A to 11A.
     config = _config()
-    config[CONF_GRID_CEILING_A] = 2.0
-    config[CONF_GRID_SAFETY_OFFSET_A] = 2.0  # ceiling - offset == 0
+    config = dataclasses.replace(config, grid_ceiling_a=2.0)
+    config = dataclasses.replace(config, grid_safety_offset_a=2.0)  # ceiling - offset == 0
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2645.0, ev_soc=50.0)
 
     # Act
@@ -763,7 +735,7 @@ async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
     smoothed control-path `surplus_w` (#602 T1)."""
     config = _config()
-    config[CONF_SMOOTHING_WINDOW] = 2
+    config = dataclasses.replace(config, smoothing_window=2)
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=3000.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -787,7 +759,7 @@ async def test_solar_surplus_w_defaults_to_zero_on_required_role_fault(hass):
 
 async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(hass):
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 4.0
+    config = dataclasses.replace(config, max_peak_kw=4.0)
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -931,7 +903,7 @@ async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_
     guard actually exercises the deadline branch, not just `fault is False`."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 10.0
+    config = dataclasses.replace(config, max_peak_kw=10.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -952,8 +924,8 @@ async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
     """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
     clamp itself computes (#602 T2)."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 3.56
-    config[CONF_SAFETY_MARGIN_W] = 250.0
+    config = dataclasses.replace(config, max_peak_kw=3.56)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -975,8 +947,8 @@ async def test_peak_headroom_a_matches_apply_peak_clamps_own_clamped_outcome(has
     output equals its internal headroom_a -- proving the coordinator's duplicated formula
     (#602 T2) hasn't drifted from engines/billing_protection.py's real behavior."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 3.56
-    config[CONF_SAFETY_MARGIN_W] = 250.0
+    config = dataclasses.replace(config, max_peak_kw=3.56)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1001,8 +973,8 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     """A high household baseline load reduces Captar's requested max-current down to the
     available headroom -- a momentary reduction (still above min_a), not a stop."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 3.56
-    config[CONF_SAFETY_MARGIN_W] = 250.0
+    config = dataclasses.replace(config, max_peak_kw=3.56)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
     # effective_peak_limit(3.56 kW) - margin(250W) - baseline(1000W) = 2310W = 10.04A -> 10A.
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -1023,8 +995,9 @@ async def test_peak_clamp_reduces_solar_below_headroom(hass):
     budget (below the safety margin) reduces Solar's surplus-based request even though
     the surplus itself is ample, proving R3 isn't Captar-only."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 0.1  # 100 W -- deliberately below the 250 W safety margin
-    config[CONF_SAFETY_MARGIN_W] = 250.0
+    # 100 W -- deliberately below the 250 W safety margin.
+    config = dataclasses.replace(config, max_peak_kw=0.1)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
     # surplus = charger_w(2760) - net_w(0) = 2760 W -> round up -> 12 A ideal.
     # headroom = floor((100 - 250 - (0 - 2760)) / 230) = floor(2610 / 230) = 11 A.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
@@ -1138,10 +1111,10 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
     """Grace period 0 -- the very first breaching cycle already exceeds it -- forces 0 A
     and CaptarState -> cooldown; the cooldown then blocks a restart until it elapses (R11)."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 1.0
-    config[CONF_SAFETY_MARGIN_W] = 250.0
-    config[CONF_PEAK_GRACE_MIN] = 0.0
-    config[CONF_CAPTAR_COOLDOWN_MIN] = 5.0
+    config = dataclasses.replace(config, max_peak_kw=1.0)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
+    config = dataclasses.replace(config, peak_grace_min=0.0)
+    config = dataclasses.replace(config, captar_cooldown_min=5.0)
     # effective_peak_limit(1.0 kW) - margin(250W) - baseline(600W) = 150W = 0.65A -> 0A < min_a.
     breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -1169,8 +1142,8 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
 async def test_captar_cooldown_resets_on_mode_switch(hass):
     """Switching away from Captar and back clears its cooldown state (R11)."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 1.0
-    config[CONF_PEAK_GRACE_MIN] = 0.0
+    config = dataclasses.replace(config, max_peak_kw=1.0)
+    config = dataclasses.replace(config, peak_grace_min=0.0)
     breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
         hass, adapters=breaching, config=config, interval_s=30, store=_FakeStore({})
@@ -1185,7 +1158,7 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     # Also restore ample peak headroom so only the cooldown reset is under test here.
     ample = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord._adapters = ample
-    coord._config = {**config, CONF_MAX_PEAK_KW: AMPLE_PEAK_HEADROOM_KW}
+    coord._config = dataclasses.replace(config, max_peak_kw=AMPLE_PEAK_HEADROOM_KW)
     coord._peak_demand.tracked_kw = AMPLE_PEAK_HEADROOM_KW
     coord.active_mode = MODE_OFF
     await coord._async_update_data()
@@ -1218,7 +1191,7 @@ async def test_power_respects_peak_by_default(hass):
     behavior); with power_respect_peak left at its default (True), R17 now ALSO
     bounds it by the R3 clamp -- a deliberate behavior change (design doc Sec 7)."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 3.56
+    config = dataclasses.replace(config, max_peak_kw=3.56)
     # Same headroom math as test_peak_clamp_reduces_captar_below_headroom: 10A available.
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
@@ -1237,8 +1210,8 @@ async def test_power_can_opt_out_of_peak_protection(hass):
     """sc_power_respect_peak=False skips the R3 clamp (E5), but the C4 grid-ceiling
     clamp (E6) still applies -- distinct call sites (ADR-0006)."""
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 3.56
-    config[CONF_POWER_RESPECT_PEAK] = False
+    config = dataclasses.replace(config, max_peak_kw=3.56)
+    config = dataclasses.replace(config, power_respect_peak=False)
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
@@ -1257,8 +1230,8 @@ async def test_grid_ceiling_still_clamps_a_captar_request(hass):
     """E6 (unchanged) still reduces a Captar-mode request that would breach the ceiling,
     even with ample R3 headroom (auto-seeded by _run_mode)."""
     config = _config()
-    config[CONF_GRID_CEILING_A] = 2.0
-    config[CONF_GRID_SAFETY_OFFSET_A] = 2.0  # ceiling - offset == 0
+    config = dataclasses.replace(config, grid_ceiling_a=2.0)
+    config = dataclasses.replace(config, grid_safety_offset_a=2.0)  # ceiling - offset == 0
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2645.0, ev_soc=50.0)
 
     _coord, result = await _run_mode(hass, adapters, config, MODE_CAPTAR, soc_limit_override=80.0)
@@ -1451,8 +1424,8 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0, sun_state=SUN_STATE_ABOVE_HORIZON)
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1503,7 +1476,7 @@ async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_v
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(60.0)
     config = _config()
-    config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
+    config = dataclasses.replace(config, ev_battery_capacity_kwh=75.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1526,7 +1499,7 @@ async def test_ev_battery_capacity_falls_back_to_configured_when_sensor_unavaila
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(None)
     config = _config()
-    config[CONF_EV_BATTERY_CAPACITY_KWH] = 75.0
+    config = dataclasses.replace(config, ev_battery_capacity_kwh=75.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1592,8 +1565,8 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON)
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1616,8 +1589,8 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
         status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
     )
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1639,8 +1612,8 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
         status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=True
     )
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = DEFAULT_CAPTAR_AVAILABLE
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=DEFAULT_CAPTAR_AVAILABLE)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1669,7 +1642,7 @@ async def test_auto_profile_selects_solar_when_surplus_sufficient(hass):
         sun_state=SUN_STATE_ABOVE_HORIZON,
     )
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = True
+    config = dataclasses.replace(config, solar_installed=True)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1689,8 +1662,8 @@ async def test_auto_profile_escalates_to_captar_under_urgency(hass, freezer):
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = True
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=True)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1713,8 +1686,8 @@ async def test_auto_escalation_resets_captar_state_the_same_cycle(hass, freezer)
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = True
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=True)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1743,8 +1716,8 @@ async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_ur
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config[CONF_SOLAR_INSTALLED] = False
-    config[CONF_CAPTAR_AVAILABLE] = False
+    config = dataclasses.replace(config, solar_installed=False)
+    config = dataclasses.replace(config, captar_available=False)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1808,7 +1781,7 @@ async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freez
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 10.0
+    config = dataclasses.replace(config, max_peak_kw=10.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1830,7 +1803,7 @@ async def test_effective_peak_limit_resolves_normally_once_urgency_reverts(hass,
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
-    config[CONF_MAX_PEAK_KW] = 10.0
+    config = dataclasses.replace(config, max_peak_kw=10.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1856,7 +1829,7 @@ async def test_manual_selector_unaffected_by_available_modes_gate_already_true_t
     gate Manual's own dispatch; select.py's own option list is what does, unaffected here)."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     config = _config()
-    config[CONF_CAPTAR_AVAILABLE] = False
+    config = dataclasses.replace(config, captar_available=False)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -1988,9 +1961,10 @@ async def test_power_opt_out_of_r3_does_not_disable_c4_ceiling(hass):
     tell a merged single-conditional clamp (Option A, rejected) from two distinct call sites --
     a merged implementation would also return 16.0 here, unclamped."""
     config = _config()
-    config[CONF_POWER_RESPECT_PEAK] = False
-    config[CONF_GRID_CEILING_A] = 10.0
-    config[CONF_GRID_SAFETY_OFFSET_A] = 2.0  # headroom = 8A, below the 16A target
+    config = dataclasses.replace(config, power_respect_peak=False)
+    config = dataclasses.replace(config, grid_ceiling_a=10.0)
+    # headroom = 8A, below the 16A target.
+    config = dataclasses.replace(config, grid_safety_offset_a=2.0)
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0)
 
     _coord, result = await _run(hass, adapters, config, target=16.0)
