@@ -527,7 +527,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             surplus_w=surplus_w,
             max_current_a=self._config.max_current,
             auto_dispatchable=auto_dispatchable,
-            solar_installed=self._config.solar_installed,
+            solar_available=self._config.solar_available,
             captar_available=self._config.captar_available,
             solar_start_threshold_w=self._config.solar_start_threshold_w,
             sun_is_up=ctx.sun_is_up,

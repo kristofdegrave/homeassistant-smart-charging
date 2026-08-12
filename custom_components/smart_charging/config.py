@@ -36,7 +36,7 @@ class SmartChargingConfig:
     keywords.
     """
 
-    solar_installed: bool
+    solar_available: bool
     captar_available: bool
     min_current: float
     max_current: float

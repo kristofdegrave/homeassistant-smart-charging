@@ -20,7 +20,7 @@ from custom_components.smart_charging.select import ModeSelect, ProfileSelect
 async def test_select_option_writes_only_its_own_state(hass):
     """ADR-0018: ModeSelect no longer references the coordinator at all -- its
     constructor doesn't accept one, and it only manages its own displayed state."""
-    entity = ModeSelect(entry_id="abc", solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_available=True)
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     await entity.async_select_option("Solar")
@@ -30,7 +30,7 @@ async def test_select_option_writes_only_its_own_state(hass):
 async def test_restores_last_selection(hass):
     entity_id = "select.smart_charging_mode"
     mock_restore_cache(hass, (State(entity_id, "SolarOnly"),))
-    entity = ModeSelect(entry_id="abc", solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_available=True)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
@@ -40,7 +40,7 @@ async def test_restores_last_selection(hass):
 async def test_restore_rejects_solar_option_when_solar_not_installed(hass):
     entity_id = "select.smart_charging_mode"
     mock_restore_cache(hass, (State(entity_id, "SolarOnly"),))
-    entity = ModeSelect(entry_id="abc", solar_installed=False)
+    entity = ModeSelect(entry_id="abc", solar_available=False)
     entity.entity_id = entity_id
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
@@ -58,29 +58,29 @@ async def test_restore_rejects_captar_option_when_captar_not_available(hass):
 
 
 async def test_added_to_hass_seeds_default_when_no_restored_state(hass):
-    entity = ModeSelect(entry_id="abc", solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_available=True)
     platform = MockEntityPlatform(hass, domain="select")
     await platform.async_add_entities([entity])
     assert entity.current_option == "Off"
 
 
 def test_init_seeds_unique_id():
-    entity = ModeSelect(entry_id="abc", solar_installed=True)
+    entity = ModeSelect(entry_id="abc", solar_available=True)
     assert entity.unique_id == "abc_mode"
 
 
 def test_options_are_off_power_only_when_solar_not_installed():
-    entity = ModeSelect(entry_id="abc", solar_installed=False)
+    entity = ModeSelect(entry_id="abc", solar_available=False)
     assert entity.options == ["Off", "Power"]
 
 
-def test_options_include_solar_modes_when_solar_installed():
-    entity = ModeSelect(entry_id="abc", solar_installed=True)
+def test_options_include_solar_modes_when_solar_available():
+    entity = ModeSelect(entry_id="abc", solar_available=True)
     assert entity.options == ["Off", "Power", "Solar", "SolarOnly"]
 
 
 @pytest.mark.parametrize(
-    ("solar_installed", "captar_available", "expected"),
+    ("solar_available", "captar_available", "expected"),
     [
         (False, False, ["Off", "Power"]),
         (True, False, ["Off", "Power", "Solar", "SolarOnly"]),
@@ -88,10 +88,10 @@ def test_options_include_solar_modes_when_solar_installed():
         (True, True, ["Off", "Power", "Solar", "SolarOnly", "Captar"]),
     ],
 )
-def test_mode_options_compose_independently(solar_installed, captar_available, expected):
+def test_mode_options_compose_independently(solar_available, captar_available, expected):
     entity = ModeSelect(
         entry_id="abc",
-        solar_installed=solar_installed,
+        solar_available=solar_available,
         captar_available=captar_available,
     )
     assert entity.options == expected

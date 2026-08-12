@@ -33,9 +33,9 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-    CONF_SOLAR_INSTALLED,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
@@ -146,7 +146,7 @@ async def test_select_entity_is_registered_on_setup(hass):
     guard for every owned entity; these two are here only because T2.2 predates it."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
-    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_SOLAR_AVAILABLE] = True
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"  # seed_charger_states already seeds sensor.ev_soc
 
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
@@ -304,7 +304,7 @@ async def test_setup_falls_back_to_every_default_for_a_pre_solar_entry(hass):
     await hass.async_block_till_done()
 
     config = entry.runtime_data.coordinator._config
-    assert config.solar_installed is False
+    assert config.solar_available is False
     assert config.captar_available is True
     assert config.smoothing_window == 4
     assert config.solar_start_threshold_w == 150.0
@@ -389,7 +389,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     # Solar/EV-SOC config is not required for any owned entity's creation -- none is
     # capability-gated -- but is set anyway so this test exercises the widest entity
     # population, same as test_select_entity_is_registered_on_setup above.
-    data[CONF_SOLAR_INSTALLED] = True
+    data[CONF_SOLAR_AVAILABLE] = True
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"  # seed_charger_states already seeds sensor.ev_soc
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)

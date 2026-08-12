@@ -111,7 +111,7 @@ ROLE_EV_BATTERY_CAPACITY = "ev_battery_capacity"
 ROLE_DEPARTURE_EXTERNAL = "departure_external"
 # RA2 (R9/R13): external home-day-flag source, optional at the factory level.
 ROLE_HOME_DAY_EXTERNAL = "home_day_external"
-# RA2 (R9): next-day solar forecast, required only when CONF_SOLAR_INSTALLED.
+# RA2 (R9): next-day solar forecast, required only when CONF_SOLAR_AVAILABLE.
 ROLE_SOLAR_FORECAST = "solar_forecast"
 # Built unconditionally by the factory, no config_flow entry -- sun.sun is a
 # core Home Assistant entity, always present once the (auto-loaded) sun integration is set up.
@@ -168,7 +168,7 @@ CONF_NET_POWER_ENTITY = "net_power_entity"
 CONF_CHARGER_POWER_ENTITY = "charger_power_entity"
 CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
-CONF_SOLAR_INSTALLED = "solar_installed"  # bool, default False -- design doc §3, R18 scoped
+CONF_SOLAR_AVAILABLE = "solar_available"  # bool, default False -- design doc §3, R18 scoped
 CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped
 # optional at the factory level (NF3) -- design doc §3, R15
 CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"
@@ -176,7 +176,7 @@ CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"
 CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"
 # optional at the factory level (NF3) -- design doc §3, R9/R13
 CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
-# required only when CONF_SOLAR_INSTALLED (R9 needs it) -- design doc §3
+# required only when CONF_SOLAR_AVAILABLE (R9 needs it) -- design doc §3
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 # optional at the factory level (NF3) -- Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
@@ -190,7 +190,7 @@ CONF_CAR_HOME_ENTITY = "car_home_entity"
 # Config-flow error codes (config_flow.py's mapping-step guards). Values must match
 # strings.json/translations/en.json's config.error keys exactly --
 # tests/test_config_flow_translations.py walks every one of these against that section.
-ERROR_REQUIRED_WHEN_SOLAR_INSTALLED = "required_when_solar_installed"
+ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE = "required_when_solar_available"
 ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE = "required_when_captar_available"
 ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED = "required_when_vehicle_limit_mapped"
 
@@ -242,7 +242,7 @@ DEFAULT_SOLAR_COOLDOWN_MIN = 2.0
 DEFAULT_SOLAR_ONLY_STRATEGY = ROUND_DOWN
 DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a percent
 DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by `SocLimitOverrideNumber`
-DEFAULT_SOLAR_INSTALLED = False
+DEFAULT_SOLAR_AVAILABLE = False
 DEFAULT_CAPTAR_AVAILABLE = True
 DEFAULT_SAFETY_MARGIN_W = 250.0
 DEFAULT_MAX_PEAK_KW = 4.0
