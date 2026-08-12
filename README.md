@@ -28,8 +28,8 @@ capacity-tariff-aware. Hardware-agnostic; targets single-phase grids for now
 > accordingly; delivering a deadline-unreachable notice (R5) is gated on the
 > not-yet-built Deadline Engine. When mapped, the vehicle's own charge-limit
 > setting is kept in sync with the System's active charge limit in both
-> directions (vehicle-limit sync). The runtime dashboard is **not implemented
-> yet** — see [Deferred](#deferred-not-in-this-mvp) below. See
+> directions (vehicle-limit sync). A runtime dashboard is registered
+> automatically — see [Runtime dashboard](#runtime-dashboard) below. See
 > [CLAUDE.md](CLAUDE.md) for the working method.
 
 ## Installation (HACS custom repository)
@@ -145,10 +145,26 @@ reading and adopting a manual change is unaffected by this gate either way).
 Unmapping the vehicle charge-limit entity disables this sync entirely without
 affecting charger-current control.
 
+## Runtime dashboard
+
+The integration ships a Lovelace dashboard at **Settings → Dashboards → Smart
+Charging** (or the sidebar, if shown), regenerated from the current entity set
+every time the integration starts up or reloads (ADR-0022). It is a **locked**
+dashboard — HA's own UI won't let you edit it in place, and any edit made to
+its underlying file is overwritten on the next reload regardless. If you want
+a different layout, build an ordinary dashboard from the same entities instead
+(every entity it shows is a normal Home Assistant entity, nothing is special
+about how the packaged one displays them).
+
+The dashboard's *Runtime settings* section and *Deadline* tab both require the
+[`auto-entities`](https://github.com/thomasloven/lovelace-auto-entities) HACS
+card — without it, that section and tab render as broken cards. Install it via
+HACS before setting up the integration if you want them to work.
+
 ## Deferred (not in this MVP)
 
-R5's deadline-unreachable notice delivery (gated on the not-yet-built Deadline
-Engine) and the runtime dashboard. These are later slices of
+R5's deadline-unreachable notice delivery, gated on the not-yet-built Deadline
+Engine. This is a later slice of
 [`docs/design/project-plan.md`](docs/design/project-plan.md).
 
 ## What it does

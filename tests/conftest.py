@@ -64,3 +64,16 @@ def auto_enable_custom_integrations(request):
     if not _is_pure_logic_test(request.node):
         request.getfixturevalue("enable_custom_integrations")
     yield
+
+
+@pytest.fixture(autouse=True)
+def _dashboard_package_dir_uses_tmp_path(request, monkeypatch, tmp_path):
+    """C5 (#601): every HA-harness suite that sets up a full config entry now regenerates the
+    runtime dashboard's YAML file -- redirect `dashboard._package_dir()` to `tmp_path` for all
+    of them, not just `tests/test_dashboard.py`'s own tests, so the real package directory on
+    disk is never written to as a side effect of running the suite."""
+    if not _is_pure_logic_test(request.node):
+        monkeypatch.setattr(
+            "custom_components.smart_charging.dashboard._package_dir", lambda: tmp_path
+        )
+    yield
