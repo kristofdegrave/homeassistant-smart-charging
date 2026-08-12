@@ -2,15 +2,6 @@
 
 DOMAIN = "smart_charging"
 
-# hass.data[DOMAIN][entry_id] dict keys (__init__.py's setup-time payload). DATA_COORDINATOR/
-# DATA_NOTIFICATION_MANAGER are the two bare-string-shaped keys in that dict; every sibling
-# key is a CONF_* constant (issue #508) -- named here so both __init__.py's writer and every
-# reader (sensor.py, tests) stay in lockstep.
-DATA_COORDINATOR = "coordinator"
-DATA_NOTIFICATION_MANAGER = "notification_manager"
-# None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY is unmapped -- M2 stays uninstantiated (Task 5.1).
-DATA_VEHICLE_LIMIT_MANAGER = "vehicle_limit_manager"
-
 # Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
 # and the config flow's `vol.In(...)` validator (Task 3.2). Plain strings, not an Enum:
 # `strategy` round-trips through HA config-entry storage, which needs bare str values.
@@ -36,6 +27,12 @@ EVENT_MANUAL_CHARGE_LIMIT_ADOPTED = "smart_charging_manual_charge_limit_adopted"
 EVENT_VEHICLE_CHARGE_LIMIT_RESET = "smart_charging_vehicle_charge_limit_reset"
 ATTR_ENTRY_ID = "entry_id"  # shared entry-scoping key across all three M2 event payloads
 ATTR_LIMIT = "limit"  # M2 event payload key -- the SOC-limit value carried by the event
+
+# `MonthlyPeakSensor`'s (sensor.py) extra-restore-data / extra-state-attribute key for the
+# "YYYY-MM" period the tracked kW belongs to (design doc Sec 6.4) -- named once here so the
+# restore round-trip (`_MonthlyPeakExtraStoredData`) and the live attribute stay in lockstep
+# (issue #565).
+ATTR_PERIOD_MONTH = "period_month"
 
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"

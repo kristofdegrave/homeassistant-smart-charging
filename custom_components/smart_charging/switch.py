@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
 
+from . import SmartChargingConfigEntry
 from .const import OWNED_SUFFIX_HOME_DAY
 from .entity import SmartChargingEntity
 
@@ -54,6 +54,6 @@ class HomeDaySwitch(SmartChargingEntity, SwitchEntity):
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     async_add_entities([HomeDaySwitch(entry_id=entry.entry_id)])

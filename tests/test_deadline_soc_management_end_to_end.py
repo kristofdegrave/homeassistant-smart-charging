@@ -40,7 +40,6 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
-    DATA_COORDINATOR,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
@@ -135,7 +134,7 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
     _seed_ample_peak_headroom(coordinator)
     return coordinator
 
@@ -143,7 +142,7 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
 def _active_soc_limit_entity_id(hass):
     """Looked up by unique_id, not entity_id -- its translation entry is T6.3's own job, not
     this task's (mirrors tests/test_init.py's own active_soc_limit sensor lookup)."""
-    entry_id = next(iter(hass.data[DOMAIN]))
+    entry_id = hass.config_entries.async_entries(DOMAIN)[0].entry_id
     registry = er.async_get(hass)
     return registry.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_active_soc_limit")
 
