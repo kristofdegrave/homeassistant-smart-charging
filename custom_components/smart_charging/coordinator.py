@@ -224,7 +224,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
         extracted methods (ADR-0023). Also caches each read role's value into
         `self._role_readings` (ADR-0021) -- `_run_cycle` decides whether to advance
-        `self._role_readings_at`, since that depends on whether this cycle's read succeeded."""
+        `self._role_readings_at`, since that depends on whether this cycle succeeded as a
+        whole (the required-adapter read succeeding is necessary but not sufficient, #648)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -367,7 +368,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 adapter_readings_at=self._role_readings_at,
             )
         status, net_w, charger_w, voltage = inputs
-        self._role_readings_at = now_dt
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
         # below (R10's smoothed control-path value).
@@ -414,6 +414,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ):
             self._log_fault("ev_soc required while a solar mode is active but missing/None")
             await self._write(0.0)
+            # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
+            # ADR-0021/entity-catalog.md:154 "last successful cycle" reasoning as the
+            # required-role fault path above (#648): an ev_soc fault means this cycle wasn't
+            # a successful one, even though the three required-adapter reads that fed
+            # `solar_surplus_w`/`monthly_peak_kw` above did succeed. (The assignment itself
+            # now lives at the very end of a successful cycle, see the comment there.)
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -628,6 +634,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
 
         await self._write(desired)
+        # ADR-0021/entity-catalog.md:154 "last successful cycle" -- deliberately the LAST
+        # statement before the success return, not right after `_read_cycle_inputs` (#648):
+        # any exception between the required-adapter read and this point (including the
+        # ev_soc-fault gate above, and any raise from the write itself) funnels to
+        # `_async_update_data`'s handler and must report a prior cycle's timestamp, not this
+        # one's -- moving this assignment any earlier would resurrect #648 for those paths.
+        self._role_readings_at = now_dt
         if self._was_faulted:
             _LOGGER.info("smart_charging recovered from fault")
             self._was_faulted = False
