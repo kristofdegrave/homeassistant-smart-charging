@@ -230,20 +230,25 @@ states, not a new rule.
 
 **Mechanism:** `select.smart_charging_mode` is pulled out of the label-driven `auto-entities` list
 (via that card's own `exclude` filter, keyed on `entity_id` — not the `label: sc_install` clause
-Decision 1 already rejected, a different, legitimate exclude) and rendered as its own
-`type: conditional` card, gated on `select.smart_charging_profile == "Manual"`:
+Decision 1 already rejected, a different, legitimate exclude) and rendered as its own `entities`
+card, gated via that card's own `visibility` key (the native idiom for a single gated card inside a
+`sections` view — a wrapping `type: conditional` card also works but adds a needless nesting level)
+on `select.smart_charging_profile == "Manual"`:
 
 ```yaml
-type: conditional
-conditions:
+type: entities
+entities:
+  - select.smart_charging_mode
+visibility:
   - condition: state
-    entity_id: select.smart_charging_profile
+    entity: select.smart_charging_profile
     state: Manual
-card:
-  type: entities
-  entities:
-    - select.smart_charging_mode
 ```
+
+Note the condition key is `entity`, not `entity_id` — the Lovelace `visibility`/`conditional` schema
+differs from the automation/script condition schema here; a missing `entity` key resolves the
+checked state as `unavailable` and the card silently never renders (caught in this addendum's own
+fresh-agent review, not in the first draft).
 
 The entity keeps its `sc_runtime` label (entity-registry classification is orthogonal to which card
 renders it) — only the dashboard's own filter/placement changes.
@@ -298,6 +303,13 @@ second setup (simulating reload) does not raise and does not duplicate the panel
   question resolves.
 - **R19 AC4 for the nine departure-time entities** — not fully satisfied; see the disclosed
   deviation in the Label application section (a pre-existing C2 gap, not introduced or fixed here).
+- **R19 AC3 for `select.smart_charging_mode` under the `Auto` profile** — this addendum's mode gate
+  (above) makes the entity invisible on the dashboard while `Auto` is active, whereas R19 AC3 reads
+  "every runtime entity is both visible and settable from the dashboard" with no profile carve-out.
+  The behavioral rationale (the glossary already scopes the entity to `Manual`; it has no effect
+  under `Auto`) is sound, but the requirement text itself is not amended by this spec — a follow-up
+  issue against R19 AC3's wording, or a switch to an always-visible-but-disabled rendering, is left
+  open rather than silently treating the AC as met.
 - **Mushroom cards, tablet-specific sizing** — already deferred by the 2026-07-08 design doc; nothing
   here reopens either.
 - **Deleting the generated YAML file on unload** — deliberately not done (see `dashboard.py` table);

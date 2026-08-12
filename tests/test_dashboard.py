@@ -43,7 +43,7 @@ def _cards(config, section_title, view_path="overview"):
     raise AssertionError(f"no section titled {section_title!r} in view {view_path!r}")
 
 
-def test_there_are_exactly_two_sections_views_overview_and_deadline():
+def test_dashboard_has_two_views_overview_and_deadline():
     """T9 (2026-08-13 addendum): HA renders >1 views in a YAML dashboard as tabs natively --
     no new registration mechanism needed beyond ADR-0022's Option C."""
     config = build_dashboard_config(_entry())
@@ -56,6 +56,36 @@ def test_the_overview_view_is_titled_smart_charging():
     view = _view(build_dashboard_config(_entry()), "overview")
 
     assert view["title"] == "Smart Charging"
+
+
+def test_the_overview_view_has_exactly_three_sections_in_order():
+    """Regression guard: T9 rebuilt build_dashboard_config wholesale -- nothing else asserts
+    the overview's section count/order survived that rebuild."""
+    view = _view(build_dashboard_config(_entry()), "overview")
+
+    assert [s["title"] for s in view["sections"]] == [
+        "Charging status",
+        "Power flow",
+        "Runtime settings",
+    ]
+
+
+def test_the_deadline_view_is_titled_deadline_with_one_departure_times_section():
+    view = _view(build_dashboard_config(_entry()), "deadline")
+
+    assert view["title"] == "Deadline"
+    assert [s["title"] for s in view["sections"]] == ["Departure times"]
+
+
+def test_the_mode_entity_is_rendered_by_exactly_the_gated_card_not_the_auto_entities_list():
+    """The invariant T8's exclude clause exists to guarantee, expressed directly: the mode
+    entity is only ever *rendered* by the gated card, and the label-driven auto-entities card
+    (which would otherwise render it unconditionally) excludes it rather than listing it."""
+    cards = _cards(build_dashboard_config(_entry()), "Runtime settings")
+    mode_gate_card, auto_entities_card = cards
+
+    assert mode_gate_card["entities"] == ["select.smart_charging_mode"]
+    assert {"entity_id": "select.smart_charging_mode"} in auto_entities_card["filter"]["exclude"]
 
 
 def test_charging_status_section_has_the_seven_documented_tiles():
@@ -127,19 +157,21 @@ def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card()
     cards = _cards(build_dashboard_config(_entry()), "Runtime settings")
 
     assert len(cards) == 2
-    conditional_card, auto_entities_card = cards
+    mode_gate_card, auto_entities_card = cards
 
     # T8 (2026-08-13 addendum): the mode selector only makes sense under the Manual profile
-    # (system-overview.md's glossary already scopes it that way) -- gated on its own card
-    # rather than left in the label-driven list unconditionally.
-    assert conditional_card["type"] == "conditional"
-    assert conditional_card["conditions"] == [
-        {"condition": "state", "entity_id": "select.smart_charging_profile", "state": "Manual"}
+    # (system-overview.md's glossary already scopes it that way) -- gated via the entities
+    # card's own `visibility` key, HA's native idiom in a `sections` view. The condition schema
+    # keys the entity as `entity`, NOT `entity_id` (that's the automation/script condition
+    # schema instead) -- a missing `entity` key resolves the checked state as `unavailable` and
+    # the card silently never renders, so this is asserted explicitly rather than left to a
+    # dict-equality mirror of the implementation.
+    assert mode_gate_card["type"] == "entities"
+    assert mode_gate_card["entities"] == ["select.smart_charging_mode"]
+    assert mode_gate_card["visibility"] == [
+        {"condition": "state", "entity": "select.smart_charging_profile", "state": "Manual"}
     ]
-    assert conditional_card["card"] == {
-        "type": "entities",
-        "entities": ["select.smart_charging_mode"],
-    }
+    assert "entity_id" not in mode_gate_card["visibility"][0]
 
     assert auto_entities_card["type"] == "custom:auto-entities"
     assert auto_entities_card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME}]
@@ -165,6 +197,7 @@ def test_deadline_view_has_one_section_with_a_time_domain_auto_entities_card():
     assert card["type"] == "custom:auto-entities"
     assert card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME, "domain": "time"}]
     assert "exclude" not in card["filter"]
+    assert card["show_empty"] is False
 
 
 async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_path):

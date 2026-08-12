@@ -156,10 +156,10 @@ a different layout, build an ordinary dashboard from the same entities instead
 (every entity it shows is a normal Home Assistant entity, nothing is special
 about how the packaged one displays them).
 
-The dashboard's *Runtime settings* section requires the
+The dashboard's *Runtime settings* section and *Deadline* tab both require the
 [`auto-entities`](https://github.com/thomasloven/lovelace-auto-entities) HACS
-card — without it, that section renders as a broken card. Install it via HACS
-before setting up the integration if you want that section to work.
+card — without it, that section and tab render as broken cards. Install it via
+HACS before setting up the integration if you want them to work.
 
 ## Deferred (not in this MVP)
 

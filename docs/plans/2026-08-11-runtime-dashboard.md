@@ -140,10 +140,12 @@ Test boundary throughout: HA harness (ADR-0009) — every task touches `entity.p
 - Failing test (`tests/test_dashboard.py`): the overview view's *Runtime settings*
   `custom:auto-entities` card's filter now carries `exclude: [{entity_id: "select.smart_charging_mode"}]`
   alongside the existing `include: [{label: sc_runtime}]`.
-- Failing test: the same section's cards also contain a `type: conditional` card, gated on
-  `condition: state, entity_id: select.smart_charging_profile, state: Manual`, wrapping a
-  `type: entities` card listing exactly `select.smart_charging_mode`.
-- Add the exclude clause and the new conditional card to `_runtime_settings_cards()`.
+- Failing test: the same section's cards also contain a `type: entities` card listing exactly
+  `select.smart_charging_mode`, gated via that card's own `visibility` key on
+  `condition: state, entity: select.smart_charging_profile, state: Manual` (note: `entity`, not
+  `entity_id` — the Lovelace `visibility`/`conditional` condition schema differs from the
+  automation/script one; a missing `entity` key resolves the checked state as `unavailable`).
+- Add the exclude clause and the new gated card to `_runtime_settings_cards()`.
 - Green, commit: `feat: gate the mode selector on the Manual profile (#601)`.
 
 ## T9 — Departure-time settings move to a second dashboard tab (design doc Addendum 2026-08-13)

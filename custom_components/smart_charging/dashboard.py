@@ -43,6 +43,10 @@ from .const import (
 )
 
 _TITLE = "Smart Charging"
+# Bare string, not `homeassistant.const.Platform.TIME` -- that's a StrEnum member, and
+# yaml.safe_dump (below) raises RepresenterError on it; a plain domain string is what
+# auto-entities' filter schema expects anyway.
+_TIME_DOMAIN = "time"
 
 # "active_mode"/"effective_peak_limit" have no OWNED_SUFFIX_* constant (sensor.py itself pins
 # them as bare literals) -- consistent with that existing precedent, not a new deviation.
@@ -99,14 +103,16 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
 def _runtime_settings_cards() -> list[dict]:
     # T8 (2026-08-13 addendum): select.smart_charging_mode only has an effect under the
     # Manual profile (system-overview.md's glossary already scopes it that way; Auto's own E2
-    # drives dispatch instead) -- gated on its own conditional card rather than left editable
-    # unconditionally in the label-driven list below.
+    # drives dispatch instead) -- gated via the entities card's own `visibility` key rather than
+    # a wrapping `type: conditional` card, HA's more native idiom for a single gated card in a
+    # `sections` view. The Lovelace condition schema (both `visibility` and `conditional`) keys
+    # the entity as `entity`, NOT `entity_id` (that key belongs to the automation/script
+    # condition schema instead) -- get this wrong and the card silently never renders, since a
+    # missing `entity` key resolves the checked state as `unavailable`.
     mode_gate_card = {
-        "type": "conditional",
-        "conditions": [
-            {"condition": "state", "entity_id": _PROFILE_ENTITY, "state": PROFILE_MANUAL}
-        ],
-        "card": {"type": "entities", "entities": [_MODE_ENTITY]},
+        "type": "entities",
+        "entities": [_MODE_ENTITY],
+        "visibility": [{"condition": "state", "entity": _PROFILE_ENTITY, "state": PROFILE_MANUAL}],
     }
     return [
         mode_gate_card,
@@ -117,11 +123,11 @@ def _runtime_settings_cards() -> list[dict]:
             # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
             # reasoning, no entity is ever labelled sc_install, so that clause can never match
             # anything. The two excludes below are different, legitimate ones: mode is rendered
-            # by the conditional card above instead (T8), and the nine departure-time entities
-            # move to the deadline tab instead (T9) -- neither should duplicate here.
+            # by the gated card above instead (T8), and the nine departure-time entities move
+            # to the deadline tab instead (T9) -- neither should duplicate here.
             "filter": {
                 "include": [{"label": LABEL_SC_RUNTIME}],
-                "exclude": [{"entity_id": _MODE_ENTITY}, {"domain": "time"}],
+                "exclude": [{"entity_id": _MODE_ENTITY}, {"domain": _TIME_DOMAIN}],
             },
             "sort": {"method": "friendly_name"},
         },
@@ -131,13 +137,16 @@ def _runtime_settings_cards() -> list[dict]:
 def _deadline_cards() -> list[dict]:
     # T9 (2026-08-13 addendum): still label-driven, not a hardcoded list (Decision 1's
     # extensibility property) -- narrowed to the time domain via the same include filter
-    # object (auto-entities ANDs the keys within one include entry).
+    # object (auto-entities ANDs the keys within one include entry). `show_empty: False` keeps
+    # the tab from rendering a visibly-empty card if the pre-existing C2 gap (R19 AC4 deferral,
+    # design doc) is ever closed and departure entities become conditionally absent.
     return [
         {
             "type": "custom:auto-entities",
-            "card": {"type": "entities", "title": "Departure times"},
-            "filter": {"include": [{"label": LABEL_SC_RUNTIME, "domain": "time"}]},
+            "card": {"type": "entities"},
+            "filter": {"include": [{"label": LABEL_SC_RUNTIME, "domain": _TIME_DOMAIN}]},
             "sort": {"method": "friendly_name"},
+            "show_empty": False,
         }
     ]
 
