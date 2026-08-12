@@ -59,8 +59,6 @@ from .const import (
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
-    MODE_SOLAR,
-    MODE_SOLAR_ONLY,
     OWNED_SUFFIX_DEPARTURE_DOW,
     OWNED_SUFFIX_DEPARTURE_HOLIDAY,
     OWNED_SUFFIX_DEPARTURE_HOME_DAY,
@@ -93,11 +91,7 @@ from .coordinator_cycle import (
     PeakDemandState,
     SocGateResolver,
     SolarStepUpGate,
-    _CaptarModeHandler,
-    _OffModeHandler,
-    _PowerModeHandler,
-    _SolarModeHandler,
-    _SolarOnlyModeHandler,
+    build_mode_handlers,
     resolve_deadline_urgency,
     resolve_solar_reserve_gate,
 )
@@ -153,17 +147,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # the registry's shared state-write path. `self.active_mode` is always one of these
         # five keys in practice (profiles/auto.select_mode only returns a registered mode; a
         # Manual selection is validated against the select entity's own options before it ever
-        # reaches the Store) -- an out-of-registry value would otherwise KeyError on lookup
-        # (issue #561). `set_active_mode` (below) now guards against that directly, rejecting
-        # any value outside this registry's keys and falling back to MODE_OFF with a warning
-        # rather than letting it KeyError deep inside the cycle every tick (issue #569).
-        self._mode_handlers: dict[str, ModeHandler] = {
-            MODE_OFF: _OffModeHandler(),
-            MODE_POWER: _PowerModeHandler(lambda: self.target_current),
-            MODE_SOLAR: _SolarModeHandler(config),
-            MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
-            MODE_CAPTAR: _CaptarModeHandler(config),
-        }
+        # reaches the Store) -- an out-of-registry value would otherwise KeyError on lookup.
+        # `set_active_mode` (below) now guards against that directly, rejecting any value
+        # outside this registry's keys and falling back to MODE_OFF with a warning rather
+        # than letting it KeyError deep inside the cycle every tick (issue #569). The five
+        # handlers themselves are built by `build_mode_handlers` (coordinator_cycle.py),
+        # which keeps the concrete `_*ModeHandler` classes private to that module.
+        self._mode_handlers: dict[str, ModeHandler] = build_mode_handlers(
+            config, lambda: self.target_current
+        )
         # Single source of truth for the setpoint is the number entity, read through the
         # Store each cycle (_read_owned_entities, ADR-0018). 0 A is the safe default for
         # cycle 0, before the first read.
