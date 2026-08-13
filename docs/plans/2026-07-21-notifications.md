@@ -479,9 +479,143 @@ git commit --author="Claude <noreply@anthropic.com>" -m "docs: translations + RE
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
+### Task 6.4: Re-arm the R5 notify-once latch on `DeadlineUnreachableCleared` (ADR-0024)
+
+The consumer half of **ADR-0024** (Option B), and the close-out of the known gap Task 6.1 left
+behind. **Gated on the producer half** — the deadline/SOC-management slice's own Task 6.4
+(`docs/plans/2026-07-21-deadline-soc-management.md`), which adds
+`EVENT_DEADLINE_UNREACHABLE_CLEARED` to `const.py` and fires it from `coordinator.py` on the
+`RequiredCurrentResult.unreachable` True→False edge. Confirm that constant exists before starting.
+
+Today `_deadline_unreachable_notified` latches for the lifetime of the Manager instance, so R5's
+notice is delivered once **per Manager instance** rather than once **per occasion**: a deadline that
+becomes unreachable, resolves, and later becomes unreachable again stays silent until the next
+reload/restart. Subscribing to the clear event scopes the latch to the occasion. Honors **ADR-0011**
+(consume the published event; never re-derive urgency) / ADR-0009.
+
+> **Path note:** the Manager lives at
+> `custom_components/smart_charging/managers/notification_manager.py` and its tests at
+> `tests/managers/test_notification_manager.py` — it moved under `managers/` per **ADR-0015**,
+> after Task 6.1 was written. Task 6.1 above still names the old package-root paths
+> (`custom_components/smart_charging/notification_manager.py`, `tests/test_notification_manager.py`);
+> that is the historical record of an already-executed task and is deliberately left as-is. Do
+> **not** "fix" this task's paths to match Task 6.1's.
+
+**Files:**
+- Modify: `custom_components/smart_charging/managers/notification_manager.py`
+- Modify: `custom_components/smart_charging/__init__.py` (the R5-delivery comment above the
+  `for unsub in notification_manager.register_listeners():` loop, ~lines 234-241, which calls the
+  delivery "permanently-latched")
+- Modify: `tests/managers/test_notification_manager.py`
+
+**Step 1: Failing tests** (HA harness) — fire synthetic bus events and assert the latch is
+per-occasion, not per-instance:
+
+```python
+async def test_deadline_unreachable_notice_is_delivered_again_after_a_clear_event(hass):
+    """ADR-0024: DeadlineUnreachableNotified -> DeadlineUnreachableCleared ->
+    DeadlineUnreachableNotified delivers TWO notices via RA4 -- the clear event re-arms
+    `_deadline_unreachable_notified`, so R5's notice is once per occasion, not once per
+    Manager instance. Complements (does not replace)
+    test_deadline_unreachable_notice_is_delivered_only_once, which still pins the
+    within-occasion suppression of the producer's per-cycle level signal."""
+
+async def test_deadline_unreachable_clear_event_without_a_prior_notice_is_harmless(hass):
+    """A clear arriving while the latch is already unset (M3 started mid-cycle, or the
+    condition resolved before M3 ever delivered) just leaves it unset -- no send, no error."""
+
+async def test_deadline_unreachable_clear_event_sends_nothing_itself(hass):
+    """The clear is a re-arm signal, not a second user-facing notice: RA4 receives no write
+    on the clear event -- R5 asks for a warning, never an all-clear push."""
+
+async def test_register_listeners_subscribes_to_both_deadline_events(hass):
+    """Regression: register_listeners returns an unsub per subscription and BOTH are
+    unsubscribed on unload (ADR-0008) -- assert len(unsubs) == 2, then call every unsub and
+    verify neither a notify nor a clear event reaches M3 afterwards."""
+
+async def test_evening_prompt_lifecycle_is_unaffected_by_the_clear_event(hass):
+    """UC08 regression: a DeadlineUnreachableCleared event touches only the R5 latch --
+    `async_evaluate`'s prompt state/date and the home-day flag write are untouched."""
+```
+
+**Step 1b (required, not optional): fix the existing test this change breaks.**
+`tests/managers/test_notification_manager.py`'s `test_deadline_unreachable_listener_unsubscribes`
+(the `(unsub,) = manager.register_listeners()` line, ~line 583) does a **single-element tuple
+unpack**. Adding the second subscription makes `register_listeners()` return a two-element list, so
+that line raises `ValueError: too many values to unpack` — the test fails on the unpack, not on its
+assertion. Rewrite it to `unsubs = manager.register_listeners()` followed by
+`assert len(unsubs) == 2` and a `for unsub in unsubs: unsub()` loop (keeping its existing
+"the notify event no longer reaches M3 after unsub" assertion), so it stays a real regression on the
+ADR-0008 unload contract rather than being silently weakened. This edit belongs in the same
+red→green cycle: the suite must be failing for the *intended* reasons before Step 3.
+
+**Step 2: Run** → FAIL. **Step 3: Implement** — import `EVENT_DEADLINE_UNREACHABLE_CLEARED` from
+`..const`; add a small `on_deadline_unreachable_cleared()` (or an inline listener body, matching
+`register_listeners`' existing `_on_deadline_unreachable` shape) that sets
+`self._deadline_unreachable_notified = False` and nothing else — no adapter read, no RA4 write; the
+clear carries no payload, so unlike the notified listener there is no `ATTR_REQUIRED_CURRENT_A`
+guard to apply. Append a second `self._hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_CLEARED, ...)`
+to the list `register_listeners` returns, so the caller's existing `entry.async_on_unload` loop
+unsubscribes both.
+
+Then update **every** piece of prose that documents the now-closed gap. There are five, and three of
+them are cross-references that become *dangling* the moment the "Known gaps" bullet is deleted —
+missing any one leaves the file self-contradictory:
+
+1. **`notification_manager.py` class docstring, second "Known gaps" bullet** (~lines 96-105): the
+   `_deadline_unreachable_notified` "latches permanently … needs a producer-side signal not yet
+   implemented" bullet — **delete** it, along with the trailing sentence's mention of "the re-arm
+   signal" (that sentence keeps its restart-persistence half; the first bullet stays untouched).
+2. **`notification_manager.py` module docstring, R5-delivery paragraph** (~lines 20-32): replace the
+   claim that the Manager suppresses further deliveries "for the lifetime of this Manager instance
+   (reset only by a reload/restart)" with the ADR-0024 pairing — the producer publishes a level
+   signal **and** its clearing edge, and M3's latch is scoped to the occasion by re-arming on the
+   clear. **Also rewrite the framing that precedes it** (~lines 25-29): "a real tension between the
+   producer's actual behavior and the documented consumer contract … this Manager resolves it on the
+   consumer side" is superseded by ADR-0024's durable rule — notify-once is a property of the event
+   **pair**, not of the onset event alone, so there is no tension left to resolve one-sidedly. Drop
+   the trailing "See the class docstring's 'Known gaps' …" pointer (dangling reference #1).
+3. **`notification_manager.py` `__init__` field comment** (~lines 143-144), directly above
+   `self._deadline_unreachable_notified = False`: currently "see the class docstring's 'Known gaps'
+   for why this is a permanent-until-reload latch, not a per-occasion one" — after this task it is
+   both factually wrong *and* dangling reference #2. Replace it with a one-liner saying the latch is
+   scoped to the occasion, re-armed by `EVENT_DEADLINE_UNREACHABLE_CLEARED` (ADR-0024).
+4. **`notification_manager.py` `on_deadline_unreachable` docstring** (~lines 233-248): its "single,
+   permanently-latched attempt" rationale for logging a delivery failure at warning still holds
+   *within* an occasion, but "permanently" no longer does — say "latched for the rest of this
+   occasion" instead. Its "class docstring's 'Known gaps' covers what this latch does and doesn't do"
+   parenthetical is dangling reference #3 — replace it with a pointer to ADR-0024 / the clear-event
+   listener.
+5. **`custom_components/smart_charging/__init__.py`** (~lines 234-241), the comment above the
+   `for unsub in notification_manager.register_listeners():` loop: it justifies registering the
+   listener *before* the first refresh by the risk of losing "that first, permanently-latched
+   delivery opportunity". The ordering rationale is unchanged and still correct — only the word
+   "permanently" is now wrong (an occasion-scoped latch would still miss that first delivery with no
+   re-fire to recover on). Reword to "occasion-scoped" and note that the same loop now registers the
+   clear-event unsub too.
+
+**Step 4: Run** → PASS. **Step 5: Commit**
+
+```bash
+git add custom_components/smart_charging/managers/notification_manager.py custom_components/smart_charging/__init__.py tests/managers/test_notification_manager.py
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: re-arm the R5 notify-once latch on DeadlineUnreachableCleared (M3, ADR-0024)
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+```
+
 > **⎔ Phase 6 / slice checkpoint:** `ruff check . && ruff format --check . && pytest -q` all green;
 > hassfest/HACS validation passes; a manual HA install can map a notify entity, receive and answer
 > the evening home-day prompt (flag set on "yes", unset on "no"/timeout), and — once E4 publishes
 > `DeadlineUnreachableNotified` (Task 6.1's gate) — receive the deadline-unreachable notice. The
 > deferred hookup (the real `DeadlineUnreachableNotified` signal name) remains `TODO(E4/#306)`,
 > tracked, not silently built (design §0/§9).
+>
+> **Reconciliation (post-E4).** The "once E4 publishes" gate above is **closed**: the
+> deadline/SOC-management slice's Task 5.2 landed the producer, so `coordinator.py` fires
+> `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` (`smart_charging_deadline_unreachable_notified`, payload key
+> `ATTR_REQUIRED_CURRENT_A`) on every cycle the deadline is unreachable, and Task 6.1's subscriber
+> consumes that real signal today — the `TODO(E4/#306)` deferred-hookup note and §9's open question 3
+> ("what concrete bus event type/payload will carry it?") are both answered by that landed name.
+> Task 6.4 above does **not** re-open the gate; it adds only the paired clear event
+> (`DeadlineUnreachableCleared`, ADR-0024) so the consumer's notify-once latch is scoped to the
+> occasion.

@@ -50,6 +50,14 @@ its "before you start" check is: *does the coordinator publish `DeadlineUnreacha
 bus event yet, and under what concrete signal name/payload?* (that name is owned by E4's spec —
 this slice matches it, it does not invent it).
 
+**Paired clear event (ADR-0024).** The R5-delivery task consumes a **second** E4/M1-published event
+on the same edge: **`DeadlineUnreachableCleared`**, fired on the cycle `RequiredCurrentResult.
+unreachable` transitions `True` → `False`. The onset event is a *level* signal (re-fired every cycle
+the condition holds); the clear is the *edge*, and M3 consumes it purely to re-arm its notify-once
+latch, so R5's notice is delivered once **per occasion** rather than once per Manager instance. Both
+are consumed, never re-derived (ADR-0011). The clear carries **no payload**. It is gated on the same
+producer slice and lands in its own task, after the onset subscription.
+
 Every other task (RA4, UC08, the supporting Resource-Access roles and owned entities) has **no** E4
 dependency and is built and tested first.
 
@@ -67,7 +75,7 @@ consumes, following the Captar slice's **"extend if it exists, create if it does
 | `solar_forecast`, `home_day_external` read roles (RA2, V1) | Absent | **In scope** — factory extension, create-if-not (§4) |
 | Home-day flag as owned state, written on "yes" (C2; `switch.smart_charging_home_day`) | Absent (no `switch.py`) | **In scope** — create-if-not (§4/§7) |
 | `charger_status` read role (RA1) | Shipped | **Reused unchanged** |
-| `DeadlineUnreachableNotified` event (E4/M1 publish) | Absent (epic #306) | **Gated last task** (§0/§9) |
+| `DeadlineUnreachableNotified` + its paired `DeadlineUnreachableCleared` event (E4/M1 publish; ADR-0024) | Absent (epic #306) | **Gated last tasks** (§0/§9) |
 
 §8 lists what is explicitly deferred.
 
@@ -197,7 +205,10 @@ Per §5.3's second `alt` and UC08:
 ### R5-delivery branch *(gated — §0/§9)*
 Per §5.3's `else R5 delivery`: M3 **subscribes** to `DeadlineUnreachableNotified` (ADR-0011's one
 published event) and, on receipt, delivers the deadline-unreachable notice via RA4. M3 does **not**
-re-derive urgency — it consumes the event the Coordinator publishes (ADR-0011 Decision row 1).
+re-derive urgency — it consumes the event the Coordinator publishes (ADR-0011 Decision row 1). It
+also subscribes to the paired **`DeadlineUnreachableCleared`** (ADR-0024) and, on receipt, re-arms
+its notify-once latch and does nothing else — no RA4 write: the clear is a re-arm signal, not a
+second user-facing notice.
 
 ---
 
@@ -249,8 +260,10 @@ touch HA.
 
 **HA-coupled orchestration → HA harness.** `notification_manager.py` (package root, mirroring
 `coordinator.py`) holds only the I/O: adapter reads (RA1/RA2/RA4), Store reads/writes (owned config +
-home-day flag), `notify` dispatch, the `mobile_app_notification_action` and `DeadlineUnreachableNotified`
-subscriptions, and per-evaluation wall-clock sampling. Tested via the HA harness (ADR-0009 — Managers
+home-day flag), `notify` dispatch, the `mobile_app_notification_action`,
+`DeadlineUnreachableNotified` and `DeadlineUnreachableCleared` (ADR-0024) subscriptions, and
+per-evaluation wall-clock sampling. The R5 notify-once latch is HA-coupled lifecycle state for the
+same reason: it is re-armed by an observed bus event, not decided from plain data. Tested via the HA harness (ADR-0009 — Managers
 are HA-coupled), per project-plan M3's "Testable on its own: HA harness". A future `managers/` package
 could gather M1/M3; it is not needed now, and this slice does not create one (extend-if-exists).
 
@@ -304,6 +317,13 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
    realization: the actual `hass.bus` event-type string and payload shape the Coordinator will fire
    once E4 (epic #306) is built. Owned by E4's spec, not this design; R5-delivery matches whatever E4
    lands with rather than inventing a concrete string now (§0's `TODO(E4/#306)`).
+   **Resolved** — E4 landed it as `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`
+   (`smart_charging_deadline_unreachable_notified`), payload key `ATTR_REQUIRED_CURRENT_A`, and
+   R5-delivery consumes that name. ADR-0024 then added the paired
+   `EVENT_DEADLINE_UNREACHABLE_CLEARED` (`smart_charging_deadline_unreachable_cleared`) on the
+   `unreachable` `True` → `False` edge, carrying **no payload** — there is no required current to
+   report once the deadline is reachable, so `ATTR_REQUIRED_CURRENT_A` stays the onset event's key
+   alone. Both names are owned by E4's plan; this slice still matches rather than invents.
 
 ---
 

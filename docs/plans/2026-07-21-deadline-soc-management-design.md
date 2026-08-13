@@ -447,13 +447,25 @@ cycle `resolve_required_current`'s (E4, §6) `unreachable` flag is `True` (UC05:
 remaining in Unreachable," not only on the transition edge) — delivery to the user is M3's job
 (deferred, §11); this slice only publishes the event.
 
+Its **paired clear event, `DeadlineUnreachableCleared`** (ADR-0024), is emitted here too, on the
+cycle `RequiredCurrentResult.unreachable` transitions `True` → `False` — including the guard paths
+that reach `unreachable=False` without computing a required current at all (`deadline_resolvable`
+going false; `deadline_today` resolving to `None`, R18), because the edge check reads
+`RequiredCurrentResult.unreachable` itself rather than any one guard. Detection is a pure
+prior-cycle-flag comparison in `coordinator_cycle.py` shaped like `SocGateResolver` (ADR-0012), with
+the `hass.bus.async_fire` staying coordinator-side (ADR-0009/0010); the flag is **held, not reset**,
+across `_run_cycle`'s two fault early-returns, which sit upstream of this call site. The onset event
+keeps its level semantics unchanged — per ADR-0024's durable rule, notify-once is a property of the
+event **pair**, and it is the clear event that lets M3 scope its latch to the occasion.
+
 ---
 
 ## 11. Deliberately deferred
 
 - **M2 (Vehicle-Limit Manager) and M3 (Notification Manager)** — separate epics (#256, #257).
-  `ActiveSocLimitChanged`/`DeadlineUnreachableNotified` are emitted by this slice (§10, per
-  ADR-0011's already-accepted publish-step gate) but have no subscriber yet; this is the same
+  `ActiveSocLimitChanged`/`DeadlineUnreachableNotified`/`DeadlineUnreachableCleared` are emitted by
+  this slice (§10, per ADR-0011's already-accepted publish-step gate, the clear event per ADR-0024)
+  but have no subscriber yet; this is the same
   "publish now, subscribe later" pattern the project-plan already prescribes for M1's other domain
   events.
 - **The evening home-day prompt (UC08)** — M3's job. `switch.smart_charging_home_day` exists and is

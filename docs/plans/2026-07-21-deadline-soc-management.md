@@ -1089,6 +1089,163 @@ git commit --author="Claude <noreply@anthropic.com>" -m "docs: translations + RE
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
+### Task 6.4: Publish `DeadlineUnreachableCleared` on the `unreachable` True→False edge (ADR-0024)
+
+Implements **ADR-0024** (Option B): `DeadlineUnreachableNotified` stays a per-cycle **level**
+signal exactly as Task 5.2 built it (that task and its tests are untouched here); this task adds the
+paired **edge** event so the consumer can scope its notify-once state to the occasion rather than to
+its own lifetime — R5's notice becomes once **per occasion**. Detection is pure and lives in
+`coordinator_cycle.py` shaped like `SocGateResolver`; the `hass.bus.async_fire` stays in
+`coordinator.py` (ADR-0009/0010 boundary, ADR-0012 keeps the detection HA-free).
+
+**Files:**
+- Modify: `custom_components/smart_charging/const.py` (new `EVENT_DEADLINE_UNREACHABLE_CLEARED`
+  alongside `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` / `ATTR_REQUIRED_CURRENT_A`)
+- Modify: `custom_components/smart_charging/coordinator_cycle.py` (new
+  `DeadlineUnreachableEdge` detector)
+- Modify: `custom_components/smart_charging/coordinator.py`
+- Modify: `tests/test_coordinator_cycle.py`
+- Modify: `tests/test_coordinator.py`
+
+**Step 1: Failing tests**
+
+```python
+# tests/test_coordinator_cycle.py -- pure detector unit tests (plain calls, no HA)
+
+def test_deadline_unreachable_edge_first_call_reports_no_clear():
+    """ADR-0024: the prior-cycle flag starts False, so a first resolve() reports
+    cleared=False for BOTH inputs -- unlike SocGateResolver's first call, which always
+    reports changed=True. There is no occasion to clear before one has been observed, and
+    a spurious clear on the very first cycle would re-arm a consumer that never notified."""
+
+def test_deadline_unreachable_edge_reports_cleared_on_true_to_false():
+    """The one edge the event exists for: the prior cycle resolved unreachable=True and this
+    one resolves False -> (False, True)."""
+
+def test_deadline_unreachable_edge_reports_no_clear_while_still_unreachable():
+    """True -> True is the level signal's territory (Task 5.2 re-fires
+    DeadlineUnreachableNotified there); no clear edge, so (True, False)."""
+
+def test_deadline_unreachable_edge_reports_no_clear_on_false_to_false():
+    """Steady-state reachable cycles must stay silent -- (False, False) -- or the consumer's
+    latch would be re-armed on every cycle and the event would become a second level signal."""
+
+def test_deadline_unreachable_edge_clears_only_once_per_occasion():
+    """True -> False -> False fires the clear on the first False cycle only; the flag is
+    updated on every resolve() call, so the second False is an ordinary no-edge cycle."""
+
+def test_deadline_unreachable_edge_reports_cleared_again_on_a_second_occasion():
+    """True -> False -> True -> False: the detector is re-usable, so a later occasion gets its
+    own clear -- this is the per-occasion behavior ADR-0024's Decision exists to produce."""
+
+
+# tests/test_coordinator.py -- integration: the event actually reaches hass.bus
+
+async def test_deadline_unreachable_cleared_fires_when_required_current_falls_back(hass, freezer):
+    """ADR-0024 exit row 1: a tight deadline makes `unreachable` True (cycle 1, no clear), then
+    the deadline is pushed out so `resolve_required_current` returns within the maximum
+    permitted rate -- cycle 2 fires EVENT_DEADLINE_UNREACHABLE_CLEARED exactly once, on the
+    same hass.bus, and cycle 3 (still reachable) fires nothing more."""
+
+async def test_deadline_unreachable_cleared_fires_on_disconnect(hass, freezer):
+    """ADR-0024 exit row 2: the car disconnects, so `deadline_resolvable` goes False and
+    resolve_deadline_urgency returns its early RequiredCurrentResult(unreachable=False)
+    without calling the engine at all -- the clear still fires, because the detector reads
+    `RequiredCurrentResult.unreachable` itself, not any one guard."""
+
+async def test_deadline_unreachable_cleared_fires_when_the_deadline_capability_is_withdrawn(
+    hass, freezer
+):
+    """ADR-0024 exit row 3 (R18): `deadline_resolvable` stays True (car connected, ev_soc
+    readable) but every R14 row resolves to no deadline, so `deadline_today` is None and
+    resolve_required_current's own `if deadline is None` guard yields unreachable=False. A
+    different mechanism from the disconnect above, deliberately covered separately."""
+
+async def test_required_adapter_fault_fires_no_clear_on_the_fault_cycle(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 1 (the *negative* half): with `unreachable`
+    True on cycle 1, a cycle whose required-adapter read returns None returns early (before
+    the deadline-urgency block runs), so no clear is fired on that cycle -- and a subsequent
+    healthy cycle that is STILL unreachable fires no clear either. Same 'a fault cycle is not
+    a successful cycle' rule `adapter_readings_at` already follows on this exact return
+    (#648). NOTE: this assertion set alone does NOT pin the hold -- see the discriminating
+    test below."""
+
+async def test_required_adapter_fault_holds_the_flag_so_a_later_genuine_resolve_still_clears(
+    hass, freezer
+):
+    """ADR-0024's fault-cycle-hold rule, path 1 (the *discriminating* half -- the test that
+    actually distinguishes HOLD from RESET, and the reason this task exists at all):
+
+      cycle 1: tight deadline -> unreachable True, no clear (the edge is now armed)
+      cycle 2: required-adapter read returns None -> fault early-return, no clear
+      cycle 3: healthy again AND the deadline genuinely resolves (unreachable False)
+               -> EVENT_DEADLINE_UNREACHABLE_CLEARED MUST fire exactly once
+
+    Under the correct HOLD behavior the detector's prior-cycle flag survived cycle 2
+    untouched, so cycle 3 is a genuine True->False edge and the clear fires. Under a broken
+    `self._unreachable_edge.reset()`-on-fault implementation the flag would be False entering
+    cycle 3, no edge would be seen, and the clear would NEVER fire -- leaving M3's
+    `_deadline_unreachable_notified` latch armed forever and silently suppressing the next
+    occasion's R5 notice. That is exactly the silent failure ADR-0024 exists to prevent, and
+    the two negative-only assertions above would pass against that broken implementation, so
+    this test is the one that pins the rule."""
+
+async def test_ev_soc_fault_fires_no_clear_on_the_fault_cycle(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 2: same negative assertions against the *other*
+    early return -- a solar mode selected, car connected, ev_soc reading None. Resetting the
+    flag here would emit a spurious clear on a cycle that established nothing about the
+    deadline and then re-notify the driver on the next healthy cycle."""
+
+async def test_ev_soc_fault_holds_the_flag_so_a_later_genuine_resolve_still_clears(
+    hass, freezer
+):
+    """ADR-0024's fault-cycle-hold rule, path 2 discriminating half: the same
+    unreachable -> fault -> genuine-resolve sequence as the required-adapter version above,
+    driven through the ev_soc early return instead. Both early returns are separate code
+    paths, so each gets its own discriminating test -- a future refactor could plausibly add
+    a reset to one and not the other."""
+```
+
+> The four `test_coordinator.py` fault tests above follow the existing file's own convention for
+> deadline tests (see `test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate`,
+> `tests/test_coordinator.py`:1588 ff.): take `(hass, freezer)`, call
+> `freezer.move_to("2026-01-15 12:00:00")` and then `_seed_today_deadline(coord, hours_from_now=0.5)`
+> (plus `_seed_ample_peak_headroom(coord)`) **before** cycle 1, and record events with an
+> `@callback`-decorated listener — a plain listener is dispatched as an executor job and races the
+> assertions. Do not write them as bare `(hass)` tests; without a frozen clock the seeded deadline is
+> not reproducible.
+
+**Step 2: Run** → FAIL. **Step 3: Implement** — add
+`EVENT_DEADLINE_UNREACHABLE_CLEARED = "smart_charging_deadline_unreachable_cleared"` to `const.py`
+next to `EVENT_DEADLINE_UNREACHABLE_NOTIFIED`, with a comment stating the asymmetry ADR-0024's
+durable rule names: the notified event is a level signal, this one is the clearing **edge**. It
+carries **no payload** — there is no required current to report once the deadline is reachable, and
+`ATTR_REQUIRED_CURRENT_A` stays the notified event's key alone. Add `DeadlineUnreachableEdge` to
+`coordinator_cycle.py` alongside `SocGateResolver`: a class owning a single
+`self._was_unreachable: bool = False`, with `resolve(unreachable: bool) -> tuple[bool, bool]`
+returning `(unreachable, self._was_unreachable and not unreachable)` and then storing the new value
+— pure, no `hass` import, docstring citing ADR-0024 and stating that the flag starts `False` so the
+first call never reports a clear (deliberately unlike `SocGateResolver`'s always-changed first
+call). Construct it in `SmartChargingCoordinator.__init__` next to `self._soc_gate`. In `_run_cycle`,
+call it at the **existing** `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` fire site — immediately after
+`required = deadline_urgency.required`, replacing the bare `if required.unreachable:` with a
+`_, cleared = self._unreachable_edge.resolve(required.unreachable)` followed by the unchanged
+notified-fire block and a `if cleared: self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)`.
+Reading `RequiredCurrentResult.unreachable` (never any one guard) is what makes all three of
+ADR-0024's exit paths fire for free. Add **no** reset of the flag on either fault early-return: both
+sit upstream of this call site, so a fault cycle simply never reaches the detector and its prior flag
+is held — that is the ADR's rule, and the two fault tests above are what pins it against a future
+"reset on fault" refactor. Note the two comments on those early returns already record the same
+`adapter_readings_at` reasoning (#648); extend one of them to name the detector too, so the next
+reader sees both pieces of held state at once. **Step 4: Run** → PASS. **Step 5: Commit**
+
+```bash
+git add custom_components/smart_charging/const.py custom_components/smart_charging/coordinator_cycle.py custom_components/smart_charging/coordinator.py tests/test_coordinator_cycle.py tests/test_coordinator.py
+git commit --author="Claude <noreply@anthropic.com>" -m "feat: publish DeadlineUnreachableCleared on the unreachable clearing edge (R5/ADR-0024)
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+```
+
 > **⎔ Phase 6 / slice checkpoint:** `ruff check . && ruff format --check . && pytest -q` all green
 > (WSL harness); HACS/hassfest validation passes; a manual HA install can select `Auto` from the
 > profile selector and observe correct mode escalation/reversion around a departure deadline, solar
