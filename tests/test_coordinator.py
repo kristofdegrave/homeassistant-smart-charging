@@ -21,6 +21,7 @@ from custom_components.smart_charging.const import (
     ATTR_REQUIRED_CURRENT_A,
     DEFAULT_CAPTAR_AVAILABLE,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
+    EVENT_DEADLINE_UNREACHABLE_CLEARED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     MODE_CAPTAR,
     MODE_OFF,
@@ -1664,6 +1665,255 @@ async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_cu
     assert len(events) == 1
     assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
     assert events[0].data[ATTR_REQUIRED_CURRENT_A] != float("inf")
+
+
+def _listen_cleared(hass):
+    events = []
+
+    @callback
+    def _record(event):
+        # A plain (non-@callback) listener is dispatched as an executor job -- appending
+        # from a worker thread races the assertions below. @callback keeps it synchronous.
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_CLEARED, _record)
+    return events
+
+
+async def test_deadline_unreachable_cleared_fires_when_required_current_falls_back(hass, freezer):
+    """ADR-0024 exit row 1: a tight deadline makes `unreachable` True (cycle 1, no clear), then
+    the deadline is pushed out so `resolve_required_current` returns within the maximum
+    permitted rate -- cycle 2 fires EVENT_DEADLINE_UNREACHABLE_CLEARED exactly once, on the
+    same hass.bus, and cycle 3 (still reachable) fires nothing more."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    config = _config()  # CONF_MAX_CURRENT=16.0
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)  # tight deadline -> required current >> 16 A
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, no clear yet
+    assert coord._required_current.unreachable is True
+    assert len(events) == 0
+
+    # cycle 2: same day, plenty of time, and the state of charge has caught up -> reachable
+    adapters[ROLE_EV_SOC] = _FakeNumeric(70.0)
+    _seed_today_deadline(coord, hours_from_now=3)
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is False
+    assert len(events) == 1
+
+    await coord._async_update_data()  # cycle 3: still reachable -> no further clear
+    assert len(events) == 1
+
+
+async def test_deadline_unreachable_cleared_fires_on_disconnect(hass, freezer):
+    """ADR-0024 exit row 2: the car disconnects, so `deadline_resolvable` goes False and
+    resolve_deadline_urgency returns its early RequiredCurrentResult(unreachable=False)
+    without calling the engine at all -- the clear still fires, because the detector reads
+    `RequiredCurrentResult.unreachable` itself, not any one guard."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, no clear yet
+    assert coord._required_current.unreachable is True
+    assert len(events) == 0
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_DISCONNECTED)  # cycle 2: disconnect
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is False
+    assert len(events) == 1
+
+
+async def test_deadline_unreachable_cleared_fires_when_the_deadline_capability_is_withdrawn(
+    hass, freezer
+):
+    """ADR-0024 exit row 3 (R18): `deadline_resolvable` stays True (car connected, ev_soc
+    readable) but every R14 row resolves to no deadline, so `deadline_today` is None and
+    resolve_required_current's own `if deadline is None` guard yields unreachable=False. A
+    different mechanism from the disconnect above, deliberately covered separately."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, no clear yet
+    assert coord._required_current.unreachable is True
+    assert len(events) == 0
+
+    # cycle 2: every R14 row now resolves to "no deadline" (capability withdrawn, R18) --
+    # car is still connected and ev_soc still reads fine, so this is NOT a disconnect.
+    coord.departure_dow_defaults[dt_util.now().weekday()] = None
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is False
+    assert len(events) == 1
+
+
+async def test_required_adapter_fault_fires_no_clear_on_the_fault_cycle(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 1 (the *negative* half): with `unreachable`
+    True on cycle 1, a cycle whose required-adapter read returns None returns early (before
+    the deadline-urgency block runs), so no clear is fired on that cycle -- and a subsequent
+    healthy cycle that is STILL unreachable fires no clear either. Same 'a fault cycle is not
+    a successful cycle' rule `adapter_readings_at` already follows on this exact return
+    (#648). NOTE: this assertion set alone does NOT pin the hold -- see the discriminating
+    test below."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, edge armed
+    assert coord._required_current.unreachable is True
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeNumeric(None)  # cycle 2: required-adapter fault
+    fault_result = await coord._async_update_data()
+    assert fault_result.fault is True
+    assert len(events) == 0
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_CHARGING)  # cycle 3: healthy, still tight
+    healthy_result = await coord._async_update_data()
+    assert healthy_result.fault is False
+    assert coord._required_current.unreachable is True
+    assert len(events) == 0
+
+
+async def test_required_adapter_fault_holds_the_flag_so_a_later_genuine_resolve_still_clears(
+    hass, freezer
+):
+    """ADR-0024's fault-cycle-hold rule, path 1 (the *discriminating* half -- the test that
+    actually distinguishes HOLD from RESET, and the reason this task exists at all):
+
+      cycle 1: tight deadline -> unreachable True, no clear (the edge is now armed)
+      cycle 2: required-adapter read returns None -> fault early-return, no clear
+      cycle 3: healthy again AND the deadline genuinely resolves (unreachable False)
+               -> EVENT_DEADLINE_UNREACHABLE_CLEARED MUST fire exactly once
+
+    Under the correct HOLD behavior the detector's prior-cycle flag survived cycle 2
+    untouched, so cycle 3 is a genuine True->False edge and the clear fires. Under a broken
+    `self._unreachable_edge.reset()`-on-fault implementation the flag would be False entering
+    cycle 3, no edge would be seen, and the clear would NEVER fire -- leaving M3's
+    `_deadline_unreachable_notified` latch armed forever and silently suppressing the next
+    occasion's R5 notice. That is exactly the silent failure ADR-0024 exists to prevent, and
+    the two negative-only assertions above would pass against that broken implementation, so
+    this test is the one that pins the rule."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 0.0
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, edge armed
+    assert coord._required_current.unreachable is True
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeNumeric(None)  # cycle 2: required-adapter fault
+    fault_result = await coord._async_update_data()
+    assert fault_result.fault is True
+    assert len(events) == 0
+
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_CHARGING)  # cycle 3: healthy again
+    adapters[ROLE_EV_SOC] = _FakeNumeric(70.0)  # ...state of charge has caught up...
+    _seed_today_deadline(coord, hours_from_now=3)  # ...and the deadline genuinely resolves
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is False
+    assert len(events) == 1
+
+
+async def test_ev_soc_fault_fires_no_clear_on_the_fault_cycle(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 2: same negative assertions against the *other*
+    early return -- a solar mode selected, car connected, ev_soc reading None. Resetting the
+    flag here would emit a spurious clear on a cycle that established nothing about the
+    deadline and then re-notify the driver on the next healthy cycle."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, edge armed
+    assert coord._required_current.unreachable is True
+
+    adapters[ROLE_EV_SOC] = _FakeNumeric(None)  # cycle 2: car connected, ev_soc unavailable
+    fault_result = await coord._async_update_data()
+    assert fault_result.fault is True
+    assert len(events) == 0
+
+    adapters[ROLE_EV_SOC] = _FakeNumeric(10.0)  # cycle 3: healthy again, still tight deadline
+    healthy_result = await coord._async_update_data()
+    assert healthy_result.fault is False
+    assert coord._required_current.unreachable is True
+    assert len(events) == 0
+
+
+async def test_ev_soc_fault_holds_the_flag_so_a_later_genuine_resolve_still_clears(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 2 discriminating half: the same
+    unreachable -> fault -> genuine-resolve sequence as the required-adapter version above,
+    driven through the ev_soc early return instead. Both early returns are separate code
+    paths, so each gets its own discriminating test -- a future refactor could plausibly add
+    a reset to one and not the other."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    _seed_ample_peak_headroom(coord)
+    events = _listen_cleared(hass)
+
+    await coord._async_update_data()  # cycle 1: unreachable, edge armed
+    assert coord._required_current.unreachable is True
+
+    adapters[ROLE_EV_SOC] = _FakeNumeric(None)  # cycle 2: ev_soc fault
+    fault_result = await coord._async_update_data()
+    assert fault_result.fault is True
+    assert len(events) == 0
+
+    adapters[ROLE_EV_SOC] = _FakeNumeric(70.0)  # cycle 3: healthy again, state of charge caught up
+    _seed_today_deadline(coord, hours_from_now=3)  # ...and the deadline genuinely resolves
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is False
+    assert len(events) == 1
 
 
 # --- ROLE_LOW_TARIFF (issue #376): Auto row 4's low-tariff input ---

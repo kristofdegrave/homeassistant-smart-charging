@@ -24,6 +24,11 @@ ATTR_REQUIRED_CURRENT_A = "required_current_a"  # DeadlineUnreachableNotified pa
 # contract), but coordinator.py caps that to CONF_MAX_CURRENT before firing this event --
 # a non-finite value would neither format sensibly into notification text nor round-trip
 # through HA's JSON websocket encoding (issue #650).
+# ADR-0024: the paired clearing *edge* -- fires once on the unreachable True->False
+# transition, unlike the level signal above, which re-fires every cycle the condition
+# holds. Carries no payload: there is no required current to report once the deadline is
+# reachable again.
+EVENT_DEADLINE_UNREACHABLE_CLEARED = "smart_charging_deadline_unreachable_cleared"
 
 # Domain events M2 fires on the HA event bus (UC09 "Domain events produced"; DDD->HA mapping). Not
 # consumed by any other Manager (ADR-0011) -- observability/automation only.

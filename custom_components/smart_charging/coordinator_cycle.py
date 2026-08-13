@@ -322,6 +322,27 @@ class SocGateResolver:
         return limit, changed
 
 
+class DeadlineUnreachableEdge:
+    """Pure True->False edge detection over `RequiredCurrentResult.unreachable` (ADR-0024),
+    shaped like `SocGateResolver` above. The coordinator fires the paired
+    `DeadlineUnreachableCleared` event off the `cleared` flag this returns; `hass.bus` access
+    stays coordinator-side (ADR-0009/0010).
+
+    Deliberately unlike `SocGateResolver`'s first call, which always reports `changed=True`:
+    the prior flag here starts `False`, so a first `resolve()` never reports a clear -- there
+    is no occasion to clear before one has been observed, and a spurious clear on the very
+    first cycle would re-arm a consumer (the Notification Manager) that never notified."""
+
+    def __init__(self) -> None:
+        self._was_unreachable = False
+
+    def resolve(self, unreachable: bool) -> tuple[bool, bool]:
+        """Return (this cycle's `unreachable`, whether it just cleared from True to False)."""
+        cleared = self._was_unreachable and not unreachable
+        self._was_unreachable = unreachable
+        return unreachable, cleared
+
+
 class SolarStepUpGate:
     """R8 solar step-up gating (ADR-0023), wrapping engines/soc_target.py::resolve_solar_step_up.
     Owns the SolarStepUpState itself -- moved off the coordinator instance -- and exposes it via
