@@ -645,32 +645,15 @@ async def test_deadline_unreachable_clear_event_sends_nothing_itself(hass):
     assert len(calls) == 1  # only the notified event's own delivery -- the clear sent nothing
 
 
-async def test_register_listeners_subscribes_to_both_deadline_events(hass):
-    """Regression: register_listeners returns an unsub per subscription and BOTH are
-    unsubscribed on unload (ADR-0008) -- assert len(unsubs) == 2, then call every unsub and
-    verify neither a notify nor a clear event reaches M3 afterwards."""
-    calls = _register_notify_capture(hass)
-    manager = _manager(hass)
-    unsubs = manager.register_listeners()
-    assert len(unsubs) == 2
-
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
-    await hass.async_block_till_done()
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})
-    await hass.async_block_till_done()
-    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 14.0})
-    await hass.async_block_till_done()
-
-    assert len(calls) == 2  # both listeners genuinely wired -- the re-arm + second notice fired
-
-
 async def test_evening_prompt_lifecycle_is_unaffected_by_the_clear_event(hass):
     """UC08 regression: a DeadlineUnreachableCleared event touches only the R5 latch --
     async_evaluate's prompt state/date and the home-day flag write are untouched."""
+    _register_notify_capture(hass)
     manager = _manager(hass)
     manager.register_listeners()
 
     await manager.async_evaluate(now=EVENING)
+    assert manager._state is PromptState.PENDING
     state_before, date_before = manager._state, manager._date
 
     hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})

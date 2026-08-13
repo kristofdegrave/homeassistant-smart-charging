@@ -88,7 +88,7 @@ class NotificationManager:
     (notification_state.py module docstring) -- this Manager is exactly the caller that
     docstring describes as owning that anchor across ticks.
 
-    Known gaps:
+    Known gap:
     - `_state`/`_date` are in-memory only and reset to Not-sent on every HA restart, so a
       restart between a prompt being sent and midnight can cause a second prompt the same
       evening (UC08's "at most once per evening" is only guaranteed within one HA session).
