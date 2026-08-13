@@ -168,7 +168,7 @@ control flow that no framework check covers, and a step omitted from its table i
 way nothing raises. That is discharged by test obligation, not by hope (see Consequences), and it is
 the same table-over-repetition trade the codebase already accepted in `_read_owned_entities`.
 
-Three points follow directly and are part of this decision rather than of its implementation:
+Four points follow directly and are part of this decision rather than of its implementation:
 
 1. **Validation becomes step-local.** Each of the coupling guards moves to the step that presents the
    field it protects and runs on that step's submission — the EV state-of-charge and solar-forecast
@@ -178,11 +178,18 @@ Three points follow directly and are part of this decision rather than of its im
    it applies, and the combined post-submit `_mapping_errors` call disappears rather than moving.
 2. **Answers accumulate in flow-instance state; the storage boundary does not move.** Each step
    merges its validated `user_input` into one flow-instance dict, and the terminal step applies the
-   existing `_split_data`/`OPTION_KEYS` split to that accumulated dict at the single
+   existing `_split_data`/`OPTION_KEYS` bucket split to that accumulated dict at the single
    `async_create_entry` (install) or `async_update_reload_and_abort` (reconfigure) call. The
    accumulator holds only the current flow run's answers — abandoning the flow discards it, which is
    what UC12's abandonment exception flow requires — and ADR-0005's bucket boundary is untouched:
-   this ADR changes when fields arrive at the split, not which side of it they land on.
+   this ADR changes when fields arrive at the split, not which side of it they land on. Prefilling
+   the reconfigure path (UC12 1a) is a *rendering-only* concern and does not seed the accumulator:
+   each step is rendered with `self.add_suggested_values_to_schema(<step schema>, entry.data)`, as
+   the flat flow already does, so the existing entry supplies suggested values on the form while the
+   accumulator still holds nothing but what the user submitted this run. This is what keeps R20 AC7
+   honest — declaring a previously-present capability absent means that capability's step is never
+   shown, so its stale mapping fields are never submitted, never enter the accumulator, and are
+   therefore dropped by `_split_data` rather than carried forward.
 3. **The options flow gets its own table, not a shared one.** Its gates read the *stored* capability
    flags rather than answers collected in this run, its steps carry threshold fields only, it has no
    vehicle-charge-limit step, and it writes only options (UC12 1b) — so it walks a separate table in
@@ -191,6 +198,15 @@ Three points follow directly and are part of this decision rather than of its im
    methods, with a flow-mode flag selecting the mapping-only or mapping-plus-threshold half of each
    step's schema, since UC12 1a differs from the install flow only in which half is rendered and in
    stopping before step 8.
+4. **The three framework-mandated entry points survive and delegate.** Home Assistant fixes the
+   method name of each flow's *first* step — `async_step_user` (install), `async_step_reconfigure`
+   (reconfigure) and `async_step_init` (options), as ADR-0005's consequences already record — so "one
+   `async_step_*` method per UC12 step" must not be read as one method for UC12 step 1. Step 1 keeps
+   two entry methods, `async_step_user` and `async_step_reconfigure`, which set the flow mode and
+   then delegate into a single shared step-1 implementation before both continue into the same table
+   walk; the options flow's table walk likewise begins at `async_step_init` rather than at its first
+   gated step. Only these three names are framework-imposed; every later step id is the integration's
+   own.
 
 This ADR supersedes nothing. ADR-0005's data/options boundary and ADR-0008's reload-on-change
 behaviour both stand exactly as written; ADR-0004's owned-entity list is untouched, and the seed
@@ -204,7 +220,15 @@ values UC12 3a describes still initialise owned entities as they do today.
   fragment, one mapping fragment and one threshold fragment per capability, an ungated-mapping
   fragment and an ungated-threshold fragment — since the mapping-only (UC12 1a) and threshold-only
   (UC12 1b) variants of each per-capability step are built from opposite halves of the same step.
-  `_split_data` and `OPTION_KEYS` survive unchanged and move to the terminal step.
+  `_split_data` survives unchanged and moves to the terminal step — it is an exclusion filter, so a
+  narrower accumulator simply yields a narrower data bucket. `OPTION_KEYS` survives as a constant but
+  its *consumption* cannot: today the terminal call is `options = {k: user_input[k] for k in
+  OPTION_KEYS}`, direct indexing over a tuple that includes capability-gated keys
+  (`CONF_SOLAR_START_THRESHOLD_W`, `CONF_SOLAR_HOLD_MIN`, `CONF_SOLAR_RESERVE_SOC`,
+  `CONF_CAPTAR_COOLDOWN_MIN` and friends). Once a solar-disabled install never renders the solar
+  step, those keys are absent from the accumulator and that comprehension raises `KeyError`, so the
+  terminal step must build the options bucket by *intersection* — only the `OPTION_KEYS` actually
+  present in the accumulator — rather than by indexing every key.
 - **The three guard helpers are split, not relocated wholesale.** `_ev_soc_missing_error`,
   `_solar_forecast_missing_error` and `_car_home_missing_error` are each invoked today against a dict
   containing every field; step-local, each becomes a guard on its owning step whose capability
@@ -213,14 +237,24 @@ values UC12 3a describes still initialise owned entities as they do today.
   needs particular care: UC12 requires the EV state-of-charge mapping to be asked exactly once even
   when both solar and CapTar are enabled, so the field is presented on whichever of the two steps runs
   first and its guard must not re-ask on the second.
-- **The accumulator needs a defined shape and a documented lifetime.** A flow-instance dict of
-  submitted fields, seeded from the existing entry in the reconfigure path, merged per step,
-  consumed once at the terminal step. It is per-flow-run state on a `FlowHandler` instance and must
-  never be read as a substitute for the config entry.
-- **Every step needs its own `strings.json` and `translations/en.json`/`nl.json` block.** One flat
-  `config.step.user` block becomes one block per step id, in both the `config` and `options` sections
-  (Home Assistant namespaces the two, so the config and options handlers may reuse step ids), each
-  carrying the title, description and per-field labels for the fields that step now owns. The existing
+- **The accumulator needs a defined shape and a documented lifetime.** A flow-instance dict of the
+  fields submitted *in this run*, starting empty, merged per step, consumed once at the terminal
+  step. It is never seeded from the existing entry: reconfigure prefill happens at render time via
+  `add_suggested_values_to_schema`, so a capability the user has just switched off contributes
+  nothing to the accumulator and its stale mapping fields cannot survive the save (R20 AC7). It is
+  per-flow-run state on a `FlowHandler` instance and must never be read as a substitute for the
+  config entry.
+- **Every step needs its own `strings.json` and `translations/en.json`/`nl.json` block.** Today there
+  are three step blocks — `config.step.user`, `config.step.reconfigure` and `options.step.init`.
+  Those become one block per step id, in both the `config` and `options` sections (Home Assistant
+  namespaces those two, so the config and options handlers may reuse step ids), each carrying the
+  title, description and per-field labels for the fields that step now owns. That namespacing does
+  *not* separate install from reconfigure — both live under `config.step.*` — so decision point 3's
+  choice to share step methods and step ids between them necessarily collapses today's separate
+  `config.step.reconfigure` block: the two flows will present the same per-step title and description
+  text, which must therefore be worded to read correctly in both a first-install and an
+  edit-my-mappings context. That is a real editorial cost of sharing the table, accepted here as the
+  price of not maintaining two parallel step sets. The existing
   field labels can be redistributed; the parenthetical "(required if Solar installed)"-style
   qualifiers in them become redundant once the field only appears when it is required, and should be
   dropped in the same change rather than left to contradict the new structure.
@@ -231,9 +265,14 @@ values UC12 3a describes still initialise owned entities as they do today.
   per moved guard asserting the error is raised on its own step (and that the flow does not advance),
   replacing the current end-of-form cases; and the accumulator needs a case pinning that an abandoned
   flow writes nothing.
-- **No config-entry migration and no `VERSION` bump.** The persisted data and options keys are
-  unchanged — only their presentation is — so an entry created by the flat flow is read identically
-  by the new one. Entries created before this change may lack fields a capability's step now presents
+- **No config-entry migration and no `VERSION` bump.** No key changes name, type or bucket, so an
+  entry created by the flat flow is read identically by the new one. The key *set* does narrow,
+  though: a disabled-capability install now persists an options bucket missing that capability's
+  threshold keys entirely — a shape the flat flow never produced, since it always wrote every
+  `OPTION_KEYS` entry. That is safe only because every consumer already reads defensively, via
+  `opts.get(<key>, DEFAULT_...)` rather than direct indexing, so an absent key resolves to its
+  default exactly as a never-configured one would; the property is pre-existing, and this decision
+  now depends on it. Entries created before this change may lack fields a capability's step now presents
   as required; the reconfigure flow (UC12 1a) is the path that repairs them, and no automatic
   migration is introduced.
 - **What becomes harder.** Adding a *field* is no longer a one-line schema edit — it now requires
