@@ -53,10 +53,23 @@ class CycleContext:
     now: float
     now_dt: datetime | None  # None only in the baseline-mode dry-run construction
     ev_soc: float | None = None
-    surplus_w: float = 0.0
-    monthly_peak_kw: float = 0.0
-    effective_peak_limit_kw: float = 0.0
-    active_soc_limit: float = 0.0
+    surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
+    # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)
+    # issue #564: monthly_peak_kw/effective_peak_limit_kw/active_soc_limit are resolved only
+    # partway through _run_cycle (see the per-assignment comments in coordinator.py), yet used to
+    # default to a same-typed placeholder (0.0) indistinguishable from a genuine reading. `None`
+    # instead so a future premature *arithmetic/comparison* read (active_soc_limit is already read
+    # this way today, by _dispatch_mode strictly after it resolves each cycle) raises immediately
+    # instead of silently computing on a plausible-looking wrong value. The five bool fields below
+    # (urgent/sun_is_up/sun_is_down/low_tariff_active/solar_reserve_active) are deliberately NOT
+    # given this treatment: every consumer reads them via plain truthiness (engines/soc_target.py,
+    # resolve_effective_peak_limit), where `None` is indistinguishable from `False` -- it would buy
+    # no fail-loudness and, for low_tariff_active, would silently invert the documented-correct
+    # single-tariff default (`True`, coordinator.py) into "not low tariff". They keep their
+    # original, genuinely-correct starting values.
+    monthly_peak_kw: float | None = None
+    effective_peak_limit_kw: float | None = None
+    active_soc_limit: float | None = None
     urgent: bool = False
     sun_is_up: bool = False
     sun_is_down: bool = False
