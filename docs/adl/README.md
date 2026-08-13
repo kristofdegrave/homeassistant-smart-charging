@@ -31,5 +31,6 @@ template.
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Proposed |
 | [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Proposed |
 | [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion | Proposed |
+| [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
