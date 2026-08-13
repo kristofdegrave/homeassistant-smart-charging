@@ -584,15 +584,18 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
 
 
 def test_deadline_unreachable_edge_first_call_reports_no_clear():
-    """ADR-0024: the prior-cycle flag starts False, so a first resolve() reports
-    cleared=False for BOTH inputs -- unlike SocGateResolver's first call, which always
-    reports changed=True. There is no occasion to clear before one has been observed, and
-    a spurious clear on the very first cycle would re-arm a consumer that never notified."""
+    """ADR-0024: the prior-cycle flag starts False, so a first resolve(True) reports
+    cleared=False -- unlike SocGateResolver's first call, which always reports changed=True.
+    There is no occasion to clear before one has been observed, and a spurious clear on the
+    very first cycle would re-arm a consumer that never notified."""
     edge = DeadlineUnreachableEdge()
     assert edge.resolve(True) == (True, False)
 
 
 def test_deadline_unreachable_edge_first_call_reports_no_clear_when_reachable():
+    """The other half of the first-call departure from SocGateResolver above: a first
+    resolve(False) also reports cleared=False, not just resolve(True) -- there is nothing to
+    clear from on either input when no prior cycle has been observed."""
     edge = DeadlineUnreachableEdge()
     assert edge.resolve(False) == (False, False)
 

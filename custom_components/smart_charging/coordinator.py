@@ -430,6 +430,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # a successful one, even though the three required-adapter reads that fed
             # `solar_surplus_w`/`monthly_peak_kw` above did succeed. (The assignment itself
             # now lives at the very end of a successful cycle, see the comment there.)
+            # `self._unreachable_edge`'s prior flag is held for the same reason (ADR-0024):
+            # this return also sits upstream of its call site below.
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,

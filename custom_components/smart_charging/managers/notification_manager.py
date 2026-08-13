@@ -97,10 +97,9 @@ class NotificationManager:
       becomes unreachable, resolves (car disconnects, SOC catches up), and later becomes
       unreachable again on a *different* occasion delivers only the first notice for the
       lifetime of this Manager instance (until the next reload/restart), not one notice per
-      occasion. The Coordinator's `DeadlineUnreachableNotified` event carries no "resolved"
-      counterpart to re-arm on (it only ever fires while unreachable, const.py), so a
-      correct per-occasion re-arm needs a producer-side signal not yet implemented --
-      tracked as a follow-up, not silently accepted as "done".
+      occasion. The Coordinator now publishes the paired resolution signal this re-arm needs
+      (`DeadlineUnreachableCleared`, ADR-0024, issue #670) -- this Manager just doesn't
+      subscribe to it yet (issue #671, tracked as a follow-up, not silently accepted as "done").
     Restart persistence and the re-arm signal are not part of the notifications design doc
     and are left for a follow-up if either proves to matter in practice.
     """

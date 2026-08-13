@@ -1,6 +1,6 @@
 """Coordinator-internal cycle decomposition: CycleContext, PeakDemandState, SocGateResolver, and
 the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
-resolve_deadline_urgency (ADR-0023).
+resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge (ADR-0024).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
 even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
 another engine; these call engines).
@@ -415,10 +415,11 @@ class DeadlineUrgencyResult:
     `auto_dispatchable` was False -- the coordinator only ever assigns `self.active_mode`
     from it in that case, mirroring the original inline `if auto_dispatchable:` guard around
     the real (non-baseline) call to the Auto policy's `select()` (ADR-0017). Firing
-    `DeadlineUnreachableNotified` off
-    `required.unreachable` stays the coordinator's own job (ADR-0009/0010: HA I/O stays
-    coordinator-side), the same boundary `SocGateResolver` already draws for
-    `ActiveSocLimitChanged`."""
+    `DeadlineUnreachableNotified` (the per-cycle level signal) and, off
+    `DeadlineUnreachableEdge`'s own detection over this same `required.unreachable`,
+    `DeadlineUnreachableCleared` (the paired clearing edge, ADR-0024) both stay the
+    coordinator's own job (ADR-0009/0010: HA I/O stays coordinator-side), the same boundary
+    `SocGateResolver` already draws for `ActiveSocLimitChanged`."""
 
     required: RequiredCurrentResult
     urgent: bool
