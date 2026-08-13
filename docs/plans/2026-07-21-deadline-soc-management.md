@@ -1161,20 +1161,59 @@ async def test_deadline_unreachable_cleared_fires_when_the_deadline_capability_i
     resolve_required_current's own `if deadline is None` guard yields unreachable=False. A
     different mechanism from the disconnect above, deliberately covered separately."""
 
-async def test_required_adapter_fault_holds_the_unreachable_flag_and_fires_no_clear(hass):
-    """ADR-0024's fault-cycle-hold rule, path 1: with `unreachable` True on cycle 1, a cycle
-    whose required-adapter read returns None returns early (before the deadline-urgency block
-    runs), so no clear is fired -- and the detector's prior-cycle flag is HELD, not reset:
-    a subsequent healthy cycle that is STILL unreachable must fire no clear either. Same
-    'a fault cycle is not a successful cycle' rule `adapter_readings_at` already follows on
-    this exact return (#648)."""
+async def test_required_adapter_fault_fires_no_clear_on_the_fault_cycle(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 1 (the *negative* half): with `unreachable`
+    True on cycle 1, a cycle whose required-adapter read returns None returns early (before
+    the deadline-urgency block runs), so no clear is fired on that cycle -- and a subsequent
+    healthy cycle that is STILL unreachable fires no clear either. Same 'a fault cycle is not
+    a successful cycle' rule `adapter_readings_at` already follows on this exact return
+    (#648). NOTE: this assertion set alone does NOT pin the hold -- see the discriminating
+    test below."""
 
-async def test_ev_soc_fault_holds_the_unreachable_flag_and_fires_no_clear(hass):
-    """ADR-0024's fault-cycle-hold rule, path 2: same assertions against the *other* early
-    return -- a solar mode selected, car connected, ev_soc reading None. Resetting the flag
-    here would emit a spurious clear on a cycle that established nothing about the deadline
-    and then re-notify the driver on the next healthy cycle."""
+async def test_required_adapter_fault_holds_the_flag_so_a_later_genuine_resolve_still_clears(
+    hass, freezer
+):
+    """ADR-0024's fault-cycle-hold rule, path 1 (the *discriminating* half -- the test that
+    actually distinguishes HOLD from RESET, and the reason this task exists at all):
+
+      cycle 1: tight deadline -> unreachable True, no clear (the edge is now armed)
+      cycle 2: required-adapter read returns None -> fault early-return, no clear
+      cycle 3: healthy again AND the deadline genuinely resolves (unreachable False)
+               -> EVENT_DEADLINE_UNREACHABLE_CLEARED MUST fire exactly once
+
+    Under the correct HOLD behavior the detector's prior-cycle flag survived cycle 2
+    untouched, so cycle 3 is a genuine True->False edge and the clear fires. Under a broken
+    `self._unreachable_edge.reset()`-on-fault implementation the flag would be False entering
+    cycle 3, no edge would be seen, and the clear would NEVER fire -- leaving M3's
+    `_deadline_unreachable_notified` latch armed forever and silently suppressing the next
+    occasion's R5 notice. That is exactly the silent failure ADR-0024 exists to prevent, and
+    the two negative-only assertions above would pass against that broken implementation, so
+    this test is the one that pins the rule."""
+
+async def test_ev_soc_fault_fires_no_clear_on_the_fault_cycle(hass, freezer):
+    """ADR-0024's fault-cycle-hold rule, path 2: same negative assertions against the *other*
+    early return -- a solar mode selected, car connected, ev_soc reading None. Resetting the
+    flag here would emit a spurious clear on a cycle that established nothing about the
+    deadline and then re-notify the driver on the next healthy cycle."""
+
+async def test_ev_soc_fault_holds_the_flag_so_a_later_genuine_resolve_still_clears(
+    hass, freezer
+):
+    """ADR-0024's fault-cycle-hold rule, path 2 discriminating half: the same
+    unreachable -> fault -> genuine-resolve sequence as the required-adapter version above,
+    driven through the ev_soc early return instead. Both early returns are separate code
+    paths, so each gets its own discriminating test -- a future refactor could plausibly add
+    a reset to one and not the other."""
 ```
+
+> The four `test_coordinator.py` fault tests above follow the existing file's own convention for
+> deadline tests (see `test_deadline_unreachable_notified_fires_while_required_current_exceeds_max_rate`,
+> `tests/test_coordinator.py`:1588 ff.): take `(hass, freezer)`, call
+> `freezer.move_to("2026-01-15 12:00:00")` and then `_seed_today_deadline(coord, hours_from_now=0.5)`
+> (plus `_seed_ample_peak_headroom(coord)`) **before** cycle 1, and record events with an
+> `@callback`-decorated listener — a plain listener is dispatched as an executor job and races the
+> assertions. Do not write them as bare `(hass)` tests; without a frozen clock the seeded deadline is
+> not reproducible.
 
 **Step 2: Run** → FAIL. **Step 3: Implement** — add
 `EVENT_DEADLINE_UNREACHABLE_CLEARED = "smart_charging_deadline_unreachable_cleared"` to `const.py`
