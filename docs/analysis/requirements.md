@@ -295,7 +295,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R19 — Runtime dashboard
 
 **Priority:** Should
-**What:** The system presents a dashboard for day-to-day use, showing current charging status and every [runtime configuration](system-overview.md#ubiquitous-language) input the household adjusts routinely (e.g. active profile, active mode, default SOC limit, departure times, home-day flag). [Install-time configuration](system-overview.md#ubiquitous-language) is set up once, through the integration's own configuration flow, and is not part of this dashboard.
+**What:** The system presents a dashboard for day-to-day use, showing current charging status and every [runtime configuration](system-overview.md#ubiquitous-language) input the household adjusts routinely (e.g. active profile, active mode, default SOC limit, departure times, home-day flag). [Install-time configuration](system-overview.md#ubiquitous-language) is set up once, through the integration's own [configuration flow](system-overview.md#ubiquitous-language) (R20), and is not part of this dashboard.
 
 **Acceptance criteria:**
 
@@ -305,6 +305,25 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] A runtime entity gated by a capability that is absent (R18) is not shown at all — in particular, the departure-time rows are not shown when the deadline capability is absent, exactly as the solar-dependent runtime entities are not shown when the solar capability is absent.
 - [ ] No entity classified as install-time configuration is presented on the dashboard; install-time configuration is reachable only through the integration's configuration flow.
 - [ ] Adding a new entity to `entity-catalog.md` and classifying it as runtime requires no dashboard-specific logic change for it to appear.
+
+---
+
+### R20 — Guided installation configuration
+
+**Priority:** Should
+**What:** The system captures and amends the installation's configuration through a [configuration flow](system-overview.md#ubiquitous-language) of steps grouped by concern, presenting only the fields the declared [capabilities](system-overview.md#ubiquitous-language) (R18) and the elected optional mappings call for, and validating each step before the next one is shown.
+
+**Acceptance criteria:**
+
+- [ ] The first step presents only the mappings every installation needs — charger current, charger status (with its connected and charging state lists), net power, charger power — together with the installation's capability declarations (solar, CapTar, deadline, each defaulting to present, R18) and the decision whether a vehicle charge-limit will be mapped.
+- [ ] Each capability declared present contributes exactly one further step of its own, presented in a fixed order (solar, then CapTar, then deadline), followed by the vehicle-charge-limit step when that mapping is elected; a capability declared absent contributes no step at all.
+- [ ] No field belonging to a capability declared absent, or to a declined optional mapping, is ever presented — in particular, no departure-time or reminder field when the deadline capability is absent (R14, R18) and no solar field when the solar capability is absent (R18).
+- [ ] A field that two capabilities both require (the EV state-of-charge mapping, required by solar and by CapTar) is presented exactly once, on the first step that needs it, and is not presented at all when neither capability is declared present.
+- [ ] The fields no capability gates — including the peak-protection fields (R3), which apply whether or not the CapTar capability is declared present — are presented in their own steps, always, after the capability-gated steps.
+- [ ] Every field is validated on the step that presents it: a value that does not fit the [adapter role](system-overview.md#ubiquitous-language) it maps (NF3), or a required field left blank, is reported on that step and the same step is re-shown; a requiredness that follows from a capability declaration is never reported only after the final step.
+- [ ] The user can amend an existing installation's mappings and capability declarations without re-entering its thresholds and defaults, and amend its thresholds and defaults without re-entering its mappings; each path presents its own fields prefilled from the current configuration and leaves every value it does not present unchanged.
+- [ ] Abandoning the flow before its final step leaves the installation exactly as it was: nothing is created on first setup, and nothing is amended afterwards.
+- [ ] A capability added in a later release (R18's extensibility clause) adds exactly one step of its own, without changing the fields or order of any existing step.
 
 ---
 

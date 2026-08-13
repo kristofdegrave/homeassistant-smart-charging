@@ -38,7 +38,7 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 | [UC09](UC09-sync-charge-limit-with-car.md) | Keep the charge limit in sync with the car | EV driver | R6 | Planned |
 | [UC10](UC10-remind-to-plug-in.md) | Remind me to plug in | EV driver | R12 | Planned |
 | [UC11](UC11-monitor-and-manage-charging-configuration.md) | Monitor and manage charging configuration (dashboard) | Household energy manager | R19 | Planned |
-| [UC12](UC12-configure-installation-through-guided-flow.md) | Configure the installation through a guided, capability-first flow | Household energy manager | None yet | Planned |
+| [UC12](UC12-configure-installation-through-guided-flow.md) | Configure the installation through a guided, capability-first flow | Household energy manager | R20 | Planned |
 
 ---
 
@@ -75,6 +75,6 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 - **UC12 is a precondition for every other use-case, not a consequence of one.** It documents the
   install-time / reconfigure / options config flow that [UC11](UC11-monitor-and-manage-charging-configuration.md)
   treats as an opaque black box (R19); the two use-cases partition install-time from runtime
-  configuration and never overlap. It carries no state model or domain events, and — unlike every
-  other use-case — satisfies no existing numbered requirement yet, a gap it surfaces rather than
-  resolves.
+  configuration and never overlap. It carries no state model or domain events, and it satisfies
+  R20 — the guided-configuration requirement this use-case itself surfaced, drafted after it rather
+  than before.

@@ -235,15 +235,19 @@ flowchart TD
 
 ## Requirements satisfied
 
+Satisfies [R20](../requirements.md#r20--guided-installation-configuration) — the step grouping,
+the capability-gated skipping, the once-only EV state-of-charge mapping, the step-local validation,
+the mapping-only and threshold-only amendment paths, and the discard-on-abandon behaviour are this
+use-case's realization of every one of R20's acceptance criteria.
+
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
 acceptance criteria that the solar, CapTar, and deadline capabilities are each user-configurable
 (AC1, AC4, AC6), and that solar's own inputs are not required to be configured when it is absent
 (AC3) — and [R14](../requirements.md#r14--configurable-departure-times) AC1, that the
-departure-time inputs are neither offered nor required when the deadline capability is absent. No
-requirement yet mandates *how many steps, in what order* — every acceptance criterion above
-concerns only whether a capability is configurable and whether its inputs are required, never the
-guided presentation this use-case specifies. That presentation gap is what this use-case surfaces;
-closing it is a separate requirement, drafted alongside this document.
+departure-time inputs are neither offered nor required when the deadline capability is absent.
+Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
+only whether a capability is configurable and whether its inputs are required. That presentation
+gap is what this use-case surfaced, and R20 above is the requirement that closes it.
 
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this
