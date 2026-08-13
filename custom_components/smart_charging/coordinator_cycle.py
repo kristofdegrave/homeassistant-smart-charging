@@ -53,15 +53,22 @@ class CycleContext:
     now: float
     now_dt: datetime | None  # None only in the baseline-mode dry-run construction
     ev_soc: float | None = None
-    surplus_w: float = 0.0
-    monthly_peak_kw: float = 0.0
-    effective_peak_limit_kw: float = 0.0
-    active_soc_limit: float = 0.0
-    urgent: bool = False
-    sun_is_up: bool = False
-    sun_is_down: bool = False
-    low_tariff_active: bool = True
-    solar_reserve_active: bool = False
+    surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
+    # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)
+    # issue #564: the remaining fields below are resolved only partway through _run_cycle (see the
+    # per-assignment comments in coordinator.py) and, apart from active_soc_limit (read by
+    # _dispatch_mode strictly after it resolves each cycle), none is read off ctx anywhere today --
+    # `None` rather than a same-typed placeholder (0.0/False/True) so a future premature read
+    # raises immediately (TypeError on arithmetic/comparison) instead of silently computing on a
+    # plausible-looking wrong value.
+    monthly_peak_kw: float | None = None
+    effective_peak_limit_kw: float | None = None
+    active_soc_limit: float | None = None
+    urgent: bool | None = None
+    sun_is_up: bool | None = None
+    sun_is_down: bool | None = None
+    low_tariff_active: bool | None = None
+    solar_reserve_active: bool | None = None
 
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place

@@ -4,6 +4,8 @@
 from datetime import datetime, time
 from unittest.mock import patch
 
+import pytest
+
 from custom_components.smart_charging.config import SmartChargingConfig
 from custom_components.smart_charging.const import (
     MODE_CAPTAR,
@@ -54,8 +56,10 @@ def _config(**overrides) -> SmartChargingConfig:
 def test_cycle_context_constructs_with_required_fields_and_defaults():
     """CycleContext (ADR-0012) exposes all defaulted fields with their documented starting
     values -- the required fields (status/net_w/charger_w/voltage/now/now_dt) construct with no
-    defaults, everything else is optional and starts at the value _run_cycle's old loose locals
-    used to start with."""
+    defaults. `surplus_w` starts at a meaningful zero-surplus value (the value _run_cycle's old
+    loose locals used to start with); every other progressively-filled field (issue #564) starts
+    at `None`, not a same-typed placeholder, so a future premature read fails loudly instead of
+    silently computing on a plausible-looking wrong value."""
     ctx = CycleContext(
         status=STATE_CHARGING,
         net_w=100.0,
@@ -66,14 +70,14 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
     )
     assert ctx.ev_soc is None
     assert ctx.surplus_w == 0.0
-    assert ctx.monthly_peak_kw == 0.0
-    assert ctx.effective_peak_limit_kw == 0.0
-    assert ctx.active_soc_limit == 0.0
-    assert ctx.urgent is False
-    assert ctx.sun_is_up is False
-    assert ctx.sun_is_down is False
-    assert ctx.low_tariff_active is True
-    assert ctx.solar_reserve_active is False
+    assert ctx.monthly_peak_kw is None
+    assert ctx.effective_peak_limit_kw is None
+    assert ctx.active_soc_limit is None
+    assert ctx.urgent is None
+    assert ctx.sun_is_up is None
+    assert ctx.sun_is_down is None
+    assert ctx.low_tariff_active is None
+    assert ctx.solar_reserve_active is None
 
 
 def test_cycle_context_accepts_none_now_dt_for_dry_run_construction():
@@ -83,6 +87,23 @@ def test_cycle_context_accepts_none_now_dt_for_dry_run_construction():
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
     )
     assert ctx.now_dt is None
+
+
+def test_cycle_context_unresolved_fields_raise_loudly_on_premature_use():
+    """issue #564: the whole point of `None` over a same-typed placeholder -- a hypothetical
+    future ModeHandler reading e.g. `ctx.effective_peak_limit_kw`/`ctx.active_soc_limit` before
+    `_run_cycle` resolves them now gets an immediate TypeError on arithmetic/comparison, not a
+    silently-computed wrong answer from a plausible-looking 0.0/False/True."""
+    ctx = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, now_dt=None
+    )
+    with pytest.raises(TypeError):
+        ctx.effective_peak_limit_kw * 1000.0
+    with pytest.raises(TypeError):
+        ctx.ev_soc = 50.0
+        _ = ctx.ev_soc >= ctx.active_soc_limit
+    with pytest.raises(TypeError):
+        ctx.monthly_peak_kw + 1.0
 
 
 def test_cycle_context_is_mutable_and_filled_progressively():
