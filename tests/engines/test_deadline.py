@@ -253,6 +253,11 @@ def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
     )
     assert result.unreachable is True  # deadline in the past -> max urgency, not an exception
     assert result.urgent is True  # Unreachable is a subset of Urgent (resolution-rules.md)
+    # Issue #650: this saturation to float('inf') is this pure engine's own documented
+    # contract (design doc Sec6) and must stay unchanged -- any capping to a finite,
+    # meaningful value (e.g. maximum_permitted_rate_a) happens at the coordinator boundary,
+    # where the result crosses into the HA-bound DeadlineUnreachableNotified event payload.
+    assert result.required_a == float("inf")
 
 
 def test_no_urgency_when_soc_already_at_or_above_limit_even_if_deadline_passed():
