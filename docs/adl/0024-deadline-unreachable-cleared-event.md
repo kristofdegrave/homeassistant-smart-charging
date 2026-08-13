@@ -15,9 +15,14 @@ The producer fires the event as a **level signal, not an edge**. `coordinator.py
 `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` on **every** control cycle for which the Deadline Engine's
 `RequiredCurrentResult.unreachable` is `True` (`engines/deadline.py`:
 `unreachable = required_a > maximum_permitted_rate_a`), not only on the cycle the condition first
-holds. `resolve_deadline_urgency`'s own docstring and the Task 5.2 plan record this as deliberate:
-the consumer must not have to catch one exact tick, and the payload's required current stays fresh.
-There is no counterpart fired when `unreachable` goes back to `False`.
+holds. Two documents record this as deliberate rather than incidental: Task 5.2's test docstring in
+`docs/plans/2026-07-21-deadline-soc-management.md`:958-962 ("published every cycle …
+`unreachable` flag is True — including re-firing on a later cycle that is still Unreachable, not
+only on the Normal/Urgent -> Unreachable transition edge"), and UC05's own domain-events section
+(`docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md`:96, "or re-fires while remaining in
+Unreachable"). The rationale is that the consumer must not have to catch one exact tick, and that
+the payload's required current stays fresh. There is no counterpart fired when `unreachable` goes
+back to `False`.
 
 The consumer therefore has to supply the once-ness ADR-0011 attributes to the event.
 `NotificationManager._deadline_unreachable_notified` latches on the first delivery and suppresses
@@ -76,9 +81,11 @@ close #546 as won't-fix.
 ### Option B — Publish a paired clear event on the `True` → `False` edge
 
 Add one domain event — `DeadlineUnreachableCleared` — fired by the Coordinator on the cycle
-`unreachable` transitions from `True` to `False` (including via `deadline_resolvable` going false on
-a disconnect or a withdrawn deadline capability). `DeadlineUnreachableNotified` keeps its level
-semantics unchanged; M3 re-arms `_deadline_unreachable_notified` on the clear event.
+`unreachable` transitions from `True` to `False` — including the two guard paths that reach
+`unreachable=False` without computing a required current at all: `deadline_resolvable` going false
+(a disconnect, or `ev_soc` becoming `None`), and `deadline_today` resolving to `None` (a withdrawn
+deadline capability, R18). `DeadlineUnreachableNotified` keeps its level semantics unchanged; M3
+re-arms `_deadline_unreachable_notified` on the clear event.
 
 - Pro: Faithful to ADR-0011's criterion — the clearing is an integration-computed domain transition
   the consumer cannot observe without re-running the Deadline Engine's determination — and it fills
@@ -176,7 +183,14 @@ likeliest one — still suppressed.
 This **refines** ADR-0011 and supersedes nothing. ADR-0011's per-trigger table row for
 `DeadlineUnreachableNotified` and its Option-C criterion both stand exactly as written; this ADR
 settles what ADR-0011 left open on that same Coordinator → Notification Manager edge, which now
-carries an onset event *and* a clear event rather than one event alone. The durable rule it adds:
+carries an onset event *and* a clear event rather than one event alone. In ADR-0011's own table
+shape, the added trigger reads:
+
+| Trigger | Producer → Consumer | Resolution | Why |
+| --- | --- | --- | --- |
+| **`DeadlineUnreachableCleared`** (UC05) | Coordinator → Notification Manager | **Publish a new event** | The clearing of `RequiredCurrentResult.unreachable` is an integration-computed transition, on the same side of ADR-0011's criterion as the onset: the Deadline Engine derives it inside the Coordinator's cycle from the resolved deadline, state of charge, the active SOC limit, the EV battery capacity (R15) and the maximum permitted rate — never read through an adapter (NF3), so the consumer cannot observe it without re-running that determination. Pairs with the level-signal onset event so the consumer's notify-once state can be scoped to the occasion. |
+
+The durable rule it adds:
 **when a published event is a level signal — fired every cycle a condition holds, so a consumer
 need not catch the transition tick — the producer must also publish the clearing edge, so consumers
 can scope once-per-occasion state to the occasion rather than to their own lifetime.** ADR-0011's
@@ -184,19 +198,39 @@ can scope once-per-occasion state to the occasion rather than to their own lifet
 
 `DeadlineUnreachableCleared` follows the DDD convention (past-tense PascalCase) and the repo's
 existing `*Cleared`/`*Lifted` pairing precedent (`SolarStepUpApplied`/`SolarStepUpCleared`,
-`SolarReserveCapEngaged`/`SolarReserveCapLifted`). It fires on **every** exit from `Unreachable` —
-including the ones where no required current is computed at all (a disconnect or a withdrawn
-deadline capability, R18, both of which make `deadline_resolvable` false and therefore `unreachable`
-false), which is precisely what makes "occasion" mean what the user means by it. It is distinct from
-`DeadlineUrgencyReverted`, which fires only on the `→ Normal` exit and remains UC05's urgency-level
-event.
+`SolarReserveCapEngaged`/`SolarReserveCapLifted`). It fires on **every** exit from `Unreachable`,
+which is precisely what makes "occasion" mean what the user means by it. Three distinct code paths
+reach `unreachable=False`, and the edge check must sit downstream of all of them — on
+`RequiredCurrentResult.unreachable` itself, not on any one guard:
+
+| Exit | Mechanism in code today | Fires |
+| --- | --- | --- |
+| Required current falls back within the maximum permitted rate (→ `Urgent`, or → `Normal` if it also falls within the baseline's desired current) | `resolve_required_current` (`engines/deadline.py`) computes `unreachable = required_a > maximum_permitted_rate_a` and it is now `False` | `DeadlineUnreachableCleared`; additionally `DeadlineUrgencyReverted` on the `→ Normal` exit |
+| Car disconnects, or `ev_soc` becomes `None` | `deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None` (`coordinator.py`:518) goes false, so `resolve_deadline_urgency` returns its early `RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)` without calling the engine | `DeadlineUnreachableCleared` |
+| Deadline capability withdrawn (R18) — every R14 row resolves to "no deadline" | `deadline_resolvable` may still be `True`; instead `_read_deadline_urgency_inputs` yields `deadline_today = None` (`resolve_departure_deadline` returning `None`), and `resolve_required_current`'s own `if deadline is None` guard returns `unreachable=False` | `DeadlineUnreachableCleared` |
+
+The second and third rows are **different** mechanisms, not one: a withdrawn capability does not make
+`deadline_resolvable` false — that predicate reads only charger status and `ev_soc`. It is distinct
+from `DeadlineUrgencyReverted`, which fires only on the `→ Normal` exit and remains UC05's
+urgency-level event.
+
+**Fault cycles hold the prior state.** Both of `_run_cycle`'s fault early-returns — the
+required-adapter fault (`coordinator.py`:354-369) and the `ev_soc` fault (:410-432) — return before
+the deadline-urgency block runs, so neither the onset fire nor this ADR's edge check is reached on a
+fault cycle. The prior-cycle `unreachable` flag the detector owns must therefore be **left
+unchanged** on such a cycle, not reset to `False`: resetting it would emit a spurious clear (and
+re-arm M3) on a cycle that established nothing about the deadline, and would then re-notify on the
+next healthy cycle. Holding is the same rule already applied to `adapter_readings_at` for exactly
+these two returns (#648): a fault cycle is not a successful cycle, so it does not advance state. The
+detector is consequently a plain "compare against last *evaluated* cycle" — fault cycles are
+invisible to it — and a clear fires on the first healthy cycle that genuinely resolves.
 
 ## Consequences
 
 - **Analysis-doc follow-ups**, each gated by its own issue and fresh-agent review per CLAUDE.md's
   review protocol; this ADR opens none of them:
   - `docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md` — add
-    `DeadlineUnreachableCleared` to "Domain events produced", annotate both `Unreachable` exits in
+    `DeadlineUnreachableCleared` to "Domain events produced", annotate every `Unreachable` exit in
     the state-model table and the `stateDiagram-v2` with it, and state its relationship to
     `DeadlineUrgencyReverted` (which fires only on the `→ Normal` exit, so the two co-fire there and
     only the clear event fires on `Unreachable` → `Urgent`).
@@ -225,19 +259,32 @@ event.
   `custom_components/smart_charging/coordinator_cycle.py` shaped like `SocGateResolver` — pure
   `(unreachable, cleared)` detection owning the prior-cycle flag, with the `hass.bus.async_fire`
   staying in `coordinator.py` per ADR-0009/0010, alongside the existing `unreachable` fire site;
+  with the detector holding its prior flag across the two fault early-returns per the Decision above;
   and re-arming `_deadline_unreachable_notified` in
   `custom_components/smart_charging/managers/notification_manager.py`, which also deletes that
   Manager's second "Known gaps" bullet and the module docstring's "producer-side signal not yet
   implemented" note. Tests land in `tests/test_coordinator_cycle.py` (detection), and
   `tests/test_coordinator.py` + `tests/managers/test_notification_manager.py` (fire and re-arm) per
-  ADR-0009's harness split. A reload resets the producer's edge flag and the consumer's latch
-  together, so no missed re-arm is introduced at the seam.
-- **What becomes harder.** Every future exit path added to the `Unreachable` state must fire the
-  clear event, or the consumer's latch silently stays armed — a coupling the level-signal onset event
-  does not have, and one the tests above must pin per exit path (required current back in range, SOC
-  at the active SOC limit, disconnect, deadline capability absent, following occurrence elapsed).
-  Contributors reading the two events side by side also see one level signal and one edge signal on
-  the same edge, which the ADR's durable rule above exists to explain.
+  ADR-0009's harness split. Those tests cover the exit paths that exist in the code today — required
+  current falling back within the maximum permitted rate, a disconnect (`deadline_resolvable` false),
+  and the deadline capability absent (`deadline_today` `None`) — plus a fault cycle not emitting a
+  clear. A reload resets the producer's edge flag and the consumer's latch together, so no missed
+  re-arm is introduced at the seam.
+- **Forward obligation on the missed-deadline hold.** R5's missed-deadline hold and UC05's
+  corresponding `Unreachable` exits (state of charge reaching the active SOC limit, a disconnect, the
+  deadline capability becoming absent, the following occurrence elapsing) are **analysis-only today**
+  — there is no hold in `custom_components/smart_charging/`, so none of those exits can be built or
+  tested against current code. This ADR therefore places the obligation on whichever future slice
+  implements the hold: each hold-exit it adds must also clear `unreachable` through the same
+  `RequiredCurrentResult` the edge check reads (or fire the clear event itself), and must land a test
+  per exit path pinning that. Because the detection sits on `unreachable` rather than on any one
+  guard, a hold that ends by making `unreachable` false gets the clear for free; a hold implemented
+  as a separate latch *outside* `RequiredCurrentResult` would not, and that is the trap the slice must
+  avoid.
+- **What becomes harder.** Every future exit path added to the `Unreachable` state must result in the
+  clear event firing, or the consumer's latch silently stays armed — a coupling the level-signal onset
+  event does not have. Contributors reading the two events side by side also see one level signal and
+  one edge signal on the same edge, which the ADR's durable rule above exists to explain.
 - **What this forecloses.** `DeadlineUnreachableNotified` is confirmed to stay a level signal, so any
   future consumer must dedupe for itself rather than assume one delivery per occasion; and the
   Notification Manager stays event-driven, never polling Coordinator-computed state, so no
