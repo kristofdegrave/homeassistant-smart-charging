@@ -582,8 +582,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
         # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault
         # early return) runs before `ctx` is constructed, so ctx's field intentionally carries
-        # its dataclass default (0.0) until this final, real value lands here. No ModeHandler
-        # reads this field today; if one later does, thread the provisional value onto ctx too.
+        # its dataclass default (None, issue #564) until this final, real value lands here. No
+        # ModeHandler reads this field today; if one later does, thread the provisional value onto
+        # ctx too.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
         # entity-catalog.md:153/control-cycle.md step 5 -- the same raw-reading target the R3
