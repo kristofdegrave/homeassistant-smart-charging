@@ -125,13 +125,28 @@ class _FakeStore:
     stands in for adapters/store.py's Store without touching the entity registry. {} means
     every read() returns None, so _read_owned_entities() is a no-op -- every existing
     SmartChargingCoordinator(...) construction in this file passes store=_FakeStore({})
-    precisely so it never disturbs a test's own direct field assignments."""
+    precisely so it never disturbs a test's own direct field assignments.
+
+    Asserts the caller's requested value_type against the fixture's own stored value --
+    unlike the real Store (which coerces a raw HA state string), this fake stores already-typed
+    Python values, so it cannot coerce; but it can and does catch a caller passing the wrong
+    value_type for a given (entity_domain, unique_id_suffix) key, which the real Store would
+    silently turn into a permanent None (a coercion failure, e.g. float() on a time string) --
+    exactly the failure mode a mis-paired row in _read_owned_entities' `simple_reads` table
+    (#652) would otherwise produce without any test noticing."""
 
     def __init__(self, values: dict[tuple[str, str], object]) -> None:
         self._values = values
 
     async def read(self, entity_domain, unique_id_suffix, value_type):
-        return self._values.get((entity_domain, unique_id_suffix))
+        value = self._values.get((entity_domain, unique_id_suffix))
+        if value is not None and not isinstance(value, value_type):
+            raise AssertionError(
+                f"_FakeStore: {entity_domain}/{unique_id_suffix} was read as {value_type!r} "
+                f"but the fixture holds a {type(value)!r} value -- likely a mis-paired "
+                f"(platform, suffix, value_type) row"
+            )
+        return value
 
 
 def _adapters(
@@ -861,6 +876,61 @@ async def test_adapter_readings_survives_a_faulted_cycle(hass):
 
     assert result.fault is True
     assert result.adapter_readings[ROLE_NET_POWER] == 1000.0  # cycle-1 cache survives
+
+
+async def test_ev_soc_fault_does_not_advance_adapter_readings_at(hass, freezer):
+    """Issue #648: the ev_soc-fault early return must NOT advance `_role_readings_at` to this
+    cycle's own timestamp, exactly like the required-role fault path a few lines above it
+    (coordinator.py's own comment: "the cache keeps whichever timestamp a prior successful
+    cycle set"). ADR-0021/entity-catalog.md:154 define
+    `sensor.smart_charging_adapter_readings`'s state as the timestamp of the LAST SUCCESSFUL
+    cycle -- an ev_soc fault means this cycle wasn't one, so the timestamp must stay at
+    cycle 1's value, not jump to cycle 2's, even though cycle 2's required-adapter read (status/
+    net_w/charger_w) itself succeeded."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    healthy = await coord._async_update_data()  # cycle 1: healthy, records the timestamp
+    assert healthy.fault is False
+    assert healthy.adapter_readings_at is not None
+
+    freezer.move_to("2026-01-15 12:00:30")  # cycle 2: one interval later
+    adapters[ROLE_EV_SOC] = _FakeNumeric(None)  # car still connected, ev_soc goes unavailable
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    # Must stay at cycle 1's timestamp, not advance to cycle 2's -- repro: solar mode active,
+    # car connected, sensor.ev_soc unavailable -> adapter_readings_at must NOT show a fresh
+    # timestamp while status is Fault.
+    assert result.adapter_readings_at == healthy.adapter_readings_at
+
+
+async def test_adapter_readings_at_advances_on_a_second_successful_cycle(hass, freezer):
+    """Regression guard for #648's fix: a genuinely successful second cycle must still
+    advance `adapter_readings_at` to its own timestamp -- the positive-direction counterpart
+    to `test_ev_soc_fault_does_not_advance_adapter_readings_at`, so a future change that moves
+    the assignment into a branch that never runs on a healthy cycle would be caught here."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    cycle1 = await coord._async_update_data()
+    assert cycle1.fault is False
+
+    freezer.move_to("2026-01-15 12:00:30")
+    cycle2 = await coord._async_update_data()
+
+    assert cycle2.fault is False
+    assert cycle2.adapter_readings_at > cycle1.adapter_readings_at
 
 
 async def test_time_to_full_min_matches_the_glossary_formula(hass):
@@ -2149,3 +2219,30 @@ async def test_read_owned_entities_does_not_overwrite_active_mode_under_auto(has
     coord.set_active_mode(MODE_CAPTAR)  # simulates Auto's own resolution from a prior cycle
     await coord._read_owned_entities()
     assert coord.active_mode == MODE_CAPTAR  # unchanged -- the stale selector (Off) not applied
+
+
+async def test_read_owned_entities_applies_every_table_driven_read(hass):
+    """#652: the five reads with no cross-read dependency (target_current, soc_limit_override,
+    home_day_flag, the two departure overrides) now run through a `simple_reads` table instead
+    of five hand-written blocks -- confirms the loop applies every row in one call, catching an
+    early `break` or a duplicated/dropped table row that per-field tests (below) each run in
+    isolation wouldn't. See _read_owned_entities' docstring for why this is a readability-only
+    change (asyncio.gather was investigated and rejected)."""
+    store = _FakeStore(
+        {
+            (Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT): 12.0,
+            (Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 80.0,
+            (Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): True,
+            (Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY): time_of_day(7, 30),
+            (Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY): time_of_day(8, 0),
+        }
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert coord.target_current == 12.0
+    assert coord.soc_limit_override == 80.0
+    assert coord.home_day_flag is True
+    assert coord.departure_holiday_override == time_of_day(7, 30)
+    assert coord.departure_home_day_override == time_of_day(8, 0)

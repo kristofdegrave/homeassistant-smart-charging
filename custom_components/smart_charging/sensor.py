@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorExtraStoredData,
+    SensorStateClass,
 )
 from homeassistant.const import UnitOfElectricCurrent, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
@@ -122,6 +123,9 @@ class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
     _attr_translation_key = "monthly_peak_kw"
     _object_id_suffix = "monthly_peak_kw"
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry_id: str, coordinator) -> None:
         super().__init__(entry_id, coordinator)
@@ -173,6 +177,9 @@ class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "effective_peak_limit"
     _object_id_suffix = "effective_peak_limit"
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.effective_peak_limit_kw
@@ -196,6 +203,9 @@ class SolarSurplusSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "solar_surplus_w"
     _object_id_suffix = OWNED_SUFFIX_SOLAR_SURPLUS_W
     _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.solar_surplus_w
@@ -207,6 +217,9 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "peak_headroom_a"
     _object_id_suffix = OWNED_SUFFIX_PEAK_HEADROOM_A
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.peak_headroom_a

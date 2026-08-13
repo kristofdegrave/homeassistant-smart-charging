@@ -224,7 +224,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
         extracted methods (ADR-0023). Also caches each read role's value into
         `self._role_readings` (ADR-0021) -- `_run_cycle` decides whether to advance
-        `self._role_readings_at`, since that depends on whether this cycle's read succeeded."""
+        `self._role_readings_at`, since that depends on whether this cycle succeeded as a
+        whole (the required-adapter read succeeding is necessary but not sufficient, #648)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -367,7 +368,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 adapter_readings_at=self._role_readings_at,
             )
         status, net_w, charger_w, voltage = inputs
-        self._role_readings_at = now_dt
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
         # below (R10's smoothed control-path value).
@@ -414,6 +414,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ):
             self._log_fault("ev_soc required while a solar mode is active but missing/None")
             await self._write(0.0)
+            # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
+            # ADR-0021/entity-catalog.md:154 "last successful cycle" reasoning as the
+            # required-role fault path above (#648): an ev_soc fault means this cycle wasn't
+            # a successful one, even though the three required-adapter reads that fed
+            # `solar_surplus_w`/`monthly_peak_kw` above did succeed. (The assignment itself
+            # now lives at the very end of a successful cycle, see the comment there.)
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -628,6 +634,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
 
         await self._write(desired)
+        # ADR-0021/entity-catalog.md:154 "last successful cycle" -- deliberately the LAST
+        # statement before the success return, not right after `_read_cycle_inputs` (#648):
+        # any exception between the required-adapter read and this point (including the
+        # ev_soc-fault gate above, and any raise from the write itself) funnels to
+        # `_async_update_data`'s handler and must report a prior cycle's timestamp, not this
+        # one's -- moving this assignment any earlier would resurrect #648 for those paths.
+        self._role_readings_at = now_dt
         if self._was_faulted:
             _LOGGER.info("smart_charging recovered from fault")
             self._was_faulted = False
@@ -690,10 +703,27 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self.active_mode = mode
 
     async def _read_owned_entities(self) -> None:
-        """RA3 (ADR-0018): reads all eight owned control-entity values through the Store once
-        per cycle. A None read leaves the field unchanged -- not a fault: owned entities are
-        internal, and a startup-race/transient-unavailable read is not the same kind of
-        missing data as a hardware adapter returning None (ADR-0007)."""
+        """RA3 (ADR-0018): reads all eight owned control-entity values -- twelve individual
+        `Store.read()` calls, since `departure_dow_defaults` alone spans seven weekday entities
+        -- through the Store once per cycle. A None read leaves the field unchanged -- not a
+        fault: owned entities are internal, and a startup-race/transient-unavailable read is not
+        the same kind of missing data as a hardware adapter returning None (ADR-0007).
+
+        #652 investigated batching these reads with `asyncio.gather`, since none has a data
+        dependency on another (the mode read's *application* depends on the profile read's
+        result, handled below exactly as before -- but its *read* doesn't). Rejected:
+        `Store.read()` (`adapters/store.py`) never actually awaits anything -- both
+        `resolve_entity_id()` and `hass.states.get()` are synchronous in-memory lookups -- so
+        `gather` would add `Task`-creation overhead for zero real concurrency, and would cost
+        this method its current atomicity-with-respect-to-the-event-loop (a `gather`'d read
+        yields control, letting a user's own change to one of these entities land between two
+        reads within the same cycle; a plain sequential `await` chain over non-yielding
+        coroutines never does). Measured harness cost confirmed the direction was wrong too: see
+        #652 for the numbers. Reads stay sequential; only the readability half of #652's ask
+        survives, via the `(platform, suffix, value_type, setter)` table below for the five
+        reads with no cross-read dependency."""
+        # Profile first: the mode read/apply immediately below needs this cycle's resolved
+        # active_profile, not last cycle's.
         profile = await self._store.read(Platform.SELECT, OWNED_SUFFIX_PROFILE, str)
         if profile is not None:
             self.set_active_profile(profile)
@@ -707,27 +737,57 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             mode = await self._store.read(Platform.SELECT, OWNED_SUFFIX_MODE, str)
             if mode is not None:
                 self.set_active_mode(mode)
-        target_current = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float)
-        if target_current is not None:
-            self.set_target_current(target_current)
-        soc_limit = await self._store.read(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, float)
-        if soc_limit is not None:
-            self.set_soc_limit_override(soc_limit)
-        home_day = await self._store.read(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, bool)
-        if home_day is not None:
-            self.home_day_flag = home_day
+
+        simple_reads: tuple[tuple[str, str, type, Callable[[Any], None]], ...] = (
+            (Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float, self.set_target_current),
+            (
+                Platform.NUMBER,
+                OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+                float,
+                self.set_soc_limit_override,
+            ),
+            (Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, bool, self.set_home_day_flag),
+            (
+                Platform.TIME,
+                OWNED_SUFFIX_DEPARTURE_HOLIDAY,
+                time_of_day,
+                self.set_departure_holiday_override,
+            ),
+            (
+                Platform.TIME,
+                OWNED_SUFFIX_DEPARTURE_HOME_DAY,
+                time_of_day,
+                self.set_departure_home_day_override,
+            ),
+        )
+        for platform, suffix, value_type, setter in simple_reads:
+            value = await self._store.read(platform, suffix, value_type)
+            if value is not None:
+                setter(value)
+
         for weekday, suffix in enumerate(OWNED_SUFFIX_DEPARTURE_DOW):  # Monday=0 .. Sunday=6
             value = await self._store.read(Platform.TIME, suffix, time_of_day)
             if value is not None:
                 self.departure_dow_defaults[weekday] = value
-        holiday = await self._store.read(Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY, time_of_day)
-        if holiday is not None:
-            self.departure_holiday_override = holiday
-        home_day_override = await self._store.read(
-            Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY, time_of_day
-        )
-        if home_day_override is not None:
-            self.departure_home_day_override = home_day_override
+
+    def set_home_day_flag(self, value: bool) -> None:
+        """Coordinator's own boundary for `home_day_flag` (ADR-0014's "any future field added
+        to the coordinator's externally-writable surface follows this same rule" clause) -- no
+        range to clamp, unlike `set_target_current`/`set_soc_limit_override`. Since ADR-0018,
+        `switch.py` never calls this directly: the coordinator reads the stored value through
+        the Store each cycle (`_read_owned_entities`, via its `simple_reads` table, #652) and
+        calls this itself."""
+        self.home_day_flag = value
+
+    def set_departure_holiday_override(self, value: time_of_day) -> None:
+        """Coordinator's own boundary for `departure_holiday_override` (ADR-0014) -- see
+        `set_home_day_flag`."""
+        self.departure_holiday_override = value
+
+    def set_departure_home_day_override(self, value: time_of_day) -> None:
+        """Coordinator's own boundary for `departure_home_day_override` (ADR-0014) -- see
+        `set_home_day_flag`."""
+        self.departure_home_day_override = value
 
     def _dispatch_mode(self, ctx: CycleContext) -> float:
         """The disconnect/Off/Power/SOC-gated-stop guards around the ModeHandler registry lookup

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
@@ -13,6 +14,7 @@ class SmartChargingEntity(Entity):
 
     _attr_has_entity_name = True
     _object_id_suffix: str | None = None  # locale-independent object_id suffix (ADR-0013)
+    _owned_labels: frozenset[str] = frozenset()  # C5 (#601): e.g. LABEL_SC_RUNTIME
 
     def __init__(self, entry_id: str) -> None:
         self._entry_id = entry_id
@@ -36,3 +38,23 @@ class SmartChargingEntity(Entity):
         # returned suffix is device-name-prefixed by HA because has_entity_name is True,
         # yielding e.g. number.smart_charging_soc_limit_override.
         return self._object_id_suffix or super().suggested_object_id
+
+    async def async_added_to_hass(self) -> None:
+        # `SmartChargingEntity` is first in every subclass's MRO (RestoreEntity/CoordinatorEntity
+        # come after it) -- delegating first is required, not optional, or every existing
+        # subclass's restore-on-restart / coordinator-push registration would silently break.
+        await super().async_added_to_hass()
+        if not self._owned_labels:
+            return
+        registry = er.async_get(self.hass)
+        existing = registry.async_get(self.entity_id)
+        if existing is None:
+            # Every `_owned_labels`-carrying class also sets `_object_id_suffix`, so
+            # `unique_id` is always set and the entity is always already registered by this
+            # point -- unreachable in practice, but async_update_entity raises KeyError on an
+            # unregistered entity_id, so guard rather than let that surprise a future caller.
+            return
+        # C5 (#601): merge, never assign the bare set -- `async_update_entity`'s `labels`
+        # parameter replaces the stored set, so a bare assignment would silently erase any
+        # label the user attached themselves on the very next reload.
+        registry.async_update_entity(self.entity_id, labels=existing.labels | self._owned_labels)
