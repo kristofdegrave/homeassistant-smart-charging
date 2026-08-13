@@ -38,7 +38,9 @@ every row of that concern regardless of role; the **Role** column distinguishes 
   `config-data` / `config-options` row, the config-entry bucket itself (`data` or `options`, ADR-0005)
   stands in for this classification, since R19's install-time/runtime axis applies to entities. Like
   install-time configuration, a `config-data`/`config-options` row is never presented on the runtime
-  dashboard (R19) — it is reached only through the config or reconfigure flow.
+  dashboard (R19) — it is reached only through the
+  [configuration flow](system-overview.md#ubiquitous-language) (R20), whose step grouping decides
+  when each such row is presented but never which rows exist.
   `—` marks `adapter role` rows (a code-level mapping, not a catalogued entity) and `state` rows
   that are pure system-computed status (e.g. the monthly peak demand), neither of which carries a
   runtime/install-time classification.

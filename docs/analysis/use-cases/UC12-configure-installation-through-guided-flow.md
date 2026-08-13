@@ -139,7 +139,7 @@ Given the maximum peak, safety margin, peak grace period, and `Power`-mode peak-
 When the System shows step 8
 Then these are presented regardless of whether the installation bills against a capacity tariff —
 the peak-protection clamp (R3) protects the grid connection itself, not only the CapTar bill, so it
-applies even when the CapTar capability is absent.
+applies even when the CapTar capability is absent (R18 AC5).
 
 ## Exception flows
 
@@ -179,6 +179,11 @@ it was before the flow started.
   required when solar is declared; the car-at-home presence mapping required when a vehicle
   charge-limit is mapped) is, after this use-case, a plain required field local to the one step
   that needs it.
+- The step set stays extensible: a capability added in a later release (R18's extensibility clause)
+  needs exactly one new step, appended after the existing capability steps (3–5) and before the
+  vehicle-charge-limit step (6), with no change to the fields or order of any step above. This is a
+  structural property of the step grouping rather than a flow exercised here — the capability set is
+  closed this release (R18), so no concrete scenario can walk it.
 - Every other use-case (UC01–UC11) can execute using the mappings, capabilities, and thresholds
   this use-case captured, with two pre-existing gaps this use-case does not introduce and is out of
   scope to close: `entity-catalog.md`'s `solar_power` adapter role and `power_cooldown_min` option
@@ -235,15 +240,22 @@ flowchart TD
 
 ## Requirements satisfied
 
+Satisfies [R20](../requirements.md#r20--guided-installation-configuration) — the step grouping,
+the capability-gated skipping, the once-only EV state-of-charge mapping, the step-local validation,
+the mapping-only and threshold-only amendment paths, and the discard-on-abandon behaviour are this
+use-case's realization of R20's acceptance criteria AC1–AC8. AC9 — a capability added in a later
+release adding exactly one step without changing any existing step — is a forward-looking property
+of this step design that no scenario here exercises, since the capability set is closed this release
+(R18); it is carried as a postcondition above rather than as a flow.
+
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
 acceptance criteria that the solar, CapTar, and deadline capabilities are each user-configurable
 (AC1, AC4, AC6), and that solar's own inputs are not required to be configured when it is absent
 (AC3) — and [R14](../requirements.md#r14--configurable-departure-times) AC1, that the
-departure-time inputs are neither offered nor required when the deadline capability is absent. No
-requirement yet mandates *how many steps, in what order* — every acceptance criterion above
-concerns only whether a capability is configurable and whether its inputs are required, never the
-guided presentation this use-case specifies. That presentation gap is what this use-case surfaces;
-closing it is a separate requirement, drafted alongside this document.
+departure-time inputs are neither offered nor required when the deadline capability is absent.
+Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
+only whether a capability is configurable and whether its inputs are required. That presentation
+gap is what this use-case surfaced, and R20 above is the requirement that closes it.
 
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this

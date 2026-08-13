@@ -92,7 +92,7 @@ every other section of the dashboard continues to render normally.
   from the dashboard, except those gated by an absent capability (4a, R18); no entity classified as
   install-time configuration is presented on it —
   install-time configuration remains reachable only through the integration's configuration flow
-  (R19).
+  (R19, R20).
 - The current charging status (charger status, active profile, active mode, active SOC limit,
   current charger current) and the current solar surplus and net import are visible on the
   dashboard whenever it is open.
