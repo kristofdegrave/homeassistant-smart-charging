@@ -30,6 +30,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
+    EVENT_DEADLINE_UNREACHABLE_CLEARED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     OWNED_SUFFIX_HOME_DAY,
     ROLE_CHARGER_STATUS,
@@ -576,14 +577,87 @@ async def test_deadline_unreachable_malformed_event_is_ignored(hass):
 
 
 async def test_deadline_unreachable_listener_unsubscribes(hass):
-    """register_listeners' returned unsub actually stops the subscription -- the caller
-    (Task 6.1's __init__.py wiring) registers it via entry.async_on_unload (ADR-0008)."""
+    """Both of register_listeners' returned unsubs actually stop their subscriptions -- the
+    caller (__init__.py wiring) registers each via entry.async_on_unload (ADR-0008)."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass)
-    (unsub,) = manager.register_listeners()
+    unsubs = manager.register_listeners()
+    assert len(unsubs) == 2
 
-    unsub()
+    for unsub in unsubs:
+        unsub()
     hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})
     await hass.async_block_till_done()
 
     assert calls == []
+
+
+async def test_deadline_unreachable_notice_is_delivered_again_after_a_clear_event(hass):
+    """ADR-0024: DeadlineUnreachableNotified -> DeadlineUnreachableCleared ->
+    DeadlineUnreachableNotified delivers TWO notices via RA4 -- the clear event re-arms
+    `_deadline_unreachable_notified`, so R5's notice is once per occasion, not once per
+    Manager instance. Complements (does not replace)
+    test_deadline_unreachable_notice_is_delivered_only_once, which still pins the
+    within-occasion suppression of the producer's per-cycle level signal."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})
+    await hass.async_block_till_done()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 14.0})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 2
+    assert "12.5" in calls[0]["message"]
+    assert "14.0" in calls[1]["message"]
+
+
+async def test_deadline_unreachable_clear_event_without_a_prior_notice_is_harmless(hass):
+    """A clear arriving while the latch is already unset (M3 started mid-cycle, or the
+    condition resolved before M3 ever delivered) just leaves it unset -- no send, no error."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})
+    await hass.async_block_till_done()  # must not raise
+
+    assert calls == []
+    assert manager._deadline_unreachable_notified is False
+
+
+async def test_deadline_unreachable_clear_event_sends_nothing_itself(hass):
+    """The clear is a re-arm signal, not a second user-facing notice: RA4 receives no write
+    on the clear event -- R5 asks for a warning, never an all-clear push."""
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1  # only the notified event's own delivery -- the clear sent nothing
+
+
+async def test_evening_prompt_lifecycle_is_unaffected_by_the_clear_event(hass):
+    """UC08 regression: a DeadlineUnreachableCleared event touches only the R5 latch --
+    async_evaluate's prompt state/date and the home-day flag write are untouched."""
+    _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    await manager.async_evaluate(now=EVENING)
+    assert manager._state is PromptState.PENDING
+    state_before, date_before = manager._state, manager._date
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED, {})
+    await hass.async_block_till_done()
+
+    assert manager._state == state_before
+    assert manager._date == date_before

@@ -231,14 +231,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     if notify_adapter is not None:
         entry.async_on_unload(notify_adapter.close)
 
-    # R5 delivery: M3 subscribes to the Coordinator's own DeadlineUnreachableNotified
-    # bus event BEFORE the first refresh below -- unlike the tick/M2's listeners, which are
-    # deliberately registered after (they read owned entities the Store/platforms must exist
-    # for first), this listener consumes a plain bus event, and the first refresh is exactly
-    # the earliest point that event could fire (an already-unreachable deadline at boot).
-    # Registering after it would silently lose that first, permanently-latched delivery
-    # opportunity (on_deadline_unreachable's notify-once latch) with no re-fire to
-    # recover on.
+    # R5 delivery: M3 subscribes to the Coordinator's own DeadlineUnreachableNotified/
+    # DeadlineUnreachableCleared bus events (ADR-0024) BEFORE the first refresh below --
+    # unlike the tick/M2's listeners, which are deliberately registered after (they read
+    # owned entities the Store/platforms must exist for first), these listeners consume plain
+    # bus events, and the first refresh is exactly the earliest point the notified event could
+    # fire (an already-unreachable deadline at boot). Registering after it would silently lose
+    # that first delivery opportunity (on_deadline_unreachable's occasion-scoped notify-once
+    # latch) with no re-fire to recover on.
     for unsub in notification_manager.register_listeners():
         entry.async_on_unload(unsub)
 
