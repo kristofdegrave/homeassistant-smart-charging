@@ -1,6 +1,6 @@
 """Coordinator-internal cycle decomposition: CycleContext, PeakDemandState, SocGateResolver, and
 the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
-resolve_deadline_urgency (ADR-0023).
+resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge (ADR-0024).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
 even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
 another engine; these call engines).
@@ -322,6 +322,27 @@ class SocGateResolver:
         return limit, changed
 
 
+class DeadlineUnreachableEdge:
+    """Pure True->False edge detection over `RequiredCurrentResult.unreachable` (ADR-0024),
+    shaped like `SocGateResolver` above. The coordinator fires the paired
+    `DeadlineUnreachableCleared` event off the `cleared` flag this returns; `hass.bus` access
+    stays coordinator-side (ADR-0009/0010).
+
+    Deliberately unlike `SocGateResolver`'s first call, which always reports `changed=True`:
+    the prior flag here starts `False`, so a first `resolve()` never reports a clear -- there
+    is no occasion to clear before one has been observed, and a spurious clear on the very
+    first cycle would re-arm a consumer (the Notification Manager) that never notified."""
+
+    def __init__(self) -> None:
+        self._was_unreachable = False
+
+    def resolve(self, unreachable: bool) -> tuple[bool, bool]:
+        """Return (this cycle's `unreachable`, whether it just cleared from True to False)."""
+        cleared = self._was_unreachable and not unreachable
+        self._was_unreachable = unreachable
+        return unreachable, cleared
+
+
 class SolarStepUpGate:
     """R8 solar step-up gating (ADR-0023), wrapping engines/soc_target.py::resolve_solar_step_up.
     Owns the SolarStepUpState itself -- moved off the coordinator instance -- and exposes it via
@@ -394,10 +415,11 @@ class DeadlineUrgencyResult:
     `auto_dispatchable` was False -- the coordinator only ever assigns `self.active_mode`
     from it in that case, mirroring the original inline `if auto_dispatchable:` guard around
     the real (non-baseline) call to the Auto policy's `select()` (ADR-0017). Firing
-    `DeadlineUnreachableNotified` off
-    `required.unreachable` stays the coordinator's own job (ADR-0009/0010: HA I/O stays
-    coordinator-side), the same boundary `SocGateResolver` already draws for
-    `ActiveSocLimitChanged`."""
+    `DeadlineUnreachableNotified` (the per-cycle level signal) and, off
+    `DeadlineUnreachableEdge`'s own detection over this same `required.unreachable`,
+    `DeadlineUnreachableCleared` (the paired clearing edge, ADR-0024) both stay the
+    coordinator's own job (ADR-0009/0010: HA I/O stays coordinator-side), the same boundary
+    `SocGateResolver` already draws for `ActiveSocLimitChanged`."""
 
     required: RequiredCurrentResult
     urgent: bool

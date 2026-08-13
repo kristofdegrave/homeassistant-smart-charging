@@ -24,6 +24,7 @@ from .const import (
     DEFAULT_SOC_LIMIT,
     DOMAIN,
     EVENT_ACTIVE_SOC_LIMIT_CHANGED,
+    EVENT_DEADLINE_UNREACHABLE_CLEARED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
     MODE_CAPTAR,
     MODE_OFF,
@@ -55,6 +56,7 @@ from .const import (
 )
 from .coordinator_cycle import (
     CycleContext,
+    DeadlineUnreachableEdge,
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
@@ -155,6 +157,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
         self._soc_gate = SocGateResolver()
+        # ADR-0024: pure True->False edge detection over resolve_deadline_urgency's own
+        # `unreachable` flag, feeding the paired DeadlineUnreachableCleared fire below. Never
+        # reset on either fault early-return -- both sit upstream of this detector's own call
+        # site, so a fault cycle simply never reaches it and its prior flag is held (see the
+        # comments on those two returns).
+        self._unreachable_edge = DeadlineUnreachableEdge()
         # R9/R14 inputs -- read through the Store each cycle (_read_owned_entities,
         # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
         # These constructor defaults (no home day, no configured deadline anywhere) only
@@ -359,7 +367,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # the LAST SUCCESSFUL cycle, and a required-role fault means this cycle wasn't one;
             # the cache keeps whichever timestamp a prior successful cycle set, even though the
             # per-role values `_read_cycle_inputs` just cached are this cycle's own (possibly
-            # None) readings.
+            # None) readings. `self._unreachable_edge`'s prior flag is held for the same reason
+            # (ADR-0024): this return sits upstream of its call site below, so a fault cycle
+            # never reaches it and must not be treated as a genuine resolve.
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -420,6 +430,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # a successful one, even though the three required-adapter reads that fed
             # `solar_surplus_w`/`monthly_peak_kw` above did succeed. (The assignment itself
             # now lives at the very end of a successful cycle, see the comment there.)
+            # `self._unreachable_edge`'s prior flag is held for the same reason (ADR-0024):
+            # this return also sits upstream of its call site below.
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -554,6 +566,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Exposed for the effective-peak-limit `urgent` parameter and Auto
         # mode-selection's escalation, and for tests, the same way `_step_up_gate.state` already is.
         self._required_current = required
+        # ADR-0024: reading `required.unreachable` itself (never any one upstream guard) is
+        # what makes every exit path -- required current falling back in range, a disconnect,
+        # the deadline capability withdrawn -- clear for free, since each already funnels
+        # through this same flag.
+        _, cleared = self._unreachable_edge.resolve(required.unreachable)
+        if cleared:
+            self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)
         if required.unreachable:
             # engines/deadline.py deliberately saturates required_a to float('inf') once a
             # same-day deadline has already passed (design doc Sec6) -- that stays the pure

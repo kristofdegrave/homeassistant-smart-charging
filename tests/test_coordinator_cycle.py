@@ -23,6 +23,7 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.coordinator_cycle import (
     CycleContext,
+    DeadlineUnreachableEdge,
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
@@ -576,6 +577,70 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
     )
     assert changed is False
     assert limit == 80.0
+
+
+# --- DeadlineUnreachableEdge (ADR-0024: pure True->False edge detection for the paired
+# DeadlineUnreachableCleared event) ---
+
+
+def test_deadline_unreachable_edge_first_call_reports_no_clear():
+    """ADR-0024: the prior-cycle flag starts False, so a first resolve(True) reports
+    cleared=False -- unlike SocGateResolver's first call, which always reports changed=True.
+    There is no occasion to clear before one has been observed, and a spurious clear on the
+    very first cycle would re-arm a consumer that never notified."""
+    edge = DeadlineUnreachableEdge()
+    assert edge.resolve(True) == (True, False)
+
+
+def test_deadline_unreachable_edge_first_call_reports_no_clear_when_reachable():
+    """The other half of the first-call departure from SocGateResolver above: a first
+    resolve(False) also reports cleared=False, not just resolve(True) -- there is nothing to
+    clear from on either input when no prior cycle has been observed."""
+    edge = DeadlineUnreachableEdge()
+    assert edge.resolve(False) == (False, False)
+
+
+def test_deadline_unreachable_edge_reports_cleared_on_true_to_false():
+    """The one edge the event exists for: the prior cycle resolved unreachable=True and this
+    one resolves False -> (False, True)."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(True)
+    assert edge.resolve(False) == (False, True)
+
+
+def test_deadline_unreachable_edge_reports_no_clear_while_still_unreachable():
+    """True -> True is the level signal's territory (Task 5.2 re-fires
+    DeadlineUnreachableNotified there); no clear edge, so (True, False)."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(True)
+    assert edge.resolve(True) == (True, False)
+
+
+def test_deadline_unreachable_edge_reports_no_clear_on_false_to_false():
+    """Steady-state reachable cycles must stay silent -- (False, False) -- or the consumer's
+    latch would be re-armed on every cycle and the event would become a second level signal."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(False)
+    assert edge.resolve(False) == (False, False)
+
+
+def test_deadline_unreachable_edge_clears_only_once_per_occasion():
+    """True -> False -> False fires the clear on the first False cycle only; the flag is
+    updated on every resolve() call, so the second False is an ordinary no-edge cycle."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(True)
+    assert edge.resolve(False) == (False, True)
+    assert edge.resolve(False) == (False, False)
+
+
+def test_deadline_unreachable_edge_reports_cleared_again_on_a_second_occasion():
+    """True -> False -> True -> False: the detector is re-usable, so a later occasion gets its
+    own clear -- this is the per-occasion behavior ADR-0024's Decision exists to produce."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(True)
+    assert edge.resolve(False) == (False, True)
+    edge.resolve(True)
+    assert edge.resolve(False) == (False, True)
 
 
 # --- SolarStepUpGate (ADR-0023, T0.1: R8 solar step-up gating, coordinator.py:306-326) ---
