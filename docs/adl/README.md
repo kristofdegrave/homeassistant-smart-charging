@@ -30,5 +30,6 @@ template.
 | [0021](0021-adapter-readings-diagnostic-sensor.md) | Adapter-role readings surfaced via a single diagnostic sensor's attributes | Accepted |
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Proposed |
 | [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Proposed |
+| [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
