@@ -79,10 +79,12 @@ variants.
    home-day mappings — none of which any capability gates.
 8. **When** the user submits that step, **then** the System shows a final step for the thresholds
    that apply regardless of any enablement decision: grid safety thresholds (grid supply ceiling,
-   grid safety offset, minimum/maximum charging current), the smoothing window, general SOC/peak
-   defaults (the values the default SOC limit and Power target current entities are seeded with,
-   safety margin, maximum peak, peak grace period, EV battery capacity), the `Power`-mode
-   peak-protection option, and the evening home-day prompt fields (8a).
+   grid safety offset, minimum/maximum charging current, the supply-voltage fallback used when the
+   grid-voltage mapping is absent), the smoothing window, general SOC/peak defaults (the values the
+   default SOC limit and Power target current entities are seeded with, safety margin, maximum
+   peak, peak grace period, EV battery capacity), the `Power`-mode peak-protection option, and the
+   evening home-day prompt fields (the evening prompt's enable flag, prompt time, and timeout)
+   (8a).
 9. **When** the user submits that step with every field valid, **then** the System creates the
    config entry, splitting the submitted values into the data bucket (mappings, capability flags,
    the derived state-translation table) and the options bucket (thresholds, defaults, seed values),
