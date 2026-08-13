@@ -382,20 +382,23 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return SmartChargingOptionsFlow(config_entry)
+        return SmartChargingOptionsFlow()
 
 
 class SmartChargingOptionsFlow(config_entries.OptionsFlow):
-    """Options flow: thresholds/defaults + control interval, editable anytime (ADR-0005)."""
+    """Options flow: thresholds/defaults + control interval, editable anytime (ADR-0005).
 
-    def __init__(self, config_entry) -> None:
-        self._entry = config_entry
+    `self.config_entry` (from `config_entries.OptionsFlow`) resolves via `self.hass`
+    and the flow-manager-assigned entry id, neither of which is set yet inside
+    `__init__`. This class therefore defines no `__init__` and only reads
+    `self.config_entry` from step methods, which always run after initialization.
+    """
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        opts = self._entry.options
+        opts = self.config_entry.options
         schema = _threshold_schema(opts).extend(
             {
                 vol.Required(

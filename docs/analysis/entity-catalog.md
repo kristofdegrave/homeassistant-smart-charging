@@ -79,9 +79,9 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow) |
-| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow) |
-| `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow) |
+| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow), UC12 |
+| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow), UC12 |
+| `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
@@ -92,17 +92,17 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC11 | user, UC11 |
-| `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime) |
-| `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime) |
+| `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
+| `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime), UC12 |
 | `select.smart_charging_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) — the `Manual` profile's mode-override selection | control-cycle, UC11 | user (Manual), UC11 |
 
 ### Installation
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `grid_supply_ceiling_a` | config-options | options | A | 40 (reference setup) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime) |
-| `grid_safety_offset_a` | config-options | options | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime) |
-| `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user (anytime) |
+| `grid_supply_ceiling_a` | config-options | options | A | 40 (reference setup) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime), UC12 |
+| `grid_safety_offset_a` | config-options | options | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime), UC12 |
+| `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user (anytime), UC12 |
 | `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
 | `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02, UC11 | — |
 | `low_tariff` | adapter role | — | bool | mapped to the installation's tariff signal (NF3; optional — treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
@@ -113,8 +113,8 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `min_current_a` | config-options | options | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user (anytime) |
-| `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime) |
+| `min_current_a` | config-options | options | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user (anytime), UC12 |
+| `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime), UC12 |
 | `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02, UC11 | — |
 | `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10, UC11 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
@@ -123,18 +123,18 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `safety_margin_w` | config-options | options | W | 250 | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user (anytime) |
-| `max_peak_kw` | config-options | options | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user (anytime) |
-| `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period | control-cycle | user (anytime) |
+| `safety_margin_w` | config-options | options | W | 250 | [safety margin](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
+| `max_peak_kw` | config-options | options | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) | resolution-rules | user (anytime), UC12 |
+| `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime) |
+| `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime), UC12 |
 
 ### `Power` mode
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11 |
-| `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) | UC04 | user (anytime) |
+| `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11, UC12 (seeds initial value) |
+| `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) | UC04 | user (anytime), UC12 |
 | `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime) |
 
 ### Diagnostic outputs
@@ -161,8 +161,8 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `number.smart_charging_soc_limit_override` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11 |
-| `ev_battery_capacity_kwh` | config-options | options | kWh | 75 | EV battery capacity (R15) | resolution-rules, control-cycle | user (anytime) |
+| `number.smart_charging_soc_limit_override` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11, UC12 (seeds initial value) |
+| `ev_battery_capacity_kwh` | config-options | options | kWh | 75 | EV battery capacity (R15) | resolution-rules, control-cycle | user (anytime), UC12 |
 | `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06, (UC11) | — |
 | `ev_battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules, control-cycle | — |
 | `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09 | — |
@@ -178,18 +178,18 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solar_start_threshold_w` | config-options | options | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime) |
-| `solar_hold_min` | config-options | options | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime) |
-| `solar_cooldown_min` | config-options | options | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime) |
+| `solar_start_threshold_w` | config-options | options | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime), UC12 |
+| `solar_hold_min` | config-options | options | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime), UC12 |
+| `solar_cooldown_min` | config-options | options | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
 | `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading (smoothed per R10; not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w`) | control-cycle | — |
 
 ### `SolarOnly` mode
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solar_only_start_threshold_w` | config-options | options | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user (anytime) |
-| `solar_only_rounding_strategy` | config-options | options | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user (anytime) |
-| `solar_only_rounding_midpoint_pct` | config-options | options | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user (anytime) |
+| `solar_only_start_threshold_w` | config-options | options | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user (anytime), UC12 |
+| `solar_only_rounding_strategy` | config-options | options | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user (anytime), UC12 |
+| `solar_only_rounding_midpoint_pct` | config-options | options | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user (anytime), UC12 |
 
 Also uses `solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
 
@@ -197,16 +197,16 @@ Also uses `solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown t
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `max_solar_soc` | config-options | options | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user (anytime) |
-| `solar_step_pp` | config-options | options | pp | 5 | solar step-up size (R8) | UC06 | user (anytime) |
-| `solar_step_threshold_pp` | config-options | options | pp | 2 | solar step-up trigger gap (R8) | UC06 | user (anytime) |
+| `max_solar_soc` | config-options | options | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user (anytime), UC12 |
+| `solar_step_pp` | config-options | options | pp | 5 | solar step-up size (R8) | UC06 | user (anytime), UC12 |
+| `solar_step_threshold_pp` | config-options | options | pp | 2 | solar step-up trigger gap (R8) | UC06 | user (anytime), UC12 |
 
 ### Solar-reserve cap
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11 |
-| `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime) |
+| `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11, UC12 (seeds initial value) |
+| `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime), UC12 |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, (UC11) | — |
 
 ---
@@ -217,10 +217,11 @@ Also uses `solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown t
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `prompt_timeout_h` | config-options | options | h | 2 | evening prompt timeout (R13) | — | user (anytime) |
-| `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime) |
-| `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (UC08) | UC08 | user (anytime) |
-| `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime) |
+| `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
+| `prompt_timeout_h` | config-options | options | h | 2 | evening prompt timeout (R13) | — | user (anytime), UC12 |
+| `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
+| `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (UC08) | UC08 | user (anytime), UC12 |
+| `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime), UC12 |
 | `binary_sensor.smart_charging_plug_in_reminder` | state | — | bool | `on` while a plug-in reminder is currently due (car home, disconnected, below the active SOC limit, within the lead time of the next departure) | plug-in reminder (R12) | (UC11) | (UC10) |
 
 ---
