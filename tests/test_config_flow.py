@@ -133,7 +133,7 @@ USER_INPUT = {
     "default_target_current": 10.0,
 }
 
-# Per-step base fixtures for the guided install flow (UC12 steps 1/3/4/5/7/8). All four
+# Per-step base fixtures for the guided install flow (UC12 steps 1/3/4/5/6/7/8). All four
 # capability decisions default False here, including solar -- even though solar's rendered
 # form default is True (T3) -- because CORE_INPUT is a fixture of explicit values, not a proof
 # of the schema default (see test_solar_available_defaults_true for that), and leaving it
@@ -171,6 +171,13 @@ CAPTAR_INPUT = {
 # empty submission is a valid base fixture.
 DEADLINE_INPUT = {}
 
+# UC12 step 6: the two are always asked together -- vehicle_charge_limit_entity is
+# vol.Required, car_home_entity is guarded (design D-3), so both need a value here.
+VEHICLE_LIMIT_INPUT = {
+    CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.vehicle_charge_limit",
+    CONF_CAR_HOME_ENTITY: "person.driver",
+}
+
 MAPPINGS_INPUT = {
     CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
 }
@@ -189,6 +196,7 @@ _INSTALL_STEP_BASES = {
     STEP_SOLAR: SOLAR_INPUT,
     STEP_CAPTAR: CAPTAR_INPUT,
     STEP_DEADLINE: DEADLINE_INPUT,
+    STEP_VEHICLE_LIMIT: VEHICLE_LIMIT_INPUT,
     STEP_MAPPINGS: MAPPINGS_INPUT,
     STEP_THRESHOLDS: THRESHOLDS_INPUT,
 }
@@ -574,15 +582,13 @@ async def test_options_flow_edits_solar_thresholds(hass):
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
-# test_thresholds_error_preserves_previously_entered_values (T3/T4) is deferred to T7. Its
-# trigger was always one of the three _mapping_errors guards firing at the thresholds step's
-# temporary safety net; T4 moved the solar pair to the solar step and T5 moves the ev_soc/
-# captar pair to the captar step, so as of this task the only guard left that could fire there
-# is _car_home_missing_error -- and it can't: vehicle_charge_limit_entity has no step to set it
-# on until T7 adds the vehicle_limit step, so `user_input.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY)`
-# is always None and the guard never triggers. The thresholds step's own
-# add_suggested_values_to_schema call is therefore genuinely untestable via a real install run
-# until T7 gives the last guard something to reject -- restore this test then.
+# test_thresholds_error_preserves_previously_entered_values (T3/T4, deferred through T5/T6) is
+# retired, not restored: T7 deletes the thresholds step's `_mapping_errors` safety net outright
+# now that all three guards it combined are step-local (the last one, _car_home_missing_error,
+# moves to the new vehicle_limit step below). The thresholds step never shows an error again,
+# so there is no longer a suggested-value-preservation behaviour of its own left to pin --
+# `test_ungated_thresholds_step_reports_no_mapping_error_of_its_own` (T7 section below) is this
+# removal's regression guard instead.
 
 
 async def test_solar_error_preserves_previously_entered_values(hass):
@@ -843,13 +849,6 @@ async def test_options_flow_edits_the_new_thresholds(hass):
     )
     await hass.async_block_till_done()
     assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
-
-
-# test_vehicle_limit_mapped_without_car_home_is_rejected,
-# test_vehicle_limit_mapped_with_car_home_is_accepted and test_car_home_mapped_alone_is_accepted
-# are deferred to T7: vehicle_charge_limit_entity/car_home_entity live on the vehicle_limit
-# step, which doesn't exist yet -- CONF_VEHICLE_LIMIT_MAPPED (core) only elects whether that
-# step would be shown; it carries no entity mapping of its own.
 
 
 async def test_neither_vehicle_limit_nor_car_home_is_accepted(hass):
@@ -1391,6 +1390,78 @@ async def test_uc12_step5_deadline_declared_reminder_lead_can_be_set(hass):
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["options"][CONF_REMINDER_LEAD_H] == 3.0
+
+
+# --- T7: the vehicle-charge-limit step, and removal of the validation safety net. ---
+
+
+async def test_uc12_step6_elected_vehicle_limit_asks_the_limit_and_car_home_together(hass):
+    """UC12 step 6: "the two are always asked together"."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_VEHICLE_LIMIT_MAPPED: True}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_VEHICLE_LIMIT
+    assert _keys(result["data_schema"]) == _keys(VEHICLE_LIMIT_MAPPING_SCHEMA)
+
+
+async def test_uc12_2a_declined_vehicle_limit_asks_neither_field(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
+
+
+async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_limit_step(hass):
+    """errors == {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED}, same step
+    re-shown, flow not advanced."""
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_VEHICLE_LIMIT_MAPPED: True},
+            STEP_VEHICLE_LIMIT: {CONF_CAR_HOME_ENTITY: None},
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_VEHICLE_LIMIT
+    assert result["errors"] == {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED}
+
+
+async def test_d2_vehicle_limit_election_is_not_persisted(hass):
+    """Design D-2: the election is a transient form key -- entity-catalog.md has no row for it,
+    so CONF_VEHICLE_LIMIT_MAPPED must not appear in the stored data bucket."""
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_VEHICLE_LIMIT_MAPPED: True}})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_VEHICLE_LIMIT_MAPPED not in result["data"]
+    assert result["data"][CONF_VEHICLE_CHARGE_LIMIT_ENTITY] == "number.vehicle_charge_limit"
+    assert result["data"][CONF_CAR_HOME_ENTITY] == "person.driver"
+
+
+async def test_ungated_thresholds_step_reports_no_mapping_error_of_its_own(hass):
+    """Removal's regression guard: with the last of the three `_mapping_errors` guards
+    (`_car_home_missing_error`) now step-local on the vehicle_limit step, the thresholds step
+    never rejects a submission of its own -- pinning that the safety net's deletion (T7) didn't
+    just move the failure elsewhere silently. Declares every capability/election so every
+    step-local guard is live and satisfied, leaving no error for a leftover thresholds-step
+    check to catch if one were mistakenly still there."""
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {
+                CONF_SOLAR_AVAILABLE: True,
+                CONF_CAPTAR_AVAILABLE: True,
+                CONF_DEADLINE_AVAILABLE: True,
+                CONF_VEHICLE_LIMIT_MAPPED: True,
+            },
+            STEP_CAPTAR: {CONF_EV_SOC_ENTITY: None},
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
