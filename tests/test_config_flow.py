@@ -131,13 +131,13 @@ USER_INPUT = {
     "default_target_current": 10.0,
 }
 
-# Per-step base fixtures for the guided install flow (UC12 steps 1/3/7/8). All three
-# capability decisions except solar default off: captar/deadline have no step yet (T5/T6), so
-# turning either on can only ever exercise the thresholds-step guard rejecting the still-
-# missing mapping. Solar defaults False here too, even though its rendered form default is
-# True (T3) -- CORE_INPUT is a fixture of explicit values, not a proof of the schema default
-# (see test_solar_available_defaults_true for that), and leaving it False keeps every test
-# that doesn't care about solar off the solar step entirely.
+# Per-step base fixtures for the guided install flow (UC12 steps 1/3/7/8). All four capability
+# decisions default False here, including solar -- even though solar's rendered form default is
+# True (T3) -- because CORE_INPUT is a fixture of explicit values, not a proof of the schema
+# default (see test_solar_available_defaults_true for that), and leaving it False keeps every
+# test that doesn't care about solar off the solar step entirely. Captar/deadline have no step
+# yet (T5/T6), so turning either on can only ever exercise the thresholds-step guard rejecting
+# the still-missing mapping.
 CORE_INPUT = {
     CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
     CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
@@ -188,6 +188,7 @@ async def _run_install_flow(hass, *, per_step=None):
     step-local guard rejects a submission -- detected as the same step_id appearing twice in a
     row, which stops the loop instead of resubmitting the same, still-failing fixture forever."""
     overrides = per_step or {}
+    consumed_overrides: set[str] = set()
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -195,11 +196,17 @@ async def _run_install_flow(hass, *, per_step=None):
     while result["type"] == FlowResultType.FORM:
         step_id = result["step_id"]
         if step_id == last_step_id:
-            return result
+            break
         last_step_id = step_id
+        consumed_overrides.add(step_id)
         submission = {**_INSTALL_STEP_BASES[step_id], **overrides.get(step_id, {})}
         submission = {k: v for k, v in submission.items() if v is not None}
         result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+    unconsumed = overrides.keys() - consumed_overrides
+    assert not unconsumed, (
+        f"per_step override(s) for {unconsumed} were never applied -- that step never "
+        "rendered this run (a capability answer this test relies on may be missing/typo'd)"
+    )
     return result
 
 
@@ -504,6 +511,7 @@ async def test_solar_available_true_with_ev_soc_succeeds(hass):
     result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
+    assert result["data"][CONF_SOLAR_FORECAST_ENTITY] == "sensor.solar_forecast"
 
 
 async def test_pre_toggle_entry_defaults_solar_available_false(hass):
@@ -694,8 +702,10 @@ async def test_solar_available_defaults_true(hass):
 async def test_captar_available_true_requires_ev_soc(hass):
     # Design doc §3: flipping CapTar available to True (or leaving its default) without
     # mapping ev_soc must be rejected by the flow itself, exactly like CONF_SOLAR_AVAILABLE's
-    # guard on the same field. T3 has no captar step yet, so ev_soc has no field to answer
-    # it on -- the guard, moved to the thresholds step's temporary safety net, still fires.
+    # guard on the same field. The captar step doesn't exist yet (T5), so ev_soc has no field
+    # to answer it on -- the guard, still running at the thresholds step's temporary safety
+    # net, fires there instead. This is the residual T3 install-flow dead end T4 didn't close
+    # (see the module comment above CONFIG_TABLE) -- it stays open until T5.
     result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: True}})
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_THRESHOLDS
@@ -1150,6 +1160,33 @@ async def test_r20_ac6_wrong_domain_solar_forecast_entity_is_rejected(hass):
     with pytest.raises(vol.Invalid):
         await hass.config_entries.flow.async_configure(result["flow_id"], bad_input)
     assert not hass.config_entries.async_entries(DOMAIN)
+    # The rejected submission never reached the flow handler (voluptuous raised first), so the
+    # flow itself is still sitting on the solar step -- the direct non-advancement proof, not
+    # just the (necessary but weaker) absence of a created entry.
+    assert hass.config_entries.flow.async_get(result["flow_id"])["step_id"] == STEP_SOLAR
+
+
+async def test_solar_step_error_can_be_corrected_and_the_flow_advances(hass):
+    """The recovery path T4's fix depends on: a rejected solar submission is not a dead end --
+    resubmitting with the missing mapping filled in advances the flow normally, and the earlier
+    rejected attempt leaves no residue in self._answers."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True}
+    )
+    assert result["step_id"] == STEP_SOLAR
+
+    rejected = {k: v for k, v in SOLAR_INPUT.items() if k != CONF_EV_SOC_ENTITY}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], rejected)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_SOLAR
+    assert result["errors"] == {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SOLAR_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
