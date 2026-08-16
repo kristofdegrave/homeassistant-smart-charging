@@ -17,6 +17,7 @@ from .const import (
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
+    CONF_DEADLINE_AVAILABLE,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_DEPARTURE_EXTERNAL_ENTITY,
@@ -39,6 +40,7 @@ from .const import (
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
+    CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_AVAILABLE,
@@ -55,21 +57,29 @@ from .const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+    CONF_VEHICLE_LIMIT_MAPPED,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
+    DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_DEFAULT_TARGET_CURRENT,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
+    DEFAULT_GRID_CEILING_A,
     DEFAULT_GRID_SAFETY_OFFSET_A,
+    DEFAULT_MAX_CURRENT,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
+    DEFAULT_MIN_CURRENT,
     DEFAULT_NOMINAL_VOLTAGE,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_AVAILABLE,
     DEFAULT_SOLAR_COOLDOWN_MIN,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
@@ -120,6 +130,7 @@ OPTION_KEYS = (
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
+    CONF_REMINDER_LEAD_H,
 )
 
 
@@ -174,19 +185,22 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_NOMINAL_VOLTAGE, default=d.get(CONF_NOMINAL_VOLTAGE, DEFAULT_NOMINAL_VOLTAGE)
             ): vol.Coerce(float),
-            vol.Required(CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, 6.0)): vol.Coerce(float),
-            vol.Required(CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, 16.0)): vol.Coerce(
-                float
-            ),
-            vol.Required(CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, 25.0)): vol.Coerce(
-                float
-            ),
+            vol.Required(
+                CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, DEFAULT_MIN_CURRENT)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, DEFAULT_GRID_CEILING_A)
+            ): vol.Coerce(float),
             vol.Required(
                 CONF_GRID_SAFETY_OFFSET_A,
                 default=d.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
             ): vol.Coerce(float),
             vol.Required(
-                CONF_DEFAULT_TARGET_CURRENT, default=d.get(CONF_DEFAULT_TARGET_CURRENT, 10.0)
+                CONF_DEFAULT_TARGET_CURRENT,
+                default=d.get(CONF_DEFAULT_TARGET_CURRENT, DEFAULT_DEFAULT_TARGET_CURRENT),
             ): vol.Coerce(float),
             vol.Required(
                 CONF_SMOOTHING_WINDOW,
@@ -284,6 +298,235 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
 USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 
 
+# --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
+# MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA above stay in place until the flat flow's
+# remaining callers are removed (T13, plan). These fragments are the guided flow's own.
+
+CORE_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_CHARGER_CURRENT_ENTITY): _entity("number"),
+        vol.Required(CONF_CHARGER_STATUS_ENTITY): _entity(["sensor", "binary_sensor"]),
+        vol.Required(CONF_CONNECTED_STATES): str,
+        vol.Required(CONF_CHARGING_STATES): str,
+        vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
+        vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
+        # T3 flips this rendered default to True (design, "Decisions on two forks" §2 --
+        # R20 AC1's "defaulting to present"); DEFAULT_SOLAR_AVAILABLE itself stays False,
+        # used only as the absent-key read fallback. Left at the constant here, same as
+        # `prompt_timeout_h` below is left off the ungated-threshold fragment until T3.
+        vol.Required(CONF_SOLAR_AVAILABLE, default=DEFAULT_SOLAR_AVAILABLE): bool,
+        vol.Required(CONF_CAPTAR_AVAILABLE, default=DEFAULT_CAPTAR_AVAILABLE): bool,
+        vol.Required(CONF_DEADLINE_AVAILABLE, default=DEFAULT_DEADLINE_AVAILABLE): bool,
+        vol.Required(CONF_VEHICLE_LIMIT_MAPPED, default=False): bool,
+    }
+)
+
+
+def _solar_mapping_schema(include_ev_soc: bool) -> vol.Schema:
+    """UC12 step 3 mapping half. `ev_soc_entity` is included only when the once-only rule
+    (R20 AC4) puts it here rather than on the CapTar step -- the one field deliberately
+    shared with `_captar_mapping_schema` (design, "Schema fragments")."""
+    fields: dict = {}
+    if include_ev_soc:
+        fields[vol.Optional(CONF_EV_SOC_ENTITY)] = _entity("sensor")
+    fields[vol.Optional(CONF_SOLAR_FORECAST_ENTITY)] = _entity("sensor")
+    return vol.Schema(fields)
+
+
+def _solar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 3 threshold half."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_SOLAR_START_THRESHOLD_W,
+                default=d.get(CONF_SOLAR_START_THRESHOLD_W, DEFAULT_SOLAR_START_THRESHOLD_W),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_ONLY_START_THRESHOLD_W,
+                default=d.get(
+                    CONF_SOLAR_ONLY_START_THRESHOLD_W, DEFAULT_SOLAR_ONLY_START_THRESHOLD_W
+                ),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_ONLY_STRATEGY,
+                default=d.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
+            ): vol.In([ROUND_UP, ROUND_DOWN, ROUND_NEAREST]),
+            vol.Required(
+                CONF_SOLAR_ONLY_MIDPOINT,
+                default=d.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_HOLD_MIN, default=d.get(CONF_SOLAR_HOLD_MIN, DEFAULT_SOLAR_HOLD_MIN)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_COOLDOWN_MIN,
+                default=d.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_STEP_PP,
+                default=d.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_STEP_THRESHOLD_PP,
+                default=d.get(CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_SOLAR_SOC,
+                default=d.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_RESERVE_SOC,
+                default=d.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+                default=d.get(
+                    CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
+                ),
+            ): vol.Coerce(float),
+        }
+    )
+
+
+def _captar_mapping_schema(include_ev_soc: bool) -> vol.Schema:
+    """UC12 step 4 mapping half. See `_solar_mapping_schema` for the once-only ev_soc rule."""
+    fields: dict = {}
+    if include_ev_soc:
+        fields[vol.Optional(CONF_EV_SOC_ENTITY)] = _entity("sensor")
+    return vol.Schema(fields)
+
+
+def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 4 threshold half."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_CAPTAR_COOLDOWN_MIN,
+                default=d.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
+            ): vol.Coerce(float),
+        }
+    )
+
+
+DEADLINE_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
+    }
+)
+
+
+def _deadline_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 5 threshold half."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_REMINDER_LEAD_H,
+                default=d.get(CONF_REMINDER_LEAD_H, DEFAULT_REMINDER_LEAD_H),
+            ): vol.Coerce(float),
+        }
+    )
+
+
+VEHICLE_LIMIT_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
+        vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
+    }
+)
+
+
+UNGATED_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+        # RA4 notify-target role (notifications design doc §3/§6): must be a `notify`-domain
+        # entity; EntitySelector's own domain filter rejects a mismatched entity (vol.Invalid).
+        vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
+        vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+    }
+)
+
+
+def _ungated_threshold_schema(
+    defaults: dict | None = None, *, include_interval: bool = False
+) -> vol.Schema:
+    """UC12 step 8. `include_interval` is True only for the options flow (UC12 1b) -- the
+    install and reconfigure flows never ask the control interval and default it instead.
+
+    `prompt_timeout_h` is added in T3 (design, "Decisions on two forks" §1) -- the ungated-
+    threshold fragment's key set here is one field short of the design doc's fragment table
+    until that task lands."""
+    d = defaults or {}
+    schema: dict = {
+        vol.Required(
+            CONF_NOMINAL_VOLTAGE, default=d.get(CONF_NOMINAL_VOLTAGE, DEFAULT_NOMINAL_VOLTAGE)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, DEFAULT_MIN_CURRENT)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, DEFAULT_GRID_CEILING_A)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_GRID_SAFETY_OFFSET_A,
+            default=d.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_SMOOTHING_WINDOW,
+            default=d.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
+        ): vol.Coerce(int),
+        vol.Required(
+            CONF_DEFAULT_SOC_LIMIT, default=d.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_DEFAULT_TARGET_CURRENT,
+            default=d.get(CONF_DEFAULT_TARGET_CURRENT, DEFAULT_DEFAULT_TARGET_CURRENT),
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_SAFETY_MARGIN_W,
+            default=d.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_MAX_PEAK_KW, default=d.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_PEAK_GRACE_MIN,
+            default=d.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_EV_BATTERY_CAPACITY_KWH,
+            default=d.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH),
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_POWER_RESPECT_PEAK,
+            default=d.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
+        ): bool,
+        vol.Required(
+            CONF_EVENING_PROMPT_ENABLED,
+            default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
+        ): bool,
+        vol.Required(
+            CONF_EVENING_PROMPT_TIME,
+            default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
+        ): selector.TimeSelector(),
+    }
+    if include_interval:
+        schema[
+            vol.Required(
+                CONF_CONTROL_INTERVAL_S,
+                default=d.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S),
+            )
+        ] = vol.All(vol.Coerce(int), vol.Range(min=5))
+    return vol.Schema(schema)
+
+
 def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
     """R18/design §3: Solar installed=True or CapTar available=True requires ev_soc
     mapped -- a config-time guard, not a runtime fault. Shared by the install and
@@ -356,7 +599,11 @@ class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         data = _split_data(user_input)
-        options = {k: user_input[k] for k in OPTION_KEYS}
+        # Intersection, not direct indexing: T1 (guided config flow) appends keys to
+        # OPTION_KEYS that this flat USER_SCHEMA does not yet ask for (e.g. reminder_lead_h,
+        # asked only on UC12 step 5) -- ADR-0025, Consequences, applied here a task early so
+        # this still-active flat flow survives OPTION_KEYS growing ahead of USER_SCHEMA.
+        options = {k: user_input[k] for k in OPTION_KEYS if k in user_input}
         options[CONF_CONTROL_INTERVAL_S] = DEFAULT_CONTROL_INTERVAL_S
         return self.async_create_entry(title="Smart Charging", data=data, options=options)
 
