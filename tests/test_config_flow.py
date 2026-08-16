@@ -24,11 +24,14 @@ from custom_components.smart_charging.const import (
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CAR_HOME_ENTITY,
     CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_POWER_ENTITY,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEADLINE_AVAILABLE,
     CONF_DEFAULT_SOC_LIMIT,
+    CONF_DEFAULT_TARGET_CURRENT,
     CONF_DEPARTURE_EXTERNAL_ENTITY,
     CONF_EV_BATTERY_CAPACITY_ENTITY,
     CONF_EV_BATTERY_CAPACITY_KWH,
@@ -40,17 +43,25 @@ from custom_components.smart_charging.const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
+    CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
+    CONF_MIN_CURRENT,
+    CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
+    CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_AVAILABLE,
+    CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
@@ -927,11 +938,11 @@ def test_uc12_step1_core_fragment_has_exactly_the_core_mappings_and_decisions():
     UC12 step 7)."""
     assert _keys(CORE_MAPPING_SCHEMA) == {
         CONF_CHARGER_CURRENT_ENTITY,
-        "charger_status_entity",
+        CONF_CHARGER_STATUS_ENTITY,
         CONF_CONNECTED_STATES,
         CONF_CHARGING_STATES,
-        "net_power_entity",
-        "charger_power_entity",
+        CONF_NET_POWER_ENTITY,
+        CONF_CHARGER_POWER_ENTITY,
         CONF_SOLAR_AVAILABLE,
         CONF_CAPTAR_AVAILABLE,
         CONF_DEADLINE_AVAILABLE,
@@ -953,11 +964,11 @@ def test_uc12_step3_solar_mapping_fragment_without_ev_soc():
 def test_uc12_step3_solar_threshold_fragment():
     assert _keys(_solar_threshold_schema()) == {
         CONF_SOLAR_START_THRESHOLD_W,
-        "solar_only_start_threshold_w",
+        CONF_SOLAR_ONLY_START_THRESHOLD_W,
         CONF_SOLAR_ONLY_STRATEGY,
-        "solar_only_midpoint",
-        "solar_hold_min",
-        "solar_cooldown_min",
+        CONF_SOLAR_ONLY_MIDPOINT,
+        CONF_SOLAR_HOLD_MIN,
+        CONF_SOLAR_COOLDOWN_MIN,
         CONF_SOLAR_STEP_PP,
         CONF_SOLAR_STEP_THRESHOLD_PP,
         CONF_MAX_SOLAR_SOC,
@@ -1007,13 +1018,13 @@ def test_uc12_step7_ungated_mapping_fragment():
 # CONF_PROMPT_TIMEOUT_H (design, "Decisions on two forks" §1). Everything else is final.
 _UNGATED_THRESHOLD_KEYS_AT_T1 = {
     CONF_NOMINAL_VOLTAGE,
-    "min_current",
-    "max_current",
+    CONF_MIN_CURRENT,
+    CONF_MAX_CURRENT,
     CONF_GRID_CEILING_A,
     CONF_GRID_SAFETY_OFFSET_A,
-    "smoothing_window",
+    CONF_SMOOTHING_WINDOW,
     CONF_DEFAULT_SOC_LIMIT,
-    "default_target_current",
+    CONF_DEFAULT_TARGET_CURRENT,
     CONF_SAFETY_MARGIN_W,
     CONF_MAX_PEAK_KW,
     CONF_PEAK_GRACE_MIN,
@@ -1067,16 +1078,20 @@ def test_no_field_appears_in_two_fragments_except_ev_soc():
     Note this does NOT generalise UC12 postcondition 3 -- that postcondition is about what a
     presented step shows (T8's traversal assertion), not a statement about fragment
     membership."""
-    mapping_fragments = [
+    all_fragments = [
         CORE_MAPPING_SCHEMA,
         _solar_mapping_schema(include_ev_soc=False),
+        _solar_threshold_schema(),
         _captar_mapping_schema(include_ev_soc=False),
+        _captar_threshold_schema(),
         DEADLINE_MAPPING_SCHEMA,
+        _deadline_threshold_schema(),
         VEHICLE_LIMIT_MAPPING_SCHEMA,
         UNGATED_MAPPING_SCHEMA,
+        _ungated_threshold_schema(include_interval=False),
     ]
     seen: set[str] = set()
-    for fragment in mapping_fragments:
+    for fragment in all_fragments:
         overlap = _keys(fragment) & seen
-        assert not overlap, f"field(s) {overlap} appear in more than one mapping fragment"
+        assert not overlap, f"field(s) {overlap} appear in more than one fragment"
         seen |= _keys(fragment)

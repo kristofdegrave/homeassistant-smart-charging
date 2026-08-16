@@ -185,19 +185,22 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
             vol.Required(
                 CONF_NOMINAL_VOLTAGE, default=d.get(CONF_NOMINAL_VOLTAGE, DEFAULT_NOMINAL_VOLTAGE)
             ): vol.Coerce(float),
-            vol.Required(CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, 6.0)): vol.Coerce(float),
-            vol.Required(CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, 16.0)): vol.Coerce(
-                float
-            ),
-            vol.Required(CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, 25.0)): vol.Coerce(
-                float
-            ),
+            vol.Required(
+                CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, DEFAULT_MIN_CURRENT)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, DEFAULT_GRID_CEILING_A)
+            ): vol.Coerce(float),
             vol.Required(
                 CONF_GRID_SAFETY_OFFSET_A,
                 default=d.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
             ): vol.Coerce(float),
             vol.Required(
-                CONF_DEFAULT_TARGET_CURRENT, default=d.get(CONF_DEFAULT_TARGET_CURRENT, 10.0)
+                CONF_DEFAULT_TARGET_CURRENT,
+                default=d.get(CONF_DEFAULT_TARGET_CURRENT, DEFAULT_DEFAULT_TARGET_CURRENT),
             ): vol.Coerce(float),
             vol.Required(
                 CONF_SMOOTHING_WINDOW,
@@ -307,6 +310,10 @@ CORE_MAPPING_SCHEMA = vol.Schema(
         vol.Required(CONF_CHARGING_STATES): str,
         vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
         vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
+        # T3 flips this rendered default to True (design, "Decisions on two forks" §2 --
+        # R20 AC1's "defaulting to present"); DEFAULT_SOLAR_AVAILABLE itself stays False,
+        # used only as the absent-key read fallback. Left at the constant here, same as
+        # `prompt_timeout_h` below is left off the ungated-threshold fragment until T3.
         vol.Required(CONF_SOLAR_AVAILABLE, default=DEFAULT_SOLAR_AVAILABLE): bool,
         vol.Required(CONF_CAPTAR_AVAILABLE, default=DEFAULT_CAPTAR_AVAILABLE): bool,
         vol.Required(CONF_DEADLINE_AVAILABLE, default=DEFAULT_DEADLINE_AVAILABLE): bool,
@@ -435,6 +442,8 @@ UNGATED_MAPPING_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
         vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+        # RA4 notify-target role (notifications design doc §3/§6): must be a `notify`-domain
+        # entity; EntitySelector's own domain filter rejects a mismatched entity (vol.Invalid).
         vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
         vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
         vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
@@ -443,7 +452,7 @@ UNGATED_MAPPING_SCHEMA = vol.Schema(
 
 
 def _ungated_threshold_schema(
-    defaults: dict | None = None, include_interval: bool = False
+    defaults: dict | None = None, *, include_interval: bool = False
 ) -> vol.Schema:
     """UC12 step 8. `include_interval` is True only for the options flow (UC12 1b) -- the
     install and reconfigure flows never ask the control interval and default it instead.
