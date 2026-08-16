@@ -334,15 +334,13 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 # async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
 #
 # T3's known temporary gap (a default-accepting install rejected at the thresholds step for a
-# missing ev_soc_entity mapping with no step to answer it on) is only PARTLY resolved by this
-# task. Since solar_available also defaults True (T3, "Decisions on two forks" §2), the solar
-# step this task adds always shows on a default install, giving ev_soc_entity a place to be
-# answered there -- and a rejection on that step is no longer a dead end, since the solar
-# step's own guard re-shows the same step with a field-local error the user can fix on the
-# spot. But a user who declines solar on the core step while leaving captar_available at its
-# own True default (DEFAULT_CAPTAR_AVAILABLE) still hits the exact T3 dead end: no captar step
-# exists until T5, so the thresholds-step safety net rejects for a missing ev_soc_entity that
-# no rendered step can answer. This residual case is real and stays open until T5.
+# missing ev_soc_entity mapping with no step to answer it on) is fully closed as of this task.
+# T4 gave ev_soc_entity a place to be answered whenever solar is declared (its form default is
+# True); T5 does the same for captar (also True by default): whichever of the two capabilities
+# is declared, its own step now asks for ev_soc_entity and re-shows itself with a field-local
+# error on a missing mapping, rather than falling through to the thresholds-step safety net
+# with no field left to answer it on. That safety net (`_mapping_errors` at the thresholds
+# step) now only remains load-bearing for the still-unsplit vehicle-limit guard (T7).
 
 
 class FlowMode(StrEnum):
@@ -427,14 +425,18 @@ UC12_FIXED_STEP_ORDER = (
 )
 
 # Populated incrementally -- see the module comment above. T3 added the two ungated rows
-# (`mappings`/`thresholds`, UC12 steps 7/8), needing no capability to be reached. T4 adds
-# `solar`, gated on this run's own CONF_SOLAR_AVAILABLE answer (always present in
-# self._answers by the time any gate runs -- CORE_MAPPING_SCHEMA's field is vol.Required).
-# `captar`/`deadline`/`vehicle_limit` (T5-T7) still have no method, so their rows wait.
+# (`mappings`/`thresholds`, UC12 steps 7/8), needing no capability to be reached. T4 added
+# `solar`, gated on this run's own CONF_SOLAR_AVAILABLE answer. T5 adds `captar`, gated the
+# same way on CONF_CAPTAR_AVAILABLE, placed after `solar` -- UC12's fixed order is what makes
+# `async_step_captar`'s `include_ev_soc` expression correct (see its docstring). Both
+# capability flags are always present in self._answers by the time any gate runs
+# (CORE_MAPPING_SCHEMA marks both vol.Required). `deadline`/`vehicle_limit` (T6-T7) still
+# have no method, so their rows wait.
 # `thresholds` is additionally gated off for reconfigure (UC12 1a, design "Step ids" table row
 # 6) -- moot until T9 wires async_step_reconfigure into this table, but correct now.
 CONFIG_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
+    FlowStep(step_id=STEP_CAPTAR, gate=lambda flow: bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))),
     FlowStep(step_id=STEP_MAPPINGS, gate=lambda flow: True),
     FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
 )
@@ -752,8 +754,7 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         """UC12 step 3: the solar mapping + threshold halves, gated on solar declared this
         run (design, "Schema fragments"). Step-local guard (ADR-0025 point 1): a missing
         ev_soc/solar_forecast mapping re-shows this step with a field-local error instead of
-        the end-of-form safety net T3 still runs for the not-yet-split captar/vehicle-limit
-        guards."""
+        the end-of-form safety net T3 still runs for the not-yet-split vehicle-limit guard."""
         include_ev_soc = CONF_EV_SOC_ENTITY not in self._answers
         schema = _solar_mapping_schema(include_ev_soc)
         if self._mode is not FlowMode.RECONFIGURE:
@@ -774,6 +775,36 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_SOLAR)
 
+    async def async_step_captar(self, user_input=None):
+        """UC12 step 4: the CapTar mapping + threshold halves, gated on CapTar declared this
+        run (design, "Schema fragments"). `include_ev_soc` mirrors the solar step's own
+        expression; it is already False here whenever the solar step ran and collected the
+        mapping (R20 AC4's once-only rule), because UC12's fixed order places `solar` before
+        `captar` in CONFIG_TABLE and the solar step only advances after merging into
+        self._answers. Step-local guard (ADR-0025 point 1, "needs particular care" per the
+        design's Consequences): a missing ev_soc mapping re-shows this step with a
+        field-local error keyed off CapTar, not solar -- `_ev_soc_missing_error` checks the
+        solar branch first, which is inert here since solar_available is either False or
+        already satisfied by the time this step can be reached."""
+        include_ev_soc = CONF_EV_SOC_ENTITY not in self._answers
+        schema = _captar_mapping_schema(include_ev_soc)
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_captar_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
+
+        merged = {**self._answers, **user_input}
+        errors = _ev_soc_missing_error(merged) or {}
+        if errors:
+            return self.async_show_form(
+                step_id=STEP_CAPTAR,
+                data_schema=self.add_suggested_values_to_schema(schema, user_input),
+                errors=errors,
+            )
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_CAPTAR)
+
     async def async_step_mappings(self, user_input=None):
         """UC12 step 7: the ungated entity-role mappings (design, "Schema fragments")."""
         if user_input is None:
@@ -789,15 +820,16 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         `_mapping_errors` is called here, on the last install-path form, as the temporary
         safety net the plan's Conventions section describes: today's flat flow's end-of-form
         behaviour, preserved verbatim until T4-T7 each move one guard to its own gated step
-        and T7 deletes both this call and `_mapping_errors` itself. T4 already gives ev_soc/
-        solar_forecast their own step-local guard on the solar step, so this call is now only
-        load-bearing for the still-unsplit captar/vehicle-limit guards (T5/T7) -- it stays
-        harmless for the solar pair, which by this point is either already satisfied (solar
-        step ran and passed) or not applicable (solar not declared). It reads `self._answers`
-        alone, not `self._answers | user_input`: none of the three guards' fields
-        (`solar_available`, `captar_available`, `ev_soc_entity`, `solar_forecast_entity`,
-        `vehicle_charge_limit_entity`, `car_home_entity`) is asked on this step, so a merge
-        with this step's own submission could never change the verdict."""
+        and T7 deletes both this call and `_mapping_errors` itself. T4/T5 already give ev_soc/
+        solar_forecast (solar step) and ev_soc (captar step) their own step-local guards, so
+        this call is now only load-bearing for the still-unsplit vehicle-limit guard (T7) --
+        it stays harmless for the solar/captar pair, which by this point is either already
+        satisfied (its step ran and passed) or not applicable (its capability not declared).
+        It reads `self._answers` alone, not `self._answers | user_input`: none of the three
+        guards' fields (`solar_available`, `captar_available`, `ev_soc_entity`,
+        `solar_forecast_entity`, `vehicle_charge_limit_entity`, `car_home_entity`) is asked on
+        this step, so a merge with this step's own submission could never change the
+        verdict."""
         schema = _ungated_threshold_schema(include_interval=False)
         if user_input is None:
             return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)

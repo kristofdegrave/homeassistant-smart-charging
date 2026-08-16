@@ -77,6 +77,7 @@ from custom_components.smart_charging.const import (
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     CONF_VEHICLE_LIMIT_MAPPED,
+    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_EVENING_PROMPT_ENABLED,
@@ -158,6 +159,14 @@ SOLAR_INPUT = {
     CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
 }
 
+# UC12 step 4: ev_soc only needs a value here when solar didn't already collect it (R20 AC4's
+# once-only rule) -- CORE_INPUT's own solar_available is False, so a bare captar-only run
+# always needs it. _run_install_flow's None-removes-the-key mechanism drops it back out for
+# the both-declared truth-table cases that must NOT ask for it again here.
+CAPTAR_INPUT = {
+    CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+}
+
 MAPPINGS_INPUT = {
     CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
 }
@@ -174,6 +183,7 @@ THRESHOLDS_INPUT = {
 _INSTALL_STEP_BASES = {
     STEP_CORE: CORE_INPUT,
     STEP_SOLAR: SOLAR_INPUT,
+    STEP_CAPTAR: CAPTAR_INPUT,
     STEP_MAPPINGS: MAPPINGS_INPUT,
     STEP_THRESHOLDS: THRESHOLDS_INPUT,
 }
@@ -559,26 +569,15 @@ async def test_options_flow_edits_solar_thresholds(hass):
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
-# The original test_solar_available_error_preserves_previously_entered_values asserted
-# suggested values for charger_current_entity/solar_available on the re-shown form -- neither
-# is a thresholds-step field now, so that specific assertion is deferred to T5/T7 along with
-# the remaining unsplit guards. The thresholds step's OWN fields are testable today, via the
-# same add_suggested_values_to_schema call (config_flow.py's async_step_thresholds); the
-# trigger is captar_available (its own step lands in T5), not solar_available (T4 moved that
-# guard to the solar step, so it can no longer reach the thresholds step's safety net):
-async def test_thresholds_error_preserves_previously_entered_values(hass):
-    result = await _run_install_flow(
-        hass,
-        per_step={
-            STEP_CORE: {CONF_CAPTAR_AVAILABLE: True},
-            STEP_THRESHOLDS: {CONF_NOMINAL_VOLTAGE: 231.5},
-        },
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == STEP_THRESHOLDS
-
-    suggested = {key.schema: key.description for key in result["data_schema"].schema}
-    assert suggested[CONF_NOMINAL_VOLTAGE]["suggested_value"] == 231.5
+# test_thresholds_error_preserves_previously_entered_values (T3/T4) is deferred to T7. Its
+# trigger was always one of the three _mapping_errors guards firing at the thresholds step's
+# temporary safety net; T4 moved the solar pair to the solar step and T5 moves the ev_soc/
+# captar pair to the captar step, so as of this task the only guard left that could fire there
+# is _car_home_missing_error -- and it can't: vehicle_charge_limit_entity has no step to set it
+# on until T7 adds the vehicle_limit step, so `user_input.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY)`
+# is always None and the guard never triggers. The thresholds step's own
+# add_suggested_values_to_schema call is therefore genuinely untestable via a real install run
+# until T7 gives the last guard something to reject -- restore this test then.
 
 
 async def test_solar_error_preserves_previously_entered_values(hass):
@@ -674,14 +673,16 @@ async def test_reconfigure_rejects_solar_available_true_without_solar_forecast(h
 
 async def test_captar_available_defaults_true(hass):
     # Design doc §3: R18 ("defaulting to present") / entity-catalog.md's sc_captar_available.
-    # Omitting the field from the core submission (rather than a successful, ev_soc-mapped
-    # install, which has no step to answer ev_soc on until T5) lets CORE_MAPPING_SCHEMA's own
-    # default apply -- proven end-to-end by the guard firing exactly as it does when the
-    # field is explicitly set True (test_captar_available_true_requires_ev_soc above).
-    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: None}})
+    # Now that the captar step exists (T5), the direct and observable proof mirrors
+    # test_solar_available_defaults_true below: omitting the field lets CORE_MAPPING_SCHEMA's
+    # own default apply, and the captar table row's own gate reads it -- the step SHOWS.
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    core_input = {k: v for k, v in CORE_INPUT.items() if k != CONF_CAPTAR_AVAILABLE}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], core_input)
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == STEP_THRESHOLDS
-    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE
+    assert result["step_id"] == STEP_CAPTAR
 
 
 async def test_solar_available_defaults_true(hass):
@@ -699,17 +700,9 @@ async def test_solar_available_defaults_true(hass):
     assert result["step_id"] == STEP_SOLAR
 
 
-async def test_captar_available_true_requires_ev_soc(hass):
-    # Design doc §3: flipping CapTar available to True (or leaving its default) without
-    # mapping ev_soc must be rejected by the flow itself, exactly like CONF_SOLAR_AVAILABLE's
-    # guard on the same field. The captar step doesn't exist yet (T5), so ev_soc has no field
-    # to answer it on -- the guard, still running at the thresholds step's temporary safety
-    # net, fires there instead. This is the residual T3 install-flow dead end T4 didn't close
-    # (see the module comment above CONFIG_TABLE) -- it stays open until T5.
-    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: True}})
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == STEP_THRESHOLDS
-    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE
+# test_captar_available_true_requires_ev_soc is superseded by
+# test_r20_ac6_missing_ev_soc_is_reported_on_the_captar_step (T5 section below): the rejection
+# now surfaces on the captar step itself, not the thresholds-step safety net.
 
 
 async def test_captar_available_false_does_not_require_ev_soc(hass):
@@ -742,13 +735,17 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
 
 
 async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass):
-    # captar_cooldown_min lives on the captar step (T5), which doesn't exist yet -- only the
-    # ungated peak-protection thresholds are checked here until then.
     result = await _run_install_flow(hass)
     assert result["options"][CONF_MAX_PEAK_KW] == DEFAULT_MAX_PEAK_KW
     assert result["options"][CONF_POWER_RESPECT_PEAK] == DEFAULT_POWER_RESPECT_PEAK
     assert result["options"][CONF_SAFETY_MARGIN_W] == DEFAULT_SAFETY_MARGIN_W
     assert result["options"][CONF_PEAK_GRACE_MIN] == DEFAULT_PEAK_GRACE_MIN
+
+
+async def test_captar_declared_cooldown_seeded_into_options_with_defaults(hass):
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: True}})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
 
 
 async def test_options_flow_edits_peak_protection_thresholds(hass):
@@ -1049,8 +1046,8 @@ async def test_adr0005_all_capabilities_off_install_splits_buckets(hass):
     }
 
     # Only the ungated thresholds + control_interval_s -- the intersection excludes every
-    # OPTION_KEYS member that lives on a step this run didn't declare (solar, gated off by
-    # CORE_INPUT) or that doesn't exist yet (captar/deadline, T5-T6).
+    # OPTION_KEYS member that lives on a step this run didn't declare (solar/captar, both
+    # gated off by CORE_INPUT) or that doesn't exist yet (deadline, T6).
     assert sorted(result["options"]) == sorted(
         _keys(_ungated_threshold_schema(include_interval=True))
     )
@@ -1059,9 +1056,9 @@ async def test_adr0005_all_capabilities_off_install_splits_buckets(hass):
 
 async def test_adr0025_option_keys_consumption_is_intersection_based(hass):
     """ADR-0025 Consequences: a skipped step leaves its OPTION_KEYS members absent from the
-    accumulator; the terminal step must intersect, not index. Declaring solar absent (as
-    CORE_INPUT does) is enough on its own to prove this -- the solar step's own OPTION_KEYS
-    members are absent purely because its gate failed, not because the step doesn't exist."""
+    accumulator; the terminal step must intersect, not index. Declaring solar/captar absent
+    (as CORE_INPUT does) is enough on its own to prove this -- their own steps' OPTION_KEYS
+    members are absent purely because their gates failed, not because the steps don't exist."""
     result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_SOLAR_START_THRESHOLD_W not in result["options"]
@@ -1185,6 +1182,114 @@ async def test_solar_step_error_can_be_corrected_and_the_flow_advances(hass):
     assert result["errors"] == {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], SOLAR_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
+
+
+# --- T5: the CapTar step, and the once-only EV state-of-charge mapping. ---
+
+
+async def test_r20_ac4_ev_soc_asked_on_solar_step_only_when_both_capabilities_declared(hass):
+    """R20 AC4 / UC12 postcondition 3: solar and CapTar both present -> the EV state-of-charge
+    mapping appears on the solar step and NOT again on the CapTar step."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True, CONF_CAPTAR_AVAILABLE: True}
+    )
+    assert result["step_id"] == STEP_SOLAR
+    assert CONF_EV_SOC_ENTITY in _keys(result["data_schema"])
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SOLAR_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CAPTAR
+    assert CONF_EV_SOC_ENTITY not in _keys(result["data_schema"])
+
+
+async def test_r20_ac4_ev_soc_asked_on_captar_step_when_only_captar_declared(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CAPTAR
+    assert CONF_EV_SOC_ENTITY in _keys(result["data_schema"])
+
+
+async def test_r20_ac4_ev_soc_never_asked_when_neither_capability_declared(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
+    assert CONF_EV_SOC_ENTITY not in _keys(result["data_schema"])
+
+
+async def test_r20_ac6_missing_ev_soc_is_reported_on_the_captar_step(hass):
+    """... with ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE, not the solar code."""
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_CAPTAR_AVAILABLE: True},
+            STEP_CAPTAR: {CONF_EV_SOC_ENTITY: None},
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CAPTAR
+    assert result["errors"] == {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE}
+
+
+async def test_uc12_step4_captar_step_presents_the_captar_cooldown(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CAPTAR
+    assert _keys(result["data_schema"]) == (
+        _keys(_captar_mapping_schema(include_ev_soc=True)) | _keys(_captar_threshold_schema())
+    )
+
+
+async def test_uc12_2a_captar_absent_skips_the_captar_step(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
+
+
+async def test_r20_ac3_captar_absent_install_stores_no_captar_threshold_keys(hass):
+    result = await _run_install_flow(hass)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    for key in _keys(_captar_threshold_schema()):
+        assert key not in result["options"]
+
+
+async def test_captar_step_error_can_be_corrected_and_the_flow_advances(hass):
+    """The captar-step analogue of test_solar_step_error_can_be_corrected_and_the_flow_advances
+    (T4): a rejected captar submission is fixable on the spot, not a dead end."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True}
+    )
+    assert result["step_id"] == STEP_CAPTAR
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CAPTAR
+    assert result["errors"] == {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE}
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CAPTAR_INPUT)
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_MAPPINGS
 
