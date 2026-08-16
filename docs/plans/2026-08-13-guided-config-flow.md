@@ -34,9 +34,9 @@ C4's own "Testable on its own" line), `ruff`.
 
 **Model:** Per CLAUDE.md, this is development work — execute on **Sonnet**.
 
-**Two open questions from the design doc must be answered before the task that depends on them
-(T3):** OQ-1 (present `prompt_timeout_h` or defer it) and OQ-2 (step 1's solar default). Both are
-one-task changes; T1 and T2 can proceed without either answer. Do not guess — ask.
+**Two forks the design doc raised are now decided** (see its "Decisions on two forks" section):
+`prompt_timeout_h` is presented (T3), and step 1's solar decision defaults `True` on the form while
+`DEFAULT_SOLAR_AVAILABLE` itself stays `False` (T3).
 
 ---
 
@@ -109,7 +109,8 @@ def test_no_field_appears_in_two_fragments():
 **Step 2 — implement.** In `const.py`, add per design D-1: `CONF_DEADLINE_AVAILABLE`,
 `DEFAULT_DEADLINE_AVAILABLE`, `CONF_REMINDER_LEAD_H`, `DEFAULT_REMINDER_LEAD_H`,
 `CONF_VEHICLE_LIMIT_MAPPED`, and per D-5 the `STEP_*` step-id constants. `CONF_REMINDER_LEAD_H` is
-appended to `OPTION_KEYS` in `config_flow.py`. (`CONF_PROMPT_TIMEOUT_H` waits on OQ-1 — T3.)
+appended to `OPTION_KEYS` in `config_flow.py`. (`CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`
+are added in T3, alongside the ungated-threshold fragment they belong to.)
 
 In `config_flow.py`, split `MAPPING_SCHEMA` and `_threshold_schema()` into the fragments named in the
 design doc's fragment table. `MAPPING_SCHEMA`, `_threshold_schema()` and `USER_SCHEMA` stay in place
@@ -170,10 +171,8 @@ gate, asserting it lands on the next passing row and calls `_async_finish` when 
 (accumulator; `async_step_user` delegates into the shared step-1 implementation), ADR-0005 (bucket
 split unchanged). **Test boundary:** HA harness, `tests/test_config_flow.py`.
 
-**Blocked on OQ-1 and OQ-2** — both land in this task's fragments/schema. Get the answers first.
-
-**Files:** edit `custom_components/smart_charging/config_flow.py`, `tests/test_config_flow.py`
-(and `const.py` + `OPTION_KEYS` if OQ-1 resolves to (a)).
+**Files:** edit `custom_components/smart_charging/config_flow.py`, `tests/test_config_flow.py`,
+and `const.py` (adds `CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`, appended to `OPTION_KEYS`).
 
 **Step 1 — failing tests.** Replace `_run_user_flow`/`_create_entry` with a step-walking driver:
 
@@ -219,10 +218,10 @@ options = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
 options[CONF_CONTROL_INTERVAL_S] = DEFAULT_CONTROL_INTERVAL_S
 ```
 
-Apply OQ-1's answer (add or omit `CONF_PROMPT_TIMEOUT_H` on the ungated threshold fragment and in
-`OPTION_KEYS`) and OQ-2's (step 1's solar decision default). If OQ-2 resolves as recommended, add the
-comment naming the divergence between the *form* default (`True`, R20 AC1) and
-`DEFAULT_SOLAR_AVAILABLE` (`False`, the absent-key read fallback), so the next reader sees it.
+Add `CONF_PROMPT_TIMEOUT_H` to the ungated threshold fragment and to `OPTION_KEYS` (design doc's
+"Decisions on two forks" §1). Render step 1's solar decision with `default=True` (§2); add a comment
+naming the divergence between the *form* default (`True`, R20 AC1) and `DEFAULT_SOLAR_AVAILABLE`
+(`False`, the absent-key read fallback), so the next reader sees it.
 
 The three gated steps do not exist yet, so their table rows must not be reachable — gate them on the
 capability flags, which this task already collects on step 1; with all three answered absent, the
@@ -559,7 +558,7 @@ with one block per step id under each section. Redistribute the existing labels;
 conditional qualifiers. Write each shared `config.step.*` title/description to read correctly in
 **both** a first-install and an edit-my-mappings context — ADR-0025 names this as the accepted
 editorial cost of sharing the table. Add labels for the new fields (`deadline_available`,
-`vehicle_limit_mapped`, `reminder_lead_h`, and `prompt_timeout_h` if OQ-1 resolved to (a)) in
+`vehicle_limit_mapped`, `reminder_lead_h`, and `prompt_timeout_h`) in
 `strings.json`, `en.json` and `nl.json`.
 
 **Verify + commit.**
@@ -612,8 +611,8 @@ Before the final push, confirm each of the following and record it in the PR bod
 5. `SmartChargingConfigFlow.VERSION` is still `1`, and no migration was added (ADR-0025,
    Consequences).
 6. `git diff --stat origin/main` touches only the six files in the scope guard.
-7. Both open questions (OQ-1, OQ-2) are answered in the PR thread and the answer is reflected in the
-   code and in the design doc, rather than left implicit.
+7. Both forks the design doc raised (the prompt-timeout field; the solar form default) are reflected
+   in the code exactly as the design doc's "Decisions on two forks" section states.
 
 ---
 
@@ -621,7 +620,8 @@ Before the final push, confirm each of the following and record it in the PR bod
 
 - Wiring `deadline_available` to the runtime capability gating (R18) and `reminder_lead_h` to the
   plug-in reminder (R12/UC10) — the keys are captured here; nothing reads them yet.
-- Aligning `DEFAULT_SOLAR_AVAILABLE` with R18 AC1's "defaulting to present", if OQ-2 is resolved as
-  recommended (the constant is left as the absent-key read fallback here).
+- Aligning `DEFAULT_SOLAR_AVAILABLE` itself with R18 AC1's "defaulting to present" — left as the
+  absent-key read fallback here; retroactively changing it affects existing config entries and
+  belongs in its own issue against R18, not this slice.
 - `entity-catalog.md`'s `solar_power` adapter role and `power_cooldown_min` option — UC12's own
   postcondition names both as pre-existing gaps out of scope to close here.

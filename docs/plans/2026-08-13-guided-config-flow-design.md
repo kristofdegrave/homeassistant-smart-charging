@@ -287,8 +287,8 @@ catalog, not invented:
 | `DEFAULT_DEADLINE_AVAILABLE` | `True` | — | catalog "on (present)"; R18 AC6 "defaulting to present" |
 | `CONF_REMINDER_LEAD_H` | `"reminder_lead_h"` | options | catalog *Reminders & prompts*; R12; UC12 step 5 |
 | `DEFAULT_REMINDER_LEAD_H` | `8.0` | — | catalog default 8 h; R12 |
-| `CONF_PROMPT_TIMEOUT_H` | `"prompt_timeout_h"` | options | catalog *Reminders & prompts*; UC12 step 8 — **subject to OQ-1** |
-| `DEFAULT_PROMPT_TIMEOUT_H` | `2.0` | — | catalog default 2 h — **subject to OQ-1** |
+| `CONF_PROMPT_TIMEOUT_H` | `"prompt_timeout_h"` | options | catalog *Reminders & prompts*; UC12 step 8 |
+| `DEFAULT_PROMPT_TIMEOUT_H` | `2.0` | — | catalog default 2 h |
 
 `CONF_REMINDER_LEAD_H` and `CONF_PROMPT_TIMEOUT_H` are appended to `OPTION_KEYS`;
 `CONF_DEADLINE_AVAILABLE` needs no list membership, since `_split_data` is an exclusion filter and
@@ -327,47 +327,35 @@ tables and the translation-parity test (CLAUDE.md: no magic strings).
 
 ---
 
-## Open questions (require the human partner's decision)
+## Decisions on two forks (settled by the human partner)
 
-**OQ-1 — the evening prompt's timeout field.** UC12 step 8 lists "the evening home-day prompt fields
-(the evening prompt's enable flag, prompt time, **and timeout**)", and `entity-catalog.md` carries a
-`prompt_timeout_h` config-options row (default 2 h, R13). But that same catalog row's **Read by**
-column is `—`, and `docs/plans/2026-07-21-notifications-design.md` §3/§9 deliberately did **not**
+Two fields in this slice's surface had no single citable answer across the existing docs/code, so
+each was raised as an explicit fork rather than resolved by guessing. Both are now decided.
+
+**The evening prompt's timeout field — present it.** UC12 step 8 lists "the evening home-day prompt
+fields (the evening prompt's enable flag, prompt time, **and timeout**)", and `entity-catalog.md`
+carries a `prompt_timeout_h` config-options row (default 2 h, R13). That same catalog row's **Read
+by** column is `—`, and `docs/plans/2026-07-21-notifications-design.md` §3/§9 deliberately did not
 wire it, because UC08 has no separate timeout (midnight is the only answer deadline) — a decision
-`config_flow.py` and `const.py` both carry an explicit comment about today.
+`config_flow.py` and `const.py` both carry an explicit comment about today. **Decision:** present it
+anyway. UC12/R20 are the later, approved authority over this flow's surface; the value is
+options-bucket data whose absent consumer is inert; and R20 AC5 carves out only values the flow
+*never presents on any path* (the control interval, the `Power`-mode cooldown) — not this one. Add
+`CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H`, place it on the ungated-threshold fragment,
+store it in options where nothing reads it yet (T3).
 
-So UC12 mandates presenting a field that an approved design deliberately left unwired and that no
-component reads. The two resolutions:
-
-- **(a) Present it** — add `CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H`, put it on the
-  ungated-threshold fragment, store it in options where nothing reads it yet. Satisfies UC12 step 8
-  literally; costs one inert user-facing field.
-- **(b) Defer it** — leave the notifications design's non-wiring standing and record a known,
-  explicit deviation from UC12 step 8, to be closed by amending UC12 (or by wiring the timeout) in
-  its own issue.
-
-**Recommendation: (a)**, because UC12/R20 are the later, approved authority over this flow's surface,
-because the value is options-bucket data whose absence of a consumer is inert, and because R20 AC5
-carves out only values the flow *never presents on any path* (the control interval, the `Power`-mode
-cooldown) — not this one. The plan isolates it as a single task (T3 sub-step, one fragment entry, one
-`OPTION_KEYS` member, one strings label) so flipping to (b) is a one-task deletion.
-
-**OQ-2 — the solar capability's default.** R18 AC1 and R20 AC1 both say the capability declarations
-default to **present**; the glossary's `solar_available` entry says "default present"; and
-`entity-catalog.md`'s Capabilities table says "on (present)". `const.py` has
-`DEFAULT_SOLAR_AVAILABLE = False`, and `MAPPING_SCHEMA` renders the field with `default=False` — a
-pre-existing divergence this slice inherits rather than introduces.
-
-- **Recommendation:** render step 1's solar decision with `default=True` per R20 AC1 (the form
-  default is squarely inside this slice's remit — it is what the flow presents), and leave
-  `DEFAULT_SOLAR_AVAILABLE` itself untouched at `False` in this slice. That constant is now used only
-  as the *absent-key read fallback* by consumers reading `entry.data.get(...)`; changing it would
-  retroactively grant the solar capability to an existing entry that predates the key, which is a
-  behavioural change to running installations and belongs in its own issue against R18, not here.
-  The plan marks this explicitly (T3) so the divergence is visible rather than silently carried.
-
-Neither open question blocks starting the plan: T1–T2 are independent of both, and each question's
-resolution touches exactly one task.
+**The solar capability's default — form defaults `True`, constant stays `False`.** R18 AC1 and R20
+AC1 both say the capability declarations default to **present**; the glossary's `solar_available`
+entry says "default present"; `entity-catalog.md`'s Capabilities table says "on (present)". `const.py`
+has `DEFAULT_SOLAR_AVAILABLE = False`, and `MAPPING_SCHEMA` renders the field with `default=False` —
+a pre-existing divergence this slice inherits rather than introduces. **Decision:** render step 1's
+solar decision with `default=True` per R20 AC1 (the form default is squarely inside this slice's
+remit — it is what the flow presents), and leave `DEFAULT_SOLAR_AVAILABLE` itself untouched at
+`False`. That constant is now used only as the *absent-key read fallback* by consumers reading
+`entry.data.get(...)`; changing it would retroactively grant the solar capability to an existing
+entry that predates the key, which is a behavioural change to running installations and belongs in
+its own issue against R18, not here. The plan marks this explicitly (T3) so the divergence stays
+visible rather than silently carried.
 
 ---
 
