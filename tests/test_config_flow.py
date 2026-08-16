@@ -1339,6 +1339,18 @@ async def test_uc12_step5_deadline_step_presents_departure_mapping_and_reminder_
     )
 
 
+async def test_uc12_2a_deadline_absent_skips_the_deadline_step(hass):
+    """UC12 exception/alternate flow 2a: declaring deadline absent skips straight to the
+    ungated mappings step -- the deadline step never shows. The direct proof that the field
+    is never OFFERED (R18 AC7's other half from the stored-entry check below)."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
+
+
 async def test_r18_ac7_deadline_absent_offers_no_departure_or_reminder_field(hass):
     """R18 AC7 / R20 AC3: the deadline step is skipped entirely, and the stored entry carries
     neither departure_external_entity nor reminder_lead_h."""
@@ -1357,7 +1369,7 @@ async def test_uc12_step5_departure_mapping_is_optional(hass):
     assert result["options"][CONF_REMINDER_LEAD_H] == DEFAULT_REMINDER_LEAD_H
 
 
-async def test_deadline_declared_departure_mapping_can_be_set(hass):
+async def test_uc12_step5_deadline_declared_departure_mapping_can_be_set(hass):
     result = await _run_install_flow(
         hass,
         per_step={
@@ -1367,6 +1379,18 @@ async def test_deadline_declared_departure_mapping_can_be_set(hass):
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_DEPARTURE_EXTERNAL_ENTITY] == "sensor.departure_time"
+
+
+async def test_uc12_step5_deadline_declared_reminder_lead_can_be_set(hass):
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_DEADLINE_AVAILABLE: True},
+            STEP_DEADLINE: {CONF_REMINDER_LEAD_H: 3.0},
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["options"][CONF_REMINDER_LEAD_H] == 3.0
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---

@@ -334,13 +334,14 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 # async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
 #
 # T3's known temporary gap (a default-accepting install rejected at the thresholds step for a
-# missing ev_soc_entity mapping with no step to answer it on) is fully closed as of this task.
-# T4 gave ev_soc_entity a place to be answered whenever solar is declared (its form default is
-# True); T5 does the same for captar (also True by default): whichever of the two capabilities
-# is declared, its own step now asks for ev_soc_entity and re-shows itself with a field-local
+# missing ev_soc_entity mapping with no step to answer it on) was fully closed by T5. T4 gave
+# ev_soc_entity a place to be answered whenever solar is declared (its form default is True);
+# T5 does the same for captar (also True by default): whichever of the two capabilities is
+# declared, its own step now asks for ev_soc_entity and re-shows itself with a field-local
 # error on a missing mapping, rather than falling through to the thresholds-step safety net
 # with no field left to answer it on. That safety net (`_mapping_errors` at the thresholds
-# step) now only remains load-bearing for the still-unsplit vehicle-limit guard (T7).
+# step) is retained for T7's still-unsplit vehicle-limit guard, but cannot fire on any current
+# install path (see `async_step_thresholds`'s own docstring).
 
 
 class FlowMode(StrEnum):
