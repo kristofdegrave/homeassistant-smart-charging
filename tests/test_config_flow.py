@@ -136,9 +136,9 @@ USER_INPUT = {
 # decisions default False here, including solar -- even though solar's rendered form default is
 # True (T3) -- because CORE_INPUT is a fixture of explicit values, not a proof of the schema
 # default (see test_solar_available_defaults_true for that), and leaving it False keeps every
-# test that doesn't care about solar off the solar step entirely. Captar/deadline have no step
-# yet (T5/T6), so turning either on can only ever exercise the thresholds-step guard rejecting
-# the still-missing mapping.
+# test that doesn't care about solar off the solar step entirely. Deadline has no step yet
+# (T6), so turning it on can only ever exercise the thresholds-step guard rejecting the
+# still-missing mapping.
 CORE_INPUT = {
     CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
     CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
@@ -251,8 +251,8 @@ async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
     assert result["options"][CONF_GRID_SAFETY_OFFSET_A] == 2.0
     assert result["options"][CONF_CONTROL_INTERVAL_S] == DEFAULT_CONTROL_INTERVAL_S
     # ev_soc mapping coverage (solar/captar steps) is exercised elsewhere: the solar step's
-    # own tests (T4) and, once T5 lands, the captar step's -- CORE_INPUT declares both
-    # capabilities absent here, so this test's own install has no field to answer it on.
+    # own tests (T4) and the captar step's (T5) -- CORE_INPUT declares both capabilities
+    # absent here, so this test's own install has no field to answer it on.
 
 
 async def test_second_config_entry_aborts_single_instance_allowed(hass):
@@ -1205,6 +1205,28 @@ async def test_r20_ac4_ev_soc_asked_on_solar_step_only_when_both_capabilities_de
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_CAPTAR
     assert CONF_EV_SOC_ENTITY not in _keys(result["data_schema"])
+
+
+async def test_r20_ac4_both_capabilities_declared_install_completes_with_ev_soc_once(hass):
+    """The end-to-end companion to the schema-shape test above: with both capabilities
+    declared, the captar step's own guard (config_flow.py's async_step_captar) must read
+    ev_soc off self._answers, not off this step's own (deliberately ev_soc-less) submission --
+    exactly the wiring ADR-0025's Consequences flags as needing particular care. Proven by
+    completing the install without ever answering ev_soc on the captar step and confirming it
+    reaches CREATE_ENTRY with ev_soc in DATA and both capabilities' OPTION_KEYS in OPTIONS."""
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_SOLAR_AVAILABLE: True, CONF_CAPTAR_AVAILABLE: True},
+            # ev_soc is not on the captar step's schema this run (already collected on
+            # solar) -- CAPTAR_INPUT's base value would be an unknown-key vol.Invalid here.
+            STEP_CAPTAR: {CONF_EV_SOC_ENTITY: None},
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
+    assert result["options"][CONF_SOLAR_ONLY_STRATEGY] == DEFAULT_SOLAR_ONLY_STRATEGY
+    assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
 
 
 async def test_r20_ac4_ev_soc_asked_on_captar_step_when_only_captar_declared(hass):

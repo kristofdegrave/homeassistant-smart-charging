@@ -822,10 +822,12 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         behaviour, preserved verbatim until T4-T7 each move one guard to its own gated step
         and T7 deletes both this call and `_mapping_errors` itself. T4/T5 already give ev_soc/
         solar_forecast (solar step) and ev_soc (captar step) their own step-local guards, so
-        this call is now only load-bearing for the still-unsplit vehicle-limit guard (T7) --
-        it stays harmless for the solar/captar pair, which by this point is either already
-        satisfied (its step ran and passed) or not applicable (its capability not declared).
-        It reads `self._answers` alone, not `self._answers | user_input`: none of the three
+        of the three `_mapping_errors` guards, only `_car_home_missing_error` is retained for
+        T7's benefit -- and it cannot actually fire yet: it keys off
+        `vehicle_charge_limit_entity`, which no guided step collects until T7 adds the
+        vehicle_limit step, so this call is currently unreachable on the install path (see
+        `test_thresholds_error_preserves_previously_entered_values`'s deferral comment). It
+        reads `self._answers` alone, not `self._answers | user_input`: none of the three
         guards' fields (`solar_available`, `captar_available`, `ev_soc_entity`,
         `solar_forecast_entity`, `vehicle_charge_limit_entity`, `car_home_entity`) is asked on
         this step, so a merge with this step's own submission could never change the
