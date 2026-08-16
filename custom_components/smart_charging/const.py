@@ -188,6 +188,8 @@ CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
 CONF_SOLAR_AVAILABLE = "solar_available"  # bool, default False -- design doc §3, R18 scoped
 CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped
+# bool, default True (R18 AC1) -- entity-catalog.md's deadline capability row
+CONF_DEADLINE_AVAILABLE = "deadline_available"
 # optional at the factory level (NF3) -- design doc §3, R15
 CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"
 # optional at the factory level (NF3) -- design doc §3, R14
@@ -275,6 +277,7 @@ DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a perc
 DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by `SocLimitOverrideNumber`
 DEFAULT_SOLAR_AVAILABLE = False
 DEFAULT_CAPTAR_AVAILABLE = True
+DEFAULT_DEADLINE_AVAILABLE = True
 DEFAULT_SAFETY_MARGIN_W = 250.0
 DEFAULT_MAX_PEAK_KW = 4.0
 DEFAULT_PEAK_GRACE_MIN = 2.0

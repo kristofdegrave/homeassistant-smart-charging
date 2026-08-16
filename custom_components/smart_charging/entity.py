@@ -15,6 +15,13 @@ class SmartChargingEntity(Entity):
     _attr_has_entity_name = True
     _object_id_suffix: str | None = None  # locale-independent object_id suffix (ADR-0013)
     _owned_labels: frozenset[str] = frozenset()  # C5 (#601): e.g. LABEL_SC_RUNTIME
+    # The labels this class may add OR remove -- a superset of every value `_owned_labels` can
+    # take across this class's lifetime, class-level and constant even when `_owned_labels`
+    # itself is set per-instance and conditionally (#674). Left empty for the common case where
+    # `_owned_labels` never changes: `async_added_to_hass` then falls back to `_owned_labels`
+    # itself, so subtracting and re-adding the same constant set is a no-op and existing
+    # subclasses need no change.
+    _manageable_labels: frozenset[str] = frozenset()
 
     def __init__(self, entry_id: str) -> None:
         self._entry_id = entry_id
@@ -44,7 +51,8 @@ class SmartChargingEntity(Entity):
         # come after it) -- delegating first is required, not optional, or every existing
         # subclass's restore-on-restart / coordinator-push registration would silently break.
         await super().async_added_to_hass()
-        if not self._owned_labels:
+        manageable = self._manageable_labels or self._owned_labels
+        if not manageable:
             return
         registry = er.async_get(self.hass)
         existing = registry.async_get(self.entity_id)
@@ -56,5 +64,11 @@ class SmartChargingEntity(Entity):
             return
         # C5 (#601): merge, never assign the bare set -- `async_update_entity`'s `labels`
         # parameter replaces the stored set, so a bare assignment would silently erase any
-        # label the user attached themselves on the very next reload.
-        registry.async_update_entity(self.entity_id, labels=existing.labels | self._owned_labels)
+        # label the user attached themselves on the very next reload. Subtract `manageable`
+        # before re-adding `_owned_labels` (#674): for a class whose `_owned_labels` never
+        # changes this is a no-op (the same constant set is removed then re-added), but for one
+        # whose `_owned_labels` is conditional, this is what lets a label be *removed* on a
+        # later reload, not just added -- a bare union could only ever grow the stored set.
+        registry.async_update_entity(
+            self.entity_id, labels=(existing.labels - manageable) | self._owned_labels
+        )

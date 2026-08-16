@@ -138,8 +138,8 @@ def _deadline_cards() -> list[dict]:
     # T9 (2026-08-13 addendum): still label-driven, not a hardcoded list (Decision 1's
     # extensibility property) -- narrowed to the time domain via the same include filter
     # object (auto-entities ANDs the keys within one include entry). `show_empty: False` keeps
-    # the tab from rendering a visibly-empty card if the pre-existing C2 gap (R19 AC4 deferral,
-    # design doc) is ever closed and departure entities become conditionally absent.
+    # the tab from rendering a visibly-empty card now that the departure-time entities'
+    # `sc_runtime` label is conditionally absent when the deadline capability is off (#674).
     return [
         {
             "type": "custom:auto-entities",
