@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any, ClassVar
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -99,6 +104,12 @@ from .const import (
     ROUND_UP,
     STATE_CHARGING,
     STATE_CONNECTED,
+    STEP_CAPTAR,
+    STEP_DEADLINE,
+    STEP_MAPPINGS,
+    STEP_SOLAR,
+    STEP_THRESHOLDS,
+    STEP_VEHICLE_LIMIT,
 )
 
 # Threshold/default keys stored in config-entry OPTIONS (ADR-0005), not data.
@@ -296,6 +307,93 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
 
 # Install form = mappings + thresholds in one screen; split into data/options on submit.
 USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
+
+
+# --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
+# No handler class uses this yet (plan T2) -- SmartChargingConfigFlow/SmartChargingOptionsFlow
+# start wiring into it from T3 onward. CONFIG_TABLE/OPTIONS_TABLE below are populated
+# incrementally, one task at a time, in UC12's fixed order, as each step method lands
+# (T3's mappings/thresholds rows, T4's solar row, T5's captar row, T6's deadline row, T7's
+# vehicle_limit row, T10's options table) -- not all six/four rows at once here, since no
+# step method exists yet for most of them and a row with no matching method would strand the
+# flow the moment its gate passed (ADR-0025's stated Con). This is a deliberate scoping of the
+# plan's "add the two tables exactly as the design doc specifies" instruction: the design doc
+# describes the tables' final, fully-populated shape; this task adds the mechanism and the
+# (initially empty) tables it operates on, per T3's own note ("keep T2's table assertions
+# scoped to the rows that exist").
+
+
+class FlowMode(StrEnum):
+    """Which of the three flows (UC12) a `_TableWalkMixin` instance is running."""
+
+    INSTALL = "install"
+    RECONFIGURE = "reconfigure"
+    OPTIONS = "options"
+
+
+@dataclass(frozen=True)
+class FlowStep:
+    """One row of a flow's ordered, gated step table (ADR-0025, Option C)."""
+
+    step_id: str
+    gate: Callable[[Any], bool]  # takes the flow handler: a config flow or an options flow
+
+
+class _TableWalkMixin:
+    """Shared table-walk dispatcher for `SmartChargingConfigFlow`/`SmartChargingOptionsFlow`.
+
+    `gate` takes the flow handler rather than a dict so one `FlowStep` signature serves both
+    tables: the config-table gates read `self._answers`/`self._mode`, the options-table gates
+    read `self.config_entry.data`. Deliberately not typed `Callable[[_TableWalkMixin], bool]`:
+    `config_entry` lives on `OptionsFlow`, not on this mixin, so the narrower hint would make
+    every options-table gate a type error.
+    """
+
+    _mode: FlowMode
+    _answers: dict[str, Any] | None = None  # per-run accumulator (ADR-0025 point 2)
+    _table: ClassVar[tuple[FlowStep, ...]] = ()
+
+    async def _async_advance(self, after: str | None):
+        """Show the first step after `after` whose gate passes; finish when none remain.
+
+        `after` need not itself be a table row (e.g. the `core`/`init` entry point is not a
+        `_table` member) -- scanning starts from the row *following* a matching step_id, or
+        from the first row when `after` is `None` or not found in the table at all."""
+        start = 0
+        if after is not None:
+            for index, row in enumerate(self._table):
+                if row.step_id == after:
+                    start = index + 1
+                    break
+        for row in self._table[start:]:
+            if row.gate(self):
+                return await getattr(self, f"async_step_{row.step_id}")()
+        return await self._async_finish()
+
+    async def _async_finish(self):
+        """Terminal: create / update the entry. Implemented per handler."""
+        raise NotImplementedError
+
+
+# UC12 step 2's fixed order (solar -> captar -> deadline -> vehicle limit -> ungated mappings
+# -> ungated thresholds), independent of how many of CONFIG_TABLE's rows exist yet -- every
+# task that appends a row must keep the table a subsequence of this order (asserted by
+# tests/test_config_flow.py's test_uc12_step2_config_table_is_in_uc12s_fixed_order).
+UC12_FIXED_STEP_ORDER = (
+    STEP_SOLAR,
+    STEP_CAPTAR,
+    STEP_DEADLINE,
+    STEP_VEHICLE_LIMIT,
+    STEP_MAPPINGS,
+    STEP_THRESHOLDS,
+)
+
+# Populated incrementally -- see the module comment above. Empty until T3.
+CONFIG_TABLE: tuple[FlowStep, ...] = ()
+
+# Populated incrementally in T10 (its own table per ADR-0025 point 3 -- gated on the *stored*
+# capability flags, not this run's answers). Empty until then.
+OPTIONS_TABLE: tuple[FlowStep, ...] = ()
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
