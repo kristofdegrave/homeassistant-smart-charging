@@ -58,6 +58,7 @@ from custom_components.smart_charging.const import (
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
+    CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -76,22 +77,15 @@ from custom_components.smart_charging.const import (
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     CONF_VEHICLE_LIMIT_MAPPED,
-    DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_MAX_PEAK_KW,
-    DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SOC_LIMIT,
-    DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
-    DEFAULT_SOLAR_ONLY_STRATEGY,
-    DEFAULT_SOLAR_RESERVE_SOC,
-    DEFAULT_SOLAR_STEP_PP,
-    DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
     ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
@@ -102,6 +96,7 @@ from custom_components.smart_charging.const import (
     STATE_CHARGING,
     STATE_CONNECTED,
     STEP_CAPTAR,
+    STEP_CORE,
     STEP_DEADLINE,
     STEP_MAPPINGS,
     STEP_SOLAR,
@@ -110,6 +105,9 @@ from custom_components.smart_charging.const import (
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
+# USER_INPUT is the flat MAPPING_SCHEMA/_threshold_schema()-shaped fixture -- still used
+# directly (never through the flow) by tests that build a MockConfigEntry's data by hand or
+# exercise async_step_reconfigure, both of which still speak the flat schema (T9/T13).
 USER_INPUT = {
     "charger_current_entity": "number.charger_current",
     "charger_status_entity": "sensor.evse",
@@ -127,34 +125,78 @@ USER_INPUT = {
     "default_target_current": 10.0,
 }
 
+# Per-step base fixtures for the guided install flow (UC12 steps 1/7/8 -- T3's own scope).
+# All three capability decisions default off: T3 adds no solar/captar/deadline step, so
+# ev_soc_entity/solar_forecast_entity/departure_external_entity have no field to answer them
+# on -- turning a capability on here can only ever exercise the thresholds-step guard
+# rejecting the still-missing mapping (T4-T6 add the real success path once their step exists).
+CORE_INPUT = {
+    CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+    CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
+    CONF_CONNECTED_STATES: "Connected, Cable",
+    CONF_CHARGING_STATES: "Charging, SuspendedEV",
+    CONF_NET_POWER_ENTITY: "sensor.net_power",
+    CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
+    CONF_SOLAR_AVAILABLE: False,
+    CONF_CAPTAR_AVAILABLE: False,
+    CONF_DEADLINE_AVAILABLE: False,
+    CONF_VEHICLE_LIMIT_MAPPED: False,
+}
 
-async def _run_user_flow(hass, overrides=None, omit=None):
-    user_input = dict(USER_INPUT)
-    user_input.update(overrides or {})
-    for key in omit or ():
-        user_input.pop(key, None)
+MAPPINGS_INPUT = {
+    CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
+}
+
+THRESHOLDS_INPUT = {
+    CONF_NOMINAL_VOLTAGE: 230.0,
+    CONF_MIN_CURRENT: 6.0,
+    CONF_MAX_CURRENT: 16.0,
+    CONF_GRID_CEILING_A: 25.0,
+    CONF_GRID_SAFETY_OFFSET_A: 2.0,
+    CONF_DEFAULT_TARGET_CURRENT: 10.0,
+}
+
+_INSTALL_STEP_BASES = {
+    STEP_CORE: CORE_INPUT,
+    STEP_MAPPINGS: MAPPINGS_INPUT,
+    STEP_THRESHOLDS: THRESHOLDS_INPUT,
+}
+
+
+async def _run_install_flow(hass, *, per_step=None):
+    """Drive the install flow (core -> mappings -> thresholds, UC12 steps 1/7/8) step by
+    step, submitting each step's base fixture merged with `per_step[<step id>]`'s overrides
+    (a value of None removes that key, replacing the old `_run_user_flow`'s `omit`). Returns
+    the final flow result -- a FORM if a step-local guard rejected the last submission,
+    otherwise CREATE_ENTRY. Asserts each form encountered along the way is the expected step."""
+    overrides = per_step or {}
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    return await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+    for step_id in (STEP_CORE, STEP_MAPPINGS, STEP_THRESHOLDS):
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == step_id
+        submission = {**_INSTALL_STEP_BASES[step_id], **overrides.get(step_id, {})}
+        submission = {k: v for k, v in submission.items() if v is not None}
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+    return result
 
 
-async def _create_entry(hass, overrides=None):
-    result = await _run_user_flow(hass, overrides=overrides)
+async def _create_entry(hass, *, per_step=None):
+    result = await _run_install_flow(hass, per_step=per_step)
     return result["result"]
 
 
 def _current_options(entry):
-    return dict(entry.options)
+    """Options as the flat options-flow schema would resubmit them. Excludes
+    prompt_timeout_h: stored via the guided install flow since T3, but not yet asked by this
+    still-flat `_threshold_schema()` (T10 gives the options flow its own table) -- spreading
+    it back in would submit a key the flat schema rejects as unknown."""
+    return {k: v for k, v in entry.options.items() if k != CONF_PROMPT_TIMEOUT_H}
 
 
 async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-    assert result["type"] == FlowResultType.FORM
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+    result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
 
     # Mappings + derived translation land in DATA (ADR-0005).
@@ -170,8 +212,8 @@ async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
     assert result["options"][CONF_GRID_CEILING_A] == 25.0
     assert result["options"][CONF_GRID_SAFETY_OFFSET_A] == 2.0
     assert result["options"][CONF_CONTROL_INTERVAL_S] == DEFAULT_CONTROL_INTERVAL_S
-    # ev_soc is a DATA field (RA1 extension) -- lands alongside the other role mappings.
-    assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
+    # ev_soc mapping coverage moves to T4/T5 (solar/captar steps) -- T3's guided flow has no
+    # step that can answer it yet (see CORE_INPUT's module comment).
 
 
 async def test_second_config_entry_aborts_single_instance_allowed(hass):
@@ -192,37 +234,31 @@ async def test_second_config_entry_aborts_single_instance_allowed(hass):
 
 async def test_overlapping_state_charging_wins(hass):
     """A raw state listed in both buckets resolves to charging (ADR-0005 install-step rule)."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {
+                CONF_CONNECTED_STATES: "Connected, Charging",
+                CONF_CHARGING_STATES: "Charging",
+            }
+        },
     )
-    user_input = dict(USER_INPUT)
-    user_input[CONF_CONNECTED_STATES] = "Connected, Charging"
-    user_input[CONF_CHARGING_STATES] = "Charging"
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_STATUS_TRANSLATION]["Charging"] == STATE_CHARGING
 
 
 async def test_no_grid_voltage_still_creates_entry(hass):
     """grid_voltage_entity is optional (NF4) — omitting it still creates the entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    result = await _run_install_flow(
+        hass, per_step={STEP_MAPPINGS: {CONF_GRID_VOLTAGE_ENTITY: None}}
     )
-    user_input = {k: v for k, v in USER_INPUT.items() if k != CONF_GRID_VOLTAGE_ENTITY}
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_GRID_VOLTAGE_ENTITY not in result["data"]
 
 
 async def test_options_flow_round_trip_updates_options_not_data(hass):
     """Changing a threshold via the options flow updates entry.options, leaving entry.data alone."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
-    entry = result["result"]
+    entry = await _create_entry(hass)
 
     original_data = dict(entry.data)
 
@@ -426,12 +462,10 @@ async def test_reconfigure_preserves_unretyped_optional_mappings(hass):
 
 
 async def test_ev_soc_is_optional_when_solar_not_installed(hass):
-    # Design doc §3/§8: with the Solar-installed toggle left False (its default), ev_soc
-    # is optional -- an install without it still produces a valid entry. CapTar available
-    # must also be turned off, since its own guard requires ev_soc otherwise (Captar T3.2).
-    result = await _run_user_flow(
-        hass, overrides={CONF_CAPTAR_AVAILABLE: False}, omit=[CONF_EV_SOC_ENTITY]
-    )
+    # Design doc §3/§8: with solar_available and captar_available both declared absent
+    # (CORE_INPUT's default), ev_soc is optional -- an install without it still produces a
+    # valid entry.
+    result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_EV_SOC_ENTITY not in result["data"]
     assert result["data"][CONF_SOLAR_AVAILABLE] is False
@@ -439,26 +473,17 @@ async def test_ev_soc_is_optional_when_solar_not_installed(hass):
 
 async def test_solar_available_true_requires_ev_soc(hass):
     # Design doc §3: flipping Solar installed to True without mapping ev_soc must be
-    # rejected by the flow itself (config-time guard), not deferred to a runtime fault.
-    result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_AVAILABLE: True}, omit=[CONF_EV_SOC_ENTITY]
-    )
+    # rejected by the flow itself (config-time guard), not deferred to a runtime fault. T3
+    # has no solar step yet -- ev_soc has no field to answer it on at all -- so the guard,
+    # moved to the thresholds step's temporary safety net (plan T3), still fires here.
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
     assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
     assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
-async def test_solar_available_true_with_ev_soc_succeeds(hass):
-    result = await _run_user_flow(
-        hass,
-        overrides={
-            CONF_SOLAR_AVAILABLE: True,
-            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
-            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
-        },
-    )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_SOLAR_AVAILABLE] is True
-    assert result["data"][CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
+# test_solar_available_true_with_ev_soc_succeeds is deferred to T4: ev_soc_entity has no
+# field to answer it on until the solar step's mapping fragment exists.
 
 
 async def test_pre_toggle_entry_defaults_solar_available_false(hass):
@@ -485,8 +510,9 @@ async def test_pre_toggle_entry_defaults_solar_available_false(hass):
 
 
 async def test_solar_thresholds_seeded_into_options_with_defaults(hass):
-    result = await _run_user_flow(hass)
-    assert result["options"][CONF_SOLAR_ONLY_STRATEGY] == DEFAULT_SOLAR_ONLY_STRATEGY
+    # solar_only_strategy lives on the solar step (T4), which doesn't exist yet -- only the
+    # ungated default_soc_limit is checked here until then.
+    result = await _run_install_flow(hass)
     assert result["options"][CONF_DEFAULT_SOC_LIMIT] == DEFAULT_SOC_LIMIT
 
 
@@ -500,18 +526,24 @@ async def test_options_flow_edits_solar_thresholds(hass):
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
-async def test_solar_available_error_preserves_previously_entered_values(hass):
-    # The re-shown form on the required_when_solar_available rejection must not drop
-    # what the user already typed -- otherwise flipping the toggle back on and refilling
-    # every mapping is the only way to recover (a real UX regression, not just cosmetic).
-    result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_AVAILABLE: True}, omit=[CONF_EV_SOC_ENTITY]
+# The original test_solar_available_error_preserves_previously_entered_values asserted
+# suggested values for charger_current_entity/solar_available on the re-shown form -- neither
+# is a thresholds-step field now, so that specific assertion is deferred to T4/T5 along with
+# the guard itself. The thresholds step's OWN fields are testable today, via the same
+# add_suggested_values_to_schema call (config_flow.py's async_step_thresholds):
+async def test_thresholds_error_preserves_previously_entered_values(hass):
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_SOLAR_AVAILABLE: True},
+            STEP_THRESHOLDS: {CONF_NOMINAL_VOLTAGE: 231.5},
+        },
     )
     assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
 
     suggested = {key.schema: key.description for key in result["data_schema"].schema}
-    assert suggested[CONF_CHARGER_CURRENT_ENTITY]["suggested_value"] == "number.charger_current"
-    assert suggested[CONF_SOLAR_AVAILABLE]["suggested_value"] is True
+    assert suggested[CONF_NOMINAL_VOLTAGE]["suggested_value"] == 231.5
 
 
 async def test_reconfigure_rejects_solar_available_true_without_ev_soc(hass):
@@ -589,23 +621,40 @@ async def test_reconfigure_rejects_solar_available_true_without_solar_forecast(h
 
 async def test_captar_available_defaults_true(hass):
     # Design doc §3: R18 ("defaulting to present") / entity-catalog.md's sc_captar_available.
-    result = await _run_user_flow(hass)
-    assert result["data"][CONF_CAPTAR_AVAILABLE] is True
+    # Omitting the field from the core submission (rather than a successful, ev_soc-mapped
+    # install, which has no step to answer ev_soc on until T5) lets CORE_MAPPING_SCHEMA's own
+    # default apply -- proven end-to-end by the guard firing exactly as it does when the
+    # field is explicitly set True (test_captar_available_true_requires_ev_soc above).
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: None}})
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE
+
+
+async def test_solar_available_defaults_true(hass):
+    # Design doc, "Decisions on two forks" §2: the core step's rendered default is True (R20
+    # AC1's "defaulting to present"), deliberately diverging from DEFAULT_SOLAR_AVAILABLE
+    # (False, the absent-key read fallback). Proven the same way as the captar default above:
+    # omitting the field lets the schema default apply, and the guard fires accordingly.
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: None}})
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
 async def test_captar_available_true_requires_ev_soc(hass):
     # Design doc §3: flipping CapTar available to True (or leaving its default) without
     # mapping ev_soc must be rejected by the flow itself, exactly like CONF_SOLAR_AVAILABLE's
-    # guard on the same field.
-    result = await _run_user_flow(hass, omit=[CONF_EV_SOC_ENTITY])
+    # guard on the same field. T3 has no captar step yet, so ev_soc has no field to answer
+    # it on -- the guard, moved to the thresholds step's temporary safety net, still fires.
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: True}})
     assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
     assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE
 
 
 async def test_captar_available_false_does_not_require_ev_soc(hass):
-    result = await _run_user_flow(
-        hass, overrides={CONF_CAPTAR_AVAILABLE: False}, omit=[CONF_EV_SOC_ENTITY]
-    )
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: False}})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_CAPTAR_AVAILABLE] is False
     assert CONF_EV_SOC_ENTITY not in result["data"]
@@ -634,12 +683,13 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
 
 
 async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass):
-    result = await _run_user_flow(hass)
+    # captar_cooldown_min lives on the captar step (T5), which doesn't exist yet -- only the
+    # ungated peak-protection thresholds are checked here until then.
+    result = await _run_install_flow(hass)
     assert result["options"][CONF_MAX_PEAK_KW] == DEFAULT_MAX_PEAK_KW
     assert result["options"][CONF_POWER_RESPECT_PEAK] == DEFAULT_POWER_RESPECT_PEAK
     assert result["options"][CONF_SAFETY_MARGIN_W] == DEFAULT_SAFETY_MARGIN_W
     assert result["options"][CONF_PEAK_GRACE_MIN] == DEFAULT_PEAK_GRACE_MIN
-    assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
 
 
 async def test_options_flow_edits_peak_protection_thresholds(hass):
@@ -665,69 +715,63 @@ async def test_power_respect_peak_can_be_turned_off(hass):
 async def test_solar_forecast_required_when_solar_available(hass):
     # Design doc §3: solar_forecast is required only when CONF_SOLAR_AVAILABLE is True
     # (R9's precondition is inert without the solar capability) -- same
-    # required_when_solar_available-style guard ev_soc already uses.
-    result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_AVAILABLE: True}, omit=[CONF_SOLAR_FORECAST_ENTITY]
-    )
+    # required_when_solar_available-style guard ev_soc already uses. T3 has no solar step
+    # yet, so solar_forecast has no field to answer it on -- the guard, moved to the
+    # thresholds step's temporary safety net, still fires (alongside the ev_soc guard, since
+    # neither is answerable -- both error keys are asserted present, not just this one).
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
     assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
     assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
 async def test_solar_forecast_not_required_when_solar_not_installed(hass):
-    result = await _run_user_flow(
-        hass, overrides={CONF_SOLAR_AVAILABLE: False}, omit=[CONF_SOLAR_FORECAST_ENTITY]
-    )
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: False}})
     assert result["type"] == FlowResultType.CREATE_ENTRY
 
 
 async def test_ev_battery_capacity_entity_can_be_mapped(hass):
-    result = await _run_user_flow(
-        hass, overrides={CONF_EV_BATTERY_CAPACITY_ENTITY: "sensor.ev_battery_capacity"}
+    result = await _run_install_flow(
+        hass,
+        per_step={STEP_MAPPINGS: {CONF_EV_BATTERY_CAPACITY_ENTITY: "sensor.ev_battery_capacity"}},
     )
     assert result["data"][CONF_EV_BATTERY_CAPACITY_ENTITY] == "sensor.ev_battery_capacity"
 
 
 async def test_ev_battery_capacity_entity_is_optional(hass):
-    result = await _run_user_flow(hass, omit=[CONF_EV_BATTERY_CAPACITY_ENTITY])
+    result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_EV_BATTERY_CAPACITY_ENTITY not in result["data"]
 
 
-async def test_departure_external_and_home_day_external_entities_can_be_mapped(hass):
-    result = await _run_user_flow(
-        hass,
-        overrides={
-            CONF_DEPARTURE_EXTERNAL_ENTITY: "sensor.departure_time",
-            CONF_HOME_DAY_EXTERNAL_ENTITY: "binary_sensor.home_day",
-        },
+async def test_home_day_external_entity_can_be_mapped(hass):
+    # departure_external_entity lives on the deadline step (T6), which doesn't exist yet --
+    # only home_day_external_entity (ungated mappings) is exercised here until then.
+    result = await _run_install_flow(
+        hass, per_step={STEP_MAPPINGS: {CONF_HOME_DAY_EXTERNAL_ENTITY: "binary_sensor.home_day"}}
     )
-    assert result["data"][CONF_DEPARTURE_EXTERNAL_ENTITY] == "sensor.departure_time"
     assert result["data"][CONF_HOME_DAY_EXTERNAL_ENTITY] == "binary_sensor.home_day"
 
 
 async def test_low_tariff_entity_can_be_mapped(hass):
-    result = await _run_user_flow(
-        hass, overrides={CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff"}
+    result = await _run_install_flow(
+        hass, per_step={STEP_MAPPINGS: {CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff"}}
     )
     assert result["data"][CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
 
 
 async def test_low_tariff_entity_is_optional(hass):
-    result = await _run_user_flow(hass, omit=[CONF_LOW_TARIFF_ENTITY])
+    result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_LOW_TARIFF_ENTITY not in result["data"]
 
 
 async def test_new_thresholds_seeded_with_defaults(hass):
-    result = await _run_user_flow(hass)
+    # max_solar_soc/solar_step_pp/solar_step_threshold_pp/solar_reserve_soc/
+    # solar_forecast_threshold_kwh live on the solar step (T4), which doesn't exist yet --
+    # only the ungated ev_battery_capacity_kwh is checked here until then.
+    result = await _run_install_flow(hass)
     assert result["options"][CONF_EV_BATTERY_CAPACITY_KWH] == DEFAULT_EV_BATTERY_CAPACITY_KWH
-    assert result["options"][CONF_MAX_SOLAR_SOC] == DEFAULT_MAX_SOLAR_SOC
-    assert result["options"][CONF_SOLAR_STEP_PP] == DEFAULT_SOLAR_STEP_PP
-    assert result["options"][CONF_SOLAR_STEP_THRESHOLD_PP] == DEFAULT_SOLAR_STEP_THRESHOLD_PP
-    assert result["options"][CONF_SOLAR_RESERVE_SOC] == DEFAULT_SOLAR_RESERVE_SOC
-    assert (
-        result["options"][CONF_SOLAR_FORECAST_THRESHOLD_KWH] == DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
-    )
 
 
 async def test_options_flow_edits_the_new_thresholds(hass):
@@ -740,43 +784,16 @@ async def test_options_flow_edits_the_new_thresholds(hass):
     assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
 
 
-async def test_vehicle_limit_mapped_without_car_home_is_rejected(hass):
-    # UC09 C2 / design §9.1: a vehicle-limit output with no presence source is unsafe --
-    # the config-time guard must reject the save outright, not defer to a runtime fault.
-    result = await _run_user_flow(
-        hass, overrides={CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit"}
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_CAR_HOME_ENTITY] == ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED
-
-
-async def test_vehicle_limit_mapped_with_car_home_is_accepted(hass):
-    result = await _run_user_flow(
-        hass,
-        overrides={
-            CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit",
-            CONF_CAR_HOME_ENTITY: "device_tracker.car",
-        },
-    )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_VEHICLE_CHARGE_LIMIT_ENTITY] == "number.car_limit"
-    assert result["data"][CONF_CAR_HOME_ENTITY] == "device_tracker.car"
-    # ADR-0005: both are hardware mappings, folded into DATA -- neither belongs in options.
-    assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in result["options"]
-    assert CONF_CAR_HOME_ENTITY not in result["options"]
-
-
-async def test_car_home_mapped_alone_is_accepted(hass):
-    # car_home has no guard of its own -- only vehicle_charge_limit requires it.
-    result = await _run_user_flow(hass, overrides={CONF_CAR_HOME_ENTITY: "device_tracker.car"})
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_CAR_HOME_ENTITY] == "device_tracker.car"
-    assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in result["data"]
+# test_vehicle_limit_mapped_without_car_home_is_rejected,
+# test_vehicle_limit_mapped_with_car_home_is_accepted and test_car_home_mapped_alone_is_accepted
+# are deferred to T7: vehicle_charge_limit_entity/car_home_entity live on the vehicle_limit
+# step, which doesn't exist yet -- CONF_VEHICLE_LIMIT_MAPPED (core) only elects whether that
+# step would be shown; it carries no entity mapping of its own.
 
 
 async def test_neither_vehicle_limit_nor_car_home_is_accepted(hass):
     # UC09 precondition: unmapped vehicle limit -> M2 inert, no requirement on car_home.
-    result = await _run_user_flow(hass)
+    result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_VEHICLE_CHARGE_LIMIT_ENTITY not in result["data"]
     assert CONF_CAR_HOME_ENTITY not in result["data"]
@@ -862,15 +879,16 @@ async def test_options_flow_edits_solar_forecast_threshold(hass):
 
 async def test_notification_target_entity_can_be_mapped(hass):
     # RA4 notify-target data field (notifications design doc §3/§6).
-    result = await _run_user_flow(
-        hass, overrides={CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app_phone"}
+    result = await _run_install_flow(
+        hass,
+        per_step={STEP_MAPPINGS: {CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app_phone"}},
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app_phone"
 
 
 async def test_notification_target_entity_is_optional(hass):
-    result = await _run_user_flow(hass, omit=[CONF_NOTIFICATION_TARGET_ENTITY])
+    result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_NOTIFICATION_TARGET_ENTITY not in result["data"]
 
@@ -879,15 +897,17 @@ async def test_notification_target_entity_rejects_non_notify_domain(hass):
     # Design doc §3/§6: the mapped entity's expected platform must be `notify` -- mirrors the
     # existing platform-validation guard (EntitySelector's own domain filter raises vol.Invalid,
     # the same mechanism test_options_flow_rejects_a_data_key exercises for a tampered options
-    # submission).
+    # submission). notification_target_entity is on the mappings step (UC12 step 7).
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    user_input = dict(USER_INPUT)
-    user_input[CONF_NOTIFICATION_TARGET_ENTITY] = "sensor.not_a_notify_entity"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
 
+    bad_mappings = {**MAPPINGS_INPUT, CONF_NOTIFICATION_TARGET_ENTITY: "sensor.not_a_notify_entity"}
     with pytest.raises(vol.Invalid):
-        await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+        await hass.config_entries.flow.async_configure(result["flow_id"], bad_mappings)
     assert not hass.config_entries.async_entries(DOMAIN)
 
 
@@ -895,7 +915,7 @@ async def test_evening_prompt_options_seeded_into_options_with_defaults(hass):
     # Notifications design doc §3: evening-prompt options seed into OPTIONS with their
     # DEFAULT_* fallbacks -- no config-entry migration needed (an entry that predates these
     # keys reads each with its DEFAULT_* fallback, exercised separately below).
-    result = await _run_user_flow(hass)
+    result = await _run_install_flow(hass)
     assert result["options"][CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
     assert result["options"][CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
 
@@ -934,6 +954,59 @@ async def test_pre_existing_entry_defaults_evening_prompt_options(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
     assert entry.options[CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
+
+
+# --- T3: install happy path -- core -> mappings -> thresholds -> create entry. ---
+
+
+async def test_r20_ac1_first_step_presents_only_core_mappings_and_decisions(hass):
+    """R20 AC1 / UC12 step 1: the first form's schema is exactly CORE_MAPPING_SCHEMA --
+    in particular it no longer carries a single threshold (the flat USER_SCHEMA did)."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CORE
+    assert _keys(result["data_schema"]) == _keys(CORE_MAPPING_SCHEMA)
+
+
+async def test_adr0005_all_capabilities_off_install_splits_buckets(hass):
+    """UC12 step 9 / ADR-0005: solar/captar/deadline all declared absent and no vehicle limit
+    elected -> core, mappings, thresholds only; DATA carries the mappings, the capability flags
+    and the derived status_translation; OPTIONS carries only the ungated thresholds plus the
+    defaulted control interval."""
+    result = await _run_install_flow(hass)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+    assert result["data"][CONF_SOLAR_AVAILABLE] is False
+    assert result["data"][CONF_CAPTAR_AVAILABLE] is False
+    assert result["data"][CONF_DEADLINE_AVAILABLE] is False
+    assert CONF_VEHICLE_LIMIT_MAPPED not in result["data"]  # design D-2: transient, not stored
+    assert result["data"][CONF_STATUS_TRANSLATION] == {
+        "Connected": STATE_CONNECTED,
+        "Cable": STATE_CONNECTED,
+        "Charging": STATE_CHARGING,
+        "SuspendedEV": STATE_CHARGING,
+    }
+
+    # Only the ungated thresholds + control_interval_s -- the intersection excludes every
+    # OPTION_KEYS member that lives on a not-yet-existing step (solar/captar/deadline, T4-T6).
+    assert sorted(result["options"]) == sorted(
+        _keys(_ungated_threshold_schema(include_interval=True))
+    )
+    assert result["options"][CONF_CONTROL_INTERVAL_S] == DEFAULT_CONTROL_INTERVAL_S
+
+
+async def test_adr0025_option_keys_consumption_is_intersection_based(hass):
+    """ADR-0025 Consequences: a skipped step leaves its OPTION_KEYS members absent from the
+    accumulator; the terminal step must intersect, not index. T3's own thresholds fragment
+    is one field short of the full OPTION_KEYS set (solar/captar/deadline thresholds live on
+    steps that don't exist yet) -- direct indexing would KeyError here."""
+    result = await _run_install_flow(hass)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_SOLAR_START_THRESHOLD_W not in result["options"]
+    assert CONF_CAPTAR_COOLDOWN_MIN not in result["options"]
+    assert CONF_REMINDER_LEAD_H not in result["options"]
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
@@ -1026,9 +1099,9 @@ def test_uc12_step7_ungated_mapping_fragment():
     }
 
 
-# T3 extends the ungated-threshold fragment -- and this expectation -- with
-# CONF_PROMPT_TIMEOUT_H (design, "Decisions on two forks" §1). Everything else is final.
-_UNGATED_THRESHOLD_KEYS_AT_T1 = {
+# Final key set (design, "Schema fragments") -- T3 added CONF_PROMPT_TIMEOUT_H per
+# "Decisions on two forks" §1.
+_UNGATED_THRESHOLD_KEYS = {
     CONF_NOMINAL_VOLTAGE,
     CONF_MIN_CURRENT,
     CONF_MAX_CURRENT,
@@ -1044,19 +1117,20 @@ _UNGATED_THRESHOLD_KEYS_AT_T1 = {
     CONF_POWER_RESPECT_PEAK,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
+    CONF_PROMPT_TIMEOUT_H,
 }
 
 
 def test_uc12_step8_ungated_threshold_fragment_without_interval():
     """UC12 step 8, install/reconfigure: the control interval is never asked on this path
     (defaulted instead, R20 AC5's carve-out)."""
-    assert _keys(_ungated_threshold_schema(include_interval=False)) == _UNGATED_THRESHOLD_KEYS_AT_T1
+    assert _keys(_ungated_threshold_schema(include_interval=False)) == _UNGATED_THRESHOLD_KEYS
 
 
 def test_uc12_step8_ungated_threshold_fragment_with_interval():
     """UC12 1b: the options flow alone asks the control interval."""
     assert _keys(_ungated_threshold_schema(include_interval=True)) == (
-        _UNGATED_THRESHOLD_KEYS_AT_T1 | {CONF_CONTROL_INTERVAL_S}
+        _UNGATED_THRESHOLD_KEYS | {CONF_CONTROL_INTERVAL_S}
     )
 
 

@@ -117,6 +117,7 @@
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
           "evening_prompt_time": "Tijdstip avondprompt thuisdag",
           "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)",
+          "prompt_timeout_h": "Time-out avondprompt thuisdag (u)",
           "control_interval_s": "Regelinterval (s)"
         }
       }

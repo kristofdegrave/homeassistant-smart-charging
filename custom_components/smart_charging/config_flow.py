@@ -45,6 +45,7 @@ from .const import (
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
+    CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -80,11 +81,11 @@ from .const import (
     DEFAULT_NOMINAL_VOLTAGE,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_PROMPT_TIMEOUT_H,
     DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
-    DEFAULT_SOLAR_AVAILABLE,
     DEFAULT_SOLAR_COOLDOWN_MIN,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
@@ -105,6 +106,7 @@ from .const import (
     STATE_CHARGING,
     STATE_CONNECTED,
     STEP_CAPTAR,
+    STEP_CORE,
     STEP_DEADLINE,
     STEP_MAPPINGS,
     STEP_SOLAR,
@@ -141,6 +143,14 @@ OPTION_KEYS = (
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
+    # CONF_PROMPT_TIMEOUT_H and CONF_REMINDER_LEAD_H: like every OPTION_KEYS member, the
+    # guided install flow writes these -- but the still-flat SmartChargingOptionsFlow
+    # (async_step_init) replaces entry.options wholesale from `_threshold_schema()`, which
+    # asks about neither. The first Configure+Save after install silently drops both, until
+    # T10 gives the options flow its own table with a merge-not-replace terminal step
+    # (design, "The terminal step and the bucket split"). Harmless today: nothing reads
+    # either key yet.
+    CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
 )
 
@@ -291,8 +301,12 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
                 ),
             ): vol.Coerce(float),
             # UC08 evening home-day prompt options (notifications design doc §3). No
-            # sc_prompt_timeout_h field -- deliberately not wired (design §3/§9; UC08 has no
-            # separate timeout, midnight is the only answer deadline).
+            # sc_prompt_timeout_h field here -- this flat schema backs only the still-flat
+            # options flow (async_step_init) until T10 builds its own table; the guided
+            # flow's _ungated_threshold_schema fragment presents/stores prompt_timeout_h from
+            # T3 onward (design, "Decisions on two forks" §1), superseding
+            # notifications-design.md §3/§9's earlier "deliberately NOT wired" call. No
+            # component reads it yet.
             vol.Required(
                 CONF_EVENING_PROMPT_ENABLED,
                 default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
@@ -310,15 +324,23 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 
 
 # --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
-# No handler class uses this yet (plan T2) -- SmartChargingConfigFlow/SmartChargingOptionsFlow
-# start wiring into it from T3 onward. CONFIG_TABLE/OPTIONS_TABLE below are populated
-# incrementally, one task at a time (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully
-# per the design doc's end-state Structure section: no step method exists yet for most rows,
-# and a row with no matching method would strand the flow the moment its gate passed
-# (ADR-0025's stated Con) -- concretely, a full CONFIG_TABLE at T3 would AttributeError on
-# every default install, since DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the
-# captar row before async_step_captar exists (T5). Comment sweep of this scaffolding is part
-# of T13's cleanup.
+# SmartChargingConfigFlow starts wiring into this from T3 onward (SmartChargingOptionsFlow
+# from T10). CONFIG_TABLE/OPTIONS_TABLE below are populated incrementally, one task at a time
+# (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully per the design doc's end-state
+# Structure section: no step method exists yet for most rows, and a row with no matching
+# method would strand the flow the moment its gate passed (ADR-0025's stated Con) --
+# concretely, a full CONFIG_TABLE at T3 would AttributeError on every default install, since
+# DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the captar row before
+# async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
+#
+# Known temporary gap (T3-T4/T5): with captar_available already defaulting True and this
+# task flipping the core step's solar_available form-default to True too (design, "Decisions
+# on two forks" §2), a user who simply accepts every default reaches the thresholds step's
+# `_mapping_errors` safety net and is rejected for a missing ev_soc_entity mapping -- a field
+# that appears on no step in T3's flow at all (it lands with the solar/captar steps, T4/T5).
+# There is no way to proceed except declining a capability on the core step. This is a
+# genuine, if short-lived, install-flow dead end for the *default* path; it resolves itself
+# the moment T4/T5 give ev_soc_entity somewhere to be answered.
 
 
 class FlowMode(StrEnum):
@@ -402,8 +424,15 @@ UC12_FIXED_STEP_ORDER = (
     STEP_THRESHOLDS,
 )
 
-# Populated incrementally -- see the module comment above. Empty until T3.
-CONFIG_TABLE: tuple[FlowStep, ...] = ()
+# Populated incrementally -- see the module comment above. T3 adds the two ungated rows
+# (`mappings`/`thresholds`, UC12 steps 7/8): they need no capability to be reached, unlike
+# `solar`/`captar`/`deadline`/`vehicle_limit` (T4-T7), whose methods don't exist yet.
+# `thresholds` is additionally gated off for reconfigure (UC12 1a, design "Step ids" table row
+# 6) -- moot until T9 wires async_step_reconfigure into this table, but correct now.
+CONFIG_TABLE: tuple[FlowStep, ...] = (
+    FlowStep(step_id=STEP_MAPPINGS, gate=lambda flow: True),
+    FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
+)
 
 # Populated incrementally in T10 (its own table per ADR-0025 point 3 -- gated on the *stored*
 # capability flags, not this run's answers). Empty until then.
@@ -422,11 +451,10 @@ CORE_MAPPING_SCHEMA = vol.Schema(
         vol.Required(CONF_CHARGING_STATES): str,
         vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
         vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
-        # T3 flips this rendered default to True (design, "Decisions on two forks" §2 --
-        # R20 AC1's "defaulting to present"); DEFAULT_SOLAR_AVAILABLE itself stays False,
-        # used only as the absent-key read fallback. Left at the constant here, same as
-        # `prompt_timeout_h` below is left off the ungated-threshold fragment until T3.
-        vol.Required(CONF_SOLAR_AVAILABLE, default=DEFAULT_SOLAR_AVAILABLE): bool,
+        # Form default True (R20 AC1's "defaulting to present"; design, "Decisions on two
+        # forks" §2) -- deliberately diverges from DEFAULT_SOLAR_AVAILABLE (False), which
+        # stays the absent-key read fallback for an entry that predates this field.
+        vol.Required(CONF_SOLAR_AVAILABLE, default=True): bool,
         vol.Required(CONF_CAPTAR_AVAILABLE, default=DEFAULT_CAPTAR_AVAILABLE): bool,
         vol.Required(CONF_DEADLINE_AVAILABLE, default=DEFAULT_DEADLINE_AVAILABLE): bool,
         vol.Required(CONF_VEHICLE_LIMIT_MAPPED, default=False): bool,
@@ -567,11 +595,7 @@ def _ungated_threshold_schema(
     defaults: dict | None = None, *, include_interval: bool = False
 ) -> vol.Schema:
     """UC12 step 8. `include_interval` is True only for the options flow (UC12 1b) -- the
-    install and reconfigure flows never ask the control interval and default it instead.
-
-    `prompt_timeout_h` is added in T3 (design, "Decisions on two forks" §1) -- the ungated-
-    threshold fragment's key set here is one field short of the design doc's fragment table
-    until that task lands."""
+    install and reconfigure flows never ask the control interval and default it instead."""
     d = defaults or {}
     schema: dict = {
         vol.Required(
@@ -628,6 +652,10 @@ def _ungated_threshold_schema(
             CONF_EVENING_PROMPT_TIME,
             default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
         ): selector.TimeSelector(),
+        vol.Required(
+            CONF_PROMPT_TIMEOUT_H,
+            default=d.get(CONF_PROMPT_TIMEOUT_H, DEFAULT_PROMPT_TIMEOUT_H),
+        ): vol.Coerce(float),
     }
     if include_interval:
         schema[
@@ -693,29 +721,73 @@ def _split_data(user_input: dict) -> dict:
     return data
 
 
-class SmartChargingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle the install-time and reconfigure flows (ADR-0005)."""
+class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle the install-time and reconfigure flows (ADR-0005, ADR-0025)."""
 
     VERSION = 1
+    _table = CONFIG_TABLE
 
     async def async_step_user(self, user_input=None):
-        if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=USER_SCHEMA)
+        """UC12's install entry point (ADR-0025 point 4): delegate into the shared `core`
+        step, framework-imposed name aside."""
+        self._mode = FlowMode.INSTALL
+        self._answers = {}
+        return await self.async_step_core()
 
-        errors = _mapping_errors(user_input)
+    async def async_step_core(self, user_input=None):
+        """UC12 step 1: the core mappings + the three capability decisions + the
+        vehicle-limit election (design, "Schema fragments")."""
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_CORE, data_schema=CORE_MAPPING_SCHEMA)
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_CORE)
+
+    async def async_step_mappings(self, user_input=None):
+        """UC12 step 7: the ungated entity-role mappings (design, "Schema fragments")."""
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_MAPPINGS, data_schema=UNGATED_MAPPING_SCHEMA)
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_MAPPINGS)
+
+    async def async_step_thresholds(self, user_input=None):
+        """UC12 step 8: the ungated thresholds/defaults -- the install/reconfigure flows
+        never ask the control interval (design, "Schema fragments").
+
+        `_mapping_errors` is called here, on the last install-path form, as the temporary
+        safety net the plan's Conventions section describes: today's flat flow's end-of-form
+        behaviour, preserved verbatim until T4-T7 each move one guard to its own gated step
+        and T7 deletes both this call and `_mapping_errors` itself. It reads `self._answers`
+        alone, not `self._answers | user_input`: every field the three guards check
+        (`solar_available`, `captar_available`, `ev_soc_entity`, `solar_forecast_entity`,
+        `vehicle_charge_limit_entity`, `car_home_entity`) is answered on the core step, none
+        on this one, so a merge with this step's own submission could never change the
+        verdict."""
+        schema = _ungated_threshold_schema(include_interval=False)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)
+
+        errors = _mapping_errors(self._answers)
         if errors:
             return self.async_show_form(
-                step_id="user",
-                data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
+                step_id=STEP_THRESHOLDS,
+                data_schema=self.add_suggested_values_to_schema(schema, user_input),
                 errors=errors,
             )
 
-        data = _split_data(user_input)
-        # Intersection, not direct indexing: T1 (guided config flow) appends keys to
-        # OPTION_KEYS that this flat USER_SCHEMA does not yet ask for (e.g. reminder_lead_h,
-        # asked only on UC12 step 5) -- ADR-0025, Consequences, applied here a task early so
-        # this still-active flat flow survives OPTION_KEYS growing ahead of USER_SCHEMA.
-        options = {k: user_input[k] for k in OPTION_KEYS if k in user_input}
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_THRESHOLDS)
+
+    async def _async_finish(self) -> config_entries.ConfigFlowResult:
+        """UC12 step 9: create the entry (install only -- T9 wires reconfigure's own
+        terminal behaviour into this same mixin method)."""
+        self._answers.pop(CONF_VEHICLE_LIMIT_MAPPED, None)  # design D-2: transient, not stored
+        data = _split_data(self._answers)
+        # Intersection, not direct indexing (ADR-0025, Consequences): a capability declared
+        # absent this run never renders its step, so its OPTION_KEYS members are absent from
+        # self._answers -- direct indexing would KeyError the moment any capability is off.
+        options = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
         options[CONF_CONTROL_INTERVAL_S] = DEFAULT_CONTROL_INTERVAL_S
         return self.async_create_entry(title="Smart Charging", data=data, options=options)
 
