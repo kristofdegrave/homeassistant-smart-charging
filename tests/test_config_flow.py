@@ -7,16 +7,22 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.config_flow import (
+    CONFIG_TABLE,
     CORE_MAPPING_SCHEMA,
     DEADLINE_MAPPING_SCHEMA,
     OPTION_KEYS,
+    OPTIONS_TABLE,
     UNGATED_MAPPING_SCHEMA,
     VEHICLE_LIMIT_MAPPING_SCHEMA,
+    FlowStep,
+    SmartChargingConfigFlow,
+    SmartChargingOptionsFlow,
     _captar_mapping_schema,
     _captar_threshold_schema,
     _deadline_threshold_schema,
     _solar_mapping_schema,
     _solar_threshold_schema,
+    _TableWalkMixin,
     _ungated_threshold_schema,
 )
 from custom_components.smart_charging.const import (
@@ -95,6 +101,12 @@ from custom_components.smart_charging.const import (
     ROLE_VEHICLE_CHARGE_LIMIT,
     STATE_CHARGING,
     STATE_CONNECTED,
+    STEP_CAPTAR,
+    STEP_DEADLINE,
+    STEP_MAPPINGS,
+    STEP_SOLAR,
+    STEP_THRESHOLDS,
+    STEP_VEHICLE_LIMIT,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
@@ -1095,3 +1107,137 @@ def test_no_field_appears_in_two_fragments_except_ev_soc():
         overlap = _keys(fragment) & seen
         assert not overlap, f"field(s) {overlap} appear in more than one fragment"
         seen |= _keys(fragment)
+
+
+# --- T2: the step table and the shared dispatcher (guided config flow, ADR-0025 Option C). ---
+# CONFIG_TABLE/OPTIONS_TABLE are populated incrementally (T3 onward), so the reachability
+# tests below are written to hold at every point along that build-out, not just today's
+# empty tables -- they are the named discharge of ADR-0025's stated Con (a step method absent
+# from its table is silently unreachable) and stay meaningful as later tasks add rows.
+
+# Steps legitimately absent from CONFIG_TABLE: the two framework-mandated entry points
+# (ADR-0025 point 4) plus `core` (UC12 step 1) -- the shared entry point both async_step_user
+# and async_step_reconfigure delegate into (T3), which is deliberately not a table row of its
+# own (design, "Step ids"). Omitting `core` here would make the converse test below fail the
+# moment T3 adds async_step_core, for a step that is correct by design, not a wiring bug.
+_CONFIG_FLOW_FRAMEWORK_STEPS = {"async_step_user", "async_step_reconfigure", "async_step_core"}
+_OPTIONS_FLOW_FRAMEWORK_STEPS = {"async_step_init"}
+
+
+def _non_framework_step_methods(cls, framework: set[str]) -> set[str]:
+    """Step methods `cls` itself defines -- not `dir(cls)`, which would also pick up
+    discovery-flow hooks (e.g. `async_step_usb`) inherited from HA's own ConfigFlow base."""
+    return {name for name in vars(cls) if name.startswith("async_step_") and name not in framework}
+
+
+def test_adr0025_every_config_table_step_has_a_step_method():
+    """ADR-0025 test obligation: a table row with no async_step_<id> strands the flow."""
+    for row in CONFIG_TABLE:
+        # cls's own method, not an inherited HA discovery-flow hook (e.g. async_step_usb).
+        assert f"async_step_{row.step_id}" in vars(SmartChargingConfigFlow)
+
+
+def test_adr0025_every_config_step_method_is_in_the_table():
+    """The converse: a step method absent from the table is unreachable and nothing raises."""
+    table_step_ids = {row.step_id for row in CONFIG_TABLE}
+    for name in _non_framework_step_methods(SmartChargingConfigFlow, _CONFIG_FLOW_FRAMEWORK_STEPS):
+        assert name.removeprefix("async_step_") in table_step_ids
+
+
+def test_adr0025_every_options_table_step_has_a_step_method():
+    """Same obligation, for the options flow's own table (ADR-0025 point 3)."""
+    for row in OPTIONS_TABLE:
+        assert f"async_step_{row.step_id}" in vars(SmartChargingOptionsFlow)
+
+
+def test_adr0025_every_options_step_method_is_in_the_table():
+    table_step_ids = {row.step_id for row in OPTIONS_TABLE}
+    for name in _non_framework_step_methods(
+        SmartChargingOptionsFlow, _OPTIONS_FLOW_FRAMEWORK_STEPS
+    ):
+        assert name.removeprefix("async_step_") in table_step_ids
+
+
+def _assert_is_subsequence_of(actual_order: list[str], fixed_order: list[str]) -> None:
+    """Each id in `actual_order` must appear in `fixed_order`, in the same relative order,
+    with no reordering permitted -- a subsequence check, not full-population equality (see
+    the TODO(T7, T10) note on UC12_FIXED_STEP_ORDER for why equality isn't checked yet)."""
+    remaining = fixed_order[:]
+    for step_id in actual_order:
+        assert step_id in remaining, f"{step_id} is out of UC12's fixed order"
+        remaining = remaining[remaining.index(step_id) + 1 :]
+
+
+def test_uc12_step2_config_table_is_in_uc12s_fixed_order():
+    """UC12 step 2 / R20 AC2: solar -> captar -> deadline -> vehicle limit -> ungated mappings
+    -> ungated thresholds. Whatever subset of CONFIG_TABLE's rows exist at any point in the
+    build-out, their relative order must be a subsequence of this fixed order -- the order is
+    the table's, and it is asserted literally. The expected order is spelled out here from
+    UC12 itself (via const.py's STEP_* ids), not imported from config_flow.py's own
+    UC12_FIXED_STEP_ORDER -- otherwise a reordering that "fixes" both the table and that
+    constant together would still pass."""
+    _assert_is_subsequence_of(
+        [row.step_id for row in CONFIG_TABLE],
+        [
+            STEP_SOLAR,
+            STEP_CAPTAR,
+            STEP_DEADLINE,
+            STEP_VEHICLE_LIMIT,
+            STEP_MAPPINGS,
+            STEP_THRESHOLDS,
+        ],
+    )
+
+
+def test_uc12_1b_options_table_is_in_uc12s_fixed_order():
+    """UC12 1b: the options flow's own table has no vehicle_limit row (ADR-0025 point 3) but
+    is otherwise gated in the same fixed order as the config table."""
+    _assert_is_subsequence_of(
+        [row.step_id for row in OPTIONS_TABLE],
+        [STEP_SOLAR, STEP_CAPTAR, STEP_DEADLINE, STEP_THRESHOLDS],
+    )
+
+
+async def test_adr0025_dispatcher_advances_past_a_failing_gate_and_finishes_when_exhausted():
+    """Dispatcher unit test over a synthetic two-row table (ADR-0025, Option C): a failing
+    gate is skipped, the next passing row is shown, and exhausting the table calls
+    _async_finish exactly once. Each gate asserts it received the flow handler itself (not,
+    say, `self._answers`), pinning FlowStep.gate's `Callable[[Any], bool]` contract -- one
+    signature serving both the config table (reads self._answers/self._mode) and the options
+    table (reads self.config_entry.data)."""
+    calls = []
+
+    class _FakeFlow(_TableWalkMixin):
+        _table = (
+            FlowStep(step_id="skip_me", gate=lambda f: f is flow and False),
+            FlowStep(step_id="show_me", gate=lambda f: f is flow),
+        )
+
+        async def async_step_skip_me(self):
+            calls.append("skip_me")
+            return "unreachable"
+
+        async def async_step_show_me(self):
+            calls.append("show_me")
+            return "shown"
+
+        async def _async_finish(self):
+            calls.append("finish")
+            return "finished"
+
+    flow = _FakeFlow()
+    result = await flow._async_advance(after=None)
+    assert result == "shown"
+    assert calls == ["show_me"]
+
+    # Advancing past the last row (nothing left to try) finishes.
+    result = await flow._async_advance(after="show_me")
+    assert result == "finished"
+    assert calls == ["show_me", "finish"]
+
+    # `after` not itself a table member (e.g. the shared `core`/`init` entry points, ADR-0025
+    # point 4) restarts the walk from the first row -- the same path core/init rely on.
+    calls.clear()
+    result = await flow._async_advance(after="not_a_table_member")
+    assert result == "shown"
+    assert calls == ["show_me"]

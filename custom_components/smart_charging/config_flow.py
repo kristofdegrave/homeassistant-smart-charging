@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any, ClassVar
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -99,6 +104,12 @@ from .const import (
     ROUND_UP,
     STATE_CHARGING,
     STATE_CONNECTED,
+    STEP_CAPTAR,
+    STEP_DEADLINE,
+    STEP_MAPPINGS,
+    STEP_SOLAR,
+    STEP_THRESHOLDS,
+    STEP_VEHICLE_LIMIT,
 )
 
 # Threshold/default keys stored in config-entry OPTIONS (ADR-0005), not data.
@@ -296,6 +307,107 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
 
 # Install form = mappings + thresholds in one screen; split into data/options on submit.
 USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
+
+
+# --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
+# No handler class uses this yet (plan T2) -- SmartChargingConfigFlow/SmartChargingOptionsFlow
+# start wiring into it from T3 onward. CONFIG_TABLE/OPTIONS_TABLE below are populated
+# incrementally, one task at a time (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully
+# per the design doc's end-state Structure section: no step method exists yet for most rows,
+# and a row with no matching method would strand the flow the moment its gate passed
+# (ADR-0025's stated Con) -- concretely, a full CONFIG_TABLE at T3 would AttributeError on
+# every default install, since DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the
+# captar row before async_step_captar exists (T5). Comment sweep of this scaffolding is part
+# of T13's cleanup.
+
+
+class FlowMode(StrEnum):
+    """Which of the three flows (UC12) a `_TableWalkMixin` instance is running."""
+
+    INSTALL = "install"
+    RECONFIGURE = "reconfigure"
+    OPTIONS = "options"
+
+
+@dataclass(frozen=True)
+class FlowStep:
+    """One row of a flow's ordered, gated step table (ADR-0025, Option C)."""
+
+    step_id: str
+    gate: Callable[[Any], bool]  # takes the flow handler: a config flow or an options flow
+
+
+class _TableWalkMixin:
+    """Shared table-walk dispatcher for `SmartChargingConfigFlow`/`SmartChargingOptionsFlow`.
+
+    `gate` takes the flow handler rather than a dict so one `FlowStep` signature serves both
+    tables: the config-table gates read `self._answers`/`self._mode`, the options-table gates
+    read `self.config_entry.data`. Deliberately not typed `Callable[[_TableWalkMixin], bool]`:
+    `config_entry` lives on `OptionsFlow`, not on this mixin, so the narrower hint would make
+    every options-table gate a type error.
+    """
+
+    _mode: FlowMode
+    _answers: dict[str, Any] | None = None  # per-run accumulator (ADR-0025 point 2)
+    _table: ClassVar[tuple[FlowStep, ...]]  # no default -- a handler that forgets to set
+    # this must AttributeError, not silently walk an empty table and finish early.
+
+    async def _async_advance(self, after: str | None) -> config_entries.ConfigFlowResult:
+        """Show the first step after `after` whose gate passes; finish when none remain.
+
+        `after` need not itself be a table row: the shared `core` entry point and the
+        framework-mandated `init` entry point (ADR-0025 point 4) are both legitimately not
+        `_table` members. Scanning starts from the row *following* a matching step_id, or
+        from the first row when `after` is `None` or not found in the table at all -- the
+        same "start from row 0" behaviour serves both of those entry points correctly. Any
+        other, genuinely unrecognised `after` would silently do the same (restart the walk)
+        rather than raise; the mixin's only two legitimate non-member callers are `core` and
+        `init`, so this is accepted as part of the design rather than additionally guarded
+        here."""
+        start = 0
+        if after is not None:
+            for index, row in enumerate(self._table):
+                if row.step_id == after:
+                    start = index + 1
+                    break
+        for row in self._table[start:]:
+            if row.gate(self):
+                return await getattr(self, f"async_step_{row.step_id}")()
+        return await self._async_finish()
+
+    async def _async_finish(self) -> config_entries.ConfigFlowResult:
+        """Terminal: create / update the entry. Implemented per handler."""
+        raise NotImplementedError
+
+
+# UC12 step 2's fixed order (solar -> captar -> deadline -> vehicle limit -> ungated mappings
+# -> ungated thresholds), independent of how many of CONFIG_TABLE's rows exist yet -- every
+# task that appends a row must keep the table a subsequence of this order (asserted by
+# tests/test_config_flow.py's test_uc12_step2_config_table_is_in_uc12s_fixed_order, which
+# spells the expected order out itself from UC12/const.py's STEP_* constants rather than
+# importing this constant, so the test stays an independent oracle rather than checking the
+# production table against itself). This constant is a documentation/cross-check aid for
+# whoever adds a row, not a runtime dependency of the dispatcher.
+#
+# TODO(T7, T10): once CONFIG_TABLE carries all six rows (T7) and OPTIONS_TABLE all four
+# (T10), add a completeness assertion (`[row.step_id for row in CONFIG_TABLE] ==
+# list(UC12_FIXED_STEP_ORDER)`, and similarly for OPTIONS_TABLE minus vehicle_limit) -- the
+# subsequence check here only guards relative order, not that every row has actually landed.
+UC12_FIXED_STEP_ORDER = (
+    STEP_SOLAR,
+    STEP_CAPTAR,
+    STEP_DEADLINE,
+    STEP_VEHICLE_LIMIT,
+    STEP_MAPPINGS,
+    STEP_THRESHOLDS,
+)
+
+# Populated incrementally -- see the module comment above. Empty until T3.
+CONFIG_TABLE: tuple[FlowStep, ...] = ()
+
+# Populated incrementally in T10 (its own table per ADR-0025 point 3 -- gated on the *stored*
+# capability flags, not this run's answers). Empty until then.
+OPTIONS_TABLE: tuple[FlowStep, ...] = ()
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
