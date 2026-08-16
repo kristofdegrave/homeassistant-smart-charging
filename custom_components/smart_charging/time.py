@@ -28,6 +28,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    CONF_DEADLINE_AVAILABLE,
     DAY_FRI,
     DAY_MON,
     DAY_SAT,
@@ -35,6 +36,7 @@ from .const import (
     DAY_THU,
     DAY_TUE,
     DAY_WED,
+    DEFAULT_DEADLINE_AVAILABLE,
     DEPARTURE_OVERRIDE_HOLIDAY,
     DEPARTURE_OVERRIDE_HOME_DAY,
     LABEL_SC_RUNTIME,
@@ -63,15 +65,30 @@ OVERRIDE_DEFAULTS: list[tuple[str, time | None]] = [
 
 
 class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity):
-    """One departure-time entity, parameterized by id-suffix and default (R14)."""
+    """One departure-time entity, parameterized by id-suffix and default (R14).
 
-    _owned_labels = frozenset({LABEL_SC_RUNTIME})
+    `_owned_labels` is set per-instance, gated on the deadline capability
+    (`deadline_available`, R18): R19 AC4 requires these entities to be hidden from the
+    runtime dashboard when the deadline capability is absent. Entities are still created
+    either way -- only their dashboard visibility (the `sc_runtime` label) is gated.
+    `_manageable_labels` stays the class-level constant superset (`entity.py`), so a later
+    reload with the capability newly absent *removes* the label, not just adds it.
+    """
 
-    def __init__(self, entry_id: str, id_suffix: str, default: time | None) -> None:
+    _manageable_labels = frozenset({LABEL_SC_RUNTIME})
+
+    def __init__(
+        self,
+        entry_id: str,
+        id_suffix: str,
+        default: time | None,
+        deadline_available: bool = DEFAULT_DEADLINE_AVAILABLE,
+    ) -> None:
         self._attr_translation_key = f"departure_{id_suffix}"
         self._object_id_suffix = f"departure_{id_suffix}"
         super().__init__(entry_id)
         self._attr_native_value = default
+        self._owned_labels = frozenset({LABEL_SC_RUNTIME}) if deadline_available else frozenset()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -90,9 +107,12 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
+    deadline_available = entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE)
     async_add_entities(
         [
-            SmartChargingDepartureTime(entry.entry_id, suffix, default)
+            SmartChargingDepartureTime(
+                entry.entry_id, suffix, default, deadline_available=deadline_available
+            )
             for suffix, default in (*DAY_OF_WEEK_DEFAULTS, *OVERRIDE_DEFAULTS)
         ]
     )
