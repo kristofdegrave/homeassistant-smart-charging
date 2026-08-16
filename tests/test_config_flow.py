@@ -526,10 +526,24 @@ async def test_options_flow_edits_solar_thresholds(hass):
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
-# test_solar_available_error_preserves_previously_entered_values is deferred to T4/T5: the
-# guard now fires on the thresholds step, whose schema carries neither charger_current_entity
-# nor solar_available -- this re-show/suggested-value behaviour belongs to whichever step the
-# guard moves to once the solar/captar steps exist.
+# The original test_solar_available_error_preserves_previously_entered_values asserted
+# suggested values for charger_current_entity/solar_available on the re-shown form -- neither
+# is a thresholds-step field now, so that specific assertion is deferred to T4/T5 along with
+# the guard itself. The thresholds step's OWN fields are testable today, via the same
+# add_suggested_values_to_schema call (config_flow.py's async_step_thresholds):
+async def test_thresholds_error_preserves_previously_entered_values(hass):
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_SOLAR_AVAILABLE: True},
+            STEP_THRESHOLDS: {CONF_NOMINAL_VOLTAGE: 231.5},
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+
+    suggested = {key.schema: key.description for key in result["data_schema"].schema}
+    assert suggested[CONF_NOMINAL_VOLTAGE]["suggested_value"] == 231.5
 
 
 async def test_reconfigure_rejects_solar_available_true_without_ev_soc(hass):
@@ -605,11 +619,27 @@ async def test_reconfigure_rejects_solar_available_true_without_solar_forecast(h
     assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
-# test_captar_available_defaults_true is deferred to T5: proving the schema-level True
-# default end-to-end needs a successful (ev_soc-mapped) install, which has no step to answer
-# ev_soc on until the captar step exists. `CORE_MAPPING_SCHEMA`'s own default is pinned by
-# test_uc12_step1_core_fragment_has_exactly_the_core_mappings_and_decisions's schema-shape
-# check in the meantime.
+async def test_captar_available_defaults_true(hass):
+    # Design doc §3: R18 ("defaulting to present") / entity-catalog.md's sc_captar_available.
+    # Omitting the field from the core submission (rather than a successful, ev_soc-mapped
+    # install, which has no step to answer ev_soc on until T5) lets CORE_MAPPING_SCHEMA's own
+    # default apply -- proven end-to-end by the guard firing exactly as it does when the
+    # field is explicitly set True (test_captar_available_true_requires_ev_soc above).
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_CAPTAR_AVAILABLE: None}})
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE
+
+
+async def test_solar_available_defaults_true(hass):
+    # Design doc, "Decisions on two forks" §2: the core step's rendered default is True (R20
+    # AC1's "defaulting to present"), deliberately diverging from DEFAULT_SOLAR_AVAILABLE
+    # (False, the absent-key read fallback). Proven the same way as the captar default above:
+    # omitting the field lets the schema default apply, and the guard fires accordingly.
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: None}})
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
 
 
 async def test_captar_available_true_requires_ev_soc(hass):

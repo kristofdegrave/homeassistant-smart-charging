@@ -143,6 +143,13 @@ OPTION_KEYS = (
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
+    # CONF_PROMPT_TIMEOUT_H and CONF_REMINDER_LEAD_H: like every OPTION_KEYS member, the
+    # guided install flow writes these -- but the still-flat SmartChargingOptionsFlow
+    # (async_step_init) replaces entry.options wholesale from `_threshold_schema()`, which
+    # asks about neither. The first Configure+Save after install silently drops both, until
+    # T10 gives the options flow its own table with a merge-not-replace terminal step
+    # (design, "The terminal step and the bucket split"). Harmless today: nothing reads
+    # either key yet.
     CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
 )
@@ -317,15 +324,23 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 
 
 # --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
-# No handler class uses this yet (plan T2) -- SmartChargingConfigFlow/SmartChargingOptionsFlow
-# start wiring into it from T3 onward. CONFIG_TABLE/OPTIONS_TABLE below are populated
-# incrementally, one task at a time (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully
-# per the design doc's end-state Structure section: no step method exists yet for most rows,
-# and a row with no matching method would strand the flow the moment its gate passed
-# (ADR-0025's stated Con) -- concretely, a full CONFIG_TABLE at T3 would AttributeError on
-# every default install, since DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the
-# captar row before async_step_captar exists (T5). Comment sweep of this scaffolding is part
-# of T13's cleanup.
+# SmartChargingConfigFlow starts wiring into this from T3 onward (SmartChargingOptionsFlow
+# from T10). CONFIG_TABLE/OPTIONS_TABLE below are populated incrementally, one task at a time
+# (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully per the design doc's end-state
+# Structure section: no step method exists yet for most rows, and a row with no matching
+# method would strand the flow the moment its gate passed (ADR-0025's stated Con) --
+# concretely, a full CONFIG_TABLE at T3 would AttributeError on every default install, since
+# DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the captar row before
+# async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
+#
+# Known temporary gap (T3-T4/T5): with captar_available already defaulting True and this
+# task flipping the core step's solar_available form-default to True too (design, "Decisions
+# on two forks" §2), a user who simply accepts every default reaches the thresholds step's
+# `_mapping_errors` safety net and is rejected for a missing ev_soc_entity mapping -- a field
+# that appears on no step in T3's flow at all (it lands with the solar/captar steps, T4/T5).
+# There is no way to proceed except declining a capability on the core step. This is a
+# genuine, if short-lived, install-flow dead end for the *default* path; it resolves itself
+# the moment T4/T5 give ev_soc_entity somewhere to be answered.
 
 
 class FlowMode(StrEnum):
@@ -743,12 +758,17 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         `_mapping_errors` is called here, on the last install-path form, as the temporary
         safety net the plan's Conventions section describes: today's flat flow's end-of-form
         behaviour, preserved verbatim until T4-T7 each move one guard to its own gated step
-        and T7 deletes both this call and `_mapping_errors` itself."""
+        and T7 deletes both this call and `_mapping_errors` itself. It reads `self._answers`
+        alone, not `self._answers | user_input`: every field the three guards check
+        (`solar_available`, `captar_available`, `ev_soc_entity`, `solar_forecast_entity`,
+        `vehicle_charge_limit_entity`, `car_home_entity`) is answered on the core step, none
+        on this one, so a merge with this step's own submission could never change the
+        verdict."""
         schema = _ungated_threshold_schema(include_interval=False)
         if user_input is None:
             return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)
 
-        errors = _mapping_errors(self._answers | user_input)
+        errors = _mapping_errors(self._answers)
         if errors:
             return self.async_show_form(
                 step_id=STEP_THRESHOLDS,
