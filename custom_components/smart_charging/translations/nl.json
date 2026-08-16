@@ -116,6 +116,7 @@
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
           "evening_prompt_time": "Tijdstip avondprompt thuisdag",
+          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)",
           "control_interval_s": "Regelinterval (s)"
         }
       }

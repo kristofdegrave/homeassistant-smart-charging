@@ -6,15 +6,32 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.smart_charging.config_flow import (
+    CORE_MAPPING_SCHEMA,
+    DEADLINE_MAPPING_SCHEMA,
+    OPTION_KEYS,
+    UNGATED_MAPPING_SCHEMA,
+    VEHICLE_LIMIT_MAPPING_SCHEMA,
+    _captar_mapping_schema,
+    _captar_threshold_schema,
+    _deadline_threshold_schema,
+    _solar_mapping_schema,
+    _solar_threshold_schema,
+    _ungated_threshold_schema,
+)
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CAR_HOME_ENTITY,
     CONF_CHARGER_CURRENT_ENTITY,
+    CONF_CHARGER_POWER_ENTITY,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_CHARGING_STATES,
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
+    CONF_DEADLINE_AVAILABLE,
     CONF_DEFAULT_SOC_LIMIT,
+    CONF_DEFAULT_TARGET_CURRENT,
     CONF_DEPARTURE_EXTERNAL_ENTITY,
     CONF_EV_BATTERY_CAPACITY_ENTITY,
     CONF_EV_BATTERY_CAPACITY_KWH,
@@ -26,15 +43,25 @@ from custom_components.smart_charging.const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
+    CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
+    CONF_MIN_CURRENT,
+    CONF_NET_POWER_ENTITY,
+    CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
+    CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
+    CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_AVAILABLE,
+    CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    CONF_SOLAR_HOLD_MIN,
+    CONF_SOLAR_ONLY_MIDPOINT,
+    CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_START_THRESHOLD_W,
@@ -42,6 +69,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+    CONF_VEHICLE_LIMIT_MAPPED,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
@@ -894,3 +922,176 @@ async def test_pre_existing_entry_defaults_evening_prompt_options(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
     assert entry.options[CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
+
+
+# --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
+# Pure schema-shape assertions -- no `hass` fixture needed (design, "Testing approach").
+
+
+def _keys(schema) -> set[str]:
+    return {str(marker) for marker in schema.schema}
+
+
+def test_uc12_step1_core_fragment_has_exactly_the_core_mappings_and_decisions():
+    """UC12 step 1 / R20 AC1: four core mappings + two state lists + four enablement
+    decisions -- and nothing else (grid voltage moves to the ungated-mappings step,
+    UC12 step 7)."""
+    assert _keys(CORE_MAPPING_SCHEMA) == {
+        CONF_CHARGER_CURRENT_ENTITY,
+        CONF_CHARGER_STATUS_ENTITY,
+        CONF_CONNECTED_STATES,
+        CONF_CHARGING_STATES,
+        CONF_NET_POWER_ENTITY,
+        CONF_CHARGER_POWER_ENTITY,
+        CONF_SOLAR_AVAILABLE,
+        CONF_CAPTAR_AVAILABLE,
+        CONF_DEADLINE_AVAILABLE,
+        CONF_VEHICLE_LIMIT_MAPPED,
+    }
+
+
+def test_uc12_step3_solar_mapping_fragment_with_ev_soc():
+    assert _keys(_solar_mapping_schema(include_ev_soc=True)) == {
+        CONF_EV_SOC_ENTITY,
+        CONF_SOLAR_FORECAST_ENTITY,
+    }
+
+
+def test_uc12_step3_solar_mapping_fragment_without_ev_soc():
+    assert _keys(_solar_mapping_schema(include_ev_soc=False)) == {CONF_SOLAR_FORECAST_ENTITY}
+
+
+def test_uc12_step3_solar_threshold_fragment():
+    assert _keys(_solar_threshold_schema()) == {
+        CONF_SOLAR_START_THRESHOLD_W,
+        CONF_SOLAR_ONLY_START_THRESHOLD_W,
+        CONF_SOLAR_ONLY_STRATEGY,
+        CONF_SOLAR_ONLY_MIDPOINT,
+        CONF_SOLAR_HOLD_MIN,
+        CONF_SOLAR_COOLDOWN_MIN,
+        CONF_SOLAR_STEP_PP,
+        CONF_SOLAR_STEP_THRESHOLD_PP,
+        CONF_MAX_SOLAR_SOC,
+        CONF_SOLAR_RESERVE_SOC,
+        CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    }
+
+
+def test_uc12_step4_captar_mapping_fragment_with_ev_soc():
+    assert _keys(_captar_mapping_schema(include_ev_soc=True)) == {CONF_EV_SOC_ENTITY}
+
+
+def test_uc12_step4_captar_mapping_fragment_without_ev_soc():
+    assert _keys(_captar_mapping_schema(include_ev_soc=False)) == set()
+
+
+def test_uc12_step4_captar_threshold_fragment():
+    assert _keys(_captar_threshold_schema()) == {CONF_CAPTAR_COOLDOWN_MIN}
+
+
+def test_uc12_step5_deadline_mapping_fragment():
+    assert _keys(DEADLINE_MAPPING_SCHEMA) == {CONF_DEPARTURE_EXTERNAL_ENTITY}
+
+
+def test_uc12_step5_deadline_threshold_fragment():
+    assert _keys(_deadline_threshold_schema()) == {CONF_REMINDER_LEAD_H}
+
+
+def test_uc12_step6_vehicle_limit_mapping_fragment():
+    assert _keys(VEHICLE_LIMIT_MAPPING_SCHEMA) == {
+        CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+        CONF_CAR_HOME_ENTITY,
+    }
+
+
+def test_uc12_step7_ungated_mapping_fragment():
+    assert _keys(UNGATED_MAPPING_SCHEMA) == {
+        CONF_GRID_VOLTAGE_ENTITY,
+        CONF_LOW_TARIFF_ENTITY,
+        CONF_NOTIFICATION_TARGET_ENTITY,
+        CONF_EV_BATTERY_CAPACITY_ENTITY,
+        CONF_HOME_DAY_EXTERNAL_ENTITY,
+    }
+
+
+# T3 extends the ungated-threshold fragment -- and this expectation -- with
+# CONF_PROMPT_TIMEOUT_H (design, "Decisions on two forks" §1). Everything else is final.
+_UNGATED_THRESHOLD_KEYS_AT_T1 = {
+    CONF_NOMINAL_VOLTAGE,
+    CONF_MIN_CURRENT,
+    CONF_MAX_CURRENT,
+    CONF_GRID_CEILING_A,
+    CONF_GRID_SAFETY_OFFSET_A,
+    CONF_SMOOTHING_WINDOW,
+    CONF_DEFAULT_SOC_LIMIT,
+    CONF_DEFAULT_TARGET_CURRENT,
+    CONF_SAFETY_MARGIN_W,
+    CONF_MAX_PEAK_KW,
+    CONF_PEAK_GRACE_MIN,
+    CONF_EV_BATTERY_CAPACITY_KWH,
+    CONF_POWER_RESPECT_PEAK,
+    CONF_EVENING_PROMPT_ENABLED,
+    CONF_EVENING_PROMPT_TIME,
+}
+
+
+def test_uc12_step8_ungated_threshold_fragment_without_interval():
+    """UC12 step 8, install/reconfigure: the control interval is never asked on this path
+    (defaulted instead, R20 AC5's carve-out)."""
+    assert _keys(_ungated_threshold_schema(include_interval=False)) == _UNGATED_THRESHOLD_KEYS_AT_T1
+
+
+def test_uc12_step8_ungated_threshold_fragment_with_interval():
+    """UC12 1b: the options flow alone asks the control interval."""
+    assert _keys(_ungated_threshold_schema(include_interval=True)) == (
+        _UNGATED_THRESHOLD_KEYS_AT_T1 | {CONF_CONTROL_INTERVAL_S}
+    )
+
+
+def test_every_option_key_appears_in_exactly_one_threshold_fragment():
+    """ADR-0005: every OPTION_KEYS member has exactly one step that presents it -- no key
+    orphaned by the split, none asked twice."""
+    threshold_fragments = [
+        _solar_threshold_schema(),
+        _captar_threshold_schema(),
+        _deadline_threshold_schema(),
+        _ungated_threshold_schema(include_interval=False),
+    ]
+    all_keys: list[str] = []
+    for fragment in threshold_fragments:
+        all_keys.extend(_keys(fragment))
+    # control_interval_s is deliberately not an OPTION_KEYS member (it's appended separately
+    # at the terminal step, design "The terminal step and the bucket split") and only the
+    # options-flow variant of the ungated fragment carries it -- excluded here by using
+    # include_interval=False above.
+    assert sorted(all_keys) == sorted(set(OPTION_KEYS))
+
+
+def test_no_field_appears_in_two_fragments_except_ev_soc():
+    """Every field belongs to exactly one fragment -- with one deliberate carve-out.
+    ev_soc_entity is a member of BOTH _solar_mapping_schema(include_ev_soc=True) and
+    _captar_mapping_schema(include_ev_soc=True) by design: the once-only rule (R20 AC4,
+    UC12 postcondition 3) is enforced at RENDER time by the include_ev_soc argument, not by
+    fragment membership. Compare the fragments built with include_ev_soc=False so the
+    carve-out is structural rather than a subtracted special case.
+
+    Note this does NOT generalise UC12 postcondition 3 -- that postcondition is about what a
+    presented step shows (T8's traversal assertion), not a statement about fragment
+    membership."""
+    all_fragments = [
+        CORE_MAPPING_SCHEMA,
+        _solar_mapping_schema(include_ev_soc=False),
+        _solar_threshold_schema(),
+        _captar_mapping_schema(include_ev_soc=False),
+        _captar_threshold_schema(),
+        DEADLINE_MAPPING_SCHEMA,
+        _deadline_threshold_schema(),
+        VEHICLE_LIMIT_MAPPING_SCHEMA,
+        UNGATED_MAPPING_SCHEMA,
+        _ungated_threshold_schema(include_interval=False),
+    ]
+    seen: set[str] = set()
+    for fragment in all_fragments:
+        overlap = _keys(fragment) & seen
+        assert not overlap, f"field(s) {overlap} appear in more than one fragment"
+        seen |= _keys(fragment)
