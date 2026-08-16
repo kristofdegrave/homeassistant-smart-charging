@@ -86,6 +86,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
+    DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
@@ -132,13 +133,12 @@ USER_INPUT = {
     "default_target_current": 10.0,
 }
 
-# Per-step base fixtures for the guided install flow (UC12 steps 1/3/7/8). All four capability
-# decisions default False here, including solar -- even though solar's rendered form default is
-# True (T3) -- because CORE_INPUT is a fixture of explicit values, not a proof of the schema
-# default (see test_solar_available_defaults_true for that), and leaving it False keeps every
-# test that doesn't care about solar off the solar step entirely. Deadline has no step yet
-# (T6), so turning it on can only ever exercise the thresholds-step guard rejecting the
-# still-missing mapping.
+# Per-step base fixtures for the guided install flow (UC12 steps 1/3/4/5/7/8). All four
+# capability decisions default False here, including solar -- even though solar's rendered
+# form default is True (T3) -- because CORE_INPUT is a fixture of explicit values, not a proof
+# of the schema default (see test_solar_available_defaults_true for that), and leaving it
+# False keeps every test that doesn't care about a capability off that capability's step
+# entirely.
 CORE_INPUT = {
     CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
     CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
@@ -167,6 +167,10 @@ CAPTAR_INPUT = {
     CONF_EV_SOC_ENTITY: "sensor.ev_soc",
 }
 
+# UC12 step 5: both fields are optional/defaulted (R18 AC7 -- neither is required), so an
+# empty submission is a valid base fixture.
+DEADLINE_INPUT = {}
+
 MAPPINGS_INPUT = {
     CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
 }
@@ -184,6 +188,7 @@ _INSTALL_STEP_BASES = {
     STEP_CORE: CORE_INPUT,
     STEP_SOLAR: SOLAR_INPUT,
     STEP_CAPTAR: CAPTAR_INPUT,
+    STEP_DEADLINE: DEADLINE_INPUT,
     STEP_MAPPINGS: MAPPINGS_INPUT,
     STEP_THRESHOLDS: THRESHOLDS_INPUT,
 }
@@ -793,8 +798,8 @@ async def test_ev_battery_capacity_entity_is_optional(hass):
 
 
 async def test_home_day_external_entity_can_be_mapped(hass):
-    # departure_external_entity lives on the deadline step (T6), which doesn't exist yet --
-    # only home_day_external_entity (ungated mappings) is exercised here until then.
+    # departure_external_entity lives on the deadline step (T6's own tests below) --
+    # home_day_external_entity is a distinct, ungated mapping, exercised here.
     result = await _run_install_flow(
         hass, per_step={STEP_MAPPINGS: {CONF_HOME_DAY_EXTERNAL_ENTITY: "binary_sensor.home_day"}}
     )
@@ -1046,8 +1051,8 @@ async def test_adr0005_all_capabilities_off_install_splits_buckets(hass):
     }
 
     # Only the ungated thresholds + control_interval_s -- the intersection excludes every
-    # OPTION_KEYS member that lives on a step this run didn't declare (solar/captar, both
-    # gated off by CORE_INPUT) or that doesn't exist yet (deadline, T6).
+    # OPTION_KEYS member that lives on a step this run didn't declare (solar/captar/deadline,
+    # all three gated off by CORE_INPUT).
     assert sorted(result["options"]) == sorted(
         _keys(_ungated_threshold_schema(include_interval=True))
     )
@@ -1056,9 +1061,10 @@ async def test_adr0005_all_capabilities_off_install_splits_buckets(hass):
 
 async def test_adr0025_option_keys_consumption_is_intersection_based(hass):
     """ADR-0025 Consequences: a skipped step leaves its OPTION_KEYS members absent from the
-    accumulator; the terminal step must intersect, not index. Declaring solar/captar absent
-    (as CORE_INPUT does) is enough on its own to prove this -- their own steps' OPTION_KEYS
-    members are absent purely because their gates failed, not because the steps don't exist."""
+    accumulator; the terminal step must intersect, not index. Declaring solar/captar/deadline
+    absent (as CORE_INPUT does) is enough on its own to prove this -- their own steps'
+    OPTION_KEYS members are absent purely because their gates failed, not because the steps
+    don't exist."""
     result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_SOLAR_START_THRESHOLD_W not in result["options"]
@@ -1314,6 +1320,53 @@ async def test_captar_step_error_can_be_corrected_and_the_flow_advances(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], CAPTAR_INPUT)
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_MAPPINGS
+
+
+# --- T6: the deadline step. ---
+
+
+async def test_uc12_step5_deadline_step_presents_departure_mapping_and_reminder_lead(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_DEADLINE_AVAILABLE: True}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_DEADLINE
+    assert _keys(result["data_schema"]) == (
+        _keys(DEADLINE_MAPPING_SCHEMA) | _keys(_deadline_threshold_schema())
+    )
+
+
+async def test_r18_ac7_deadline_absent_offers_no_departure_or_reminder_field(hass):
+    """R18 AC7 / R20 AC3: the deadline step is skipped entirely, and the stored entry carries
+    neither departure_external_entity nor reminder_lead_h."""
+    result = await _run_install_flow(hass)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_DEPARTURE_EXTERNAL_ENTITY not in result["data"]
+    assert CONF_REMINDER_LEAD_H not in result["options"]
+
+
+async def test_uc12_step5_departure_mapping_is_optional(hass):
+    """UC12 step 5 calls it 'the optional external departure-time mapping' -- submitting the
+    step without it advances."""
+    result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_DEADLINE_AVAILABLE: True}})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_DEPARTURE_EXTERNAL_ENTITY not in result["data"]
+    assert result["options"][CONF_REMINDER_LEAD_H] == DEFAULT_REMINDER_LEAD_H
+
+
+async def test_deadline_declared_departure_mapping_can_be_set(hass):
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_DEADLINE_AVAILABLE: True},
+            STEP_DEADLINE: {CONF_DEPARTURE_EXTERNAL_ENTITY: "sensor.departure_time"},
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_DEPARTURE_EXTERNAL_ENTITY] == "sensor.departure_time"
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
