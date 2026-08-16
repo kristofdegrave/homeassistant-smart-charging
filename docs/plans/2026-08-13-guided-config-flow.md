@@ -8,8 +8,12 @@ forms into the capability-gated step sequence
 [UC12](../analysis/use-cases/UC12-configure-installation-through-guided-flow.md) and
 [R20](../analysis/requirements.md#r20--guided-installation-configuration) settled, using the
 table-driven linear `async_step_*` mechanism
-[ADR-0025](../adl/0025-config-flow-branching-structure.md) chose (Option C). Closes issue #677 of
+[ADR-0025](../adl/0025-config-flow-branching-structure.md) proposes (Option C). Closes issue #677 of
 epic #656; slice **C4** of [`docs/design/project-plan.md`](../design/project-plan.md).
+
+**ADR gate:** ADR-0025's Status is **Proposed**, not Accepted. It is this slice's gate — see the
+design doc's "ADR gate" note, which also records that project-plan C4's "ADR gate: none new" line is
+now stale. Do not begin T1 against a rejected or superseded ADR-0025.
 
 **Architecture:** one ordered, gated step table per flow plus one shared dispatcher; one
 `async_step_*` method per UC12 step; per-step schema fragments replacing `MAPPING_SCHEMA` /
@@ -19,12 +23,33 @@ at the terminal step, where the existing `_split_data` (unchanged) and an **inte
 [`2026-08-13-guided-config-flow-design.md`](2026-08-13-guided-config-flow-design.md) — read it first;
 this plan does not restate its tables.
 
-**Scope guard — this plan touches only:**
+**Scope guard — this plan touches only these eight files:**
 `custom_components/smart_charging/config_flow.py`, `custom_components/smart_charging/const.py`
 (new constants only, per design D-1/D-5), `custom_components/smart_charging/strings.json`,
 `custom_components/smart_charging/translations/{en,nl}.json`,
-`tests/test_config_flow.py`, `tests/test_config_flow_translations.py`.
-No other module changes. No behaviour is added to any consumer of the keys this flow writes — wiring
+`tests/test_config_flow.py`, `tests/test_config_flow_translations.py`,
+`tests/test_translations.py`.
+No other module changes.
+
+`tests/test_translations.py` is in the list because this slice **breaks it** — it is not optional
+collateral to discover mid-task. It is a plain-pytest module that imports `USER_SCHEMA`,
+`MAPPING_SCHEMA` and `OPTION_KEYS` from `config_flow.py` and asserts config-flow label parity against
+`config.step.user` / `config.step.reconfigure` / `options.step.init`, including
+`set(OPTION_KEYS) | {CONF_CONTROL_INTERVAL_S} <= options_data`. Four tasks hit it:
+
+| Task | What breaks `tests/test_translations.py` |
+| --- | --- |
+| T1 | appending `CONF_REMINDER_LEAD_H` to `OPTION_KEYS` — no `options.step.init.data` label for it yet |
+| T3 | appending `CONF_PROMPT_TIMEOUT_H` — same failure again |
+| T12 | deleting the three step blocks — `KeyError` on `strings["config"]["step"]["user"]` |
+| T13 | deleting `USER_SCHEMA` / `MAPPING_SCHEMA` — `ImportError` at **collection** time |
+
+The resolution is scheduled, not improvised: **T1 and T3 each add the new field's label** in the
+same commit that appends the key, so the module stays green; **T12** removes
+`test_every_config_flow_field_has_a_label` outright, superseded by T12's own dynamic step/field
+parity check; **T13** then has no config-flow import left to break. The rest of the module
+(`test_strings_json_and_en_json_are_identical`, `test_nl_json_has_the_same_keys_as_en_json`,
+`test_every_entity_translation_key_has_a_name`) is unrelated to `config_flow.py` and stays unchanged. No behaviour is added to any consumer of the keys this flow writes — wiring
 `deadline_available` and `reminder_lead_h` to runtime behaviour is explicitly out of this slice (design,
 Deferrals).
 
@@ -59,7 +84,14 @@ C4's own "Testable on its own" line), `ruff`.
 - **Genuine red before green** — each task states the failure its first test produces.
 - **The flow stays runnable at every commit.** T1–T2 add structure alongside the flat flow; T3 is the
   first task that replaces a user-visible path, and from T3 onward every commit leaves all three
-  flows working end to end.
+  flows working end to end — *including their validation*. That last clause is why
+  `_mapping_errors` is **kept as a terminal safety net through T3–T6** rather than deleted when T3
+  rewrites the install path. Without it, T3's commit would ship a real hole: the default install has
+  CapTar available, the CapTar step (which carries the EV-SOC requiredness) does not exist until T5,
+  and nothing else checks it — so a default install could create an entry with no `ev_soc_entity` and
+  no error at all. The net closes that window. **T7 is where it is removed**, because T7 lands the
+  last of the three step-local guards (`_car_home_missing_error`), at which point the guards fully
+  replace it and keeping it would double-report.
 
 ---
 
@@ -71,7 +103,12 @@ bucket). **Test boundary:** HA harness module `tests/test_config_flow.py`; these
 assertions need no `hass` fixture (design, Testing approach).
 
 **Files:** edit `custom_components/smart_charging/const.py`,
-`custom_components/smart_charging/config_flow.py`, `tests/test_config_flow.py`.
+`custom_components/smart_charging/config_flow.py`, `tests/test_config_flow.py`, plus a one-line
+`reminder_lead_h` label in `strings.json`, `translations/en.json` and `translations/nl.json`. That
+label is not optional polish: appending `CONF_REMINDER_LEAD_H` to `OPTION_KEYS` fails
+`tests/test_translations.py`'s `options.step.init.data` parity assertion the moment it lands (see the
+scope guard), and adding the label in the same commit is what keeps that module green without
+editing it here.
 
 **Step 1 — failing tests.** One test per fragment asserting its **exact** key set against the design
 doc's fragment table (which is itself UC12's step text). Use
@@ -92,6 +129,17 @@ Cover: `test_uc12_step3_solar_fragments_*` (mapping half with and without `inclu
 half), `test_uc12_step4_captar_fragments_*`, `test_uc12_step5_deadline_fragments_*`,
 `test_uc12_step6_vehicle_limit_fragment_*`, `test_uc12_step7_ungated_mapping_fragment_*`,
 `test_uc12_step8_ungated_threshold_fragment_*` (with `include_interval` False **and** True — UC12 1b).
+
+**The ungated-threshold fragment's expected key set omits `prompt_timeout_h` at this task.** The
+design doc's fragment table lists it, but `CONF_PROMPT_TIMEOUT_H` is deliberately not added until T3
+(see Step 2), so asserting the table's full set here would leave T1 red on its own commit. Write the
+expectation without that one key and mark it:
+
+```python
+# T3 extends the ungated-threshold fragment -- and this expectation -- with
+# CONF_PROMPT_TIMEOUT_H (design, "Decisions on two forks" §1). Everything else is final.
+```
+
 Plus two whole-surface tests that make an omission impossible to miss:
 
 ```python
@@ -100,16 +148,31 @@ def test_every_option_key_appears_in_exactly_one_threshold_fragment():
     orphaned by the split, none asked twice."""
 
 
-def test_no_field_appears_in_two_fragments():
-    """UC12 postcondition 3 generalised: a field belongs to exactly one step."""
+def test_no_field_appears_in_two_fragments_except_ev_soc():
+    """Every field belongs to exactly one fragment -- with one deliberate carve-out.
+    ev_soc_entity is a member of BOTH _solar_mapping_schema(include_ev_soc=True) and
+    _captar_mapping_schema(include_ev_soc=True) by design: the once-only rule (R20 AC4,
+    UC12 postcondition 3) is enforced at RENDER time by the include_ev_soc argument, not by
+    fragment membership. Compare the fragments built with include_ev_soc=False so the
+    carve-out is structural rather than a subtracted special case."""
 ```
+
+Note the docstring does **not** claim this generalises UC12 postcondition 3 — that postcondition is
+about what a *presented step* shows, which is T5's traversal assertion, not a statement about
+fragment membership.
 
 **Red:** `ImportError` / `AttributeError` — no fragment exists.
 
-**Step 2 — implement.** In `const.py`, add per design D-1: `CONF_DEADLINE_AVAILABLE`,
-`DEFAULT_DEADLINE_AVAILABLE`, `CONF_REMINDER_LEAD_H`, `DEFAULT_REMINDER_LEAD_H`,
-`CONF_VEHICLE_LIMIT_MAPPED`, and per D-5 the `STEP_*` step-id constants. `CONF_REMINDER_LEAD_H` is
-appended to `OPTION_KEYS` in `config_flow.py`. (`CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`
+**Step 2 — implement.** In `const.py`, add per design **D-1**: `CONF_DEADLINE_AVAILABLE`,
+`DEFAULT_DEADLINE_AVAILABLE`, `CONF_REMINDER_LEAD_H`, `DEFAULT_REMINDER_LEAD_H`, and the four
+extracted threshold defaults `DEFAULT_MIN_CURRENT` (`6.0`), `DEFAULT_MAX_CURRENT` (`16.0`),
+`DEFAULT_GRID_CEILING_A` (`25.0`), `DEFAULT_DEFAULT_TARGET_CURRENT` (`10.0`) — these replace the four
+bare numeric literals `_threshold_schema()` carries today, so the rewritten ungated fragment has
+named defaults like every one of its siblings (CLAUDE.md: no magic strings). Per design **D-2**, add
+`CONF_VEHICLE_LIMIT_MAPPED` (the transient election key, not a persisted id). Per **D-5**, add the
+`STEP_*` step-id constants. `CONF_REMINDER_LEAD_H` is appended to `OPTION_KEYS` in `config_flow.py`,
+and its label is added to `options.step.init.data` in `strings.json`/`en.json`/`nl.json` in the same
+commit so `tests/test_translations.py` stays green. (`CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`
 are added in T3, alongside the ungated-threshold fragment they belong to.)
 
 In `config_flow.py`, split `MAPPING_SCHEMA` and `_threshold_schema()` into the fragments named in the
@@ -172,7 +235,10 @@ gate, asserting it lands on the next passing row and calls `_async_finish` when 
 split unchanged). **Test boundary:** HA harness, `tests/test_config_flow.py`.
 
 **Files:** edit `custom_components/smart_charging/config_flow.py`, `tests/test_config_flow.py`,
-and `const.py` (adds `CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`, appended to `OPTION_KEYS`).
+and `const.py` (adds `CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`, appended to `OPTION_KEYS`),
+plus a one-line `prompt_timeout_h` label in `strings.json`, `translations/en.json` and
+`translations/nl.json` — same reason as T1: without it `tests/test_translations.py`'s
+`options.step.init.data` parity assertion goes red the moment the key joins `OPTION_KEYS`.
 
 **Step 1 — failing tests.** Replace `_run_user_flow`/`_create_entry` with a step-walking driver:
 
@@ -218,8 +284,24 @@ options = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
 options[CONF_CONTROL_INTERVAL_S] = DEFAULT_CONTROL_INTERVAL_S
 ```
 
+Keep a call to `_mapping_errors(self._answers)` on the **`thresholds` step's submission** (the last
+install form) as the temporary safety net the Conventions section describes, re-showing that step
+with its errors — this is exactly today's end-of-form behaviour, preserved verbatim so that T3–T6
+never ship an install path that can write an entry missing a required mapping. T4/T5/T7 each move one
+guard to its own step; **T7 deletes both this call and `_mapping_errors` itself**, once all three
+step-local guards exist.
+
 Add `CONF_PROMPT_TIMEOUT_H` to the ungated threshold fragment and to `OPTION_KEYS` (design doc's
-"Decisions on two forks" §1). Render step 1's solar decision with `default=True` (§2); add a comment
+"Decisions on two forks" §1). **Update the two now-false comments in the same commit:** the
+"`sc_prompt_timeout_h` is deliberately NOT wired here" block above `CONF_EVENING_PROMPT_ENABLED` in
+`const.py`, and the "No `sc_prompt_timeout_h` field -- deliberately not wired" comment inside
+`_threshold_schema()` in `config_flow.py`. Both must be rewritten to say what is still true — the
+field is now presented and stored per UC12 step 8, but **no component reads it yet** — and to name
+`docs/plans/2026-07-21-notifications-design.md` §3/§9 as the earlier decision this supersedes. That
+notifications design doc is out of this slice's scope guard and keeps a stale cross-reference as a
+result; the design doc records that divergence as deliberate and named.
+
+Render step 1's solar decision with `default=True` (§2); add a comment
 naming the divergence between the *form* default (`True`, R20 AC1) and `DEFAULT_SOLAR_AVAILABLE`
 (`False`, the absent-key read fallback), so the next reader sees it.
 
@@ -253,6 +335,14 @@ async def test_r20_ac6_missing_ev_soc_is_reported_on_the_solar_step(hass):
     (errors == {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}), the same step is
     re-shown, and the flow has NOT advanced -- replacing the end-of-form _mapping_errors case."""
 async def test_r20_ac6_missing_solar_forecast_is_reported_on_the_solar_step(hass)
+async def test_r20_ac6_wrong_domain_solar_forecast_entity_is_rejected(hass):
+    """R20 AC6 / UC12 exception flow 1 ('a mapped entity is of the wrong domain for its
+    role'): this is the OTHER half of AC6, which every other AC6 test above covers only for
+    a blank required field. Submit the solar step with an entity id whose domain the field's
+    EntitySelector does not allow -> the submission is rejected and the solar step is
+    re-shown; the flow does not advance. The solar-forecast mapping is the first
+    EntitySelector-backed required field a gated step introduces, so this is where the
+    domain-mismatch half of AC6 gets its named test (design, success criterion 6)."""
 ```
 
 Assert non-advancement explicitly: the returned result is a `FORM` whose `step_id` is still the solar
@@ -352,6 +442,14 @@ async def test_d2_vehicle_limit_election_is_not_persisted(hass):
 the transient election. `vehicle_charge_limit_entity` is `vol.Required`; `car_home_entity` is guarded
 by the step-local `_car_home_missing_error` (design D-3). The pop of the transient key in
 `_async_finish` already exists from T3 — this task is where it starts mattering.
+
+**Then remove the safety net.** All three guards (`_ev_soc_missing_error` from T4/T5,
+`_solar_forecast_missing_error` from T4, `_car_home_missing_error` here) are now step-local, so the
+temporary `_mapping_errors` call T3 kept on the `thresholds` step is redundant and would
+double-report. Delete both the call and `_mapping_errors` itself in this task (ADR-0025,
+Consequences: the combiner has no step that needs all three). Add a test asserting the ungated
+`thresholds` step reports **no** mapping error of its own — it is the removal's regression guard, and
+without it the deletion is unpinned.
 
 **Verify + commit.**
 
@@ -466,6 +564,25 @@ async def test_uc12_1b_options_asks_the_control_interval(hass):
 
 
 async def test_r20_ac7_options_leaves_the_data_bucket_untouched(hass)
+async def test_r20_ac7_options_save_preserves_a_withdrawn_capabilitys_stored_thresholds(hass):
+    """The reachable data-loss case the merge exists to prevent. Arrange: an entry with solar
+    present and customised solar thresholds in options; withdraw solar through reconfigure
+    (UC12 1a touches the data bucket only, so the solar thresholds are still in options by
+    design). Act: open the options flow WITHOUT re-enabling solar -- the solar step is now
+    gated off by the stored flag, so no solar key enters this run's accumulator -- and save.
+    Assert: every solar threshold is still in entry.options with its previous value. A
+    replace-the-whole-bucket async_create_entry silently wipes them; the design's
+    `{**self.config_entry.options, **intersection}` merge is what makes this pass."""
+
+
+async def test_uc12_1b_options_flow_opens_on_an_entry_predating_deadline_available(hass):
+    """Design, options table: deadline_available is a NEW key (D-1), so every entry written
+    before this slice lacks it. Build a MockConfigEntry whose data has no
+    CONF_DEADLINE_AVAILABLE key at all, open the options flow, and assert it opens and
+    completes rather than raising KeyError -- the gate reads
+    entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE), so the deadline
+    threshold step is shown (the default is True). The same defensive read applies to the
+    solar and captar gates."""
 async def test_d4_untouched_threshold_resubmits_its_stored_value(hass):
     """Design D-4: threshold fragments keep their `defaults` parameter, so re-submitting a step
     without changing a field preserves the stored value rather than resetting it to the
@@ -478,8 +595,14 @@ own `async_step_solar` / `async_step_captar` / `async_step_deadline` / `async_st
 (threshold halves only, built from the **same** fragments as the config flow — ADR-0025 point 3), and
 `async_step_init` which sets `self._mode = FlowMode.OPTIONS`, `self._answers = {}` and calls
 `self._async_advance(after=None)` without rendering a form of its own. Gates read
-`self.config_entry.data`. `_async_finish` returns
-`async_create_entry(title="", data=<intersection incl. control_interval_s>)`. Keep the class's
+`self.config_entry.data` — **always as `.get(CONF_<X>_AVAILABLE, DEFAULT_<X>_AVAILABLE)`, never by
+bracket indexing**: `deadline_available` does not exist on any pre-slice entry, and the fallbacks are
+`DEFAULT_SOLAR_AVAILABLE` (`False`), `DEFAULT_CAPTAR_AVAILABLE` (`True`), `DEFAULT_DEADLINE_AVAILABLE`
+(`True`), exactly as the design doc's options table spells out. `_async_finish` returns
+`async_create_entry(title="", data={**self.config_entry.options, **<intersection incl.
+control_interval_s>})` — **merged into the stored options, not replacing them**, because
+`OptionsFlow.async_create_entry` overwrites `entry.options` wholesale and a gated-off capability's
+thresholds would otherwise be deleted (design, "The terminal step and the bucket split"). Keep the class's
 existing no-`__init__` rule (its docstring explains why) — `_answers` is a class attribute assigned
 in `async_step_init`.
 
@@ -518,13 +641,26 @@ Abandon via `hass.config_entries.flow.async_abort(flow_id)` (and the options-flo
 
 **Realizes:** UC12 (every step is user-facing); R20 AC6 (error messages stay field-local).
 **ADR honored:** ADR-0025 (Consequences — one block per step id in both the `config` and `options`
-sections; install and reconfigure share `config.step.*`). **Test boundary:** HA harness module
-`tests/test_config_flow_translations.py` (JSON parity assertions; no `hass` fixture needed).
+sections; install and reconfigure share `config.step.*`). **Test boundary:** **plain pytest**
+(`tests/test_config_flow_translations.py` imports only `json`, `pathlib` and `const`) — which is the
+correct boundary per ADR-0009 for a pure data-file parity check, not an HA-harness module.
 
 **Files:** edit `custom_components/smart_charging/strings.json`,
 `custom_components/smart_charging/translations/en.json`,
 `custom_components/smart_charging/translations/nl.json`,
-`tests/test_config_flow_translations.py`.
+`tests/test_config_flow_translations.py`, `tests/test_translations.py`.
+
+**Before anything else, resolve `tests/test_translations.py`.** Deleting `config.step.user`,
+`config.step.reconfigure` and `options.step.init` makes its
+`test_every_config_flow_field_has_a_label` raise `KeyError` on the first of those lookups. That test
+is **superseded** by this task's own dynamic step/field parity checks, which cover strictly more (per
+step, both sections, both directions) and discover the step set from the tables instead of naming
+three hardcoded blocks. **Remove it.** Leave the rest of the module untouched:
+`test_strings_json_and_en_json_are_identical`, `test_nl_json_has_the_same_keys_as_en_json` and
+`test_every_entity_translation_key_has_a_name` are entity-translation and file-parity guards with no
+relationship to `config_flow.py`, and this slice must not weaken them. After the removal the module
+imports nothing from `config_flow.py`, which is also what stops T13's schema deletions from breaking
+it at collection time.
 
 **Step 1 — failing tests.** Extend the existing error-code parity file with **step and field**
 parity, discovered dynamically from the tables and fragments (the same anti-hardcoding discipline
@@ -588,9 +724,14 @@ async def test_r20_ac9_a_new_capability_is_one_table_row_and_one_step_method(has
 Build the "before" expectation from the real table so the test cannot drift.
 
 **Step 2 — implement / clean up.** With every path now running through the tables, delete the flat
-flow's remains: `USER_SCHEMA`, `MAPPING_SCHEMA`, `_threshold_schema()`, `_mapping_errors`. Keep
-`_split_data` (unchanged), `OPTION_KEYS`, `_parse_states`, `_build_translation`, `_entity`, and the
-three step-local guard helpers with their `if capability` prefixes now removed (design D-3).
+flow's remains: `USER_SCHEMA`, `MAPPING_SCHEMA` and `_threshold_schema()`. (`_mapping_errors` is
+already gone — T7 deleted it once the last step-local guard landed.) Keep `_split_data` (unchanged),
+`OPTION_KEYS`, `_parse_states`, `_build_translation`, `_entity`, and the three step-local guard
+helpers, which T4/T5/T7 already reduced to plain presence checks (design D-3) — nothing further is
+needed here.
+
+Deleting `USER_SCHEMA` and `MAPPING_SCHEMA` would break `tests/test_translations.py` at **import**
+time, but T12 already removed that module's only config-flow import, so nothing is left to fix here.
 
 **Verify + commit.**
 
@@ -605,12 +746,22 @@ Before the final push, confirm each of the following and record it in the PR bod
    criterion AC1–AC9 is cited by at least one test docstring.
 3. `grep -n "USER_SCHEMA\|_mapping_errors\|MAPPING_SCHEMA\|_threshold_schema" custom_components/`
    returns nothing (T13's deletions landed).
-4. `grep -rn "options\[" custom_components/` and a scan of every consumer of an `OPTION_KEYS` member
-   confirm they all read `opts.get(<key>, DEFAULT_...)`, never direct indexing — the design's
-   packaging note depends on this and the narrowed key set makes it load-bearing.
+4. **Both buckets** narrow, so both are checked. (a) `grep -rn "options\[" custom_components/` and a
+   scan of every consumer of an `OPTION_KEYS` member confirm they all read
+   `opts.get(<key>, DEFAULT_...)`, never direct indexing. (b) `grep -rn "\.data\[" custom_components/`
+   and a read of `adapters/factory.py`, `dashboard.py` and `__init__.py` confirm the same for the
+   **data** bucket, whose key set also narrows now: `ev_soc_entity`, `solar_forecast_entity`,
+   `departure_external_entity`, `car_home_entity` and `vehicle_charge_limit_entity` are each absent
+   whenever their capability or election was declared off. Together these verify project-plan C4's
+   integration checkpoint — "the entry C4 writes drives RA1's factory and the Store's data/options
+   reads on setup" — which the design's packaging note now depends on for both buckets.
 5. `SmartChargingConfigFlow.VERSION` is still `1`, and no migration was added (ADR-0025,
    Consequences).
-6. `git diff --stat origin/main` touches only the six files in the scope guard.
+6. `git diff --stat origin/main` touches only the **eight** files in the scope guard —
+   `config_flow.py`, `const.py`, `strings.json`, `translations/en.json`, `translations/nl.json`,
+   `tests/test_config_flow.py`, `tests/test_config_flow_translations.py` **and**
+   `tests/test_translations.py` (whose `test_every_config_flow_field_has_a_label` T12 removed as
+   superseded). Nothing else.
 7. Both forks the design doc raised (the prompt-timeout field; the solar form default) are reflected
    in the code exactly as the design doc's "Decisions on two forks" section states.
 

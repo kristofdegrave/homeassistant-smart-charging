@@ -20,8 +20,18 @@ call direction, or a stored key's home; it restructures the one existing Client
 (`custom_components/smart_charging/config_flow.py`) from one screen per flow into the capability-gated
 step sequence [UC12](../analysis/use-cases/UC12-configure-installation-through-guided-flow.md) and
 [R20](../analysis/requirements.md#r20--guided-installation-configuration) settled, using the
-mechanism [ADR-0025](../adl/0025-config-flow-branching-structure.md) chose. Every behavioural fact
+mechanism [ADR-0025](../adl/0025-config-flow-branching-structure.md) proposes. Every behavioural fact
 below is cited; none is decided here.
+
+**ADR gate.** The project-plan C4 entry quoted above says "**ADR gate:** none new" — that line is now
+**stale**, and this document is where the staleness is recorded rather than silently carried.
+Restructuring the flow *did* surface a structural decision, and it was opened as
+[ADR-0025](../adl/0025-config-flow-branching-structure.md), whose Status is still **Proposed**. So
+everywhere this document and its plan say "the mechanism ADR-0025 chose", read it as *the mechanism
+ADR-0025 proposes*: **ADR-0025 reaching Accepted is this slice's gate**, and no task below may be
+committed against a superseded or rejected ADR-0025. Correcting project-plan.md's own C4 line is a
+separate change to `docs/design/project-plan.md` and is deliberately not made here (this slice edits
+no design doc).
 
 **Sources of truth (cited, never restated as this document's own):**
 
@@ -103,10 +113,19 @@ point 3):
 | # | Step id | UC12 | Gate | Rendered |
 | --- | --- | --- | --- | --- |
 | — | `init` | — | framework entry point; renders no form of its own, dispatches into the table | — |
-| 1 | `solar` | step 3, threshold half | `entry.data[solar_available]` | threshold half only |
-| 2 | `captar` | step 4, threshold half | `entry.data[captar_available]` | threshold half only |
-| 3 | `deadline` | step 5, threshold half | `entry.data[deadline_available]` | threshold half only |
+| 1 | `solar` | step 3, threshold half | `entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)` (`False`) | threshold half only |
+| 2 | `captar` | step 4, threshold half | `entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE)` (`True`) | threshold half only |
+| 3 | `deadline` | step 5, threshold half | `entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE)` (`True`) | threshold half only |
 | 4 | `thresholds` | step 8 | always | ungated thresholds **+ the control interval** (UC12 1b) |
+
+**Every options-flow gate reads defensively, with the named default spelled out above — never
+`entry.data[<key>]`.** `deadline_available` is a *new* key this slice introduces (D-1), so every
+config entry written before this change lacks it entirely; bracket indexing would raise `KeyError`
+the first time an upgraded installation opens Configure, and a bare `.get(key)` would silently gate
+on `None`. The fallbacks are the module `DEFAULT_*` constants, so an entry that predates a key
+behaves exactly as a never-configured one would (Packaging and migration). Note that
+`DEFAULT_SOLAR_AVAILABLE` stays `False` here deliberately — see "Decisions on two forks" §2: the
+`True` default belongs to the *form*, the `False` constant to the *absent-key read*.
 
 There is deliberately **no** `vehicle_limit` row here: that step has no threshold fields of its own
 (UC12 1b).
@@ -134,7 +153,7 @@ class FlowStep:
     """One row of a flow's ordered, gated step table (ADR-0025, Option C)."""
 
     step_id: str
-    gate: Callable[[_TableWalkMixin], bool]
+    gate: Callable[[Any], bool]   # the flow handler: a config flow or an options flow
 
 
 class _TableWalkMixin:
@@ -150,7 +169,11 @@ class _TableWalkMixin:
 ```
 
 `gate` takes the flow handler rather than a dict so that one signature serves both tables: the config
-gates read `self._answers` and `self._mode`, the options gates read `self.config_entry.data`.
+gates read `self._answers` and `self._mode`, the options gates read `self.config_entry.data`. The
+annotation is deliberately *not* `Callable[[_TableWalkMixin], bool]`: `config_entry` lives on
+`OptionsFlow`, not on the mixin, so the narrower hint would make every options gate a type error.
+The handler is the union of "a config flow" and "an options flow", each of which also mixes in
+`_TableWalkMixin`; annotating the parameter as that permissive is the honest description.
 `_async_advance` scans the table from the row after `after` (or from the first row when `after is
 None`) and calls `getattr(self, f"async_step_{row.step_id}")()` with no `user_input`, which renders
 that step's form; when the table is exhausted it calls `self._async_finish()`. Every step method's
@@ -178,6 +201,20 @@ Lifetime and rules, per ADR-0025 point 2 and its Consequences:
 - Starts **empty** on every run. It is **never seeded from the existing entry** — reconfigure
   prefill is a *rendering-only* concern, done with
   `self.add_suggested_values_to_schema(<fragment>, entry.data)` at form-render time.
+  **The `core` step is the one exception to passing `entry.data` directly**: its fragment carries
+  `vehicle_limit_mapped`, which is transient (D-2) and therefore has no key in `entry.data` at all,
+  so passing `entry.data` unchanged would render that election unset on every reconfigure regardless
+  of whether a limit entity is in fact mapped. The core step's render passes an **augmented mapping**
+  instead:
+
+  ```python
+  self.add_suggested_values_to_schema(
+      CORE_MAPPING_SCHEMA,
+      entry.data | {CONF_VEHICLE_LIMIT_MAPPED: bool(entry.data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY))},
+  )
+  ```
+
+  Every other step passes `entry.data` as-is, because every field it presents *is* a stored key.
 - Each step merges its validated `user_input` into it and nothing else reads it mid-flow except the
   gates and the EV-SOC once-only rule.
 - Consumed exactly once, at `_async_finish`.
@@ -206,7 +243,7 @@ re-submits its **stored** value rather than the module default.
 | `deadline` (UC12 5) | `DEADLINE_MAPPING_SCHEMA` — `departure_external_entity` (optional) | `_deadline_threshold_schema(defaults)` — `reminder_lead_h` | none |
 | `vehicle_limit` (UC12 6) | `VEHICLE_LIMIT_MAPPING_SCHEMA` — `vehicle_charge_limit_entity` (`vol.Required`), `car_home_entity` | — | `_car_home_missing_error` |
 | `mappings` (UC12 7) | `UNGATED_MAPPING_SCHEMA` — `grid_voltage_entity`, `low_tariff_entity`, `notification_target_entity`, `ev_battery_capacity_entity`, `home_day_external_entity` (all optional) | — | none |
-| `thresholds` (UC12 8) | — | `_ungated_threshold_schema(defaults, include_interval: bool)` — `nominal_voltage`, `min_current`, `max_current`, `grid_ceiling_a`, `grid_safety_offset_a`, `smoothing_window`, `default_soc_limit`, `default_target_current`, `safety_margin_w`, `max_peak_kw`, `peak_grace_min`, `ev_battery_capacity_kwh`, `power_respect_peak`, `evening_prompt_enabled`, `evening_prompt_time`, `prompt_timeout_h` (see OQ-1), and `control_interval_s` **only when `include_interval`** (UC12 1b) | none |
+| `thresholds` (UC12 8) | — | `_ungated_threshold_schema(defaults, include_interval: bool)` — `nominal_voltage`, `min_current`, `max_current`, `grid_ceiling_a`, `grid_safety_offset_a`, `smoothing_window`, `default_soc_limit`, `default_target_current`, `safety_margin_w`, `max_peak_kw`, `peak_grace_min`, `ev_battery_capacity_kwh`, `power_respect_peak`, `evening_prompt_enabled`, `evening_prompt_time`, `prompt_timeout_h` (see "Decisions on two forks"), and `control_interval_s` **only when `include_interval`** (UC12 1b) | none |
 
 Every field above is placed by UC12's own step text; none is added or moved by this document. Note in
 particular that `grid_voltage_entity` moves from step 1's fragment to the ungated-mappings step (UC12
@@ -217,6 +254,12 @@ the CapTar capability (UC12 8a / R18 AC5 / R20 AC5).
 step renders: `include_ev_soc = CONF_EV_SOC_ENTITY not in self._answers`. Because the solar step
 always precedes the CapTar step in the table, this presents the field on the solar step when solar is
 declared and on the CapTar step otherwise, and never when neither is — exactly UC12 steps 3 and 4.
+
+`ev_soc_entity` is consequently the **one** field that is a member of two fragments
+(`_solar_mapping_schema(include_ev_soc=True)` and `_captar_mapping_schema(include_ev_soc=True)`),
+and that is deliberate: the once-only rule is enforced at **render time** by the `include_ev_soc`
+argument, not by fragment disjointness. Every other field belongs to exactly one fragment. The
+fragment-disjointness test (plan T1) carries an explicit `ev_soc_entity` carve-out for this reason.
 
 ### Guards (ADR-0025 point 1 and its Consequences)
 
@@ -258,6 +301,18 @@ Direct indexing raises `KeyError` the moment a solar-disabled install never rend
 `CONF_SOLAR_START_THRESHOLD_W` and friends are absent (ADR-0025, Consequences). The intersection is
 the whole fix; nothing else about the split moves.
 
+**In the options flow the intersection is *merged*, not written as the whole bucket.**
+`OptionsFlow.async_create_entry(data=...)` replaces `entry.options` wholesale, and after this slice
+the accumulator is deliberately narrower than the stored options: a capability withdrawn through
+reconfigure (UC12 1a) leaves its thresholds sitting in the options bucket by design — 1a changes only
+the data bucket — but its options step is then gated off by the stored flag, so none of its keys
+enter the next options run's accumulator. A replace-the-bucket write would silently delete the user's
+solar thresholds the first time they open Configure after withdrawing solar, and re-enabling solar
+later would seed from module defaults instead of their prior values. The terminal step therefore
+writes `{**self.config_entry.options, **intersection}`: this run's answers win for the keys it
+actually presented, and every key it did not present survives untouched. Pinned by a named test
+(plan T10).
+
 The transient `vehicle_limit_mapped` decision (see D-2) is popped from the accumulator immediately
 before the split, so `_split_data`'s exclusion tuple needs no new member and stays literally
 unchanged.
@@ -268,7 +323,7 @@ Per flow mode, `_async_finish` does:
 | --- | --- | --- |
 | install | `async_create_entry(title="Smart Charging", data=_split_data(answers), options=<intersection> \| {control_interval_s: DEFAULT})` | step 9 |
 | reconfigure | `async_update_reload_and_abort(entry, data=_split_data(answers))` — data bucket only, entry reloaded (ADR-0008) | 1a |
-| options | `async_create_entry(title="", data=<intersection, incl. control_interval_s>)` — options bucket only | 1b |
+| options | `async_create_entry(title="", data={**self.config_entry.options, **<intersection, incl. control_interval_s>})` — options bucket only, **merged** into the stored options, never replacing them | 1b |
 
 ---
 
@@ -289,6 +344,22 @@ catalog, not invented:
 | `DEFAULT_REMINDER_LEAD_H` | `8.0` | — | catalog default 8 h; R12 |
 | `CONF_PROMPT_TIMEOUT_H` | `"prompt_timeout_h"` | options | catalog *Reminders & prompts*; UC12 step 8 |
 | `DEFAULT_PROMPT_TIMEOUT_H` | `2.0` | — | catalog default 2 h |
+
+Four further `DEFAULT_*` constants are added at the same time — not because a field is new, but
+because four existing ungated thresholds are the only ones in `_threshold_schema()` whose fallback is
+a **bare numeric literal** rather than a named constant, and this slice is the one change that
+rewrites those very lines into `_ungated_threshold_schema()`. Leaving them as literals while moving
+them would carry a CLAUDE.md "no magic strings" violation across a rewrite. Names follow `const.py`'s
+existing `DEFAULT_<CONF suffix>` convention (`CONF_GRID_SAFETY_OFFSET_A` →
+`DEFAULT_GRID_SAFETY_OFFSET_A`); values are today's literals, unchanged, so this is a pure extraction
+with no behavioural effect:
+
+| Constant | Value | Extracted from |
+| --- | --- | --- |
+| `DEFAULT_MIN_CURRENT` | `6.0` | `_threshold_schema()`'s `d.get(CONF_MIN_CURRENT, 6.0)` |
+| `DEFAULT_MAX_CURRENT` | `16.0` | `d.get(CONF_MAX_CURRENT, 16.0)` |
+| `DEFAULT_GRID_CEILING_A` | `25.0` | `d.get(CONF_GRID_CEILING_A, 25.0)` |
+| `DEFAULT_DEFAULT_TARGET_CURRENT` | `10.0` | `d.get(CONF_DEFAULT_TARGET_CURRENT, 10.0)` |
 
 `CONF_REMINDER_LEAD_H` and `CONF_PROMPT_TIMEOUT_H` are appended to `OPTION_KEYS`;
 `CONF_DEADLINE_AVAILABLE` needs no list membership, since `_split_data` is an exclusion filter and
@@ -344,6 +415,16 @@ options-bucket data whose absent consumer is inert; and R20 AC5 carves out only 
 `CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H`, place it on the ungated-threshold fragment,
 store it in options where nothing reads it yet (T3).
 
+*Consequences of reversing that earlier decision, named rather than left to rot:* the explicit
+"deliberately NOT wired" comments in `const.py` (above `CONF_EVENING_PROMPT_ENABLED`) and in
+`config_flow.py` (inside `_threshold_schema()`) become **false the moment T3 lands** and are
+rewritten there — the field is now presented and stored; what remains true is only that no component
+*reads* it yet. And `docs/plans/2026-07-21-notifications-design.md` §3/§9 keeps a cross-reference
+that is now stale in the other direction: it states the field is not wired into the config flow, and
+after this slice it is. That document is **out of scope** here (this slice edits no other plan doc),
+so the divergence is recorded as deliberate and named, not silently left inconsistent; correcting
+§3/§9 belongs to its own change.
+
 **The solar capability's default — form defaults `True`, constant stays `False`.** R18 AC1 and R20
 AC1 both say the capability declarations default to **present**; the glossary's `solar_available`
 entry says "default present"; `entity-catalog.md`'s Capabilities table says "on (present)". `const.py`
@@ -376,16 +457,26 @@ fields it already owns.
 
 ## Testing approach (ADR-0009)
 
-**HA harness throughout.** The config flow is HA-coupled — `hass.config_entries.flow`,
+**HA harness for the flow itself.** The config flow is HA-coupled — `hass.config_entries.flow`,
 `FlowResultType`, `EntitySelector`, `MockConfigEntry` — so per ADR-0009 (and project-plan C4's own
-"Testable on its own: HA harness" line) every test in this slice lives in the harness modules:
+"Testable on its own: HA harness" line) every *behavioural* test in this slice lives in the harness
+module. Three test modules are touched:
 
-- `tests/test_config_flow.py` — restructured in place, keeping its existing shape (`USER_INPUT`
-  dict, `_run_user_flow`/`_create_entry` helpers, `tests/helpers.py`'s `entry_data_base` /
-  `entry_options_base`) but per-step. The existing single-submission helpers become a
-  `_run_install_flow(hass, *, capabilities, per_step_input)` driver that walks the steps.
-- `tests/test_config_flow_translations.py` — extended from error-code parity to **step and field**
-  parity (see plan T12).
+- `tests/test_config_flow.py` — **HA harness.** Restructured in place, keeping its existing shape
+  (`USER_INPUT` dict, `_run_user_flow`/`_create_entry` helpers, `tests/helpers.py`'s
+  `entry_data_base` / `entry_options_base`) but per-step. The existing single-submission helpers
+  become a `_run_install_flow(hass, *, capabilities, per_step_input)` driver that walks the steps.
+- `tests/test_config_flow_translations.py` — **plain pytest** (it imports only `json`, `pathlib` and
+  `const`), which is the correct boundary per ADR-0009 for a pure data-file parity check. Extended
+  from error-code parity to **step and field** parity (see plan T12).
+- `tests/test_translations.py` — **plain pytest**, and a module this slice *breaks* rather than
+  extends. It imports `USER_SCHEMA`, `MAPPING_SCHEMA` and `OPTION_KEYS` from `config_flow.py` and
+  asserts label parity against `config.step.user`, `config.step.reconfigure` and `options.step.init`
+   — the three blocks T12 deletes and the two schemas T13 deletes. Its
+  `test_every_config_flow_field_has_a_label` is therefore **superseded** by T12's dynamic step/field
+  parity test and is removed there; its `test_strings_json_and_en_json_are_identical`,
+  `test_nl_json_has_the_same_keys_as_en_json` and `test_every_entity_translation_key_has_a_name`
+  are unrelated to `config_flow.py` and are **kept unchanged**.
 
 A handful of assertions in T1 (schema fragments have exactly the keys UC12 lists) are pure and need
 no `hass` fixture; they live in the same harness module for cohesion with the flow they describe,
@@ -413,12 +504,18 @@ existing suite uses (`test_adr0005_user_flow_builds_translation_and_splits_bucke
 - **No config-entry `VERSION` bump and no migration.** Confirmed against ADR-0025's Consequences: no
   key changes name, type or bucket, so an entry written by the flat flow is read identically by the
   restructured one. `SmartChargingConfigFlow.VERSION` stays `1`.
-- **The key *set* narrows, and that is safe only because consumers read defensively.** A
+- **Both key *sets* narrow, and that is safe only because consumers read defensively.** A
   solar-disabled install now writes an options bucket with no solar threshold keys at all — a shape
-  the flat flow never produced. Every consumer already reads `opts.get(<key>, DEFAULT_...)` rather
-  than indexing, so an absent key resolves to its default exactly as a never-configured one would.
-  This property is pre-existing; this slice now *depends* on it, so the plan's completion check
-  re-verifies it by grep before the final commit.
+  the flat flow never produced. **The data bucket narrows too**, which is the half easiest to
+  overlook: `ev_soc_entity`, `solar_forecast_entity`, `departure_external_entity`, `car_home_entity`
+  and `vehicle_charge_limit_entity` are each absent whenever the capability or election that carries
+  them was declared off, so `adapters/factory.py`, `dashboard.py` and `__init__.py` must all read
+  `entry.data.get(<key>)`/`entry.data.get(<key>, DEFAULT_...)` rather than indexing. Every consumer
+  already reads that way, so an absent key resolves to its default exactly as a never-configured one
+  would. This property is pre-existing; this slice now *depends* on it for **both** buckets, so the
+  plan's completion check re-verifies both by grep before the final commit. This is exactly what
+  project-plan C4's integration checkpoint — "the entry C4 writes drives RA1's factory and the
+  Store's data/options reads on setup" — asks to be true.
 - **Entries created before this change may lack fields a step now presents as required**
   (`deadline_available`, `reminder_lead_h`). The reconfigure flow (UC12 1a) is the repair path; no
   automatic migration is introduced (ADR-0025, Consequences).
