@@ -116,6 +116,7 @@
           "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
           "evening_prompt_time": "Evening home-day prompt time",
+          "reminder_lead_h": "Plug-in reminder lead time (h)",
           "control_interval_s": "Control interval (s)"
         }
       }

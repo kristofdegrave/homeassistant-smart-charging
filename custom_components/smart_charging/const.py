@@ -204,6 +204,12 @@ CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
 CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
 # required when vehicle_charge_limit is mapped (design §9.1)
 CONF_CAR_HOME_ENTITY = "car_home_entity"
+# R18 deadline capability declaration (guided-config-flow design D-1; UC12 step 1).
+CONF_DEADLINE_AVAILABLE = "deadline_available"
+# Transient guided-config-flow election, not a persisted id (design D-2; entity-catalog.md has
+# no row for it) -- gates the vehicle-charge-limit step and is popped before the data/options
+# split, so it never reaches _split_data's output.
+CONF_VEHICLE_LIMIT_MAPPED = "vehicle_limit_mapped"
 
 # Config-flow error codes (config_flow.py's mapping-step guards). Values must match
 # strings.json/translations/en.json's config.error keys exactly --
@@ -250,7 +256,14 @@ CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-r
 # midnight is the only answer deadline (design doc §3/§9).
 CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
 CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
+# R12 plug-in reminder lead time (guided-config-flow design D-1; UC12 step 5). No component
+# reads this yet -- contract-first for the R12 plug-in-reminder slice (design, Deferrals).
+CONF_REMINDER_LEAD_H = "reminder_lead_h"
 
+DEFAULT_MIN_CURRENT = 6.0
+DEFAULT_MAX_CURRENT = 16.0
+DEFAULT_GRID_CEILING_A = 25.0
+DEFAULT_DEFAULT_TARGET_CURRENT = 10.0
 DEFAULT_GRID_SAFETY_OFFSET_A = 2.0
 DEFAULT_SMOOTHING_WINDOW = 4
 DEFAULT_SOLAR_START_THRESHOLD_W = 150.0
@@ -275,6 +288,20 @@ DEFAULT_SOLAR_RESERVE_SOC = 60.0
 DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
 DEFAULT_EVENING_PROMPT_ENABLED = True
 DEFAULT_EVENING_PROMPT_TIME = "18:00:00"
+DEFAULT_REMINDER_LEAD_H = 8.0
+# R18 deadline capability, absent-key read fallback -- catalog "on (present)" (design D-1).
+DEFAULT_DEADLINE_AVAILABLE = True
 
 SOC_LIMIT_OVERRIDE_MIN = 50.0  # percent (R6) -- shared by number.py's own bounds and the
 SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (single source)
+
+# Guided-config-flow step ids (ADR-0025, design D-5) -- shared by config_flow.py's two step
+# tables and the translation-parity test. Only `async_step_user`/`async_step_reconfigure`/
+# `async_step_init` are framework-imposed names (ADR-0025 point 4) and are not listed here.
+STEP_CORE = "core"
+STEP_SOLAR = "solar"
+STEP_CAPTAR = "captar"
+STEP_DEADLINE = "deadline"
+STEP_VEHICLE_LIMIT = "vehicle_limit"
+STEP_MAPPINGS = "mappings"
+STEP_THRESHOLDS = "thresholds"
