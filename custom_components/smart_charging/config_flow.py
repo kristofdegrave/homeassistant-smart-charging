@@ -334,13 +334,14 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 # async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
 #
 # T3's known temporary gap (a default-accepting install rejected at the thresholds step for a
-# missing ev_soc_entity mapping with no step to answer it on) is fully closed as of this task.
-# T4 gave ev_soc_entity a place to be answered whenever solar is declared (its form default is
-# True); T5 does the same for captar (also True by default): whichever of the two capabilities
-# is declared, its own step now asks for ev_soc_entity and re-shows itself with a field-local
+# missing ev_soc_entity mapping with no step to answer it on) was fully closed by T5. T4 gave
+# ev_soc_entity a place to be answered whenever solar is declared (its form default is True);
+# T5 does the same for captar (also True by default): whichever of the two capabilities is
+# declared, its own step now asks for ev_soc_entity and re-shows itself with a field-local
 # error on a missing mapping, rather than falling through to the thresholds-step safety net
 # with no field left to answer it on. That safety net (`_mapping_errors` at the thresholds
-# step) now only remains load-bearing for the still-unsplit vehicle-limit guard (T7).
+# step) is retained for T7's still-unsplit vehicle-limit guard, but cannot fire on any current
+# install path (see `async_step_thresholds`'s own docstring).
 
 
 class FlowMode(StrEnum):
@@ -426,17 +427,22 @@ UC12_FIXED_STEP_ORDER = (
 
 # Populated incrementally -- see the module comment above. T3 added the two ungated rows
 # (`mappings`/`thresholds`, UC12 steps 7/8), needing no capability to be reached. T4 added
-# `solar`, gated on this run's own CONF_SOLAR_AVAILABLE answer. T5 adds `captar`, gated the
+# `solar`, gated on this run's own CONF_SOLAR_AVAILABLE answer. T5 added `captar`, gated the
 # same way on CONF_CAPTAR_AVAILABLE, placed after `solar` -- UC12's fixed order is what makes
-# `async_step_captar`'s `include_ev_soc` expression correct (see its docstring). Both
+# `async_step_captar`'s `include_ev_soc` expression correct (see its docstring). T6 adds
+# `deadline`, gated the same way on CONF_DEADLINE_AVAILABLE -- unlike solar/captar it carries
+# no step-local guard (UC12 marks neither of its fields required, R18 AC7). All three
 # capability flags are always present in self._answers by the time any gate runs
-# (CORE_MAPPING_SCHEMA marks both vol.Required). `deadline`/`vehicle_limit` (T6-T7) still
-# have no method, so their rows wait.
+# (CORE_MAPPING_SCHEMA marks each vol.Required). `vehicle_limit` (T7) still has no method, so
+# its row waits.
 # `thresholds` is additionally gated off for reconfigure (UC12 1a, design "Step ids" table row
 # 6) -- moot until T9 wires async_step_reconfigure into this table, but correct now.
 CONFIG_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
     FlowStep(step_id=STEP_CAPTAR, gate=lambda flow: bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))),
+    FlowStep(
+        step_id=STEP_DEADLINE, gate=lambda flow: bool(flow._answers.get(CONF_DEADLINE_AVAILABLE))
+    ),
     FlowStep(step_id=STEP_MAPPINGS, gate=lambda flow: True),
     FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
 )
@@ -804,6 +810,20 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_CAPTAR)
+
+    async def async_step_deadline(self, user_input=None):
+        """UC12 step 5: the departure-time mapping + reminder-lead threshold, gated on
+        deadline declared this run (design, "Schema fragments"). No step-local guard: UC12
+        marks neither field required (R18 AC7) -- unlike the solar/captar steps, a submission
+        here always advances."""
+        schema = DEADLINE_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_deadline_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_DEADLINE, data_schema=schema)
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_DEADLINE)
 
     async def async_step_mappings(self, user_input=None):
         """UC12 step 7: the ungated entity-role mappings (design, "Schema fragments")."""
