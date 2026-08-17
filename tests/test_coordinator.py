@@ -2140,7 +2140,12 @@ async def test_manual_profile_solar_only_baseline_dry_run(hass, freezer):
 
 async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freezer):
     """R5/C3 row 1: urgency raises the effective peak limit to max_peak_kw, above the
-    monthly-tracked peak it would otherwise be capped to."""
+    monthly-tracked peak it would otherwise be capped to. Also asserts commanded_current
+    (issue #719's code-reviewer finding): row 2 alone (1.0 kW) would leave so little headroom
+    at 0 W baseline that the R3 breach timer clamps the 16 A target down to min_a=6.0 on its
+    first grace-period cycle, whereas the urgency-raised 10.0 kW limit has ample headroom for
+    the full 16 A -- a discriminating check that `_apply_peak_clamp` reads the real
+    (post-urgency) `ctx.effective_peak_limit_kw`, not a stale/provisional one."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
@@ -2150,6 +2155,7 @@ async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freez
     )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
+    coord.target_current = config.max_current
     coord.soc_limit_override = 80.0
     _seed_today_deadline(coord, hours_from_now=1)
     _seed_ample_peak_headroom(coord, kw=1.0)  # well below max_peak_kw -- row 2 alone would apply
@@ -2158,6 +2164,7 @@ async def test_effective_peak_limit_raises_to_maximum_during_urgency(hass, freez
 
     assert coord._required_current.urgent is True
     assert result.effective_peak_limit_kw == 10.0
+    assert result.commanded_current == config.max_current
 
 
 async def test_effective_peak_limit_resolves_normally_once_urgency_reverts(hass, freezer):
