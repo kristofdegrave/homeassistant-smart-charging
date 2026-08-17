@@ -71,6 +71,71 @@ def test_compare_flags_regression_beyond_tolerance(tmp_path):
     assert not any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
 
 
+def test_compare_flags_regression_for_a_negative_baseline(tmp_path):
+    """Guards the abs(base_value) sign fix -- signed division would compute
+    (-50 - -100) / -100 * 100 = -50% (a false "improvement"), never REGRESSED."""
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "coordinator_cycle": {
+                    "median_cpu_ms": 10.0,
+                    "median_rss_delta_kb": -100.0,
+                    "median_peak_traced_memory_kb": 1000.0,
+                    "recorded_at": "2026-08-17",
+                }
+            }
+        )
+    )
+    results_path = tmp_path / "coordinator_cycle.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "median_cpu_ms": 10.0,
+                "median_rss_delta_kb": -50.0,
+                "median_peak_traced_memory_kb": 1000.0,
+            }
+        )
+    )
+
+    rows = compare(str(results_path), str(baseline_path))
+
+    assert any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
+
+
+def test_compare_tolerance_boundary(tmp_path):
+    """Pins _TOLERANCE_PCT=25.0 and its `>` (not `>=`) boundary -- exactly +25% stays ok,
+    a hair over regresses."""
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "coordinator_cycle": {
+                    "median_cpu_ms": 100.0,
+                    "median_rss_delta_kb": 100.0,
+                    "median_peak_traced_memory_kb": 1000.0,
+                    "recorded_at": "2026-08-17",
+                }
+            }
+        )
+    )
+    results_path = tmp_path / "coordinator_cycle.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "median_cpu_ms": 125.0,  # exactly +25% -- at tolerance, not beyond it
+                "median_rss_delta_kb": 125.1,  # a hair over +25%
+                "median_peak_traced_memory_kb": 1000.0,
+            }
+        )
+    )
+
+    rows = compare(str(results_path), str(baseline_path))
+
+    assert not any("median_cpu_ms" in row and "REGRESSED" in row for row in rows)
+    assert any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
+
+
 def test_compare_reports_missing_results_file_without_raising(tmp_path):
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text(
