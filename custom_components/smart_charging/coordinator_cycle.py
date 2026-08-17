@@ -46,19 +46,18 @@ class CycleContext:
     loose local variables ADR-0012 flagged. Filled progressively as steps resolve each value --
     not everything is known at construction time.
 
-    issue #719: `net_w`/`charger_w`/`effective_peak_limit_kw` are each read by exactly one
-    consumer downstream (the two clamps, via `_apply_peak_clamp`/`_apply_grid_ceiling_clamp`
-    below) -- there is no second, separately-passed copy of any of them for `_run_cycle` to
-    keep in lockstep. `now_dt`/`monthly_peak_kw`/`urgent` used to be fields here too, assigned
-    every cycle but read by no production consumer (only by this module's own tests); removed
-    outright rather than left as dead state for a hypothetical future reader -- a future
-    ModeHandler or clamp that genuinely needs one adds it back as a real, consumed field, not a
-    speculative one."""
+    issue #719: `net_w`/`charger_w`/`voltage`/`now` are each read by both of coordinator.py's
+    two clamps (`_apply_peak_clamp`/`_apply_grid_ceiling_clamp`), off this same ctx rather than
+    as a second, separately-passed copy for `_run_cycle` to keep in lockstep;
+    `effective_peak_limit_kw` is read by `_apply_peak_clamp` alone. `now_dt`/`monthly_peak_kw`/
+    `urgent` used to be fields here too, assigned every cycle but read by no production
+    consumer (only by this module's own tests) -- removed rather than left as dead state; a
+    future consumer that genuinely needs one adds it back for real, not speculatively."""
 
     status: str
     net_w: float  # raw, not the smoothed reading (coordinator.py's separate smoothed_net_w) --
-    # read by the two clamps below, off this same ctx (issue #719)
-    charger_w: float  # read by the two clamps below, off this same ctx (issue #719)
+    # read by coordinator.py's two clamps, off this same ctx (issue #719)
+    charger_w: float  # read by coordinator.py's two clamps, off this same ctx (issue #719)
     voltage: float
     now: float
     ev_soc: float | None = None
