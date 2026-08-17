@@ -820,12 +820,14 @@ async def test_adapter_readings_caches_deadline_and_reserve_block_reads(hass):
     adapters[ROLE_DEPARTURE_EXTERNAL] = _FakeNumeric(time_of_day(20, 0))
     adapters[ROLE_LOW_TARIFF] = _FakeNumeric(True)
     adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(15.0)
+    adapters[ROLE_EV_BATTERY_CAPACITY] = _FakeNumeric(60.0)
     _coord, result = await _run(hass, adapters, _config(), target=8.0)
 
     assert result.adapter_readings[ROLE_DEPARTURE_EXTERNAL] == time_of_day(20, 0)
     assert result.adapter_readings[ROLE_SUN] == SUN_STATE_ABOVE_HORIZON
     assert result.adapter_readings[ROLE_LOW_TARIFF] is True
     assert result.adapter_readings[ROLE_SOLAR_FORECAST] == 15.0
+    assert result.adapter_readings[ROLE_EV_BATTERY_CAPACITY] == 60.0
 
 
 async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):

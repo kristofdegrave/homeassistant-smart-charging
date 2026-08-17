@@ -228,8 +228,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     async def _read_role(self, role: str) -> Any:
         """ADR-0021: the one guarded optional-role read -- `role not in self._adapters` returns
         None without reading, otherwise reads and mirrors the value into `_role_readings` in the
-        same place. Replaces 7 hand-written copies of this exact if-guard/read/cache shape (issue
-        #717); a prior extraction (ADR-0023, see the comment on `_resolve_deadline_and_reserve`)
+        same place. Replaces every guarded optional-role read's hand-written if-guard/read/cache
+        shape (issue #717); a prior extraction (ADR-0023, see the comment on
+        `_resolve_deadline_and_reserve`)
         had silently dropped four of those copies' cache writes, which this single call site
         makes structurally impossible to drop again. Only for optional roles -- the three
         required reads in `_read_cycle_inputs` below have no `in self._adapters` guard at all
@@ -246,9 +247,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         required adapter; _run_cycle performs the actual fault CycleResult itself, keeping
         ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
         extracted methods (ADR-0023). Also caches each read role's value into
-        `self._role_readings` (ADR-0021) -- `_run_cycle` decides whether to advance
-        `self._role_readings_at`, since that depends on whether this cycle succeeded as a
-        whole (the required-adapter read succeeding is necessary but not sufficient, #648)."""
+        `self._role_readings` (ADR-0021) -- the three required reads cache directly here,
+        grid voltage's optional read caches inside `_read_role` (issue #717). `_run_cycle`
+        decides whether to advance `self._role_readings_at`, since that depends on whether
+        this cycle succeeded as a whole (the required-adapter read succeeding is necessary
+        but not sufficient, #648)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -283,6 +286,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         read -- so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/ROLE_SOLAR_FORECAST keep
         reporting their real reads in `sensor.smart_charging_adapter_readings` instead of a
         stale/None value forever."""
+        # Computed separately from the _read_role call below, not redundant with it:
+        # resolve_deadline_for's `external_configured` param needs "role configured" as its
+        # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
+        # None return can't carry.
         external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
         external = await self._read_role(ROLE_DEPARTURE_EXTERNAL)
         sun_reading = await self._read_role(ROLE_SUN)
