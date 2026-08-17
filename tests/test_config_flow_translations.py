@@ -103,10 +103,23 @@ OPTIONS_STEP_FIELDS = {
     cf.STEP_SOLAR: _keys(cf._solar_threshold_schema()),
     cf.STEP_CAPTAR: _keys(cf._captar_threshold_schema()),
     cf.STEP_DEADLINE: _keys(cf._deadline_threshold_schema()),
-    cf.STEP_THRESHOLDS: (
-        _keys(cf._ungated_threshold_schema(include_interval=False)) | {cf.CONF_CONTROL_INTERVAL_S}
-    ),
+    cf.STEP_THRESHOLDS: _keys(cf._ungated_threshold_schema(include_interval=True)),
 }
+
+# Anti-vacuity guards (matching test_emitted_error_codes_is_non_empty's own rationale above):
+# a step added to a table without a matching CONFIG_STEP_FIELDS/OPTIONS_STEP_FIELDS entry
+# would otherwise silently escape field parity checking in both directions.
+assert set(CONFIG_STEP_FIELDS) == CONFIG_STEP_IDS
+assert set(OPTIONS_STEP_FIELDS) == OPTIONS_STEP_IDS
+
+
+def _assert_title_and_description(relative_path, section, step_id, block):
+    """Every step block must actually be user-facing -- a block with only a `data` object
+    (no title/description) would pass every field-parity check below and still render blank."""
+    assert block.get("title"), f"{relative_path}'s {section}.step.{step_id} has no title"
+    assert block.get("description"), (
+        f"{relative_path}'s {section}.step.{step_id} has no description"
+    )
 
 
 @pytest.mark.parametrize("relative_path", _CHECKED_FILES)
@@ -116,6 +129,8 @@ def test_every_config_step_has_a_strings_block(relative_path):
     blocks = _load(relative_path)["config"]["step"]
     missing = CONFIG_STEP_IDS - set(blocks)
     assert not missing, f"{relative_path}'s config.step is missing blocks for {missing}"
+    for step_id in CONFIG_STEP_IDS:
+        _assert_title_and_description(relative_path, "config", step_id, blocks[step_id])
 
 
 @pytest.mark.parametrize("relative_path", _CHECKED_FILES)
@@ -123,6 +138,8 @@ def test_every_options_step_has_a_strings_block(relative_path):
     blocks = _load(relative_path)["options"]["step"]
     missing = OPTIONS_STEP_IDS - set(blocks)
     assert not missing, f"{relative_path}'s options.step is missing blocks for {missing}"
+    for step_id in OPTIONS_STEP_IDS:
+        _assert_title_and_description(relative_path, "options", step_id, blocks[step_id])
 
 
 @pytest.mark.parametrize("relative_path", _CHECKED_FILES)

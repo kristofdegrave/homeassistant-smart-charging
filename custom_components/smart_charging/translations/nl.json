@@ -19,7 +19,7 @@
       },
       "solar": {
         "title": "Zon",
-        "description": "Koppel de entiteiten die Zon-modus gebruikt, en stel de drempelwaarden in.",
+        "description": "Koppel de entiteiten die Zon-modus gebruikt.",
         "data": {
           "ev_soc_entity": "EV-laadniveau-entiteit",
           "solar_forecast_entity": "Zonneprognose-entiteit",
@@ -38,7 +38,7 @@
       },
       "captar": {
         "title": "CapTar",
-        "description": "Koppel de entiteiten die CapTar's piekbeperking gebruikt, en stel de afkoelduur in.",
+        "description": "Koppel de entiteiten die CapTar's piekbeperking gebruikt.",
         "data": {
           "ev_soc_entity": "EV-laadniveau-entiteit",
           "captar_cooldown_min": "Afkoelduur Captar (min)"
@@ -46,7 +46,7 @@
       },
       "deadline": {
         "title": "Vertrekdeadline",
-        "description": "Koppel de externe vertrektijd-entiteit die voor de deadline wordt gebruikt, en stel de voorlooptijd van de oplaadherinnering in.",
+        "description": "Koppel de externe vertrektijd-entiteit die voor de deadline wordt gebruikt.",
         "data": {
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
           "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)"
@@ -54,7 +54,7 @@
       },
       "vehicle_limit": {
         "title": "Laadlimiet voertuig",
-        "description": "Koppel de laadlimiet-regeling van het voertuig en de aanwezigheidsentiteit auto-thuis die deze gate.",
+        "description": "Koppel de laadlimiet-regeling van het voertuig en de aanwezigheidsentiteit auto-thuis die dit beperkt.",
         "data": {
           "vehicle_charge_limit_entity": "Laadlimiet-regelentiteit voertuig",
           "car_home_entity": "Aanwezigheidsentiteit auto-thuis"

@@ -1,11 +1,17 @@
 """strings.json/translations completeness guard (T6.3).
 
 Plain pytest, no HA harness needed (ADR-0009) -- these are pure data-file checks, plus
-introspection of the voluptuous schemas and the entities' own `_attr_translation_key`
-literals. Catches the two regression classes that `python -m script.hassfest` (a
-strings.json *schema* check, run only as a GitHub Action) does not: (1) a config-flow
-field with no label in one or more of strings.json/en.json/nl.json, and (2) an entity
-`_attr_translation_key` with no matching `entity.<platform>.<key>.name`.
+introspection of the entities' own `_attr_translation_key` literals. Catches two regression
+classes that `python -m script.hassfest` (a strings.json *schema* check, run only as a GitHub
+Action) does not: (1) strings.json/en.json/nl.json drifting apart (missing keys or a
+non-identical English copy), and (2) an entity `_attr_translation_key` with no matching
+`entity.<platform>.<key>.name`.
+
+Config-flow step/field label parity (the config-flow-specific regression class this module
+used to also cover) now lives in tests/test_config_flow_translations.py instead (plan T12) --
+its dynamic per-step-id parity checks, discovered from config_flow.py's own tables and schema
+fragments, superseded this module's single hardcoded test against the three flat blocks
+(config.step.user/reconfigure, options.step.init) the guided config flow's tables replaced.
 """
 
 from __future__ import annotations
@@ -48,12 +54,8 @@ def test_nl_json_has_the_same_keys_as_en_json():
     assert en_keys == nl_keys
 
 
-# test_every_config_flow_field_has_a_label (checked config.step.user/reconfigure and
-# options.step.init, the three blocks the guided config flow's own tables replace) is
-# superseded by tests/test_config_flow_translations.py's dynamic step/field parity checks
-# (plan T12), which cover strictly more -- per step, both config and options sections, both
-# "missing" and "orphaned" directions -- and discover the step set from the tables instead of
-# naming three now-deleted hardcoded blocks. Removed here rather than updated in place.
+# test_every_config_flow_field_has_a_label is removed here, not updated in place -- see the
+# module docstring above for why (superseded by test_config_flow_translations.py, plan T12).
 
 
 def test_every_entity_translation_key_has_a_name():

@@ -19,7 +19,7 @@
       },
       "solar": {
         "title": "Solar",
-        "description": "Map the entities Solar mode reads, and tune its thresholds.",
+        "description": "Map the entities Solar mode reads.",
         "data": {
           "ev_soc_entity": "EV state-of-charge entity",
           "solar_forecast_entity": "Solar forecast entity",
@@ -38,7 +38,7 @@
       },
       "captar": {
         "title": "CapTar",
-        "description": "Map the entities CapTar's peak-shaving reads, and tune its cooldown.",
+        "description": "Map the entities CapTar's peak-shaving reads.",
         "data": {
           "ev_soc_entity": "EV state-of-charge entity",
           "captar_cooldown_min": "Captar cooldown duration (min)"
@@ -46,7 +46,7 @@
       },
       "deadline": {
         "title": "Departure deadline",
-        "description": "Map the departure-time entity used to track a deadline, and set the plug-in reminder lead time.",
+        "description": "Map the departure-time entity used to track a deadline.",
         "data": {
           "departure_external_entity": "External departure-time entity (optional)",
           "reminder_lead_h": "Plug-in reminder lead time (h)"
