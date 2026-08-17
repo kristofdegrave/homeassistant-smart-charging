@@ -1664,6 +1664,16 @@ def test_mapping_errors_combiner_is_deleted():
     assert not hasattr(config_flow_module, "_mapping_errors")
 
 
+def test_flat_flow_schema_surface_is_deleted():
+    """T13's own removal guard, same rationale as test_mapping_errors_combiner_is_deleted above:
+    every install/reconfigure/options path now runs through CONFIG_TABLE/OPTIONS_TABLE, so no
+    end-to-end flow test can discriminate MAPPING_SCHEMA/_threshold_schema/USER_SCHEMA ever
+    being reintroduced -- only a direct structural check pins the deletion."""
+    assert not hasattr(config_flow_module, "MAPPING_SCHEMA")
+    assert not hasattr(config_flow_module, "_threshold_schema")
+    assert not hasattr(config_flow_module, "USER_SCHEMA")
+
+
 async def test_all_capabilities_and_vehicle_limit_declared_install_completes(hass):
     """Happy-path integration coverage (not a removal regression guard -- see
     test_mapping_errors_combiner_is_deleted for that): every capability/election declared and
@@ -2063,6 +2073,8 @@ async def test_adr0025_options_accumulator_starts_empty_on_a_second_run(hass):
 
 # --- T13: extensibility guard. ---
 
+_STEP_SYNTHETIC = "synthetic"
+
 
 async def test_r20_ac9_a_new_capability_is_one_table_row_and_one_step_method(hass, monkeypatch):
     """R20 AC9 / UC12 postcondition 5: insert a synthetic gated row after the deadline row and
@@ -2076,12 +2088,12 @@ async def test_r20_ac9_a_new_capability_is_one_table_row_and_one_step_method(has
     side of the insertion point actually renders, and never completes any flow to
     CREATE_ENTRY (ADR-0013 allows only one entry per hass, and this test drives several) --
     each drive stops and aborts the moment it reaches the thresholds step."""
-    STEP_SYNTHETIC = "synthetic"
     core_overrides = {CONF_DEADLINE_AVAILABLE: True, CONF_VEHICLE_LIMIT_MAPPED: True}
 
     async def _trace():
         """Drive an install flow (deadline + vehicle_limit both declared), recording each
-        FORM's (step_id, sorted schema key set) up to but not including thresholds."""
+        FORM's (step_id, sorted schema key set) including the terminal thresholds FORM, then
+        abort -- never CREATE_ENTRY (ADR-0013 permits only one entry per hass)."""
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -2092,6 +2104,7 @@ async def test_r20_ac9_a_new_capability_is_one_table_row_and_one_step_method(has
             if result["type"] == FlowResultType.FORM:
                 trace.append((result["step_id"], sorted(_keys(result["data_schema"]))))
             submission = _INSTALL_STEP_BASES.get(result.get("step_id"), {})
+        assert result["type"] == FlowResultType.FORM, "drive ended without reaching thresholds"
         hass.config_entries.flow.async_abort(result["flow_id"])
         return trace
 
@@ -2101,43 +2114,42 @@ async def test_r20_ac9_a_new_capability_is_one_table_row_and_one_step_method(has
 
     async def async_step_synthetic(self, user_input=None):
         if user_input is None:
-            return self.async_show_form(step_id=STEP_SYNTHETIC, data_schema=vol.Schema({}))
+            return self.async_show_form(step_id=_STEP_SYNTHETIC, data_schema=vol.Schema({}))
         self._answers.update(user_input)
-        return await self._async_advance(after=STEP_SYNTHETIC)
+        return await self._async_advance(after=_STEP_SYNTHETIC)
 
     monkeypatch.setattr(
-        config_flow_module.SmartChargingConfigFlow,
-        "async_step_synthetic",
-        async_step_synthetic,
-        raising=False,
+        SmartChargingConfigFlow, "async_step_synthetic", async_step_synthetic, raising=False
     )
 
-    deadline_index = next(
-        i for i, row in enumerate(config_flow_module.CONFIG_TABLE) if row.step_id == STEP_DEADLINE
-    )
-    gate_passes = False
-    synthetic_table = (
-        *config_flow_module.CONFIG_TABLE[: deadline_index + 1],
-        config_flow_module.FlowStep(step_id=STEP_SYNTHETIC, gate=lambda flow: gate_passes),
-        *config_flow_module.CONFIG_TABLE[deadline_index + 1 :],
-    )
-    monkeypatch.setattr(config_flow_module.SmartChargingConfigFlow, "_table", synthetic_table)
+    deadline_index = next(i for i, row in enumerate(CONFIG_TABLE) if row.step_id == STEP_DEADLINE)
+
+    def _table_with_synthetic(gate):
+        return (
+            *CONFIG_TABLE[: deadline_index + 1],
+            FlowStep(step_id=_STEP_SYNTHETIC, gate=gate),
+            *CONFIG_TABLE[deadline_index + 1 :],
+        )
 
     # (b) the gate fails -> the synthetic step is skipped entirely, and (c) every other step's
     # sequence and field set is byte-for-byte what it was before the row was ever inserted.
-    gate_passes = False
+    monkeypatch.setattr(
+        SmartChargingConfigFlow, "_table", _table_with_synthetic(gate=lambda flow: False)
+    )
     assert await _trace() == before_trace
 
     # (a) the gate passes -> visited exactly where inserted: right after deadline, right
     # before vehicle_limit. Built by splicing the untouched "before" trace, not re-asserting
     # the position as a separate hardcoded index.
-    gate_passes = True
+    monkeypatch.setattr(
+        SmartChargingConfigFlow, "_table", _table_with_synthetic(gate=lambda flow: True)
+    )
     deadline_position = next(
         i for i, (step_id, _) in enumerate(before_trace) if step_id == STEP_DEADLINE
     )
     expected_with_synthetic = (
         before_trace[: deadline_position + 1]
-        + [(STEP_SYNTHETIC, [])]
+        + [(_STEP_SYNTHETIC, [])]
         + before_trace[deadline_position + 1 :]
     )
     assert await _trace() == expected_with_synthetic

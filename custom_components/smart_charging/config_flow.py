@@ -170,26 +170,20 @@ def _entity(domain: str | list[str] | None = None):
 
 
 # --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
-# SmartChargingConfigFlow starts wiring into this from T3 onward (SmartChargingOptionsFlow
-# from T10). CONFIG_TABLE/OPTIONS_TABLE below are populated incrementally, one task at a time
-# (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully per the design doc's end-state
-# Structure section: no step method exists yet for most rows, and a row with no matching
-# method would strand the flow the moment its gate passed (ADR-0025's stated Con) --
-# concretely, a full CONFIG_TABLE at T3 would AttributeError on every default install, since
-# DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the captar row before
-# async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
+# SmartChargingConfigFlow's own table is CONFIG_TABLE, SmartChargingOptionsFlow's is
+# OPTIONS_TABLE (both below); both are now complete, with a step method for every row (T3-T13).
 #
-# T3's known temporary gap (a default-accepting install rejected at the thresholds step for a
-# missing ev_soc_entity mapping with no step to answer it on) was fully closed by T5, once both
-# the solar and captar steps existed to give ev_soc_entity somewhere to be answered. T7
-# finishes the job: with the vehicle_limit step now giving `_car_home_missing_error` its own
-# step-local home too, all three guards `_mapping_errors` used to combine are step-local, so
-# the thresholds-step safety net and `_mapping_errors` itself are both deleted outright
-# (ADR-0025, Consequences: the combiner has no *guided-flow step* left that needs all three).
-# T9 migrates `async_step_reconfigure` onto this same table (ADR-0025 point 4): it now
-# delegates into the shared `core` step instead of running its own flat form, so every guard
-# above already covers reconfigure too -- there is no longer a separate three-guard combine to
-# keep in sync with the guided flow's own.
+# Historical note on the guard consolidation this replaced: the flat flow's `_mapping_errors`
+# combined three guards (solar's/captar's shared ev_soc_entity requirement and vehicle_limit's
+# car_home_entity requirement) at a single thresholds-step safety net, because none of those
+# three had a step of its own to answer on. T5 gave solar/captar that step-local home for
+# ev_soc_entity; T7 gave vehicle_limit the same for car_home_entity via `_car_home_missing_error`
+# -- with all three guards step-local, the thresholds-step combiner and `_mapping_errors` itself
+# were deleted outright (ADR-0025, Consequences: the combiner has no *guided-flow step* left that
+# needs all three). T9 migrated `async_step_reconfigure` onto this same table (ADR-0025 point 4):
+# it now delegates into the shared `core` step instead of running its own flat form, so every
+# guard above already covers reconfigure too -- there is no longer a separate three-guard combine
+# to keep in sync with the guided flow's own.
 
 
 class FlowMode(StrEnum):
@@ -336,8 +330,8 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
 # The flat flow's own MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA (and _mapping_errors,
-# gone since T7) are deleted as of T13 -- every path now runs through the tables below. These
-# fragments are the guided flow's own.
+# gone since T7) are deleted as of T13 -- every path now runs through CONFIG_TABLE/OPTIONS_TABLE
+# above. These fragments are the guided flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
