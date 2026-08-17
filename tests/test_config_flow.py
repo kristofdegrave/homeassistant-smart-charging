@@ -1,5 +1,7 @@
 """HA-harness config-flow tests (ADR-0005)."""
 
+import itertools
+
 import pytest
 import voluptuous as vol
 from homeassistant import config_entries
@@ -1519,6 +1521,73 @@ async def test_all_capabilities_and_vehicle_limit_declared_install_completes(has
         },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+# --- T8: traversal matrix -- every enablement combination, in UC12's order. ---
+# Test-only task (plan T8): no production code. If a combination below fails, the fix belongs
+# to the step task that owns the offending step, not here.
+
+
+@pytest.mark.parametrize(
+    "solar,captar,deadline,vehicle", list(itertools.product([True, False], repeat=4))
+)
+async def test_uc12_step2_traversal_visits_exactly_the_prescribed_steps_in_order(
+    hass, solar, captar, deadline, vehicle
+):
+    """UC12 step 2 + 2a / R20 AC2 + AC3: the visited step ids are exactly
+    [core] + [solar if solar] + [captar if captar] + [deadline if deadline]
+    + [vehicle_limit if vehicle] + [mappings, thresholds] -- order included. Asserted as
+    equality, not "contains", so both a skipped and an extra step fail."""
+    step_inputs = {
+        STEP_CORE: {
+            **CORE_INPUT,
+            CONF_SOLAR_AVAILABLE: solar,
+            CONF_CAPTAR_AVAILABLE: captar,
+            CONF_DEADLINE_AVAILABLE: deadline,
+            CONF_VEHICLE_LIMIT_MAPPED: vehicle,
+        },
+        STEP_SOLAR: SOLAR_INPUT,
+        # R20 AC4's once-only rule: omit ev_soc here when solar already collected it, or the
+        # captar step's schema (which then excludes the field) rejects it as an unknown key.
+        STEP_CAPTAR: {} if solar else CAPTAR_INPUT,
+        STEP_DEADLINE: DEADLINE_INPUT,
+        STEP_VEHICLE_LIMIT: VEHICLE_LIMIT_INPUT,
+        STEP_MAPPINGS: MAPPINGS_INPUT,
+        STEP_THRESHOLDS: THRESHOLDS_INPUT,
+    }
+    expected_steps = (
+        [STEP_CORE]
+        + ([STEP_SOLAR] if solar else [])
+        + ([STEP_CAPTAR] if captar else [])
+        + ([STEP_DEADLINE] if deadline else [])
+        + ([STEP_VEHICLE_LIMIT] if vehicle else [])
+        + [STEP_MAPPINGS, STEP_THRESHOLDS]
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    visited = [result["step_id"]]
+    while result["type"] == FlowResultType.FORM:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], step_inputs[result["step_id"]]
+        )
+        if result["type"] == FlowResultType.FORM:
+            visited.append(result["step_id"])
+
+    assert visited == expected_steps
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+    # Design doc, "Safety caveat": the grid-safety threshold group is on an ungated step, so it
+    # is present in every combination's options regardless of any capability answer.
+    for key in (
+        CONF_NOMINAL_VOLTAGE,
+        CONF_MIN_CURRENT,
+        CONF_MAX_CURRENT,
+        CONF_GRID_CEILING_A,
+        CONF_GRID_SAFETY_OFFSET_A,
+    ):
+        assert key in result["options"]
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
