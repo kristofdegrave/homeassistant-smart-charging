@@ -1,6 +1,7 @@
 # Pinned after first resolve (Task 0.1). homeassistant and
 # pytest-homeassistant-custom-component must stay compatible — phcc tracks HA releases.
 homeassistant==2026.7.2
+psutil==7.2.2
 pytest
 pytest-cov
 pytest-homeassistant-custom-component==0.13.346
