@@ -9,8 +9,8 @@ regression should ever fail the job is a separate, future decision.
 import json
 import os
 
-_BASELINE_KEY = "coordinator_cycle"
-_METRICS = ("median_cpu_ms", "median_rss_delta_kb", "median_peak_traced_memory_kb")
+BASELINE_KEY = "coordinator_cycle"  # not module-private -- update_baseline.py reuses it
+METRICS = ("median_cpu_ms", "median_rss_delta_kb", "median_peak_traced_memory_kb")
 _STATUS_OK = "ok"
 _STATUS_REGRESSED = "REGRESSED"
 # Deliberately loose first-cut threshold (design doc S4) -- no real variance data exists
@@ -25,10 +25,10 @@ def compare(results_path: str, baseline_path: str) -> list[str]:
     with open(results_path) as f:
         results = json.load(f)
     with open(baseline_path) as f:
-        baseline = json.load(f)[_BASELINE_KEY]
+        baseline = json.load(f)[BASELINE_KEY]
 
     rows = ["| metric | baseline | current | delta % | status |", "| --- | --- | --- | --- | --- |"]
-    for metric in _METRICS:
+    for metric in METRICS:
         base_value = baseline[metric]
         current_value = results[metric]
         # A metric like median_rss_delta_kb can legitimately be <= 0 -- dividing by the signed
