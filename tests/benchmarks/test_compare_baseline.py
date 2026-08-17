@@ -1,11 +1,14 @@
-"""Plain-pytest tests for tests/benchmarks/compare_baseline.py (issue #708, ADR-0026).
+"""Plain-pytest tests for tests/benchmarks/compare_baseline.py and update_baseline.py
+(issue #708, ADR-0026).
 
 Pure JSON/arithmetic -- no HA dependency (registered in tests/conftest.py's _PURE_FILES).
 """
 
 import json
+from datetime import date
 
 from tests.benchmarks.compare_baseline import compare
+from tests.benchmarks.update_baseline import update
 
 
 def test_compare_reports_no_regression_within_tolerance(tmp_path):
@@ -147,3 +150,43 @@ def test_compare_reports_missing_results_file_without_raising(tmp_path):
 
     assert len(rows) == 1
     assert str(missing_results_path) in rows[0]
+
+
+def test_update_overwrites_the_medians_and_recorded_at_and_nothing_else(tmp_path):
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "unrelated_top_level_key": "untouched",
+                "coordinator_cycle": {
+                    "median_cpu_ms": 10.0,
+                    "median_rss_delta_kb": 100.0,
+                    "median_peak_traced_memory_kb": 1000.0,
+                    "recorded_at": "2020-01-01",  # unambiguously stale, unlike today's date
+                    "batches": 11,  # unrelated sibling key -- must also survive the update
+                },
+            }
+        )
+    )
+    results_path = tmp_path / "coordinator_cycle.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "median_cpu_ms": 11.0,
+                "median_rss_delta_kb": 110.0,
+                "median_peak_traced_memory_kb": 1100.0,
+            }
+        )
+    )
+
+    update(str(results_path), str(baseline_path))
+
+    updated = json.loads(baseline_path.read_text())
+    assert updated["unrelated_top_level_key"] == "untouched"
+    assert updated["coordinator_cycle"] == {
+        "median_cpu_ms": 11.0,
+        "median_rss_delta_kb": 110.0,
+        "median_peak_traced_memory_kb": 1100.0,
+        "recorded_at": date.today().isoformat(),
+        "batches": 11,
+    }

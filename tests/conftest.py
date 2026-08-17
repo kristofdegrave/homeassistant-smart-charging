@@ -28,8 +28,9 @@ only reads ``const.py`` and the integration's own JSON translation files off dis
 no ``hass`` fixture at all, so its tests are plain pytest too.
 
 ``test_compare_baseline.py`` is a deliberate exception despite living under
-``tests/benchmarks/`` (issue #708, ADR-0026): it tests ``compare_baseline.py``, a pure
-JSON/arithmetic module with no HA dependency, distinct from its sibling
+``tests/benchmarks/`` (issue #708, ADR-0026): it tests ``compare_baseline.py`` and
+``update_baseline.py``, pure JSON/arithmetic modules with no HA dependency, distinct
+from their sibling
 ``test_coordinator_perf.py`` in the same directory, which genuinely needs ``hass`` and
 stays an HA-harness test.
 
