@@ -1816,6 +1816,7 @@ async def test_uc12_1b_options_shows_no_mapping_field_on_any_step(hass):
         assert not (mapping_keys & _keys(result["data_schema"]))
         result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()  # drain the background reload this save schedules
 
 
 def test_uc12_1b_options_has_no_vehicle_limit_step():
@@ -1839,6 +1840,7 @@ async def test_r20_ac7_options_leaves_the_data_bucket_untouched(hass):
         hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_START_THRESHOLD_W: 321.0}}
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()  # drain the background reload this save schedules
     assert dict(entry.data) == original_data
 
 
@@ -1855,6 +1857,7 @@ async def test_r20_ac7_options_save_preserves_a_withdrawn_capabilitys_stored_thr
     await _run_options_flow(
         hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_START_THRESHOLD_W: 321.0}}
     )
+    await hass.async_block_till_done()  # drain the background reload this save schedules
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 321.0
 
     result = await _run_reconfigure_flow(
@@ -1867,6 +1870,7 @@ async def test_r20_ac7_options_save_preserves_a_withdrawn_capabilitys_stored_thr
 
     result = await _run_options_flow(hass, entry)
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()  # drain the background reload this save schedules
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 321.0
 
 
@@ -1895,6 +1899,7 @@ async def test_uc12_1b_options_flow_opens_on_an_entry_predating_deadline_availab
     assert result["step_id"] == STEP_THRESHOLDS
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()  # drain the background reload this save schedules
 
 
 async def test_d4_untouched_threshold_resubmits_its_stored_value(hass):
@@ -1903,10 +1908,12 @@ async def test_d4_untouched_threshold_resubmits_its_stored_value(hass):
     module default -- the flat options flow's behaviour, kept."""
     entry = await _create_entry(hass)
     await _run_options_flow(hass, entry, per_step={STEP_THRESHOLDS: {CONF_MAX_PEAK_KW: 7.0}})
+    await hass.async_block_till_done()  # drain the background reload this save schedules
     assert entry.options[CONF_MAX_PEAK_KW] == 7.0
 
     result = await _run_options_flow(hass, entry)
     assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()  # drain the background reload this save schedules
     assert entry.options[CONF_MAX_PEAK_KW] == 7.0
 
 
