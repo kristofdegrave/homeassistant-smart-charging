@@ -56,12 +56,12 @@ def _config(**overrides) -> SmartChargingConfig:
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
     """CycleContext (ADR-0012) exposes all defaulted fields with their documented starting
-    values -- the required fields (status/net_w/charger_w/voltage/now/now_dt) construct with no
+    values -- the required fields (status/net_w/charger_w/voltage/now) construct with no
     defaults. `surplus_w` starts at a meaningful zero-surplus value (the value _run_cycle's old
-    loose locals used to start with); the five bool fields keep their original, genuinely-correct
+    loose locals used to start with); the four bool fields keep their original, genuinely-correct
     starting values (only ever read via plain truthiness, so `None` would buy no fail-loudness and
-    would silently invert `low_tariff_active`'s documented-correct `True` default). The three
-    numeric fields resolved partway through _run_cycle -- monthly_peak_kw/effective_peak_limit_kw/
+    would silently invert `low_tariff_active`'s documented-correct `True` default). The two
+    numeric fields resolved partway through _run_cycle -- effective_peak_limit_kw/
     active_soc_limit (issue #564) -- start at `None`, not a same-typed placeholder, so a future
     premature arithmetic/comparison read fails loudly instead of silently computing on a
     plausible-looking wrong value."""
@@ -71,35 +71,23 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
         charger_w=1000.0,
         voltage=230.0,
         now=1.0,
-        now_dt=datetime(2026, 7, 27, 12, 0),
     )
     assert ctx.ev_soc is None
     assert ctx.surplus_w == 0.0
-    assert ctx.monthly_peak_kw is None
     assert ctx.effective_peak_limit_kw is None
     assert ctx.active_soc_limit is None
-    assert ctx.urgent is False
     assert ctx.sun_is_up is False
     assert ctx.sun_is_down is False
     assert ctx.low_tariff_active is True
     assert ctx.solar_reserve_active is False
 
 
-def test_cycle_context_accepts_none_now_dt_for_dry_run_construction():
-    """now_dt is None only in _mode_desired_current's dry-run ctx (Task 3.3), which needs no
-    month/weekday context -- documented as the one legitimate None, not an accidental gap."""
-    ctx = CycleContext(
-        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
-    )
-    assert ctx.now_dt is None
-
-
 def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use():
-    """issue #564: the whole point of `None` over a same-typed placeholder for the three
+    """issue #564: the whole point of `None` over a same-typed placeholder for the two
     numeric fields resolved partway through _run_cycle -- a hypothetical future ModeHandler
     reading e.g. `ctx.effective_peak_limit_kw`/`ctx.active_soc_limit` before `_run_cycle`
     resolves them now gets an immediate TypeError on arithmetic/comparison, not a
-    silently-computed wrong answer from a plausible-looking 0.0. (The five bool fields are
+    silently-computed wrong answer from a plausible-looking 0.0. (The four bool fields are
     deliberately excluded -- see test_cycle_context_constructs_with_required_fields_and_defaults's
     docstring for why `None` wouldn't fail loudly for those.)"""
     ctx = CycleContext(
@@ -108,15 +96,12 @@ def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use()
         charger_w=0.0,
         voltage=230.0,
         now=0.0,
-        now_dt=None,
         ev_soc=50.0,
     )
     with pytest.raises(TypeError):
         ctx.effective_peak_limit_kw * 1000.0
     with pytest.raises(TypeError):
         assert ctx.ev_soc >= ctx.active_soc_limit
-    with pytest.raises(TypeError):
-        ctx.monthly_peak_kw + 1.0
 
 
 def test_cycle_context_is_mutable_and_filled_progressively():
@@ -129,7 +114,6 @@ def test_cycle_context_is_mutable_and_filled_progressively():
         charger_w=1000.0,
         voltage=230.0,
         now=1.0,
-        now_dt=datetime(2026, 7, 27, 12, 0),
     )
     ctx.surplus_w = 500.0
     assert ctx.surplus_w == 500.0
@@ -316,7 +300,6 @@ def test_build_mode_handlers_threads_the_same_config_into_solar_only_and_captar_
         charger_w=0.0,
         voltage=230.0,
         now=0.0,
-        now_dt=None,
         surplus_w=400.0,  # below CONF_SOLAR_START_THRESHOLD_W/CONF_SOLAR_ONLY_START_THRESHOLD_W
     )
 
@@ -340,9 +323,7 @@ def test_build_mode_handlers_power_handler_reads_target_current_getter_live():
     which changes across cycles."""
     current = [5.0]
     handlers = build_mode_handlers(_config(), lambda: current[0])
-    ctx = CycleContext(
-        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
-    )
+    ctx = CycleContext(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0)
 
     desired_before, _ = handlers[MODE_POWER].desired_current(ctx, None)
     current[0] = 12.0
@@ -359,9 +340,7 @@ def test_off_mode_handler_always_commands_zero_and_passes_state_through():
     handler = _OffModeHandler()
     sentinel_state = object()
     current, new_state = handler.desired_current(
-        CycleContext(
-            status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
-        ),
+        CycleContext(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0),
         sentinel_state,
     )
     assert current == 0.0
@@ -374,9 +353,7 @@ def test_power_mode_handler_delegates_to_modes_power_desired_current():
     (design doc Sec 3.4) rather than duplicating it onto CycleContext. Anchor: tests/modes/
     test_power.py's own STATE_CHARGING/target_current=10.0 -> 10.0 A expectation."""
     handler = _PowerModeHandler(lambda: 10.0)
-    ctx = CycleContext(
-        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
-    )
+    ctx = CycleContext(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0)
     current, new_state = handler.desired_current(ctx, None)
     assert current == 10.0
     assert new_state is None
@@ -386,9 +363,7 @@ def test_power_mode_handler_commands_zero_when_disconnected():
     """Confirms the handler re-reads status from ctx each call (not cached at construction) --
     anchored to tests/modes/test_power.py's disconnected -> 0.0 A expectation."""
     handler = _PowerModeHandler(lambda: 10.0)
-    ctx = CycleContext(
-        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
-    )
+    ctx = CycleContext(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0)
     current, _ = handler.desired_current(ctx, None)
     assert current == 0.0
 
@@ -399,9 +374,7 @@ def test_power_mode_handler_reads_target_current_fresh_each_call():
     memoized at construction (design doc Sec 3.4's stated rationale for the getter shape)."""
     current_target = [10.0]
     handler = _PowerModeHandler(lambda: current_target[0])
-    ctx = CycleContext(
-        status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, now_dt=None
-    )
+    ctx = CycleContext(status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0)
     first, _ = handler.desired_current(ctx, None)
     current_target[0] = 16.0
     second, _ = handler.desired_current(ctx, None)
@@ -429,7 +402,6 @@ def test_solar_mode_handler_delegates_to_modes_solar_step():
         charger_w=0.0,
         voltage=230.0,
         now=0.0,
-        now_dt=datetime(2026, 7, 27, 12, 0),
         surplus_w=150.0,
     )
     current, new_state = handler.desired_current(ctx, solar.SolarState.idle())
@@ -457,7 +429,6 @@ def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
         charger_w=0.0,
         voltage=230.0,
         now=0.0,
-        now_dt=datetime(2026, 7, 27, 12, 0),
         surplus_w=1450.0,
     )
     current, new_state = handler.desired_current(ctx, solar_only.SolarOnlyState.idle())
@@ -473,9 +444,7 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     # (code-reviewer finding on PR #451); exercised via the cooldown-elapsing assertions.
     config = _config(max_current=32.0, captar_cooldown_min=1.0)
     handler = _CaptarModeHandler(config)
-    ctx = CycleContext(
-        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, now_dt=None
-    )
+    ctx = CycleContext(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0)
     current, new_state = handler.desired_current(ctx, captar.CaptarState.idle())
     assert current == 32.0
     assert new_state.phase == Phase.CHARGING
@@ -486,7 +455,7 @@ def test_captar_mode_handler_delegates_to_modes_captar_step():
     blocked, _ = handler.desired_current(ctx, cooldown_state)
     assert blocked == 0.0
     ctx_later = CycleContext(
-        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=61.0, now_dt=None
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=61.0
     )
     rearmed, rearmed_state = handler.desired_current(ctx_later, cooldown_state)
     assert rearmed == 32.0
