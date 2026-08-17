@@ -116,9 +116,9 @@ from custom_components.smart_charging.const import (
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
-# USER_INPUT is the flat MAPPING_SCHEMA/_threshold_schema()-shaped fixture -- still used
-# directly (never through the flow, not even for reconfigure since T9) by tests that build a
-# MockConfigEntry's data by hand (its shape survives until T13 deletes the flat schemas).
+# USER_INPUT is a plain dict fixture shaped like the flat flow's old MAPPING_SCHEMA +
+# _threshold_schema() (both deleted, T13) -- used directly (never through the flow) by a test
+# that builds a MockConfigEntry's data by hand.
 USER_INPUT = {
     "charger_current_entity": "number.charger_current",
     "charger_status_entity": "sensor.evse",
@@ -1664,6 +1664,16 @@ def test_mapping_errors_combiner_is_deleted():
     assert not hasattr(config_flow_module, "_mapping_errors")
 
 
+def test_flat_flow_schema_surface_is_deleted():
+    """T13's own removal guard, same rationale as test_mapping_errors_combiner_is_deleted above:
+    every install/reconfigure/options path now runs through CONFIG_TABLE/OPTIONS_TABLE, so no
+    end-to-end flow test can discriminate MAPPING_SCHEMA/_threshold_schema/USER_SCHEMA ever
+    being reintroduced -- only a direct structural check pins the deletion."""
+    assert not hasattr(config_flow_module, "MAPPING_SCHEMA")
+    assert not hasattr(config_flow_module, "_threshold_schema")
+    assert not hasattr(config_flow_module, "USER_SCHEMA")
+
+
 async def test_all_capabilities_and_vehicle_limit_declared_install_completes(hass):
     """Happy-path integration coverage (not a removal regression guard -- see
     test_mapping_errors_combiner_is_deleted for that): every capability/election declared and
@@ -2059,6 +2069,90 @@ async def test_adr0025_options_accumulator_starts_empty_on_a_second_run(hass):
     await hass.async_block_till_done()  # drain the background reload this save schedules
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == stored_threshold
     assert entry.options[CONF_MAX_PEAK_KW] == 5.0
+
+
+# --- T13: extensibility guard. ---
+
+_STEP_SYNTHETIC = "synthetic"
+
+
+async def test_r20_ac9_a_new_capability_is_one_table_row_and_one_step_method(hass, monkeypatch):
+    """R20 AC9 / UC12 postcondition 5: insert a synthetic gated row after the deadline row and
+    before the vehicle-limit row, with a step method of its own, and assert (a) it is visited
+    exactly where it was inserted when its gate passes, (b) it is skipped when it does not, and
+    (c) every other step's field set and relative order is byte-for-byte what it was before the
+    insertion -- i.e. no existing step was edited to accommodate it.
+
+    Structural, not scenario-driven (R18 closes the capability set this release, so no real
+    UC12 scenario can walk AC9): declares both deadline and vehicle_limit so the row either
+    side of the insertion point actually renders, and never completes any flow to
+    CREATE_ENTRY (ADR-0013 allows only one entry per hass, and this test drives several) --
+    each drive stops and aborts the moment it reaches the thresholds step."""
+    core_overrides = {CONF_DEADLINE_AVAILABLE: True, CONF_VEHICLE_LIMIT_MAPPED: True}
+
+    async def _trace():
+        """Drive an install flow (deadline + vehicle_limit both declared), recording each
+        FORM's (step_id, sorted schema key set) including the terminal thresholds FORM, then
+        abort -- never CREATE_ENTRY (ADR-0013 permits only one entry per hass)."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        trace = [(result["step_id"], sorted(_keys(result["data_schema"])))]
+        submission = {**CORE_INPUT, **core_overrides}
+        while result["type"] == FlowResultType.FORM and result["step_id"] != STEP_THRESHOLDS:
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+            if result["type"] == FlowResultType.FORM:
+                trace.append((result["step_id"], sorted(_keys(result["data_schema"]))))
+            submission = _INSTALL_STEP_BASES.get(result.get("step_id"), {})
+        assert result["type"] == FlowResultType.FORM, "drive ended without reaching thresholds"
+        hass.config_entries.flow.async_abort(result["flow_id"])
+        return trace
+
+    # Build the "before" expectation from the real, unmodified table -- so this test cannot
+    # drift from whatever CONFIG_TABLE actually looks like.
+    before_trace = await _trace()
+
+    async def async_step_synthetic(self, user_input=None):
+        if user_input is None:
+            return self.async_show_form(step_id=_STEP_SYNTHETIC, data_schema=vol.Schema({}))
+        self._answers.update(user_input)
+        return await self._async_advance(after=_STEP_SYNTHETIC)
+
+    monkeypatch.setattr(
+        SmartChargingConfigFlow, "async_step_synthetic", async_step_synthetic, raising=False
+    )
+
+    deadline_index = next(i for i, row in enumerate(CONFIG_TABLE) if row.step_id == STEP_DEADLINE)
+
+    def _table_with_synthetic(gate):
+        return (
+            *CONFIG_TABLE[: deadline_index + 1],
+            FlowStep(step_id=_STEP_SYNTHETIC, gate=gate),
+            *CONFIG_TABLE[deadline_index + 1 :],
+        )
+
+    # (b) the gate fails -> the synthetic step is skipped entirely, and (c) every other step's
+    # sequence and field set is byte-for-byte what it was before the row was ever inserted.
+    monkeypatch.setattr(
+        SmartChargingConfigFlow, "_table", _table_with_synthetic(gate=lambda flow: False)
+    )
+    assert await _trace() == before_trace
+
+    # (a) the gate passes -> visited exactly where inserted: right after deadline, right
+    # before vehicle_limit. Built by splicing the untouched "before" trace, not re-asserting
+    # the position as a separate hardcoded index.
+    monkeypatch.setattr(
+        SmartChargingConfigFlow, "_table", _table_with_synthetic(gate=lambda flow: True)
+    )
+    deadline_position = next(
+        i for i, (step_id, _) in enumerate(before_trace) if step_id == STEP_DEADLINE
+    )
+    expected_with_synthetic = (
+        before_trace[: deadline_position + 1]
+        + [(_STEP_SYNTHETIC, [])]
+        + before_trace[deadline_position + 1 :]
+    )
+    assert await _trace() == expected_with_synthetic
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---

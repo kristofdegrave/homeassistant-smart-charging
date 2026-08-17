@@ -169,179 +169,21 @@ def _entity(domain: str | list[str] | None = None):
     return selector.EntitySelector(selector.EntitySelectorConfig(**cfg))
 
 
-# DATA fields — entity-role mappings + raw state lists (folded into status_translation).
-MAPPING_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_CHARGER_CURRENT_ENTITY): _entity("number"),
-        vol.Required(CONF_CHARGER_STATUS_ENTITY): _entity(["sensor", "binary_sensor"]),
-        vol.Required(CONF_CONNECTED_STATES): str,
-        vol.Required(CONF_CHARGING_STATES): str,
-        vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
-        vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_SOLAR_AVAILABLE, default=False): bool,
-        vol.Optional(CONF_CAPTAR_AVAILABLE, default=True): bool,
-        vol.Optional(CONF_EV_SOC_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
-        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
-        vol.Optional(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
-        vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
-        # RA4 notify-target role (notifications design doc §3/§6): must be a `notify`-domain
-        # entity; EntitySelector's own domain filter rejects a mismatched entity (vol.Invalid).
-        vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
-    }
-)
-
-
-def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """OPTIONS fields — thresholds/defaults, prefilled from `defaults` when editing."""
-    d = defaults or {}
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_NOMINAL_VOLTAGE, default=d.get(CONF_NOMINAL_VOLTAGE, DEFAULT_NOMINAL_VOLTAGE)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, DEFAULT_MIN_CURRENT)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, DEFAULT_GRID_CEILING_A)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_GRID_SAFETY_OFFSET_A,
-                default=d.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_DEFAULT_TARGET_CURRENT,
-                default=d.get(CONF_DEFAULT_TARGET_CURRENT, DEFAULT_DEFAULT_TARGET_CURRENT),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SMOOTHING_WINDOW,
-                default=d.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
-            ): vol.Coerce(int),
-            vol.Required(
-                CONF_SOLAR_START_THRESHOLD_W,
-                default=d.get(CONF_SOLAR_START_THRESHOLD_W, DEFAULT_SOLAR_START_THRESHOLD_W),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_ONLY_START_THRESHOLD_W,
-                default=d.get(
-                    CONF_SOLAR_ONLY_START_THRESHOLD_W, DEFAULT_SOLAR_ONLY_START_THRESHOLD_W
-                ),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_HOLD_MIN, default=d.get(CONF_SOLAR_HOLD_MIN, DEFAULT_SOLAR_HOLD_MIN)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_COOLDOWN_MIN,
-                default=d.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_ONLY_STRATEGY,
-                default=d.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
-            ): vol.In([ROUND_UP, ROUND_DOWN, ROUND_NEAREST]),
-            vol.Required(
-                CONF_SOLAR_ONLY_MIDPOINT,
-                default=d.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_DEFAULT_SOC_LIMIT, default=d.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SAFETY_MARGIN_W,
-                default=d.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_MAX_PEAK_KW, default=d.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_PEAK_GRACE_MIN,
-                default=d.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_CAPTAR_COOLDOWN_MIN,
-                default=d.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_POWER_RESPECT_PEAK,
-                default=d.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
-            ): bool,
-            vol.Required(
-                CONF_EV_BATTERY_CAPACITY_KWH,
-                default=d.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_MAX_SOLAR_SOC,
-                default=d.get(CONF_MAX_SOLAR_SOC, DEFAULT_MAX_SOLAR_SOC),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_STEP_PP,
-                default=d.get(CONF_SOLAR_STEP_PP, DEFAULT_SOLAR_STEP_PP),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_STEP_THRESHOLD_PP,
-                default=d.get(CONF_SOLAR_STEP_THRESHOLD_PP, DEFAULT_SOLAR_STEP_THRESHOLD_PP),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_RESERVE_SOC,
-                default=d.get(CONF_SOLAR_RESERVE_SOC, DEFAULT_SOLAR_RESERVE_SOC),
-            ): vol.Coerce(float),
-            vol.Required(
-                CONF_SOLAR_FORECAST_THRESHOLD_KWH,
-                default=d.get(
-                    CONF_SOLAR_FORECAST_THRESHOLD_KWH, DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH
-                ),
-            ): vol.Coerce(float),
-            # UC08 evening home-day prompt options (notifications design doc §3). No
-            # sc_prompt_timeout_h field here -- this flat schema has no flow caller left as of
-            # T10 (T13 deletes it, see the module comment above the schema fragments); the
-            # guided flow's _ungated_threshold_schema fragment presents/stores
-            # prompt_timeout_h from T3 onward (design, "Decisions on two forks" §1),
-            # superseding notifications-design.md §3/§9's earlier "deliberately NOT wired"
-            # call. No component reads it yet.
-            vol.Required(
-                CONF_EVENING_PROMPT_ENABLED,
-                default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
-            ): bool,
-            vol.Required(
-                CONF_EVENING_PROMPT_TIME,
-                default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
-            ): selector.TimeSelector(),
-        }
-    )
-
-
-# Install form = mappings + thresholds in one screen; split into data/options on submit.
-USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
-
-
 # --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
-# SmartChargingConfigFlow starts wiring into this from T3 onward (SmartChargingOptionsFlow
-# from T10). CONFIG_TABLE/OPTIONS_TABLE below are populated incrementally, one task at a time
-# (T3/T4/T5/T6/T7/T10 -- see the plan), rather than fully per the design doc's end-state
-# Structure section: no step method exists yet for most rows, and a row with no matching
-# method would strand the flow the moment its gate passed (ADR-0025's stated Con) --
-# concretely, a full CONFIG_TABLE at T3 would AttributeError on every default install, since
-# DEFAULT_CAPTAR_AVAILABLE is True and the walk would reach the captar row before
-# async_step_captar exists (T5). Comment sweep of this scaffolding is part of T13's cleanup.
+# SmartChargingConfigFlow's own table is CONFIG_TABLE, SmartChargingOptionsFlow's is
+# OPTIONS_TABLE (both below); both are now complete, with a step method for every row (T3-T13).
 #
-# T3's known temporary gap (a default-accepting install rejected at the thresholds step for a
-# missing ev_soc_entity mapping with no step to answer it on) was fully closed by T5, once both
-# the solar and captar steps existed to give ev_soc_entity somewhere to be answered. T7
-# finishes the job: with the vehicle_limit step now giving `_car_home_missing_error` its own
-# step-local home too, all three guards `_mapping_errors` used to combine are step-local, so
-# the thresholds-step safety net and `_mapping_errors` itself are both deleted outright
-# (ADR-0025, Consequences: the combiner has no *guided-flow step* left that needs all three).
-# T9 migrates `async_step_reconfigure` onto this same table (ADR-0025 point 4): it now
-# delegates into the shared `core` step instead of running its own flat form, so every guard
-# above already covers reconfigure too -- there is no longer a separate three-guard combine to
-# keep in sync with the guided flow's own.
+# Historical note on the guard consolidation this replaced: the flat flow's `_mapping_errors`
+# combined three guards (solar's/captar's shared ev_soc_entity requirement and vehicle_limit's
+# car_home_entity requirement) at a single thresholds-step safety net, because none of those
+# three had a step of its own to answer on. T5 gave solar/captar that step-local home for
+# ev_soc_entity; T7 gave vehicle_limit the same for car_home_entity via `_car_home_missing_error`
+# -- with all three guards step-local, the thresholds-step combiner and `_mapping_errors` itself
+# were deleted outright (ADR-0025, Consequences: the combiner has no *guided-flow step* left that
+# needs all three). T9 migrated `async_step_reconfigure` onto this same table (ADR-0025 point 4):
+# it now delegates into the shared `core` step instead of running its own flat form, so every
+# guard above already covers reconfigure too -- there is no longer a separate three-guard combine
+# to keep in sync with the guided flow's own.
 
 
 class FlowMode(StrEnum):
@@ -487,13 +329,9 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
-# MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA have had no production caller since T10
-# (SmartChargingOptionsFlow now builds its own schemas from the fragments below, the same way
-# the config flow already did from T3 onward) and, as of T12, no test caller either --
-# tests/test_translations.py's import of them was removed once its one test that needed them
-# was superseded by tests/test_config_flow_translations.py's dynamic parity checks. All three
-# still stay in place regardless: their deletion is T13's own task (plan). These fragments
-# below are the guided flow's own.
+# The flat flow's own MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA (and _mapping_errors,
+# gone since T7) are deleted as of T13 -- every path now runs through CONFIG_TABLE/OPTIONS_TABLE
+# above. These fragments are the guided flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
