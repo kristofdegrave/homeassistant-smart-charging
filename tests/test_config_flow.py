@@ -1,5 +1,7 @@
 """HA-harness config-flow tests (ADR-0005)."""
 
+import itertools
+
 import pytest
 import voluptuous as vol
 from homeassistant import config_entries
@@ -1505,7 +1507,10 @@ def test_mapping_errors_combiner_is_deleted():
 async def test_all_capabilities_and_vehicle_limit_declared_install_completes(hass):
     """Happy-path integration coverage (not a removal regression guard -- see
     test_mapping_errors_combiner_is_deleted for that): every capability/election declared and
-    every step-local guard satisfied still reaches CREATE_ENTRY."""
+    every step-local guard satisfied still reaches CREATE_ENTRY. Now the
+    (True, True, True, True) row of T8's traversal matrix below duplicates this exact
+    combination -- kept anyway since it predates that matrix and still documents the T7
+    removal's own happy path in context, right next to the deletion it accompanies."""
     result = await _run_install_flow(
         hass,
         per_step={
@@ -1519,6 +1524,90 @@ async def test_all_capabilities_and_vehicle_limit_declared_install_completes(has
         },
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+# --- T8: traversal matrix -- every enablement combination, in UC12's order. ---
+# Test-only task (plan T8): no production code. If a combination below fails, the fix belongs
+# to the step task that owns the offending step, not here.
+
+
+@pytest.mark.parametrize(
+    "solar,captar,deadline,vehicle", list(itertools.product([True, False], repeat=4))
+)
+async def test_uc12_step2_traversal_visits_exactly_the_prescribed_steps_in_order(
+    hass, solar, captar, deadline, vehicle
+):
+    """UC12 step 2 + 2a / R20 AC2 + AC3: the visited step ids are exactly
+    [core] + [solar if solar] + [captar if captar] + [deadline if deadline]
+    + [vehicle_limit if vehicle] + [mappings, thresholds] -- order included. Asserted as
+    equality, not "contains", so both a skipped and an extra step fail."""
+    step_inputs = {
+        STEP_CORE: {
+            **CORE_INPUT,
+            CONF_SOLAR_AVAILABLE: solar,
+            CONF_CAPTAR_AVAILABLE: captar,
+            CONF_DEADLINE_AVAILABLE: deadline,
+            CONF_VEHICLE_LIMIT_MAPPED: vehicle,
+        },
+        STEP_SOLAR: SOLAR_INPUT,
+        # R20 AC4's once-only rule: omit ev_soc here when solar already collected it, or the
+        # captar step's schema (which then excludes the field) rejects it as an unknown key.
+        # Derived from CAPTAR_INPUT rather than hard-coded to {}, so a future field added to
+        # that fixture is still carried through instead of silently dropped.
+        STEP_CAPTAR: (
+            {k: v for k, v in CAPTAR_INPUT.items() if k != CONF_EV_SOC_ENTITY}
+            if solar
+            else CAPTAR_INPUT
+        ),
+        STEP_DEADLINE: DEADLINE_INPUT,
+        STEP_VEHICLE_LIMIT: VEHICLE_LIMIT_INPUT,
+        STEP_MAPPINGS: MAPPINGS_INPUT,
+        STEP_THRESHOLDS: THRESHOLDS_INPUT,
+    }
+    expected_steps = (
+        [STEP_CORE]
+        + ([STEP_SOLAR] if solar else [])
+        + ([STEP_CAPTAR] if captar else [])
+        + ([STEP_DEADLINE] if deadline else [])
+        + ([STEP_VEHICLE_LIMIT] if vehicle else [])
+        + [STEP_MAPPINGS, STEP_THRESHOLDS]
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    visited = [result["step_id"]]
+    while result["type"] == FlowResultType.FORM:
+        last_step_id = result["step_id"]
+        if last_step_id not in step_inputs:
+            pytest.fail(f"unexpected step {last_step_id!r}; visited so far {visited}")
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], step_inputs[last_step_id]
+        )
+        if result["type"] == FlowResultType.FORM:
+            if result["step_id"] == last_step_id:
+                # a step-local guard rejected the fixture and re-showed itself -- stop here
+                # (rather than resubmitting the same, still-failing input forever) so the
+                # equality assertion below fails with a readable diff instead of hanging,
+                # mirroring _run_install_flow's own re-show guard.
+                visited.append(result["step_id"])
+                break
+            visited.append(result["step_id"])
+
+    assert visited == expected_steps
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+    # Design doc, "Safety caveat": the grid-safety threshold group is on an ungated step, so it
+    # is present -- with the submitted value, not a silently-standing-in default -- in every
+    # combination's options regardless of any capability answer.
+    for key in (
+        CONF_NOMINAL_VOLTAGE,
+        CONF_MIN_CURRENT,
+        CONF_MAX_CURRENT,
+        CONF_GRID_CEILING_A,
+        CONF_GRID_SAFETY_OFFSET_A,
+    ):
+        assert result["options"][key] == THRESHOLDS_INPUT[key]
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
