@@ -2155,9 +2155,11 @@ def test_adr0025_every_options_step_method_is_in_the_table():
 
 def _assert_is_subsequence_of(actual_order: list[str], fixed_order: list[str]) -> None:
     """Each id in `actual_order` must appear in `fixed_order`, in the same relative order,
-    with no reordering permitted -- a subsequence check, not full-population equality. T8's
-    traversal matrix is the exact-sequence assertion for CONFIG_TABLE; the TODO(T10) note on
-    UC12_FIXED_STEP_ORDER covers the still-open OPTIONS_TABLE completeness check."""
+    with no reordering permitted -- a subsequence check, not full-population equality. Still
+    used for CONFIG_TABLE (T8's traversal matrix is that table's own exact-sequence
+    assertion, at the flow-behavior level); OPTIONS_TABLE's own order test asserts equality
+    directly instead, since that table lands complete in T10 with no incremental build-out to
+    tolerate."""
     remaining = fixed_order[:]
     for step_id in actual_order:
         assert step_id in remaining, f"{step_id} is out of UC12's fixed order"
@@ -2187,11 +2189,17 @@ def test_uc12_step2_config_table_is_in_uc12s_fixed_order():
 
 def test_uc12_1b_options_table_is_in_uc12s_fixed_order():
     """UC12 1b: the options flow's own table has no vehicle_limit row (ADR-0025 point 3) but
-    is otherwise gated in the same fixed order as the config table."""
-    _assert_is_subsequence_of(
-        [row.step_id for row in OPTIONS_TABLE],
-        [STEP_SOLAR, STEP_CAPTAR, STEP_DEADLINE, STEP_THRESHOLDS],
-    )
+    is otherwise gated in the same fixed order as the config table. Asserted as equality, not
+    a subsequence: unlike CONFIG_TABLE (populated incrementally across T3-T7, so a subsequence
+    check was the honest thing to assert until T7 completed it), OPTIONS_TABLE lands complete
+    in this one task and never gains a fifth row -- there is no future task's partial state
+    this check needs to tolerate."""
+    assert [row.step_id for row in OPTIONS_TABLE] == [
+        STEP_SOLAR,
+        STEP_CAPTAR,
+        STEP_DEADLINE,
+        STEP_THRESHOLDS,
+    ]
 
 
 async def test_adr0025_dispatcher_advances_past_a_failing_gate_and_finishes_when_exhausted():

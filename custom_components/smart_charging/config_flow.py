@@ -299,12 +299,12 @@ def _threshold_schema(defaults: dict | None = None) -> vol.Schema:
                 ),
             ): vol.Coerce(float),
             # UC08 evening home-day prompt options (notifications design doc §3). No
-            # sc_prompt_timeout_h field here -- this flat schema backs only the still-flat
-            # options flow (async_step_init) until T10 builds its own table; the guided
-            # flow's _ungated_threshold_schema fragment presents/stores prompt_timeout_h from
-            # T3 onward (design, "Decisions on two forks" §1), superseding
-            # notifications-design.md §3/§9's earlier "deliberately NOT wired" call. No
-            # component reads it yet.
+            # sc_prompt_timeout_h field here -- this flat schema has no flow caller left as of
+            # T10 (T13 deletes it, see the module comment above the schema fragments); the
+            # guided flow's _ungated_threshold_schema fragment presents/stores
+            # prompt_timeout_h from T3 onward (design, "Decisions on two forks" §1),
+            # superseding notifications-design.md §3/§9's earlier "deliberately NOT wired"
+            # call. No component reads it yet.
             vol.Required(
                 CONF_EVENING_PROMPT_ENABLED,
                 default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
@@ -414,10 +414,10 @@ class _TableWalkMixin:
 #
 # CONFIG_TABLE carries all six rows as of T7; T8's traversal matrix is the exact-sequence
 # assertion this comment used to ask for on the config side (its own task, not duplicated
-# here). TODO(T10): OPTIONS_TABLE still needs the equivalent completeness assertion
-# (`[row.step_id for row in OPTIONS_TABLE] == list(UC12_FIXED_STEP_ORDER)` minus
-# vehicle_limit) once it carries all four rows -- the subsequence check here only guards
-# relative order, not that every row has actually landed.
+# here). OPTIONS_TABLE carries all four of its own rows as of T10, asserted directly as
+# equality by that table's own order test (unlike CONFIG_TABLE, OPTIONS_TABLE landed complete
+# in one task, so there was no incremental build-out state to tolerate with a subsequence
+# check).
 UC12_FIXED_STEP_ORDER = (
     STEP_SOLAR,
     STEP_CAPTAR,
@@ -1044,5 +1044,11 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
         replacing rather than merging would silently delete that capability's thresholds the
         first time Configure is opened after withdrawing it through reconfigure (R20 AC7)."""
         intersection = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
-        intersection[CONF_CONTROL_INTERVAL_S] = self._answers[CONF_CONTROL_INTERVAL_S]
+        # Not OPTION_KEYS-intersected like every other key above: control_interval_s is
+        # deliberately not an OPTION_KEYS member (design, "The terminal step and the bucket
+        # split"). Membership-guarded rather than direct indexing anyway, matching every
+        # other key's defensive style here, even though the unconditional `thresholds` gate
+        # makes the key's absence unreachable today.
+        if CONF_CONTROL_INTERVAL_S in self._answers:
+            intersection[CONF_CONTROL_INTERVAL_S] = self._answers[CONF_CONTROL_INTERVAL_S]
         return self.async_create_entry(title="", data={**self.config_entry.options, **intersection})
