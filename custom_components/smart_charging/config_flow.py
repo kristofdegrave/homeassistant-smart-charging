@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, ClassVar
@@ -463,8 +463,13 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = ()
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
-# MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA above stay in place until the flat flow's
-# remaining callers are removed (T13, plan). These fragments are the guided flow's own.
+# MAPPING_SCHEMA/USER_SCHEMA have no production caller left as of T9 (the flat
+# async_step_reconfigure that used MAPPING_SCHEMA is gone); _threshold_schema() still backs
+# the still-flat SmartChargingOptionsFlow (T10 gives it its own table). All three stay in
+# place regardless: tests/test_translations.py imports them, and T12 removes that import
+# before T13 deletes the three definitions themselves (plan). Do not delete early -- that
+# breaks test_translations.py at collection time. These fragments below are the guided
+# flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
@@ -749,7 +754,12 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers = {}
         return await self.async_step_core()
 
-    def _maybe_prefill(self, schema: vol.Schema, *, extra_from=None) -> vol.Schema:
+    def _maybe_prefill(
+        self,
+        schema: vol.Schema,
+        *,
+        extra_from: Callable[[Mapping[str, Any]], dict[str, Any]] | None = None,
+    ) -> vol.Schema:
         """UC12 1a / ADR-0025 point 2: reconfigure prefills a step's rendered schema from the
         stored entry -- a rendering-only concern; the accumulator itself is never seeded
         (install renders `schema` unchanged). `extra_from(entry.data)` augments the prefill
@@ -758,7 +768,7 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         if self._mode is not FlowMode.RECONFIGURE:
             return schema
         entry = self._get_reconfigure_entry()
-        source = entry.data | extra_from(entry.data) if extra_from else entry.data
+        source = (entry.data | extra_from(entry.data)) if extra_from else entry.data
         return self.add_suggested_values_to_schema(schema, source)
 
     async def async_step_core(self, user_input=None):
@@ -779,8 +789,8 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
     async def async_step_solar(self, user_input=None):
         """UC12 step 3: the solar mapping + threshold halves, gated on solar declared this
         run (design, "Schema fragments"). Step-local guard (ADR-0025 point 1): a missing
-        ev_soc/solar_forecast mapping re-shows this step with a field-local error instead of
-        the end-of-form safety net T3 still runs for the not-yet-split vehicle-limit guard."""
+        ev_soc/solar_forecast mapping re-shows this step with a field-local error -- the
+        `_mapping_errors` end-of-form safety net this replaced is gone entirely since T7."""
         include_ev_soc = CONF_EV_SOC_ENTITY not in self._answers
         schema = _solar_mapping_schema(include_ev_soc)
         if self._mode is not FlowMode.RECONFIGURE:
@@ -899,7 +909,9 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         one guard to its own gated step. T7 moved the last one (`_car_home_missing_error`, to
         the vehicle_limit step) and deleted both that call and `_mapping_errors` itself --
         this step never had a mapping guard of its own to begin with (UC12 assigns none to the
-        ungated thresholds step)."""
+        ungated thresholds step). Render skips `_maybe_prefill` too -- unlike every other step
+        method, this one is unreachable in reconfigure at all (CONFIG_TABLE's own gate), so
+        there is never a reconfigure render to prefill."""
         schema = _ungated_threshold_schema(include_interval=False)
         if user_input is None:
             return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)

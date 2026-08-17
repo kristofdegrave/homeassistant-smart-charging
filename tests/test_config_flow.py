@@ -117,8 +117,8 @@ from custom_components.smart_charging.const import (
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
 # USER_INPUT is the flat MAPPING_SCHEMA/_threshold_schema()-shaped fixture -- still used
-# directly (never through the flow) by tests that build a MockConfigEntry's data by hand or
-# exercise async_step_reconfigure, both of which still speak the flat schema (T9/T13).
+# directly (never through the flow, not even for reconfigure since T9) by tests that build a
+# MockConfigEntry's data by hand (its shape survives until T13 deletes the flat schemas).
 USER_INPUT = {
     "charger_current_entity": "number.charger_current",
     "charger_status_entity": "sensor.evse",
@@ -205,19 +205,20 @@ _INSTALL_STEP_BASES = {
 }
 
 
-async def _run_install_flow(hass, *, per_step=None):
-    """Drive the install flow across whichever steps the table shows this run -- which steps
-    appear (e.g. `solar`) varies with the capability flags answered on the core step, so this
-    follows the flow's own `step_id` rather than a fixed sequence. Submits each step's base
-    fixture merged with `per_step[<step id>]`'s overrides (a value of None removes that key).
-    Returns the final flow result: CREATE_ENTRY on success, or the re-shown FORM the moment a
-    step-local guard rejects a submission -- detected as the same step_id appearing twice in a
-    row, which stops the loop instead of resubmitting the same, still-failing fixture forever."""
+async def _walk_flow(hass, init_result, *, per_step=None):
+    """Shared driver behind `_run_install_flow`/`_run_reconfigure_flow`: from an
+    already-initiated flow's first result, follow whichever steps the table shows this run --
+    which steps appear (e.g. `solar`) varies with the capability flags answered on the core
+    step, so this follows the flow's own `step_id` rather than a fixed sequence. Submits each
+    step's base fixture (strict lookup -- a step with no fixture is a bug in the fixture
+    table, not something to paper over with an empty submission) merged with
+    `per_step[<step id>]`'s overrides (a value of None removes that key). Returns the final
+    flow result: success on completion, or the re-shown FORM the moment a step-local guard
+    rejects a submission -- detected as the same step_id appearing twice in a row, which stops
+    the loop instead of resubmitting the same, still-failing fixture forever."""
     overrides = per_step or {}
     consumed_overrides: set[str] = set()
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = init_result
     last_step_id = None
     while result["type"] == FlowResultType.FORM:
         step_id = result["step_id"]
@@ -236,6 +237,13 @@ async def _run_install_flow(hass, *, per_step=None):
     return result
 
 
+async def _run_install_flow(hass, *, per_step=None):
+    init_result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    return await _walk_flow(hass, init_result, per_step=per_step)
+
+
 async def _create_entry(hass, *, per_step=None):
     result = await _run_install_flow(hass, per_step=per_step)
     return result["result"]
@@ -243,32 +251,14 @@ async def _create_entry(hass, *, per_step=None):
 
 async def _run_reconfigure_flow(hass, entry, *, per_step=None):
     """The reconfigure analogue of `_run_install_flow` (T9, ADR-0025 point 4): entered via
-    SOURCE_RECONFIGURE, otherwise identical -- same shared step methods and per-step base
-    fixtures, same repeated-step-id guard against re-submitting a rejected fixture forever.
-    The `thresholds` row is gated off entirely in this mode (UC12 1a), so the walk always
-    ends at ABORT/reconfigure_successful, never CREATE_ENTRY."""
-    overrides = per_step or {}
-    consumed_overrides: set[str] = set()
-    result = await hass.config_entries.flow.async_init(
+    SOURCE_RECONFIGURE, otherwise identical -- same shared `_walk_flow` driver. The
+    `thresholds` row is gated off entirely in this mode (UC12 1a), so the walk always ends at
+    ABORT/reconfigure_successful, never CREATE_ENTRY."""
+    init_result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
-    last_step_id = None
-    while result["type"] == FlowResultType.FORM:
-        step_id = result["step_id"]
-        if step_id == last_step_id:
-            break
-        last_step_id = step_id
-        consumed_overrides.add(step_id)
-        submission = {**_INSTALL_STEP_BASES.get(step_id, {}), **overrides.get(step_id, {})}
-        submission = {k: v for k, v in submission.items() if v is not None}
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
-    unconsumed = overrides.keys() - consumed_overrides
-    assert not unconsumed, (
-        f"per_step override(s) for {unconsumed} were never applied -- that step never "
-        "rendered this run (a capability answer this test relies on may be missing/typo'd)"
-    )
-    return result
+    return await _walk_flow(hass, init_result, per_step=per_step)
 
 
 def _current_options(entry):
@@ -413,12 +403,17 @@ def _suggested_values(result):
 
 async def test_uc12_1a_reconfigure_shows_mapping_fields_only(hass):
     """UC12 1a: the per-capability steps are 'restricted to their mapping fields only ...
-    never a threshold', and step 8 is skipped entirely."""
+    never a threshold', and step 8 is skipped entirely. Checked for all three
+    capability-gated steps (solar, captar, deadline) -- their `if self._mode is not
+    FlowMode.RECONFIGURE: schema = schema.extend(...)` lines were dead code before this task,
+    since reconfigure never reached any of them until now."""
     data = entry_data_base(
         **{
             CONF_SOLAR_AVAILABLE: True,
             CONF_EV_SOC_ENTITY: "sensor.ev_soc",
             CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_CAPTAR_AVAILABLE: True,
+            CONF_DEADLINE_AVAILABLE: True,
         }
     )
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
@@ -430,12 +425,27 @@ async def test_uc12_1a_reconfigure_shows_mapping_fields_only(hass):
     )
     assert result["step_id"] == STEP_CORE
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True}
+        result["flow_id"],
+        {
+            **CORE_INPUT,
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_CAPTAR_AVAILABLE: True,
+            CONF_DEADLINE_AVAILABLE: True,
+        },
     )
     assert result["step_id"] == STEP_SOLAR
     assert _keys(result["data_schema"]) == _keys(_solar_mapping_schema(include_ev_soc=True))
 
-    visited_steps = []
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], SOLAR_INPUT)
+    assert result["step_id"] == STEP_CAPTAR
+    assert _keys(result["data_schema"]) == _keys(_captar_mapping_schema(include_ev_soc=False))
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["step_id"] == STEP_DEADLINE
+    assert _keys(result["data_schema"]) == _keys(DEADLINE_MAPPING_SCHEMA)
+
+    visited_steps = [STEP_DEADLINE]
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], DEADLINE_INPUT)
     while result["type"] == FlowResultType.FORM:
         visited_steps.append(result["step_id"])
         result = await hass.config_entries.flow.async_configure(
@@ -1255,6 +1265,27 @@ async def test_r20_ac6_missing_solar_forecast_is_reported_on_the_solar_step(hass
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_SOLAR
     assert result["errors"] == {CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
+
+
+async def test_r20_ac6_missing_ev_soc_and_solar_forecast_reported_together(hass):
+    """The two guards on async_step_solar are unioned (`errors.update(...)`), not
+    short-circuited -- both must appear when both fields are missing at once, not just
+    whichever guard happened to run last. (Previously pinned via a now-superseded
+    reconfigure-specific test; the guard itself is mode-agnostic, so this install-flow test
+    covers it exactly as well.)"""
+    result = await _run_install_flow(
+        hass,
+        per_step={
+            STEP_CORE: {CONF_SOLAR_AVAILABLE: True},
+            STEP_SOLAR: {CONF_EV_SOC_ENTITY: None, CONF_SOLAR_FORECAST_ENTITY: None},
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_SOLAR
+    assert result["errors"] == {
+        CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
+        CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
+    }
 
 
 async def test_r20_ac6_wrong_domain_solar_forecast_entity_is_rejected(hass):
