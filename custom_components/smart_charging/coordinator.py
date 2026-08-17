@@ -76,6 +76,7 @@ from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .modes import captar
 from .modes._phase import Phase
+from .profiles.policy import PROFILE_POLICIES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -184,6 +185,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # `_was_faulted`/`_log_fault` below), since a corrupted Store-read value would otherwise
         # re-reject identically every cycle.
         self._last_rejected_mode: str | None = None
+        # Same once-per-outage discipline as `_last_rejected_mode`, for `set_active_profile`'s
+        # own registry guard (issue #718's PROFILE_POLICIES lookup) -- a corrupted stored
+        # profile would otherwise re-read and re-reject identically every cycle.
+        self._last_rejected_profile: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
@@ -460,10 +465,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             charger_w=charger_w,
             voltage=voltage,
             now=now,
-            now_dt=now_dt,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
-            monthly_peak_kw=monthly_peak_kw,
         )
         # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
         # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
@@ -592,16 +595,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             )
 
         urgent = deadline_urgency.urgent
-        ctx.urgent = urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw, self._config.max_peak_kw, urgent=urgent
         )
         # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
         # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault
         # early return) runs before `ctx` is constructed, so ctx's field intentionally carries
-        # its dataclass default (None, issue #564) until this final, real value lands here. No
-        # ModeHandler reads this field today; if one later does, thread the provisional value onto
-        # ctx too.
+        # its dataclass default (None, issue #564) until this final, real value lands here.
+        # `_apply_peak_clamp` (below) reads it off `ctx` rather than as a separately-passed
+        # kwarg (issue #719) -- there is no second copy for the two to drift out of lockstep.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
         # entity-catalog.md:153/control-cycle.md step 5 -- the same raw-reading target the R3
@@ -634,18 +636,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         desired = self._dispatch_mode(ctx)
 
-        desired = self._apply_peak_clamp(
-            desired,
-            net_w=net_w,
-            charger_w=charger_w,
-            voltage=voltage,
-            effective_peak_limit_kw=effective_peak_limit_kw,
-            now=now,
-        )
+        desired = self._apply_peak_clamp(ctx, desired)
 
-        desired = self._apply_grid_ceiling_clamp(
-            desired, net_w=net_w, charger_w=charger_w, voltage=voltage
-        )
+        desired = self._apply_grid_ceiling_clamp(ctx, desired)
         desired = apply_floor_cap(  # E8 invariant last
             desired, min_a=self._config.min_current, max_a=self._config.max_current
         )
@@ -766,10 +759,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # raw (stale, user-facing) value here every cycle would fight that resolution and
         # falsely register as a mode *change* to _reset_mode_state_if_changed() right below,
         # silently discarding R7/R11 timers and R3's breach cooldown every single cycle.
+        # Resolved via the ADR-0017 registry (issue #718) -- `ManualPolicy.select` is a pure
+        # pass-through of `active_mode`, so this is behaviorally identical to assigning `mode`
+        # directly, but it means Manual's own dispatch actually goes through the
+        # `ModeSelectionPolicy` the registry was built for, rather than bypassing it.
         if self.active_profile != PROFILE_AUTO:
             mode = await self._store.read(Platform.SELECT, OWNED_SUFFIX_MODE, str)
             if mode is not None:
-                self.set_active_mode(mode)
+                resolved_mode = PROFILE_POLICIES[self.active_profile].select(active_mode=mode)
+                self.set_active_mode(resolved_mode)
 
         simple_reads: tuple[tuple[str, str, type, Callable[[Any], None]], ...] = (
             (Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float, self.set_target_current),
@@ -863,16 +861,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         return desired
 
-    def _apply_peak_clamp(
-        self,
-        desired: float,
-        *,
-        net_w: float,
-        charger_w: float,
-        voltage: float,
-        effective_peak_limit_kw: float,
-        now: float,
-    ) -> float:
+    def _apply_peak_clamp(self, ctx: CycleContext, desired: float) -> float:
         """R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
         Sec 7). `desired` here is the already-computed mode request from `_dispatch_mode` --
         apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
@@ -881,38 +870,40 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         below, per ADR-0006's requirement that the two never merge into one routine -- merging
         them would let the R17 opt-out silently reach C4 too. Mutates self._peak_tracker and, on a
         force-stop while Captar is active, self._mode_state[MODE_CAPTAR] -- both exactly as
-        before this extraction (ADR-0023)."""
+        before this extraction (ADR-0023). Reads net_w/charger_w/voltage/effective_peak_limit_kw/
+        now off `ctx` (issue #719) rather than as separately-passed kwargs -- `_run_cycle`
+        already has exactly one of each by the time this is called, so there is no second copy
+        for the two to drift out of lockstep."""
         if self.active_mode == MODE_POWER and not self._config.power_respect_peak:
             return desired
         desired, self._peak_tracker, force_stop = apply_peak_clamp(
             desired,
-            net_w=net_w,
-            charger_w=charger_w,
-            voltage=voltage,
-            effective_peak_limit_kw=effective_peak_limit_kw,
+            net_w=ctx.net_w,
+            charger_w=ctx.charger_w,
+            voltage=ctx.voltage,
+            effective_peak_limit_kw=ctx.effective_peak_limit_kw,
             safety_margin_w=self._config.safety_margin_w,
             min_a=self._config.min_current,
             grace_period_s=self._config.peak_grace_min * 60,
             tracker=self._peak_tracker,
-            now=now,
+            now=ctx.now,
         )
         if force_stop and self.active_mode == MODE_CAPTAR:
             desired = 0.0
-            self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, now)
+            self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, ctx.now)
         return desired
 
-    def _apply_grid_ceiling_clamp(
-        self, desired: float, *, net_w: float, charger_w: float, voltage: float
-    ) -> float:
+    def _apply_grid_ceiling_clamp(self, ctx: CycleContext, desired: float) -> float:
         """C4 grid-supply-ceiling clamp (E6) -- never skippable, no opt-out of any kind. A
         separate named call from the R3 clamp above, per ADR-0006 -- merging the two, or adding
         a shared parameter, would risk the R17 opt-out silently reaching C4 too. Extracted from
-        `_run_cycle` per ADR-0023."""
+        `_run_cycle` per ADR-0023. Reads net_w/charger_w/voltage off `ctx` (issue #719), same
+        rationale as `_apply_peak_clamp` above."""
         return clamp_to_ceiling(
             desired,
-            net_w=net_w,
-            charger_w=charger_w,
-            voltage=voltage,
+            net_w=ctx.net_w,
+            charger_w=ctx.charger_w,
+            voltage=ctx.voltage,
             ceiling_a=self._config.grid_ceiling_a,
             offset_a=self._config.grid_safety_offset_a,
         )
@@ -965,11 +956,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
     def set_active_profile(self, profile: str) -> None:
         """Coordinator's own boundary for `active_profile` (ADR-0014) -- the field itself stays
-        a plain writable attribute (design doc §2, criterion 1). No range to clamp:
-        `SelectEntity`'s own `options` list already rejects any value outside the enum before
-        it is ever stored. Since ADR-0018, `select.py` never calls this directly: the
-        coordinator reads the stored option through the Store each cycle
-        (`_read_owned_entities`) and calls this itself; the only other caller is tests."""
+        a plain writable attribute (design doc §2, criterion 1). Since ADR-0018, `select.py`
+        never calls this directly: the coordinator reads the stored option through the Store
+        each cycle (`_read_owned_entities`) and calls this itself; the only other caller is
+        tests.
+
+        Unlike `SelectEntity`'s own `options` list (which rejects an out-of-enum value before
+        ever reaching this method), a value read back from the Store has no such gate -- issue
+        #718 made `_read_owned_entities` look `self.active_profile` up in `PROFILE_POLICIES`
+        every cycle, so a stale/corrupted restored profile would otherwise KeyError there
+        instead of degrading gracefully the way an unmapped `active_mode` already does in
+        `set_active_mode` above. Guards the same way: falls back to `PROFILE_MANUAL` (the
+        constructor's own starting value) and logs a warning once per rejected raw value
+        (`_last_rejected_profile`, mirroring `_last_rejected_mode`'s once-per-outage
+        discipline, ADR-0007) rather than raising `CycleResult.fault` -- a corrupted *setting*
+        is a different class of defect than a hardware adapter returning `None`."""
+        if profile not in PROFILE_POLICIES:
+            if profile != self._last_rejected_profile:
+                _LOGGER.warning(
+                    "smart_charging: select.smart_charging_profile has an unrecognized value "
+                    "%r; falling back to %s until a valid option (%s) is selected again",
+                    profile,
+                    PROFILE_MANUAL,
+                    ", ".join(sorted(PROFILE_POLICIES)),
+                )
+                self._last_rejected_profile = profile
+            profile = PROFILE_MANUAL
+        else:
+            self._last_rejected_profile = None
         self.active_profile = profile
 
     def _mode_desired_current(
@@ -988,12 +1002,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         state -- the baseline-mode comparison needs a candidate mode's request
         without actually charging on it.
 
-        `net_w`/`charger_w`/`now_dt` are deliberately 0.0/0.0/None here, not threaded from
-        the caller: none of the five `ModeHandler.desired_current` implementations reads
-        `ctx.net_w`, `ctx.charger_w`, or `ctx.now_dt` (only `ctx.surplus_w`/`ctx.voltage`/
-        `ctx.now`/`ctx.status`) -- the one intentional exception `CycleContext.now_dt`'s
-        `datetime | None` typing documents. If a future ModeHandler needs any of these
-        three, thread the real values from `_run_cycle` at that point, not before."""
+        `net_w`/`charger_w` are deliberately 0.0/0.0 here, not threaded from the caller: none of
+        the five `ModeHandler.desired_current` implementations reads `ctx.net_w`/`ctx.charger_w`
+        (only `ctx.surplus_w`/`ctx.voltage`/`ctx.now`/`ctx.status`), and this dry-run ctx is never
+        passed to `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue
+        #719) -- only the real `_run_cycle`-constructed ctx is. If a future ModeHandler needs
+        either, thread the real values from `_run_cycle` at that point, not before."""
         if status not in CHARGEABLE_STATES:
             return 0.0
         if self._mode_handlers[mode].is_soc_gated and ev_soc >= active_soc_limit:
@@ -1004,7 +1018,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             charger_w=0.0,
             voltage=voltage,
             now=now,
-            now_dt=None,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             active_soc_limit=active_soc_limit,
