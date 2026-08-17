@@ -35,5 +35,19 @@ def test_compare_reports_no_regression_within_tolerance(tmp_path):
 
     rows = compare(str(results_path), str(baseline_path))
 
+    assert len(rows) == 2 + 3  # header + separator + one row per metric
+    assert any("| median_cpu_ms | 10.0 | 10.5 | +5.0% | ok |" == row for row in rows)
     assert not any("REGRESSED" in row for row in rows)
-    assert any("median_cpu_ms" in row for row in rows)
+
+
+def test_compare_reports_missing_results_file_without_raising(tmp_path):
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps({"coordinator_cycle": {"median_cpu_ms": 10.0, "recorded_at": "2026-08-17"}})
+    )
+    missing_results_path = tmp_path / "does-not-exist.json"
+
+    rows = compare(str(missing_results_path), str(baseline_path))
+
+    assert len(rows) == 1
+    assert str(missing_results_path) in rows[0]

@@ -9,7 +9,9 @@ regression should ever fail the job is a separate, future decision.
 import json
 import os
 
+_BASELINE_KEY = "coordinator_cycle"
 _METRICS = ("median_cpu_ms", "median_rss_delta_kb", "median_peak_traced_memory_kb")
+_STATUS_OK = "ok"
 
 
 def compare(results_path: str, baseline_path: str) -> list[str]:
@@ -19,15 +21,20 @@ def compare(results_path: str, baseline_path: str) -> list[str]:
     with open(results_path) as f:
         results = json.load(f)
     with open(baseline_path) as f:
-        baseline = json.load(f)["coordinator_cycle"]
+        baseline = json.load(f)[_BASELINE_KEY]
 
     rows = ["| metric | baseline | current | delta % | status |", "| --- | --- | --- | --- | --- |"]
     for metric in _METRICS:
         base_value = baseline[metric]
         current_value = results[metric]
-        delta_pct = ((current_value - base_value) / base_value) * 100 if base_value else 0.0
+        # A metric like median_rss_delta_kb can legitimately be <= 0 -- dividing by the signed
+        # base_value would flip the sign of a real regression into a false "improvement" for a
+        # negative baseline. abs() keeps delta_pct's sign meaning "current is higher/lower than
+        # baseline" regardless of the baseline's own sign.
+        delta_pct = ((current_value - base_value) / abs(base_value)) * 100 if base_value else 0.0
         rows.append(
-            f"| {metric} | {base_value:.1f} | {current_value:.1f} | {delta_pct:+.1f}% | ok |"
+            f"| {metric} | {base_value:.1f} | {current_value:.1f} | "
+            f"{delta_pct:+.1f}% | {_STATUS_OK} |"
         )
     return rows
 
