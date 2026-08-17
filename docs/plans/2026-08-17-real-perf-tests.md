@@ -12,8 +12,9 @@ a committed rolling baseline for trend tracking, per
 `tests/benchmarks/update_baseline.py`, registered in `tests/conftest.py`'s `_PURE_FILES`) plus a
 committed `tests/benchmarks/baseline.json`; the existing `test_coordinator_perf.py`'s single test
 function gets a rewritten measurement body (11 batches, `psutil` CPU/RSS deltas, `tracemalloc`
-kept alongside). One new CI step in the `perf` job, plus a fix to the `test` job so it stops
-accidentally also collecting `tests/benchmarks`. Full design:
+kept alongside). One new CI step in the `perf` job; `perf` scoped to `push` on `main` only
+(issue #729); and a fix to the `test` job so it stops accidentally also collecting
+`tests/benchmarks`. Full design:
 [`2026-08-17-real-perf-tests-design.md`](2026-08-17-real-perf-tests-design.md).
 
 **Tech Stack:** Python ≥3.13 (per `pyproject.toml`), `pytest` (plain, ADR-0009 — the two new baseline scripts),
@@ -472,10 +473,13 @@ per this project's existing HA-harness convention).
 **Files:**
 - Create: `tests/benchmarks/baseline.json`
 
-**Step 1:** Push Task 2.1's commit and let the `perf` CI job run once (or run
+**Step 1:** Push Task 2.1's commit on its PR branch and let the `perf` CI job run once (or run
 `PERF_RESULTS_DIR=/tmp/perf-results pytest tests/benchmarks -q` locally/under WSL and use that
 output — either is a legitimate seed per the design doc, since there is no prior trustworthy
-baseline to preserve).
+baseline to preserve). **This dual path is only available before Task 4.1 lands** (issue #729
+scopes `perf` to `push` on `main` only, so a PR-branch push stops triggering it) — once Task 4.1
+is done, any future re-seed can only come from a local/WSL run or a real push-to-`main` run's
+output, not from a PR's own CI.
 
 **Step 2:** Take the resulting `coordinator_cycle.json`'s three median fields and write
 `tests/benchmarks/baseline.json`:
@@ -501,7 +505,7 @@ against an empty starter file with the `coordinator_cycle` key already present, 
 
 ## Phase 4 — Wire the CI comparison step
 
-### Task 4.1: Add the `compare_baseline.py` step, and stop the `test` job from also collecting `tests/benchmarks`
+### Task 4.1: Add the `compare_baseline.py` step, scope `perf` to `push` only, and stop the `test` job from also collecting `tests/benchmarks`
 
 **ADR honored:** ADR-0026. **Test boundary:** none — CI YAML only, verified by the next CI run.
 
@@ -532,7 +536,24 @@ added in Task 0.1). No `permissions:` change in `ci.yml` — the step only reads
 (already checked out) and the results directory, and writes to `$GITHUB_STEP_SUMMARY`, not to the
 repo.
 
-**Step 2: Fix the pre-existing `test`-job gap** (design doc §4/§5) — the merge-blocking `test` job
+**Step 2: Scope `perf` to `push` only** (design doc §4 amendment, issue #729) — `perf` currently
+inherits the workflow's shared `pull_request` + `push` trigger, running on every PR attempt too.
+Add a `github.event_name == 'push'` clause to the job's existing `if:`:
+
+```yaml
+    if: always() && github.event_name == 'push' && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+```
+
+Per `ci.yml`'s own header comment, `perf` isn't a required status check (only `lint`/`test`/
+`hassfest`/`hacs` are), so it's safe for it to simply report **skipped** on a `pull_request` event
+rather than needing the "always report skipped" fail-safe that comment describes for the required
+jobs — confirm this against the repo's actual branch-protection settings (Settings → Branches)
+before merging this task, since the comment is a paraphrase, not the authoritative source. Update
+that same header comment (lines 9-14) to note `perf` as a deliberate exception to the "every job
+reports skipped via the shared `if:`" pattern it describes — otherwise the comment goes stale the
+moment this step lands.
+
+**Step 3: Fix the pre-existing `test`-job gap** (design doc §4/§5) — the merge-blocking `test` job
 (`.github/workflows/ci.yml`, the `test:` job) runs bare `pytest -q`, which `pyproject.toml`'s
 `testpaths = ["tests"]` already expands to include `tests/benchmarks/test_coordinator_perf.py`
 *without* the `perf` job's `continue-on-error: true` protecting it. Change that job's step:
@@ -544,12 +565,13 @@ repo.
 This is what makes the "`perf` stays advisory" decision (§5) actually true instead of only true
 for one of the two jobs that run it.
 
-**Step 3:** No new automated test — this is CI YAML, verified by observing the next real workflow
-run: the `perf` job's summary shows the comparison table, and the `test` job's log no longer
-mentions `test_coordinator_perf.py`. Note this verification step explicitly in the PR description
+**Step 4:** No new automated test — this is CI YAML, verified by observing the next real workflow
+run: a PR run's job list shows `perf` skipped (Step 2), a push-to-`main` run's `perf` job summary
+shows the comparison table (Step 1), and the `test` job's log no longer mentions
+`test_coordinator_perf.py` (Step 3). Note this verification step explicitly in the PR description
 so the human reviewer checks the Actions tab, not just the diff.
 
-**Step 4: Commit** — `ci: compare perf results against the committed baseline, and stop the required test job from also gating on it (issue #708)`.
+**Step 5: Commit** — `ci: compare perf results against the committed baseline, run perf on push to main only, and stop the required test job from also gating on it (issue #708, #729)`.
 
 ---
 
