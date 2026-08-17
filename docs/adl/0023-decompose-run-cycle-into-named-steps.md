@@ -1,7 +1,7 @@
 # ADR-0023: Decompose `_run_cycle` into named per-step methods (extends ADR-0012)
 
 Date: 2026-08-10
-Status: Proposed
+Status: Accepted
 
 ## Context
 

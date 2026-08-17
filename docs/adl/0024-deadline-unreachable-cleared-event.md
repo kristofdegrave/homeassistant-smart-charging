@@ -1,7 +1,7 @@
 # ADR-0024: Paired clear event to re-arm the deadline-unreachable notice per occasion
 
 Date: 2026-08-13
-Status: Proposed
+Status: Accepted
 
 ## Context
 

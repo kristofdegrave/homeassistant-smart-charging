@@ -1,7 +1,7 @@
 # ADR-0020: Advisory SkillSpector scan feeding the workflow-reviewer AI review
 
 Date: 2026-08-09
-Status: Proposed
+Status: Accepted
 
 ## Context
 
