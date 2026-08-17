@@ -12,11 +12,22 @@ name: CI
 # on non-matching PRs -- reporting "skipped" (which satisfies a required check) instead of
 # never running. The `needs.changes.result != 'success'` half is deliberate fail-safe: if the
 # `changes` job itself errors, jobs still run rather than silently reporting green.
+#
+# `perf` is a deliberate exception to that pattern: it isn't a required status check, so it
+# simply reports "skipped" on `pull_request` events instead (its `if:` excludes that event) --
+# avoids sampling the perf suite on noisy per-PR shared-runner attempts, matching its
+# baseline/trend model of one accepted data point per merge (issue #729). It still runs on
+# `push` (to main) and on a manual `workflow_dispatch` (e.g. to re-seed baseline.json without
+# waiting for a push). One consequence: the perf job and its baseline-comparison step are no
+# longer exercised on a PR at all -- a break in either is only observable after a push/dispatch.
 
 on:
   push:
     branches: [main]
   pull_request:
+  # Manual trigger -- with `perf` now push-to-main-only, this keeps a way to sample a
+  # fresh perf run (e.g. to re-seed baseline.json) without needing a push (issue #708).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -75,16 +86,25 @@ jobs:
       - run: pip install -r requirements-test.txt
       # Exit 5 = "no tests collected"; tolerated during scaffolding before the
       # first tests land (Phase 1). Any real failure (exit 1) still fails the job.
-      - run: pytest -q || [ $? -eq 5 ]
+      # test_coordinator_perf.py is excluded -- it has its own dedicated perf job below
+      # with its own (advisory-only) tolerance; this required job must not also gate on
+      # it (#708). Its sibling test_compare_baseline.py (plain-pytest, no HA dependency)
+      # is deliberately NOT excluded -- it still needs a real, non-advisory gate.
+      - run: pytest -q --ignore=tests/benchmarks/test_coordinator_perf.py || [ $? -eq 5 ]
 
   perf:
-    # CPU/memory tripwire for the M1 control cycle (issue #266), separate from the
-    # functional gate above. continue-on-error: advisory-only until a real baseline
-    # exists -- a ceiling breach is visible in the run but never blocks merge.
+    # CPU/RSS tripwire for the M1 control cycle (issue #708, ADR-0026), separate from the
+    # functional gate above. continue-on-error: advisory-only until real trend history
+    # exists -- a ceiling breach, or a baseline comparison regression, is visible in the
+    # run but never blocks merge. push-to-main only (issue #729): see the header comment.
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+    if: always() && github.event_name != 'pull_request' && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      # github.workspace, not runner.temp -- the runner context isn't available in a
+      # job-level env: block (only github/needs/strategy/matrix/vars/secrets/inputs are).
+      PERF_RESULTS_DIR: ${{ github.workspace }}/perf-results
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -93,13 +113,13 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements-test.txt
       - run: pytest tests/benchmarks -q
-        env:
-          PERF_RESULTS_DIR: ${{ runner.temp }}/perf-results
+      - run: python tests/benchmarks/compare_baseline.py "$PERF_RESULTS_DIR/coordinator_cycle.json" tests/benchmarks/baseline.json >> "$GITHUB_STEP_SUMMARY"
+        if: always()
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: perf-results
-          path: ${{ runner.temp }}/perf-results
+          path: ${{ env.PERF_RESULTS_DIR }}
           if-no-files-found: ignore
 
   hassfest:

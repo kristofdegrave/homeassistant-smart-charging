@@ -35,7 +35,9 @@ jobs:
           python-version: "3.14"
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements-test.txt
-      - run: pytest --cov=custom_components/smart_charging --cov-report=term-missing --cov-report=xml -q
+      # test_coordinator_perf.py excluded -- ci.yml's dedicated perf job is the only
+      # advisory-tolerance gate for it; this job must not fail on shared-runner noise (#708).
+      - run: pytest --cov=custom_components/smart_charging --cov-report=term-missing --cov-report=xml -q --ignore=tests/benchmarks/test_coordinator_perf.py
       - uses: actions/upload-artifact@v7
         with:
           name: coverage-report
