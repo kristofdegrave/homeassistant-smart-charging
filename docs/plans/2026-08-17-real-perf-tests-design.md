@@ -212,9 +212,12 @@ clause:
 ```
 
 `perf` isn't a required status check (only `lint`/`test`/`hassfest`/`hacs` are, per this workflow's
-own header comment), so the fail-safe "always report skipped so a required check doesn't hang"
-pattern that condition otherwise protects doesn't apply here — it's safe for `perf` to simply not
-run at all on a PR event.
+own header comment — the authoritative source is the repo's branch-protection settings, and the
+paired plan's Task 4.1 confirms against those directly before merging), so the fail-safe "always
+report skipped so a required check doesn't hang" pattern that condition otherwise protects doesn't
+apply here — `perf` can simply report **skipped** on a PR event with no ill effect. Task 4.1 also
+updates `ci.yml`'s header comment to note `perf` as this deliberate exception, so the comment stays
+accurate once this lands.
 
 **A second, pre-existing CI fix this slice must make (§5):** `pyproject.toml`'s
 `testpaths = ["tests"]` means the merge-blocking `test` job's bare `pytest -q` already collects
