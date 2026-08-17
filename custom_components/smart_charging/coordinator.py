@@ -185,6 +185,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # `_was_faulted`/`_log_fault` below), since a corrupted Store-read value would otherwise
         # re-reject identically every cycle.
         self._last_rejected_mode: str | None = None
+        # Same once-per-outage discipline as `_last_rejected_mode`, for `set_active_profile`'s
+        # own registry guard (issue #718's PROFILE_POLICIES lookup) -- a corrupted stored
+        # profile would otherwise re-read and re-reject identically every cycle.
+        self._last_rejected_profile: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
@@ -971,11 +975,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
     def set_active_profile(self, profile: str) -> None:
         """Coordinator's own boundary for `active_profile` (ADR-0014) -- the field itself stays
-        a plain writable attribute (design doc §2, criterion 1). No range to clamp:
-        `SelectEntity`'s own `options` list already rejects any value outside the enum before
-        it is ever stored. Since ADR-0018, `select.py` never calls this directly: the
-        coordinator reads the stored option through the Store each cycle
-        (`_read_owned_entities`) and calls this itself; the only other caller is tests."""
+        a plain writable attribute (design doc §2, criterion 1). Since ADR-0018, `select.py`
+        never calls this directly: the coordinator reads the stored option through the Store
+        each cycle (`_read_owned_entities`) and calls this itself; the only other caller is
+        tests.
+
+        Unlike `SelectEntity`'s own `options` list (which rejects an out-of-enum value before
+        ever reaching this method), a value read back from the Store has no such gate -- issue
+        #718 made `_read_owned_entities` look `self.active_profile` up in `PROFILE_POLICIES`
+        every cycle, so a stale/corrupted restored profile would otherwise KeyError there
+        instead of degrading gracefully the way an unmapped `active_mode` already does in
+        `set_active_mode` above. Guards the same way: falls back to `PROFILE_MANUAL` (the
+        constructor's own starting value) and logs a warning once per rejected raw value
+        (`_last_rejected_profile`, mirroring `_last_rejected_mode`'s once-per-outage
+        discipline, ADR-0007) rather than raising `CycleResult.fault` -- a corrupted *setting*
+        is a different class of defect than a hardware adapter returning `None`."""
+        if profile not in PROFILE_POLICIES:
+            if profile != self._last_rejected_profile:
+                _LOGGER.warning(
+                    "smart_charging: select.smart_charging_profile has an unrecognized value "
+                    "%r; falling back to %s until a valid option (%s) is selected again",
+                    profile,
+                    PROFILE_MANUAL,
+                    ", ".join(sorted(PROFILE_POLICIES)),
+                )
+                self._last_rejected_profile = profile
+            profile = PROFILE_MANUAL
+        else:
+            self._last_rejected_profile = None
         self.active_profile = profile
 
     def _mode_desired_current(
