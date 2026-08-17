@@ -1,15 +1,17 @@
-"""CPU/memory tripwire for the M1 control cycle (issue #266).
+"""CPU/RSS tripwire for the M1 control cycle (issue #708, ADR-0026).
 
 Separate from the functional suite in tests/test_coordinator.py -- these tests report and
 bound the cost of repeatedly running the hot path (SmartChargingCoordinator._async_update_data),
-not its behavior. Ceilings are deliberately generous (a CI-runner tripwire for gross
-regressions, not a performance SLA) until a real baseline exists.
+not its behavior. Ceilings are deliberately generous placeholders (a CI-runner tripwire for
+gross regressions, not a performance SLA) until a real baseline exists (design doc S3.1).
 """
 
 import json
 import os
-import time
+import statistics
 import tracemalloc
+
+import psutil
 
 from custom_components.smart_charging.config import SmartChargingConfig
 from custom_components.smart_charging.const import (
@@ -21,11 +23,18 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
+from tests.benchmarks.compare_baseline import BASELINE_KEY, METRICS
 from tests.config_factory import make_test_config
 
 _ITERATIONS = 200
-_MAX_AVG_CYCLE_MS = 20.0
-_MAX_PEAK_MEMORY_KB = 5_000
+_BATCHES = 11
+_WARMUP_BATCHES = 1
+_MAX_MEDIAN_CPU_MS = 20.0
+_MAX_MAX_CPU_MS = 30.0
+_MAX_MEDIAN_RSS_DELTA_KB = 2_000.0
+_MAX_MEDIAN_PEAK_MEMORY_KB = 5_000.0
+
+_process = psutil.Process()
 
 
 class _FakeNumeric:
@@ -84,38 +93,76 @@ def _write_report(name, payload):
         json.dump(payload, f, indent=2)
 
 
+async def _measure_one_batch(coord):
+    """One batch's CPU-ms-per-cycle, net RSS delta (KB), and peak traced memory (KB).
+    Sampled before/after this batch specifically (not once for the whole test) so the
+    RSS delta is isolated from whatever earlier batches already allocated -- ADR-0026's
+    own rationale for choosing psutil over resource.getrusage."""
+    cpu_before = _process.cpu_times()
+    rss_before_kb = _process.memory_info().rss / 1024
+    tracemalloc.start()
+    for _ in range(_ITERATIONS):
+        await coord._async_update_data()
+    _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    cpu_after = _process.cpu_times()
+    rss_after_kb = _process.memory_info().rss / 1024
+
+    cpu_s_total = (cpu_after.user + cpu_after.system) - (cpu_before.user + cpu_before.system)
+    return (cpu_s_total * 1000) / _ITERATIONS, rss_after_kb - rss_before_kb, peak_bytes / 1024
+
+
 async def test_power_mode_cycle_perf(hass):
+    """CPU/RSS tripwire for the M1 control cycle (issue #708, ADR-0026). Runs _BATCHES
+    batches of _ITERATIONS cycles each, discards the first as warm-up, and reports
+    median (primary comparator) plus max_cpu_ms -- a small-n proxy for a 95th
+    percentile, not a true one: with only _BATCHES - _WARMUP_BATCHES measured batches, a
+    statistically rigorous p95 isn't meaningful (design doc S3)."""
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore()
     )
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
 
-    tracemalloc.start()
-    start = time.perf_counter()
-    for _ in range(_ITERATIONS):
-        await coord._async_update_data()
-    elapsed_s = time.perf_counter() - start
-    _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    batches = [await _measure_one_batch(coord) for _ in range(_BATCHES)]
+    measured = batches[_WARMUP_BATCHES:]
+    cpu_values = [b[0] for b in measured]
+    rss_values = [b[1] for b in measured]
+    peak_values = [b[2] for b in measured]
 
-    avg_cycle_ms = (elapsed_s / _ITERATIONS) * 1000
-    peak_kb = peak_bytes / 1024
+    median_cpu_ms = statistics.median(cpu_values)
+    max_cpu_ms = max(cpu_values)  # small-n p95 proxy (design doc S3) -- not a true percentile
+    median_rss_delta_kb = statistics.median(rss_values)
+    median_peak_kb = statistics.median(peak_values)
 
+    cpu_metric, rss_metric, peak_metric = METRICS
     _write_report(
-        "coordinator_cycle",
+        BASELINE_KEY,
         {
-            "iterations": _ITERATIONS,
-            "avg_cycle_ms": avg_cycle_ms,
-            "peak_traced_memory_kb": peak_kb,
+            "batches": _BATCHES,
+            "warmup_batches": _WARMUP_BATCHES,
+            "iterations_per_batch": _ITERATIONS,
+            cpu_metric: median_cpu_ms,
+            "max_cpu_ms": max_cpu_ms,
+            rss_metric: median_rss_delta_kb,
+            peak_metric: median_peak_kb,
         },
     )
 
-    assert avg_cycle_ms < _MAX_AVG_CYCLE_MS, (
-        f"Power-mode cycle averaged {avg_cycle_ms:.2f} ms over {_ITERATIONS} runs "
-        f"(ceiling {_MAX_AVG_CYCLE_MS} ms) -- see issue #266"
+    assert median_cpu_ms < _MAX_MEDIAN_CPU_MS, (
+        f"Power-mode cycle's median CPU time was {median_cpu_ms:.2f} ms over "
+        f"{len(measured)} measured batches of {_ITERATIONS} runs each "
+        f"(ceiling {_MAX_MEDIAN_CPU_MS} ms) -- see issue #708"
     )
-    assert peak_kb < _MAX_PEAK_MEMORY_KB, (
-        f"Power-mode cycle peaked at {peak_kb:.0f} KB traced memory over {_ITERATIONS} runs "
-        f"(ceiling {_MAX_PEAK_MEMORY_KB} KB) -- see issue #266"
+    assert max_cpu_ms < _MAX_MAX_CPU_MS, (
+        f"Power-mode cycle's worst-batch CPU time per cycle was {max_cpu_ms:.2f} ms "
+        f"(ceiling {_MAX_MAX_CPU_MS} ms) -- see issue #708"
+    )
+    assert median_rss_delta_kb < _MAX_MEDIAN_RSS_DELTA_KB, (
+        f"Power-mode cycle's median RSS growth was {median_rss_delta_kb:.0f} KB per batch "
+        f"(ceiling {_MAX_MEDIAN_RSS_DELTA_KB} KB) -- see issue #708"
+    )
+    assert median_peak_kb < _MAX_MEDIAN_PEAK_MEMORY_KB, (
+        f"Power-mode cycle's median peak traced memory was {median_peak_kb:.0f} KB "
+        f"(ceiling {_MAX_MEDIAN_PEAK_MEMORY_KB} KB) -- see issue #708"
     )
