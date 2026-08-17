@@ -36,7 +36,7 @@ and revisits no ADR-0026 trade-off.
 | `tracemalloc` peak, not RSS | **In scope** — add `psutil.Process().memory_info().rss` before/after delta *alongside* `tracemalloc` (§2); ADR-0026's Consequences left this an open choice — this spec keeps `tracemalloc` for its genuine per-block Python-allocation attribution (a property neither `psutil` metric has) while adding RSS as the real-memory signal `tracemalloc` cannot provide |
 | Single sample, no statistical treatment | **In scope** — multiple batches, first batch discarded as warm-up, median (and a small-n p95 proxy) across the rest (§3) |
 | No trend/evolution tracking across CI runs | **In scope** — a committed rolling baseline JSON + a comparison step, not `github-action-benchmark` (§4 explains the choice) |
-| Whether `perf` stays `continue-on-error: true` | **Decided: stays advisory for now** — deferred to a follow-up issue once real trend history exists to calibrate a hard gate (§5) |
+| Whether `perf` stays `continue-on-error: true` | **Decided: stays advisory for now** — deferred to a follow-up issue once real trend history exists to calibrate a hard gate (§5); requires also fixing a pre-existing gap where the merge-blocking `test` job unintentionally collects `tests/benchmarks/` too (§5) |
 
 ---
 
@@ -45,6 +45,9 @@ and revisits no ADR-0026 trade-off.
 Both new primitives are sampled **before and after each batch** (not once per whole test run) —
 this is what makes a delta meaningful in a single, long-lived pytest process, per ADR-0026's own
 rationale.
+
+Illustrative shape only (the coordinator's own cycle is `async`, so the paired plan's real
+implementation is an `async def`, not the sync sketch below):
 
 ```python
 import psutil
@@ -87,12 +90,10 @@ the remaining 10 measured batches.
 _BATCHES = 11
 _WARMUP_BATCHES = 1
 
-def _run_batches(coord):
+async def _run_batches(coord):
     results = []
     for _ in range(_BATCHES):
-        cpu_ms, rss_delta_kb, peak_kb = _cpu_ms_and_rss_delta_kb(
-            lambda: _run_iterations(coord)
-        )
+        cpu_ms, rss_delta_kb, peak_kb = await _measure_one_batch(coord)
         results.append((cpu_ms / _ITERATIONS, rss_delta_kb, peak_kb))
     return results[_WARMUP_BATCHES:]
 ```
@@ -103,6 +104,18 @@ report payload and the test's own docstring as a small-n tail proxy, not a true 
 (`statistics.median`) is the primary ceiling comparator; the max/"p95" is reported for visibility
 and compared against its own, more generous ceiling.
 
+### 3.1 Ceiling selection
+
+No trustworthy measurement exists yet to derive numeric ceilings from — that is exactly the gap
+this slice closes (§4). The paired plan therefore keeps the same posture the current suite already
+states in its own docstring ("deliberately generous... until a real baseline exists"): initial
+ceilings are chosen generously (same order of magnitude as today's `_MAX_AVG_CYCLE_MS`/
+`_MAX_PEAK_MEMORY_KB`, extended with a comparably generous RSS-delta ceiling), explicitly as
+placeholders, not derived from data. Once Phase 3 (§9) seeds the first real `baseline.json`, a
+human can tighten these ceilings in a small follow-up commit if the real medians run far below
+them — this spec does not do that tightening itself, since it would be guessing at numbers a real
+run hasn't produced yet.
+
 ---
 
 ## 4. Trend tracking: committed baseline JSON, not `github-action-benchmark`
@@ -111,8 +124,9 @@ Epic #706 named two options: wire up `github-action-benchmark`, or commit-and-di
 baseline JSON. This spec chooses the **committed baseline JSON**.
 
 `github-action-benchmark` needs a `gh-pages` branch (or an external storage backend) to persist
-history, `contents: write` permission (the workflow currently only has `contents: read`,
-`.github/workflows/ci.yml:21`), and typically a bot commit back to the repo on every `main` push —
+history, `contents: write` permission (the workflow currently declares only `contents: read` in
+its top-level `permissions:` block), and typically a bot commit back to the repo on every `main`
+push —
 infrastructure this project doesn't otherwise have and that sits awkwardly with the project's
 "no auto-merge, no bot self-approval" posture (CLAUDE.md merge policy) applied one level down to
 CI writing to branches unattended. A single committed `baseline.json`, updated **only by a human
@@ -143,11 +157,19 @@ itself — keeps the comparison logic testable and runnable standalone):
 ```python
 def compare(results_path, baseline_path) -> list[str]:
     """Returns a list of markdown table rows (one per metric) comparing results_path's
-    payload against baseline_path's stored medians. Never raises/exits non-zero on a
-    regression -- advisory only (see design doc S5); returns the rows for the caller to
-    write to GITHUB_STEP_SUMMARY and to decide whether to fail the job in a later, separate
-    decision."""
+    payload against baseline_path's stored medians, at a 25% tolerance (a deliberately
+    loose first-cut threshold -- there is no real variance data yet to calibrate a
+    tighter one; revisiting this number is part of the same follow-up §5 already
+    schedules). Never raises/exits non-zero on a regression -- advisory only (see design
+    doc S5); returns the rows for the caller to write to GITHUB_STEP_SUMMARY and to
+    decide whether to fail the job in a later, separate decision. If results_path does
+    not exist (the pytest step errored before writing it), returns a single row saying
+    so rather than raising."""
 ```
+
+Runnable as a script with two positional arguments (`results_path`, `baseline_path`) — not via an
+environment variable — so the CI step and a human running it locally use the identical invocation
+(paired plan Task 0.1/4.1).
 
 **`tests/benchmarks/update_baseline.py`** (new, run locally/manually, never by CI):
 
@@ -163,21 +185,38 @@ def update(results_path, baseline_path) -> None:
 `pytest tests/benchmarks -q` step, only running the comparison (no baseline mutation):
 
 ```yaml
-      - run: python tests/benchmarks/compare_baseline.py >> "$GITHUB_STEP_SUMMARY"
+    env:
+      PERF_RESULTS_DIR: ${{ runner.temp }}/perf-results
+    steps:
+      ...
+      - run: pytest tests/benchmarks -q
+      - run: python tests/benchmarks/compare_baseline.py "$PERF_RESULTS_DIR/coordinator_cycle.json" tests/benchmarks/baseline.json >> "$GITHUB_STEP_SUMMARY"
         if: always()
-        env:
-          PERF_RESULTS_DIR: ${{ runner.temp }}/perf-results
 ```
 
-No `contents: write` permission is added — the comparison step only reads `baseline.json` (already
-checked out) and the fresh results directory; it writes only to the step summary, not to the repo.
+(`PERF_RESULTS_DIR` moves to the job's own `env:` block so both steps share one definition instead
+of two copies drifting apart.) No `contents: write` permission is added — the comparison step only
+reads `baseline.json` (already checked out) and the fresh results directory; it writes only to the
+step summary, not to the repo.
+
+**A second, pre-existing CI fix this slice must make (§5):** `pyproject.toml`'s
+`testpaths = ["tests"]` means the merge-blocking `test` job's bare `pytest -q` already collects
+`tests/benchmarks/test_coordinator_perf.py` too — today's single wall-clock/tracemalloc assertion
+already runs there with no `continue-on-error`, which the `perf` job's own advisory framing doesn't
+protect against. This slice increases that test's cost (11 batches instead of one sample) and adds
+a new, less-predictable RSS-delta assertion, so leaving this pre-existing gap unfixed would make
+the "advisory only" claim false in practice. The `test` job's step becomes
+`pytest -q --ignore=tests/benchmarks || [ $? -eq 5 ]` — `tests/benchmarks` keeps running only in
+the dedicated, `continue-on-error: true` `perf` job (paired plan Task 4.1).
 
 ---
 
 ## 5. Decision: `perf` stays `continue-on-error: true`
 
 Epic #706's last open question is whether `perf` should start gating merges. This spec decides
-**no, not yet** — `continue-on-error: true` stays. Two batches of real CI history don't exist yet
+**no, not yet** — `continue-on-error: true` stays, and the `test` job's accidental collection of
+`tests/benchmarks` (§4) is fixed so that job genuinely stops being a second, unintended gate on
+this suite. Real CI history doesn't exist yet
 (this slice produces the *first* trustworthy baseline, per §4); gating merges on a metric with no
 track record risks blocking legitimate PRs on shared-runner noise the multi-run treatment (§3)
 reduces but cannot eliminate. This is a deliberate deferral, not a silent one: **a follow-up issue
@@ -195,7 +234,14 @@ revisit whether `perf` should gate merges for a confirmed (not single-run) regre
   (read/write JSON, do arithmetic) → get their own **plain-pytest** tests,
   `tests/benchmarks/test_compare_baseline.py`, covering: a metric within tolerance produces no
   regression row; a metric beyond tolerance produces a row flagged as regressed; `update_baseline`
-  overwrites exactly the three median fields and nothing else.
+  overwrites the three median fields and `recorded_at`, and nothing else.
+- `tests/conftest.py`'s autouse HA-harness fixture treats anything outside `_PURE_DIRS`/
+  `_PURE_FILES` as needing `hass` (it is not itself scoped by directory beyond that check, so a
+  new file under `tests/benchmarks/` — a directory that must stay HA-harness-capable for its
+  sibling `test_coordinator_perf.py` — would otherwise be silently routed through the harness,
+  the exact ADR-0009 mis-split this spec must not introduce). `test_compare_baseline.py` is added
+  to `conftest.py`'s `_PURE_FILES` set so it collects as plain pytest despite living in that
+  directory.
 - No new HA-harness tests are added — the coordinator's own behavior is unchanged by this slice.
 
 ---
@@ -210,8 +256,13 @@ tests/benchmarks/
   update_baseline.py             # new -- plain function, human-invoked only, never by CI
   test_compare_baseline.py       # new -- plain pytest for the two scripts above
 
+tests/conftest.py
+  _PURE_FILES                    # + "test_compare_baseline.py" (S6)
+
 .github/workflows/ci.yml
-  perf job                       # + one step running compare_baseline.py into GITHUB_STEP_SUMMARY
+  test job                       # pytest -q -> pytest -q --ignore=tests/benchmarks (S4/S5 fix)
+  perf job                       # env: block gains PERF_RESULTS_DIR (shared with the new step);
+                                  # + one step running compare_baseline.py into GITHUB_STEP_SUMMARY
                                   #   (S4); continue-on-error: true unchanged (S5)
 
 requirements-test.txt

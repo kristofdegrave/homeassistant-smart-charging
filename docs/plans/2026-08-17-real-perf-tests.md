@@ -9,12 +9,14 @@ a committed rolling baseline for trend tracking, per
 **Test-infrastructure only — no `custom_components/` behavior change.**
 
 **Architecture:** Two new plain-Python modules (`tests/benchmarks/compare_baseline.py`,
-`tests/benchmarks/update_baseline.py`) plus a committed `tests/benchmarks/baseline.json`; the
-existing `test_coordinator_perf.py`'s single test function gets a rewritten measurement body
-(11 batches, `psutil` CPU/RSS deltas, `tracemalloc` kept alongside). One new CI step in the `perf`
-job. Full design: [`2026-08-17-real-perf-tests-design.md`](2026-08-17-real-perf-tests-design.md).
+`tests/benchmarks/update_baseline.py`, registered in `tests/conftest.py`'s `_PURE_FILES`) plus a
+committed `tests/benchmarks/baseline.json`; the existing `test_coordinator_perf.py`'s single test
+function gets a rewritten measurement body (11 batches, `psutil` CPU/RSS deltas, `tracemalloc`
+kept alongside). One new CI step in the `perf` job, plus a fix to the `test` job so it stops
+accidentally also collecting `tests/benchmarks`. Full design:
+[`2026-08-17-real-perf-tests-design.md`](2026-08-17-real-perf-tests-design.md).
 
-**Tech Stack:** Python ≥3.12, `pytest` (plain, ADR-0009 — the two new baseline scripts),
+**Tech Stack:** Python ≥3.13 (per `pyproject.toml`), `pytest` (plain, ADR-0009 — the two new baseline scripts),
 `pytest-homeassistant-custom-component` (HA harness — the existing coordinator perf test, test
 boundary unchanged), `psutil==7.2.2` (new test-only dependency, ADR-0026), `ruff`.
 
@@ -31,6 +33,10 @@ boundary unchanged), `psutil==7.2.2` (new test-only dependency, ADR-0026), `ruff
 - Both `ruff check .` and `ruff format --check .` before each commit that touches Python.
 - `compare_baseline.py`/`update_baseline.py` tests are plain pytest, no `hass` fixture (ADR-0009 —
   both modules only read/write JSON and do arithmetic, no HA coupling).
+- Once Phase 0 lands, `pytest tests/benchmarks -q` (the `perf` CI job's own invocation) also
+  collects `test_compare_baseline.py` alongside the coordinator perf test — harmless (it's fast,
+  plain-pytest, and always green by the time `perf` runs it), just worth knowing before reading a
+  `perf` job log that has more than one test name in it.
 
 ---
 
@@ -40,20 +46,40 @@ boundary unchanged), `psutil==7.2.2` (new test-only dependency, ADR-0026), `ruff
 
 **ADR honored:** ADR-0026 (measurement primitives this compares are `psutil`-based, decided
 there). **Test boundary:** plain pytest, `tests/benchmarks/test_compare_baseline.py` (new file —
-pure, no HA).
+pure, no HA; see Step 0 below for why this needs an explicit `conftest.py` registration despite
+living in `tests/benchmarks/`).
 
 **Files:**
 - Create: `tests/benchmarks/compare_baseline.py`
 - Create: `tests/benchmarks/test_compare_baseline.py`
+- Edit: `tests/conftest.py`
 
-**Step 1: Write the failing test**
+**Step 0: Register the new test file as pure-logic**
+
+`tests/conftest.py`'s autouse fixture routes anything outside `_PURE_DIRS`/`_PURE_FILES` through
+the HA harness (design doc §6). `tests/benchmarks/` is not, and cannot become, a `_PURE_DIRS`
+entry — its sibling `test_coordinator_perf.py` genuinely needs `hass`. Add the new file by name to
+`_PURE_FILES` instead (matches by `path.name`, so the directory doesn't matter):
+
+```python
+_PURE_FILES = frozenset(
+    {
+        "test_coordinator_cycle.py",
+        "test_entity.py",
+        "test_notification_state.py",
+        "test_config_flow_translations.py",
+        "test_compare_baseline.py",
+    }
+)
+```
+
+**Step 1: Write the failing test** — this first test only needs the "ok" case; the "REGRESSED"
+row and its tolerance constant are driven into existence by Task 0.2, not here.
 
 ```python
 import json
 
 from tests.benchmarks.compare_baseline import compare
-
-_TOLERANCE_PCT = 25.0
 
 
 def test_compare_reports_no_regression_within_tolerance(tmp_path):
@@ -91,7 +117,10 @@ def test_compare_reports_no_regression_within_tolerance(tmp_path):
 `pytest tests/benchmarks/test_compare_baseline.py -v` →
 `ModuleNotFoundError: No module named 'tests.benchmarks.compare_baseline'`.
 
-**Step 3: Implement**
+**Step 3: Implement** — minimal version: every metric reports "ok" (no tolerance check yet; Task
+0.2 adds that). Also handle a missing results file (the pytest step erroring before
+`_write_report` runs) by returning a single explanatory row rather than raising — CI's
+`if: always()` (Task 4.1) means this step still runs in that case.
 
 ```python
 """Advisory baseline comparison for the coordinator perf suite (issue #708, ADR-0026).
@@ -103,13 +132,15 @@ regression should ever fail the job is a separate, future decision.
 """
 
 import json
-
-_TOLERANCE_PCT = 25.0
+import os
 
 _METRICS = ("median_cpu_ms", "median_rss_delta_kb", "median_peak_traced_memory_kb")
 
 
 def compare(results_path: str, baseline_path: str) -> list[str]:
+    if not os.path.exists(results_path):
+        return [f"No perf results found at {results_path} -- the pytest step likely errored."]
+
     with open(results_path) as f:
         results = json.load(f)
     with open(baseline_path) as f:
@@ -120,11 +151,16 @@ def compare(results_path: str, baseline_path: str) -> list[str]:
         base_value = baseline[metric]
         current_value = results[metric]
         delta_pct = ((current_value - base_value) / base_value) * 100 if base_value else 0.0
-        status = "REGRESSED" if delta_pct > _TOLERANCE_PCT else "ok"
         rows.append(
-            f"| {metric} | {base_value:.1f} | {current_value:.1f} | {delta_pct:+.1f}% | {status} |"
+            f"| {metric} | {base_value:.1f} | {current_value:.1f} | {delta_pct:+.1f}% | ok |"
         )
     return rows
+
+
+if __name__ == "__main__":
+    import sys
+
+    print("\n".join(compare(sys.argv[1], sys.argv[2])))
 ```
 
 **Step 4: Run to verify pass.**
@@ -172,11 +208,29 @@ def test_compare_flags_regression_beyond_tolerance(tmp_path):
     assert not any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
 ```
 
-**Step 2: Run to verify it already passes** (Task 0.1's implementation already handles this case —
-this step documents/locks the regression-flagging behavior with its own test, no new code
-expected). If it fails, fix `compare()` until it passes.
+**Step 2: Run to verify failure** — Task 0.1's `compare()` always reports `ok`; this new test
+expects a `REGRESSED` row, so it fails on the first assertion.
 
-**Step 3: Commit** — `test: add compare_baseline regression case (issue #708)`.
+**Step 3: Implement** — add the tolerance check Task 0.1 deliberately left out:
+
+```python
+_TOLERANCE_PCT = 25.0  # deliberately loose first-cut threshold (design doc S4) --
+                        # no real variance data exists yet to calibrate a tighter one
+```
+
+and change the per-metric row to:
+
+```python
+        status = "REGRESSED" if delta_pct > _TOLERANCE_PCT else "ok"
+        rows.append(
+            f"| {metric} | {base_value:.1f} | {current_value:.1f} | {delta_pct:+.1f}% | {status} |"
+        )
+```
+
+**Step 4: Run to verify pass**, then re-run Task 0.1's test to confirm it still passes (10.5 vs.
+10.0 is a 5% delta, well within the new 25% tolerance).
+
+**Step 5: Commit** — `feat: flag regressions beyond tolerance in compare_baseline (issue #708)`.
 
 ---
 
@@ -195,10 +249,12 @@ need separate test files; see Packaging note in the design doc if this grows).
 **Step 1: Write the failing test**
 
 ```python
+from datetime import date
+
 from tests.benchmarks.update_baseline import update
 
 
-def test_update_overwrites_only_the_three_median_fields(tmp_path):
+def test_update_overwrites_the_medians_and_recorded_at_and_nothing_else(tmp_path):
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text(
         json.dumps(
@@ -226,9 +282,12 @@ def test_update_overwrites_only_the_three_median_fields(tmp_path):
     update(str(results_path), str(baseline_path))
 
     updated = json.loads(baseline_path.read_text())["coordinator_cycle"]
-    assert updated["median_cpu_ms"] == 11.0
-    assert updated["median_rss_delta_kb"] == 110.0
-    assert updated["median_peak_traced_memory_kb"] == 1100.0
+    assert updated == {
+        "median_cpu_ms": 11.0,
+        "median_rss_delta_kb": 110.0,
+        "median_peak_traced_memory_kb": 1100.0,
+        "recorded_at": date.today().isoformat(),
+    }
 ```
 
 **Step 2: Run to verify failure.**
@@ -312,6 +371,10 @@ _process = psutil.Process()
 
 
 async def _measure_one_batch(coord):
+    """One batch's CPU-ms-per-cycle, net RSS delta (KB), and peak traced memory (KB).
+    Sampled before/after this batch specifically (not once for the whole test) so the
+    RSS delta is isolated from whatever earlier batches already allocated -- ADR-0026's
+    own rationale for choosing psutil over resource.getrusage."""
     cpu_before = _process.cpu_times()
     rss_before_kb = _process.memory_info().rss / 1024
     tracemalloc.start()
@@ -322,11 +385,16 @@ async def _measure_one_batch(coord):
     cpu_after = _process.cpu_times()
     rss_after_kb = _process.memory_info().rss / 1024
 
-    cpu_ms_total = (cpu_after.user + cpu_after.system) - (cpu_before.user + cpu_before.system)
-    return (cpu_ms_total * 1000) / _ITERATIONS, rss_after_kb - rss_before_kb, peak_bytes / 1024
+    cpu_s_total = (cpu_after.user + cpu_after.system) - (cpu_before.user + cpu_before.system)
+    return (cpu_s_total * 1000) / _ITERATIONS, rss_after_kb - rss_before_kb, peak_bytes / 1024
 
 
 async def test_power_mode_cycle_perf(hass):
+    """CPU/RSS tripwire for the M1 control cycle (issue #708, ADR-0026). Runs _BATCHES
+    batches of _ITERATIONS cycles each, discards the first as warm-up, and reports
+    median (primary comparator) plus max_cpu_ms -- a small-n proxy for a 95th
+    percentile, not a true one: with only _BATCHES - _WARMUP_BATCHES measured batches, a
+    statistically rigorous p95 isn't meaningful (design doc S3)."""
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore()
     )
@@ -381,6 +449,13 @@ Remove the now-unused `_MAX_AVG_CYCLE_MS`/`_MAX_PEAK_MEMORY_KB` constants and th
 doc's "replace," not "augment," decision for wall-clock specifically). Keep the `tracemalloc`
 import — still used for `median_peak_traced_memory_kb`.
 
+The four new ceilings (`_MAX_MEDIAN_CPU_MS`, `_MAX_MAX_CPU_MS`, `_MAX_MEDIAN_RSS_DELTA_KB`,
+`_MAX_MEDIAN_PEAK_MEMORY_KB`) are **placeholders, not derived from real data** — design doc §3.1
+explains why (no trustworthy measurement exists yet to derive them from; Phase 3 seeds the first
+one). Also update the module docstring (currently: "Ceilings are deliberately generous... until a
+real baseline exists" — issue #266's original wording) to reference issue #708/ADR-0026 instead of
+#266, keeping the same "deliberately generous placeholder" framing since it's still accurate.
+
 **Step 3: Run to verify pass** — `pytest tests/benchmarks -q` locally (or under WSL on Windows,
 per this project's existing HA-harness convention).
 
@@ -426,41 +501,55 @@ against an empty starter file with the `coordinator_cycle` key already present, 
 
 ## Phase 4 — Wire the CI comparison step
 
-### Task 4.1: Add the `compare_baseline.py` step to the `perf` job
+### Task 4.1: Add the `compare_baseline.py` step, and stop the `test` job from also collecting `tests/benchmarks`
 
 **ADR honored:** ADR-0026. **Test boundary:** none — CI YAML only, verified by the next CI run.
 
 **Files:**
 - Edit: `.github/workflows/ci.yml`
 
-**Step 1: Implement** — in the `perf` job (`.github/workflows/ci.yml:80-103`), add one step
-immediately after the existing `pytest tests/benchmarks -q` step, before `actions/upload-artifact`:
+**Step 1: Implement the comparison step** — in the `perf` job (`.github/workflows/ci.yml:80-103`),
+move `PERF_RESULTS_DIR` to the job's own `env:` block (currently only the `pytest`
+step sets it inline) and add one new step immediately after `pytest tests/benchmarks -q`, before
+`actions/upload-artifact`:
 
 ```yaml
+  perf:
+    ...
+    env:
+      PERF_RESULTS_DIR: ${{ runner.temp }}/perf-results
+    steps:
+      ...
+      - run: pytest tests/benchmarks -q
       - run: python tests/benchmarks/compare_baseline.py "$PERF_RESULTS_DIR/coordinator_cycle.json" tests/benchmarks/baseline.json >> "$GITHUB_STEP_SUMMARY"
         if: always()
-        env:
-          PERF_RESULTS_DIR: ${{ runner.temp }}/perf-results
+      - uses: actions/upload-artifact@v7
+        ...
 ```
 
-This requires `compare_baseline.py` to be runnable as a script, not just importable — add a
-`if __name__ == "__main__":` block:
+`compare_baseline.py` is already runnable as a script (its `if __name__ == "__main__":` block was
+added in Task 0.1). No `permissions:` change in `ci.yml` — the step only reads `baseline.json`
+(already checked out) and the results directory, and writes to `$GITHUB_STEP_SUMMARY`, not to the
+repo.
 
-```python
-if __name__ == "__main__":
-    import sys
+**Step 2: Fix the pre-existing `test`-job gap** (design doc §4/§5) — the merge-blocking `test` job
+(`.github/workflows/ci.yml`, the `test:` job) runs bare `pytest -q`, which `pyproject.toml`'s
+`testpaths = ["tests"]` already expands to include `tests/benchmarks/test_coordinator_perf.py`
+*without* the `perf` job's `continue-on-error: true` protecting it. Change that job's step:
 
-    print("\n".join(compare(sys.argv[1], sys.argv[2])))
+```yaml
+      - run: pytest -q --ignore=tests/benchmarks || [ $? -eq 5 ]
 ```
 
-No `permissions:` change in `ci.yml` — the step only reads `baseline.json` (already checked out)
-and the results directory, and writes to `$GITHUB_STEP_SUMMARY`, not to the repo.
+This is what makes the "`perf` stays advisory" decision (§5) actually true instead of only true
+for one of the two jobs that run it.
 
-**Step 2:** No new automated test — this is CI YAML, verified by observing the next real workflow
-run's job summary shows the comparison table. Note this verification step explicitly in the PR
-description so the human reviewer checks the Actions tab, not just the diff.
+**Step 3:** No new automated test — this is CI YAML, verified by observing the next real workflow
+run: the `perf` job's summary shows the comparison table, and the `test` job's log no longer
+mentions `test_coordinator_perf.py`. Note this verification step explicitly in the PR description
+so the human reviewer checks the Actions tab, not just the diff.
 
-**Step 3: Commit** — `ci: compare perf results against the committed baseline (issue #708)`.
+**Step 4: Commit** — `ci: compare perf results against the committed baseline, and stop the required test job from also gating on it (issue #708)`.
 
 ---
 
@@ -477,9 +566,9 @@ description so the human reviewer checks the Actions tab, not just the diff.
 
 **Step 2:** `ruff check .` and `ruff format --check .` on the whole repo.
 
-**Step 3:** Confirm `git diff` touches only `tests/benchmarks/`, `requirements-test.txt`, and
-`.github/workflows/ci.yml` — no `custom_components/` file changed (this slice's own success
-criterion, design doc §1).
+**Step 3:** Confirm `git diff` touches only `tests/benchmarks/`, `tests/conftest.py`,
+`requirements-test.txt`, and `.github/workflows/ci.yml` — no `custom_components/` file changed
+(this slice's own success criterion, design doc §1).
 
 **Step 4: Report** — plan complete; issue #708 implemented, no coordinator behavior change, full
 suite green, first real baseline committed.
