@@ -6,9 +6,12 @@ Pure JSON/arithmetic -- no HA dependency (registered in tests/conftest.py's _PUR
 
 import json
 from datetime import date
+from pathlib import Path
 
-from tests.benchmarks.compare_baseline import compare
+from tests.benchmarks.compare_baseline import BASELINE_KEY, METRICS, compare
 from tests.benchmarks.update_baseline import update
+
+_REAL_BASELINE_PATH = Path(__file__).parent / "baseline.json"
 
 
 def test_compare_reports_no_regression_within_tolerance(tmp_path):
@@ -190,3 +193,13 @@ def test_update_overwrites_the_medians_and_recorded_at_and_nothing_else(tmp_path
         "recorded_at": date.today().isoformat(),
         "batches": 11,
     }
+
+
+def test_committed_baseline_is_loadable_and_schema_complete():
+    """Guards the real, committed tests/benchmarks/baseline.json (issue #708 Task 3.1) --
+    a typo in that hand-authored file would otherwise surface only as a KeyError inside
+    the CI perf job's `if: always()` comparison step (ci.yml), which never fails the job."""
+    baseline = json.loads(_REAL_BASELINE_PATH.read_text())[BASELINE_KEY]
+    for metric in METRICS:
+        assert isinstance(baseline[metric], (int, float))
+    assert "recorded_at" in baseline
