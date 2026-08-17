@@ -241,6 +241,36 @@ async def _create_entry(hass, *, per_step=None):
     return result["result"]
 
 
+async def _run_reconfigure_flow(hass, entry, *, per_step=None):
+    """The reconfigure analogue of `_run_install_flow` (T9, ADR-0025 point 4): entered via
+    SOURCE_RECONFIGURE, otherwise identical -- same shared step methods and per-step base
+    fixtures, same repeated-step-id guard against re-submitting a rejected fixture forever.
+    The `thresholds` row is gated off entirely in this mode (UC12 1a), so the walk always
+    ends at ABORT/reconfigure_successful, never CREATE_ENTRY."""
+    overrides = per_step or {}
+    consumed_overrides: set[str] = set()
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    last_step_id = None
+    while result["type"] == FlowResultType.FORM:
+        step_id = result["step_id"]
+        if step_id == last_step_id:
+            break
+        last_step_id = step_id
+        consumed_overrides.add(step_id)
+        submission = {**_INSTALL_STEP_BASES.get(step_id, {}), **overrides.get(step_id, {})}
+        submission = {k: v for k, v in submission.items() if v is not None}
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+    unconsumed = overrides.keys() - consumed_overrides
+    assert not unconsumed, (
+        f"per_step override(s) for {unconsumed} were never applied -- that step never "
+        "rendered this run (a capability answer this test relies on may be missing/typo'd)"
+    )
+    return result
+
+
 def _current_options(entry):
     """Options as the flat options-flow schema would resubmit them. Excludes
     prompt_timeout_h: stored via the guided install flow since T3, but not yet asked by this
@@ -369,7 +399,198 @@ async def test_options_flow_rejects_a_data_key(hass):
     assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
 
 
-async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
+def _suggested_values(result):
+    """Map schema key -> its prefilled suggested_value (absent keys omitted)."""
+    return {
+        key.schema: key.description["suggested_value"]
+        for key in result["data_schema"].schema
+        if key.description and "suggested_value" in key.description
+    }
+
+
+# --- T9: the reconfigure flow. ---
+
+
+async def test_uc12_1a_reconfigure_shows_mapping_fields_only(hass):
+    """UC12 1a: the per-capability steps are 'restricted to their mapping fields only ...
+    never a threshold', and step 8 is skipped entirely."""
+    data = entry_data_base(
+        **{
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+        }
+    )
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["step_id"] == STEP_CORE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True}
+    )
+    assert result["step_id"] == STEP_SOLAR
+    assert _keys(result["data_schema"]) == _keys(_solar_mapping_schema(include_ev_soc=True))
+
+    visited_steps = []
+    while result["type"] == FlowResultType.FORM:
+        visited_steps.append(result["step_id"])
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], _INSTALL_STEP_BASES.get(result["step_id"], {})
+        )
+
+    assert STEP_THRESHOLDS not in visited_steps
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+
+_RECONFIGURE_ENTRY_DATA = {
+    CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+    "charger_status_entity": "sensor.evse",
+    "net_power_entity": "sensor.net_power",
+    "charger_power_entity": "sensor.charger_power",
+    CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
+    CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff",
+    CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app",
+    CONF_SOLAR_AVAILABLE: False,
+    CONF_CAPTAR_AVAILABLE: False,
+    CONF_DEADLINE_AVAILABLE: False,
+    CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
+}
+
+
+async def test_uc12_1a_reconfigure_prefills_step_one_from_the_existing_entry(hass):
+    """ADR-0025 point 2: prefill is rendering-only, via add_suggested_values_to_schema."""
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CORE
+
+    suggested = _suggested_values(result)
+    assert suggested[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
+    # A bool field with a schema-level default (captar_available) must also prefill from
+    # entry.data, not fall back to the schema default -- otherwise reconfiguring would
+    # silently flip it back to True and re-trigger the ev_soc-required guard.
+    assert suggested[CONF_CAPTAR_AVAILABLE] is False
+
+
+async def test_reconfigure_form_prefills_existing_mappings(hass):
+    # Issue #499: the blank reconfigure form must be prefilled from entry.data, otherwise
+    # any optional mapping the user doesn't retype is silently dropped on save. Checked on
+    # both the core step and the ungated mappings step, since T9 spreads what was once one
+    # flat form across the guided flow's own steps.
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    # connected_states/charging_states have no stored raw value to prefill (known gap,
+    # tracked separately) -- the user must always retype these two required fields.
+    core_submission = {
+        **_suggested_values(result),
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+    }
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], core_submission)
+    assert result["step_id"] == STEP_MAPPINGS
+
+    suggested = _suggested_values(result)
+    assert suggested[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
+    assert suggested[CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
+    assert suggested[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
+
+
+async def test_reconfigure_preserves_unretyped_optional_mappings(hass):
+    # Issue #499: submitting exactly what a prefilled form round-trips back (the
+    # rendered suggested values, unchanged) must not null out any optional mapping --
+    # only the field the user actually edits (charger_current_entity, on the core step)
+    # should change. Built from each rendered step's own suggested values, so this fails for
+    # the right reason if the prefill regresses: reverting the fix blanks every suggested
+    # value below.
+    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    core_submission = dict(_suggested_values(result))
+    # connected_states/charging_states have no stored raw value to prefill (known gap,
+    # tracked separately) -- the user must always retype these two required fields.
+    core_submission[CONF_CONNECTED_STATES] = "Connected"
+    core_submission[CONF_CHARGING_STATES] = "Charging"
+    core_submission[CONF_CHARGER_CURRENT_ENTITY] = "number.new_charger_current"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], core_submission)
+    assert result["step_id"] == STEP_MAPPINGS
+    mappings_submission = dict(_suggested_values(result))
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], mappings_submission)
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
+    assert entry.data[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
+    assert entry.data[CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
+    assert entry.data[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
+
+
+async def test_r20_ac7_withdrawing_a_capability_drops_its_mapping_fields(hass):
+    """R20 AC7 / ADR-0025 point 2: solar answered 'no' where it was 'yes' -> the solar step is
+    never shown, so solar_forecast_entity never enters the accumulator and is absent from the
+    saved data bucket (and so is ev_soc_entity, solar's only source for it here)."""
+    data = entry_data_base(
+        **{
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+        }
+    )
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await _run_reconfigure_flow(
+        hass, entry, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: False}}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert entry.data[CONF_SOLAR_AVAILABLE] is False
+    assert CONF_SOLAR_FORECAST_ENTITY not in entry.data
+    assert CONF_EV_SOC_ENTITY not in entry.data
+
+
+async def test_r20_ac7_reconfigure_leaves_the_options_bucket_untouched(hass):
+    """UC12 1a: 'any of its thresholds already stored in the options bucket are left untouched'
+    -- byte-for-byte equal before and after, including the withdrawn capability's thresholds."""
+    data = entry_data_base(
+        **{
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+        }
+    )
+    options = entry_options_base(**{CONF_SOLAR_START_THRESHOLD_W: 999.0})
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+
+    result = await _run_reconfigure_flow(
+        hass, entry, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: False}}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert dict(entry.options) == original_options
+
+
+async def test_adr0008_reconfigure_reloads_the_entry(hass):
     """async_step_reconfigure is the only sanctioned path to remap entity roles
     (ADR-0005) — it must replace data, leave options untouched, and reload the entry
     (ADR-0008: a mapping change tears down and recreates the coordinator). The entry is
@@ -381,11 +602,7 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     hass.states.async_set("sensor.new_evse", "Charging")
     hass.states.async_set("number.new_charger_current", "0.0")
 
-    data = entry_data_base()
-    # CONF_CAPTAR_AVAILABLE defaults to True (DEFAULT_CAPTAR_AVAILABLE) and neither this
-    # entry nor the reconfigure submission below maps ev_soc -- turn it off so the
-    # required_when_captar_available guard doesn't reject the reconfigure submission.
-    data[CONF_CAPTAR_AVAILABLE] = False
+    data = entry_data_base(**{CONF_CAPTAR_AVAILABLE: False})
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -399,18 +616,27 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "reconfigure"
+    assert result["step_id"] == STEP_CORE
 
-    new_mapping = {
-        CONF_CHARGER_CURRENT_ENTITY: "number.new_charger_current",
-        "charger_status_entity": "sensor.new_evse",
-        CONF_CONNECTED_STATES: "Connected",
-        CONF_CHARGING_STATES: "Charging",
-        "net_power_entity": "sensor.net_power",
-        "charger_power_entity": "sensor.charger_power",
-        CONF_CAPTAR_AVAILABLE: False,
-    }
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_CHARGER_CURRENT_ENTITY: "number.new_charger_current",
+            "charger_status_entity": "sensor.new_evse",
+            CONF_CONNECTED_STATES: "Connected",
+            CONF_CHARGING_STATES: "Charging",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_SOLAR_AVAILABLE: False,
+            CONF_CAPTAR_AVAILABLE: False,
+            CONF_DEADLINE_AVAILABLE: False,
+            CONF_VEHICLE_LIMIT_MAPPED: False,
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
@@ -436,84 +662,66 @@ async def test_reconfigure_replaces_data_leaves_options_and_reloads(hass):
     )
 
 
-def _suggested_values(result):
-    """Map schema key -> its prefilled suggested_value (absent keys omitted)."""
-    return {
-        key.schema: key.description["suggested_value"]
-        for key in result["data_schema"].schema
-        if key.description and "suggested_value" in key.description
-    }
-
-
-_RECONFIGURE_ENTRY_DATA = {
-    CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-    "charger_status_entity": "sensor.evse",
-    "net_power_entity": "sensor.net_power",
-    "charger_power_entity": "sensor.charger_power",
-    CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
-    CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff",
-    CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app",
-    CONF_CAR_HOME_ENTITY: "person.driver",
-    CONF_CAPTAR_AVAILABLE: False,
-    CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
-}
-
-
-async def test_reconfigure_form_prefills_existing_mappings(hass):
-    # Issue #499: the blank reconfigure form must be prefilled from entry.data, otherwise
-    # any optional mapping the user doesn't retype is silently dropped on save.
-    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
+async def test_uc12_1a_reconfigure_prefills_the_vehicle_limit_election_from_the_stored_mapping(
+    hass,
+):
+    """Design D-2: no stored election key exists, so the answer is derived from whether
+    vehicle_charge_limit_entity is mapped."""
+    data = entry_data_base(
+        **{
+            CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.vehicle_charge_limit",
+            CONF_CAR_HOME_ENTITY: "person.driver",
+        }
+    )
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert _suggested_values(result)[CONF_VEHICLE_LIMIT_MAPPED] is True
+
+
+async def test_reconfigure_vehicle_limit_election_defaults_false_when_unmapped(hass):
+    """The converse of the test above: no vehicle_charge_limit_entity stored -> the derived
+    election is False, same as a fresh install that never elects it."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert _suggested_values(result)[CONF_VEHICLE_LIMIT_MAPPED] is False
+
+
+async def test_reconfigure_still_runs_the_solar_steps_step_local_guard(hass):
+    """T9 shares the exact step methods between install and reconfigure (ADR-0025 point 4),
+    so every step-local guard already applies to reconfigure by construction -- each guard
+    call runs unconditionally, with no `if self._mode is INSTALL` branch to accidentally skip
+    it. There is therefore no separate reconfigure-specific guard implementation left to
+    duplicate-test per guard (superseding the three now-removed reconfigure guard tests that
+    predated this task's rewrite). This is the one smoke test confirming reconfigure genuinely
+    walks the shared table rather than some other, guard-less path."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True}
+    )
+    assert result["step_id"] == STEP_SOLAR
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"}
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "reconfigure"
-
-    suggested = _suggested_values(result)
-    assert suggested[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
-    assert suggested[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
-    assert suggested[CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
-    assert suggested[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
-    assert suggested[CONF_CAR_HOME_ENTITY] == "person.driver"
-    # A bool field with a schema-level default (captar_available) must also prefill from
-    # entry.data, not fall back to the schema default -- otherwise reconfiguring would
-    # silently flip it back to True and re-trigger the ev_soc-required guard.
-    assert suggested[CONF_CAPTAR_AVAILABLE] is False
-
-
-async def test_reconfigure_preserves_unretyped_optional_mappings(hass):
-    # Issue #499: submitting exactly what a prefilled form round-trips back (the
-    # rendered suggested values, unchanged) must not null out any optional mapping --
-    # only the field the user actually edits (charger_current_entity here) should change.
-    # Built from the rendered schema's own suggested values, so this fails for the right
-    # reason if the prefill regresses: reverting the fix blanks every suggested value below.
-    entry = MockConfigEntry(domain=DOMAIN, data=dict(_RECONFIGURE_ENTRY_DATA), options={})
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
-    )
-
-    new_mapping = dict(_suggested_values(result))
-    # connected_states/charging_states have no stored raw value to prefill (known gap,
-    # tracked separately) -- the user must always retype these two required fields.
-    new_mapping[CONF_CONNECTED_STATES] = "Connected"
-    new_mapping[CONF_CHARGING_STATES] = "Charging"
-    new_mapping[CONF_CHARGER_CURRENT_ENTITY] = "number.new_charger_current"
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "reconfigure_successful"
-
-    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
-    assert entry.data[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
-    assert entry.data[CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
-    assert entry.data[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
-    assert entry.data[CONF_CAR_HOME_ENTITY] == "person.driver"
+    assert result["step_id"] == STEP_SOLAR
+    assert result["errors"] == {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
 
 
 async def test_ev_soc_is_optional_when_solar_not_installed(hass):
@@ -612,117 +820,14 @@ async def test_solar_error_preserves_previously_entered_values(hass):
     assert suggested[CONF_SOLAR_START_THRESHOLD_W]["suggested_value"] == 175.0
 
 
-async def test_reconfigure_rejects_solar_available_true_without_ev_soc(hass):
-    # Design doc §3: the config-time guard must hold on reconfigure too -- otherwise a
-    # user can bypass it entirely by flipping the toggle through Reconfigure instead of
-    # the initial install form.
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-            "charger_status_entity": "sensor.evse",
-            "net_power_entity": "sensor.net_power",
-            "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
-        },
-        options={},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
-    )
-    new_mapping = {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        "charger_status_entity": "sensor.evse",
-        CONF_CONNECTED_STATES: "Connected",
-        CONF_CHARGING_STATES: "Charging",
-        "net_power_entity": "sensor.net_power",
-        "charger_power_entity": "sensor.charger_power",
-        CONF_SOLAR_AVAILABLE: True,
-    }
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_EV_SOC_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
-
-
-async def test_reconfigure_rejects_solar_available_true_without_solar_forecast(hass):
-    # Design doc §3: the solar_forecast guard must also hold on reconfigure, mirroring
-    # the ev_soc guard's own reconfigure test above -- otherwise a user could bypass it
-    # by flipping CONF_SOLAR_AVAILABLE on through Reconfigure instead of the install form.
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-            "charger_status_entity": "sensor.evse",
-            "net_power_entity": "sensor.net_power",
-            "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
-        },
-        options={},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
-    )
-    new_mapping = {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        "charger_status_entity": "sensor.evse",
-        CONF_CONNECTED_STATES: "Connected",
-        CONF_CHARGING_STATES: "Charging",
-        "net_power_entity": "sensor.net_power",
-        "charger_power_entity": "sensor.charger_power",
-        CONF_SOLAR_AVAILABLE: True,
-        CONF_EV_SOC_ENTITY: "sensor.ev_soc",
-    }
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
-
-
-async def test_reconfigure_rejects_both_ev_soc_and_solar_forecast_missing_together(hass):
-    """T7 inlined the three-guard combine that used to live in `_mapping_errors` directly into
-    async_step_reconfigure. The single-guard tests above each pin one guard firing alone; this
-    one is the only test that observes the inlining's `dict.update` merge itself -- both guards
-    firing on the same submission must both appear in `errors`, not just whichever ran last."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-            "charger_status_entity": "sensor.evse",
-            "net_power_entity": "sensor.net_power",
-            "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
-        },
-        options={},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
-    )
-    new_mapping = {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        "charger_status_entity": "sensor.evse",
-        CONF_CONNECTED_STATES: "Connected",
-        CONF_CHARGING_STATES: "Charging",
-        "net_power_entity": "sensor.net_power",
-        "charger_power_entity": "sensor.charger_power",
-        CONF_SOLAR_AVAILABLE: True,
-    }
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {
-        CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
-        CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
-    }
+# test_reconfigure_rejects_solar_available_true_without_ev_soc,
+# test_reconfigure_rejects_solar_available_true_without_solar_forecast and
+# test_reconfigure_rejects_both_ev_soc_and_solar_forecast_missing_together (pre-T9) each pinned
+# a guard against T7's now-deleted flat three-guard combine inlined directly into
+# async_step_reconfigure. T9 replaces that flat form with a delegate into the shared `core`
+# step (ADR-0025 point 4), so every step-local guard already covers reconfigure by
+# construction -- see test_reconfigure_still_runs_the_solar_steps_step_local_guard (T9 section
+# below) for the one smoke test that still needs to exist.
 
 
 async def test_captar_available_defaults_true(hass):
@@ -930,41 +1035,9 @@ async def test_pre_field_entry_reads_vehicle_limit_and_car_home_as_absent(hass):
     assert ROLE_CAR_HOME not in coordinator._adapters
 
 
-async def test_reconfigure_rejects_vehicle_limit_mapped_without_car_home(hass):
-    # Design doc §9.1: the guard must hold on reconfigure too, mirroring the ev_soc/
-    # solar_forecast reconfigure guard tests above -- otherwise a user could bypass it by
-    # mapping vehicle_charge_limit through Reconfigure instead of the install form.
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-            "charger_status_entity": "sensor.evse",
-            "net_power_entity": "sensor.net_power",
-            "charger_power_entity": "sensor.charger_power",
-            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
-        },
-        options={},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
-    )
-    new_mapping = {
-        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-        "charger_status_entity": "sensor.evse",
-        CONF_CONNECTED_STATES: "Connected",
-        CONF_CHARGING_STATES: "Charging",
-        "net_power_entity": "sensor.net_power",
-        "charger_power_entity": "sensor.charger_power",
-        CONF_CAPTAR_AVAILABLE: False,  # isolate the car_home guard from the ev_soc guard
-        CONF_VEHICLE_CHARGE_LIMIT_ENTITY: "number.car_limit",
-    }
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_CAR_HOME_ENTITY] == ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED
+# test_reconfigure_rejects_vehicle_limit_mapped_without_car_home (pre-T9) is superseded the
+# same way as the solar/captar reconfigure guard tests above: see
+# test_reconfigure_still_runs_the_solar_steps_step_local_guard's docstring (T9 section below).
 
 
 async def test_options_flow_edits_solar_forecast_threshold(hass):

@@ -340,8 +340,10 @@ USER_SCHEMA = MAPPING_SCHEMA.extend(_threshold_schema().schema)
 # step-local home too, all three guards `_mapping_errors` used to combine are step-local, so
 # the thresholds-step safety net and `_mapping_errors` itself are both deleted outright
 # (ADR-0025, Consequences: the combiner has no *guided-flow step* left that needs all three).
-# `async_step_reconfigure` still inlines the same three-guard combine, since it is the last
-# flat-form path (T9 migrates it) and still needs all three checked against one submission.
+# T9 migrates `async_step_reconfigure` onto this same table (ADR-0025 point 4): it now
+# delegates into the shared `core` step instead of running its own flat form, so every guard
+# above already covers reconfigure too -- there is no longer a separate three-guard combine to
+# keep in sync with the guided flow's own.
 
 
 class FlowMode(StrEnum):
@@ -439,7 +441,8 @@ UC12_FIXED_STEP_ORDER = (
 # self._answers by the time any gate runs (CORE_MAPPING_SCHEMA marks each vol.Required). The
 # table is now complete for the install flow.
 # `thresholds` is additionally gated off for reconfigure (UC12 1a, design "Step ids" table row
-# 6) -- moot until T9 wires async_step_reconfigure into this table, but correct now.
+# 6): T9 wires async_step_reconfigure into this same table, so this gate is what makes step 8
+# skip itself in that mode -- no second table, no reconfigure-specific branch in the walk.
 CONFIG_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
     FlowStep(step_id=STEP_CAPTAR, gate=lambda flow: bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))),
@@ -746,11 +749,29 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers = {}
         return await self.async_step_core()
 
+    def _maybe_prefill(self, schema: vol.Schema, *, extra_from=None) -> vol.Schema:
+        """UC12 1a / ADR-0025 point 2: reconfigure prefills a step's rendered schema from the
+        stored entry -- a rendering-only concern; the accumulator itself is never seeded
+        (install renders `schema` unchanged). `extra_from(entry.data)` augments the prefill
+        source for the one field with no stored key of its own -- the core step's transient
+        vehicle-limit election (design D-2)."""
+        if self._mode is not FlowMode.RECONFIGURE:
+            return schema
+        entry = self._get_reconfigure_entry()
+        source = entry.data | extra_from(entry.data) if extra_from else entry.data
+        return self.add_suggested_values_to_schema(schema, source)
+
     async def async_step_core(self, user_input=None):
         """UC12 step 1: the core mappings + the three capability decisions + the
         vehicle-limit election (design, "Schema fragments")."""
         if user_input is None:
-            return self.async_show_form(step_id=STEP_CORE, data_schema=CORE_MAPPING_SCHEMA)
+            schema = self._maybe_prefill(
+                CORE_MAPPING_SCHEMA,
+                extra_from=lambda data: {
+                    CONF_VEHICLE_LIMIT_MAPPED: bool(data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY))
+                },
+            )
+            return self.async_show_form(step_id=STEP_CORE, data_schema=schema)
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_CORE)
@@ -765,7 +786,7 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_solar_threshold_schema().schema)
         if user_input is None:
-            return self.async_show_form(step_id=STEP_SOLAR, data_schema=schema)
+            return self.async_show_form(step_id=STEP_SOLAR, data_schema=self._maybe_prefill(schema))
 
         merged = {**self._answers, **user_input}
         errors = _ev_soc_missing_error(merged) or {}
@@ -796,7 +817,9 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_captar_threshold_schema().schema)
         if user_input is None:
-            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
+            return self.async_show_form(
+                step_id=STEP_CAPTAR, data_schema=self._maybe_prefill(schema)
+            )
 
         merged = {**self._answers, **user_input}
         errors = _ev_soc_missing_error(merged) or {}
@@ -819,7 +842,9 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_deadline_threshold_schema().schema)
         if user_input is None:
-            return self.async_show_form(step_id=STEP_DEADLINE, data_schema=schema)
+            return self.async_show_form(
+                step_id=STEP_DEADLINE, data_schema=self._maybe_prefill(schema)
+            )
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_DEADLINE)
@@ -838,7 +863,8 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         guided step."""
         if user_input is None:
             return self.async_show_form(
-                step_id=STEP_VEHICLE_LIMIT, data_schema=VEHICLE_LIMIT_MAPPING_SCHEMA
+                step_id=STEP_VEHICLE_LIMIT,
+                data_schema=self._maybe_prefill(VEHICLE_LIMIT_MAPPING_SCHEMA),
             )
 
         errors = _car_home_missing_error(user_input)
@@ -857,7 +883,9 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
     async def async_step_mappings(self, user_input=None):
         """UC12 step 7: the ungated entity-role mappings (design, "Schema fragments")."""
         if user_input is None:
-            return self.async_show_form(step_id=STEP_MAPPINGS, data_schema=UNGATED_MAPPING_SCHEMA)
+            return self.async_show_form(
+                step_id=STEP_MAPPINGS, data_schema=self._maybe_prefill(UNGATED_MAPPING_SCHEMA)
+            )
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_MAPPINGS)
@@ -880,10 +908,15 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return await self._async_advance(after=STEP_THRESHOLDS)
 
     async def _async_finish(self) -> config_entries.ConfigFlowResult:
-        """UC12 step 9: create the entry (install only -- T9 wires reconfigure's own
-        terminal behaviour into this same mixin method)."""
+        """UC12 step 9 (install) / 1a (reconfigure): create or update the entry. Reconfigure
+        touches the data bucket only (ADR-0005) and reloads (ADR-0008); it never computes
+        `options` at all -- the `thresholds` row's own gate skips step 8 entirely in this
+        mode, so no threshold answer ever entered `self._answers` to intersect."""
         self._answers.pop(CONF_VEHICLE_LIMIT_MAPPED, None)  # design D-2: transient, not stored
         data = _split_data(self._answers)
+        if self._mode is FlowMode.RECONFIGURE:
+            entry = self._get_reconfigure_entry()
+            return self.async_update_reload_and_abort(entry, data=data)
         # Intersection, not direct indexing (ADR-0025, Consequences): a capability declared
         # absent this run never renders its step, so its OPTION_KEYS members are absent from
         # self._answers -- direct indexing would KeyError the moment any capability is off.
@@ -892,30 +925,16 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return self.async_create_entry(title="Smart Charging", data=data, options=options)
 
     async def async_step_reconfigure(self, user_input=None):
-        """Edit the entity-role mappings (DATA) with re-validation; reloads on save (ADR-0005).
-
-        Combines all three guards inline (T7 deleted the shared `_mapping_errors` helper once
-        every guided-flow step became step-local): this is the last flat-form path -- T9
-        migrates it onto the table -- and still needs all three checked against one
-        submission, unlike a guided step, which only ever needs its own."""
-        entry = self._get_reconfigure_entry()
-        if user_input is None:
-            return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=self.add_suggested_values_to_schema(MAPPING_SCHEMA, entry.data),
-            )
-
-        errors = _ev_soc_missing_error(user_input) or {}
-        errors.update(_solar_forecast_missing_error(user_input) or {})
-        errors.update(_car_home_missing_error(user_input) or {})
-        if errors:
-            return self.async_show_form(
-                step_id="reconfigure",
-                data_schema=self.add_suggested_values_to_schema(MAPPING_SCHEMA, user_input),
-                errors=errors,
-            )
-
-        return self.async_update_reload_and_abort(entry, data=_split_data(user_input))
+        """UC12 1a's reconfigure entry point (ADR-0025 point 4): delegate into the shared
+        `core` step, framework-imposed name aside -- the same shared step methods and table
+        install uses, with `self._mode` alone selecting each step's mapping-only render
+        (`_maybe_prefill`), the `thresholds` row's skip, and `_async_finish`'s terminal
+        branch. No guard logic of its own: every guard (`_ev_soc_missing_error`,
+        `_solar_forecast_missing_error`, `_car_home_missing_error`) is already step-local
+        (T4/T5/T7) and runs unconditionally regardless of `self._mode`."""
+        self._mode = FlowMode.RECONFIGURE
+        self._answers = {}
+        return await self.async_step_core()
 
     @staticmethod
     @callback
