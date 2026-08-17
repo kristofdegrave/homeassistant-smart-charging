@@ -76,6 +76,7 @@ from .engines.grid_safety import clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .modes import captar
 from .modes._phase import Phase
+from .profiles.policy import PROFILE_POLICIES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -766,10 +767,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # raw (stale, user-facing) value here every cycle would fight that resolution and
         # falsely register as a mode *change* to _reset_mode_state_if_changed() right below,
         # silently discarding R7/R11 timers and R3's breach cooldown every single cycle.
+        # Resolved via the ADR-0017 registry (issue #718) -- `ManualPolicy.select` is a pure
+        # pass-through of `active_mode`, so this is behaviorally identical to assigning `mode`
+        # directly, but it means Manual's own dispatch actually goes through the
+        # `ModeSelectionPolicy` the registry was built for, rather than bypassing it.
         if self.active_profile != PROFILE_AUTO:
             mode = await self._store.read(Platform.SELECT, OWNED_SUFFIX_MODE, str)
             if mode is not None:
-                self.set_active_mode(mode)
+                resolved_mode = PROFILE_POLICIES[self.active_profile].select(active_mode=mode)
+                self.set_active_mode(resolved_mode)
 
         simple_reads: tuple[tuple[str, str, type, Callable[[Any], None]], ...] = (
             (Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT, float, self.set_target_current),
