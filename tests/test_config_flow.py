@@ -1942,6 +1942,9 @@ async def test_adr0008_options_change_reloads_the_entry(hass):
 # persisting mid-flow -- a real bug, not a spec gap.
 
 
+_ABANDONED_CHARGER_ENTITY = "number.abandoned_charger"
+
+
 async def test_r20_ac8_abandoned_install_creates_no_entry(hass):
     """UC12 exception flow 3: abort the flow after the core step -> no config entry exists."""
     result = await hass.config_entries.flow.async_init(
@@ -1949,13 +1952,18 @@ async def test_r20_ac8_abandoned_install_creates_no_entry(hass):
     )
     result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
     assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
 
     hass.config_entries.flow.async_abort(result["flow_id"])
     assert not hass.config_entries.async_entries(DOMAIN)
+    assert not hass.config_entries.flow.async_progress()
 
 
 async def test_r20_ac8_abandoned_reconfigure_leaves_the_entry_unchanged(hass):
-    """... data and options both byte-for-byte identical to before the flow started."""
+    """UC12 exception flow 3 / R20 AC8: data and options both byte-for-byte identical to
+    before the flow started. Submits a genuinely CHANGED mapping (not a resubmission of the
+    stored value) before aborting, so this fails for the right reason if abandonment ever
+    started persisting mid-flow."""
     entry = await _create_entry(hass)
     original_data = dict(entry.data)
     original_options = dict(entry.options)
@@ -1965,9 +1973,10 @@ async def test_r20_ac8_abandoned_reconfigure_leaves_the_entry_unchanged(hass):
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {**CORE_INPUT, CONF_CHARGER_CURRENT_ENTITY: "number.abandoned_charger"}
+        result["flow_id"], {**CORE_INPUT, CONF_CHARGER_CURRENT_ENTITY: _ABANDONED_CHARGER_ENTITY}
     )
     assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_MAPPINGS
 
     hass.config_entries.flow.async_abort(result["flow_id"])
     assert dict(entry.data) == original_data
@@ -1975,6 +1984,9 @@ async def test_r20_ac8_abandoned_reconfigure_leaves_the_entry_unchanged(hass):
 
 
 async def test_r20_ac8_abandoned_options_flow_leaves_the_options_unchanged(hass):
+    """UC12 exception flow 3 / R20 AC8. Submits a genuinely CHANGED threshold (999.0, vs. the
+    stored DEFAULT_SOLAR_START_THRESHOLD_W) before aborting, so this fails for the right
+    reason if abandonment ever started persisting mid-flow."""
     entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
     original_options = dict(entry.options)
 
@@ -1992,18 +2004,61 @@ async def test_r20_ac8_abandoned_options_flow_leaves_the_options_unchanged(hass)
 
 async def test_adr0025_accumulator_starts_empty_on_a_second_run(hass):
     """ADR-0025 point 2: per-run state. An abandoned run's answers must not leak into the next
-    flow started on the same handler class."""
+    flow started on the same handler class.
+
+    Run 1 declares solar (submitting the solar step's mapping + a distinctive threshold) and
+    is abandoned before finishing; run 2 is a plain default install that never declares solar
+    at all. Resubmitting the SAME key in both runs (as an earlier version of this test did
+    with charger_current_entity) can't detect a leak: `self._answers.update(user_input)`
+    always lets the second run's own answer overwrite whatever leaked. Using a key run 2
+    never answers is what makes a shared-accumulator regression actually fail this test."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {**CORE_INPUT, CONF_CHARGER_CURRENT_ENTITY: "number.abandoned_charger"}
+        result["flow_id"], {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True}
+    )
+    assert result["step_id"] == STEP_SOLAR
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {**SOLAR_INPUT, CONF_SOLAR_START_THRESHOLD_W: 999.0},
     )
     assert result["type"] == FlowResultType.FORM
     hass.config_entries.flow.async_abort(result["flow_id"])
 
     entry = await _create_entry(hass)
-    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
+    assert CONF_EV_SOC_ENTITY not in entry.data
+    assert CONF_SOLAR_FORECAST_ENTITY not in entry.data
+    assert CONF_SOLAR_START_THRESHOLD_W not in entry.options
+
+
+async def test_adr0025_options_accumulator_starts_empty_on_a_second_run(hass):
+    """The options-flow analogue of the test above: `async_step_init` is a separate reset
+    site (ADR-0025 point 2 names all three entry points), and a leak here is higher-
+    consequence than on the config flow -- `_async_finish` MERGES the accumulator into the
+    stored options, so a leaked threshold from an abandoned run would be written to
+    entry.options on the very next Configure+Save, not just omitted from a fresh entry."""
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    stored_threshold = entry.options[CONF_SOLAR_START_THRESHOLD_W]
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == STEP_SOLAR
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SOLAR_START_THRESHOLD_W: 999.0}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+    hass.config_entries.options.async_abort(result["flow_id"])
+
+    # A second options run that DOES touch the ungated thresholds step (but not solar's own)
+    # must not pick up the abandoned run's 999.0 -- the stored value must still be intact.
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_THRESHOLDS: {CONF_MAX_PEAK_KW: 5.0}}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()  # drain the background reload this save schedules
+    assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == stored_threshold
+    assert entry.options[CONF_MAX_PEAK_KW] == 5.0
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
