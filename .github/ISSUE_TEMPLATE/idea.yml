@@ -1,0 +1,28 @@
+name: Idea (not yet scoped)
+description: Something worth doing, but not yet scoped to a single artifact or task
+title: "<short description of the idea>"
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the work is still fuzzy — spans multiple artifacts, unclear
+        boundaries, not yet clear whether it's a use-case, requirement, ADR, or
+        implementation task. It'll be worked with the `work-idea` skill: brainstormed
+        interactively and decomposed into one or more properly context-labeled follow-up
+        issues (`uc`, `requirement`, `adr`, `specs`, `development`, `testing`, `workflow`).
+
+        Don't force a context label onto this issue yourself — that decision happens
+        during decomposition, not at filing time.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem or opportunity?
+      description: Describe it from the goal's perspective — what's missing, broken, or could be better. No need to propose a solution yet.
+    validations:
+      required: true
+  - type: textarea
+    id: pointers
+    attributes:
+      label: Related context
+      description: Links to related issues, docs, or discussions, if any.
