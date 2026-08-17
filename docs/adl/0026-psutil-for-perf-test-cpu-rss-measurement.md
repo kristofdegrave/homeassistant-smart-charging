@@ -1,7 +1,7 @@
 # ADR-0026: psutil for CPU-time/RSS measurement in perf tests
 
 Date: 2026-08-17
-Status: Proposed
+Status: Accepted
 
 ## Context
 
