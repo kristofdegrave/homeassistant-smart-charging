@@ -2393,6 +2393,55 @@ async def test_read_owned_entities_updates_active_mode(hass):
     assert coord.active_mode == MODE_SOLAR
 
 
+async def test_read_owned_entities_manual_mode_dispatches_via_the_registry(hass, monkeypatch):
+    """Issue #718: Manual's own mode resolution goes through
+    `PROFILE_POLICIES[PROFILE_MANUAL].select(...)` (ADR-0017), not a direct assignment of the
+    raw stored selector value -- swapping in a fake policy whose `select` returns a *different*
+    mode than the one stored, and confirming `active_mode` reflects the fake policy's return
+    value, proves the call actually happens rather than being silently skipped."""
+
+    seen_active_mode = None
+
+    class _FakePolicy:
+        def select(self, *, active_mode: str, **_ignored) -> str:
+            nonlocal seen_active_mode
+            seen_active_mode = active_mode
+            return MODE_OFF
+
+    monkeypatch.setitem(coordinator_module.PROFILE_POLICIES, PROFILE_MANUAL, _FakePolicy())
+    store = _FakeStore(
+        {
+            (Platform.SELECT, OWNED_SUFFIX_PROFILE): PROFILE_MANUAL,
+            (Platform.SELECT, OWNED_SUFFIX_MODE): MODE_SOLAR,
+        }
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    await coord._read_owned_entities()
+    assert seen_active_mode == MODE_SOLAR
+    assert coord.active_mode == MODE_OFF
+
+
+async def test_set_active_profile_falls_back_to_manual_on_unrecognized_stored_profile(hass, caplog):
+    """Issue #718's registry guard (mirroring `set_active_mode`'s own): a stale/corrupted
+    stored profile outside `PROFILE_POLICIES` must not KeyError `_read_owned_entities`'
+    `PROFILE_POLICIES[self.active_profile]` lookup into a permanent fault loop -- it degrades
+    to `PROFILE_MANUAL` and logs a warning, exactly as an unrecognized `active_mode` already
+    degrades to `MODE_OFF`."""
+    store = _FakeStore({(Platform.SELECT, OWNED_SUFFIX_PROFILE): "not_a_real_profile"})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        await coord._read_owned_entities()
+    assert coord.active_profile == PROFILE_MANUAL
+    assert any(
+        r.levelno == logging.WARNING and r.name == coordinator_module.__name__
+        for r in caplog.records
+    )
+
+
 async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_none(hass):
     """Success criterion 4: a missing/unresolvable read is not a fault -- keep the current value."""
     store = _FakeStore({})  # every read() call returns None
