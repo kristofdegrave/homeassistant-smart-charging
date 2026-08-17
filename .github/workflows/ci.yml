@@ -122,15 +122,18 @@ jobs:
           path: ${{ env.PERF_RESULTS_DIR }}
           if-no-files-found: ignore
       # README badge (issue #741) -- median CPU ms only; RSS/peak-memory stay in the step
-      # summary table above. A snapshot of the last main-branch run, not a trend. Only
-      # updated on an actual push to main (not workflow_dispatch from a feature branch),
-      # same scope coverage.yml's own badge update already has.
+      # summary table above. A snapshot of the last run on refs/heads/main -- a push, or a
+      # manual workflow_dispatch run on main (e.g. to re-seed baseline.json); never a
+      # feature branch or a PR. `always()` is deliberate: a run that breaches the CPU
+      # ceiling should still show its real (regressed) value on the badge, not skip it.
       - name: Read median CPU time for the badge
         id: perf_badge
         if: always() && github.ref == 'refs/heads/main'
         run: |
           if [ -f "$PERF_RESULTS_DIR/coordinator_cycle.json" ]; then
-            ms=$(python -c "import json; print(f\"{json.load(open('$PERF_RESULTS_DIR/coordinator_cycle.json'))['median_cpu_ms']:.2f}\")")
+            # median_cpu_ms's name is tests/benchmarks/compare_baseline.py's own METRICS --
+            # a rename there needs a matching update here.
+            ms=$(python -c "import json, os; p = os.environ['PERF_RESULTS_DIR'] + '/coordinator_cycle.json'; print(f'{json.load(open(p))[\"median_cpu_ms\"]:.2f}')")
             echo "median_cpu_ms=$ms" >> "$GITHUB_OUTPUT"
           fi
       - name: Update perf badge gist
