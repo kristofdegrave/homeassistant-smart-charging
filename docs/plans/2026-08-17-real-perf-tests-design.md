@@ -199,6 +199,23 @@ of two copies drifting apart.) No `contents: write` permission is added — the 
 reads `baseline.json` (already checked out) and the fresh results directory; it writes only to the
 step summary, not to the repo.
 
+**Amendment (issue #729): the `perf` job runs on `push` to `main` only, not on every PR.** The
+workflow's shared `on:` trigger (`push: branches: [main]` + `pull_request`) would otherwise run
+`perf` on every PR attempt too — exactly the kind of extra shared-runner sampling this same design
+is trying to make trustworthy (§3), and a mismatch with the baseline/trend model in this section,
+which is framed as one accepted data point per merge, not per PR attempt. `lint`/`test`/`hassfest`/
+etc. are unaffected — only `perf`'s own `if:` condition gains a `github.event_name == 'push'`
+clause:
+
+```yaml
+    if: always() && github.event_name == 'push' && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+```
+
+`perf` isn't a required status check (only `lint`/`test`/`hassfest`/`hacs` are, per this workflow's
+own header comment), so the fail-safe "always report skipped so a required check doesn't hang"
+pattern that condition otherwise protects doesn't apply here — it's safe for `perf` to simply not
+run at all on a PR event.
+
 **A second, pre-existing CI fix this slice must make (§5):** `pyproject.toml`'s
 `testpaths = ["tests"]` means the merge-blocking `test` job's bare `pytest -q` already collects
 `tests/benchmarks/test_coordinator_perf.py` too — today's single wall-clock/tracemalloc assertion
@@ -263,7 +280,8 @@ tests/conftest.py
   test job                       # pytest -q -> pytest -q --ignore=tests/benchmarks (S4/S5 fix)
   perf job                       # env: block gains PERF_RESULTS_DIR (shared with the new step);
                                   # + one step running compare_baseline.py into GITHUB_STEP_SUMMARY
-                                  #   (S4); continue-on-error: true unchanged (S5)
+                                  #   (S4); if: gains github.event_name == 'push' (S4 amendment,
+                                  #   issue #729); continue-on-error: true unchanged (S5)
 
 requirements-test.txt
   + psutil==7.2.2                 # pinned per ADR-0026; test-only, never shipped in the HACS

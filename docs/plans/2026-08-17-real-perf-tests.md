@@ -501,7 +501,7 @@ against an empty starter file with the `coordinator_cycle` key already present, 
 
 ## Phase 4 — Wire the CI comparison step
 
-### Task 4.1: Add the `compare_baseline.py` step, and stop the `test` job from also collecting `tests/benchmarks`
+### Task 4.1: Add the `compare_baseline.py` step, scope `perf` to `push` only, and stop the `test` job from also collecting `tests/benchmarks`
 
 **ADR honored:** ADR-0026. **Test boundary:** none — CI YAML only, verified by the next CI run.
 
@@ -532,7 +532,18 @@ added in Task 0.1). No `permissions:` change in `ci.yml` — the step only reads
 (already checked out) and the results directory, and writes to `$GITHUB_STEP_SUMMARY`, not to the
 repo.
 
-**Step 2: Fix the pre-existing `test`-job gap** (design doc §4/§5) — the merge-blocking `test` job
+**Step 2: Scope `perf` to `push` only** (design doc §4 amendment, issue #729) — `perf` currently
+inherits the workflow's shared `pull_request` + `push` trigger, running on every PR attempt too.
+Add a `github.event_name == 'push'` clause to the job's existing `if:`:
+
+```yaml
+    if: always() && github.event_name == 'push' && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+```
+
+`perf` isn't a required status check (only `lint`/`test`/`hassfest`/`hacs` are), so it's safe for
+it to not run at all on a `pull_request` event — no "always report skipped" fail-safe needed here.
+
+**Step 3: Fix the pre-existing `test`-job gap** (design doc §4/§5) — the merge-blocking `test` job
 (`.github/workflows/ci.yml`, the `test:` job) runs bare `pytest -q`, which `pyproject.toml`'s
 `testpaths = ["tests"]` already expands to include `tests/benchmarks/test_coordinator_perf.py`
 *without* the `perf` job's `continue-on-error: true` protecting it. Change that job's step:
@@ -544,12 +555,13 @@ repo.
 This is what makes the "`perf` stays advisory" decision (§5) actually true instead of only true
 for one of the two jobs that run it.
 
-**Step 3:** No new automated test — this is CI YAML, verified by observing the next real workflow
-run: the `perf` job's summary shows the comparison table, and the `test` job's log no longer
-mentions `test_coordinator_perf.py`. Note this verification step explicitly in the PR description
+**Step 4:** No new automated test — this is CI YAML, verified by observing the next real workflow
+run: a PR run's job list shows `perf` skipped (Step 2), a push-to-`main` run's `perf` job summary
+shows the comparison table (Step 1), and the `test` job's log no longer mentions
+`test_coordinator_perf.py` (Step 3). Note this verification step explicitly in the PR description
 so the human reviewer checks the Actions tab, not just the diff.
 
-**Step 4: Commit** — `ci: compare perf results against the committed baseline, and stop the required test job from also gating on it (issue #708)`.
+**Step 5: Commit** — `ci: compare perf results against the committed baseline, run perf on push to main only, and stop the required test job from also gating on it (issue #708)`.
 
 ---
 
