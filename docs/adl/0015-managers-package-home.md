@@ -1,7 +1,7 @@
 # ADR-0015: Package home for the Managers beyond the Coordinator
 
 Date: 2026-08-02
-Status: Proposed
+Status: Accepted
 
 ## Context
 
