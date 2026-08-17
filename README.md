@@ -1,6 +1,7 @@
 # homeassistant-smart-charging
 
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kristofdegrave/c567fdec00982c4da95cfe92f80caf81/raw/smart-charging-coverage.json)](https://github.com/kristofdegrave/homeassistant-smart-charging/actions/workflows/coverage.yml)
+[![Perf](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/kristofdegrave/c567fdec00982c4da95cfe92f80caf81/raw/smart-charging-perf.json)](https://github.com/kristofdegrave/homeassistant-smart-charging/actions/workflows/ci.yml)
 
 <img src="custom_components/smart_charging/brand/logo@2x.png" alt="Smart Charging logo" width="96" height="96" align="right" />
 
