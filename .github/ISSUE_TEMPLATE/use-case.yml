@@ -1,0 +1,87 @@
+name: Use-case analysis
+description: Request a Smart Charging use-case document to be drafted by the CI runner
+title: "UCnn — <goal as an active verb phrase>"
+labels: ["uc"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form applies the `uc` context label. Add `needs-draft` yourself afterwards
+        to trigger the AI documentation pipeline: the runner drafts
+        `docs/analysis/use-cases/<slug>.md` following the `write-use-case` skill, updates
+        the entity-catalog, and opens a PR that Closes this issue (`needs-review` then
+        runs the fresh review; a human gives final manual approval and merges).
+
+        Leave `needs-draft` off if you just want to file the idea without drafting it yet.
+  - type: input
+    id: uc-number
+    attributes:
+      label: UC number
+      description: Next sequential UCnn (check docs/analysis/use-cases/ for the highest existing number).
+      placeholder: "UC13"
+    validations:
+      required: true
+  - type: input
+    id: goal
+    attributes:
+      label: Goal
+      description: Active verb phrase describing what the actor achieves.
+      placeholder: "Driver overrides the charging deadline for a single session"
+    validations:
+      required: true
+  - type: dropdown
+    id: actor
+    attributes:
+      label: Primary actor
+      options:
+        - EV driver
+        - Household energy manager
+    validations:
+      required: true
+  - type: input
+    id: requirements
+    attributes:
+      label: Requirement(s) satisfied
+      description: Requirement IDs this use-case satisfies, e.g. R2, R7.
+      placeholder: "R2"
+    validations:
+      required: true
+  - type: input
+    id: file-slug
+    attributes:
+      label: File slug
+      description: Target file path for the drafted document.
+      placeholder: "docs/analysis/use-cases/UC13-slug.md"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode-use-case
+    attributes:
+      label: Mode use-case?
+      description: Does this use-case need a stateDiagram-v2 + State model section?
+      options:
+        - "Yes — needs stateDiagram-v2 + State model"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Key notes / scope
+      description: >
+        Anything the drafter must capture: alternate/exception flows, «extend»/«include»
+        relationships, thresholds, edge cases.
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **Authoring contract (for the runner):**
+        - Follow the `write-use-case` skill and the template in
+          `docs/plans/2026-06-25-use-cases-design.md`.
+        - Every domain term must already be in the `system-overview.md` glossary — add it
+          there first if not.
+        - Reference (do not restate) `control-cycle.md` and `resolution-rules.md`.
+        - Update `entity-catalog.md`'s *Read by* / *Written by* columns for every entity touched.
+        - Requirements satisfied must match the requirement(s) listed above.

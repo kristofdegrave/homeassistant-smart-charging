@@ -1,0 +1,70 @@
+name: Architecture Decision Record
+description: Propose an architectural decision that needs to be recorded (new ADR, or superseding an existing one)
+title: "ADR-NNNN — <decision title>"
+labels: ["adr"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form applies the `adr` context label. Add `needs-draft` yourself afterwards
+        to trigger the AI documentation pipeline, which follows the `write-adr` skill.
+
+        Before filing: is this decision ADR-worthy? Write one when the choice is about
+        structure that would be expensive to reverse or materially constrains future
+        options (hardware mapping, boundary/abstraction layers, config-entry schema shape,
+        a library/protocol dependency, coordinator/control-loop structure). Skip it for a
+        variable name, a log message, or any implementation detail with no lasting
+        structural consequence.
+  - type: input
+    id: title
+    attributes:
+      label: Decision title
+      placeholder: "Use MQTT for charger command dispatch"
+    validations:
+      required: true
+  - type: dropdown
+    id: relation
+    attributes:
+      label: Is this a new decision or does it supersede an existing ADR?
+      options:
+        - New decision
+        - Supersedes an existing ADR
+    validations:
+      required: true
+  - type: input
+    id: superseded-adr
+    attributes:
+      label: ADR being superseded (if applicable)
+      description: Number and title, e.g. "ADR-0007 — Poll-based charger status".
+      placeholder: "ADR-0007 — ..."
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: The forces at play — what makes this decision necessary, without presupposing the answer.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options to consider
+      description: >
+        Every option seriously evaluated, not just the one you expect to be chosen — the
+        drafter needs at least one genuine Pro and Con per option. List as many as you
+        already know about; the drafter/reviewer will add more if needed.
+      placeholder: |
+        1. Option A — ...
+        2. Option B — ...
+        3. Do nothing / keep the status quo
+    validations:
+      required: true
+  - type: textarea
+    id: leaning
+    attributes:
+      label: Leaning / recommendation (optional)
+      description: If you already have a preferred option and why, note it here — the drafter still writes up all options fairly.
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Known consequences / follow-up
+      description: Concrete follow-up this decision implies (issues to open, docs to update), if known.

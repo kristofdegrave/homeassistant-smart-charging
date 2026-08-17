@@ -1,0 +1,69 @@
+name: Requirement / constraint / glossary change
+description: Propose a new or changed requirement, constraint, or glossary term
+title: "Rnn — <short title>"
+labels: ["requirement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form applies the `requirement` context label. Add `needs-draft` yourself
+        afterwards to trigger the AI documentation pipeline, which follows the
+        `write-requirement` skill. Skip the issue-first step entirely only for
+        typo-level/pure-wording edits — this form is for anything that changes behavior
+        or acceptance criteria.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of change is this?
+      options:
+        - New requirement (Rnn)
+        - New non-functional requirement (NFnn)
+        - New constraint (Cnn)
+        - New glossary term
+        - Change to an existing requirement/constraint/glossary term
+    validations:
+      required: true
+  - type: input
+    id: identifier
+    attributes:
+      label: Identifier (if known)
+      description: e.g. R12, NF3, C4, or the existing ID being changed. Leave blank for a new ID — the drafter assigns the next sequential one.
+      placeholder: "R12"
+  - type: input
+    id: title
+    attributes:
+      label: Short title
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (MoSCoW)
+      description: Leave blank for glossary-only changes.
+      options:
+        - Must
+        - Should
+        - Could
+        - "Won't"
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: One sentence — what the system must do, not how. For a glossary term, its definition instead.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: >
+        SMART, testable statements — specific, measurable, with the configurable default in
+        parentheses. Leave blank for a glossary-only change.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Why this is needed, related requirements/use-cases, ripple effects you already know about (glossary, entity-catalog, control-cycle).
