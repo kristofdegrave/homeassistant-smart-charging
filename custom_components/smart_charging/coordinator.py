@@ -225,15 +225,33 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if role not in ROLES_ADAPTER_READINGS_EXCLUDED
         }
 
+    async def _read_role(self, role: str) -> Any:
+        """ADR-0021: the one guarded optional-role read -- `role not in self._adapters` returns
+        None without reading, otherwise reads and mirrors the value into `_role_readings` in the
+        same place. Replaces every guarded optional-role read's hand-written if-guard/read/cache
+        shape (issue #717); a prior extraction (ADR-0023, see the comment on
+        `_resolve_deadline_and_reserve`)
+        had silently dropped four of those copies' cache writes, which this single call site
+        makes structurally impossible to drop again. Only for optional roles -- the three
+        required reads in `_read_cycle_inputs` below have no `in self._adapters` guard at all
+        and stay as they are."""
+        if role not in self._adapters:
+            return None
+        value = await self._adapters[role].read()
+        self._role_readings[role] = value
+        return value
+
     async def _read_cycle_inputs(self) -> tuple[str, float, float, float] | None:
         """Steps 1 and 3 (ADR-0006): read the three required adapters and resolve voltage (NF4's
         fallback -- the one role where a None reading is not a fault). Returns None on a missing
         required adapter; _run_cycle performs the actual fault CycleResult itself, keeping
         ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
         extracted methods (ADR-0023). Also caches each read role's value into
-        `self._role_readings` (ADR-0021) -- `_run_cycle` decides whether to advance
-        `self._role_readings_at`, since that depends on whether this cycle succeeded as a
-        whole (the required-adapter read succeeding is necessary but not sufficient, #648)."""
+        `self._role_readings` (ADR-0021) -- the three required reads cache directly here,
+        grid voltage's optional read caches inside `_read_role` (issue #717). `_run_cycle`
+        decides whether to advance `self._role_readings_at`, since that depends on whether
+        this cycle succeeded as a whole (the required-adapter read succeeding is necessary
+        but not sufficient, #648)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -242,10 +260,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._role_readings[ROLE_CHARGER_POWER] = charger_w
 
         # Grid voltage is the one role where None is NOT a fault (NF4).
-        measured_v = None
-        if ROLE_GRID_VOLTAGE in self._adapters:
-            measured_v = await self._adapters[ROLE_GRID_VOLTAGE].read()
-            self._role_readings[ROLE_GRID_VOLTAGE] = measured_v
+        measured_v = await self._read_role(ROLE_GRID_VOLTAGE)
         voltage = resolve_voltage(measured_v, self._config.nominal_voltage)
 
         # Any required role missing -> fault (ADR-0007).
@@ -266,32 +281,27 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         was already needed by R9's own gate; resolve_deadline_for is the closure
         `_read_deadline_urgency_inputs` (below) calls for today's deadline. is_holiday is
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
-        table never matches. Also caches each read role's value into `self._role_readings`
-        (ADR-0021) -- a prior extraction (ADR-0023) had dropped these four writes,
-        which `_read_cycle_inputs`/`_read_deadline_urgency_inputs` still do for their own reads;
-        restored here so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/
-        ROLE_SOLAR_FORECAST keep reporting their real reads in
-        `sensor.smart_charging_adapter_readings` instead of a stale/None value forever."""
+        table never matches. Each optional-role read here goes through `_read_role` (issue
+        #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
+        read -- so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/ROLE_SOLAR_FORECAST keep
+        reporting their real reads in `sensor.smart_charging_adapter_readings` instead of a
+        stale/None value forever."""
+        # Computed separately from the _read_role call below, not redundant with it:
+        # resolve_deadline_for's `external_configured` param needs "role configured" as its
+        # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
+        # None return can't carry.
         external_configured = ROLE_DEPARTURE_EXTERNAL in self._adapters
-        external = (
-            await self._adapters[ROLE_DEPARTURE_EXTERNAL].read() if external_configured else None
-        )
-        if external_configured:
-            self._role_readings[ROLE_DEPARTURE_EXTERNAL] = external
-        sun_reading = await self._adapters[ROLE_SUN].read() if ROLE_SUN in self._adapters else None
-        if ROLE_SUN in self._adapters:
-            self._role_readings[ROLE_SUN] = sun_reading
+        external = await self._read_role(ROLE_DEPARTURE_EXTERNAL)
+        sun_reading = await self._read_role(ROLE_SUN)
         ctx.sun_is_up = sun_reading == SUN_STATE_ABOVE_HORIZON
         ctx.sun_is_down = sun_reading == SUN_STATE_BELOW_HORIZON
         # An unmapped ROLE_LOW_TARIFF (or a None reading) keeps the glossary's own
         # single-tariff default -- "the signal is omitted and the flag is treated as
         # always active".
         ctx.low_tariff_active = True
-        if ROLE_LOW_TARIFF in self._adapters:
-            low_tariff_reading = await self._adapters[ROLE_LOW_TARIFF].read()
-            self._role_readings[ROLE_LOW_TARIFF] = low_tariff_reading
-            if low_tariff_reading is not None:
-                ctx.low_tariff_active = low_tariff_reading
+        low_tariff_reading = await self._read_role(ROLE_LOW_TARIFF)
+        if low_tariff_reading is not None:
+            ctx.low_tariff_active = low_tariff_reading
 
         # R14's four-row table, evaluated for a given weekday -- shared by both today's
         # deadline (urgency, below) and tomorrow's (R9's one-day-ahead precondition, UC07),
@@ -310,13 +320,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # R9's precondition (UC07): the same R14 table evaluated one day ahead.
         tomorrow_weekday = (now_dt.weekday() + 1) % 7
         deadline_tomorrow = resolve_deadline_for(tomorrow_weekday)
-        forecast_kwh = (
-            await self._adapters[ROLE_SOLAR_FORECAST].read()
-            if ROLE_SOLAR_FORECAST in self._adapters
-            else None
-        )
-        if ROLE_SOLAR_FORECAST in self._adapters:
-            self._role_readings[ROLE_SOLAR_FORECAST] = forecast_kwh
+        forecast_kwh = await self._read_role(ROLE_SOLAR_FORECAST)
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=self.home_day_flag,
@@ -345,10 +349,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         (deadline_today, effective_battery_capacity_kwh); deadline_today is None when
         deadline_resolvable is False, exactly as today (resolve_deadline_urgency short-circuits
         before reading it)."""
-        sensed_capacity_kwh = None
-        if ROLE_EV_BATTERY_CAPACITY in self._adapters:
-            sensed_capacity_kwh = await self._adapters[ROLE_EV_BATTERY_CAPACITY].read()
-            self._role_readings[ROLE_EV_BATTERY_CAPACITY] = sensed_capacity_kwh
+        sensed_capacity_kwh = await self._read_role(ROLE_EV_BATTERY_CAPACITY)
         effective_battery_capacity_kwh = sensed_capacity_kwh
         if effective_battery_capacity_kwh is None:
             effective_battery_capacity_kwh = self._config.ev_battery_capacity_kwh
@@ -413,10 +414,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # stop, not a fault, even if its SOC sensor also goes unavailable on unplug, per UC01/R7);
         # outside that gate a missing reading just means deadline urgency can't be computed this
         # cycle (below), not a fault.
-        ev_soc = None
-        if status in CHARGEABLE_STATES and ROLE_EV_SOC in self._adapters:
-            ev_soc = await self._adapters[ROLE_EV_SOC].read()
-            self._role_readings[ROLE_EV_SOC] = ev_soc
+        ev_soc = await self._read_role(ROLE_EV_SOC) if status in CHARGEABLE_STATES else None
         if (
             self._mode_handlers[self.active_mode].is_soc_gated
             and status in CHARGEABLE_STATES
