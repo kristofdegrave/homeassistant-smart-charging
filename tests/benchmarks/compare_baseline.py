@@ -12,6 +12,10 @@ import os
 _BASELINE_KEY = "coordinator_cycle"
 _METRICS = ("median_cpu_ms", "median_rss_delta_kb", "median_peak_traced_memory_kb")
 _STATUS_OK = "ok"
+_STATUS_REGRESSED = "REGRESSED"
+# Deliberately loose first-cut threshold (design doc S4) -- no real variance data exists
+# yet to calibrate a tighter one.
+_TOLERANCE_PCT = 25.0
 
 
 def compare(results_path: str, baseline_path: str) -> list[str]:
@@ -32,9 +36,9 @@ def compare(results_path: str, baseline_path: str) -> list[str]:
         # negative baseline. abs() keeps delta_pct's sign meaning "current is higher/lower than
         # baseline" regardless of the baseline's own sign.
         delta_pct = ((current_value - base_value) / abs(base_value)) * 100 if base_value else 0.0
+        status = _STATUS_REGRESSED if delta_pct > _TOLERANCE_PCT else _STATUS_OK
         rows.append(
-            f"| {metric} | {base_value:.1f} | {current_value:.1f} | "
-            f"{delta_pct:+.1f}% | {_STATUS_OK} |"
+            f"| {metric} | {base_value:.1f} | {current_value:.1f} | {delta_pct:+.1f}% | {status} |"
         )
     return rows
 
