@@ -1,9 +1,9 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Set up Smart Charging",
-        "description": "Map the entities that represent your charger and grid, and set the initial thresholds. Only the grid voltage entity and the EV state-of-charge entity are optional (the latter is required when Solar is installed or CapTar is available).",
+      "core": {
+        "title": "Charger, grid & capabilities",
+        "description": "Map the entities that represent your charger and grid, and choose which optional capabilities to configure. Each capability you enable asks its own follow-up questions next.",
         "data": {
           "charger_current_entity": "Charger current control entity",
           "charger_status_entity": "Charger status entity",
@@ -11,18 +11,70 @@
           "charging_states": "States meaning \"charging\" (comma-separated)",
           "net_power_entity": "Net grid power entity",
           "charger_power_entity": "Charger power entity",
-          "grid_voltage_entity": "Grid voltage entity (optional)",
           "solar_available": "Solar installed",
           "captar_available": "CapTar available",
-          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
-          "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
-          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
+          "deadline_available": "Departure deadline tracking",
+          "vehicle_limit_mapped": "Control a vehicle charge limit"
+        }
+      },
+      "solar": {
+        "title": "Solar",
+        "description": "Map the entities Solar mode reads, and tune its thresholds.",
+        "data": {
+          "ev_soc_entity": "EV state-of-charge entity",
+          "solar_forecast_entity": "Solar forecast entity",
+          "solar_start_threshold_w": "Solar start threshold (W)",
+          "solar_only_start_threshold_w": "SolarOnly start threshold (W)",
+          "solar_hold_min": "Solar post-surplus hold duration (min)",
+          "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
+          "solar_only_strategy": "SolarOnly amp-step rounding strategy",
+          "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
+          "solar_step_pp": "Solar step-up step size (percentage points)",
+          "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
+          "max_solar_soc": "Solar step-up maximum SOC (%)",
+          "solar_reserve_soc": "Solar-reserve SOC cap (%)",
+          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
+        }
+      },
+      "captar": {
+        "title": "CapTar",
+        "description": "Map the entities CapTar's peak-shaving reads, and tune its cooldown.",
+        "data": {
+          "ev_soc_entity": "EV state-of-charge entity",
+          "captar_cooldown_min": "Captar cooldown duration (min)"
+        }
+      },
+      "deadline": {
+        "title": "Departure deadline",
+        "description": "Map the departure-time entity used to track a deadline, and set the plug-in reminder lead time.",
+        "data": {
           "departure_external_entity": "External departure-time entity (optional)",
-          "home_day_external_entity": "External home-day entity (optional)",
+          "reminder_lead_h": "Plug-in reminder lead time (h)"
+        }
+      },
+      "vehicle_limit": {
+        "title": "Vehicle charge limit",
+        "description": "Map the vehicle charge-limit control and the car-home presence entity that gates it.",
+        "data": {
+          "vehicle_charge_limit_entity": "Vehicle charge-limit control entity",
+          "car_home_entity": "Car-home presence entity"
+        }
+      },
+      "mappings": {
+        "title": "Additional mappings",
+        "description": "Optional entity mappings not tied to any capability above.",
+        "data": {
+          "grid_voltage_entity": "Grid voltage entity (optional)",
           "low_tariff_entity": "Low-tariff entity (optional)",
-          "vehicle_charge_limit_entity": "Vehicle charge-limit entity (optional; requires car_home when mapped)",
-          "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)",
           "notification_target_entity": "Notification target entity (optional, notify domain)",
+          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
+          "home_day_external_entity": "External home-day entity (optional)"
+        }
+      },
+      "thresholds": {
+        "title": "Thresholds and defaults",
+        "description": "Tune the remaining thresholds and defaults.",
+        "data": {
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)",
@@ -30,50 +82,15 @@
           "grid_safety_offset_a": "Grid safety offset (A)",
           "default_target_current": "Default target current (A)",
           "smoothing_window": "Smoothing window (samples)",
-          "solar_start_threshold_w": "Solar start threshold (W)",
-          "solar_only_start_threshold_w": "SolarOnly start threshold (W)",
-          "solar_hold_min": "Solar post-surplus hold duration (min)",
-          "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
-          "solar_only_strategy": "SolarOnly amp-step rounding strategy",
-          "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
           "default_soc_limit": "Default charge limit (%)",
           "safety_margin_w": "CapTar peak safety margin (W)",
           "max_peak_kw": "CapTar maximum peak (kW)",
           "peak_grace_min": "CapTar peak grace period (min)",
-          "captar_cooldown_min": "Captar cooldown duration (min)",
           "power_respect_peak": "Power mode respects the peak limit",
           "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
-          "max_solar_soc": "Solar step-up maximum SOC (%)",
-          "solar_step_pp": "Solar step-up step size (percentage points)",
-          "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
-          "solar_reserve_soc": "Solar-reserve SOC cap (%)",
-          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
-          "evening_prompt_time": "Evening home-day prompt time"
-        }
-      },
-      "reconfigure": {
-        "title": "Reconfigure Smart Charging",
-        "description": "Update which entities play each role. Changes are re-validated and reload the integration.",
-        "data": {
-          "charger_current_entity": "Charger current control entity",
-          "charger_status_entity": "Charger status entity",
-          "connected_states": "States meaning \"connected\" (comma-separated)",
-          "charging_states": "States meaning \"charging\" (comma-separated)",
-          "net_power_entity": "Net grid power entity",
-          "charger_power_entity": "Charger power entity",
-          "grid_voltage_entity": "Grid voltage entity (optional)",
-          "solar_available": "Solar installed",
-          "captar_available": "CapTar available",
-          "ev_soc_entity": "EV state-of-charge entity (required if Solar installed or CapTar available)",
-          "solar_forecast_entity": "Solar forecast entity (required if Solar installed)",
-          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
-          "departure_external_entity": "External departure-time entity (optional)",
-          "home_day_external_entity": "External home-day entity (optional)",
-          "low_tariff_entity": "Low-tariff entity (optional)",
-          "vehicle_charge_limit_entity": "Vehicle charge-limit entity (optional; requires car_home when mapped)",
-          "car_home_entity": "Car-home presence entity (required when vehicle charge-limit entity is mapped)",
-          "notification_target_entity": "Notification target entity (optional, notify domain)"
+          "evening_prompt_time": "Evening home-day prompt time",
+          "prompt_timeout_h": "Evening home-day prompt timeout (h)"
         }
       }
     },
@@ -85,9 +102,40 @@
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Smart Charging options",
-        "description": "Tune thresholds and defaults at any time.",
+      "solar": {
+        "title": "Solar thresholds",
+        "description": "Tune Solar mode's thresholds.",
+        "data": {
+          "solar_start_threshold_w": "Solar start threshold (W)",
+          "solar_only_start_threshold_w": "SolarOnly start threshold (W)",
+          "solar_hold_min": "Solar post-surplus hold duration (min)",
+          "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
+          "solar_only_strategy": "SolarOnly amp-step rounding strategy",
+          "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
+          "solar_step_pp": "Solar step-up step size (percentage points)",
+          "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
+          "max_solar_soc": "Solar step-up maximum SOC (%)",
+          "solar_reserve_soc": "Solar-reserve SOC cap (%)",
+          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
+        }
+      },
+      "captar": {
+        "title": "CapTar thresholds",
+        "description": "Tune CapTar's cooldown.",
+        "data": {
+          "captar_cooldown_min": "Captar cooldown duration (min)"
+        }
+      },
+      "deadline": {
+        "title": "Deadline settings",
+        "description": "Tune the plug-in reminder lead time.",
+        "data": {
+          "reminder_lead_h": "Plug-in reminder lead time (h)"
+        }
+      },
+      "thresholds": {
+        "title": "Thresholds and defaults",
+        "description": "Tune the remaining thresholds, defaults, and the control interval.",
         "data": {
           "nominal_voltage": "Nominal grid voltage (V)",
           "min_current": "Minimum charging current (A)",
@@ -96,27 +144,14 @@
           "grid_safety_offset_a": "Grid safety offset (A)",
           "default_target_current": "Default target current (A)",
           "smoothing_window": "Smoothing window (samples)",
-          "solar_start_threshold_w": "Solar start threshold (W)",
-          "solar_only_start_threshold_w": "SolarOnly start threshold (W)",
-          "solar_hold_min": "Solar post-surplus hold duration (min)",
-          "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
-          "solar_only_strategy": "SolarOnly amp-step rounding strategy",
-          "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
           "default_soc_limit": "Default charge limit (%)",
           "safety_margin_w": "CapTar peak safety margin (W)",
           "max_peak_kw": "CapTar maximum peak (kW)",
           "peak_grace_min": "CapTar peak grace period (min)",
-          "captar_cooldown_min": "Captar cooldown duration (min)",
           "power_respect_peak": "Power mode respects the peak limit",
           "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
-          "max_solar_soc": "Solar step-up maximum SOC (%)",
-          "solar_step_pp": "Solar step-up step size (percentage points)",
-          "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
-          "solar_reserve_soc": "Solar-reserve SOC cap (%)",
-          "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
           "evening_prompt_time": "Evening home-day prompt time",
-          "reminder_lead_h": "Plug-in reminder lead time (h)",
           "prompt_timeout_h": "Evening home-day prompt timeout (h)",
           "control_interval_s": "Control interval (s)"
         }

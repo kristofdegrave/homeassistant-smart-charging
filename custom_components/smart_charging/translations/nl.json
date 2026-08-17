@@ -1,9 +1,9 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Smart Charging instellen",
-        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en stel de initiële drempelwaarden in. Alleen de netspanning-entiteit en de EV-laadniveau-entiteit zijn optioneel (de laatste is verplicht wanneer Zonne-energie is geïnstalleerd of CapTar beschikbaar is).",
+      "core": {
+        "title": "Lader, net & mogelijkheden",
+        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en kies welke optionele mogelijkheden je wilt instellen. Elke mogelijkheid die je inschakelt, stelt daarna zijn eigen vervolgvragen.",
         "data": {
           "charger_current_entity": "Stroomregeling-entiteit van de lader",
           "charger_status_entity": "Statusentiteit van de lader",
@@ -11,18 +11,70 @@
           "charging_states": "Statussen die \"aan het laden\" betekenen (kommagescheiden)",
           "net_power_entity": "Netto vermogen-entiteit",
           "charger_power_entity": "Vermogen-entiteit van de lader",
-          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
           "solar_available": "Zonne-energie geïnstalleerd",
           "captar_available": "CapTar beschikbaar",
-          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
-          "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
-          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
+          "deadline_available": "Vertrekdeadline bijhouden",
+          "vehicle_limit_mapped": "Laadlimiet voertuig regelen"
+        }
+      },
+      "solar": {
+        "title": "Zon",
+        "description": "Koppel de entiteiten die Zon-modus gebruikt, en stel de drempelwaarden in.",
+        "data": {
+          "ev_soc_entity": "EV-laadniveau-entiteit",
+          "solar_forecast_entity": "Zonneprognose-entiteit",
+          "solar_start_threshold_w": "Startdrempel Zon (W)",
+          "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
+          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
+          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
+          "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
+          "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
+          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
+          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
+          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
+          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
+          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
+        }
+      },
+      "captar": {
+        "title": "CapTar",
+        "description": "Koppel de entiteiten die CapTar's piekbeperking gebruikt, en stel de afkoelduur in.",
+        "data": {
+          "ev_soc_entity": "EV-laadniveau-entiteit",
+          "captar_cooldown_min": "Afkoelduur Captar (min)"
+        }
+      },
+      "deadline": {
+        "title": "Vertrekdeadline",
+        "description": "Koppel de externe vertrektijd-entiteit die voor de deadline wordt gebruikt, en stel de voorlooptijd van de oplaadherinnering in.",
+        "data": {
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
-          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
+          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)"
+        }
+      },
+      "vehicle_limit": {
+        "title": "Laadlimiet voertuig",
+        "description": "Koppel de laadlimiet-regeling van het voertuig en de aanwezigheidsentiteit auto-thuis die deze gate.",
+        "data": {
+          "vehicle_charge_limit_entity": "Laadlimiet-regelentiteit voertuig",
+          "car_home_entity": "Aanwezigheidsentiteit auto-thuis"
+        }
+      },
+      "mappings": {
+        "title": "Aanvullende koppelingen",
+        "description": "Optionele entiteitkoppelingen die niet aan een mogelijkheid hierboven gebonden zijn.",
+        "data": {
+          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
           "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
-          "vehicle_charge_limit_entity": "Laadlimiet-entiteit voertuig (optioneel; vereist car_home indien gekoppeld)",
-          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)",
           "notification_target_entity": "Meldingsdoel-entiteit (optioneel, notify-domein)",
+          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
+          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)"
+        }
+      },
+      "thresholds": {
+        "title": "Drempelwaarden en standaardinstellingen",
+        "description": "Stel de overige drempelwaarden en standaardinstellingen in.",
+        "data": {
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
           "max_current": "Maximale laadstroom (A)",
@@ -30,50 +82,15 @@
           "grid_safety_offset_a": "Veiligheidsmarge net (A)",
           "default_target_current": "Standaard doelstroom (A)",
           "smoothing_window": "Afvlakvenster (samples)",
-          "solar_start_threshold_w": "Startdrempel Zon (W)",
-          "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
-          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
-          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
-          "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
-          "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
           "default_soc_limit": "Standaard laadlimiet (%)",
           "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
           "max_peak_kw": "CapTar maximale piek (kW)",
           "peak_grace_min": "CapTar respijtperiode piek (min)",
-          "captar_cooldown_min": "Afkoelduur Captar (min)",
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
-          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
-          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
-          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
-          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
-          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
-          "evening_prompt_time": "Tijdstip avondprompt thuisdag"
-        }
-      },
-      "reconfigure": {
-        "title": "Smart Charging herconfigureren",
-        "description": "Werk bij welke entiteit welke rol vervult. Wijzigingen worden opnieuw gevalideerd en herladen de integratie.",
-        "data": {
-          "charger_current_entity": "Stroomregeling-entiteit van de lader",
-          "charger_status_entity": "Statusentiteit van de lader",
-          "connected_states": "Statussen die \"verbonden\" betekenen (kommagescheiden)",
-          "charging_states": "Statussen die \"aan het laden\" betekenen (kommagescheiden)",
-          "net_power_entity": "Netto vermogen-entiteit",
-          "charger_power_entity": "Vermogen-entiteit van de lader",
-          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
-          "solar_available": "Zonne-energie geïnstalleerd",
-          "captar_available": "CapTar beschikbaar",
-          "ev_soc_entity": "EV-laadniveau-entiteit (verplicht als Zonne-energie is geïnstalleerd of CapTar beschikbaar is)",
-          "solar_forecast_entity": "Zonneprognose-entiteit (verplicht als Zonne-energie is geïnstalleerd)",
-          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
-          "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
-          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
-          "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
-          "vehicle_charge_limit_entity": "Laadlimiet-entiteit voertuig (optioneel; vereist car_home indien gekoppeld)",
-          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld)",
-          "notification_target_entity": "Meldingsdoel-entiteit (optioneel, notify-domein)"
+          "evening_prompt_time": "Tijdstip avondprompt thuisdag",
+          "prompt_timeout_h": "Time-out avondprompt thuisdag (u)"
         }
       }
     },
@@ -85,9 +102,40 @@
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Smart Charging-opties",
-        "description": "Pas drempelwaarden en standaardinstellingen op elk moment aan.",
+      "solar": {
+        "title": "Drempelwaarden Zon",
+        "description": "Stel de drempelwaarden van Zon-modus in.",
+        "data": {
+          "solar_start_threshold_w": "Startdrempel Zon (W)",
+          "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
+          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
+          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
+          "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
+          "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
+          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
+          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
+          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
+          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
+          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
+        }
+      },
+      "captar": {
+        "title": "Drempelwaarden CapTar",
+        "description": "Stel de afkoelduur van CapTar in.",
+        "data": {
+          "captar_cooldown_min": "Afkoelduur Captar (min)"
+        }
+      },
+      "deadline": {
+        "title": "Instellingen deadline",
+        "description": "Stel de voorlooptijd van de oplaadherinnering in.",
+        "data": {
+          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)"
+        }
+      },
+      "thresholds": {
+        "title": "Drempelwaarden en standaardinstellingen",
+        "description": "Stel de overige drempelwaarden, standaardinstellingen en het regelinterval in.",
         "data": {
           "nominal_voltage": "Nominale netspanning (V)",
           "min_current": "Minimale laadstroom (A)",
@@ -96,27 +144,14 @@
           "grid_safety_offset_a": "Veiligheidsmarge net (A)",
           "default_target_current": "Standaard doelstroom (A)",
           "smoothing_window": "Afvlakvenster (samples)",
-          "solar_start_threshold_w": "Startdrempel Zon (W)",
-          "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
-          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
-          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
-          "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
-          "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
           "default_soc_limit": "Standaard laadlimiet (%)",
           "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
           "max_peak_kw": "CapTar maximale piek (kW)",
           "peak_grace_min": "CapTar respijtperiode piek (min)",
-          "captar_cooldown_min": "Afkoelduur Captar (min)",
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
-          "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
-          "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
-          "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
-          "solar_reserve_soc": "Laadniveauplafond zonnereserve (%)",
-          "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
           "evening_prompt_time": "Tijdstip avondprompt thuisdag",
-          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)",
           "prompt_timeout_h": "Time-out avondprompt thuisdag (u)",
           "control_interval_s": "Regelinterval (s)"
         }

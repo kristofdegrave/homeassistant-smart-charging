@@ -10,6 +10,14 @@ without a matching translation key is caught automatically. This guarantee only 
 codes exposed as an `ERROR_*` constant -- a code introduced as a bare literal directly in
 config_flow.py (exactly the anti-pattern this file exists to close off) would not be seen.
 
+T12 extends this file with the same anti-hardcoding discipline for **step and field**
+parity (guided config flow, ADR-0025 Consequences: one `config.step.<id>` /
+`options.step.<id>` block per step id, install and reconfigure sharing `config.step.*`).
+The step ids and each step's field set are discovered from `config_flow.py`'s own tables
+and schema fragments -- the single source of truth the dispatcher itself uses -- rather
+than hardcoded here, so a step added to a table without a matching strings.json block (or
+a field moved to a different step without its label following) is caught automatically.
+
 Only `strings.json`/`translations/en.json` are checked, not `translations/nl.json` -- HA
 falls back to `en` for missing keys, and requiring every locale to stay fully translated
 would block adding a new locale incrementally.
@@ -18,17 +26,25 @@ would block adding a new locale incrementally.
 import json
 from pathlib import Path
 
+import pytest
+
+from custom_components.smart_charging import config_flow as cf
 from custom_components.smart_charging import const
 
 COMPONENT_DIR = Path(__file__).parent.parent / "custom_components" / "smart_charging"
 
 EMITTED_ERROR_CODES = {getattr(const, name) for name in dir(const) if name.startswith("ERROR_")}
 
+_CHECKED_FILES = ("strings.json", "translations/en.json")
+
+
+def _load(relative_path: str) -> dict:
+    with open(COMPONENT_DIR / relative_path, encoding="utf-8") as f:
+        return json.load(f)
+
 
 def _config_error_keys(relative_path: str) -> set[str]:
-    with open(COMPONENT_DIR / relative_path, encoding="utf-8") as f:
-        data = json.load(f)
-    return set(data["config"]["error"].keys())
+    return set(_load(relative_path)["config"]["error"].keys())
 
 
 def test_emitted_error_codes_is_non_empty():
@@ -45,3 +61,128 @@ def test_strings_json_has_every_emitted_error_code():
 def test_translations_en_json_has_every_emitted_error_code():
     missing = EMITTED_ERROR_CODES - _config_error_keys("translations/en.json")
     assert not missing, f"translations/en.json's config.error section is missing: {sorted(missing)}"
+
+
+# --- T12: step and field parity (guided config flow, ADR-0025 Consequences). ---
+
+
+def _keys(schema) -> set[str]:
+    return {str(k) for k in schema.schema}
+
+
+# Step ids the config/options flows can show, discovered from the tables themselves --
+# `core` is the shared entry point both install and reconfigure delegate into (ADR-0025
+# point 4) and is deliberately not a CONFIG_TABLE row of its own (design, "Step ids").
+CONFIG_STEP_IDS = {row.step_id for row in cf.CONFIG_TABLE} | {cf.STEP_CORE}
+OPTIONS_STEP_IDS = {row.step_id for row in cf.OPTIONS_TABLE}
+
+# Each step's field set, unioned across every schema variant it can render (both mapping
+# and threshold halves for the config flow; the once-only ev_soc rule's two include_ev_soc
+# variants for solar/captar) -- a field a step presents in ANY variant needs a label.
+CONFIG_STEP_FIELDS = {
+    cf.STEP_CORE: _keys(cf.CORE_MAPPING_SCHEMA),
+    cf.STEP_SOLAR: (
+        _keys(cf._solar_mapping_schema(include_ev_soc=True))
+        | _keys(cf._solar_mapping_schema(include_ev_soc=False))
+        | _keys(cf._solar_threshold_schema())
+    ),
+    cf.STEP_CAPTAR: (
+        _keys(cf._captar_mapping_schema(include_ev_soc=True))
+        | _keys(cf._captar_mapping_schema(include_ev_soc=False))
+        | _keys(cf._captar_threshold_schema())
+    ),
+    cf.STEP_DEADLINE: _keys(cf.DEADLINE_MAPPING_SCHEMA) | _keys(cf._deadline_threshold_schema()),
+    cf.STEP_VEHICLE_LIMIT: _keys(cf.VEHICLE_LIMIT_MAPPING_SCHEMA),
+    cf.STEP_MAPPINGS: _keys(cf.UNGATED_MAPPING_SCHEMA),
+    cf.STEP_THRESHOLDS: _keys(cf._ungated_threshold_schema(include_interval=False)),
+}
+
+# The options flow's own steps are threshold-only (ADR-0025 point 3, no mapping fields);
+# `thresholds` alone also asks the control interval (UC12 1b's own carve-out).
+OPTIONS_STEP_FIELDS = {
+    cf.STEP_SOLAR: _keys(cf._solar_threshold_schema()),
+    cf.STEP_CAPTAR: _keys(cf._captar_threshold_schema()),
+    cf.STEP_DEADLINE: _keys(cf._deadline_threshold_schema()),
+    cf.STEP_THRESHOLDS: (
+        _keys(cf._ungated_threshold_schema(include_interval=False)) | {cf.CONF_CONTROL_INTERVAL_S}
+    ),
+}
+
+
+@pytest.mark.parametrize("relative_path", _CHECKED_FILES)
+def test_every_config_step_has_a_strings_block(relative_path):
+    """ADR-0025 Consequences: one config.step.<id> block per step id the config flow can
+    show, including the shared `core` block both install and reconfigure render."""
+    blocks = _load(relative_path)["config"]["step"]
+    missing = CONFIG_STEP_IDS - set(blocks)
+    assert not missing, f"{relative_path}'s config.step is missing blocks for {missing}"
+
+
+@pytest.mark.parametrize("relative_path", _CHECKED_FILES)
+def test_every_options_step_has_a_strings_block(relative_path):
+    blocks = _load(relative_path)["options"]["step"]
+    missing = OPTIONS_STEP_IDS - set(blocks)
+    assert not missing, f"{relative_path}'s options.step is missing blocks for {missing}"
+
+
+@pytest.mark.parametrize("relative_path", _CHECKED_FILES)
+def test_every_field_a_step_presents_has_a_label_in_that_steps_block(relative_path):
+    """A field moved between steps without moving its label renders as a raw key."""
+    data = _load(relative_path)
+    for step_id, fields in CONFIG_STEP_FIELDS.items():
+        block_data = set(data["config"]["step"][step_id].get("data", {}))
+        missing = fields - block_data
+        assert not missing, (
+            f"{relative_path}'s config.step.{step_id} is missing labels for {missing}"
+        )
+    for step_id, fields in OPTIONS_STEP_FIELDS.items():
+        block_data = set(data["options"]["step"][step_id].get("data", {}))
+        missing = fields - block_data
+        assert not missing, (
+            f"{relative_path}'s options.step.{step_id} is missing labels for {missing}"
+        )
+
+
+@pytest.mark.parametrize("relative_path", _CHECKED_FILES)
+def test_no_orphaned_step_block_or_field_label(relative_path):
+    """The converse -- catches the flat flow's leftovers."""
+    data = _load(relative_path)
+
+    orphaned_config_steps = set(data["config"]["step"]) - CONFIG_STEP_IDS
+    assert not orphaned_config_steps, (
+        f"{relative_path} has orphaned config.step blocks: {orphaned_config_steps}"
+    )
+    orphaned_options_steps = set(data["options"]["step"]) - OPTIONS_STEP_IDS
+    assert not orphaned_options_steps, (
+        f"{relative_path} has orphaned options.step blocks: {orphaned_options_steps}"
+    )
+
+    for step_id, fields in CONFIG_STEP_FIELDS.items():
+        block_data = set(data["config"]["step"][step_id].get("data", {}))
+        orphaned = block_data - fields
+        assert not orphaned, (
+            f"{relative_path}'s config.step.{step_id} has orphaned field labels: {orphaned}"
+        )
+    for step_id, fields in OPTIONS_STEP_FIELDS.items():
+        block_data = set(data["options"]["step"][step_id].get("data", {}))
+        orphaned = block_data - fields
+        assert not orphaned, (
+            f"{relative_path}'s options.step.{step_id} has orphaned field labels: {orphaned}"
+        )
+
+
+@pytest.mark.parametrize("relative_path", _CHECKED_FILES)
+def test_no_field_label_carries_a_conditional_qualifier(relative_path):
+    """ADR-0025 Consequences: '(required if Solar installed)'-style qualifiers are redundant
+    once a field only appears when it is required, and must not contradict the new
+    structure."""
+    data = _load(relative_path)
+    banned_phrases = ("required if", "required when")
+    for section in ("config", "options"):
+        for step_id, block in data[section]["step"].items():
+            for field, label in block.get("data", {}).items():
+                lowered = label.lower()
+                assert not any(phrase in lowered for phrase in banned_phrases), (
+                    f"{relative_path}'s {section}.step.{step_id}.data.{field} still carries "
+                    f"a conditional qualifier: {label!r}"
+                )

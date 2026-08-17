@@ -15,8 +15,6 @@ from pathlib import Path
 
 from custom_components.smart_charging import number, select, sensor, switch
 from custom_components.smart_charging import time as time_platform
-from custom_components.smart_charging.config_flow import MAPPING_SCHEMA, OPTION_KEYS, USER_SCHEMA
-from custom_components.smart_charging.const import CONF_CONTROL_INTERVAL_S
 
 COMPONENT_DIR = Path(__file__).parent.parent / "custom_components" / "smart_charging"
 
@@ -36,11 +34,6 @@ def _flatten(d: dict, prefix: str = "") -> set[str]:
     return keys
 
 
-def _schema_keys(schema) -> set[str]:
-    """The vol.Schema's top-level field names, as plain strings."""
-    return {str(k) for k in schema.schema}
-
-
 def test_strings_json_and_en_json_are_identical():
     """translations/en.json is the English strings.json's own translations copy -- the
     two must never drift (this project keeps them byte-for-byte identical)."""
@@ -55,19 +48,12 @@ def test_nl_json_has_the_same_keys_as_en_json():
     assert en_keys == nl_keys
 
 
-def test_every_config_flow_field_has_a_label():
-    """Every USER_SCHEMA (install step = MAPPING_SCHEMA + thresholds) and MAPPING_SCHEMA
-    (reconfigure step) field has a matching config.step.<step>.data label; every OPTION_KEYS
-    + control_interval_s field has a matching options.step.init.data label."""
-    strings = _load("strings.json")
-
-    user_data = set(strings["config"]["step"]["user"]["data"])
-    reconfigure_data = set(strings["config"]["step"]["reconfigure"]["data"])
-    options_data = set(strings["options"]["step"]["init"]["data"])
-
-    assert _schema_keys(USER_SCHEMA) <= user_data
-    assert _schema_keys(MAPPING_SCHEMA) <= reconfigure_data
-    assert set(OPTION_KEYS) | {CONF_CONTROL_INTERVAL_S} <= options_data
+# test_every_config_flow_field_has_a_label (checked config.step.user/reconfigure and
+# options.step.init, the three blocks the guided config flow's own tables replace) is
+# superseded by tests/test_config_flow_translations.py's dynamic step/field parity checks
+# (plan T12), which cover strictly more -- per step, both config and options sections, both
+# "missing" and "orphaned" directions -- and discover the step set from the tables instead of
+# naming three now-deleted hardcoded blocks. Removed here rather than updated in place.
 
 
 def test_every_entity_translation_key_has_a_name():
