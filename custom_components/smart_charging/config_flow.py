@@ -487,12 +487,13 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
-# MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA have no production caller left as of T10
+# MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA have had no production caller since T10
 # (SmartChargingOptionsFlow now builds its own schemas from the fragments below, the same way
-# the config flow already did from T3 onward). All three stay in place regardless:
-# tests/test_translations.py imports them, and T12 removes that import before T13 deletes the
-# three definitions themselves (plan). Do not delete early -- that breaks
-# test_translations.py at collection time. These fragments below are the guided flow's own.
+# the config flow already did from T3 onward) and, as of T12, no test caller either --
+# tests/test_translations.py's import of them was removed once its one test that needed them
+# was superseded by tests/test_config_flow_translations.py's dynamic parity checks. All three
+# still stay in place regardless: their deletion is T13's own task (plan). These fragments
+# below are the guided flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {

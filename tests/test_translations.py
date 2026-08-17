@@ -1,11 +1,17 @@
 """strings.json/translations completeness guard (T6.3).
 
 Plain pytest, no HA harness needed (ADR-0009) -- these are pure data-file checks, plus
-introspection of the voluptuous schemas and the entities' own `_attr_translation_key`
-literals. Catches the two regression classes that `python -m script.hassfest` (a
-strings.json *schema* check, run only as a GitHub Action) does not: (1) a config-flow
-field with no label in one or more of strings.json/en.json/nl.json, and (2) an entity
-`_attr_translation_key` with no matching `entity.<platform>.<key>.name`.
+introspection of the entities' own `_attr_translation_key` literals. Catches two regression
+classes that `python -m script.hassfest` (a strings.json *schema* check, run only as a GitHub
+Action) does not: (1) strings.json/en.json/nl.json drifting apart (missing keys or a
+non-identical English copy), and (2) an entity `_attr_translation_key` with no matching
+`entity.<platform>.<key>.name`.
+
+Config-flow step/field label parity (the config-flow-specific regression class this module
+used to also cover) now lives in tests/test_config_flow_translations.py instead (plan T12) --
+its dynamic per-step-id parity checks, discovered from config_flow.py's own tables and schema
+fragments, superseded this module's single hardcoded test against the three flat blocks
+(config.step.user/reconfigure, options.step.init) the guided config flow's tables replaced.
 """
 
 from __future__ import annotations
@@ -15,8 +21,6 @@ from pathlib import Path
 
 from custom_components.smart_charging import number, select, sensor, switch
 from custom_components.smart_charging import time as time_platform
-from custom_components.smart_charging.config_flow import MAPPING_SCHEMA, OPTION_KEYS, USER_SCHEMA
-from custom_components.smart_charging.const import CONF_CONTROL_INTERVAL_S
 
 COMPONENT_DIR = Path(__file__).parent.parent / "custom_components" / "smart_charging"
 
@@ -36,11 +40,6 @@ def _flatten(d: dict, prefix: str = "") -> set[str]:
     return keys
 
 
-def _schema_keys(schema) -> set[str]:
-    """The vol.Schema's top-level field names, as plain strings."""
-    return {str(k) for k in schema.schema}
-
-
 def test_strings_json_and_en_json_are_identical():
     """translations/en.json is the English strings.json's own translations copy -- the
     two must never drift (this project keeps them byte-for-byte identical)."""
@@ -55,19 +54,8 @@ def test_nl_json_has_the_same_keys_as_en_json():
     assert en_keys == nl_keys
 
 
-def test_every_config_flow_field_has_a_label():
-    """Every USER_SCHEMA (install step = MAPPING_SCHEMA + thresholds) and MAPPING_SCHEMA
-    (reconfigure step) field has a matching config.step.<step>.data label; every OPTION_KEYS
-    + control_interval_s field has a matching options.step.init.data label."""
-    strings = _load("strings.json")
-
-    user_data = set(strings["config"]["step"]["user"]["data"])
-    reconfigure_data = set(strings["config"]["step"]["reconfigure"]["data"])
-    options_data = set(strings["options"]["step"]["init"]["data"])
-
-    assert _schema_keys(USER_SCHEMA) <= user_data
-    assert _schema_keys(MAPPING_SCHEMA) <= reconfigure_data
-    assert set(OPTION_KEYS) | {CONF_CONTROL_INTERVAL_S} <= options_data
+# test_every_config_flow_field_has_a_label is removed here, not updated in place -- see the
+# module docstring above for why (superseded by test_config_flow_translations.py, plan T12).
 
 
 def test_every_entity_translation_key_has_a_name():
