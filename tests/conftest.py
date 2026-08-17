@@ -41,13 +41,16 @@ import pytest
 _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
 # Root-level test files that are pure logic despite living outside _PURE_DIRS
-# (ADR-0012/0013; test_notification_state.py per the notifications design doc Sec7).
+# (ADR-0012/0013; test_notification_state.py per the notifications design doc Sec7;
+# test_compare_baseline.py per issue #708/ADR-0026 -- it lives under tests/benchmarks/,
+# which must stay HA-harness-capable for its sibling test_coordinator_perf.py).
 _PURE_FILES = frozenset(
     {
         "test_coordinator_cycle.py",
         "test_entity.py",
         "test_notification_state.py",
         "test_config_flow_translations.py",
+        "test_compare_baseline.py",
     }
 )
 
