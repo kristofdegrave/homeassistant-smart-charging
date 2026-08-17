@@ -1507,7 +1507,10 @@ def test_mapping_errors_combiner_is_deleted():
 async def test_all_capabilities_and_vehicle_limit_declared_install_completes(hass):
     """Happy-path integration coverage (not a removal regression guard -- see
     test_mapping_errors_combiner_is_deleted for that): every capability/election declared and
-    every step-local guard satisfied still reaches CREATE_ENTRY."""
+    every step-local guard satisfied still reaches CREATE_ENTRY. Now the
+    (True, True, True, True) row of T8's traversal matrix below duplicates this exact
+    combination -- kept anyway since it predates that matrix and still documents the T7
+    removal's own happy path in context, right next to the deletion it accompanies."""
     result = await _run_install_flow(
         hass,
         per_step={
@@ -1549,7 +1552,13 @@ async def test_uc12_step2_traversal_visits_exactly_the_prescribed_steps_in_order
         STEP_SOLAR: SOLAR_INPUT,
         # R20 AC4's once-only rule: omit ev_soc here when solar already collected it, or the
         # captar step's schema (which then excludes the field) rejects it as an unknown key.
-        STEP_CAPTAR: {} if solar else CAPTAR_INPUT,
+        # Derived from CAPTAR_INPUT rather than hard-coded to {}, so a future field added to
+        # that fixture is still carried through instead of silently dropped.
+        STEP_CAPTAR: (
+            {k: v for k, v in CAPTAR_INPUT.items() if k != CONF_EV_SOC_ENTITY}
+            if solar
+            else CAPTAR_INPUT
+        ),
         STEP_DEADLINE: DEADLINE_INPUT,
         STEP_VEHICLE_LIMIT: VEHICLE_LIMIT_INPUT,
         STEP_MAPPINGS: MAPPINGS_INPUT,
@@ -1569,17 +1578,28 @@ async def test_uc12_step2_traversal_visits_exactly_the_prescribed_steps_in_order
     )
     visited = [result["step_id"]]
     while result["type"] == FlowResultType.FORM:
+        last_step_id = result["step_id"]
+        if last_step_id not in step_inputs:
+            pytest.fail(f"unexpected step {last_step_id!r}; visited so far {visited}")
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], step_inputs[result["step_id"]]
+            result["flow_id"], step_inputs[last_step_id]
         )
         if result["type"] == FlowResultType.FORM:
+            if result["step_id"] == last_step_id:
+                # a step-local guard rejected the fixture and re-showed itself -- stop here
+                # (rather than resubmitting the same, still-failing input forever) so the
+                # equality assertion below fails with a readable diff instead of hanging,
+                # mirroring _run_install_flow's own re-show guard.
+                visited.append(result["step_id"])
+                break
             visited.append(result["step_id"])
 
     assert visited == expected_steps
     assert result["type"] == FlowResultType.CREATE_ENTRY
 
     # Design doc, "Safety caveat": the grid-safety threshold group is on an ungated step, so it
-    # is present in every combination's options regardless of any capability answer.
+    # is present -- with the submitted value, not a silently-standing-in default -- in every
+    # combination's options regardless of any capability answer.
     for key in (
         CONF_NOMINAL_VOLTAGE,
         CONF_MIN_CURRENT,
@@ -1587,7 +1607,7 @@ async def test_uc12_step2_traversal_visits_exactly_the_prescribed_steps_in_order
         CONF_GRID_CEILING_A,
         CONF_GRID_SAFETY_OFFSET_A,
     ):
-        assert key in result["options"]
+        assert result["options"][key] == THRESHOLDS_INPUT[key]
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
