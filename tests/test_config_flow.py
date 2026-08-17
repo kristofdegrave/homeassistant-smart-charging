@@ -1937,6 +1937,75 @@ async def test_adr0008_options_change_reloads_the_entry(hass):
     assert new_coordinator is not original_coordinator
 
 
+# --- T11: abandonment writes nothing. ---
+# Test-only task (plan T11): no production code. A failure here means something is
+# persisting mid-flow -- a real bug, not a spec gap.
+
+
+async def test_r20_ac8_abandoned_install_creates_no_entry(hass):
+    """UC12 exception flow 3: abort the flow after the core step -> no config entry exists."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
+async def test_r20_ac8_abandoned_reconfigure_leaves_the_entry_unchanged(hass):
+    """... data and options both byte-for-byte identical to before the flow started."""
+    entry = await _create_entry(hass)
+    original_data = dict(entry.data)
+    original_options = dict(entry.options)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_CHARGER_CURRENT_ENTITY: "number.abandoned_charger"}
+    )
+    assert result["type"] == FlowResultType.FORM
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    assert dict(entry.data) == original_data
+    assert dict(entry.options) == original_options
+
+
+async def test_r20_ac8_abandoned_options_flow_leaves_the_options_unchanged(hass):
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    original_options = dict(entry.options)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == STEP_SOLAR
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SOLAR_START_THRESHOLD_W: 999.0}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+
+    hass.config_entries.options.async_abort(result["flow_id"])
+    assert dict(entry.options) == original_options
+
+
+async def test_adr0025_accumulator_starts_empty_on_a_second_run(hass):
+    """ADR-0025 point 2: per-run state. An abandoned run's answers must not leak into the next
+    flow started on the same handler class."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**CORE_INPUT, CONF_CHARGER_CURRENT_ENTITY: "number.abandoned_charger"}
+    )
+    assert result["type"] == FlowResultType.FORM
+    hass.config_entries.flow.async_abort(result["flow_id"])
+
+    entry = await _create_entry(hass)
+    assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.charger_current"
+
+
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
 # Pure schema-shape assertions -- no `hass` fixture needed (design, "Testing approach").
 
