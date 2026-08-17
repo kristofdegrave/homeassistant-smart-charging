@@ -3,8 +3,8 @@
 Per ADR-0009 (Option A), the pure mode/engine/profile logic under ``tests/modes/``,
 ``tests/engines/``, and ``tests/profiles/`` runs as plain pytest with no HA dependency.
 Every other test (adapters, plus the root-level config-flow / coordinator / init tests,
-and any other file listed in ``_PURE_FILES`` below, root-level or not) is an HA-harness
-test that needs the custom integration loaded. The autouse fixture below applies
+and any other root-level file listed in ``_PURE_FILES`` below) is an HA-harness test that
+needs the custom integration loaded. The autouse fixture below applies
 ``enable_custom_integrations`` to the HA-harness tests only, keeping the pure dirs/files
 HA-free so they collect without phcc.
 
@@ -27,12 +27,6 @@ its tests are plain pytest too.
 only reads ``const.py`` and the integration's own JSON translation files off disk, needing
 no ``hass`` fixture at all, so its tests are plain pytest too.
 
-``test_compare_baseline.py`` is a deliberate exception despite living under
-``tests/benchmarks/`` (issue #708, ADR-0026): it tests ``compare_baseline.py``, a pure
-JSON/arithmetic module with no HA dependency, distinct from its sibling
-``test_coordinator_perf.py`` in the same directory, which genuinely needs ``hass`` and
-stays an HA-harness test.
-
 This file deliberately stays HA-free -- it is imported for every test under ``tests/``,
 including the pure-logic dirs above. The shared end-to-end test helpers (config-entry
 seeding, coordinator seeding, etc.) that the HA-harness suites need live in
@@ -46,11 +40,10 @@ import pytest
 # Directories whose tests are pure logic with no HA dependency (ADR-0009).
 _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
-# Individual test files that are pure logic despite living outside _PURE_DIRS -- most are
-# root-level (ADR-0012/0013; test_notification_state.py per the notifications design doc
-# Sec7), but test_compare_baseline.py per issue #708/ADR-0026 is not: it lives under
-# tests/benchmarks/, which must stay HA-harness-capable for its sibling
-# test_coordinator_perf.py.
+# Root-level test files that are pure logic despite living outside _PURE_DIRS
+# (ADR-0012/0013; test_notification_state.py per the notifications design doc Sec7;
+# test_compare_baseline.py per issue #708/ADR-0026 -- it lives under tests/benchmarks/,
+# which must stay HA-harness-capable for its sibling test_coordinator_perf.py).
 _PURE_FILES = frozenset(
     {
         "test_coordinator_cycle.py",
