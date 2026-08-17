@@ -6,6 +6,7 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.smart_charging import config_flow as config_flow_module
 from custom_components.smart_charging.config_flow import (
     CONFIG_TABLE,
     CORE_MAPPING_SCHEMA,
@@ -680,6 +681,46 @@ async def test_reconfigure_rejects_solar_available_true_without_solar_forecast(h
     result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
     assert result["type"] == FlowResultType.FORM
     assert result["errors"][CONF_SOLAR_FORECAST_ENTITY] == ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE
+
+
+async def test_reconfigure_rejects_both_ev_soc_and_solar_forecast_missing_together(hass):
+    """T7 inlined the three-guard combine that used to live in `_mapping_errors` directly into
+    async_step_reconfigure. The single-guard tests above each pin one guard firing alone; this
+    one is the only test that observes the inlining's `dict.update` merge itself -- both guards
+    firing on the same submission must both appear in `errors`, not just whichever ran last."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+            "charger_status_entity": "sensor.evse",
+            "net_power_entity": "sensor.net_power",
+            "charger_power_entity": "sensor.charger_power",
+            CONF_STATUS_TRANSLATION: {"Connected": STATE_CONNECTED, "Charging": STATE_CHARGING},
+        },
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    new_mapping = {
+        CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
+        "charger_status_entity": "sensor.evse",
+        CONF_CONNECTED_STATES: "Connected",
+        CONF_CHARGING_STATES: "Charging",
+        "net_power_entity": "sensor.net_power",
+        "charger_power_entity": "sensor.charger_power",
+        CONF_SOLAR_AVAILABLE: True,
+    }
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], new_mapping)
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
+        CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
+    }
 
 
 async def test_captar_available_defaults_true(hass):
@@ -1409,12 +1450,17 @@ async def test_uc12_step6_elected_vehicle_limit_asks_the_limit_and_car_home_toge
 
 
 async def test_uc12_2a_declined_vehicle_limit_asks_neither_field(hass):
+    """UC12 exception/alternate flow 2a: declining the election skips straight to the ungated
+    mappings step -- the vehicle_limit step, and both its fields, never show."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_MAPPINGS
+    assert not {CONF_VEHICLE_CHARGE_LIMIT_ENTITY, CONF_CAR_HOME_ENTITY} & _keys(
+        result["data_schema"]
+    )
 
 
 async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_limit_step(hass):
@@ -1434,21 +1480,32 @@ async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_limit_step(ha
 
 async def test_d2_vehicle_limit_election_is_not_persisted(hass):
     """Design D-2: the election is a transient form key -- entity-catalog.md has no row for it,
-    so CONF_VEHICLE_LIMIT_MAPPED must not appear in the stored data bucket."""
+    so CONF_VEHICLE_LIMIT_MAPPED must not appear in EITHER stored bucket. Checking both (not
+    just data) pins that `_async_finish` pops it before both `_split_data` and the OPTION_KEYS
+    intersection run, not just before one of the two."""
     result = await _run_install_flow(hass, per_step={STEP_CORE: {CONF_VEHICLE_LIMIT_MAPPED: True}})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_VEHICLE_LIMIT_MAPPED not in result["data"]
+    assert CONF_VEHICLE_LIMIT_MAPPED not in result["options"]
     assert result["data"][CONF_VEHICLE_CHARGE_LIMIT_ENTITY] == "number.vehicle_charge_limit"
     assert result["data"][CONF_CAR_HOME_ENTITY] == "person.driver"
 
 
-async def test_ungated_thresholds_step_reports_no_mapping_error_of_its_own(hass):
-    """Removal's regression guard: with the last of the three `_mapping_errors` guards
-    (`_car_home_missing_error`) now step-local on the vehicle_limit step, the thresholds step
-    never rejects a submission of its own -- pinning that the safety net's deletion (T7) didn't
-    just move the failure elsewhere silently. Declares every capability/election so every
-    step-local guard is live and satisfied, leaving no error for a leftover thresholds-step
-    check to catch if one were mistakenly still there."""
+def test_mapping_errors_combiner_is_deleted():
+    """Removal's actual regression guard (ADR-0025, Consequences: "the combiner has no
+    guided-flow step left that needs all three"). An end-to-end flow test cannot discriminate
+    this deletion: every condition `_mapping_errors` used to catch is now blocked one step
+    earlier by its own step-local guard, so no reachable state ever reaches the thresholds
+    step still violating one -- a fully-satisfied install would pass identically whether or
+    not this helper (and the call to it this task also deleted) had ever been removed. Only a
+    direct structural check pins the deletion itself."""
+    assert not hasattr(config_flow_module, "_mapping_errors")
+
+
+async def test_all_capabilities_and_vehicle_limit_declared_install_completes(hass):
+    """Happy-path integration coverage (not a removal regression guard -- see
+    test_mapping_errors_combiner_is_deleted for that): every capability/election declared and
+    every step-local guard satisfied still reaches CREATE_ENTRY."""
     result = await _run_install_flow(
         hass,
         per_step={
@@ -1689,8 +1746,9 @@ def test_adr0025_every_options_step_method_is_in_the_table():
 
 def _assert_is_subsequence_of(actual_order: list[str], fixed_order: list[str]) -> None:
     """Each id in `actual_order` must appear in `fixed_order`, in the same relative order,
-    with no reordering permitted -- a subsequence check, not full-population equality (see
-    the TODO(T7, T10) note on UC12_FIXED_STEP_ORDER for why equality isn't checked yet)."""
+    with no reordering permitted -- a subsequence check, not full-population equality. T8's
+    traversal matrix is the exact-sequence assertion for CONFIG_TABLE; the TODO(T10) note on
+    UC12_FIXED_STEP_ORDER covers the still-open OPTIONS_TABLE completeness check."""
     remaining = fixed_order[:]
     for step_id in actual_order:
         assert step_id in remaining, f"{step_id} is out of UC12's fixed order"

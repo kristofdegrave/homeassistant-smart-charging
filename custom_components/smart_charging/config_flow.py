@@ -412,10 +412,12 @@ class _TableWalkMixin:
 # production table against itself). This constant is a documentation/cross-check aid for
 # whoever adds a row, not a runtime dependency of the dispatcher.
 #
-# TODO(T7, T10): once CONFIG_TABLE carries all six rows (T7) and OPTIONS_TABLE all four
-# (T10), add a completeness assertion (`[row.step_id for row in CONFIG_TABLE] ==
-# list(UC12_FIXED_STEP_ORDER)`, and similarly for OPTIONS_TABLE minus vehicle_limit) -- the
-# subsequence check here only guards relative order, not that every row has actually landed.
+# CONFIG_TABLE carries all six rows as of T7; T8's traversal matrix is the exact-sequence
+# assertion this comment used to ask for on the config side (its own task, not duplicated
+# here). TODO(T10): OPTIONS_TABLE still needs the equivalent completeness assertion
+# (`[row.step_id for row in OPTIONS_TABLE] == list(UC12_FIXED_STEP_ORDER)` minus
+# vehicle_limit) once it carries all four rows -- the subsequence check here only guards
+# relative order, not that every row has actually landed.
 UC12_FIXED_STEP_ORDER = (
     STEP_SOLAR,
     STEP_CAPTAR,
@@ -827,7 +829,13 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         mapping, gated on the transient election made on the core step (design D-2). UC12
         step 6: "the two are always asked together". Step-local guard (ADR-0025 point 1,
         design D-3): a missing car_home mapping re-shows this step with a field-local error,
-        the last of the three guards `_mapping_errors` used to combine to move step-local."""
+        the last of the three guards `_mapping_errors` used to combine to move step-local.
+
+        Unlike the solar/captar guards, this one reads `user_input` alone, never
+        `self._answers` -- both fields it checks are answered on this step, not carried over:
+        `vehicle_charge_limit_entity` is `vol.Required`, so the flow manager guarantees it is
+        in `user_input` before this method ever runs; `car_home_entity` appears on no other
+        guided step."""
         if user_input is None:
             return self.async_show_form(
                 step_id=STEP_VEHICLE_LIMIT, data_schema=VEHICLE_LIMIT_MAPPING_SCHEMA
