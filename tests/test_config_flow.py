@@ -455,6 +455,11 @@ async def test_uc12_1a_reconfigure_shows_mapping_fields_only(hass):
     assert STEP_THRESHOLDS not in visited_steps
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+    # async_update_reload_and_abort schedules a background reload task even for an entry
+    # that was never set up (add_to_hass alone) -- drain it before the hass fixture tears
+    # down, or the harness's own lingering-timer/task check fails the test (CI-only flake:
+    # PR #705's own review run caught this once the reload actually reaches entity setup).
+    await hass.async_block_till_done()
 
 
 _RECONFIGURE_ENTRY_DATA = {
@@ -548,6 +553,7 @@ async def test_reconfigure_preserves_unretyped_optional_mappings(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], mappings_submission)
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()  # drain the background reload this ABORT schedules
 
     assert entry.data[CONF_CHARGER_CURRENT_ENTITY] == "number.new_charger_current"
     assert entry.data[CONF_GRID_VOLTAGE_ENTITY] == "sensor.grid_voltage"
@@ -573,6 +579,7 @@ async def test_r20_ac7_withdrawing_a_capability_drops_its_mapping_fields(hass):
         hass, entry, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: False}}
     )
     assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()  # drain the background reload this ABORT schedules
     assert entry.data[CONF_SOLAR_AVAILABLE] is False
     assert CONF_SOLAR_FORECAST_ENTITY not in entry.data
     assert CONF_EV_SOC_ENTITY not in entry.data
@@ -597,6 +604,7 @@ async def test_r20_ac7_reconfigure_leaves_the_options_bucket_untouched(hass):
         hass, entry, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: False}}
     )
     assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()  # drain the background reload this ABORT schedules
     assert dict(entry.options) == original_options
 
 
