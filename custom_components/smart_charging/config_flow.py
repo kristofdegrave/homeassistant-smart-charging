@@ -86,6 +86,7 @@ from .const import (
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
     DEFAULT_SOC_LIMIT,
+    DEFAULT_SOLAR_AVAILABLE,
     DEFAULT_SOLAR_COOLDOWN_MIN,
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     DEFAULT_SOLAR_HOLD_MIN,
@@ -143,13 +144,10 @@ OPTION_KEYS = (
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
-    # CONF_PROMPT_TIMEOUT_H and CONF_REMINDER_LEAD_H: like every OPTION_KEYS member, the
-    # guided install flow writes these -- but the still-flat SmartChargingOptionsFlow
-    # (async_step_init) replaces entry.options wholesale from `_threshold_schema()`, which
-    # asks about neither. The first Configure+Save after install silently drops both, until
-    # T10 gives the options flow its own table with a merge-not-replace terminal step
-    # (design, "The terminal step and the bucket split"). Harmless today: nothing reads
-    # either key yet.
+    # CONF_PROMPT_TIMEOUT_H lives on the ungated thresholds step (both flows);
+    # CONF_REMINDER_LEAD_H lives on the deadline step's threshold half. T10 gave the options
+    # flow its own table with a merge-not-replace terminal step (design, "The terminal step
+    # and the bucket split"), so both now round-trip through Configure+Save correctly.
     CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
 )
@@ -457,19 +455,44 @@ CONFIG_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
 )
 
-# Populated incrementally in T10 (its own table per ADR-0025 point 3 -- gated on the *stored*
-# capability flags, not this run's answers). Empty until then.
-OPTIONS_TABLE: tuple[FlowStep, ...] = ()
+# The options flow's own table (ADR-0025 point 3): threshold halves only, no `core`/
+# `mappings`/`vehicle_limit` rows (mapping fields never appear here -- ADR-0005 restricts this
+# flow to the options bucket). Gated on the *stored* capability flags (`self.config_entry.data`),
+# never this run's own answers -- the options flow never re-asks a capability, only its
+# thresholds. Every gate reads defensively via `.get(key, DEFAULT_*)`, never bracket indexing:
+# `deadline_available` is a key this slice introduces (D-1) and is absent from every entry
+# written before it, so `entry.data[CONF_DEADLINE_AVAILABLE]` would KeyError on the first
+# Configure a pre-slice entry ever opens.
+OPTIONS_TABLE: tuple[FlowStep, ...] = (
+    FlowStep(
+        step_id=STEP_SOLAR,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
+        ),
+    ),
+    FlowStep(
+        step_id=STEP_CAPTAR,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE)
+        ),
+    ),
+    FlowStep(
+        step_id=STEP_DEADLINE,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE)
+        ),
+    ),
+    FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: True),
+)
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
-# MAPPING_SCHEMA/USER_SCHEMA have no production caller left as of T9 (the flat
-# async_step_reconfigure that used MAPPING_SCHEMA is gone); _threshold_schema() still backs
-# the still-flat SmartChargingOptionsFlow (T10 gives it its own table). All three stay in
-# place regardless: tests/test_translations.py imports them, and T12 removes that import
-# before T13 deletes the three definitions themselves (plan). Do not delete early -- that
-# breaks test_translations.py at collection time. These fragments below are the guided
-# flow's own.
+# MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA have no production caller left as of T10
+# (SmartChargingOptionsFlow now builds its own schemas from the fragments below, the same way
+# the config flow already did from T3 onward). All three stay in place regardless:
+# tests/test_translations.py imports them, and T12 removes that import before T13 deletes the
+# three definitions themselves (plan). Do not delete early -- that breaks
+# test_translations.py at collection time. These fragments below are the guided flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
@@ -954,26 +977,72 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return SmartChargingOptionsFlow()
 
 
-class SmartChargingOptionsFlow(config_entries.OptionsFlow):
+class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
     """Options flow: thresholds/defaults + control interval, editable anytime (ADR-0005).
+
+    Walks its own table (ADR-0025 point 3) -- threshold halves only, built from the same
+    fragments the config flow uses, gated on the stored capability flags rather than any
+    answer of this run's own.
 
     `self.config_entry` (from `config_entries.OptionsFlow`) resolves via `self.hass`
     and the flow-manager-assigned entry id, neither of which is set yet inside
     `__init__`. This class therefore defines no `__init__` and only reads
-    `self.config_entry` from step methods, which always run after initialization.
+    `self.config_entry` from step methods, which always run after initialization --
+    `_answers` (declared on the mixin) is likewise only ever assigned from `async_step_init`.
     """
 
-    async def async_step_init(self, user_input=None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+    _table = OPTIONS_TABLE
 
-        opts = self.config_entry.options
-        schema = _threshold_schema(opts).extend(
-            {
-                vol.Required(
-                    CONF_CONTROL_INTERVAL_S,
-                    default=opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S),
-                ): vol.All(vol.Coerce(int), vol.Range(min=5))
-            }
-        )
-        return self.async_show_form(step_id="init", data_schema=schema)
+    async def async_step_init(self, user_input=None):
+        """UC12 1b's entry point (ADR-0025 point 4): renders no form of its own, walks
+        straight into the table."""
+        self._mode = FlowMode.OPTIONS
+        self._answers = {}
+        return await self._async_advance(after=None)
+
+    async def async_step_solar(self, user_input=None):
+        """UC12 step 3, threshold half only -- no mapping fields, and no once-only ev_soc
+        rule to evaluate (that's a config-flow-only concern). Design D-4: `defaults` prefills
+        from the stored options directly, unlike the config flow's `add_suggested_values_to_schema`
+        prefill -- this preserves the flat options flow's existing re-submission behaviour."""
+        schema = _solar_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_SOLAR, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_SOLAR)
+
+    async def async_step_captar(self, user_input=None):
+        """UC12 step 4, threshold half only."""
+        schema = _captar_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_CAPTAR)
+
+    async def async_step_deadline(self, user_input=None):
+        """UC12 step 5, threshold half only."""
+        schema = _deadline_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_DEADLINE, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_DEADLINE)
+
+    async def async_step_thresholds(self, user_input=None):
+        """UC12 step 8 -- always shown (ungated), and the one step that also asks the
+        control interval (UC12 1b's own carve-out: install/reconfigure never ask it)."""
+        schema = _ungated_threshold_schema(self.config_entry.options, include_interval=True)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_THRESHOLDS)
+
+    async def _async_finish(self) -> config_entries.ConfigFlowResult:
+        """UC12 1b: merge this run's answers into the stored options, never replace them
+        wholesale (design, "The terminal step and the bucket split"). `OptionsFlow.
+        async_create_entry` replaces `entry.options` outright, and this run's accumulator is
+        deliberately narrower than the stored bucket whenever a capability is gated off --
+        replacing rather than merging would silently delete that capability's thresholds the
+        first time Configure is opened after withdrawing it through reconfigure (R20 AC7)."""
+        intersection = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
+        intersection[CONF_CONTROL_INTERVAL_S] = self._answers[CONF_CONTROL_INTERVAL_S]
+        return self.async_create_entry(title="", data={**self.config_entry.options, **intersection})

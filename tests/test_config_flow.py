@@ -261,12 +261,45 @@ async def _run_reconfigure_flow(hass, entry, *, per_step=None):
     return await _walk_flow(hass, init_result, per_step=per_step)
 
 
+async def _run_options_flow(hass, entry, *, per_step=None):
+    """Drive the options flow (T10, UC12 1b) across whichever steps `OPTIONS_TABLE` shows for
+    this entry's STORED capability flags. Unlike the install/reconfigure drivers, the base
+    submission for every step is empty: every threshold field is `vol.Required(default=...)`,
+    built fresh at render time from `self.config_entry.options`, so an empty submission is
+    exactly an unedited resubmission of the current stored value -- `per_step[<step id>]`'s
+    overrides are the only values that actually change anything. Uses the separate options
+    flow manager (`hass.config_entries.options`, not `.flow`), so this can't reuse
+    `_walk_flow` outright."""
+    overrides = per_step or {}
+    consumed_overrides: set[str] = set()
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    last_step_id = None
+    while result["type"] == FlowResultType.FORM:
+        step_id = result["step_id"]
+        if step_id == last_step_id:
+            break
+        last_step_id = step_id
+        consumed_overrides.add(step_id)
+        submission = overrides.get(step_id, {})
+        result = await hass.config_entries.options.async_configure(result["flow_id"], submission)
+    unconsumed = overrides.keys() - consumed_overrides
+    assert not unconsumed, (
+        f"per_step override(s) for {unconsumed} were never applied -- that step never "
+        "rendered this run (a capability answer this test relies on may be missing/typo'd)"
+    )
+    return result
+
+
 def _current_options(entry):
-    """Options as the flat options-flow schema would resubmit them. Excludes
-    prompt_timeout_h: stored via the guided install flow since T3, but not yet asked by this
-    still-flat `_threshold_schema()` (T10 gives the options flow its own table) -- spreading
-    it back in would submit a key the flat schema rejects as unknown."""
-    return {k: v for k, v in entry.options.items() if k != CONF_PROMPT_TIMEOUT_H}
+    """`entry.options` as-is -- a resubmission of every stored threshold, valid only against
+    the options flow's `thresholds` step (the ungated fragment T10 gives its own table row).
+    Correct for any entry whose capabilities are all declared absent (the majority of this
+    file's fixtures): with no solar/captar/deadline step to gate open, `thresholds` is the
+    first and only form the options flow ever shows, and this dict's keys are exactly what
+    that step's schema expects -- no more, no less. An entry that DOES declare a capability
+    needs the multi-step `_run_options_flow` driver below instead, since a single flat
+    submission can no longer reach every step's own fields at once."""
+    return dict(entry.options)
 
 
 async def test_adr0005_user_flow_builds_translation_and_splits_buckets(hass):
@@ -802,12 +835,14 @@ async def test_solar_declared_thresholds_seeded_into_options_with_defaults(hass)
 
 
 async def test_options_flow_edits_solar_thresholds(hass):
-    entry = await _create_entry(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**_current_options(entry), CONF_SOLAR_START_THRESHOLD_W: 200.0}
+    # Solar must be declared present on the entry itself, or OPTIONS_TABLE's solar row (gated
+    # on the STORED flag) never shows -- there'd be no step to submit this edit through.
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_START_THRESHOLD_W: 200.0}}
     )
     await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 200.0
 
 
@@ -1008,12 +1043,14 @@ async def test_solar_declared_new_thresholds_seeded_with_defaults(hass):
 
 
 async def test_options_flow_edits_the_new_thresholds(hass):
-    entry = await _create_entry(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**_current_options(entry), CONF_SOLAR_RESERVE_SOC: 55.0}
+    # solar_reserve_soc lives on the solar step's threshold half -- needs solar declared
+    # present on the entry, same as test_options_flow_edits_solar_thresholds above.
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_RESERVE_SOC: 55.0}}
     )
     await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_SOLAR_RESERVE_SOC] == 55.0
 
 
@@ -1062,12 +1099,14 @@ async def test_options_flow_edits_solar_forecast_threshold(hass):
     # Notifications design doc §3: the options flow round-trips edits to the forecast
     # threshold, same as every other threshold field (this field predates this task -- it
     # is reused, not newly added -- but the round-trip itself was previously untested here).
-    entry = await _create_entry(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**_current_options(entry), CONF_SOLAR_FORECAST_THRESHOLD_KWH: 15.0}
+    # solar_forecast_threshold_kwh lives on the solar step's threshold half -- needs solar
+    # declared present on the entry, same as the solar-threshold tests above.
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_FORECAST_THRESHOLD_KWH: 15.0}}
     )
     await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_SOLAR_FORECAST_THRESHOLD_KWH] == 15.0
 
 
@@ -1132,14 +1171,23 @@ async def test_options_flow_round_trips_evening_prompt_options(hass):
 
 
 async def test_pre_existing_entry_defaults_evening_prompt_options(hass):
-    # An entry created before this task predates these keys entirely -- opening the options
-    # flow on it must seed each field with its DEFAULT_* (no config-entry migration, design
-    # doc §3), and submitting that pre-filled form must persist those defaults, not KeyError.
+    """An entry created before this task predates these keys entirely -- opening the options
+    flow on it must seed each field with its DEFAULT_* (no config-entry migration, design
+    doc §3), and submitting that pre-filled form must persist those defaults, not KeyError.
+    This entry's data has no capability keys at all, so OPTIONS_TABLE's defensive gate reads
+    (`.get(key, DEFAULT_*)`) fall back to DEFAULT_CAPTAR_AVAILABLE/DEFAULT_DEADLINE_AVAILABLE
+    (both True) -- the captar and deadline threshold steps show before thresholds, walked
+    through here with their own (irrelevant to this test) defaults too."""
     entry = MockConfigEntry(domain=DOMAIN, data=dict(USER_INPUT), options={})
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_CAPTAR
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["step_id"] == STEP_DEADLINE
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["step_id"] == STEP_THRESHOLDS
+
     defaults = {key.schema: key.default() for key in result["data_schema"].schema}
     assert defaults[CONF_EVENING_PROMPT_ENABLED] == DEFAULT_EVENING_PROMPT_ENABLED
     assert defaults[CONF_EVENING_PROMPT_TIME] == DEFAULT_EVENING_PROMPT_TIME
@@ -1720,6 +1768,166 @@ async def test_uc12_step2_traversal_visits_exactly_the_prescribed_steps_in_order
         CONF_GRID_SAFETY_OFFSET_A,
     ):
         assert result["options"][key] == THRESHOLDS_INPUT[key]
+
+
+# --- T10: the options flow's own table. ---
+
+
+async def test_uc12_1b_options_shows_the_solar_step_when_solar_is_stored_present(hass):
+    """ADR-0025 point 3: an entry with solar stored present shows the solar threshold step."""
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == STEP_SOLAR
+
+
+async def test_uc12_1b_options_skips_the_solar_step_when_solar_is_stored_absent(hass):
+    """ADR-0025 point 3: the converse -- nothing in this flow re-asks the capability itself,
+    it only reads what's already stored. Single-config-entry (ADR-0013) means the paired
+    stored-present case above needs its own test/entry rather than sharing one hass."""
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] != STEP_SOLAR
+
+
+async def test_uc12_1b_options_shows_no_mapping_field_on_any_step(hass):
+    """UC12 1b: 'none of steps 1-7's fields are thresholds' -- and the converse here."""
+    entry = await _create_entry(
+        hass,
+        per_step={
+            STEP_CORE: {
+                CONF_SOLAR_AVAILABLE: True,
+                CONF_CAPTAR_AVAILABLE: True,
+                CONF_DEADLINE_AVAILABLE: True,
+            },
+            STEP_CAPTAR: {CONF_EV_SOC_ENTITY: None},
+        },
+    )
+    mapping_keys = (
+        _keys(CORE_MAPPING_SCHEMA)
+        | _keys(_solar_mapping_schema(include_ev_soc=True))
+        | _keys(_captar_mapping_schema(include_ev_soc=True))
+        | _keys(DEADLINE_MAPPING_SCHEMA)
+        | _keys(VEHICLE_LIMIT_MAPPING_SCHEMA)
+        | _keys(UNGATED_MAPPING_SCHEMA)
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    while result["type"] == FlowResultType.FORM:
+        assert not (mapping_keys & _keys(result["data_schema"]))
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+def test_uc12_1b_options_has_no_vehicle_limit_step():
+    """ADR-0025 point 3: that step has no threshold fields of its own."""
+    assert STEP_VEHICLE_LIMIT not in {row.step_id for row in OPTIONS_TABLE}
+
+
+async def test_uc12_1b_options_asks_the_control_interval(hass):
+    """UC12 1b: 'a field the install and reconfigure flows never ask, defaulting it instead'."""
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == STEP_THRESHOLDS
+    assert CONF_CONTROL_INTERVAL_S in _keys(result["data_schema"])
+
+
+async def test_r20_ac7_options_leaves_the_data_bucket_untouched(hass):
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    original_data = dict(entry.data)
+
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_START_THRESHOLD_W: 321.0}}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert dict(entry.data) == original_data
+
+
+async def test_r20_ac7_options_save_preserves_a_withdrawn_capabilitys_stored_thresholds(hass):
+    """The reachable data-loss case the merge exists to prevent. Arrange: an entry with solar
+    present and customised solar thresholds in options; withdraw solar through reconfigure
+    (UC12 1a touches the data bucket only, so the solar thresholds are still in options by
+    design). Act: open the options flow WITHOUT re-enabling solar -- the solar step is now
+    gated off by the stored flag, so no solar key enters this run's accumulator -- and save.
+    Assert: every solar threshold is still in entry.options with its previous value. A
+    replace-the-whole-bucket async_create_entry silently wipes them; the design's
+    `{**self.config_entry.options, **intersection}` merge is what makes this pass."""
+    entry = await _create_entry(hass, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: True}})
+    await _run_options_flow(
+        hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_START_THRESHOLD_W: 321.0}}
+    )
+    assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 321.0
+
+    result = await _run_reconfigure_flow(
+        hass, entry, per_step={STEP_CORE: {CONF_SOLAR_AVAILABLE: False}}
+    )
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()  # drain the background reload this ABORT schedules
+    assert entry.data[CONF_SOLAR_AVAILABLE] is False
+    assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 321.0  # UC12 1a: data bucket only
+
+    result = await _run_options_flow(hass, entry)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 321.0
+
+
+async def test_uc12_1b_options_flow_opens_on_an_entry_predating_deadline_available(hass):
+    """Design, options table: deadline_available is a NEW key (D-1), so every entry written
+    before this slice lacks it. Build a MockConfigEntry whose data has no
+    CONF_DEADLINE_AVAILABLE key at all, open the options flow, and assert it opens and
+    completes rather than raising KeyError -- the gate reads
+    entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE), so the deadline
+    threshold step is shown (the default is True). The same defensive read applies to the
+    solar and captar gates."""
+    data = entry_data_base()
+    assert CONF_DEADLINE_AVAILABLE not in data
+    assert CONF_SOLAR_AVAILABLE not in data
+    assert CONF_CAPTAR_AVAILABLE not in data
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    # DEFAULT_SOLAR_AVAILABLE is False -> skipped; DEFAULT_CAPTAR_AVAILABLE/
+    # DEFAULT_DEADLINE_AVAILABLE are both True -> both show, captar first (fixed order).
+    assert result["step_id"] == STEP_CAPTAR
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["step_id"] == STEP_DEADLINE
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["step_id"] == STEP_THRESHOLDS
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_d4_untouched_threshold_resubmits_its_stored_value(hass):
+    """Design D-4: threshold fragments keep their `defaults` parameter, so re-submitting a step
+    without changing a field preserves the stored value rather than resetting it to the
+    module default -- the flat options flow's behaviour, kept."""
+    entry = await _create_entry(hass)
+    await _run_options_flow(hass, entry, per_step={STEP_THRESHOLDS: {CONF_MAX_PEAK_KW: 7.0}})
+    assert entry.options[CONF_MAX_PEAK_KW] == 7.0
+
+    result = await _run_options_flow(hass, entry)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_MAX_PEAK_KW] == 7.0
+
+
+async def test_adr0008_options_change_reloads_the_entry(hass):
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    original_coordinator = entry.runtime_data.coordinator
+
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_THRESHOLDS: {CONF_MAX_PEAK_KW: 7.0}}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    assert entry.options[CONF_MAX_PEAK_KW] == 7.0
+    new_coordinator = entry.runtime_data.coordinator
+    assert new_coordinator is not original_coordinator
 
 
 # --- T1: per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
