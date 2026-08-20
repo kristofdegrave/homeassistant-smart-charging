@@ -82,6 +82,12 @@ class CycleContext:
     sun_is_down: bool = False
     low_tariff_active: bool = True
     solar_reserve_active: bool = False
+    # R11/issue #757: the coordinator's own has-charged flag (HasChargedFlag, owned outside
+    # `_mode_state` so it survives a Solar<->SolarOnly mode switch -- see coordinator.py's own
+    # field docstring), mirrored onto ctx each cycle so `_SolarModeHandler`/`_SolarOnlyModeHandler`
+    # can read it without `CycleContext`/`ModeHandler` growing a has-charged-specific parameter
+    # of their own. False default matters only before `_run_cycle` assigns the real value.
+    has_charged: bool = False
 
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place
@@ -217,6 +223,8 @@ class _SolarModeHandler:
             min_a=self._config.min_current,
             hold_minutes=self._config.solar_hold_min,
             cooldown_minutes=self._config.solar_cooldown_min,
+            debounce_minutes=self._config.solar_restart_debounce_min,
+            has_charged=ctx.has_charged,
             voltage=ctx.voltage,
         )
 
@@ -244,8 +252,10 @@ class _SolarOnlyModeHandler:
             min_a=self._config.min_current,
             hold_minutes=self._config.solar_only_hold_min,
             cooldown_minutes=self._config.solar_cooldown_min,
+            debounce_minutes=self._config.solar_restart_debounce_min,
             strategy=self._config.solar_only_strategy,
             midpoint=self._config.solar_only_midpoint,
+            has_charged=ctx.has_charged,
             voltage=ctx.voltage,
         )
 

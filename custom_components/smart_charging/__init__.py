@@ -45,6 +45,7 @@ from .const import (
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
     CONF_SOLAR_RESERVE_SOC,
+    CONF_SOLAR_RESTART_DEBOUNCE_MIN,
     CONF_SOLAR_START_THRESHOLD_W,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
@@ -72,6 +73,7 @@ from .const import (
     DEFAULT_SOLAR_ONLY_START_THRESHOLD_W,
     DEFAULT_SOLAR_ONLY_STRATEGY,
     DEFAULT_SOLAR_RESERVE_SOC,
+    DEFAULT_SOLAR_RESTART_DEBOUNCE_MIN,
     DEFAULT_SOLAR_START_THRESHOLD_W,
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
@@ -157,6 +159,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         ),
         solar_hold_min=opts.get(CONF_SOLAR_HOLD_MIN, DEFAULT_SOLAR_HOLD_MIN),
         solar_only_hold_min=opts.get(CONF_SOLAR_ONLY_HOLD_MIN, DEFAULT_SOLAR_ONLY_HOLD_MIN),
+        solar_restart_debounce_min=opts.get(
+            CONF_SOLAR_RESTART_DEBOUNCE_MIN, DEFAULT_SOLAR_RESTART_DEBOUNCE_MIN
+        ),
         solar_cooldown_min=opts.get(CONF_SOLAR_COOLDOWN_MIN, DEFAULT_SOLAR_COOLDOWN_MIN),
         solar_only_strategy=opts.get(CONF_SOLAR_ONLY_STRATEGY, DEFAULT_SOLAR_ONLY_STRATEGY),
         solar_only_midpoint=opts.get(CONF_SOLAR_ONLY_MIDPOINT, DEFAULT_SOLAR_ONLY_MIDPOINT),

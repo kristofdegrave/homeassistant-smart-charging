@@ -685,8 +685,13 @@ async def test_mode_switch_resets_the_incoming_modes_state(hass):
         hass, ample, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
     )
 
-    # Assert (cycles 4-5)
-    assert result.commanded_current == 12.0  # fresh idle -> charges immediately, no cooldown wait
+    # Assert (cycles 4-5): the switch resets `_mode_state` -- the incoming mode is no longer
+    # stuck in Cooldown -- but the has-charged flag (R11/issue #757) is untouched by a mode
+    # switch, since it's scoped to the connection, not the active mode (it was already set by
+    # cycle 1's own charging start). So the fresh Idle state now debounces this threshold
+    # crossing instead of resuming immediately the way a pre-#757 "fresh idle" would have.
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.DEBOUNCING
 
 
 async def test_grid_ceiling_still_clamps_a_solar_request(hass):
@@ -1409,6 +1414,116 @@ async def test_solar_step_up_survives_solar_to_solaronly_switch(hass):
     await coord._async_update_data()
 
     assert coord._step_up_gate.state == SolarStepUpState(stepped_pct=85.0)
+
+
+# --- issue #757: has-charged flag / restart debounce (R11) ---
+# `_has_charged` is owned outside `_mode_state` for the same structural reason as
+# `_step_up_gate` above (see coordinator.py's own field docstring) -- these tests mirror the
+# step-up tests' own set/survive/clear shape.
+
+
+async def test_has_charged_flag_sets_on_first_charging_transition(hass):
+    """The flag starts False and flips True the first time Solar's own step() actually
+    transitions into Phase.CHARGING (here, the connection's first-ever start)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=300.0, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    assert coord._has_charged is False
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current > 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+    assert coord._has_charged is True
+
+
+async def test_has_charged_flag_survives_solar_to_solaronly_switch(hass):
+    """R7/UC02's own relationships section: unlike every timer in `_mode_state`, the
+    has-charged flag is scoped to the connection, not the active mode -- a Solar<->SolarOnly
+    switch must not reset it, the same shape as the step-up state above (but for its own,
+    unrelated reason)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=300.0, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()
+    assert coord._has_charged is True
+
+    coord.active_mode = MODE_SOLAR_ONLY
+    await coord._async_update_data()
+
+    assert coord._has_charged is True
+
+
+async def test_has_charged_flag_clears_on_disconnect(hass):
+    """A disconnect clears the has-charged flag -- the next connection is a fresh session's
+    first start (system-overview.md's `has-charged flag` glossary entry)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=300.0, ev_soc=50.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    await coord._async_update_data()
+    assert coord._has_charged is True
+
+    coord._adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_DISCONNECTED)
+    await coord._async_update_data()
+
+    assert coord._has_charged is False
+
+
+async def test_later_idle_crossing_debounces_after_has_charged_is_set(hass):
+    """End-to-end proof the flag actually gates the debounce through the real coordinator:
+    once set, a fresh Idle threshold crossing (post cooldown-into-idle) doesn't charge
+    immediately -- it debounces (R11/UC01 2b)."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=300.0, ev_soc=50.0)
+    config = _config(solar_hold_min=0.0, solar_cooldown_min=0.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    # Cycle 1: ample surplus -> charges immediately (first start), sets the flag.
+    result = await coord._async_update_data()
+    assert result.commanded_current > 0.0
+    assert coord._has_charged is True
+
+    # Cycle 2: surplus drops below threshold -> Hold (min_a set-point).
+    coord._adapters[ROLE_CHARGER_POWER] = _FakeNumeric(0.0)
+    result = await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.HOLD
+
+    # Cycle 3: still no surplus -- hold_min=0 has already elapsed by now -> Cooldown.
+    result = await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+
+    # Cycle 4: still no surplus -- cooldown_min=0 has already elapsed -> Idle (not Charging,
+    # since surplus is still below threshold).
+    result = await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
+
+    # Cycle 5: surplus recovers -- but the flag is set, so Idle's threshold crossing debounces
+    # instead of resuming immediately.
+    coord._adapters[ROLE_CHARGER_POWER] = _FakeNumeric(300.0)
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.DEBOUNCING
 
 
 async def test_active_soc_limit_changed_event_fires_on_change(hass):

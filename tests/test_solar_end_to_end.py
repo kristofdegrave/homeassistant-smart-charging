@@ -182,6 +182,44 @@ async def test_uc01_2a_cooldown_blocks_start_until_it_elapses(hass):
     assert coordinator._mode_state[MODE_SOLAR].phase == Phase.CHARGING
 
 
+async def test_uc01_2b_restart_debounce_gates_a_later_idle_crossing(hass):
+    """UC01 alternate 2b: once the has-charged flag is set, a start-threshold crossing while
+    dwelling in Idle must hold for the restart debounce period before charging actually
+    starts. Driven through the real coordinator (not modes.solar.step directly), so this
+    exercises the coordinator's own has-charged flag wiring (issue #757) too, not just the
+    pure state machine `tests/modes/test_solar.py` already covers."""
+    coordinator, calls = await _setup(
+        hass, **{CONF_SOLAR_HOLD_MIN: 0.0, CONF_SOLAR_COOLDOWN_MIN: 0.0}
+    )
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+
+    # First-ever start: immediate, no debounce -- and sets the has-charged flag.
+    await _cycle(hass, coordinator, charger_w=2760.0)
+    assert calls[-1]["value"] == 12.0
+    assert coordinator._has_charged is True
+
+    # Surplus drops -> Hold (elapses next cycle, hold_min=0) -> Cooldown (elapses next
+    # cycle, cooldown_min=0) -> Idle, since surplus is still below threshold throughout.
+    await _cycle(hass, coordinator, charger_w=0.0)
+    assert coordinator._mode_state[MODE_SOLAR].phase == Phase.HOLD
+    await _cycle(hass, coordinator, charger_w=0.0)
+    assert coordinator._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+    await _cycle(hass, coordinator, charger_w=0.0)
+    assert coordinator._mode_state[MODE_SOLAR].phase == Phase.IDLE
+
+    # Surplus recovers while dwelling in Idle -- the flag is set, so this crossing
+    # debounces instead of resuming immediately.
+    await _cycle(hass, coordinator, charger_w=2760.0)
+    assert calls[-1]["value"] == 0.0
+    assert coordinator._mode_state[MODE_SOLAR].phase == Phase.DEBOUNCING
+
+    # Simulate the debounce period having fully elapsed (avoiding a real wall-clock wait).
+    replace_coordinator_config(coordinator, solar_restart_debounce_min=0.0)
+    await _cycle(hass, coordinator, charger_w=2760.0)
+    assert calls[-1]["value"] == 12.0
+    assert coordinator._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+
+
 async def test_uc01_3a_grid_fallback_holds_at_minimum_and_draws_from_grid(hass):
     """UC01 alternate 3a: surplus at/above the start threshold but below the minimum
     charging current (expressed as power) holds at the minimum current, drawing the

@@ -11,6 +11,7 @@ DEFAULTS = dict(
     min_a=6.0,
     hold_minutes=1.0,
     cooldown_minutes=2.0,
+    debounce_minutes=1.0,
     strategy=ROUND_DOWN,
     midpoint=0.5,
 )
@@ -159,3 +160,50 @@ def test_unknown_phase_raises_value_error():
     bad_state = SolarOnlyState(phase="bogus")
     with pytest.raises(ValueError, match="unknown SolarOnlyState.phase"):
         step(surplus_w=1400.0, state=bad_state, now=0.0, **DEFAULTS)
+
+
+# --- has-charged flag / restart debounce (R11, issue #757, shared with sibling Solar) ---
+
+
+def test_connections_first_start_is_immediate_no_debounce():
+    desired, state = step(
+        surplus_w=1400.0, state=SolarOnlyState.idle(), now=0.0, has_charged=False, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_later_idle_crossing_debounces_once_has_charged_is_set():
+    state = SolarOnlyState.idle()
+    desired, state = step(surplus_w=1400.0, state=state, now=0.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0
+    desired, state = step(surplus_w=1400.0, state=state, now=30.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING  # debounce period (1 min) not yet elapsed
+    desired, state = step(surplus_w=1400.0, state=state, now=60.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_debounce_resets_to_idle_on_drop_below_threshold():
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    desired, state = step(surplus_w=500.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert desired == 0.0
+    assert state.phase == Phase.IDLE
+
+
+def test_cooldown_elapsed_resume_at_threshold_is_immediate_even_when_has_charged():
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, has_charged=False, **DEFAULTS)
+    _, state = step(surplus_w=500.0, state=state, now=10.0, has_charged=True, **DEFAULTS)  # hold
+    cooldown_enter = 10.0 + 60
+    _, state = step(surplus_w=500.0, state=state, now=cooldown_enter, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.COOLDOWN
+    cooldown_elapsed = cooldown_enter + 2 * 60 + 1
+    desired, state = step(
+        surplus_w=1400.0, state=state, now=cooldown_elapsed, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
