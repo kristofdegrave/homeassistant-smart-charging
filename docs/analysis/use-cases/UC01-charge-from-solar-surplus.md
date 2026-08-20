@@ -127,6 +127,6 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 ## Relationships
 
-- **Sibling [UC02](UC02-charge-from-solar-only.md)** (`SolarOnly`) — both use amp-step rounding, but `Solar` always rounds up (fixed), whereas `SolarOnly`'s strategy is configurable (default round down); `SolarOnly` also has no grid fallback and no post-surplus hold; a solar step-up in effect is preserved when switching between the two (R7).
+- **Sibling [UC02](UC02-charge-from-solar-only.md)** (`SolarOnly`) — both use amp-step rounding, but `Solar` always rounds up (fixed), whereas `SolarOnly`'s strategy is configurable (default round down); both hold at the minimum charging current on a post-surplus hold before stopping, but `SolarOnly`'s hold is shorter (default 1 minute vs. 5) and is the one bounded exception to its zero-grid-import guarantee, whereas `SolarOnly` has no ongoing grid fallback the way `Solar` does; a solar step-up in effect is preserved when switching between the two (R7).
 - **Peer [UC06](UC06-store-abundant-solar.md)**, not an extension — while charging in a solar mode, UC06 may write a higher active SOC limit into the shared `resolution-rules.md` lookup (R7 priority row 2) to store abundant surplus (R8); this use-case's own set-point logic just reads whatever value is currently resolved there, unaware of who set it.
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit rule in `resolution-rules.md`.

@@ -37,7 +37,7 @@ Then the System does not start charging until the cooldown has fully elapsed, th
 **Peak / grid-ceiling clamp bounds or stops the set-point.**
 Given the System has requested a `Captar` set-point
 When the peak-protection clamp (R3) or the grid-supply-ceiling clamp (C4) in `control-cycle.md` would be exceeded on raw readings — for example household load leaves less than the minimum charging current of headroom
-Then the coordinator reduces the charger current — or, on a sustained R3 breach at the minimum charging current, stops it and starts the `Captar` cooldown (R11); a C4 breach clamps down (to 0 A if necessary) without starting a cooldown — so the clamp decides the set-point this cycle, not the mode.
+Then the coordinator reduces the charger current — or, on a sustained R3 breach at the minimum charging current, stops it and starts the `Captar` cooldown (R11); a C4 breach clamps down (to 0 A if necessary) without starting a cooldown — so the clamp decides the set-point this cycle, not the mode. R3's grace period (default 2 minutes, held at the minimum charging current before the stop) already gives `Captar` the same abrupt-stop protection that the solar modes' post-surplus hold gives them (R11) — no separate hold is needed here, since the peak clamp's own grace-period mechanism plays that role.
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Captar` mode

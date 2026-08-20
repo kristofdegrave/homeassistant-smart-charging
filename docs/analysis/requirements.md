@@ -26,14 +26,15 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R2 — Solar-only charging
 
 **Priority:** Must
-**What:** When `SolarOnly` mode is active, the system charges the car exclusively from solar surplus and never draws supplementary power from the grid.
+**What:** When `SolarOnly` mode is active, the system charges the car exclusively from solar surplus, holding at the minimum charging current for a brief, bounded period to ride out a passing cloud rather than stopping outright — but otherwise never draws supplementary power from the grid.
 
 **Acceptance criteria:**
 
 - [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 1300 W, chosen so the minimum charging current can be met from solar alone) and no stop or cooldown condition applies.
 - [ ] The whole-ampere set-point is computed using a configurable amp-step rounding strategy: `round down` (default — the highest whole ampere that keeps net grid import at or below 0 W, no grid import), `round up` (the next whole ampere, accepting a bounded net grid import of less than one amp-step to use all surplus), or `round to nearest` (whichever whole ampere is closer to the ideal value, using a configurable midpoint, default 50 %, which may oscillate between the two amp steps when surplus hovers at the midpoint).
-- [ ] When smoothed solar surplus falls below the start threshold (default 1300 W), the charger stops within one control cycle with no hold period.
-- [ ] Under the default `round down` strategy, the car is never charged from the grid while in this mode; net grid import attributable to charging never exceeds 0 W beyond one control cycle of sensor noise. Under `round up` or `round to nearest`, net grid import attributable to charging stays bounded to less than one amp-step.
+- [ ] When smoothed solar surplus falls below the start threshold (default 1300 W), the charger holds at the minimum charging current for a configurable period (default 1 minute) before stopping, riding out brief cloud cover; if surplus recovers to the start threshold within that period, charging resumes at the recovered rate and the hold is cancelled.
+- [ ] This hold is the one exception to this mode's zero-grid-import guarantee: while holding, any shortfall between available solar and the minimum charging current is drawn from the grid, bounded to the hold period. If surplus has not recovered to the start threshold once the hold elapses, the charger stops (0 A) and the solar-mode cooldown begins (R11).
+- [ ] Outside the hold, under the default `round down` strategy, the car is never charged from the grid while in this mode; net grid import attributable to charging never exceeds 0 W beyond one control cycle of sensor noise. Under `round up` or `round to nearest`, net grid import attributable to charging stays bounded to less than one amp-step.
 
 ---
 
@@ -167,10 +168,11 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R11 — Rapid cycling prevention
 
 **Priority:** Must
-**What:** The system prevents the charger from starting and stopping in quick succession so the car never enters a charging error state.
+**What:** The system prevents the charger from starting and stopping in quick succession, and from cutting current straight to 0 A the moment a stop condition arises, so the car never enters a charging error state.
 
 **Acceptance criteria:**
 
+- [ ] When a stop condition first arises (surplus/headroom no longer sufficient to sustain the minimum charging current), the charger holds at the minimum charging current for a mode-specific hold period (configurable; e.g. R1's post-surplus hold, R2's solar-only hold, R3's peak-breach grace period) before actually cutting to 0 A — a momentary or quickly-recovering condition is ridden out rather than triggering an immediate stop.
 - [ ] After charging stops, it does not restart until a mode-specific cooldown has fully elapsed (configurable; defaults: 2 minutes for solar modes, 10 minutes for `Captar`).
 - [ ] A cooldown, once started, always runs to completion and is not shortened by a change in conditions.
 - [ ] The charger current is only ever 0 A or at least the minimum charging current, never in between (per C1).
