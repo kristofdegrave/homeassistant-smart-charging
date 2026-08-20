@@ -83,6 +83,29 @@ def test_floor_never_raises_the_limit_above_the_maximum_peak():
     )
 
 
+def test_monthly_peak_equal_to_the_floor_resolves_to_the_floor():
+    # Boundary case: monthly_peak_kw == peak_floor_kw. max(monthly, floor) must still take
+    # this (either) value, not fall through to a `>`-only comparison that would miss equality.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=2.5, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=False
+        )
+        == 2.5
+    )
+
+
+def test_floor_equal_to_the_maximum_peak_resolves_to_the_maximum_peak():
+    # Boundary case: peak_floor_kw == max_peak_kw. min(max(monthly, floor), max) must still
+    # take this (either) value, not fall through to a `>`-only comparison that would miss
+    # equality.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=0.5, max_peak_kw=4.0, peak_floor_kw=4.0, urgent=False
+        )
+        == 4.0
+    )
+
+
 def test_urgency_ignores_the_peak_floor_too():
     # Regression check -- row 1 (urgent) is unchanged by #754: still max_peak_kw regardless
     # of monthly peak or floor.
