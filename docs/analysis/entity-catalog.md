@@ -138,7 +138,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11, UC12 (seeds initial value) |
 | `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) | UC04 | user (anytime), UC12 |
-| `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime) |
+| `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime), UC12 |
 
 ### Diagnostic outputs
 
@@ -341,7 +341,11 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   required, and the `Auto` rule skips the solar mode accordingly.
 - **Captar-dependent rows are conditional on the CapTar capability (R18).** When
   `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
-  `Captar` accordingly.
+  `Captar` accordingly. The *Peak protection* subgroup's thresholds (`safety_margin_w`,
+  `max_peak_kw`, `peak_floor_kw`, `peak_grace_min`) still apply — the R3 clamp is not gated by this
+  capability — but [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (6a) now
+  presents their fields on the flow's CapTar-gated step, so a non-CapTar installation runs them on
+  their defaults rather than tuning them through the flow.
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When
   `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
@@ -356,7 +360,12 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   The *Home day* subgroup and
   `evening_prompt_*` are **not** gated, because the home-day flag independently drives the
   solar-reserve cap (R9). Unlike the solar and CapTar capabilities, this one removes no option from
-  `select.smart_charging_mode`.
+  `select.smart_charging_mode`. One presentation-level exception, deliberate and named in
+  [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (8a): the `home_day_external`
+  role's *mapping field* is presented on the flow's deadline-gated step, so an installation without
+  the deadline capability is not offered it — the row itself stays ungated here, since the flag's
+  behaviour is unchanged and the home-day switch can still be driven by the evening prompt (UC08)
+  or set directly (UC11).
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
   manual selection; without the CapTar capability, `Captar` is not offered for manual selection.

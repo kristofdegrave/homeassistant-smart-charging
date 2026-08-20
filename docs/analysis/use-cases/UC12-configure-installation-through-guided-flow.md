@@ -1,4 +1,4 @@
-# UC12 — Configure the installation through a guided, capability-first flow
+# UC12 — Configure the installation through a guided, topic-based flow
 
 **Primary actor:** Household energy manager (secondary: System maintainer, who typically invokes
 the reconfigure flow to repair or replace an adapter-role mapping).
@@ -38,6 +38,35 @@ configuration](../system-overview.md#ubiquitous-language) and never this flow (R
 - For the reconfigure and options flows, a config entry already exists from a prior run of this
   use-case (install, or an earlier reconfigure/options run).
 
+## The step model
+
+The flow is nine steps, each grouping the fields of **one installation topic**, in this fixed
+order:
+
+| # | Step | Gate |
+| --- | --- | --- |
+| 1 | core | none — always shown |
+| 2 | grid | none — always shown |
+| 3 | ev_charger | none — always shown |
+| 4 | vehicle | none — always shown |
+| 5 | power | none — always shown |
+| 6 | captar | the CapTar [capability](../system-overview.md#ubiquitous-language) (R18) |
+| 7 | solar | the solar capability (R18) |
+| 8 | deadline | the [deadline capability](../system-overview.md#ubiquitous-language) (R18) |
+| 9 | notifications | none — always shown |
+
+Every step has, at most, two halves: a **mapping half** (adapter-role mappings, their
+state-translation tables, and the capability declarations — config-entry *data*) and a **threshold
+half** (thresholds, defaults, and seed values — config-entry *options*), per
+[ADR-0005](../../adl/0005-config-entry-structure-and-interval.md). Which halves a given flow shows
+is what distinguishes the three flows: install shows both halves of every step it reaches,
+reconfigure shows only mapping halves (1a), and options shows only threshold halves (1b). Two steps
+have only one half — `captar` and `power` are threshold-only, so neither appears in the reconfigure
+flow at all.
+
+The step ids (`core`, `grid`, `ev_charger`, …) are structural labels for the flow's own steps, not
+ubiquitous-language terms; the glossary defines the concepts each step captures, not the steps.
+
 ## Trigger
 
 The user starts one of the three flows: install, reconfigure, or options.
@@ -47,101 +76,152 @@ The user starts one of the three flows: install, reconfigure, or options.
 The install flow is the superset of the other two; 1a/1b below give the reconfigure and options
 variants.
 
-1. **Given** the user starts the install flow, **when** the System shows the first step, **then**
-   it presents only the four core hardware mappings — charger current, charger status (with its
-   connected/charging state lists), net power, charger power — and four enablement decisions: is
-   solar installed (solar [capability](../system-overview.md#ubiquitous-language), R18)? does the
-   installation bill against a capacity tariff (CapTar capability, R18)? does the household want
-   departure deadlines managed at all (deadline capability, R18)? and will a vehicle charge-limit
-   entity be mapped (a plain optional-mapping decision, not an R18 capability)?
-2. **When** the user submits the first step with valid core mappings, **then** the System advances
-   through one step per enablement the user answered "yes" to — solar, then CapTar, then deadline,
-   then vehicle charge-limit, in that fixed order — skipping any answered "no" (2a).
-3. **Given** solar was declared installed, **when** the System shows the solar step, **then** it
-   presents the EV state-of-charge mapping (required by both the solar and CapTar capabilities;
-   asked here first) if not already satisfied, the solar-forecast mapping, and only solar's own
-   thresholds: the `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and
-   midpoint, the `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown
-   duration, the restart debounce duration, the solar step-up size,
-   trigger gap, and ceiling, and the value the solar-reserve cap seeds together with its forecast
-   threshold (3a).
-4. **Given** the installation bills against a capacity tariff, **when** the System shows the
-   CapTar step, **then** it presents the EV state-of-charge mapping if step 3 did not already
-   satisfy it, and the `Captar`-mode cooldown duration.
-5. **Given** the household wants departure deadlines managed, **when** the System shows the
-   deadline step, **then** it presents the optional external departure-time mapping and the
-   plug-in reminder's lead time.
-6. **Given** a vehicle charge-limit entity will be mapped, **when** the System shows the
-   vehicle-charge-limit step, **then** it presents the vehicle charge-limit mapping together with
-   the car-at-home presence mapping it requires — the two are always asked together.
-7. **When** the user has completed every step their enablement decisions required, **then** the
-   System shows a step for the mappings that apply regardless of any enablement decision — the
-   optional grid-voltage, low-tariff (with its own state-translation table when the mapped entity
-   does not already report on/off), notification-target, EV-battery-capacity-sensor, and external
-   home-day mappings — none of which any capability gates.
-8. **When** the user submits that step, **then** the System shows a final step for the thresholds
-   that apply regardless of any enablement decision: grid safety thresholds (grid supply ceiling,
-   grid safety offset, minimum/maximum charging current, the supply-voltage fallback used when the
-   grid-voltage mapping is absent), the smoothing window, general SOC/peak defaults (the values the
-   default SOC limit and Power target current entities are seeded with, safety margin, maximum
-   peak, peak floor, peak grace period, EV battery capacity), the `Power`-mode peak-protection option, and the
-   evening home-day prompt fields (the evening prompt's enable flag, prompt time, and timeout)
-   (8a).
-9. **When** the user submits that step with every field valid, **then** the System creates the
-   config entry, splitting the submitted values into the data bucket (mappings, capability flags,
-   the derived state-translation tables) and the options bucket (thresholds, defaults, seed values),
-   exactly as today (ADR-0005), and the installation is complete.
+1. **Given** the user starts the install flow, **when** the System shows the `core` step, **then**
+   it presents the three [capability](../system-overview.md#ubiquitous-language) declarations
+   (R18) — is solar installed? does the installation bill against a capacity tariff? does the
+   household want departure deadlines managed at all? — together with the smoothing window (R10).
+   It does not present the [control interval](../system-overview.md#ubiquitous-language), which the
+   install flow defaults rather than asks (1b).
+2. **When** the user submits the `core` step, **then** the System shows the `grid` step, presenting
+   the net-power mapping, the optional grid-voltage mapping, the optional low-tariff mapping (with
+   its own state-translation table when the mapped entity does not already report on/off), the
+   [grid supply ceiling](../system-overview.md#ubiquitous-language), and the [grid safety
+   offset](../system-overview.md#ubiquitous-language) (C4).
+3. **When** the user submits the `grid` step, **then** the System shows the `ev_charger` step,
+   presenting the charger-current mapping, the charger-status mapping with its connected and
+   charging state lists, the charger-power mapping, the [supply
+   voltage](../system-overview.md#ubiquitous-language) fallback used when the grid-voltage mapping
+   is absent (NF4), and the [minimum](../system-overview.md#ubiquitous-language) and
+   [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
+4. **When** the user submits the `ev_charger` step, **then** the System shows the `vehicle` step —
+   always, gated by nothing — presenting the EV state-of-charge mapping, the optional
+   EV-battery-capacity sensor mapping, the EV battery capacity value (R15), the optional vehicle
+   charge-limit mapping together with the car-at-home presence mapping it conditionally requires
+   (4a), and the value the SOC-limit-override entity is seeded with (4b).
+5. **When** the user submits the `vehicle` step, **then** the System shows the `power` step,
+   presenting the value the [Power target current](../system-overview.md#ubiquitous-language)
+   entity is seeded with (4b), the `Power`-mode peak-protection option (R17), and the `Power`-mode
+   cooldown duration (R11); it then advances through the capability-gated steps 6–8 in that fixed
+   order, skipping any capability the user declared absent (5a).
+6. **Given** the installation bills against a capacity tariff, **when** the System shows the
+   `captar` step, **then** it presents the `Captar`-mode cooldown duration (R11) and the
+   peak-protection thresholds — [safety margin](../system-overview.md#ubiquitous-language),
+   [maximum peak](../system-overview.md#ubiquitous-language), [peak
+   floor](../system-overview.md#ubiquitous-language), and peak-breach grace period (R3) — which
+   this step model gates on the CapTar capability, a deliberate change from the previous step
+   model (6a).
+7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
+   presents the solar-production and solar-forecast mappings and solar's own thresholds: the
+   `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
+   `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown duration, the
+   restart debounce duration, the solar step-up size, trigger gap, and ceiling, and the value the
+   [solar-reserve cap](../system-overview.md#ubiquitous-language) is seeded with (4b) together with
+   its forecast threshold.
+8. **Given** the household wants departure deadlines managed, **when** the System shows the
+   `deadline` step, **then** it presents the optional external departure-time mapping, the external
+   home-day mapping (8a), and the plug-in reminder's lead time (R12).
+9. **When** the user has completed every gated step their capability declarations required, **then**
+   the System shows the `notifications` step, presenting the notification-target mapping, the
+   evening home-day prompt's enable flag and prompt time, and the prompt timeout (R13).
+10. **When** the user submits the `notifications` step with every field valid, **then** the System
+    creates the config entry, splitting the submitted values into the data bucket (mappings,
+    capability declarations, the derived state-translation tables) and the options bucket
+    (thresholds, defaults, seed values), exactly as today (ADR-0005), and the installation is
+    complete.
 
 ## Alternate flows
 
 **1a — Reconfigure flow** — replaces the install flow from the Trigger onward.
 Given the user invokes Reconfigure on an existing entry
 When the System runs this use-case
-Then it presents step 1's fields prefilled from the existing entry; advances through whichever of
-steps 3–6 the user's (possibly changed) enablement answers call for, restricted to their mapping
-fields only — the EV state-of-charge, solar-forecast, vehicle-charge-limit, and car-at-home-presence
-mappings, never a threshold; shows step 7 (the ungated mappings) unchanged; and skips step 8
-entirely, since none of its fields are mappings. Submitting updates only the data bucket and
-reloads the config entry. A capability answered "no" here that was "yes" before drops that
-capability's mapping fields from the data bucket on save; any of its thresholds already stored in
-the options bucket are left untouched (changing them is the options flow's job, 1b).
+Then it shows only the **mapping half** of each step, prefilled from the existing entry: `core`'s
+capability declarations; `grid`'s net-power, grid-voltage, and low-tariff mappings; `ev_charger`'s
+charger-current, charger-status, and charger-power mappings; `vehicle`'s EV state-of-charge,
+EV-battery-capacity-sensor, vehicle-charge-limit, and car-at-home mappings — unconditionally, since
+the `vehicle` step is ungated; `solar`'s solar-production and solar-forecast mappings when solar is
+declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
+managed; and `notifications`' notification-target mapping.
+The `captar` and `power` steps never appear, since neither has a mapping half.
+Submitting updates only the data bucket and reloads the config entry. A capability declared absent
+here that was present before drops that capability's mapping fields from the data bucket on save;
+any of its thresholds already stored in the options bucket are left untouched (changing them is the
+options flow's job, 1b).
 
 **1b — Options flow** — replaces the install flow from the Trigger onward.
 Given the user opens Configure on an existing entry
 When the System runs this use-case
-Then it skips steps 1–7 entirely — the installation's capabilities are fixed by the existing entry
-and changeable only through the reconfigure flow (1a), and none of steps 1–7's fields are
-thresholds — and instead shows the threshold-only version of whichever per-capability
-step the entry's already-declared capabilities call for (the solar step's thresholds when solar is
-installed, the CapTar step's cooldown when CapTar is available, the deadline step's reminder lead
-time when deadlines are managed; the vehicle-charge-limit step never appears here, since it has no
-threshold fields of its own), followed by step 8's always-applicable thresholds, which here also
-includes the control interval (a field the install and reconfigure flows never ask, defaulting it
-instead). Submitting updates only the options bucket.
+Then it shows only the **threshold half** of each step, and never a mapping or a capability
+declaration — the installation's capabilities are fixed by the existing entry and changeable only
+through the reconfigure flow (1a). It therefore shows: `core`'s smoothing window **and the control
+interval**, the one field neither the install nor the reconfigure flow ever asks (install defaults
+it; reconfigure touches no options at all), so the options flow is the only path on which it is
+presented; `grid`'s grid supply ceiling and safety offset; `ev_charger`'s supply-voltage fallback
+and minimum/maximum charging current; `vehicle`'s EV battery capacity and SOC-limit seed value;
+`power`'s target-current seed value, peak-protection option, and cooldown; then the threshold half
+of whichever gated steps the entry's already-declared capabilities call for — `captar`'s cooldown
+and peak-protection thresholds when CapTar is available, `solar`'s thresholds when solar is
+installed, `deadline`'s reminder lead time when deadlines are managed; and finally
+`notifications`' evening-prompt fields and prompt timeout.
+Submitting updates only the options bucket.
 
-**2a — An enablement decision is "no"** — branches from step 2.
-Given the user answered "no" to solar installed, CapTar available, deadline management, or vehicle
-charge-limit mapped
-When the System advances past step 1
-Then the corresponding step (3, 4, 5, or 6 respectively) is skipped entirely; if both solar and
-CapTar are answered "no", the EV state-of-charge mapping is never asked at all; if vehicle
-charge-limit mapping is declined, neither it nor the car-at-home presence mapping is ever asked.
+**4a — The car-at-home mapping is required only when a vehicle charge limit is mapped** — branches
+from step 4.
+Given the user is on the `vehicle` step
+When the user fills in the vehicle charge-limit mapping
+Then the car-at-home presence mapping becomes required on that same step, because keeping the
+vehicle's own charge limit in step with the active SOC limit (R6, UC09) is meaningful only while
+the car is at home; when the user leaves the vehicle charge-limit mapping blank — declining
+charge-limit synchronisation — the car-at-home mapping is not required either. This is a
+**field-level** rule local to one always-shown step, and it replaces the previous step model's
+separate yes/no election asked on the first step and its own conditional step: the flow no longer
+asks the user to predict, before seeing the fields, whether they want the mapping.
 
-**3a — Solar-reserve-cap and default-SOC-limit fields seed runtime entities, not thresholds.**
-Given the solar-reserve cap value (step 3) and the default SOC limit and Power target current
-values (step 8)
+**4b — Seed-value fields set a runtime entity's starting value, not a threshold** — branches from
+step 4.
+Given the SOC-limit seed value (step 4), the `Power` target-current seed value (step 5), and the
+solar-reserve cap seed value (step 7)
 When the user later changes any of the three from the runtime dashboard
 Then that change updates the corresponding owned runtime entity directly
 ([UC11](UC11-monitor-and-manage-charging-configuration.md)) — this use-case's own field only sets
-each entity's *starting* value at whichever moment this step runs, distinct from an installation
+each entity's *starting* value at whichever moment its step runs, distinct from an installation
 threshold that keeps applying until it is changed again through this flow.
 
-**8a — Peak-protection fields are not gated by the CapTar capability.**
-Given the maximum peak, peak floor, safety margin, peak grace period, and `Power`-mode peak-protection option
-When the System shows step 8
-Then these are presented regardless of whether the installation bills against a capacity tariff —
-the peak-protection clamp (R3) protects the grid connection itself, not only the CapTar bill, so it
-applies even when the CapTar capability is absent (R18 AC5).
+**5a — A capability is declared absent** — branches from step 5.
+Given the user declared the CapTar, solar, or deadline capability absent on the `core` step
+When the System advances past the `power` step
+Then the corresponding gated step (6, 7, or 8 respectively) is skipped entirely and none of its
+fields is ever presented (R18 AC3, AC7; R14 AC1). No ungated step is ever skipped: `core`, `grid`,
+`ev_charger`, `vehicle`, `power`, and `notifications` are shown on every install path, whatever the
+capability declarations.
+
+**6a — Peak-protection thresholds are now gated by the CapTar capability** — branches from step 6.
+Given the safety margin, maximum peak, peak floor, and peak-breach grace period
+When the CapTar capability is declared absent
+Then this step model no longer presents them at all, and the installation runs on their defaults.
+This **reverses** the previous step model, which presented them ungated on the strength of the
+peak-protection clamp (R3) protecting the grid connection itself rather than only the capacity-tariff
+bill. The reversal is deliberate: it groups every peak-protection threshold with the billing
+arrangement that motivates tuning them, at the cost that a non-CapTar installation can no longer
+tune them through this flow. The clamp itself is unchanged — R3 still applies in every mode, and the
+[grid supply ceiling](../system-overview.md#ubiquitous-language) clamp (C4), which is what actually
+protects the grid connection on a non-CapTar installation, stays on the ungated `grid` step. This
+use-case describes only the new step behaviour; reconciling the wording of R3, C3, C4, and R18 AC5 —
+which currently assert that the peak-protection *fields* apply whether or not the CapTar capability
+is present — is tracked separately and is out of scope here.
+
+**8a — The external home-day mapping is presented on the deadline-gated step** — branches from
+step 8.
+Given the external home-day mapping
+When the deadline capability is declared absent
+Then the mapping is not presented, even though the [home-day
+flag](../system-overview.md#ubiquitous-language) it feeds independently drives the solar-reserve cap
+(R9) and the evening prompt (R13) whether or not deadlines are managed — which is why
+`entity-catalog.md` records the Home day subgroup as *not* gated by the deadline capability. This
+is a deliberate, named exception to that gating, made because the mapping's dominant use is the
+home-day departure override (R14). Its real-world consequence, stated plainly: a household that
+declares deadlines unmanaged but still wants the solar-reserve cap is no longer offered this mapping
+through the flow, and must drive the home-day flag through the evening prompt (UC08) or set the
+owned home-day switch directly (UC11) instead. Nothing about how the flag behaves once set changes.
 
 ## Exception flows
 
@@ -154,7 +234,7 @@ user never reaches a later step with an invalid earlier mapping in place.
 
 **A field required by the current step is left blank.**
 Given the user submits a step without a field that step marks required (e.g. the car-at-home
-presence mapping in the vehicle-charge-limit step)
+presence mapping on the `vehicle` step, once a vehicle charge-limit mapping has been filled in, 4a)
 When the System validates that step
 Then the System rejects the submission and re-shows the same step with an error local to the
 missing field — never an error raised only after every later step has also been completed, which
@@ -172,24 +252,27 @@ it was before the flow started.
 - A config entry exists (install) or has been updated (reconfigure/options), split into data and
   options exactly as ADR-0005 already specifies — this use-case changes only how the fields are
   presented, not where they are stored.
-- No field belonging to a capability, or to the vehicle-charge-limit mapping, that the user
-  declared disabled was ever presented to them.
-- The EV state-of-charge mapping, when required by an enabled capability, was asked exactly once,
-  never repeated across steps.
-- The cross-field requiredness the current implementation enforces only as an end-of-form error
+- No field belonging to a capability the user declared absent was ever presented to them.
+- The EV state-of-charge mapping was asked exactly once, on the always-shown `vehicle` step,
+  whatever the capability declarations — replacing the previous step model's once-only-across-two-
+  possible-steps mechanism, and asked even when neither solar nor CapTar is declared present.
+- The cross-field requiredness the original implementation enforced only as an end-of-form error
   (EV state-of-charge required when solar or CapTar is declared; the solar-forecast mapping
   required when solar is declared; the car-at-home presence mapping required when a vehicle
   charge-limit is mapped) is, after this use-case, a plain required field local to the one step
-  that needs it.
+  that needs it — the first two unconditionally required on their own step, the third by the
+  field-level rule 4a.
+- Two gaps the previous step model named as out of scope are closed by it: the solar-production
+  mapping is now presented on the `solar` step, and the `Power`-mode cooldown on the `power` step,
+  so every catalogued adapter role and `config-options` key the flow is responsible for now has a
+  field on some step.
 - The step set stays extensible: a capability added in a later release (R18's extensibility clause)
-  needs exactly one new step, appended after the existing capability steps (3–5) and before the
-  vehicle-charge-limit step (6), with no change to the fields or order of any step above. This is a
+  needs exactly one new step, appended after the existing capability-gated steps (6–8) and before
+  the `notifications` step (9), with no change to the fields or order of any other step. This is a
   structural property of the step grouping rather than a flow exercised here — the capability set is
   closed this release (R18), so no concrete scenario can walk it.
 - Every other use-case (UC01–UC11) can execute using the mappings, capabilities, and thresholds
-  this use-case captured, with two pre-existing gaps this use-case does not introduce and is out of
-  scope to close: `entity-catalog.md`'s `solar_power` adapter role and `power_cooldown_min` option
-  each currently have no corresponding field in the implementation to present.
+  this use-case captured.
 
 ## Domain events produced
 
@@ -201,54 +284,64 @@ consistent with how [UC11](UC11-monitor-and-manage-charging-configuration.md) al
 
 ```mermaid
 flowchart TD
-    subgraph Install["Install flow"]
-        I1["Step 1: core mappings +<br/>solar / CapTar / deadline /<br/>vehicle-limit decisions"] --> ID{"Which enablements<br/>are 'yes'?"}
-        ID -- solar --> IS["Step 3: solar<br/>mapping + thresholds"]
-        ID -- captar --> IC["Step 4: CapTar<br/>mapping + threshold"]
-        ID -- deadline --> IDL["Step 5: deadline<br/>mapping + threshold"]
-        ID -- vehicle-limit --> IV["Step 6: vehicle-limit<br/>mapping"]
-        ID -- "no" branches --> ISkip["Skip that step (2a)"]
-        IS --> I7["Step 7: ungated mappings"]
-        IC --> I7
-        IDL --> I7
-        IV --> I7
-        ISkip --> I7
-        I7 --> I8["Step 8: ungated thresholds"]
-        I8 --> ISubmit["Create entry:<br/>split data / options"]
+    subgraph Install["Install flow — both halves of every step reached"]
+        I1["1 core: capability declarations<br/>+ smoothing window"] --> I2["2 grid"]
+        I2 --> I3["3 ev_charger"]
+        I3 --> I4["4 vehicle (always)"]
+        I4 --> I5["5 power"]
+        I5 --> ID{"Which capabilities<br/>are present?"}
+        ID -- captar --> I6["6 captar:<br/>cooldown + peak protection (6a)"]
+        ID -- solar --> I7["7 solar"]
+        ID -- deadline --> I8["8 deadline (incl. home-day, 8a)"]
+        ID -- "absent" --> ISkip["Skip that step (5a)"]
+        I6 --> I9["9 notifications"]
+        I7 --> I9
+        I8 --> I9
+        ISkip --> I9
+        I9 --> ISubmit["Create entry:<br/>split data / options"]
     end
 
-    subgraph Reconfigure["Reconfigure flow (1a)"]
-        R1["Step 1 fields, prefilled"] --> RD{"Which enablements<br/>are 'yes'?"}
-        RD -- yes branches --> R2["Steps 3-6,<br/>mapping fields only"]
-        RD -- "no" branches --> RSkip["Skip that step (2a)"]
-        R2 --> R7["Step 7: ungated mappings"]
-        RSkip --> R7
-        R7 --> RSubmit["Update data bucket only<br/>+ reload entry"]
+    subgraph Reconfigure["Reconfigure flow (1a) — mapping halves only"]
+        R1["1 core: capability<br/>declarations, prefilled"] --> R2["2 grid, 3 ev_charger,<br/>4 vehicle — mappings"]
+        R2 --> RD{"Which capabilities<br/>are present?"}
+        RD -- solar --> R7["7 solar mappings"]
+        RD -- deadline --> R8["8 deadline mappings"]
+        RD -- "absent" --> RSkip["Skip that step (5a)"]
+        R7 --> R9["9 notifications mapping"]
+        R8 --> R9
+        RSkip --> R9
+        R9 --> RSubmit["Update data bucket only<br/>+ reload entry"]
+        RNote["5 power and 6 captar never appear:<br/>no mapping half"] -.-> RD
     end
 
-    subgraph Options["Options flow (1b)"]
-        O0["Read entry's already-<br/>declared capabilities"] --> OD{"Which are<br/>already declared?"}
-        OD -- solar --> O2["Step 3: solar<br/>thresholds only"]
-        OD -- captar --> O3["Step 4: CapTar<br/>threshold only"]
-        OD -- deadline --> O4["Step 5: deadline<br/>threshold only"]
-        OD -- "off" branches --> OSkip["Skip that step"]
-        O2 --> O8["Step 8: ungated thresholds<br/>+ control interval"]
-        O3 --> O8
-        O4 --> O8
-        OSkip --> O8
-        O8 --> OSubmit["Update options bucket only"]
+    subgraph Options["Options flow (1b) — threshold halves only"]
+        O1["1 core: smoothing window<br/>+ control interval"] --> O2["2 grid, 3 ev_charger,<br/>4 vehicle, 5 power — thresholds"]
+        O2 --> OD{"Which are already<br/>declared?"}
+        OD -- captar --> O6["6 captar thresholds"]
+        OD -- solar --> O7["7 solar thresholds"]
+        OD -- deadline --> O8["8 deadline threshold"]
+        OD -- "absent" --> OSkip["Skip that step"]
+        O6 --> O9["9 notifications thresholds"]
+        O7 --> O9
+        O8 --> O9
+        OSkip --> O9
+        O9 --> OSubmit["Update options bucket only"]
     end
 ```
 
 ## Requirements satisfied
 
 Satisfies [R20](../requirements.md#r20--guided-installation-configuration) — the step grouping,
-the capability-gated skipping, the once-only EV state-of-charge mapping, the step-local validation,
-the mapping-only and threshold-only amendment paths, and the discard-on-abandon behaviour are this
-use-case's realization of R20's acceptance criteria AC1–AC8. AC9 — a capability added in a later
-release adding exactly one step without changing any existing step — is a forward-looking property
-of this step design that no scenario here exercises, since the capability set is closed this release
-(R18); it is carried as a postcondition above rather than as a flow.
+the capability-gated skipping, the step-local validation, the mapping-only and threshold-only
+amendment paths, and the discard-on-abandon behaviour are this use-case's realization of R20's
+acceptance criteria. Three of R20's criteria are written against the previous step model and no
+longer describe what this use-case does: AC1 (the first step's field list and the vehicle
+charge-limit election), AC4 (the EV state-of-charge mapping presented "on the first step that needs
+it" and "not presented at all when neither capability is declared present" — it is now always
+presented, 4a's step being ungated), and AC5 (ungated peak-protection fields — now CapTar-gated,
+6a; AC5's carve-out for the `Power`-mode cooldown is also obsolete, since the flow now asks it).
+AC9's extensibility property still holds, with the insertion point restated in the Postconditions
+above. Reconciling R20's wording is tracked separately and is out of scope here.
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
 acceptance criteria that the solar, CapTar, and deadline capabilities are each user-configurable
@@ -256,8 +349,7 @@ acceptance criteria that the solar, CapTar, and deadline capabilities are each u
 (AC3) — and [R14](../requirements.md#r14--configurable-departure-times) AC1, that the
 departure-time inputs are neither offered nor required when the deadline capability is absent.
 Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
-only whether a capability is configurable and whether its inputs are required. That presentation
-gap is what this use-case surfaced, and R20 above is the requirement that closes it.
+only whether a capability is configurable and whether its inputs are required.
 
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this
@@ -266,10 +358,11 @@ governs why every mapping field exists at all (adapter roles).
 
 ## Relationships
 
-- **«include»** R18's capability model for the solar, CapTar, and deadline branches (steps 3, 4,
-  5) — a direct visual realization of which capabilities are declared, not a decision of its own.
-  The vehicle-charge-limit step (6) branches on a plain optional-mapping decision this use-case's
-  own step design introduces, not an R18 capability.
+- **«include»** R18's capability model for the CapTar, solar, and deadline branches (steps 6, 7,
+  8) — a direct visual realization of which capabilities are declared, not a decision of its own.
+  No other step branches on anything: the six ungated steps are shown unconditionally, and the one
+  remaining optional mapping (the vehicle charge limit) is now a field-level rule inside the
+  always-shown `vehicle` step rather than a step-level gate (4a).
 - **Precedes every other use-case.** UC01–UC11 all depend on a config entry this use-case (or its
   reconfigure/options variants) produces.
 - **Distinct from [UC11](UC11-monitor-and-manage-charging-configuration.md)**, which presents only
