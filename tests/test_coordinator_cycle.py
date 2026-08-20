@@ -208,6 +208,7 @@ def test_mode_handler_protocol_is_satisfied_by_each_adapter():
     for handler in handlers:
         assert callable(handler.desired_current)
         assert callable(handler.idle_state)
+        assert callable(handler.resume_state)
         assert isinstance(handler.is_soc_gated, bool)
         assert isinstance(handler.is_solar_mode, bool)
 
@@ -240,6 +241,22 @@ def test_mode_handler_idle_state_per_mode():
     assert _SolarModeHandler(_config()).idle_state() == solar.SolarState.idle()
     assert _SolarOnlyModeHandler(_config()).idle_state() == solar_only.SolarOnlyState.idle()
     assert _CaptarModeHandler(_config()).idle_state() == captar.CaptarState.idle()
+
+
+def test_mode_handler_resume_state_per_mode():
+    """Issue #757: resume_state() is what the coordinator's SOC-gate branch holds/reads
+    instead of idle_state() -- for Solar/SolarOnly it must be an already-elapsed Cooldown
+    (ModeState.resumed()), NOT idle_state(), so a SocReached resume is exempt from the
+    restart debounce (see coordinator.py's own SOC-gated-stop branch and
+    modes/_mode_state.py::ModeState.resumed()'s docstring). Captar has no such concept, so its
+    resume_state() stays equal to idle_state(); Off/Power return None either way."""
+    assert _OffModeHandler().resume_state() is None
+    assert _PowerModeHandler(lambda: 10.0).resume_state() is None
+    assert _SolarModeHandler(_config()).resume_state() == solar.SolarState.resumed()
+    assert _SolarModeHandler(_config()).resume_state() != solar.SolarState.idle()
+    assert _SolarOnlyModeHandler(_config()).resume_state() == solar_only.SolarOnlyState.resumed()
+    assert _SolarOnlyModeHandler(_config()).resume_state() != solar_only.SolarOnlyState.idle()
+    assert _CaptarModeHandler(_config()).resume_state() == captar.CaptarState.idle()
 
 
 def test_build_mode_handlers_wires_all_five_modes_with_correct_types_and_facts():
@@ -434,6 +451,61 @@ def test_solar_only_mode_handler_delegates_to_modes_solar_only_step():
     current, new_state = handler.desired_current(ctx, solar_only.SolarOnlyState.idle())
     assert current == 6.0
     assert new_state.phase == Phase.CHARGING
+
+
+def test_solar_mode_handler_threads_hold_minutes():
+    """Companion to test_solar_mode_handler_delegates_to_modes_solar_step above, which only
+    exercises the Idle -> Charging transition and so never proves solar_hold_min is actually
+    threaded through (unlike Captar's own cooldown_minutes proof below) -- solar_hold_min is
+    a distinct config field from solar_cooldown_min, threaded to a different step() parameter,
+    so the cooldown proof alone doesn't cover it."""
+    config = _config(solar_hold_min=1.0, min_current=6.0)  # 1 min -- distinct from every other
+    # test in this file, so a stray fresh-config default or a hold_minutes/cooldown_minutes
+    # swap at the call site would fail this, not pass it by coincidence.
+    handler = _SolarModeHandler(config)
+    hold_state = solar.SolarState(Phase.HOLD, phase_started_at=0.0)
+
+    # Below hold_minutes (60s) -- still holding at min_a, not yet Cooldown.
+    ctx_before = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=59.0, surplus_w=0.0
+    )
+    current, state = handler.desired_current(ctx_before, hold_state)
+    assert current == config.min_current
+    assert state.phase == Phase.HOLD
+
+    # Past hold_minutes -- transitions to Cooldown.
+    ctx_after = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=61.0, surplus_w=0.0
+    )
+    current, state = handler.desired_current(ctx_after, hold_state)
+    assert current == 0.0
+    assert state.phase == Phase.COOLDOWN
+
+
+def test_solar_only_mode_handler_threads_hold_minutes():
+    """Companion to test_solar_only_mode_handler_delegates_to_modes_solar_only_step above --
+    same gap as test_solar_mode_handler_threads_hold_minutes above, for solar_only_hold_min
+    (a config field distinct from Solar's own solar_hold_min, R2)."""
+    config = _config(solar_only_hold_min=1.0, min_current=6.0)  # 1 min -- distinct from every
+    # other test in this file (same rationale as the Solar test above).
+    handler = _SolarOnlyModeHandler(config)
+    hold_state = solar_only.SolarOnlyState(Phase.HOLD, phase_started_at=0.0)
+
+    # Below hold_minutes (60s) -- still holding at min_a, not yet Cooldown.
+    ctx_before = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=59.0, surplus_w=0.0
+    )
+    current, state = handler.desired_current(ctx_before, hold_state)
+    assert current == config.min_current
+    assert state.phase == Phase.HOLD
+
+    # Past hold_minutes -- transitions to Cooldown.
+    ctx_after = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=61.0, surplus_w=0.0
+    )
+    current, state = handler.desired_current(ctx_after, hold_state)
+    assert current == 0.0
+    assert state.phase == Phase.COOLDOWN
 
 
 def test_captar_mode_handler_delegates_to_modes_captar_step():

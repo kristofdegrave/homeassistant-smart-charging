@@ -8,7 +8,10 @@ from custom_components.smart_charging.modes.solar_only import SolarOnlyState, st
 
 DEFAULTS = dict(
     start_threshold_w=1300.0,
+    min_a=6.0,
+    hold_minutes=1.0,
     cooldown_minutes=2.0,
+    debounce_minutes=1.0,
     strategy=ROUND_DOWN,
     midpoint=0.5,
 )
@@ -53,12 +56,46 @@ def test_starts_at_threshold_default_round_down_never_imports():
     assert desired == 6.0
 
 
-def test_immediate_stop_no_hold_no_grid_fallback():
+def test_surplus_drop_enters_hold_not_immediate_stop():
+    # R2/UC02 3a (post-#749): SolarOnly no longer stops immediately -- it holds at min_a
+    # first, drawing any shortfall from the grid for the bounded hold period.
     state = SolarOnlyState.idle()
-    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)  # -> charging
     desired, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)
+    assert state.phase == Phase.HOLD
+    assert desired == DEFAULTS["min_a"]  # flat min_a -- no grid fallback, unlike Solar's hold
+
+
+def test_hold_set_point_is_flat_min_a_not_recomputed_ideal():
+    # The one behavioral difference from Solar's Hold (issue #755): SolarOnly has no
+    # ongoing grid fallback, so its hold set-point never recomputes an ideal current --
+    # it's always the flat minimum, regardless of how much surplus remains during hold.
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)  # -> charging
+    _, state = step(surplus_w=800.0, state=state, now=10.0, **DEFAULTS)  # -> hold, surplus > 0
+    assert state.phase == Phase.HOLD
+    desired, state = step(surplus_w=800.0, state=state, now=20.0, **DEFAULTS)
+    assert desired == DEFAULTS["min_a"]  # not round_down(800/230)=3.0 -- flat min_a while holding
+    assert state.phase == Phase.HOLD
+
+
+def test_hold_then_resume_within_period():
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)  # -> charging
+    _, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)  # -> hold
+    assert state.phase == Phase.HOLD
+    desired, state = step(surplus_w=1400.0, state=state, now=30.0, **DEFAULTS)  # within 1 min
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_hold_elapses_into_cooldown_then_idle():
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)  # -> charging
+    _, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)  # -> hold @ t=10
+    desired, state = step(surplus_w=500.0, state=state, now=10.0 + 60, **DEFAULTS)
     assert desired == 0.0
-    assert state.phase == Phase.COOLDOWN  # not "hold" -- SolarOnly has no hold phase
+    assert state.phase == Phase.COOLDOWN
 
 
 def test_round_up_strategy_configured():
@@ -85,11 +122,16 @@ def test_round_nearest_strategy_threaded_through():
 
 def test_cooldown_blocks_restart_until_elapsed():
     state = SolarOnlyState.idle()
-    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)
-    _, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)  # -> cooldown @ t=10
-    desired, state = step(surplus_w=1400.0, state=state, now=10.0 + 60, **DEFAULTS)
-    assert desired == 0.0 and state.phase == Phase.COOLDOWN
-    desired, state = step(surplus_w=1400.0, state=state, now=10.0 + 2 * 60 + 1, **DEFAULTS)
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)  # -> charging
+    _, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)  # -> hold @ t=10
+    _, state = step(surplus_w=500.0, state=state, now=10.0 + 60, **DEFAULTS)  # hold elapses
+    cooldown_start = 10.0 + 60
+    desired, state = step(surplus_w=1400.0, state=state, now=cooldown_start + 30, **DEFAULTS)
+    assert desired == 0.0
+    assert state.phase == Phase.COOLDOWN  # still within the 2 min cooldown
+    desired, state = step(
+        surplus_w=1400.0, state=state, now=cooldown_start + 2 * 60 + 1, **DEFAULTS
+    )
     assert state.phase == Phase.CHARGING
 
 
@@ -97,8 +139,10 @@ def test_cooldown_elapses_into_idle_without_qualifying_surplus():
     # UC02's state table (Cooldown row): cooldown elapsed & surplus < start threshold -> Idle.
     state = SolarOnlyState.idle()
     _, state = step(surplus_w=1400.0, state=state, now=0.0, **DEFAULTS)  # -> charging
-    _, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)  # -> cooldown @ t=10
-    desired, state = step(surplus_w=500.0, state=state, now=10.0 + 2 * 60 + 1, **DEFAULTS)
+    _, state = step(surplus_w=500.0, state=state, now=10.0, **DEFAULTS)  # -> hold @ t=10
+    _, state = step(surplus_w=500.0, state=state, now=10.0 + 60, **DEFAULTS)  # hold elapses
+    cooldown_start = 10.0 + 60
+    desired, state = step(surplus_w=500.0, state=state, now=cooldown_start + 2 * 60 + 1, **DEFAULTS)
     assert desired == 0.0
     assert state.phase == Phase.IDLE
 
@@ -116,3 +160,72 @@ def test_unknown_phase_raises_value_error():
     bad_state = SolarOnlyState(phase="bogus")
     with pytest.raises(ValueError, match="unknown SolarOnlyState.phase"):
         step(surplus_w=1400.0, state=bad_state, now=0.0, **DEFAULTS)
+
+
+# --- has-charged flag / restart debounce (R11, issue #757, shared with sibling Solar) ---
+
+
+def test_connections_first_start_is_immediate_no_debounce():
+    desired, state = step(
+        surplus_w=1400.0, state=SolarOnlyState.idle(), now=0.0, has_charged=False, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_later_idle_crossing_debounces_once_has_charged_is_set():
+    state = SolarOnlyState.idle()
+    desired, state = step(surplus_w=1400.0, state=state, now=0.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0
+    desired, state = step(surplus_w=1400.0, state=state, now=30.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING  # debounce period (1 min) not yet elapsed
+    desired, state = step(surplus_w=1400.0, state=state, now=60.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_debounce_resets_to_idle_on_drop_below_threshold():
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    desired, state = step(surplus_w=500.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert desired == 0.0
+    assert state.phase == Phase.IDLE
+
+
+def test_cooldown_elapsed_resume_at_threshold_is_immediate_even_when_has_charged():
+    state = SolarOnlyState.idle()
+    _, state = step(surplus_w=1400.0, state=state, now=0.0, has_charged=False, **DEFAULTS)
+    _, state = step(surplus_w=500.0, state=state, now=10.0, has_charged=True, **DEFAULTS)  # hold
+    cooldown_enter = 10.0 + 60
+    _, state = step(surplus_w=500.0, state=state, now=cooldown_enter, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.COOLDOWN
+    cooldown_elapsed = cooldown_enter + 2 * 60 + 1
+    desired, state = step(
+        surplus_w=1400.0, state=state, now=cooldown_elapsed, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_resumed_state_at_threshold_is_immediate_even_when_has_charged():
+    # issue #757/UC02's `SocReached -> Charging` transition -- see the sibling Solar test
+    # of the same name for the full rationale.
+    desired, state = step(
+        surplus_w=1400.0, state=SolarOnlyState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_resumed_state_below_threshold_lands_in_idle_debounce_eligible():
+    # issue #757/UC02's `SocReached -> Idle` transition -- see the sibling Solar test of the
+    # same name for the full rationale.
+    _, state = step(
+        surplus_w=500.0, state=SolarOnlyState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.IDLE
+    desired, state = step(surplus_w=1400.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0

@@ -154,6 +154,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # SolarStepUpGate owns the SolarStepUpState itself; `.state` is a plain mutable
         # attribute, same seeding pattern as before via `self._step_up_gate.state = ...`.
         self._step_up_gate = SolarStepUpGate()
+        # R11's has-charged flag (issue #757), owned outside `_mode_state` for the exact same
+        # structural reason as `_step_up_gate` above: `_reset_mode_state_if_changed`/
+        # `_fresh_mode_state` rebuild EVERY SOC-gated mode's state on any mode switch,
+        # including a Solar<->SolarOnly switch -- but per R11/system-overview.md's
+        # `has-charged flag` glossary entry, this flag must survive exactly that switch (it's
+        # scoped to the connection, not the active mode). A plain bool suffices here, unlike
+        # `SolarStepUpState`'s own richer shape -- there's no per-mode data to carry, only a
+        # single flip-once-per-connection bit. Set True in `_dispatch_mode` the first time a
+        # solar mode's own step() transitions into Phase.CHARGING while it was False; cleared
+        # back to False only on disconnect (`_dispatch_mode`'s own early branch) -- a fresh
+        # coordinator instance (a restart) already starts at False for free, so there is
+        # nothing to persist/restore for that case (R11's third clearing condition).
+        self._has_charged: bool = False
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
@@ -468,6 +481,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             now=now,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
+            # R11/issue #757: mirrors this cycle's has-charged flag onto ctx so
+            # _SolarModeHandler/_SolarOnlyModeHandler (coordinator_cycle.py) can read it without
+            # either the ModeHandler Protocol or CycleContext's construction elsewhere needing
+            # to know about it -- _dispatch_mode (below) flips self._has_charged itself, off
+            # this same ctx's is_solar_mode/new-state-phase check.
+            has_charged=self._has_charged,
         )
         # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
         # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
@@ -833,6 +852,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
             # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
             self._mode_state = self._fresh_mode_state()
+            # R11/issue #757: disconnect also clears the has-charged flag (system-overview.md's
+            # `has-charged flag` glossary entry) -- the next connection is a fresh session's
+            # first start. Deliberately NOT touched by `_reset_mode_state_if_changed` (the
+            # mode-switch reset) -- see this coordinator's own `_has_charged` field docstring.
+            self._has_charged = False
             return 0.0
         if self.active_mode == MODE_OFF:
             return 0.0
@@ -846,20 +870,45 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return desired
         handler = self._mode_handlers[self.active_mode]
         if handler.is_soc_gated and ctx.ev_soc >= ctx.active_soc_limit:
-            # R7: don't resume until the gate clears. Holding the state at idle() (rather than
-            # dispatching into step()) means the next cycle where this branch stops matching --
-            # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
-            # idle(), re-checking the start threshold normally. No latch, no separate phase.
-            self._mode_state[self.active_mode] = handler.idle_state()
+            # R7: don't resume until the gate clears. Holding the state at resume_state()
+            # (rather than dispatching into step()) means the next cycle where this branch
+            # stops matching -- because soc_limit_override rose (resume condition 1) --
+            # dispatches fresh from that state, re-checking the start threshold normally. No
+            # latch, no SocReached phase of its own (UC01/UC02's state model draws one, but
+            # M1 keeps every mode module opinion-free about SOC, per solar.py's own module
+            # docstring). For Solar/SolarOnly, resume_state() is an already-elapsed Cooldown
+            # (ModeState.resumed()) rather than a genuine idle_state() -- that's what makes a
+            # SocReached resume exempt from R11's restart debounce when the start threshold is
+            # already met (immediate, never having passed through Idle), and correctly
+            # debounce-eligible the next time around when it isn't (UC01/UC02's own
+            # `SocReached -> Idle` transition). This is distinct from #752 (still open), which
+            # is about the STOP side -- whether reaching the limit should itself go through a
+            # hold before cutting to 0 A -- not this RESUME side, which #757 already decided.
+            self._mode_state[self.active_mode] = handler.resume_state()
             return 0.0
         # ADR-0012: one ModeHandler registry lookup replaces the old per-mode if/elif chain
         # (MODE_SOLAR/MODE_SOLAR_ONLY/MODE_CAPTAR -- the only modes that can still reach this
         # branch, since MODE_OFF/MODE_POWER/the SOC-gated-stop guard above all handle their own
         # case first). Each handler wraps its modes/*.py step()/desired_current() unchanged;
         # only the lookup mechanism changed.
-        desired, self._mode_state[self.active_mode] = handler.desired_current(
-            ctx, self._mode_state.get(self.active_mode)
-        )
+        desired, new_state = handler.desired_current(ctx, self._mode_state.get(self.active_mode))
+        self._mode_state[self.active_mode] = new_state
+        # R11/issue #757: flips the has-charged flag the first time a solar mode's own step()
+        # actually transitions into Phase.CHARGING while it was still False -- step() itself
+        # stays pure/stateless about this flag (it only reads ctx.has_charged), so the
+        # coordinator is the one place that decides when the connection's first-ever start
+        # happened. `handler.is_solar_mode` excludes Captar, which has no has-charged/debounce
+        # concept (R11) even though its state also carries a `.phase` attribute.
+        #
+        # Deliberately latches on the raw phase transition here, before `_apply_peak_clamp`/
+        # `_apply_grid_ceiling_clamp` run in `_run_cycle` -- so a same-cycle force-stop to 0 A
+        # by either clamp can still leave the flag set even though nothing was actually
+        # delivered. Moving the flip to after both clamps would mean threading `new_state`
+        # (or a second phase check) through `_run_cycle` and both clamp methods, which live
+        # in separate methods from this one -- left as-is rather than risk a subtler behavior
+        # change this late; revisit only if a real deadlock/regression traces back to it.
+        if handler.is_solar_mode and not self._has_charged and new_state.phase == Phase.CHARGING:
+            self._has_charged = True
         return desired
 
     def _apply_peak_clamp(self, ctx: CycleContext, desired: float) -> float:
@@ -925,7 +974,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         or not the incoming mode is one of them (a state nobody is dispatching to is inert
         either way). Idempotent -- a no-op once `_last_active_mode` catches up, so calling
         this twice in the same cycle (Manual's change is already final at the top of the
-        cycle; Auto's own mode isn't resolved until later) never double-resets."""
+        cycle; Auto's own mode isn't resolved until later) never double-resets.
+
+        Deliberately leaves `self._has_charged` untouched (issue #757) -- unlike every timer
+        in `_mode_state`, the has-charged flag is scoped to the connection, not the active
+        mode (R11), so a Solar<->SolarOnly switch must not reset it. See `_has_charged`'s own
+        field docstring for where it IS reset (disconnect, `_dispatch_mode`)."""
         if self.active_mode != self._last_active_mode:
             self._mode_state = self._fresh_mode_state()
             self._last_active_mode = self.active_mode
@@ -1022,6 +1076,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             active_soc_limit=active_soc_limit,
+            # Deliberately NOT threaded from `self._has_charged` (unlike the real
+            # `_run_cycle`-constructed ctx) -- left at CycleContext's own default (False).
+            # See `test_baseline_dry_run_ignores_has_charged_after_escalation_deadlock` for
+            # the full deadlock scenario this avoids.
+            has_charged=False,
         )
         current, _ = self._mode_handlers[mode].desired_current(ctx, self._mode_state.get(mode))
         return current

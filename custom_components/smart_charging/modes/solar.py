@@ -1,13 +1,24 @@
 """Solar charging-mode engine (E1 -- UC01). Pure -- no HA imports (ADR-0006/0009).
 
-State machine: Idle -> Charging -> Hold -> Cooldown, per UC01's state model, MINUS
-the SocReached phase UC01's own diagram draws -- that transition is entirely the
-coordinator's responsibility (M1), not this module's (see design doc §5's "Where
-the SOC gate itself lives"): a mode "has no opinion on why the limit is where it
-is" (R7), so it is never told SOC was reached at all -- the coordinator simply
-stops calling step() and holds this state at idle() for as long as the gate holds.
-State is a small frozen dataclass threaded by the coordinator -- this module holds
-nothing itself; `now` (seconds, monotonic) is always injected.
+State machine: Idle -> [Debouncing] -> Charging -> Hold -> Cooldown, per UC01's state
+model, MINUS the SocReached phase UC01's own diagram draws -- that transition is
+entirely the coordinator's responsibility (M1), not this module's (see design doc
+§5's "Where the SOC gate itself lives"): a mode "has no opinion on why the limit is
+where it is" (R7), so it is never told SOC was reached at all -- the coordinator
+simply stops calling step() and holds this state at idle() for as long as the gate
+holds. State is a small frozen dataclass threaded by the coordinator -- this module
+holds nothing itself; `now` (seconds, monotonic) is always injected.
+
+`Debouncing` (R11/UC01 2b, issue #757) is a sub-state of Idle: `has_charged` is the
+coordinator's own has-charged flag, read-only here -- this module has no opinion on
+*when* that flag is set (the coordinator flips it after observing a fresh
+Idle/Debouncing -> Charging transition) or *why* it's cleared (disconnect/restart,
+never a mode switch or reaching the SOC limit -- both the coordinator's concern,
+same "has no opinion" shape as R7's SOC limit above). Before the flag is set, a
+threshold crossing while Idle starts charging immediately; once set, it must hold
+for `debounce_minutes` first. A resume straight from `Cooldown` with the threshold
+already met is exempt -- it never passes through `Idle` at all, so there is no
+crossing to debounce.
 """
 
 from __future__ import annotations
@@ -35,6 +46,8 @@ def step(
     min_a: float,
     hold_minutes: float,
     cooldown_minutes: float,
+    debounce_minutes: float,
+    has_charged: bool = False,
     voltage: float = 230.0,
 ) -> tuple[float, SolarState]:
     """Return (desired_current, next_state) for one control cycle (UC01).
@@ -46,15 +59,35 @@ def step(
     surplus yields a large ideal current, uncapped here) -- E8 remains the single
     place the upper bound is enforced, avoiding a second, redundant clamp site for
     the same invariant.
+
+    `has_charged` defaults to False (the connection's first-ever start, immediate,
+    no debounce) -- see the module docstring for who owns setting/clearing it.
     """
     ideal_a = surplus_w / voltage
 
-    if state.phase in (Phase.IDLE, Phase.COOLDOWN):
-        is_cooldown_done = cooldown_done(state, now, cooldown_minutes)
-        if surplus_w >= start_threshold_w and is_cooldown_done:
+    if state.phase == Phase.COOLDOWN:
+        if not cooldown_done(state, now, cooldown_minutes):
+            return 0.0, state
+        if surplus_w >= start_threshold_w:
+            # Already met the moment Cooldown elapses -- never passes through Idle,
+            # so no debounce applies here regardless of has_charged (UC01 2b's exemption).
             return _charging_setpoint(ideal_a, min_a), SolarState(Phase.CHARGING, now)
-        if state.phase == Phase.COOLDOWN and is_cooldown_done:
+        return 0.0, SolarState.idle()
+
+    if state.phase == Phase.IDLE:
+        if surplus_w < start_threshold_w:
+            return 0.0, state
+        if not has_charged:
+            return _charging_setpoint(ideal_a, min_a), SolarState(Phase.CHARGING, now)
+        return 0.0, SolarState(Phase.DEBOUNCING, now)  # RestartDebounceStarted (UC01 2b)
+
+    if state.phase == Phase.DEBOUNCING:
+        if surplus_w < start_threshold_w:
+            # Blip below threshold before the debounce elapsed -- discard the timer,
+            # a fresh crossing later starts a fresh one (R11).
             return 0.0, SolarState.idle()
+        if now - state.phase_started_at >= debounce_minutes * 60:
+            return _charging_setpoint(ideal_a, min_a), SolarState(Phase.CHARGING, now)
         return 0.0, state
 
     if state.phase == Phase.CHARGING:

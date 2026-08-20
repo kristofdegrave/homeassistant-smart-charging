@@ -7,6 +7,12 @@ later mode engine with the same Idle/Charging/[Hold]/Cooldown shape, e.g. UC03's
 still defines its own valid subset and its own transition rules -- only the names
 are shared. `SocReached` is deliberately absent -- see `modes/solar.py`'s module
 docstring for why that phase is the coordinator's responsibility, not a mode's.
+
+`DEBOUNCING` (R11, issue #757) is a `Solar`/`SolarOnly`-only sub-state of `Idle`: once
+the has-charged flag is set for the connection, a start-threshold crossing while
+dwelling in `Idle` must hold for the restart-debounce period before charging actually
+starts. `Captar`/`Power` never use it -- their own start conditions aren't derived
+from a fluctuating sensor reading, so there is nothing to debounce (R11).
 """
 
 from enum import StrEnum
@@ -17,3 +23,4 @@ class Phase(StrEnum):
     CHARGING = "charging"
     HOLD = "hold"
     COOLDOWN = "cooldown"
+    DEBOUNCING = "debouncing"

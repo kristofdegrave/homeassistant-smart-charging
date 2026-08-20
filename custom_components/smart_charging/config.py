@@ -48,6 +48,8 @@ class SmartChargingConfig:
     solar_start_threshold_w: float
     solar_only_start_threshold_w: float
     solar_hold_min: float
+    solar_only_hold_min: float
+    solar_restart_debounce_min: float
     solar_cooldown_min: float
     solar_only_strategy: str
     solar_only_midpoint: float

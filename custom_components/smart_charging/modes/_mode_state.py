@@ -29,6 +29,22 @@ class ModeState:
     def idle(cls) -> Self:
         return cls(phase=Phase.IDLE)
 
+    @classmethod
+    def resumed(cls) -> Self:
+        """A state that behaves as an already-elapsed `Cooldown` -- used by the coordinator
+        when a controlled stop it owns (the SOC gate holding a mode at the active limit,
+        UC01/UC02's `SocReached`) releases. `Solar`/`SolarOnly`'s own `Cooldown` branch
+        already treats "the timer elapsed with the threshold already met" as exempt from the
+        restart debounce (never having passed through `Idle` at all) -- reusing that same
+        exemption here, via `float("-inf")` (always elapsed, regardless of `now` or
+        `cooldown_minutes`), gives a `SocReached` resume the identical immediate-if-met/
+        debounce-eligible-otherwise behavior the UC01/UC02 state models specify for it,
+        without either mode needing an opinion on SOC (`solar.py`'s own module docstring) or a
+        `SocReached` phase of its own. Behaviorally identical to `idle()` for `Captar` (whose
+        `step()` treats `Idle`/`Cooldown` identically) and unused by `Off`/`Power` (neither is
+        ever stored in `_mode_state`)."""
+        return cls(phase=Phase.COOLDOWN, phase_started_at=float("-inf"))
+
 
 def cooldown_done(state: ModeState, now: float, cooldown_minutes: float) -> bool:
     """True once a Cooldown phase has elapsed `cooldown_minutes` -- or immediately for

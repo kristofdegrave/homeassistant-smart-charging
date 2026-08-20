@@ -82,6 +82,12 @@ class CycleContext:
     sun_is_down: bool = False
     low_tariff_active: bool = True
     solar_reserve_active: bool = False
+    # R11/issue #757: the coordinator's own has-charged flag (HasChargedFlag, owned outside
+    # `_mode_state` so it survives a Solar<->SolarOnly mode switch -- see coordinator.py's own
+    # field docstring), mirrored onto ctx each cycle so `_SolarModeHandler`/`_SolarOnlyModeHandler`
+    # can read it without `CycleContext`/`ModeHandler` growing a has-charged-specific parameter
+    # of their own. False default matters only before `_run_cycle` assigns the real value.
+    has_charged: bool = False
 
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place
@@ -139,11 +145,11 @@ class ModeHandler(Protocol):
     unchanged (ADR-0012) -- this decision only changes how the coordinator looks one up, not
     any mode module's own logic.
 
-    `is_soc_gated`/`is_solar_mode`/`idle_state()` carry the per-mode facts the coordinator
-    used to branch on by name (`_SOC_GATED_MODES`/`_SOLAR_MODES` tuples, and a
-    Captar-vs-solar ternary picking each mode's idle state). Adding a mode with one of these
-    properties now means giving its handler the right value/method, not adding a new branch
-    or extending a tuple at every call site."""
+    `is_soc_gated`/`is_solar_mode`/`idle_state()`/`resume_state()` carry the per-mode facts
+    the coordinator used to branch on by name (`_SOC_GATED_MODES`/`_SOLAR_MODES` tuples, and a
+    Captar-vs-solar ternary picking each mode's idle/resume state). Adding a mode with one of
+    these properties now means giving its handler the right value/method, not adding a new
+    branch or extending a tuple at every call site."""
 
     is_soc_gated: bool
     """R7: whether SOC reaching the active limit stops this mode. False for Off/Power."""
@@ -157,9 +163,18 @@ class ModeHandler(Protocol):
         ...
 
     def idle_state(self) -> Any:
-        """This mode's fresh/idle per-mode state (R7/R11) -- what disconnect, a mode switch,
-        and the SOC gate all reset to. Only ever read when `is_soc_gated` is True; Off/Power
-        return None since neither is ever stored in `_mode_state`."""
+        """This mode's fresh/idle per-mode state (R7/R11) -- what disconnect and a mode switch
+        reset to. Only ever read when `is_soc_gated` is True; Off/Power return None since
+        neither is ever stored in `_mode_state`."""
+        ...
+
+    def resume_state(self) -> Any:
+        """This mode's state for a `SocReached` resume (R7/UC01/UC02) -- what the SOC gate
+        itself resets to while it holds, and what dispatch reads from the cycle it releases.
+        Distinct from `idle_state()` for `Solar`/`SolarOnly` (issue #757's `SocReached ->
+        Charging`/`SocReached -> Idle` transitions are exempt from the restart debounce,
+        `_mode_state.py::ModeState.resumed()`'s own docstring); identical to `idle_state()`
+        for every other mode. Only ever read when `is_soc_gated` is True."""
         ...
 
 
@@ -175,6 +190,9 @@ class _OffModeHandler:
         return 0.0, state
 
     def idle_state(self) -> None:
+        return None
+
+    def resume_state(self) -> None:
         return None
 
 
@@ -194,6 +212,9 @@ class _PowerModeHandler:
         return power.desired_current(self._target_current_getter(), ctx.status), state
 
     def idle_state(self) -> None:
+        return None
+
+    def resume_state(self) -> None:
         return None
 
 
@@ -217,11 +238,16 @@ class _SolarModeHandler:
             min_a=self._config.min_current,
             hold_minutes=self._config.solar_hold_min,
             cooldown_minutes=self._config.solar_cooldown_min,
+            debounce_minutes=self._config.solar_restart_debounce_min,
+            has_charged=ctx.has_charged,
             voltage=ctx.voltage,
         )
 
     def idle_state(self) -> solar.SolarState:
         return solar.SolarState.idle()
+
+    def resume_state(self) -> solar.SolarState:
+        return solar.SolarState.resumed()
 
 
 class _SolarOnlyModeHandler:
@@ -241,14 +267,21 @@ class _SolarOnlyModeHandler:
             state,
             ctx.now,
             start_threshold_w=self._config.solar_only_start_threshold_w,
+            min_a=self._config.min_current,
+            hold_minutes=self._config.solar_only_hold_min,
             cooldown_minutes=self._config.solar_cooldown_min,
+            debounce_minutes=self._config.solar_restart_debounce_min,
             strategy=self._config.solar_only_strategy,
             midpoint=self._config.solar_only_midpoint,
+            has_charged=ctx.has_charged,
             voltage=ctx.voltage,
         )
 
     def idle_state(self) -> solar_only.SolarOnlyState:
         return solar_only.SolarOnlyState.idle()
+
+    def resume_state(self) -> solar_only.SolarOnlyState:
+        return solar_only.SolarOnlyState.resumed()
 
 
 class _CaptarModeHandler:
@@ -271,6 +304,12 @@ class _CaptarModeHandler:
         )
 
     def idle_state(self) -> captar.CaptarState:
+        return captar.CaptarState.idle()
+
+    def resume_state(self) -> captar.CaptarState:
+        # Captar's own step() treats Idle/Cooldown identically (both are cooldown_done()
+        # immediately-eligible) -- no has-charged/debounce concept to be exempt from, so this
+        # is behaviorally identical to idle_state(), unlike its Solar/SolarOnly siblings.
         return captar.CaptarState.idle()
 
 

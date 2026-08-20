@@ -10,6 +10,7 @@ DEFAULTS = dict(
     min_a=6.0,
     hold_minutes=5.0,
     cooldown_minutes=2.0,
+    debounce_minutes=1.0,
 )
 
 
@@ -111,3 +112,89 @@ def test_non_default_voltage_changes_ideal_current():
 def test_unknown_phase_raises_value_error():
     with pytest.raises(ValueError, match="unknown SolarState.phase"):
         step(surplus_w=0.0, state=SolarState("bogus"), now=0.0, **DEFAULTS)
+
+
+# --- has-charged flag / restart debounce (R11, issue #757) ---
+
+
+def test_connections_first_start_is_immediate_no_debounce():
+    # Before the has-charged flag is ever set, Idle starts charging as soon as the
+    # threshold is met, with no debounce (system-overview.md's `restart debounce` entry).
+    desired, state = step(
+        surplus_w=2300.0, state=SolarState.idle(), now=0.0, has_charged=False, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_later_idle_crossing_debounces_once_has_charged_is_set():
+    # UC01 2b: once has_charged is True, a threshold crossing while dwelling in Idle must
+    # hold for the restart debounce period before charging actually starts.
+    state = SolarState.idle()
+    desired, state = step(surplus_w=2300.0, state=state, now=0.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0
+    # Still below the debounce period (1 min) -- stays Debouncing.
+    desired, state = step(surplus_w=2300.0, state=state, now=30.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0
+    # Debounce period elapsed with surplus still at/above threshold -> Charging.
+    desired, state = step(surplus_w=2300.0, state=state, now=60.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_debounce_resets_to_idle_on_drop_below_threshold():
+    # UC01 2b: a blip below the threshold before the debounce elapses discards the timer --
+    # the System remains Idle, not Debouncing, and a fresh crossing starts a fresh timer.
+    state = SolarState.idle()
+    _, state = step(surplus_w=2300.0, state=state, now=0.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    desired, state = step(surplus_w=50.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert desired == 0.0
+    assert state.phase == Phase.IDLE
+
+
+def test_cooldown_elapsed_resume_at_threshold_is_immediate_even_when_has_charged():
+    # UC01 2b's exemption: a resume straight from Cooldown, with the threshold already met
+    # the moment cooldown elapses, never passes through Idle -- so no debounce applies,
+    # regardless of has_charged.
+    state = SolarState.idle()
+    _, state = step(
+        surplus_w=2300.0, state=state, now=0.0, has_charged=False, **DEFAULTS
+    )  # charging
+    _, state = step(surplus_w=50.0, state=state, now=10.0, has_charged=True, **DEFAULTS)  # hold
+    cooldown_enter = 10.0 + 5 * 60
+    _, state = step(surplus_w=50.0, state=state, now=cooldown_enter, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.COOLDOWN
+    cooldown_elapsed = cooldown_enter + 2 * 60 + 1
+    desired, state = step(
+        surplus_w=2300.0, state=state, now=cooldown_elapsed, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_resumed_state_at_threshold_is_immediate_even_when_has_charged():
+    # issue #757/UC01's `SocReached -> Charging` transition: the coordinator dispatches a
+    # SocReached resume via SolarState.resumed() (an already-elapsed Cooldown), not a genuine
+    # idle() -- so, exactly like the Cooldown-elapsed case above, a resume with the threshold
+    # already met is immediate regardless of has_charged.
+    desired, state = step(
+        surplus_w=2300.0, state=SolarState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_resumed_state_below_threshold_lands_in_idle_debounce_eligible():
+    # issue #757/UC01's `SocReached -> Idle` transition: if the threshold isn't met the
+    # moment the gate releases, the resume lands in Idle -- has_charged stays set, so the
+    # *next* crossing debounces normally (unlike the immediate case above).
+    _, state = step(
+        surplus_w=50.0, state=SolarState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.IDLE
+    desired, state = step(surplus_w=2300.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0
