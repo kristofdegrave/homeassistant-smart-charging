@@ -249,10 +249,13 @@ async def test_uc02_main_success_starts_and_recomputes_with_round_down_default(h
     assert calls[-1]["value"] == 12.0
 
 
-async def test_uc02_3a_surplus_below_threshold_stops_immediately_no_hold_no_fallback(hass):
-    """UC02 alternate 3a: surplus falling below the start threshold stops charging (0 A)
-    within one cycle -- no hold, and no grid fallback to the minimum current, unlike the
-    sibling UC01.
+async def test_uc02_3a_surplus_below_threshold_holds_then_stops_no_ongoing_fallback(hass):
+    """UC02 alternate 3a (post-#755): surplus falling below the start threshold no longer
+    stops charging immediately -- it holds at the minimum current first (the one bounded
+    exception to SolarOnly's zero-grid-import guarantee), then stops (0 A) and starts the
+    cooldown only once the hold period elapses without surplus recovering. Unlike the
+    sibling UC01, there is still no *ongoing* grid fallback while `Charging` -- the hold
+    below is the only, time-bounded circumstance in which SolarOnly draws from the grid.
 
     (UC02's alternate 2a -- cooldown blocks a restart -- has no dedicated end-to-end test
     here: it's the same idle/cooldown-gate code path already proven end-to-end by UC01's
@@ -264,10 +267,10 @@ async def test_uc02_3a_surplus_below_threshold_stops_immediately_no_hold_no_fall
     assert calls[-1]["value"] == 8.0
 
     # surplus = 500 W, below the 1300 W threshold -- and also below the min-current's
-    # 1380 W, so a grid-fallback floor (UC01's behaviour) would have held at 6 A.
+    # 1380 W. Enters the hold at the minimum current, not an immediate stop.
     await _cycle(hass, coordinator, charger_w=500.0)
-    assert calls[-1]["value"] == 0.0
-    assert coordinator._mode_state[MODE_SOLAR_ONLY].phase == Phase.COOLDOWN
+    assert calls[-1]["value"] == 6.0
+    assert coordinator._mode_state[MODE_SOLAR_ONLY].phase == Phase.HOLD
 
 
 async def test_uc02_3b_round_up_strategy_accepts_bounded_grid_import(hass):

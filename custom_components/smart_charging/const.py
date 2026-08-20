@@ -232,7 +232,11 @@ CONF_SMOOTHING_WINDOW = "smoothing_window"  # R10 rolling-window sample count
 CONF_SOLAR_START_THRESHOLD_W = "solar_start_threshold_w"  # R1 (Solar)
 CONF_SOLAR_ONLY_START_THRESHOLD_W = "solar_only_start_threshold_w"  # R2 (SolarOnly)
 CONF_SOLAR_HOLD_MIN = "solar_hold_min"  # R1 post-surplus hold duration
+CONF_SOLAR_ONLY_HOLD_MIN = "solar_only_hold_min"  # R2 post-surplus hold duration
 CONF_SOLAR_COOLDOWN_MIN = "solar_cooldown_min"  # R1/R2 cooldown duration
+# R11: shared by Solar/SolarOnly -- once the has-charged flag is set, a start-threshold
+# crossing while dwelling in Idle must hold for this long before charging actually starts.
+CONF_SOLAR_RESTART_DEBOUNCE_MIN = "solar_restart_debounce_min"
 CONF_SOLAR_ONLY_STRATEGY = "solar_only_strategy"  # R2: ROUND_UP | ROUND_DOWN | ROUND_NEAREST
 CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"  # R2 round_nearest fractional threshold
 # Config-flow-time default for the "Default charge limit" number entity's initial value
@@ -273,7 +277,9 @@ DEFAULT_SMOOTHING_WINDOW = 4
 DEFAULT_SOLAR_START_THRESHOLD_W = 150.0
 DEFAULT_SOLAR_ONLY_START_THRESHOLD_W = 1300.0
 DEFAULT_SOLAR_HOLD_MIN = 5.0
+DEFAULT_SOLAR_ONLY_HOLD_MIN = 1.0
 DEFAULT_SOLAR_COOLDOWN_MIN = 2.0
+DEFAULT_SOLAR_RESTART_DEBOUNCE_MIN = 1.0
 DEFAULT_SOLAR_ONLY_STRATEGY = ROUND_DOWN
 DEFAULT_SOLAR_ONLY_MIDPOINT = 0.5  # fraction 0-1 (R2 round_nearest), not a percent
 DEFAULT_SOC_LIMIT = 80.0  # percent, 50-100 (R6) -- range enforced by `SocLimitOverrideNumber`
