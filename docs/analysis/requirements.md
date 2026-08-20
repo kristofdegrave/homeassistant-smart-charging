@@ -26,7 +26,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R2 — Solar-only charging
 
 **Priority:** Must
-**What:** When `SolarOnly` mode is active, the system charges the car exclusively from solar surplus, holding at the minimum charging current for a brief, bounded period to ride out a passing cloud rather than stopping outright — but otherwise never draws supplementary power from the grid.
+**What:** When `SolarOnly` mode is active, the system charges the car from solar surplus and never draws supplementary power from the grid, save for a brief, bounded hold at the minimum charging current to ride out a passing cloud rather than stopping outright.
 
 **Acceptance criteria:**
 
@@ -168,11 +168,11 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R11 — Rapid cycling prevention
 
 **Priority:** Must
-**What:** The system prevents the charger from starting and stopping in quick succession, and from cutting current straight to 0 A the moment a stop condition arises, so the car never enters a charging error state.
+**What:** The system prevents the charger from starting and stopping in quick succession, and, for a mode's own ordinary stop conditions, from cutting current straight to 0 A the instant one first arises, so the car never enters a charging error state.
 
 **Acceptance criteria:**
 
-- [ ] When a stop condition first arises (surplus/headroom no longer sufficient to sustain the minimum charging current), the charger holds at the minimum charging current for a mode-specific hold period (configurable; e.g. R1's post-surplus hold, R2's solar-only hold, R3's peak-breach grace period) before actually cutting to 0 A — a momentary or quickly-recovering condition is ridden out rather than triggering an immediate stop.
+- [ ] For a mode's own stop condition (the post-surplus hold, R1/R2, when smoothed surplus falls below the solar start threshold; `Captar`'s own peak-breach grace period, R3), the charger holds at the minimum charging current for that mode-specific hold period before actually cutting to 0 A — a momentary or quickly-recovering condition is ridden out rather than triggering an immediate stop. This criterion is about *when a mode's own logic decides to stop*; it does not apply to the C4 grid-supply-ceiling clamp (a hard safety limit that cuts immediately) or to reaching the active SOC limit (an intentional stop, not a fluctuating condition).
 - [ ] After charging stops, it does not restart until a mode-specific cooldown has fully elapsed (configurable; defaults: 2 minutes for solar modes, 10 minutes for `Captar`).
 - [ ] A cooldown, once started, always runs to completion and is not shortened by a change in conditions.
 - [ ] The charger current is only ever 0 A or at least the minimum charging current, never in between (per C1).

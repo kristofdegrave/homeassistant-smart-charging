@@ -144,7 +144,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`raw value`** — An unsmoothed, most-recent sensor reading; used by peak protection (R3) so a peak breach cannot persist for up to one smoothing window.
 
-**`grid fallback`** — In Solar mode, charging at the minimum charging current using grid power when solar surplus alone cannot sustain it; permitted in Solar mode, explicitly excluded in SolarOnly mode.
+**`grid fallback`** — In `Solar` mode, charging at the minimum charging current on an ongoing basis using grid power when solar surplus alone cannot sustain it. This ongoing fallback is excluded in `SolarOnly` mode; `SolarOnly`'s only grid draw is the time-bounded post-surplus hold (R2), not a sustained fallback the way `Solar` has.
 
 **`amp-step rounding`** — How the System converts a continuous ideal charging current into a whole-ampere set-point each cycle: **round down** (floor to the highest whole ampere that keeps net import at or below the target, leaving any fractional-amp surplus unused), **round up** (ceiling to the next whole ampere, using all available surplus and accepting a small net grid import — bounded to less than one amp-step — to fill the gap), or **round to nearest** (switch to whichever whole ampere is closer to the ideal value, using a configurable midpoint, default 50%; when the ideal value sits exactly at the midpoint this can toggle the set-point between the two amp steps from one cycle to the next — an accepted "pendel" edge case, not actively dampened). `Solar` mode always rounds up (R1, fixed, not configurable). `SolarOnly` mode's strategy is configurable, default round down (R2).
 

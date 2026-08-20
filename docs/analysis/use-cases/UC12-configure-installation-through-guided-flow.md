@@ -61,7 +61,8 @@ variants.
    presents the EV state-of-charge mapping (required by both the solar and CapTar capabilities;
    asked here first) if not already satisfied, the solar-forecast mapping, and only solar's own
    thresholds: the `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and
-   midpoint, the post-surplus hold and solar-mode cooldown durations, the solar step-up size,
+   midpoint, the `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown
+   duration, the solar step-up size,
    trigger gap, and ceiling, and the value the solar-reserve cap seeds together with its forecast
    threshold (3a).
 4. **Given** the installation bills against a capacity tariff, **when** the System shows the

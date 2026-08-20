@@ -4,8 +4,8 @@
 
 **Stakeholders & interests:**
 
-- Household energy manager — wants the car charged strictly from solar surplus, with zero grid import attributable to charging under the default rounding strategy, even if that means the car sometimes charges slowly or not at all.
-- EV driver — accepts that charging pauses the moment solar can no longer cover it, in exchange for a guaranteed all-solar session.
+- Household energy manager — wants the car charged from solar surplus, with zero grid import attributable to sustained charging under the default rounding strategy, even if that means the car sometimes charges slowly or not at all — accepting only a brief, bounded grid draw while riding out a passing cloud.
+- EV driver — accepts that charging stops if solar surplus doesn't return within the bounded post-surplus hold, in exchange for a session that is otherwise all-solar.
 
 **Scope / level:** sea-level (single goal: charge the car exclusively from solar surplus while `SolarOnly` mode is active)
 
@@ -58,7 +58,7 @@ And if surplus hovers at the midpoint from one cycle to the next, the set-point 
 **Coordinator clamps still bound the set-point.**
 Given the System has computed a solar-only set-point
 When the peak-protection clamp (R3) or the grid-supply-ceiling clamp (C4) in `control-cycle.md` is applied on raw readings
-Then the coordinator may only reduce (never raise) the charger current — but because `SolarOnly` keeps net grid import at or below 0 W under the default `round down` strategy (or bounded to less than one amp-step under `round up`/`nearest`), neither clamp normally engages, since both act on materially positive net import.
+Then the coordinator may only reduce (never raise) the charger current. While `Charging`, `SolarOnly` keeps net grid import at or below 0 W under the default `round down` strategy (or bounded to less than one amp-step under `round up`/`nearest`), so neither clamp normally engages there, since both act on materially positive net import. While `Hold`, net import can be materially positive (up to the whole minimum charging current drawn from the grid), so either clamp can engage during the hold the same way it can during `Solar`'s grid fallback (UC01).
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `SolarOnly` mode
@@ -67,7 +67,7 @@ Then the System stops charging (0 A) and does not resume above that limit until 
 
 ## Postconditions
 
-- Under the default `round down` strategy, net grid import stays at or below 0 W while surplus sustains charging (apart from a single-cycle transient) — solar is self-consumed, never imported; the only exception is the bounded post-surplus hold below.
+- Under the default `round down` strategy, net grid import stays at or below 0 W while surplus sustains charging (apart from a single-cycle transient) — solar is self-consumed, never imported; the only exception is the bounded post-surplus hold (default 1 minute, see below).
 - Under `round up` or `round to nearest`, net grid import while surplus sustains charging stays bounded to less than one amp-step — a deliberate, configured trade-off, not the default.
 - There is no ongoing grid fallback: when smoothed surplus falls below the start threshold, the System holds at the minimum charging current — drawing any shortfall from the grid — only for the bounded post-surplus hold period (default 1 minute), then stops if surplus has not recovered.
 - The charger current is only ever 0 A or between the minimum and maximum charging current (C1).
@@ -108,7 +108,7 @@ the diagram does not draw a disconnect edge from every state.
 ## Domain events produced
 
 - `SolarOnlyChargingStarted` — the System began charging exclusively from solar surplus (Idle/Cooldown → Charging).
-- `PostSurplusHoldStarted` — smoothed surplus fell below the start threshold; the System entered the hold to ride out cloud cover, drawing any shortfall from the grid for the bounded hold period.
+- `PostSurplusHoldStarted` — smoothed surplus fell below the start threshold; the System entered the hold to ride out cloud cover, drawing any shortfall from the grid for the bounded hold period. Shared with sibling UC01's `Solar` mode (same event name, mode-specific duration and grid-import semantics carried in the event's own mode context, not in the name).
 - `SolarOnlyChargingStopped` — the System stopped charging (0 A) after the hold period elapsed with surplus still below the start threshold, and started the solar-mode cooldown.
 - `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit (R7).
 

@@ -92,7 +92,7 @@ the diagram does not draw a disconnect edge from every state.
 
 - `SolarChargingStarted` — the System began charging from solar surplus (Idle/Cooldown → Charging).
 - `GridFallbackEngaged` — (fires within the `Charging` state on a set-point condition, not a state transition) surplus fell below the minimum charging current; the System is holding at minimum current with grid shortfall.
-- `PostSurplusHoldStarted` — surplus fell below the start threshold; the System entered the hold to ride out cloud cover.
+- `PostSurplusHoldStarted` — surplus fell below the start threshold; the System entered the hold to ride out cloud cover. Shared with sibling UC02's `SolarOnly` mode (same event name, mode-specific duration and grid-import semantics carried in the event's own mode context, not in the name).
 - `SolarChargingStopped` — the System stopped charging (0 A) after the hold period elapsed and started the cooldown.
 - `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit (R7).
 

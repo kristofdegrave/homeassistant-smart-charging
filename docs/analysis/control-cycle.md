@@ -136,9 +136,11 @@ flowchart TD
 7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
-   mode-specific cooldown has fully elapsed, and a cooldown in progress always runs to
-   completion. (Start/stop and cooldown durations are mode-specific and defined in each mode
-   use-case; the coordinator only upholds the invariant.)
+   mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion,
+   and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
+   before actually cutting to 0 A (the post-surplus hold, R1/R2; `Captar`'s own peak-breach grace
+   period, R3, edge case below). (Start/stop, hold, and cooldown durations are mode-specific and
+   defined in each mode use-case; the coordinator only upholds the invariant.)
 8. **Set the charger current.** The coordinator writes the final current to the charger
    through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
    interval.
@@ -166,7 +168,7 @@ flowchart TD
 
 - **R3** — CapTar peak protection (the clamp in step 5, on raw readings).
 - **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 5).
-- **R11** — Rapid-cycling prevention (the cooldown/min-current invariant in step 7).
+- **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop invariant in step 7).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
