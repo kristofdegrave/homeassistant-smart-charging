@@ -25,8 +25,9 @@ active mode and never chooses it (NF1); mode choice belongs to the [profile](sys
 
 A timer firing every control interval (configurable via `control_interval_s`,
 default 10 s). The cycle carries no decision state between firings; a handful of named flags and
-accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling timers,
-the step-up/reserve context threaded in step 4, and the
+accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling
+timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
+threaded in step 4, and the
 [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
 homed in the rule or use-case that defines its lifecycle.
 
@@ -158,17 +159,21 @@ flowchart TD
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
   rapid-cycling cooldown then governs any restart (R11).
-- **Mode switched mid-operation.** Switching the active mode resets all hold and cooldown
-  timers so the incoming mode starts fresh (R11); the next cycle dispatches to the new module.
-  The has-charged flag is unaffected by a mode switch — it is scoped to the connection, not the
-  active mode, so switching between `Solar` and `SolarOnly` does not grant a fresh, undebounced
-  first start.
+- **Mode switched mid-operation.** Switching the active mode resets all hold, cooldown, and
+  restart-debounce timers so the incoming mode starts fresh (R11) — a debounce already under way
+  in `Solar` does not carry over into `SolarOnly`'s different start threshold, or vice versa; the
+  next cycle dispatches to the new module. The has-charged flag itself is unaffected by a mode
+  switch — it is scoped to the connection, not the active mode, so switching between `Solar` and
+  `SolarOnly` does not grant a fresh, undebounced first start; only its debounce *timer* resets.
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.
-- **Coordinator restart.** No analysis-layer state survives a coordinator/Home Assistant restart
-  (`resolution-rules.md`), including the has-charged flag and any running hold, cooldown, or
-  restart-debounce timer. A connected car is therefore treated as a fresh first start after a
-  restart, with no restart debounce, even if it had charged before the restart.
+- **Coordinator restart.** Restart-after-power-loss persistence of internal bookkeeping is not
+  catalogued — it is "how", not "what" (`entity-catalog.md`) — but this cycle's own timers,
+  including the has-charged flag and any running hold, cooldown, or restart-debounce timer, are
+  deliberately not required to survive one, consistent with `resolution-rules.md`'s
+  missed-deadline hold making the same choice. A connected car is therefore treated as a fresh
+  first start after a restart, with no restart debounce, even if it had charged before the
+  restart.
 - **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
