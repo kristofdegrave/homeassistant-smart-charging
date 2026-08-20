@@ -184,6 +184,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `solar_start_threshold_w` | config-options | options | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime), UC12 |
 | `solar_hold_min` | config-options | options | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime), UC12 |
 | `solar_cooldown_min` | config-options | options | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
+| `solar_restart_debounce_min` | config-options | options | min | 1 | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
 | `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading (smoothed per R10; not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w`) | control-cycle | — |
 
 ### `SolarOnly` mode
@@ -195,7 +196,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `solar_only_rounding_strategy` | config-options | options | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user (anytime), UC12 |
 | `solar_only_rounding_midpoint_pct` | config-options | options | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user (anytime), UC12 |
 
-Also uses `solar_cooldown_min` (see `Solar` mode) — R11 applies one cooldown to both solar modes.
+Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mode) — R11 applies one cooldown and one restart debounce to both solar modes.
 
 ### Solar SOC step-up
 

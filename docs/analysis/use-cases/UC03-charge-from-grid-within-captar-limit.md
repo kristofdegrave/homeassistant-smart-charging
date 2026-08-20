@@ -63,6 +63,10 @@ job (R16, Auto mode-selection row 4 and the active-SOC-limit resolution in `reso
 `Auto` chooses *when* to select `Captar` and, independently, what the active SOC limit currently
 is; `Captar` itself, once selected — whether by `Auto` or manually — always charges the same way
 to whichever limit it is given.
+Unlike the solar modes (UC01/UC02), `Captar` has no [restart debounce](../system-overview.md#ubiquitous-language)
+(R11): its `Idle → Charging` transition depends only on SOC and cooldown, both discrete
+conditions, not a fluctuating sensor reading, so there is nothing for a debounce to guard
+against.
 The R3 peak clamp (`control-cycle.md`) fits the maximum-current request on **raw** readings to the
 available [peak headroom](../system-overview.md#ubiquitous-language) — the highest whole ampere
 that keeps net import at or below the effective peak limit minus the safety margin, floored at the

@@ -289,6 +289,12 @@ escalation and revert happen automatically.
 | 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set, next-day forecast above threshold, no departure deadline resolved for tomorrow, and no missed-deadline hold in effect) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
 | 5 | Otherwise | `Off` |
 
+- **Row 3's "sufficient to start" is the raw eligibility condition, not UC01's internal timing.**
+  It means smoothed solar surplus is at or above the solar start threshold — the same condition
+  that gates `Idle → Charging` in UC01/UC02 — regardless of whether UC01/UC02's own restart
+  debounce (R11) is currently being waited out inside that mode. `Auto` does not deselect `Solar`
+  merely because its internal debounce is pending; deselecting on every debounce would reset the
+  mode-switch timers (`control-cycle.md`) and could prevent the debounce from ever completing.
 - **Row 1 compares against the *resolved* active SOC limit.** During a solar session the solar
   step-up (R8) keeps the limit ahead of the rising state of charge, so row 1 does not prematurely
   stop solar storage. When the target is already met with no step-up in effect, row 1 resolves to

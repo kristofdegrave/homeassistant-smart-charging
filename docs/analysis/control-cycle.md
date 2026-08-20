@@ -25,8 +25,9 @@ active mode and never chooses it (NF1); mode choice belongs to the [profile](sys
 
 A timer firing every control interval (configurable via `control_interval_s`,
 default 10 s). The cycle carries no decision state between firings; a handful of named flags and
-accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling timers,
-the step-up/reserve context threaded in step 4, and the
+accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling
+timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
+threaded in step 4, and the
 [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
 homed in the rule or use-case that defines its lifecycle.
 
@@ -68,7 +69,7 @@ flowchart TD
     Clamp --> Ceiling{"Would net import exceed<br/>grid supply ceiling − safety offset?<br/>(raw readings — C4, always)"}
     Ceiling -->|yes| CeilingClamp["Clamp so net import stays below<br/>ceiling − safety offset<br/>(SupplyCeilingClamped)"]
     Ceiling -->|no| Invariant
-    CeilingClamp --> Invariant["Enforce invariants:<br/>0 A or ≥ minimum current (C1);<br/>cooldown gating (R11)"]
+    CeilingClamp --> Invariant["Enforce invariants:<br/>0 A or ≥ minimum current (C1);<br/>cooldown/hold/restart-debounce gating (R11)"]
     Invariant --> Set["Set charger current<br/>(ChargerCurrentSet)"]
     Set --> Wait(["Wait for next interval"])
 ```
@@ -139,7 +140,12 @@ flowchart TD
    mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion,
    and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
    before actually cutting to 0 A (the post-surplus hold, R1/R2; `Captar`'s own peak-breach grace
-   period, R3, edge case below). (Start/stop, hold, and cooldown durations are mode-specific and
+   period, R3, edge case below). In the solar modes only, once the has-charged flag is set for the
+   connection, a restart from `Idle` additionally waits out the
+   [restart debounce](system-overview.md#ubiquitous-language) period once the mode's start
+   condition is newly met — but a resume straight from `Cooldown`, where the start condition is
+   already met the moment the cooldown elapses, is not subject to this wait, since it never waits
+   in `Idle`. (Start/stop, hold, cooldown, and restart-debounce durations are mode-specific and
    defined in each mode use-case; the coordinator only upholds the invariant.)
 8. **Set the charger current.** The coordinator writes the final current to the charger
    through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
@@ -153,10 +159,21 @@ flowchart TD
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
   rapid-cycling cooldown then governs any restart (R11).
-- **Mode switched mid-operation.** Switching the active mode resets all hold and cooldown
-  timers so the incoming mode starts fresh (R11); the next cycle dispatches to the new module.
+- **Mode switched mid-operation.** Switching the active mode resets all hold, cooldown, and
+  restart-debounce timers so the incoming mode starts fresh (R11) — a debounce already under way
+  in `Solar` does not carry over into `SolarOnly`'s different start threshold, or vice versa; the
+  next cycle dispatches to the new module. The has-charged flag itself is unaffected by a mode
+  switch — it is scoped to the connection, not the active mode, so switching between `Solar` and
+  `SolarOnly` does not grant a fresh, undebounced first start; only its debounce *timer* resets.
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.
+- **Coordinator restart.** Restart-after-power-loss persistence of internal bookkeeping is not
+  catalogued — it is "how", not "what" (`entity-catalog.md`) — but this cycle's own timers,
+  including the has-charged flag and any running hold, cooldown, or restart-debounce timer, are
+  deliberately not required to survive one, consistent with `resolution-rules.md`'s
+  missed-deadline hold making the same choice. A connected car is therefore treated as a fresh
+  first start after a restart, with no restart debounce, even if it had charged before the
+  restart.
 - **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
@@ -168,7 +185,7 @@ flowchart TD
 
 - **R3** — CapTar peak protection (the clamp in step 5, on raw readings).
 - **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 5).
-- **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop invariant in step 7).
+- **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop/restart-debounce invariant in step 7).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
