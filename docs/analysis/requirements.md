@@ -15,7 +15,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 150 W) and no stop or cooldown condition applies.
+- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 150 W) and no stop or cooldown condition applies — immediately on the connection's first start, or after the restart debounce period on every later start (R11).
 - [ ] While surplus sustains at least the minimum charging current, the charger current is set by rounding up to the next whole ampere (amp-step rounding, round up — fixed for this mode, not configurable), so all available solar surplus is used and a bounded net grid import (less than one amp-step) fills the gap.
 - [ ] When smoothed surplus is at or above the start threshold but below the minimum charging current, the charger holds at the minimum charging current and draws the shortfall from the grid (grid fallback), accepting a positive net import.
 - [ ] When smoothed surplus falls below the start threshold (default 150 W), the charger holds at the minimum charging current for a configurable period (default 5 minutes) before stopping, riding out brief cloud cover.
@@ -30,7 +30,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 1300 W, chosen so the minimum charging current can be met from solar alone) and no stop or cooldown condition applies.
+- [ ] Charging starts within one control cycle once smoothed solar surplus reaches at least a configurable threshold (default 1300 W, chosen so the minimum charging current can be met from solar alone) and no stop or cooldown condition applies — immediately on the connection's first start, or after the restart debounce period on every later start (R11).
 - [ ] The whole-ampere set-point is computed using a configurable amp-step rounding strategy: `round down` (default — the highest whole ampere that keeps net grid import at or below 0 W, no grid import), `round up` (the next whole ampere, accepting a bounded net grid import of less than one amp-step to use all surplus), or `round to nearest` (whichever whole ampere is closer to the ideal value, using a configurable midpoint, default 50 %, which may oscillate between the two amp steps when surplus hovers at the midpoint).
 - [ ] When smoothed solar surplus falls below the start threshold (default 1300 W), the charger holds at the minimum charging current for a configurable period (default 1 minute) before stopping, riding out brief cloud cover; if surplus recovers to the start threshold within that period, charging resumes at the recovered rate and the hold is cancelled.
 - [ ] This hold is the one exception to this mode's zero-grid-import guarantee: while holding, any shortfall between available solar and the minimum charging current is drawn from the grid, bounded to the hold period. If surplus has not recovered to the start threshold once the hold elapses, the charger stops (0 A) and the solar-mode cooldown begins (R11).
@@ -176,8 +176,10 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] For a mode's own stop condition (the post-surplus hold, R1/R2, when smoothed surplus falls below the solar start threshold; `Captar`'s own peak-breach grace period, R3), the charger holds at the minimum charging current for that mode-specific hold period before actually cutting to 0 A — a momentary or quickly-recovering condition is ridden out rather than triggering an immediate stop. This criterion is about *when a mode's own logic decides to stop*; it does not apply to the C4 grid-supply-ceiling clamp (a hard safety limit that cuts immediately) or to reaching the active SOC limit (an intentional stop, not a fluctuating condition).
 - [ ] After charging stops, it does not restart until a mode-specific cooldown has fully elapsed (configurable; defaults: 2 minutes for solar modes, 10 minutes for `Captar`).
 - [ ] A cooldown, once started, always runs to completion and is not shortened by a change in conditions.
+- [ ] In `Solar` and `SolarOnly`, once the has-charged flag is set for the current connection, the solar start threshold must hold continuously for a configurable restart debounce period (default 1 minute, shared by both modes) before charging resumes from `Idle` — a single-cycle blip while waiting in `Idle` does not restart charging only to immediately need to stop again. The debounce is a property of dwelling in `Idle`, not of cooldown itself: if the start threshold is already met at the moment a cooldown elapses, charging resumes immediately with no additional wait, since the System never actually sits in `Idle` waiting. Before the has-charged flag is first set — the connection's very first start — `Idle` starts charging as soon as the start threshold is met, with no debounce. `Captar` and `Power` have no restart debounce, since their own start conditions do not depend on a fluctuating sensor reading.
+- [ ] The has-charged flag is set the first time a solar mode actually starts charging on the current connection, and is cleared only on disconnect — not by a mode switch, a cooldown, or reaching the active SOC limit.
 - [ ] The charger current is only ever 0 A or at least the minimum charging current, never in between (per C1).
-- [ ] Switching the active mode resets all hold and cooldown timers so the incoming mode starts fresh.
+- [ ] Switching the active mode resets all hold and cooldown timers so the incoming mode starts fresh; the has-charged flag is unaffected, since it is scoped to the connection, not the active mode.
 
 ---
 

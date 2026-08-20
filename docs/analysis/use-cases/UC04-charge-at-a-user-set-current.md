@@ -61,7 +61,10 @@ Then the System stops charging (0 A) and does not resume above that limit until 
 `Power`'s charging law is the simplest of the modes: it requests the configured [Power target
 current](../system-overview.md#ubiquitous-language) whenever its connection, SOC, and cooldown
 conditions hold, unconditionally — it never reads smoothed inputs, the low-tariff flag, the
-home-day flag, or the solar forecast. Unlike `Captar` (UC03), which always requests the maximum
+home-day flag, or the solar forecast. Like `Captar` (UC03) and unlike the solar modes (UC01/UC02),
+`Power` has no [restart debounce](../system-overview.md#ubiquitous-language) (R11): its
+`Idle → Charging` transition depends only on SOC and cooldown, not a fluctuating sensor reading,
+so there is nothing for a debounce to guard against. Unlike `Captar` (UC03), which always requests the maximum
 charging current, `Power`'s requested current is itself a user-configured value (default 10 A) —
 the mode does not decide how fast to charge, the user does. The only configurable branch is
 whether the R3 peak clamp applies at all, via `power_respect_peak` (default on); the
