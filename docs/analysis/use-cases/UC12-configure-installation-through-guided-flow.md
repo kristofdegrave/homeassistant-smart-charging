@@ -75,7 +75,8 @@ variants.
    the car-at-home presence mapping it requires — the two are always asked together.
 7. **When** the user has completed every step their enablement decisions required, **then** the
    System shows a step for the mappings that apply regardless of any enablement decision — the
-   optional grid-voltage, low-tariff, notification-target, EV-battery-capacity-sensor, and external
+   optional grid-voltage, low-tariff (with its own state-translation table when the mapped entity
+   does not already report on/off), notification-target, EV-battery-capacity-sensor, and external
    home-day mappings — none of which any capability gates.
 8. **When** the user submits that step, **then** the System shows a final step for the thresholds
    that apply regardless of any enablement decision: grid safety thresholds (grid supply ceiling,
@@ -87,7 +88,7 @@ variants.
    (8a).
 9. **When** the user submits that step with every field valid, **then** the System creates the
    config entry, splitting the submitted values into the data bucket (mappings, capability flags,
-   the derived state-translation table) and the options bucket (thresholds, defaults, seed values),
+   the derived state-translation tables) and the options bucket (thresholds, defaults, seed values),
    exactly as today (ADR-0005), and the installation is complete.
 
 ## Alternate flows
