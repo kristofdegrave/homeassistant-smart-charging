@@ -53,6 +53,7 @@ class SmartChargingConfig:
     solar_only_midpoint: float
     safety_margin_w: float
     max_peak_kw: float
+    peak_floor_kw: float
     peak_grace_min: float
     captar_cooldown_min: float
     power_respect_peak: bool

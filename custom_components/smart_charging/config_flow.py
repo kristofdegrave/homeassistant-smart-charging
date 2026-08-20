@@ -43,6 +43,7 @@ from .const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
+    CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_PROMPT_TIMEOUT_H,
@@ -79,6 +80,7 @@ from .const import (
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_MIN_CURRENT,
     DEFAULT_NOMINAL_VOLTAGE,
+    DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_PROMPT_TIMEOUT_H,
@@ -133,6 +135,7 @@ OPTION_KEYS = (
     CONF_DEFAULT_SOC_LIMIT,
     CONF_SAFETY_MARGIN_W,
     CONF_MAX_PEAK_KW,
+    CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_POWER_RESPECT_PEAK,
@@ -521,6 +524,9 @@ def _ungated_threshold_schema(
         ): vol.Coerce(float),
         vol.Required(
             CONF_MAX_PEAK_KW, default=d.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
+        ): vol.Coerce(float),
+        vol.Required(
+            CONF_PEAK_FLOOR_KW, default=d.get(CONF_PEAK_FLOOR_KW, DEFAULT_PEAK_FLOOR_KW)
         ): vol.Coerce(float),
         vol.Required(
             CONF_PEAK_GRACE_MIN,

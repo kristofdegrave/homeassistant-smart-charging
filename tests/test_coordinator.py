@@ -181,17 +181,23 @@ def _adapters(
 def _config(**overrides) -> SmartChargingConfig:
     """This suite's own SmartChargingConfig baseline, layered on tests/config_factory.py's
     shared production-DEFAULT_*-seeded factory (issue #570 follow-up: three near-identical
-    per-suite factories collapsed to one). The four overrides below are THIS file's own
+    per-suite factories collapsed to one). The overrides below are THIS file's own
     long-standing baseline values, deliberately distinct from the production defaults
     `make_test_config` otherwise uses, so existing test expectations are unchanged. `**overrides`
     takes the dataclass's own field names (not CONF_* constants) -- pass e.g.
     `_config(max_peak_kw=7.5)` for a non-default value, or mutate an already-built config with
-    `dataclasses.replace`."""
+    `dataclasses.replace`.
+
+    `peak_floor_kw=0.0` -- this suite's monthly-peak fixtures (e.g. `_seed_ample_peak_headroom`)
+    use small kW values well below the production DEFAULT_PEAK_FLOOR_KW (#754), which would
+    otherwise silently raise them and break this file's existing min(monthly, max) expectations;
+    none of these tests are about the floor itself."""
     return make_test_config(
         smoothing_window=1,
         solar_start_threshold_w=100.0,
         solar_only_start_threshold_w=100.0,
         captar_cooldown_min=5.0,
+        peak_floor_kw=0.0,
         **overrides,
     )
 
@@ -786,6 +792,52 @@ async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(ha
     result = await coord._async_update_data()
 
     assert result.effective_peak_limit_kw == 3.0
+
+
+async def test_effective_peak_limit_carries_the_configured_peak_floor(hass):
+    """Issue #754: the coordinator must actually thread `_config.peak_floor_kw` into
+    `resolve_effective_peak_limit()`'s final call site (coordinator.py:599-601), not just
+    accept the field. `_config()`'s own baseline pins `peak_floor_kw=0.0` (see its docstring)
+    so every other peak-limit test in this file is unaffected by the floor -- this test
+    overrides it to a non-zero value on purpose. A low tracked monthly peak (1.0 kW, well
+    below both the floor and max) with `peak_floor_kw=2.5` and `max_peak_kw=4.0` must resolve
+    to the floor (2.5), not the raw tracked value (1.0) -- a hardcoded `0.0` at this call site
+    would still return 1.0 and pass every other existing peak-limit test, which is exactly the
+    gap this test closes."""
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=4.0, peak_floor_kw=2.5)
+    adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=1.0)  # below the floor -- must be raised, not passed through
+
+    result = await coord._async_update_data()
+
+    assert result.effective_peak_limit_kw == 2.5
+
+
+async def test_ev_soc_fault_early_return_also_carries_the_configured_peak_floor(hass):
+    """Cheaper companion to
+    test_effective_peak_limit_carries_the_configured_peak_floor above, covering the OTHER
+    resolve_effective_peak_limit call site (coordinator.py:401-406, the provisional value used
+    only by the ev_soc-missing early-fault return) -- a hardcoded `0.0` there would also pass
+    every other existing test (they all either override the floor to 0.0 or seed enough
+    headroom that it never binds)."""
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=4.0, peak_floor_kw=2.5)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc_role=True, ev_soc=None)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    seed_ample_peak_headroom(coord, kw=1.0)  # below the floor
+
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    assert result.effective_peak_limit_kw == 2.5
 
 
 async def test_adapter_readings_contains_every_currently_wired_role(hass):

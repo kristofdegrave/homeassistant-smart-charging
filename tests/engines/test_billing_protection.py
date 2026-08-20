@@ -1,7 +1,7 @@
 """Plain-pytest tests for the Billing-Protection Engine (E5 -- UC03, R3, R5).
 
-Row 1 (deadline urgency) is added by this suite -- row 2 (unchanged) is only
-reached when urgent=False."""
+Row 1 (deadline urgency) is added by this suite -- row 2 (min(max(monthly, floor), max),
+#754/R3) is only reached when urgent=False."""
 
 from custom_components.smart_charging.engines.billing_protection import (
     PeakBreachTracker,
@@ -14,18 +14,107 @@ DEFAULTS = dict(voltage=230.0, safety_margin_w=250.0, min_a=6.0, grace_period_s=
 
 
 def test_effective_peak_limit_is_the_lesser_of_monthly_peak_and_maximum():
-    assert resolve_effective_peak_limit(monthly_peak_kw=3.0, max_peak_kw=4.0, urgent=False) == 3.0
-    assert resolve_effective_peak_limit(monthly_peak_kw=5.0, max_peak_kw=4.0, urgent=False) == 4.0
+    # peak_floor_kw=0.0 here -- these cases are about the min(monthly, max) half of the
+    # formula, not the floor, so the floor is set low enough to never bind.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=3.0, max_peak_kw=4.0, peak_floor_kw=0.0, urgent=False
+        )
+        == 3.0
+    )
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=5.0, max_peak_kw=4.0, peak_floor_kw=0.0, urgent=False
+        )
+        == 4.0
+    )
 
 
 def test_urgency_raises_to_the_maximum_peak_regardless_of_monthly_peak():
-    assert resolve_effective_peak_limit(monthly_peak_kw=1.0, max_peak_kw=4.0, urgent=True) == 4.0
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=1.0, max_peak_kw=4.0, peak_floor_kw=0.0, urgent=True
+        )
+        == 4.0
+    )
 
 
 def test_urgency_never_exceeds_the_maximum_peak():
     # monthly_peak_kw exceeds max_peak_kw here so this is discriminating on its own --
     # row 2 (min) would return 10.0 without row 1's raise-to-maximum behavior.
-    assert resolve_effective_peak_limit(monthly_peak_kw=10.0, max_peak_kw=4.0, urgent=True) == 4.0
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=10.0, max_peak_kw=4.0, peak_floor_kw=0.0, urgent=True
+        )
+        == 4.0
+    )
+
+
+def test_low_monthly_peak_is_raised_to_the_floor():
+    # #754: a low or not-yet-established monthly peak must not resolve the effective peak
+    # limit down to near 0 kW and block Captar/Power charging.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=0.5, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=False
+        )
+        == 2.5
+    )
+
+
+def test_monthly_peak_above_the_floor_is_unaffected_by_it():
+    # Regression check -- the floor must never raise the limit above the pre-floor
+    # min(monthly, max) result when monthly is already above the floor.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=3.0, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=False
+        )
+        == 3.0
+    )
+
+
+def test_floor_never_raises_the_limit_above_the_maximum_peak():
+    # max() is applied before min(): a floor set above maximum_peak must still be
+    # clamped down to maximum_peak, not returned as-is.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=0.5, max_peak_kw=4.0, peak_floor_kw=10.0, urgent=False
+        )
+        == 4.0
+    )
+
+
+def test_monthly_peak_equal_to_the_floor_resolves_to_the_floor():
+    # Boundary case: monthly_peak_kw == peak_floor_kw. max(monthly, floor) must still take
+    # this (either) value, not fall through to a `>`-only comparison that would miss equality.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=2.5, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=False
+        )
+        == 2.5
+    )
+
+
+def test_floor_equal_to_the_maximum_peak_resolves_to_the_maximum_peak():
+    # Boundary case: peak_floor_kw == max_peak_kw. min(max(monthly, floor), max) must still
+    # take this (either) value, not fall through to a `>`-only comparison that would miss
+    # equality.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=0.5, max_peak_kw=4.0, peak_floor_kw=4.0, urgent=False
+        )
+        == 4.0
+    )
+
+
+def test_urgency_ignores_the_peak_floor_too():
+    # Regression check -- row 1 (urgent) is unchanged by #754: still max_peak_kw regardless
+    # of monthly peak or floor.
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=0.1, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=True
+        )
+        == 4.0
+    )
 
 
 def test_clamp_reduces_to_available_headroom():

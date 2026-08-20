@@ -33,6 +33,7 @@ from custom_components.smart_charging.const import (
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
     CONF_NOTIFICATION_TARGET_ENTITY,
+    CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
@@ -356,6 +357,7 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     options[CONF_CONTROL_INTERVAL_S] = 60
     options[CONF_SAFETY_MARGIN_W] = 500.0
     options[CONF_MAX_PEAK_KW] = 7.5
+    options[CONF_PEAK_FLOOR_KW] = 1.5
     options[CONF_PEAK_GRACE_MIN] = 3.0
     options[CONF_CAPTAR_COOLDOWN_MIN] = 15.0
     options[CONF_POWER_RESPECT_PEAK] = False
@@ -369,6 +371,7 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     config = coordinator._config
     assert config.safety_margin_w == 500.0
     assert config.max_peak_kw == 7.5
+    assert config.peak_floor_kw == 1.5
     assert config.peak_grace_min == 3.0
     assert config.captar_cooldown_min == 15.0
     assert config.power_respect_peak is False
