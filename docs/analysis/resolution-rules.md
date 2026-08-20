@@ -236,12 +236,13 @@ below, the active-SOC-limit rule above (the cap's row-1 precondition), UC05, UC0
 
 Resolves the [effective peak limit](system-overview.md#ubiquitous-language) — the ceiling on
 net import that charging must stay below. Priority order: deadline urgency raises the limit;
-otherwise it is the lesser of the billed peak and the configured maximum.
+otherwise it is the lesser of the configured maximum and the billed peak, floored so a low or
+not-yet-established billed peak can't push the limit down too far (row 2).
 
 | Priority | Condition | Effective peak limit |
 | --- | --- | --- |
 | 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5 — possible only while the [deadline capability](system-overview.md#ubiquitous-language) is present, R18) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
-| 2 | Otherwise (normal operation) | `min(`[monthly peak demand](system-overview.md#ubiquitous-language)`, maximum peak)` |
+| 2 | Otherwise (normal operation) | `min(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
 
 - This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
   `Manual`: raising the ceiling never itself raises what a mode requests, but a mode whose own
@@ -258,6 +259,9 @@ otherwise it is the lesser of the billed peak and the configured maximum.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
   this limit (`effective peak limit − safety margin`); the margin is applied by the peak clamp
   in `control-cycle.md`, not by this rule.
+- The [peak floor](system-overview.md#ubiquitous-language) (row 2) is applied with `max()`
+  before the `min()` with the maximum peak, so it can raise but never push the effective peak
+  limit above the maximum peak — see the glossary term for why the floor exists.
 - The limit never exceeds the maximum peak, even under urgency (C3).
 - When the required current exceeds the maximum permitted rate even so — regardless of
   profile — the System delivers the maximum permitted rate and notifies the user that the
