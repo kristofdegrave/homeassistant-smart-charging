@@ -83,7 +83,7 @@ variants.
    grid safety offset, minimum/maximum charging current, the supply-voltage fallback used when the
    grid-voltage mapping is absent), the smoothing window, general SOC/peak defaults (the values the
    default SOC limit and Power target current entities are seeded with, safety margin, maximum
-   peak, peak grace period, EV battery capacity), the `Power`-mode peak-protection option, and the
+   peak, peak floor, peak grace period, EV battery capacity), the `Power`-mode peak-protection option, and the
    evening home-day prompt fields (the evening prompt's enable flag, prompt time, and timeout)
    (8a).
 9. **When** the user submits that step with every field valid, **then** the System creates the
@@ -136,7 +136,7 @@ each entity's *starting* value at whichever moment this step runs, distinct from
 threshold that keeps applying until it is changed again through this flow.
 
 **8a — Peak-protection fields are not gated by the CapTar capability.**
-Given the maximum peak, safety margin, peak grace period, and `Power`-mode peak-protection option
+Given the maximum peak, peak floor, safety margin, peak grace period, and `Power`-mode peak-protection option
 When the System shows step 8
 Then these are presented regardless of whether the installation bills against a capacity tariff —
 the peak-protection clamp (R3) protects the grid connection itself, not only the CapTar bill, so it
