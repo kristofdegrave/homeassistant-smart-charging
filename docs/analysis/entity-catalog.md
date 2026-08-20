@@ -84,6 +84,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow), UC12 |
 | `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow), UC12 |
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
+| `notifications_available` | config-data | data | — | on (present) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC08, UC10 | user (reconfigure flow), UC12 |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
@@ -168,7 +169,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `ev_battery_capacity_kwh` | config-options | options | kWh | 75 | EV battery capacity (R15) | resolution-rules, control-cycle | user (anytime), UC12 |
 | `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06, (UC11) | — |
 | `ev_battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules, control-cycle | — |
-| `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09 | — |
+| `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09, UC10 | — |
 | `vehicle_charge_limit` | adapter role (read/write) | — | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | UC09 | UC09 |
 
 ---
@@ -220,6 +221,14 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 
 ### Reminders & prompts
 
+*`notification_target`, `prompt_timeout_h`, `evening_prompt_enabled`, and `evening_prompt_time` are
+conditional on the [notifications capability](system-overview.md#ubiquitous-language)
+(`notifications_available`, R18): when it is off,
+[UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step (9) is
+skipped, so none of the four is offered or required. `reminder_lead_h` is the exception — it is
+presented on UC12's deadline-gated step (8) and so follows the [deadline
+capability](system-overview.md#ubiquitous-language) instead.*
+
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
@@ -251,7 +260,7 @@ home-day flag also drives the solar-reserve cap (R9).*
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `home_day_external` | adapter role | — | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13) | resolution-rules, UC08 | — |
+| `home_day_external` | adapter role | — | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13; and R14's home-day departure override while the deadline capability is present) | resolution-rules, UC08 | — |
 | `switch.smart_charging_home_day` | state | runtime | bool | off (resets daily at midnight) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC08, UC11 | UC08, UC11 |
 
 The home-day flag drives the solar-reserve cap (R9) and, while the deadline capability is present (R18), the home-day departure override (R14). How it is set is deliberately left open (R13) — currently via the evening prompt (UC08) or an external source (NF3).
@@ -343,7 +352,7 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly. The *Peak protection* subgroup's thresholds (`safety_margin_w`,
   `max_peak_kw`, `peak_floor_kw`, `peak_grace_min`) still apply — the R3 clamp is not gated by this
-  capability — but [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (6a) now
+  capability — but [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b) now
   presents their fields on the flow's CapTar-gated step, so a non-CapTar installation runs them on
   their defaults rather than tuning them through the flow.
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When
@@ -358,14 +367,22 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   imprecise in the same way; tracked as a wording follow-up for whoever next touches R15/R18,
   not corrected here since this catalog-only change has no mandate to edit requirement text.
   The *Home day* subgroup and
-  `evening_prompt_*` are **not** gated, because the home-day flag independently drives the
-  solar-reserve cap (R9). Unlike the solar and CapTar capabilities, this one removes no option from
+  `evening_prompt_*` are **not** gated by the deadline capability, because the home-day flag
+  independently drives the solar-reserve cap (R9); `evening_prompt_*` is instead gated by the
+  notifications capability (below). Unlike the solar and CapTar capabilities, this one removes no option from
   `select.smart_charging_mode`. One presentation-level exception, deliberate and named in
-  [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (8a): the `home_day_external`
+  [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5c): the `home_day_external`
   role's *mapping field* is presented on the flow's deadline-gated step, so an installation without
   the deadline capability is not offered it — the row itself stays ungated here, since the flag's
   behaviour is unchanged and the home-day switch can still be driven by the evening prompt (UC08)
   or set directly (UC11).
+- **Notification-dependent rows are conditional on the notifications capability (R18).** When
+  `notifications_available` is off,
+  [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step is
+  skipped, so `notification_target`, `evening_prompt_enabled`, `evening_prompt_time`, and
+  `prompt_timeout_h` are neither offered nor required. Like the deadline capability, this one
+  removes no option from `select.smart_charging_mode`. `reminder_lead_h` stays with the deadline
+  capability, since UC12 presents it on the deadline-gated step.
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
   manual selection; without the CapTar capability, `Captar` is not offered for manual selection.
@@ -385,7 +402,8 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   diagnostic** entities are native `smart_charging_` platform entities (the
   `select`/`number`/`time`/`switch`/`sensor`/`binary_sensor` rows above). Per
   [ADR-0005](../adl/0005-config-entry-structure-and-interval.md) (Accepted), every declared
-  capability (`solar_available`, `captar_available`, `deadline_available`) is config-entry **data**
+  capability (`solar_available`, `captar_available`, `deadline_available`,
+  `notifications_available`) is config-entry **data**
   — set at initial setup, changed only via the reconfigure flow — and every install-time threshold,
   default, or the control interval (`control_interval_s`, `grid_supply_ceiling_a`, `max_peak_kw`,
   `min_current_a`/`max_current_a`, the `solar_*` thresholds, `prompt_timeout_h`,
