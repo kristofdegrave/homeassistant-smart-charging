@@ -38,7 +38,7 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 | [UC09](UC09-sync-charge-limit-with-car.md) | Keep the charge limit in sync with the car | EV driver | R6 | Planned |
 | [UC10](UC10-remind-to-plug-in.md) | Remind me to plug in | EV driver | R12 | Planned |
 | [UC11](UC11-monitor-and-manage-charging-configuration.md) | Monitor and manage charging configuration (dashboard) | Household energy manager | R19 | Planned |
-| [UC12](UC12-configure-installation-through-guided-flow.md) | Configure the installation through a guided, capability-first flow | Household energy manager | R20 | Planned |
+| [UC12](UC12-configure-installation-through-guided-flow.md) | Configure the installation through a guided, topic-based flow | Household energy manager | R20 | Planned |
 
 ---
 
