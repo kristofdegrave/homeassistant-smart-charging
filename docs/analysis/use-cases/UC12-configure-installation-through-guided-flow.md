@@ -111,16 +111,19 @@ variants.
    (4a), and the value the SOC-limit-override entity is seeded with (4b).
 5. **When** the user submits the `vehicle` step, **then** the System shows the `power` step,
    presenting the value the [Power target current](../system-overview.md#ubiquitous-language)
-   entity is seeded with (4b), the `Power`-mode peak-protection option (R17), and the `Power`-mode
-   cooldown duration (R11); it then advances through the capability-gated steps 6–9 in that fixed
+   entity is seeded with (4b) and the `Power`-mode cooldown duration (R11); it then advances through
+   the capability-gated steps 6–9 in that fixed
    order, skipping any capability the user declared absent (5a).
 6. **Given** the installation bills against a capacity tariff, **when** the System shows the
-   `captar` step, **then** it presents the `Captar`-mode cooldown duration (R11) and the
+   `captar` step, **then** it presents the `Captar`-mode cooldown duration (R11), the `Power`-mode
+   peak-protection option (R17), and the
    peak-protection thresholds — [safety margin](../system-overview.md#ubiquitous-language),
    [maximum peak](../system-overview.md#ubiquitous-language), [peak
-   floor](../system-overview.md#ubiquitous-language), and peak-breach grace period (R3) — which
-   this step model gates on the CapTar capability, a deliberate change from the previous step
-   model (5b).
+   floor](../system-overview.md#ubiquitous-language), and peak-breach grace period (R3) — all of
+   which this step model gates on the CapTar capability, a deliberate change from the previous step
+   model (5b). The peak-protection option sits here, not on the ungated `power` step, because it
+   switches the very clamp those thresholds tune: gating the thresholds but not their on/off switch
+   would split one topic across two steps.
 7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
    presents the solar-production and solar-forecast mappings and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
@@ -174,9 +177,10 @@ interval**, the one field neither the install nor the reconfigure flow ever asks
 it; reconfigure touches no options at all), so the options flow is the only path on which it is
 presented; `grid`'s supply-voltage fallback, grid supply ceiling, and safety offset;
 `ev_charger`'s minimum/maximum charging current; `vehicle`'s EV battery capacity and SOC-limit seed
-value; `power`'s target-current seed value, peak-protection option, and cooldown; then the
+value; `power`'s target-current seed value and cooldown; then the
 threshold half of whichever gated steps the entry's already-declared capabilities call for —
-`captar`'s cooldown and peak-protection thresholds when CapTar is available, `solar`'s thresholds
+`captar`'s cooldown, `Power`-mode peak-protection option, and peak-protection thresholds when
+CapTar is available, `solar`'s thresholds
 when solar is installed, `deadline`'s reminder lead time when deadlines are managed, and
 `notifications`' evening-prompt fields and prompt timeout when notifications are wanted.
 Submitting updates only the options bucket.
@@ -221,20 +225,25 @@ send them.
 No ungated step is ever skipped: `core`, `grid`, `ev_charger`, `vehicle`, and `power` are shown on
 every install path, whatever the capability declarations.
 
-**5b — Peak-protection thresholds are now gated by the CapTar capability** — branches from step 5,
+**5b — Peak-protection fields are now gated by the CapTar capability** — branches from step 5,
 the point at which 5a decides whether step 6 is shown at all.
-Given the safety margin, maximum peak, peak floor, and peak-breach grace period
+Given the `Power`-mode peak-protection option, the safety margin, maximum peak, peak floor, and
+peak-breach grace period
 When the CapTar capability is declared absent
-Then this step model no longer presents them at all, and the installation is left on their
-defaults. Its real-world consequence, stated plainly: `power_respect_peak` defaults **on** (R17
-AC2) and `max_peak_kw` defaults to **4 kW** (with a 2.5 kW peak floor), so a non-CapTar
+Then this step model no longer presents any of them, and the installation is left on their
+defaults. Its real-world consequence, stated plainly: the peak-protection option defaults **on**
+(R17 AC2) and the maximum peak defaults to **4 kW** (with a 2.5 kW peak floor), so a non-CapTar
 installation is clamped to a roughly 4 kW effective peak limit with **no path through this flow to
-raise it** — on a 40 A single-phase (≈9 kW) connection, the upper part of the `Power`-mode current
-range becomes unreachable. That is a behaviour change, not merely a lost tuning affordance.
+raise that limit, and — the option being gated too — no path to switch the clamp off either** — on
+a 40 A single-phase (≈9 kW) connection, the upper part of the `Power`-mode current
+range becomes unreachable. Gating the option alongside the thresholds sharpens that consequence
+rather than contradicting it: a household that cannot raise the limit also cannot opt out of it, so
+neither lever remains. That is a behaviour change, not merely a lost tuning affordance.
 This **reverses** the previous step model, which presented these fields ungated on the strength of
 the peak-protection clamp (R3) protecting the grid connection itself rather than only the
-capacity-tariff bill. The reversal is deliberate: it groups every peak-protection threshold with
-the billing arrangement that motivates tuning them, accepting the clamp above as the price. The
+capacity-tariff bill. The reversal is deliberate: it groups every peak-protection field — the
+thresholds and the switch that turns the clamp they tune on or off — with the billing arrangement
+that motivates tuning them, accepting the clamp above as the price. The
 clamp itself is unchanged — R3 still applies in every mode, and the [grid supply
 ceiling](../system-overview.md#ubiquitous-language) clamp (C4), which is what actually protects the
 grid connection on a non-CapTar installation, stays on the ungated `grid` step. This use-case
