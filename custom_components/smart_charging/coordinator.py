@@ -898,6 +898,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # coordinator is the one place that decides when the connection's first-ever start
         # happened. `handler.is_solar_mode` excludes Captar, which has no has-charged/debounce
         # concept (R11) even though its state also carries a `.phase` attribute.
+        #
+        # Deliberately latches on the raw phase transition here, before `_apply_peak_clamp`/
+        # `_apply_grid_ceiling_clamp` run in `_run_cycle` -- so a same-cycle force-stop to 0 A
+        # by either clamp can still leave the flag set even though nothing was actually
+        # delivered. Moving the flip to after both clamps would mean threading `new_state`
+        # (or a second phase check) through `_run_cycle` and both clamp methods, which live
+        # in separate methods from this one -- left as-is rather than risk a subtler behavior
+        # change this late; revisit only if a real deadlock/regression traces back to it.
         if handler.is_solar_mode and not self._has_charged and new_state.phase == Phase.CHARGING:
             self._has_charged = True
         return desired
@@ -1067,11 +1075,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             active_soc_limit=active_soc_limit,
-            # R11/issue #757: threaded for the same reason as the real `_run_cycle`-constructed
-            # ctx -- a candidate Solar/SolarOnly dry run must see the connection's real
-            # has-charged flag, or it would wrongly assume an immediate (undebounced) start for
-            # a connection that has already charged once.
-            has_charged=self._has_charged,
+            # Deliberately NOT threaded from `self._has_charged` (unlike the real
+            # `_run_cycle`-constructed ctx) -- left at CycleContext's own default (False).
+            # See `test_baseline_dry_run_ignores_has_charged_after_escalation_deadlock` for
+            # the full deadlock scenario this avoids.
+            has_charged=False,
         )
         current, _ = self._mode_handlers[mode].desired_current(ctx, self._mode_state.get(mode))
         return current

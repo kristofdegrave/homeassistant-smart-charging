@@ -290,15 +290,16 @@ async def test_uc02_main_success_starts_and_recomputes_with_round_down_default(h
 async def test_uc02_3a_surplus_below_threshold_holds_then_stops_no_ongoing_fallback(hass):
     """UC02 alternate 3a (post-#755): surplus falling below the start threshold no longer
     stops charging immediately -- it holds at the minimum current first (the one bounded
-    exception to SolarOnly's zero-grid-import guarantee), then stops (0 A) and starts the
-    cooldown only once the hold period elapses without surplus recovering. Unlike the
+    exception to SolarOnly's zero-grid-import guarantee); if surplus returns in time the
+    System resumes normal charging (hold cancelled), and if the hold period elapses while
+    surplus is still low the System stops (0 A) and starts the cooldown. Unlike the
     sibling UC01, there is still no *ongoing* grid fallback while `Charging` -- the hold
     below is the only, time-bounded circumstance in which SolarOnly draws from the grid.
 
     (UC02's alternate 2a -- cooldown blocks a restart -- has no dedicated end-to-end test
     here: it's the same idle/cooldown-gate code path already proven end-to-end by UC01's
     2a test above, plus `tests/modes/test_solar_only.py`'s own cooldown coverage.)"""
-    coordinator, calls = await _setup(hass)
+    coordinator, calls = await _setup(hass, **{CONF_SOLAR_COOLDOWN_MIN: 5.0})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     await _cycle(hass, coordinator, charger_w=1955.0)
@@ -309,6 +310,21 @@ async def test_uc02_3a_surplus_below_threshold_holds_then_stops_no_ongoing_fallb
     await _cycle(hass, coordinator, charger_w=500.0)
     assert calls[-1]["value"] == 6.0
     assert coordinator._mode_state[MODE_SOLAR_ONLY].phase == Phase.HOLD
+
+    # Surplus returns within the (default 1-minute) hold period -> resumes normal
+    # charging, hold cancelled.
+    await _cycle(hass, coordinator, charger_w=1955.0)
+    assert calls[-1]["value"] == 8.0
+    assert coordinator._mode_state[MODE_SOLAR_ONLY].phase == Phase.CHARGING
+
+    # Surplus drops again -> Hold, then simulate the hold period having fully elapsed
+    # (avoiding a real 1-minute wall-clock wait) while surplus is still low.
+    await _cycle(hass, coordinator, charger_w=500.0)
+    assert coordinator._mode_state[MODE_SOLAR_ONLY].phase == Phase.HOLD
+    replace_coordinator_config(coordinator, solar_only_hold_min=0.0)
+    await _cycle(hass, coordinator, charger_w=500.0)
+    assert calls[-1]["value"] == 0.0
+    assert coordinator._mode_state[MODE_SOLAR_ONLY].phase == Phase.COOLDOWN
 
 
 async def test_uc02_3b_round_up_strategy_accepts_bounded_grid_import(hass):

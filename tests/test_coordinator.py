@@ -1704,6 +1704,79 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
     assert coord._required_current.urgent is True
 
 
+async def test_baseline_dry_run_ignores_has_charged_after_escalation_deadlock(hass, freezer):
+    """Regression for the deadlock traced against `_mode_desired_current`: once a
+    connection has charged once (`_has_charged=True`) and Auto has escalated away from
+    Solar into Captar (a mode switch, which resets `_mode_state[MODE_SOLAR]` back to
+    `idle()` but -- by design, issue #757 -- leaves `_has_charged` untouched), the
+    baseline dry run for Solar must still be evaluated by every subsequent cycle (rows
+    3-5, resolution-rules.md). Before the fix, threading the real `has_charged=True`
+    into the dry-run `CycleContext` sent Solar's `idle()` state straight to
+    `Debouncing` every single cycle -- and since the dry run always discards its
+    returned state, it can never advance past `Debouncing` on its own, pinning
+    `baseline_desired_a` at 0.0 forever. That makes `required_a > baseline_desired_a`
+    (any positive requirement) permanently True, so Auto can never revert from Captar
+    back to Solar even once the real deadline pressure drops well below what Solar
+    could deliver on its own."""
+    freezer.move_to("2026-01-15 12:00:00")
+    # Ample surplus throughout -- ideal_a = 2760W / 230V = 12A, Solar's real un-debounced
+    # desired current whenever it's actually dispatched.
+    adapters = _adapters(
+        status=STATE_CHARGING,
+        ev_soc=50.0,
+        net_w=0.0,
+        charger_w=2760.0,
+        sun_state=SUN_STATE_ABOVE_HORIZON,
+    )
+    config = _config()
+    config = dataclasses.replace(config, solar_available=True)
+    config = dataclasses.replace(config, captar_available=True)
+    # 0 -- this test isn't about R11's restart-debounce duration itself; keeping it at the
+    # suite's own default would make cycle 4's real (non-dry-run) Solar dispatch depend on
+    # how much real wall-clock time this test happens to take to run (`now` for solar.step()
+    # is `hass.loop.time()`, monotonic, never advanced by `freezer`), an unrelated flake risk.
+    config = dataclasses.replace(config, solar_restart_debounce_min=0.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    # Cycle 1: no deadline pressure -- Auto's baseline (row 3) picks Solar, ample surplus
+    # charges immediately (has_charged was False), setting the has-charged flag.
+    result = await coord._async_update_data()
+    assert result.active_mode == MODE_SOLAR
+    assert coord._has_charged is True
+
+    # Cycle 2: an unreachably tight deadline forces urgent=True regardless of baseline --
+    # Auto escalates to Captar, and the same-cycle mode-switch reset (R11) wipes
+    # `_mode_state[MODE_SOLAR]` back to `idle()`. `_has_charged` stays True (issue #757:
+    # scoped to the connection, not the active mode).
+    _seed_today_deadline(coord, hours_from_now=0.5)
+    result = await coord._async_update_data()
+    assert result.active_mode == MODE_CAPTAR
+    assert coord._has_charged is True
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
+
+    # Cycle 3+: relax the deadline to something Solar's own real 12 A would comfortably
+    # meet (required_a ~= 9.78 A here) -- Auto should revert to Solar (row 3) since the
+    # real requirement no longer exceeds Solar's real desired current. 10h keeps the
+    # deadline later the same day (now is frozen at noon), so it can't wrap past midnight
+    # back onto `now` itself (which would saturate required_a to inf instead).
+    _seed_today_deadline(coord, hours_from_now=10)
+    result = await coord._async_update_data()
+    assert coord._required_current.required_a == pytest.approx(9.7826, abs=1e-3)
+    assert coord._required_current.urgent is False
+    assert result.active_mode == MODE_SOLAR
+
+    # Cycle 4: stays reverted -- not a one-cycle fluke.
+    result = await coord._async_update_data()
+    assert coord._required_current.urgent is False
+    assert result.active_mode == MODE_SOLAR
+
+
 async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
     mutual-exclusivity clause)."""
@@ -2497,18 +2570,6 @@ async def test_seed_monthly_peak_passes_a_negative_kw_through_unchanged(hass):
 
 # --- Task 4.1 (ADR-0012 coordinator decomposition): explicit ADR-0006 clamp-integrity check,
 # made permanent regression tests rather than a one-time manual read (plan Step 4). ---
-#
-# OPEN QUESTION FOR REVIEWER (T4.1's own Step 3 dead-code sweep): `_mode_desired_current` in
-# coordinator.py still carries its own pre-Task-3.3 if/elif dispatch chain (calling
-# solar.step/solar_only.step/captar.step/power.desired_current directly against
-# self._mode_state), rather than the unified `self._mode_handlers[mode].desired_current(ctx,
-# ...)` form Task 3.3 specifies -- its own docstring even says so ("still its own if/elif
-# chain here -- unified onto the ModeHandler registry in Task 3.3"). Task 4.1 assumes Tasks
-# 0.1-3.3 already landed; this sweep found that precondition doesn't hold for Task 3.3
-# specifically. Left unchanged here -- unifying it is Task 3.3's own scope, not T4.1's, and
-# this session's scope is T4.1 only. The three old peak-tracking fields, `_last_active_soc_
-# limit`, and `_run_cycle`'s own old per-mode if/elif chain (Tasks 1.2/2.2/3.2) ARE confirmed
-# fully removed (grep + read, both clean).
 
 
 async def test_power_opt_out_of_r3_does_not_disable_c4_ceiling(hass):

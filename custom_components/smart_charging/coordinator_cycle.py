@@ -145,11 +145,11 @@ class ModeHandler(Protocol):
     unchanged (ADR-0012) -- this decision only changes how the coordinator looks one up, not
     any mode module's own logic.
 
-    `is_soc_gated`/`is_solar_mode`/`idle_state()` carry the per-mode facts the coordinator
-    used to branch on by name (`_SOC_GATED_MODES`/`_SOLAR_MODES` tuples, and a
-    Captar-vs-solar ternary picking each mode's idle state). Adding a mode with one of these
-    properties now means giving its handler the right value/method, not adding a new branch
-    or extending a tuple at every call site."""
+    `is_soc_gated`/`is_solar_mode`/`idle_state()`/`resume_state()` carry the per-mode facts
+    the coordinator used to branch on by name (`_SOC_GATED_MODES`/`_SOLAR_MODES` tuples, and a
+    Captar-vs-solar ternary picking each mode's idle/resume state). Adding a mode with one of
+    these properties now means giving its handler the right value/method, not adding a new
+    branch or extending a tuple at every call site."""
 
     is_soc_gated: bool
     """R7: whether SOC reaching the active limit stops this mode. False for Off/Power."""
