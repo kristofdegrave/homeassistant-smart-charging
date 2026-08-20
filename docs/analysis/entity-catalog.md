@@ -191,6 +191,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `solar_only_start_threshold_w` | config-options | options | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user (anytime), UC12 |
+| `solar_only_hold_min` | config-options | options | min | 1 | [post-surplus hold](system-overview.md#ubiquitous-language) — SolarOnly instance, the bounded exception to the zero-grid-import guarantee (R2, R11) | UC02 | user (anytime), UC12 |
 | `solar_only_rounding_strategy` | config-options | options | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user (anytime), UC12 |
 | `solar_only_rounding_midpoint_pct` | config-options | options | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user (anytime), UC12 |
 
