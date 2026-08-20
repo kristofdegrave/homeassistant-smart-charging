@@ -241,7 +241,7 @@ otherwise it is the lesser of the billed peak and the configured maximum.
 | Priority | Condition | Effective peak limit |
 | --- | --- | --- |
 | 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5 — possible only while the [deadline capability](system-overview.md#ubiquitous-language) is present, R18) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
-| 2 | Otherwise (normal operation) | `min(`[monthly peak demand](system-overview.md#ubiquitous-language)`, maximum peak)` |
+| 2 | Otherwise (normal operation) | `min(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
 
 - This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
   `Manual`: raising the ceiling never itself raises what a mode requests, but a mode whose own
@@ -258,6 +258,11 @@ otherwise it is the lesser of the billed peak and the configured maximum.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
   this limit (`effective peak limit − safety margin`); the margin is applied by the peak clamp
   in `control-cycle.md`, not by this rule.
+- The [peak floor](system-overview.md#ubiquitous-language) (row 2) exists so that a low or
+  not-yet-established monthly peak demand — early in a billing month, or right after the
+  monthly reset — does not itself resolve the effective peak limit down to near 0 kW and block
+  `Captar`/`Power` charging; `max()` with the floor is applied before the `min()` with the
+  maximum peak, so the floor can never raise the effective peak limit above the maximum peak.
 - The limit never exceeds the maximum peak, even under urgency (C3).
 - When the required current exceeds the maximum permitted rate even so — regardless of
   profile — the System delivers the maximum permitted rate and notifies the user that the

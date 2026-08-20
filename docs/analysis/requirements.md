@@ -49,6 +49,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] When net import would exceed the effective peak limit minus the safety margin, the charger current is first reduced — within the same control cycle — to the highest whole ampere that keeps net import at or below that target.
 - [ ] The charger stops (0 A) only when it is already at the minimum charging current and net import still exceeds the effective peak limit minus the safety margin continuously for a configurable grace period (default 2 minutes); a momentary breach does not stop charging.
 - [ ] The charger may use all headroom up to the effective peak limit minus the safety margin, including capacity freed when other household appliances switch off.
+- [ ] The effective peak limit's monthly-peak-demand operand never falls below a configurable peak floor (default 2.5 kW), so a low or not-yet-established monthly peak demand — e.g. early in a billing month, or right after the monthly reset — does not itself block `Captar`/`Power` charging. The floor never raises the effective peak limit above the configured maximum peak.
 
 ---
 
