@@ -401,6 +401,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         effective_peak_limit_kw = resolve_effective_peak_limit(
             monthly_peak_kw,
             self._config.max_peak_kw,
+            self._config.peak_floor_kw,
             urgent=False,
         )
         # R11: catches a Manual mode change here (already final -- set externally before this
@@ -596,7 +597,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         urgent = deadline_urgency.urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
-            monthly_peak_kw, self._config.max_peak_kw, urgent=urgent
+            monthly_peak_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
         )
         # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
         # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault

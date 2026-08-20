@@ -59,6 +59,7 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
+    CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_PROMPT_TIMEOUT_H,
@@ -87,6 +88,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
+    DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_REMINDER_LEAD_H,
@@ -949,6 +951,7 @@ async def test_pre_toggle_entry_defaults_captar_available_true(hass):
 async def test_peak_protection_thresholds_seeded_into_options_with_defaults(hass):
     result = await _run_install_flow(hass)
     assert result["options"][CONF_MAX_PEAK_KW] == DEFAULT_MAX_PEAK_KW
+    assert result["options"][CONF_PEAK_FLOOR_KW] == DEFAULT_PEAK_FLOOR_KW
     assert result["options"][CONF_POWER_RESPECT_PEAK] == DEFAULT_POWER_RESPECT_PEAK
     assert result["options"][CONF_SAFETY_MARGIN_W] == DEFAULT_SAFETY_MARGIN_W
     assert result["options"][CONF_PEAK_GRACE_MIN] == DEFAULT_PEAK_GRACE_MIN
@@ -968,6 +971,16 @@ async def test_options_flow_edits_peak_protection_thresholds(hass):
     )
     await hass.async_block_till_done()
     assert entry.options[CONF_MAX_PEAK_KW] == 5.0
+
+
+async def test_options_flow_edits_the_peak_floor(hass):
+    entry = await _create_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**_current_options(entry), CONF_PEAK_FLOOR_KW: 1.0}
+    )
+    await hass.async_block_till_done()
+    assert entry.options[CONF_PEAK_FLOOR_KW] == 1.0
 
 
 async def test_power_respect_peak_can_be_turned_off(hass):
@@ -2258,6 +2271,7 @@ _UNGATED_THRESHOLD_KEYS = {
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_SAFETY_MARGIN_W,
     CONF_MAX_PEAK_KW,
+    CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_POWER_RESPECT_PEAK,

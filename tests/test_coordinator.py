@@ -181,17 +181,23 @@ def _adapters(
 def _config(**overrides) -> SmartChargingConfig:
     """This suite's own SmartChargingConfig baseline, layered on tests/config_factory.py's
     shared production-DEFAULT_*-seeded factory (issue #570 follow-up: three near-identical
-    per-suite factories collapsed to one). The four overrides below are THIS file's own
+    per-suite factories collapsed to one). The overrides below are THIS file's own
     long-standing baseline values, deliberately distinct from the production defaults
     `make_test_config` otherwise uses, so existing test expectations are unchanged. `**overrides`
     takes the dataclass's own field names (not CONF_* constants) -- pass e.g.
     `_config(max_peak_kw=7.5)` for a non-default value, or mutate an already-built config with
-    `dataclasses.replace`."""
+    `dataclasses.replace`.
+
+    `peak_floor_kw=0.0` -- this suite's monthly-peak fixtures (e.g. `_seed_ample_peak_headroom`)
+    use small kW values well below the production DEFAULT_PEAK_FLOOR_KW (#754), which would
+    otherwise silently raise them and break this file's existing min(monthly, max) expectations;
+    none of these tests are about the floor itself."""
     return make_test_config(
         smoothing_window=1,
         solar_start_threshold_w=100.0,
         solar_only_start_threshold_w=100.0,
         captar_cooldown_min=5.0,
+        peak_floor_kw=0.0,
         **overrides,
     )
 

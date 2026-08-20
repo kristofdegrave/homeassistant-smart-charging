@@ -22,6 +22,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_MAX_SOLAR_SOC,
+    DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
@@ -62,6 +63,7 @@ def make_test_config(**overrides) -> SmartChargingConfig:
         solar_only_midpoint=DEFAULT_SOLAR_ONLY_MIDPOINT,
         safety_margin_w=DEFAULT_SAFETY_MARGIN_W,
         max_peak_kw=100.0,  # ample headroom by default -- most tests don't exercise R3
+        peak_floor_kw=DEFAULT_PEAK_FLOOR_KW,
         peak_grace_min=DEFAULT_PEAK_GRACE_MIN,
         captar_cooldown_min=DEFAULT_CAPTAR_COOLDOWN_MIN,
         power_respect_peak=True,
