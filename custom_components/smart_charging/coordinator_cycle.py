@@ -163,9 +163,18 @@ class ModeHandler(Protocol):
         ...
 
     def idle_state(self) -> Any:
-        """This mode's fresh/idle per-mode state (R7/R11) -- what disconnect, a mode switch,
-        and the SOC gate all reset to. Only ever read when `is_soc_gated` is True; Off/Power
-        return None since neither is ever stored in `_mode_state`."""
+        """This mode's fresh/idle per-mode state (R7/R11) -- what disconnect and a mode switch
+        reset to. Only ever read when `is_soc_gated` is True; Off/Power return None since
+        neither is ever stored in `_mode_state`."""
+        ...
+
+    def resume_state(self) -> Any:
+        """This mode's state for a `SocReached` resume (R7/UC01/UC02) -- what the SOC gate
+        itself resets to while it holds, and what dispatch reads from the cycle it releases.
+        Distinct from `idle_state()` for `Solar`/`SolarOnly` (issue #757's `SocReached ->
+        Charging`/`SocReached -> Idle` transitions are exempt from the restart debounce,
+        `_mode_state.py::ModeState.resumed()`'s own docstring); identical to `idle_state()`
+        for every other mode. Only ever read when `is_soc_gated` is True."""
         ...
 
 
@@ -181,6 +190,9 @@ class _OffModeHandler:
         return 0.0, state
 
     def idle_state(self) -> None:
+        return None
+
+    def resume_state(self) -> None:
         return None
 
 
@@ -200,6 +212,9 @@ class _PowerModeHandler:
         return power.desired_current(self._target_current_getter(), ctx.status), state
 
     def idle_state(self) -> None:
+        return None
+
+    def resume_state(self) -> None:
         return None
 
 
@@ -230,6 +245,9 @@ class _SolarModeHandler:
 
     def idle_state(self) -> solar.SolarState:
         return solar.SolarState.idle()
+
+    def resume_state(self) -> solar.SolarState:
+        return solar.SolarState.resumed()
 
 
 class _SolarOnlyModeHandler:
@@ -262,6 +280,9 @@ class _SolarOnlyModeHandler:
     def idle_state(self) -> solar_only.SolarOnlyState:
         return solar_only.SolarOnlyState.idle()
 
+    def resume_state(self) -> solar_only.SolarOnlyState:
+        return solar_only.SolarOnlyState.resumed()
+
 
 class _CaptarModeHandler:
     """Wraps modes/captar.py::step unchanged."""
@@ -283,6 +304,12 @@ class _CaptarModeHandler:
         )
 
     def idle_state(self) -> captar.CaptarState:
+        return captar.CaptarState.idle()
+
+    def resume_state(self) -> captar.CaptarState:
+        # Captar's own step() treats Idle/Cooldown identically (both are cooldown_done()
+        # immediately-eligible) -- no has-charged/debounce concept to be exempt from, so this
+        # is behaviorally identical to idle_state(), unlike its Solar/SolarOnly siblings.
         return captar.CaptarState.idle()
 
 

@@ -869,16 +869,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return desired
         handler = self._mode_handlers[self.active_mode]
         if handler.is_soc_gated and ctx.ev_soc >= ctx.active_soc_limit:
-            # R7: don't resume until the gate clears. Holding the state at idle() (rather than
-            # dispatching into step()) means the next cycle where this branch stops matching --
-            # because soc_limit_override rose (resume condition 1) -- dispatches fresh from
-            # idle(), re-checking the start threshold normally. No latch, no separate phase.
-            # issue #752 (deferred): whether/how the gate's release should interact with R11's
-            # restart debounce -- e.g. whether it should route through Idle (debounce-eligible)
-            # or resume immediately the way a Cooldown-elapsed resume does -- is an open
-            # question #757 explicitly leaves to #752, not decided by this branch. Forcing
-            # straight to idle_state() here, unconditionally, is today's unchanged behavior.
-            self._mode_state[self.active_mode] = handler.idle_state()
+            # R7: don't resume until the gate clears. Holding the state at resume_state()
+            # (rather than dispatching into step()) means the next cycle where this branch
+            # stops matching -- because soc_limit_override rose (resume condition 1) --
+            # dispatches fresh from that state, re-checking the start threshold normally. No
+            # latch, no SocReached phase of its own (UC01/UC02's state model draws one, but
+            # M1 keeps every mode module opinion-free about SOC, per solar.py's own module
+            # docstring). For Solar/SolarOnly, resume_state() is an already-elapsed Cooldown
+            # (ModeState.resumed()) rather than a genuine idle_state() -- that's what makes a
+            # SocReached resume exempt from R11's restart debounce when the start threshold is
+            # already met (immediate, never having passed through Idle), and correctly
+            # debounce-eligible the next time around when it isn't (UC01/UC02's own
+            # `SocReached -> Idle` transition). This is distinct from #752 (still open), which
+            # is about the STOP side -- whether reaching the limit should itself go through a
+            # hold before cutting to 0 A -- not this RESUME side, which #757 already decided.
+            self._mode_state[self.active_mode] = handler.resume_state()
             return 0.0
         # ADR-0012: one ModeHandler registry lookup replaces the old per-mode if/elif chain
         # (MODE_SOLAR/MODE_SOLAR_ONLY/MODE_CAPTAR -- the only modes that can still reach this

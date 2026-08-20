@@ -479,15 +479,20 @@ async def test_dispatches_to_solar_only_when_selected(hass):
 
 
 @pytest.mark.parametrize(
-    ("mode", "idle_state_type"),
+    ("mode", "resume_state_type", "resume_phase"),
     [
-        (MODE_SOLAR, SolarState),
-        (MODE_SOLAR_ONLY, SolarOnlyState),
-        (MODE_CAPTAR, CaptarState),
+        # issue #757: Solar/SolarOnly hold at an already-elapsed Cooldown (ModeState.resumed()),
+        # not a genuine Idle -- that's what exempts a SocReached resume from the restart
+        # debounce when the start threshold is already met (see the has-charged-flag tests
+        # below). Captar has no has-charged/debounce concept, so its resume_state() is still
+        # idle_state() (Phase.IDLE) unchanged.
+        (MODE_SOLAR, SolarState, Phase.COOLDOWN),
+        (MODE_SOLAR_ONLY, SolarOnlyState, Phase.COOLDOWN),
+        (MODE_CAPTAR, CaptarState, Phase.IDLE),
     ],
 )
-async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(
-    hass, mode, idle_state_type
+async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_resume(
+    hass, mode, resume_state_type, resume_phase
 ):
     # Arrange: ev_soc at the configured limit, with ample surplus that would otherwise charge.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=80.0)
@@ -498,10 +503,10 @@ async def test_soc_at_or_above_limit_forces_zero_and_holds_solar_states_at_idle(
     # Assert
     assert result.commanded_current == 0.0
     # issue #561: pins the state's own TYPE, not just its `.phase` -- a mis-wired
-    # ModeHandler.idle_state() returning the wrong mode's state would still have
-    # phase == Phase.IDLE (all three *State dataclasses expose it) but fail this isinstance.
-    assert isinstance(coord._mode_state[mode], idle_state_type)
-    assert coord._mode_state[mode].phase == Phase.IDLE
+    # ModeHandler.resume_state() returning the wrong mode's state would still have a valid
+    # phase (all three *State dataclasses expose one) but fail this isinstance.
+    assert isinstance(coord._mode_state[mode], resume_state_type)
+    assert coord._mode_state[mode].phase == resume_phase
 
 
 async def test_resumes_when_the_soc_limit_rises_above_current_soc(hass):
@@ -573,6 +578,74 @@ async def test_resumes_after_disconnect_and_reconnect_while_still_at_the_limit(h
     # Assert (cycle 4): resumes immediately, proving nothing was left latched by the
     # disconnect/reconnect cycle.
     assert result.commanded_current == 12.0
+
+
+async def test_soc_gate_release_resumes_immediately_when_surplus_already_met(hass):
+    """issue #757/UC01's `SocReached -> Charging` transition: resuming from the SOC gate with
+    the start threshold already met is exempt from R11's restart debounce, even though the
+    has-charged flag is already set from charging before the limit was reached -- distinct
+    from a genuine Idle threshold crossing, which would debounce. Multi-cycle by nature (see
+    test_resumes_when_the_soc_limit_rises_above_current_soc above)."""
+    config = _config()
+
+    # Cycle 1: charges normally, setting the has-charged flag.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord, result = await _run_mode(hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0)
+    assert result.commanded_current == 12.0
+    assert coord._has_charged is True
+
+    # Cycle 2: SOC reaches the limit -- gate closes.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=80.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0
+
+    # Cycle 3: SOC drops back below the limit -- gate releases, surplus is still ample.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+
+    # Assert (cycle 3): immediate, not debounced, despite has_charged already being True.
+    assert result.commanded_current == 12.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+
+
+async def test_soc_gate_release_without_surplus_still_debounces_next_start(hass):
+    """The other half of the same SocReached transition (UC01's `SocReached -> Idle`): if
+    surplus is below the start threshold at the moment the gate releases, it lands in Idle,
+    not Charging -- and since the has-charged flag is already set, the *next* threshold
+    crossing debounces normally, unlike the immediate-resume case above."""
+    config = _config()
+
+    # Cycle 1: charges normally, setting the has-charged flag.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord, result = await _run_mode(hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0)
+    assert coord._has_charged is True
+
+    # Cycle 2: SOC reaches the limit -- gate closes.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=80.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0
+
+    # Cycle 3: gate releases, but surplus has since dropped below the start threshold.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
+
+    # Cycle 4: surplus recovers -- the flag is still set, so this crossing debounces.
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord, result = await _run_mode(
+        hass, adapters, config, MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.DEBOUNCING
 
 
 @pytest.mark.parametrize("mode", [MODE_POWER, MODE_OFF])

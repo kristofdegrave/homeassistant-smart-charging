@@ -207,3 +207,25 @@ def test_cooldown_elapsed_resume_at_threshold_is_immediate_even_when_has_charged
     )
     assert state.phase == Phase.CHARGING
     assert desired > 0.0
+
+
+def test_resumed_state_at_threshold_is_immediate_even_when_has_charged():
+    # issue #757/UC02's `SocReached -> Charging` transition -- see the sibling Solar test
+    # of the same name for the full rationale.
+    desired, state = step(
+        surplus_w=1400.0, state=SolarOnlyState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_resumed_state_below_threshold_lands_in_idle_debounce_eligible():
+    # issue #757/UC02's `SocReached -> Idle` transition -- see the sibling Solar test of the
+    # same name for the full rationale.
+    _, state = step(
+        surplus_w=500.0, state=SolarOnlyState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.IDLE
+    desired, state = step(surplus_w=1400.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0

@@ -173,3 +173,28 @@ def test_cooldown_elapsed_resume_at_threshold_is_immediate_even_when_has_charged
     )
     assert state.phase == Phase.CHARGING
     assert desired > 0.0
+
+
+def test_resumed_state_at_threshold_is_immediate_even_when_has_charged():
+    # issue #757/UC01's `SocReached -> Charging` transition: the coordinator dispatches a
+    # SocReached resume via SolarState.resumed() (an already-elapsed Cooldown), not a genuine
+    # idle() -- so, exactly like the Cooldown-elapsed case above, a resume with the threshold
+    # already met is immediate regardless of has_charged.
+    desired, state = step(
+        surplus_w=2300.0, state=SolarState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.CHARGING
+    assert desired > 0.0
+
+
+def test_resumed_state_below_threshold_lands_in_idle_debounce_eligible():
+    # issue #757/UC01's `SocReached -> Idle` transition: if the threshold isn't met the
+    # moment the gate releases, the resume lands in Idle -- has_charged stays set, so the
+    # *next* crossing debounces normally (unlike the immediate case above).
+    _, state = step(
+        surplus_w=50.0, state=SolarState.resumed(), now=0.0, has_charged=True, **DEFAULTS
+    )
+    assert state.phase == Phase.IDLE
+    desired, state = step(surplus_w=2300.0, state=state, now=10.0, has_charged=True, **DEFAULTS)
+    assert state.phase == Phase.DEBOUNCING
+    assert desired == 0.0
