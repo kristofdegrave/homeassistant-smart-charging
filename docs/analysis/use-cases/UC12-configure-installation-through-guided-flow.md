@@ -82,9 +82,11 @@ variants.
    it presents the four [capability](../system-overview.md#ubiquitous-language) declarations
    (R18) — is solar installed? does the installation bill against a capacity tariff? does the
    household want departure deadlines managed at all? does the household want the System to send
-   notifications at all? — together with the smoothing window (R10). Each of the four defaults to
-   *present*, consistent with R18's own default-present rule for every capability, so a household
-   that accepts the defaults is offered every step.
+   notifications at all? — together with the smoothing window (R10). The solar, CapTar, and
+   deadline declarations each default to *present*, per R18's default-present rule; the
+   notifications declaration deliberately departs from that rule and defaults to *absent* (see
+   "Requirements satisfied" for why), so a household that accepts the defaults is offered steps
+   6–8 but not the `notifications` step.
    It does not present the [control interval](../system-overview.md#ubiquitous-language), which the
    install flow defaults rather than asks (1b).
 2. **When** the user submits the `core` step, **then** the System shows the `grid` step, presenting
@@ -207,15 +209,15 @@ Then that change updates the corresponding owned runtime entity directly
 each entity's *starting* value at whichever moment its step runs, distinct from an installation
 threshold that keeps applying until it is changed again through this flow.
 
-**5a — A capability is declared absent** — branches from step 5.
-Given the user declared the CapTar, solar, deadline, or notifications capability absent on the
-`core` step
+**5a — A capability is absent** — branches from step 5.
+Given the user declared the CapTar, solar, or deadline capability absent on the `core` step, or
+did not declare the notifications capability present there (its default being absent)
 When the System advances past the `power` step
 Then the corresponding gated step (6, 7, 8, or 9 respectively) is skipped entirely and none of its
 fields is ever presented (R18 AC3, AC7; R14 AC1) — for the notifications capability, that is the
 notification-target mapping, the evening home-day prompt's enable flag and prompt time, and the
-prompt timeout, so a household that declares notifications unwanted is never asked where to send
-them.
+prompt timeout, so a household that has not declared notifications wanted is never asked where to
+send them.
 No ungated step is ever skipped: `core`, `grid`, `ev_charger`, `vehicle`, and `power` are shown on
 every install path, whatever the capability declarations.
 
@@ -285,7 +287,8 @@ it was before the flow started.
 - A config entry exists (install) or has been updated (reconfigure/options), split into data and
   options exactly as ADR-0005 already specifies — this use-case changes only how the fields are
   presented, not where they are stored.
-- No field belonging to a capability the user declared absent was ever presented to them.
+- No field belonging to an absent capability — declared so, or absent by default — was ever
+  presented to them.
 - The EV state-of-charge mapping was asked exactly once, on the always-shown `vehicle` step,
   whatever the capability declarations — replacing the previous step model's once-only-across-two-
   possible-steps mechanism, and asked even when neither solar nor CapTar is declared present.
@@ -401,11 +404,21 @@ Neither R18 nor R14 mandates *how many steps, in what order* — their acceptanc
 only whether a capability is configurable and whether its inputs are required.
 
 The **notifications capability** (`notifications_available`) this use-case adds to the `core` step
-is a fourth capability under R18's extensibility clause (AC9). It defaults to **present**, matching
-every existing capability's default-present rule, so a household that accepts the defaults is still
-asked for its notification target and evening-prompt settings. The glossary's capability list is
-extended for it; reconciling R18's own wording ("This release recognises three") and adding a
-matching pair of R18 acceptance criteria is tracked separately and is out of scope here.
+is a fourth capability under R18's extensibility clause (AC9). It defaults to **absent** — a
+deliberate, named departure from R18's blanket "Every capability defaults to *present*" rule, not
+an oversight. The three existing capabilities each record an installation fact that is already true
+of the installation before the flow asks: panels are installed or they are not, the connection
+bills against a capacity tariff or it does not, deadlines are wanted or they are not. Defaulting
+those to present asks the household only to correct a statement about what it already has. Whether
+the System may contact the household unprompted is not such a fact; it is a standing preference,
+and one whose default determines whether messages arrive uninvited. A household that never engages
+with the question should end up un-notified rather than silently signed up, so this capability is
+opted into. The practical consequence is that a household accepting the defaults is *not* asked for
+its notification target or evening-prompt settings; it must declare notifications wanted on the
+`core` step to reach step 9. The glossary's capability list and the notifications-capability entry
+both record the exception; reconciling R18's own wording (both "This release recognises three" and
+its default-present sentence) and adding a matching pair of R18 acceptance criteria is tracked
+separately and is out of scope here.
 
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this

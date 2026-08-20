@@ -84,7 +84,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow), UC12 |
 | `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow), UC12 |
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
-| `notifications_available` | config-data | data | — | on (present) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC08, UC10 | user (reconfigure flow), UC12 |
+| `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC08, UC10 | user (reconfigure flow), UC12 |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
