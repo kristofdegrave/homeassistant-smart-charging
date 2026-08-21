@@ -17,7 +17,11 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.smart_charging.const import DOMAIN, LABEL_SC_RUNTIME
-from custom_components.smart_charging.entity import SmartChargingEntity, sync_disabled_by
+from custom_components.smart_charging.entity import (
+    SmartChargingEntity,
+    sync_disabled_by,
+    sync_labels,
+)
 
 _OTHER_LABEL = "some_other_label"
 
@@ -48,42 +52,87 @@ class _RestoringLabelledEntity(SmartChargingEntity, RestoreEntity):
         self.restored_state = await self.async_get_last_state()
 
 
-async def test_owned_labels_applied_on_add(hass):
-    entity = _LabelledEntity(entry_id="entry1")
-    platform = MockEntityPlatform(hass, domain="sensor")
+async def test_sync_labels_applies_owned_labels(hass):
+    """ADR-0028: sync_labels writes owned_labels onto a registered entity's row."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
-
     registry = er.async_get(hass)
+
+    sync_labels(
+        registry, Platform.SENSOR, entity.unique_id, owned_labels=frozenset({LABEL_SC_RUNTIME})
+    )
+
     entry = registry.async_get(entity.entity_id)
-    assert entry is not None
     assert entry.labels == {LABEL_SC_RUNTIME}
 
 
-async def test_default_owned_labels_is_empty(hass):
+async def test_sync_labels_noop_with_no_owned_or_manageable_labels(hass):
+    """ADR-0028: a class with no owned_labels at all (e.g. SolarSurplusSensor) gets no
+    registry write -- not a call that happens to no-op, a genuine no-op."""
     entity = _UnlabelledEntity(entry_id="entry1")
-    platform = MockEntityPlatform(hass, domain="sensor")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
-
     registry = er.async_get(hass)
+
+    sync_labels(registry, Platform.SENSOR, entity.unique_id, owned_labels=frozenset())
+
     entry = registry.async_get(entity.entity_id)
-    assert entry is not None
     assert entry.labels == set()
 
 
-async def test_owned_labels_merge_with_a_users_own_label(hass):
+async def test_sync_labels_merges_with_a_users_own_label(hass):
     """`async_update_entity`'s `labels` parameter replaces the stored set -- a bare assignment
-    would silently erase a label the user attached themselves on the next reload."""
-    registry = er.async_get(hass)
+    would silently erase a label the user attached themselves on the next reload. Calls with
+    only `owned_labels` set, relying on `manageable_labels`'s default (falls back to
+    `owned_labels` itself) -- the case ADR-0028's own review caught as under-specified."""
     entity = _LabelledEntity(entry_id="entry1")
-    platform = MockEntityPlatform(hass, domain="sensor")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
     registry.async_update_entity(entity.entity_id, labels={_OTHER_LABEL})
 
-    # Re-fire the mechanism directly (simulating a second add on reload).
-    await entity.async_added_to_hass()
+    sync_labels(
+        registry, Platform.SENSOR, entity.unique_id, owned_labels=frozenset({LABEL_SC_RUNTIME})
+    )
 
     entry = registry.async_get(entity.entity_id)
     assert entry.labels == {LABEL_SC_RUNTIME, _OTHER_LABEL}
+
+
+async def test_sync_labels_removes_label_when_owned_labels_drops_it(hass):
+    """ADR-0028: a capability turning off (owned_labels no longer containing the label) must
+    remove it, not just leave it stuck from a previous reload -- `manageable_labels` is the
+    superset that makes removal possible, since `owned_labels` alone could only ever grow the
+    stored set (#674)."""
+    entity = _LabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+
+    sync_labels(
+        registry,
+        Platform.SENSOR,
+        entity.unique_id,
+        owned_labels=frozenset(),
+        manageable_labels=frozenset({LABEL_SC_RUNTIME}),
+    )
+
+    entry = registry.async_get(entity.entity_id)
+    assert entry.labels == set()
+
+
+async def test_sync_labels_noop_when_not_yet_registered(hass):
+    """ADR-0028: a unique_id with no registry row yet must not raise -- mirrors
+    sync_disabled_by's equivalent case."""
+    registry = er.async_get(hass)
+    unique_id = "entry1_never_registered"
+    entity_count_before = len(registry.entities)
+
+    sync_labels(registry, Platform.SENSOR, unique_id, owned_labels=frozenset({LABEL_SC_RUNTIME}))
+
+    assert registry.async_get_entity_id(Platform.SENSOR, DOMAIN, unique_id) is None
+    assert len(registry.entities) == entity_count_before
 
 
 async def test_async_added_to_hass_still_delegates_restore_state(hass):
@@ -94,7 +143,7 @@ async def test_async_added_to_hass_still_delegates_restore_state(hass):
 
     entity = _RestoringLabelledEntity(entry_id="entry1")
     entity.entity_id = entity_id
-    platform = MockEntityPlatform(hass, domain="sensor")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR)
     await platform.async_add_entities([entity])
 
     assert entity.restored_state is not None
