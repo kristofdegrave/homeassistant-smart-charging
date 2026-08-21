@@ -37,6 +37,33 @@ def sync_disabled_by(
         registry.async_update_entity(entity_id, disabled_by=None)
 
 
+def sync_labels(
+    registry: er.EntityRegistry,
+    domain: str,
+    unique_id: str,
+    *,
+    owned_labels: frozenset[str],
+    manageable_labels: frozenset[str] = frozenset(),
+) -> None:
+    """Post-add registry sync (ADR-0028): replaces the removed async_added_to_hass-based label
+    sync with the identical merge semantics. Keyed on unique_id (via the same
+    registry.async_get_entity_id lookup as sync_disabled_by), NOT the entity instance's own
+    entity_id attribute -- a registry-disabled entity never gets added to hass, so its instance
+    may have no reliable entity_id to read; the registry lookup works regardless of whether the
+    entity was added live this reload (ADR-0028's Decision requires the label to stay correct
+    even for a capability-absent entity a user forced back on with disabled_by=USER)."""
+    manageable = manageable_labels or owned_labels
+    if not manageable:
+        return
+    entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+    if entity_id is None:
+        return
+    existing = registry.async_get(entity_id)
+    if existing is None:
+        return
+    registry.async_update_entity(entity_id, labels=(existing.labels - manageable) | owned_labels)
+
+
 class SmartChargingEntity(Entity):
     """Common device grouping for owned entities; subclasses set their own unique_id."""
 
