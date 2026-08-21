@@ -24,7 +24,9 @@ motivates revisiting the decision:
   been redistributed onto a topic step — grid fields to `grid`, charger fields to `ev_charger`,
   EV/battery fields to `vehicle`, `Power`-mode fields to `power`, notification fields to the new
   `notifications` step, and the smoothing window into `core`. There is no longer any step whose
-  membership rule is "whatever did not fit elsewhere".
+  membership rule is "whatever did not fit elsewhere". Two fields land on a step for the first time
+  rather than moving onto one — the solar-production mapping and the `Power`-mode cooldown, which
+  the seven-step model never presented at all (UC12's postconditions name both).
 - **`vehicle_limit` is gone as a step.** UC12 4a turns the vehicle-charge-limit question from a
   step-level election asked on the first step into a plain field on the always-shown `vehicle`
   step, with the car-at-home mapping becoming required by a *field-level* rule on that same step
@@ -87,13 +89,22 @@ e.g. `power` checks the CapTar flag, else solar, else deadline, else notificatio
 - Pro: Uses only `async_show_form`, keeps each step's successor visible in the step that owns it,
   needs no indirection to read (the traversal is the call graph), and is the most conventional shape
   in the Home Assistant ecosystem.
-- Con: The gating logic is duplicated once per possible predecessor, and the nine-step model makes
-  this strictly worse than it was at seven: with four consecutive gated steps at the tail, every one
-  of `power`, `captar`, `solar` and `deadline` must know every *later* gate, so the last five steps
-  form a quadratic web of successor conditions. UC12's extensibility postcondition — a new
-  capability appended after steps 6–9 with no change to any other step — is unsatisfiable, since
-  the new step's gate would have to be added to each of its four possible predecessors. It is also a
-  silent-failure shape: a successor chain that forgets a branch skips a step rather than raising.
+- Con: The gating logic is duplicated once per possible predecessor. The nine-step model does not
+  make this *larger* — the seven-step model already had four consecutive gated steps
+  (`solar`, `captar`, `deadline`, `vehicle_limit`), and the count of gate tests a hand-chained
+  version must spell out is the same ten in both models (`power`, `captar`, `solar` and `deadline`
+  must each know every later gate, exactly as `core`, `solar`, `captar` and `deadline` had to
+  before). What changes is the *failure mode*, and it changes for the worse. In the seven-step
+  model the gated block was followed by the always-reachable `mappings` and `thresholds` steps, so a
+  forgotten branch meant a capability's fields silently never rendered while the flow still ran to
+  completion and created a correct-shaped entry. In the nine-step model the gated block
+  (`captar`, `solar`, `deadline`, `notifications`) is the tail, with nothing always-reachable behind
+  it: a forgotten branch has no later step to fall through to, so the worst case is a chain that
+  terminates early rather than one that merely skips a screen. Either way the duplication is what
+  makes UC12's extensibility postcondition — a new capability appended after steps 6–9 with no
+  change to any other step — unsatisfiable, since the new step's gate would have to be added to each
+  of its four possible predecessors. And in both models the shape fails silently: nothing raises
+  when a successor condition is missing.
 
 ### Option C — Linear `async_step_*` sequence driven by one ordered, gated step table
 
@@ -129,9 +140,9 @@ resolves to that step's method, and a "done" item finishes the flow.
   sharpens this: defaulting to absent is a *stored* fact about a household that never engaged with
   the question, and a menu cannot record a decision the user did not make. A menu also cannot be
   prefilled from an existing entry as UC12 1a requires of `core`'s declarations, gives no guarantee
-  every enabled step was completed before "done", and cannot express the fixed order at all.
-- Note: unchanged from ADR-0025's assessment; the nine-step model only strengthens the Con, since
-  five of the nine steps are ungated and would sit outside the menu entirely.
+  every enabled step was completed before "done", and cannot express the fixed order at all. This
+  assessment is unchanged from ADR-0025's; the nine-step model only strengthens it, since five of
+  the nine steps are ungated and would sit outside the menu entirely.
 
 ### Option E — Hybrid: menu for capability selection, linear substeps within each capability
 
@@ -162,9 +173,15 @@ a step whose capability flag is false is absent everywhere).
   options flow shows threshold halves only") true by construction rather than by a hand-written gate
   that could disagree with the schemas.
 - Con: It conflates two things UC12 keeps separate: *whether* a step runs (a capability decision)
-  and *what* it renders (a schema decision). Gates that are not derivable from schemas would have
-  nowhere to live, and UC12 has one — the flow-mode distinction is derivable, but a future gate on
-  anything other than schema shape would force the table back. It also makes the fixed order
+  and *what* it renders (a schema decision) — and it only actually eliminates the table for the
+  second. The four capability gates (`captar`, `solar`, `deadline`, `notifications`) are not
+  derivable from schema shape at all: a capability flag is a value in the config-entry data bucket
+  (ADR-0005), not a property of a schema fragment, so no amount of inspecting fragments can tell you
+  whether step 7 runs for *this* entry. Only the mapping-half-presence question ("which fields does
+  this step's schema happen to include", which decides reconfigure's subset) falls out of the
+  schemas. Option F would therefore still need a per-step capability declaration sitting alongside
+  the schema-derived part — the harder half of the duplication it promises to remove survives it,
+  and with it the premise of the option. It also makes the fixed order
   implicit in a registry's declaration order, which is a weaker guarantee than an ordered table the
   tests can assert against directly, and it discards a working, tested mechanism for a speculative
   gain.
@@ -184,14 +201,17 @@ value must be stored for a household that never touched the question, makes Opti
 infer-from-navigation fallback less viable than before, not more. Option E still lands that mismatch
 on the screen where it does damage.
 
-Between the linear shapes, the choice of C over B is made *more* decisive by the new model, not
-less: four consecutive capability-gated steps at the tail turn B's per-predecessor duplication into
-a quadratic web, and UC12's restated extensibility postcondition ("appended after the existing
-capability-gated steps (6–9), with no change to the fields or order of any other step") is exactly
-what B cannot deliver. Option F is rejected as the more interesting alternative it is: it would make
-two of UC12's derived rules structural, but at the price of conflating traversal with rendering and
-of trading a tested mechanism for a speculative one — and the duplication it removes is cheap to
-pin with the table tests this decision already requires.
+Between the linear shapes, C is still preferred to B for the same reason ADR-0025 preferred it, and
+the new model does not change the size of B's per-predecessor duplication — the seven-step model had
+the same four consecutive gated steps and the same ten gate tests. What the new model changes is
+where a mistake lands: the gated block is now the tail of the flow, with no always-reachable step
+behind it to absorb a forgotten branch. UC12's restated extensibility postcondition ("appended after
+the existing capability-gated steps (6–9), with no change to the fields or order of any other step")
+remains the decisive point, and it is exactly what B cannot deliver. Option F is rejected as the more
+interesting alternative it is: it would make two of UC12's derived rules structural, but it leaves
+the capability gates — the half of the duplication that actually costs something — undelivered, and
+it trades a tested mechanism for a speculative one. The duplication it does remove is cheap to pin
+with the table tests this decision already requires.
 
 Option C's own cost is accepted and restated, now larger: traversal is hand-rolled control flow no
 framework check covers, and at nine steps a row omitted from a table is unreachable in a way nothing
@@ -245,8 +265,13 @@ entities.
 
 - **ADR-0025 is superseded in full.** Its Status becomes `Superseded by ADR-0027` and its ADL row is
   updated to match, in this same change; its Context, Decision and Consequences are left exactly as
-  written, per ADR-0001's immutability rule. No other ADR cites ADR-0025, so no cross-reference needs
-  a note. Where this ADR restates ADR-0025's reasoning unchanged (the menu options, the accumulator,
+  written, per ADR-0001's immutability rule. No other *ADR* cites ADR-0025, but the approved
+  implementation spec `docs/plans/2026-08-13-guided-config-flow-design.md` does, and makes
+  "ADR-0025 reaching Accepted" its slice gate, barring any task from being committed against a
+  superseded ADR-0025 — so merging this change puts that spec's own gate condition on a superseded
+  record. Re-pointing that gate (and the spec's ADR-0025 citations) at ADR-0027 is a small follow-up
+  update the spec owes once this ADR is Accepted; it is named here, not attempted here. Where this
+  ADR restates ADR-0025's reasoning unchanged (the menu options, the accumulator,
   the framework-mandated entry points), the restatement — not the superseded record — is what
   applies from here.
 - **The implementation has not caught up, and this ADR does not pretend otherwise.**
@@ -260,7 +285,11 @@ entities.
   flow onto the nine-step model is therefore **outstanding implementation work**, to be planned and
   tracked as its own task set; until it lands, the shipped flow follows ADR-0025's superseded model.
   The mechanism this ADR re-affirms is already built, so that work is confined to the tables, the
-  step methods and the schema fragments.
+  step methods and the schema fragments — plus a mechanical re-citation pass: roughly fifty
+  docstring and comment references to "ADR-0025" live in `config_flow.py`, `const.py`,
+  `tests/test_config_flow.py` and `tests/test_config_flow_translations.py`, including a test named
+  `test_adr0025_every_config_table_step_has_a_step_method`, and all of them must come to name
+  ADR-0027 instead.
 - **The step constants and the fixed-order constant change.** `STEP_VEHICLE_LIMIT`, `STEP_MAPPINGS`
   and `STEP_THRESHOLDS` lose their steps; `STEP_GRID`, `STEP_EV_CHARGER`, `STEP_VEHICLE`,
   `STEP_POWER` and `STEP_NOTIFICATIONS` are added; `UC12_FIXED_STEP_ORDER` becomes the nine-step
@@ -274,7 +303,12 @@ entities.
   mapping-only — so `_ungated_threshold_schema`'s contents disperse across `core`, `grid`,
   `ev_charger`, `vehicle` and `power`, and new `notifications` fragments appear. Two fragments get
   simpler: `_solar_mapping_schema` and `_captar_mapping_schema` lose their `include_ev_soc`
-  parameter entirely, since the EV state-of-charge field moves to `vehicle`.
+  parameter entirely, since the EV state-of-charge field moves to `vehicle`. One new mapping
+  fragment is not a flat field list: UC12 2 puts the low-tariff mapping's own state-translation
+  table on the `grid` step beside the mapping itself, presented only when the mapped entity does not
+  already report on/off — the single place where a step's mapping half is conditionally shaped by
+  another field submitted on that same step, and therefore the one fragment whose construction is
+  not a straight per-topic re-cut.
 - **Two guard helpers dissolve; one moves and gains a condition.** `_ev_soc_missing_error` and
   `_solar_forecast_missing_error` have no remaining job — each becomes a plain `vol.Required` on a
   step that is always shown, respectively always shown when it applies — and the once-only-across-
