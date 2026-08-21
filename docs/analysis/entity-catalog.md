@@ -138,7 +138,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11, UC12 (seeds initial value) |
-| `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) | UC04 | user (anytime), UC12 |
+| `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) — see the Captar-dependent-rows note | UC04 | user (anytime), UC12 |
 | `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime), UC12 |
 
 ### Diagnostic outputs
@@ -351,10 +351,16 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 - **Captar-dependent rows are conditional on the CapTar capability (R18).** When
   `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly. The *Peak protection* subgroup's thresholds (`safety_margin_w`,
-  `max_peak_kw`, `peak_floor_kw`, `peak_grace_min`) still apply — the R3 clamp is not gated by this
-  capability — but [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b) now
-  presents their fields on the flow's CapTar-gated step, so a non-CapTar installation runs them on
-  their defaults rather than tuning them through the flow.
+  `max_peak_kw`, `peak_floor_kw`, `peak_grace_min`) and the `Power`-mode peak-protection option
+  (`power_respect_peak`, catalogued under *`Power` mode*) still apply — the R3 clamp is not gated by
+  this capability — but [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b) now
+  presents all five fields on the flow's CapTar-gated step, so a non-CapTar installation runs them on
+  whichever values it already holds rather than tuning them through the flow. On a fresh install
+  those are the defaults: peak protection stays on at the default thresholds. On an entry that
+  declares CapTar absent through reconfigure they are the values it last stored (UC12 1a leaves a
+  withdrawn capability's stored options values untouched), so an entry that had switched
+  `power_respect_peak` off keeps it off and stays bounded only by C4. Either way there is no path
+  through the flow to raise the limit or to switch the clamp on or off.
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When
   `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
