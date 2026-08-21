@@ -64,8 +64,9 @@ And if surplus hovers at the midpoint from one cycle to the next, the set-point 
 
 **Coordinator clamps still bound the set-point.**
 Given the System has computed a solar-only set-point
-When the peak-protection clamp (R3) or the grid-supply-ceiling clamp (C4) in `control-cycle.md` is applied on raw readings
-Then the coordinator may only reduce (never raise) the charger current. While `Charging`, `SolarOnly` keeps net grid import at or below 0 W under the default `round down` strategy (or bounded to less than one amp-step under `round up`/`nearest`), so neither clamp normally engages there, since both act on materially positive net import. While `Hold`, net import can be materially positive (up to the whole minimum charging current drawn from the grid), so either clamp can engage during the hold the same way it can during `Solar`'s grid fallback (UC01).
+When the peak-protection clamp (R3, only while the CapTar [capability](../system-overview.md#ubiquitous-language) is present — R18) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` is applied on raw readings
+Then the coordinator may only reduce (never raise) the charger current. While `Charging`, `SolarOnly` keeps net grid import at or below 0 W under the default `round down` strategy (or bounded to less than one amp-step under `round up`/`nearest`), so neither clamp normally engages there, since both act on materially positive net import. While `Hold`, net import can be materially positive (up to the whole minimum charging current drawn from the grid), so either clamp can engage during the hold the same way it can during `Solar`'s grid fallback (UC01)
+And when the CapTar capability is absent, the R3 clamp does not run at all — in this or any other mode (R3, `control-cycle.md` step 5) — so net import, during the hold as anywhere else, is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1). `SolarOnly` itself stays available on such an installation: only the solar capability gates this mode (R18, Preconditions).
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `SolarOnly` mode
@@ -99,7 +100,12 @@ not recovered — the one exception to this mode's otherwise strict zero-grid-im
 R11). The `stateDiagram-v2` below is authoritative for the state set. All
 thresholds/timers are configurable (defaults shown). The peak-protection (R3) and
 grid-supply-ceiling (C4) clamps are applied by the coordinator *after* the mode returns its desired
-current and are not repeated here.
+current and are not repeated here. Neither clamp appears in the state set below, and only C4 applies
+unconditionally: the R3 clamp bounds this mode's delivered current — in practice only during the
+`Hold`, where net import can be materially positive — solely while the CapTar
+[capability](../system-overview.md#ubiquitous-language) is present, and does not run at all while it
+is absent (R18, Exception flows) — `SolarOnly` remains available either way, since only the solar
+capability gates it.
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected"
 precondition and exits this use-case's scope from any state, returning to Idle; on disconnect
 the active SOC limit resets to the default, any solar step-up is cleared (R7), and the
@@ -161,7 +167,7 @@ stateDiagram-v2
 
 - **R2** — Solar-only charging (start threshold default 1300 W, configurable amp-step rounding strategy — default `round down` keeping net import ≤ 0 W — bounded post-surplus hold (default 1 minute) before stopping, never charged from the grid under the default strategy outside that bounded hold).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3) and grid-supply-ceiling (C4) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3, only while the CapTar capability is present — R18) and grid-supply-ceiling (C4, always) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
 
 ## Relationships
 

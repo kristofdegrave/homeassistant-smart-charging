@@ -56,8 +56,9 @@ And if the hold period elapses with surplus still below the start threshold, the
 
 **Peak / grid-ceiling clamp overrides the solar set-point.**
 Given the System has computed a solar set-point
-When the peak-protection clamp (R3) or the grid-supply-ceiling clamp (C4) in `control-cycle.md` would be exceeded on raw readings
-Then the coordinator reduces (or, on a sustained breach at the minimum current, stops) the charger current — the clamp decides the set-point this cycle, not the solar rule.
+When the peak-protection clamp (R3, only while the CapTar [capability](../system-overview.md#ubiquitous-language) is present — R18) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` would be exceeded on raw readings
+Then the coordinator reduces (or, on a sustained R3 breach at the minimum current, stops) the charger current — the clamp decides the set-point this cycle, not the solar rule
+And when the CapTar capability is absent, the R3 clamp does not run at all — in this or any other mode (R3, `control-cycle.md` step 5) — so net import is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1), and the sustained-R3-breach stop can never fire. `Solar` itself stays available on such an installation: only the solar capability gates this mode (R18, Preconditions), so this is the ordinary shape of the clamp on a non-CapTar installation, not an exceptional one.
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Solar` mode
@@ -82,7 +83,11 @@ re-tracks the available surplus as it changes, keeping net import bounded to les
 outside grid fallback and the post-surplus hold (R1). The
 `stateDiagram-v2` below is authoritative for the state set. All thresholds/timers are configurable
 (defaults shown). The peak-protection (R3) and grid-supply-ceiling (C4) clamps are applied by the
-coordinator *after* the mode returns its desired current and are not repeated here.
+coordinator *after* the mode returns its desired current and are not repeated here. Neither clamp
+appears in the state set below, and only C4 applies unconditionally: the R3 clamp bounds this mode's
+delivered current only while the CapTar [capability](../system-overview.md#ubiquitous-language) is
+present, and does not run at all while it is absent (R18, Exception flows) — `Solar` remains
+available either way, since only the solar capability gates it.
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected"
 precondition and exits this use-case's scope from any state, returning to Idle; on disconnect
 the active SOC limit resets to the default, any solar step-up is cleared (R7), and the
@@ -143,7 +148,7 @@ stateDiagram-v2
 
 - **R1** — Solar-first charging (start threshold, amp-step rounding round-up set-point using all available surplus, grid fallback, post-surplus hold).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3) and grid-supply-ceiling (C4) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3, only while the CapTar capability is present — R18) and grid-supply-ceiling (C4, always) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
 
 ## Relationships
 
