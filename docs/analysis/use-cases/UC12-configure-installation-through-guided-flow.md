@@ -136,8 +136,24 @@ variants.
    home-day mapping (5c), and the plug-in reminder's lead time (R12).
 9. **Given** the household wants notifications sent, **when** the user has completed every gated
    step among 6–8 their capability declarations required, **then** the System shows the
-   `notifications` step, presenting the notification-target mapping, the evening home-day prompt's
-   enable flag and prompt time, and the prompt timeout (R13).
+   `notifications` step, presenting the notification-target mapping, the three [per-notification
+   enable toggles](../system-overview.md#ubiquitous-language) (R18 AC11) — one each for the
+   unreachable-deadline notice (R5), the plug-in reminder (R12), and the evening home-day prompt
+   (R13) — and the evening home-day prompt's own time together with the prompt timeout (R13).
+   All three toggles are presented whatever the deadline capability declares, including
+   `deadline_notice_enabled` and `plug_in_reminder_enabled`, whose notifications cannot fire at all
+   without a departure deadline (R18 AC7): the toggles belong to the notification surface, gated by
+   the notifications capability alone (R18 AC10), which is why `entity-catalog.md` records all three
+   in the notification configuration group rather than the deadline one. A household that wants
+   notifications but no deadlines is therefore shown both toggles and can set either, and both are
+   simply inert until a deadline exists.
+   The three toggles sit here, on the notifications step, rather than beside the notification each
+   one governs, because all three are gated by the notifications capability (R18 AC10): presenting
+   any of them on another step would put it in front of a household that never opted into
+   notifications. That they are also one topic — which notifications this household wants — and
+   that the step model asks one topic per step, supports the same placement. The plug-in reminder's
+   *lead time* stays on the deadline-gated step 8 (R12), since it tunes when a reminder is due
+   rather than whether reminders are wanted at all.
 10. **When** the user submits the last step the flow showed them — `notifications` while the
     notifications capability is present, otherwise the last gated step they reached, or `power`
     when every capability is declared absent — with every
@@ -182,7 +198,9 @@ threshold half of whichever gated steps the entry's already-declared capabilitie
 `captar`'s cooldown, `Power`-mode peak-protection option, and peak-protection thresholds when
 CapTar is available, `solar`'s thresholds
 when solar is installed, `deadline`'s reminder lead time when deadlines are managed, and
-`notifications`' evening-prompt fields and prompt timeout when notifications are wanted.
+`notifications`' three [per-notification enable
+toggles](../system-overview.md#ubiquitous-language), evening-prompt time, and prompt timeout when
+notifications are wanted.
 Submitting updates only the options bucket.
 
 **4a — When the car-at-home mapping is required** — branches from step 4.
@@ -218,10 +236,11 @@ Given the user declared the CapTar, solar, or deadline capability absent on the 
 did not declare the notifications capability present there (its default being absent)
 When the System advances past the `power` step
 Then the corresponding gated step (6, 7, 8, or 9 respectively) is skipped entirely and none of its
-fields is ever presented (R18 AC3, AC5, AC7, AC10; R14 AC1) — for the notifications capability, that is
-the notification-target mapping, the evening home-day prompt's enable flag and prompt time, and the
+fields is ever presented (R18 AC3, AC5, AC7, AC10; R14 AC1) — for the notifications capability,
+that is the notification-target mapping, the three [per-notification enable
+toggles](../system-overview.md#ubiquitous-language), the evening home-day prompt's time, and the
 prompt timeout, so a household that has not declared notifications wanted is never asked where to
-send them.
+send them, nor which of the three notifications it wants.
 No ungated step is ever skipped: `core`, `grid`, `ev_charger`, `vehicle`, and `power` are shown on
 every install path, whatever the capability declarations.
 
@@ -302,6 +321,13 @@ it was before the flow started.
   presented, not where they are stored.
 - No field belonging to an absent capability — declared so, or absent by default — was ever
   presented to them.
+- A household that declared notifications wanted was presented one [per-notification enable
+  toggle](../system-overview.md#ubiquitous-language) per notification on the `notifications` step
+  (R18 AC11), and each toggle's submitted value was stored in the options bucket — so changing any
+  one of them later needs only the options flow (1b), never a return to the reconfigure flow, and
+  never withdrawing the capability. What each toggle then suppresses is not this use-case's to say:
+  R18 AC11 owns the shared rule, and each notification's own requirement (R5, R12, R13) owns its
+  own detail.
 - The EV state-of-charge mapping was asked exactly once, on the always-shown `vehicle` step,
   whatever the capability declarations — replacing the previous step model's once-only-across-two-
   possible-steps mechanism, and asked even when neither solar nor CapTar is declared present.
@@ -409,30 +435,36 @@ written against the previous step model and no longer describe what this use-cas
 Reconciling R20's wording is tracked separately and is out of scope here.
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
-acceptance criteria that the solar, CapTar, and deadline capabilities are each user-configurable
-(AC1, AC4, AC6), and that solar's own inputs are not required to be configured when it is absent
-(AC3) — and [R14](../requirements.md#r14--configurable-departure-times) AC1, that the
+acceptance criteria that the solar, CapTar, deadline, and notifications capabilities are each
+user-configurable (AC1, AC4, AC6, AC9), that solar's own inputs are not required to be configured
+when it is absent (AC3), and that each notification's own [per-notification enable
+toggle](../system-overview.md#ubiquitous-language) is user-configurable (AC11, in the part that
+concerns configurability: this use-case presents the three toggles on step 9 and, while the
+notifications capability is absent, presents none of them, AC10; what each toggle suppresses once
+set is not this use-case's to say — R18 AC11 owns the shared rule, and each notification's own
+requirement (R5, R12, R13) owns its own detail) — and
+[R14](../requirements.md#r14--configurable-departure-times) AC1, that the
 departure-time inputs are neither offered nor required when the deadline capability is absent.
 Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
 only whether a capability is configurable and whether its inputs are required.
 
 The **notifications capability** (`notifications_available`) this use-case adds to the `core` step
 is a fourth capability, alongside the other three R18 already names as in scope this release
-(AC13). It defaults to **absent** — a
-deliberate, named departure from R18's blanket "Every capability defaults to *present*" rule, not
-an oversight. The three existing capabilities each record an installation fact that is already true
-of the installation before the flow asks: panels are installed or they are not, the connection
-bills against a capacity tariff or it does not, deadlines are wanted or they are not. Defaulting
+(AC13). It defaults to **absent** — a deliberate, named departure from the default-present
+convention the other three capabilities follow, not an oversight. The three existing capabilities
+each record an installation fact that is already true of the installation before the flow asks:
+panels are installed or they are not, the connection bills against a capacity tariff or it does
+not, deadlines are wanted or they are not. Defaulting
 those to present asks the household only to correct a statement about what it already has. Whether
 the System may contact the household unprompted is not such a fact; it is a standing preference,
 and one whose default determines whether messages arrive uninvited. A household that never engages
 with the question should end up un-notified rather than silently signed up, so this capability is
 opted into. The practical consequence is that a household accepting the defaults is *not* asked for
-its notification target or evening-prompt settings; it must declare notifications wanted on the
-`core` step to reach step 9. The glossary's capability list and the notifications-capability entry
-both record the exception; reconciling R18's own wording (both "This release recognises three" and
-its default-present sentence) and adding a matching pair of R18 acceptance criteria is tracked
-separately and is out of scope here.
+its notification target, its per-notification enable toggles, or its evening-prompt settings; it
+must declare notifications wanted on the `core` step to reach step 9. The glossary's capability
+list and the notifications-capability entry both record the exception, and so does R18 itself: it
+names the notifications capability alongside the other three, states the default-absent exception,
+and carries the matching acceptance criteria (AC9, AC10, AC11).
 
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this
