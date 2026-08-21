@@ -271,9 +271,14 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data.coordinator
     solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
-    solar_surplus_unique_id = f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    solar_surplus_sensor = SolarSurplusSensor(
+        entry.entry_id, coordinator, solar_available=solar_available
+    )
     sync_disabled_by(
-        er.async_get(hass), Platform.SENSOR, solar_surplus_unique_id, capability_met=solar_available
+        er.async_get(hass),
+        Platform.SENSOR,
+        solar_surplus_sensor.unique_id,
+        capability_met=solar_available,
     )
     async_add_entities(
         [
@@ -282,7 +287,7 @@ async def async_setup_entry(
             MonthlyPeakSensor(entry.entry_id, coordinator),
             EffectivePeakLimitSensor(entry.entry_id, coordinator),
             ActiveSocLimitSensor(entry.entry_id, coordinator),
-            SolarSurplusSensor(entry.entry_id, coordinator, solar_available=solar_available),
+            solar_surplus_sensor,
             PeakHeadroomSensor(entry.entry_id, coordinator),
             TimeToFullSensor(entry.entry_id, coordinator),
             AdapterReadingsSensor(entry.entry_id, coordinator),

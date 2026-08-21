@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import Platform
+from homeassistant.const import STATE_UNAVAILABLE, Platform
 from homeassistant.core import State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
@@ -427,6 +427,7 @@ async def test_solar_surplus_sensor_disabled_by_default_when_solar_unavailable(h
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
+    assert entity_id is not None
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
 
 
@@ -444,12 +445,14 @@ async def test_solar_surplus_sensor_enabled_when_solar_available(hass):
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
+    assert entity_id is not None
     assert registry.async_get(entity_id).disabled_by is None
 
 
 async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(hass):
     """ADR-0028: a reload (ADR-0008) with solar_available flipped to True clears disabled_by
-    on the entity that already exists in the registry from the prior (disabled) setup."""
+    on the entity that already exists in the registry from the prior (disabled) setup, and the
+    entity is live again (design doc §5: not just a registry-field flip)."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
@@ -460,7 +463,9 @@ async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
+    assert entity_id is not None
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None
 
     data = entry_data_base()
     data[CONF_SOLAR_AVAILABLE] = True
@@ -468,11 +473,12 @@ async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(
     await hass.async_block_till_done()
 
     assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
 
 
 async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(hass):
     """ADR-0028: reverse of the above -- a reload with solar_available flipped to False
-    disables the previously-enabled entity."""
+    disables the previously-enabled entity and removes it from hass (design doc §5)."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_SOLAR_AVAILABLE] = True
@@ -485,12 +491,21 @@ async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(h
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
+    assert entity_id is not None
     assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
 
-    hass.config_entries.async_update_entry(entry, data=entry_data_base())
+    off_data = entry_data_base()
+    off_data[CONF_SOLAR_AVAILABLE] = False
+    hass.config_entries.async_update_entry(entry, data=off_data)
     await hass.async_block_till_done()
 
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    # A previously-live entity leaves a restored/unavailable ghost state behind on removal
+    # rather than disappearing from the state machine outright -- unlike the sibling test's
+    # fresh-install case (never live, so genuinely no state at all).
+    disabled_state = hass.states.get(entity_id)
+    assert disabled_state is None or disabled_state.state == STATE_UNAVAILABLE
 
 
 async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
@@ -498,24 +513,36 @@ async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
     entry.data.get(CONF_SOLAR_AVAILABLE, ...) -- the same pattern select.py/time.py already use
     -- and NOT via entry.runtime_data.coordinator._config, a private Client->Manager access
     path no platform file uses today. Rigs entry.data and a stubbed private attribute to
-    disagree, so reading the wrong one flips this assertion."""
-    captured = []
+    disagree and captures the exact `capability_met` sync_disabled_by is called with (not just
+    the constructor argument), so reading either the constructor OR the disabled_by sync from
+    the wrong source flips this assertion."""
+    captured_entities = []
+    captured_calls = []
 
     def _capture(entities):
-        captured.extend(entities)
+        captured_entities.extend(entities)
 
-    entry = SimpleNamespace(
-        entry_id="entry1",
-        data={CONF_SOLAR_AVAILABLE: True},
-        runtime_data=SimpleNamespace(
-            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False))
-        ),
-    )
+    def _fake_sync_disabled_by(registry, domain, unique_id, *, capability_met):
+        captured_calls.append(capability_met)
 
-    await sensor_module.async_setup_entry(hass, entry, _capture)
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(sensor_module, "sync_disabled_by", _fake_sync_disabled_by)
+    try:
+        entry = SimpleNamespace(
+            entry_id="entry1",
+            data={CONF_SOLAR_AVAILABLE: True},
+            runtime_data=SimpleNamespace(
+                coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False))
+            ),
+        )
 
-    solar_sensor = next(e for e in captured if isinstance(e, SolarSurplusSensor))
-    assert solar_sensor._attr_entity_registry_enabled_default is True
+        await sensor_module.async_setup_entry(hass, entry, _capture)
+    finally:
+        monkeypatch.undo()
+
+    solar_sensor = next(e for e in captured_entities if isinstance(e, SolarSurplusSensor))
+    assert solar_sensor.entity_registry_enabled_default is True
+    assert captured_calls == [True]
 
 
 def test_active_mode_unique_id_scoped_to_entry():

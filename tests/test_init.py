@@ -532,9 +532,11 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     the GENERATED id equals the catalog id (the property under test)."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
-    # Solar/EV-SOC config is not required for any owned entity's creation -- none is
-    # capability-gated -- but is set anyway so this test exercises the widest entity
-    # population, same as test_select_entity_is_registered_on_setup above.
+    # solar_available=True is set so this test exercises the widest entity population
+    # (same as test_select_entity_is_registered_on_setup above) -- since ADR-0028,
+    # SolarSurplusSensor is registry-gated on this flag, so this also keeps it enabled
+    # rather than registered-but-disabled, which doesn't change its unique_id/entity_id
+    # (the property this test actually checks) but keeps the test's own intent legible.
     data[CONF_SOLAR_AVAILABLE] = True
     data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"  # seed_charger_states already seeds sensor.ev_soc
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
