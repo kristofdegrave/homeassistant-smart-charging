@@ -233,29 +233,27 @@ When the CapTar capability is declared absent
 Then this step model no longer presents any of them, and the installation keeps whichever values it
 already holds — their defaults on a fresh install, but on reconfigure the values the entry last
 stored, since declaring a capability absent leaves its stored options values untouched (1a).
-On a fresh install the real-world consequence, stated plainly, is that the peak-protection option
-defaults **on** (R17 AC2) and the maximum peak defaults to **4 kW** (with a 2.5 kW peak floor), so a
-non-CapTar installation is clamped to a roughly 4 kW effective peak limit — on a 40 A single-phase
-(≈9 kW) connection, the upper part of the `Power`-mode current range becomes unreachable.
-On reconfigure the consequence runs in either direction: an entry that had switched the option
-**off** while CapTar was present keeps it off once CapTar is declared absent, so its `Power` mode
-stays unclamped by peak protection and is bounded only by the [grid supply
-ceiling](../system-overview.md#ubiquitous-language) (C4).
-Either way **no path through this flow remains to raise the limit, or to switch the clamp on or
-off** — gating the option alongside the thresholds sharpens that consequence rather than
-contradicting it, since whichever values the entry is left on, neither lever stays reachable.
-That is a behaviour change, not merely a lost tuning affordance.
+The real-world consequence, stated plainly, is that none of those five values has any effect while
+the capability is absent: the peak-protection clamp does not run at all on a non-CapTar
+installation (R3, R18), in any mode, so net import is bounded only by the [grid supply
+ceiling](../system-overview.md#ubiquitous-language) (C4) — typically a far higher ceiling than the
+4 kW maximum peak the thresholds default to, which means the full `Power`-mode current range stays
+reachable on, say, a 40 A single-phase (≈9 kW) connection. The dormant values matter only on the
+way back: declaring the capability present again resumes the clamp on exactly whichever values the
+entry still holds — the defaults on a fresh install, or the stored values on reconfigure (1a) —
+and **no path through this flow remains to change them meanwhile**. That is a behaviour change, not
+merely a lost tuning affordance.
 This **reverses** the previous step model, which presented these fields ungated on the strength of
 the peak-protection clamp (R3) protecting the grid connection itself rather than only the
 capacity-tariff bill. The reversal is deliberate: it groups every peak-protection field — the
 thresholds and the switch that enables the clamp those thresholds tune — with the billing
-arrangement that motivates tuning them, accepting the consequences above as the price. The
-clamp itself is unchanged — R3 still applies in every mode, and the grid supply ceiling clamp (C4),
-which is what actually protects the grid connection on a non-CapTar installation, stays on the
-ungated `grid` step. This use-case describes only the new step behaviour; the wording of
-**R18 AC5** and **R20 AC5** is reconciled in a companion requirements change rather than here, so
-this document does not restate what those criteria say about where the peak-protection fields are
-presented.
+arrangement that motivates tuning them, accepting the consequences above as the price. R3 itself is
+now gated the same way — it applies in every mode while the capability is present and in none while
+it is absent — and the grid supply ceiling clamp (C4), which is what actually protects the grid
+connection on a non-CapTar installation, stays on the
+ungated `grid` step. This use-case describes only the step behaviour; **R18 AC5** and **R20 AC5**
+already say the same thing in `requirements.md`, so this document does not restate what those
+criteria say about where the peak-protection fields are presented.
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.

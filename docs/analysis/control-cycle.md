@@ -45,7 +45,9 @@ homed in the rule or use-case that defines its lifecycle.
 - `PeakLimitClamped` — the peak-protection step reduced the mode's desired current to keep
   net import at or below the [effective peak limit](system-overview.md#ubiquitous-language)
   minus the [safety margin](system-overview.md#ubiquitous-language); signals that peak
-  protection, not the mode, decided the set-point this cycle.
+  protection, not the mode, decided the set-point this cycle. Never emitted when the CapTar
+  [capability](system-overview.md#ubiquitous-language) is absent, since step 5 does not run at
+  all then (R18).
 - `SupplyCeilingClamped` — the grid-supply-ceiling step reduced the current to keep net grid
   import below the [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
   [grid safety offset](system-overview.md#ubiquitous-language); signals that the hard
@@ -63,7 +65,7 @@ flowchart TD
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
     Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule, smoothed inputs)"]
-    Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped if Power disables it, R17)"}
+    Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped entirely when the CapTar<br/>capability is absent, R18;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
     Peak -->|no| Ceiling
     Clamp --> Ceiling{"Would net import exceed<br/>grid supply ceiling − safety offset?<br/>(raw readings — C4, always)"}
@@ -116,7 +118,10 @@ flowchart TD
    is Auto mode-selection's own decision (`resolution-rules.md`), made before this step reads the
    active mode; under `Manual` the active mode never changes, and this step never adjusts what a
    mode requests either (NF2) — see step 5.
-5. **Apply the peak-protection clamp (R3).** Using the **raw** readings (not the smoothed
+5. **Apply the peak-protection clamp (R3) — when the CapTar capability is present.** This step is
+   skipped in its entirety when the CapTar [capability](system-overview.md#ubiquitous-language) is
+   absent (R18): no clamp engages in any mode, no effective peak limit is consulted, and no
+   `PeakLimitClamped` is emitted; net import is then bounded by step 6 alone. Otherwise, using the **raw** readings (not the smoothed
    ones, to avoid lag), the coordinator checks whether the desired current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
@@ -126,14 +131,17 @@ flowchart TD
    mode whose own request was previously clamped (e.g. `Captar`, `Power`) draw more, up to
    whatever it already requests; it never raises what a mode requests in the first place. This
    clamp is active in every mode except when `Power` mode has its peak-protection option
-   disabled (R17); the grid supply ceiling clamp in step 6 still applies in that case.
-6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode — and even when the step 5
-   peak clamp was skipped — the coordinator reduces the current, using **raw** readings (not
+   disabled (R17); the grid supply ceiling clamp in step 6 still applies in that case, as it does
+   when this whole step is skipped for an absent CapTar capability.
+6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode *and* regardless of any
+   declared capability — and so also whenever the step 5 peak clamp was skipped, whether because
+   `Power` disabled it or because the CapTar capability is absent — the coordinator reduces the current, using **raw** readings (not
    smoothed, to avoid lag), so that net grid import stays below the
    [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
    [grid safety offset](system-overview.md#ubiquitous-language) (converted to amperes via the
-   resolved supply voltage). This is the hard fuse-protection limit and the one clamp `Power`
-   mode cannot switch off; it emits `SupplyCeilingClamped` when it engages.
+   resolved supply voltage). This is the hard fuse-protection limit, the one clamp `Power`
+   mode cannot switch off, and the only clamp every installation always has whatever its
+   capabilities; it emits `SupplyCeilingClamped` when it engages.
 7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
@@ -155,7 +163,7 @@ flowchart TD
 
 - **No healthy supply-voltage reading.** Conversions fall back to the configurable nominal
   voltage (default 230 V) for the cycle (NF4); the cycle still completes.
-- **Peak breach persists.** A momentary breach only triggers a clamp, not a stop. The charger
+- **Peak breach persists** (CapTar capability present only). A momentary breach only triggers a clamp, not a stop. The charger
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
   rapid-cycling cooldown then governs any restart (R11).
@@ -178,12 +186,13 @@ flowchart TD
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
-  cannot trip (C4). This applies even in `Power` mode with peak protection disabled, where it is
-  the only active clamp.
+  cannot trip (C4). This applies even in `Power` mode with peak protection disabled, and on an
+  installation without the CapTar capability (R18) — in both of which it is the only active clamp.
 
 ## Requirements satisfied
 
-- **R3** — CapTar peak protection (the clamp in step 5, on raw readings).
+- **R3** — CapTar peak protection (the clamp in step 5, on raw readings; the step is skipped
+  entirely while the CapTar capability is absent, R18).
 - **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 5).
 - **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop/restart-debounce invariant in step 7).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
