@@ -31,7 +31,8 @@ template.
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Accepted |
 | [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Accepted |
 | [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion | Accepted |
-| [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Accepted |
+| [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Accepted |
+| [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
