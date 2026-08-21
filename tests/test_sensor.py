@@ -6,14 +6,25 @@ from types import SimpleNamespace
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import Platform
 from homeassistant.core import State
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
     MockEntityPlatform,
     mock_restore_cache_with_extra_data,
 )
 
-from custom_components.smart_charging.const import ATTR_PERIOD_MONTH, STATUS_FAULT, STATUS_OK
+from custom_components.smart_charging import sensor as sensor_module
+from custom_components.smart_charging.const import (
+    ATTR_PERIOD_MONTH,
+    CONF_SOLAR_AVAILABLE,
+    DOMAIN,
+    OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    STATUS_FAULT,
+    STATUS_OK,
+)
 from custom_components.smart_charging.coordinator_cycle import PeakDemandState
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
@@ -26,6 +37,7 @@ from custom_components.smart_charging.sensor import (
     SolarSurplusSensor,
     TimeToFullSensor,
 )
+from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
 _ADAPTER_READINGS_AT = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
 
@@ -401,6 +413,109 @@ def test_all_sensor_object_id_suffixes_are_unique():
     ]
     suffixes = [cls(entry_id="abc", coordinator=coord)._object_id_suffix for cls in sensor_classes]
     assert len(suffixes) == len(set(suffixes))
+
+
+async def test_solar_surplus_sensor_disabled_by_default_when_solar_unavailable(hass):
+    """ADR-0028: a fresh install with solar_available=False registers the sensor disabled."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+
+async def test_solar_surplus_sensor_enabled_when_solar_available(hass):
+    """ADR-0028: solar_available=True registers the sensor enabled."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = True
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    assert registry.async_get(entity_id).disabled_by is None
+
+
+async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(hass):
+    """ADR-0028: a reload (ADR-0008) with solar_available flipped to True clears disabled_by
+    on the entity that already exists in the registry from the prior (disabled) setup."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=data)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(entity_id).disabled_by is None
+
+
+async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(hass):
+    """ADR-0028: reverse of the above -- a reload with solar_available flipped to False
+    disables the previously-enabled entity."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = True
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    assert registry.async_get(entity_id).disabled_by is None
+
+    hass.config_entries.async_update_entry(entry, data=entry_data_base())
+    await hass.async_block_till_done()
+
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+
+async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
+    """Regression guard (design doc §3.1): async_setup_entry must resolve solar_available via
+    entry.data.get(CONF_SOLAR_AVAILABLE, ...) -- the same pattern select.py/time.py already use
+    -- and NOT via entry.runtime_data.coordinator._config, a private Client->Manager access
+    path no platform file uses today. Rigs entry.data and a stubbed private attribute to
+    disagree, so reading the wrong one flips this assertion."""
+    captured = []
+
+    def _capture(entities):
+        captured.extend(entities)
+
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={CONF_SOLAR_AVAILABLE: True},
+        runtime_data=SimpleNamespace(
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False))
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    solar_sensor = next(e for e in captured if isinstance(e, SolarSurplusSensor))
+    assert solar_sensor._attr_entity_registry_enabled_default is True
 
 
 def test_active_mode_unique_id_scoped_to_entry():
