@@ -57,8 +57,8 @@ And if the hold period elapses with surplus still below the start threshold, the
 **Peak / grid-ceiling clamp overrides the solar set-point.**
 Given the System has computed a solar set-point
 When the peak-protection clamp (R3, only while the CapTar [capability](../system-overview.md#ubiquitous-language) is present — R18) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` would be exceeded on raw readings
-Then the coordinator reduces (or, on a sustained R3 breach at the minimum current, stops) the charger current — the clamp decides the set-point this cycle, not the solar rule
-And when the CapTar capability is absent, the R3 clamp does not run at all — in this or any other mode (R3, `control-cycle.md` step 5) — so net import is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1), and the sustained-R3-breach stop can never fire. `Solar` itself stays available on such an installation: only the solar capability gates this mode (R18, Preconditions), so this is the ordinary shape of the clamp on a non-CapTar installation, not an exceptional one.
+Then the coordinator reduces the charger current — or, on a sustained R3 breach at the minimum charging current (reachable in `Charging` during grid fallback and in `Hold`, the two situations where this mode sits at the minimum current with a materially positive net import), stops it and starts the solar-mode cooldown (R11) — so the clamp decides the set-point this cycle, not the solar rule. That stop is drawn in the State model below; C4, having no grace period, only ever clamps
+And when the CapTar capability is absent, the R3 clamp does not run at all — in this or any other mode (R3, `control-cycle.md` step 5) — so beyond this mode's own set-point rule, net import is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1), and the sustained-R3-breach stop can never fire. `Solar` itself stays available on such an installation: only the solar capability gates this mode (R18, Preconditions).
 
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Solar` mode
@@ -84,10 +84,14 @@ outside grid fallback and the post-surplus hold (R1). The
 `stateDiagram-v2` below is authoritative for the state set. All thresholds/timers are configurable
 (defaults shown). The peak-protection (R3) and grid-supply-ceiling (C4) clamps are applied by the
 coordinator *after* the mode returns its desired current and are not repeated here. Neither clamp
-appears in the state set below, and only C4 applies unconditionally: the R3 clamp bounds this mode's
+is a state below, and only C4 applies unconditionally: the R3 clamp bounds this mode's
 delivered current only while the CapTar [capability](../system-overview.md#ubiquitous-language) is
-present, and does not run at all while it is absent (R18, Exception flows) — `Solar` remains
+present, and does not run at all while it is absent (R18, Exception flows). `Solar` remains
 available either way, since only the solar capability gates it.
+The R3 clamp does contribute two transitions: a sustained R3 breach at the minimum charging
+current stops charging and starts the solar-mode cooldown, from `Charging` (where grid fallback
+holds at the minimum current) and from `Hold`. Both edges are inapplicable while the CapTar
+capability is absent, since the clamp they respond to never runs.
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected"
 precondition and exits this use-case's scope from any state, returning to Idle; on disconnect
 the active SOC limit resets to the default, any solar step-up is cleared (R7), and the
@@ -106,8 +110,8 @@ is met the moment cooldown elapses, without ever passing through `Idle`.
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | smoothed surplus ≥ start threshold, SOC < active SOC limit, no cooldown → Charging, immediately if the has-charged flag is not yet set, else once the threshold has held for the restart debounce period (default 1 min) |
-| Charging | next whole ampere rounded up from smoothed surplus (amp-step rounding, round up), floored at minimum current (grid fallback) | surplus < start threshold → Hold · SOC ≥ active SOC limit → SocReached |
-| Hold | minimum charging current | surplus ≥ start threshold → Charging · hold period (5 min) elapsed → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Charging | next whole ampere rounded up from smoothed surplus (amp-step rounding, round up), floored at minimum current (grid fallback) | surplus < start threshold → Hold · sustained R3 breach while at the minimum current in grid fallback, only while the CapTar capability is present (stop → R11 solar-mode cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Hold | minimum charging current | surplus ≥ start threshold → Charging · hold period (5 min) elapsed → Cooldown · sustained R3 breach at the minimum current, only while the CapTar capability is present (stop → R11 solar-mode cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) |
 | SocReached | 0 A | active SOC limit changes → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) · car unplugged/replugged → Idle (disconnect clears the has-charged flag) |
 
@@ -117,7 +121,7 @@ is met the moment cooldown elapses, without ever passing through `Idle`.
 - `RestartDebounceStarted` — (fires within the `Idle` state; not a state transition, since `Idle` is unchanged) the start threshold was newly met while the has-charged flag was already set; the System begins waiting out the restart debounce period before actually starting. Shared with sibling UC02's `SolarOnly` mode.
 - `GridFallbackEngaged` — (fires within the `Charging` state on a set-point condition, not a state transition) surplus fell below the minimum charging current; the System is holding at minimum current with grid shortfall.
 - `PostSurplusHoldStarted` — surplus fell below the start threshold; the System entered the hold to ride out cloud cover. Shared with sibling UC02's `SolarOnly` mode (same event name, mode-specific duration and grid-import semantics carried in the event's own mode context, not in the name).
-- `SolarChargingStopped` — the System stopped charging (0 A) after the hold period elapsed and started the cooldown.
+- `SolarChargingStopped` — the System stopped charging (0 A) and started the solar-mode cooldown, either because the hold period elapsed with surplus still below the start threshold, or because a sustained R3 breach at the minimum charging current forced the stop (the latter only while the CapTar capability is present — never on a non-CapTar installation, where R3 does not run).
 - `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit (R7).
 
 ## Diagram
@@ -129,6 +133,8 @@ stateDiagram-v2
     Charging --> Hold: smoothed surplus < start threshold
     Hold --> Charging: smoothed surplus ≥ start threshold<br/>(within hold — rides out cloud)
     Hold --> Cooldown: hold period elapsed (5 min)<br/>surplus still below threshold
+    Charging --> Cooldown: sustained R3 breach at minimum<br/>current (grid fallback), only while the<br/>CapTar capability is present<br/>(stop → R11 cooldown)
+    Hold --> Cooldown: sustained R3 breach at minimum<br/>current, only while the CapTar<br/>capability is present<br/>(stop → R11 cooldown)
     Charging --> SocReached: SOC ≥ active SOC limit
     Hold --> SocReached: SOC ≥ active SOC limit<br/>(minimum current draws from grid)
     Cooldown --> Charging: cooldown elapsed (2 min)<br/>& surplus ≥ start threshold<br/>(immediate, no debounce — never entered Idle)
