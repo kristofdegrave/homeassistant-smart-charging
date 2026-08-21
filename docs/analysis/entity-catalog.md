@@ -221,20 +221,29 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 
 ### Reminders & prompts
 
-*`notification_target`, `prompt_timeout_h`, `evening_prompt_enabled`, and `evening_prompt_time` are
-conditional on the [notifications capability](system-overview.md#ubiquitous-language)
-(`notifications_available`, R18): when it is off,
-[UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step (9) is
-skipped, so none of the four is offered or required. `reminder_lead_h` is the exception — it is
+*`notification_target`, `prompt_timeout_h`, `deadline_notice_enabled`, `plug_in_reminder_enabled`,
+`evening_prompt_enabled`, and `evening_prompt_time` are conditional on the [notifications
+capability](system-overview.md#ubiquitous-language) (`notifications_available`, R18): when it is
+off, [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step (9)
+is skipped, so none of the six is offered or required. `reminder_lead_h` is the exception — it is
 presented on UC12's deadline-gated step (8) and so follows the [deadline
 capability](system-overview.md#ubiquitous-language) instead.*
+
+*Gating of the notifications themselves is two-layer and conjunctive: each is sent only while
+`notifications_available` is on **and** its own per-notification enable toggle is on —
+`deadline_notice_enabled` for R5's unreachable-deadline notice, `plug_in_reminder_enabled` for R12's
+plug-in reminder, `evening_prompt_enabled` for R13's evening home-day prompt. All three toggles
+default to on, so declaring the capability present enables all three notifications and the household
+narrows down from there (R18).*
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
 | `prompt_timeout_h` | config-options | options | h | 2 | evening prompt timeout (R13) | — | user (anytime), UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
-| `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (UC08) | UC08 | user (anytime), UC12 |
+| `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | UC05 | user (anytime), UC12 |
+| `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | UC10 | user (anytime), UC12 |
+| `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (R13, R18; UC08) | UC08 | user (anytime), UC12 |
 | `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime), UC12 |
 | `binary_sensor.smart_charging_plug_in_reminder` | state | — | bool | `on` while a plug-in reminder is currently due (car home, disconnected, below the active SOC limit, within the lead time of the next departure) | plug-in reminder (R12) | (UC11) | (UC10) |
 
@@ -280,7 +289,8 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   itself selectable as the active limit) is a config-entry **options** value, alongside other
   bounds (`min_current_a`, `max_current_a`) — same reasoning ADR-0005 applies to thresholds
   generally. Likewise, a behavioural/algorithm choice that is set once and rarely revisited
-  (`solar_only_rounding_strategy`, `power_respect_peak`, `evening_prompt_enabled`) is a
+  (`solar_only_rounding_strategy`, `power_respect_peak`, and the per-notification enable toggles
+  `deadline_notice_enabled` / `plug_in_reminder_enabled` / `evening_prompt_enabled`) is a
   config-entry options value, distinct from a value the household dials in for the current session
   (`sc_power_target_current_a`, still an open runtime-entity question under ADR-0004). For values
   ADR-0005's own text does not individually enumerate (e.g. `grid_supply_ceiling_a`,
@@ -390,10 +400,17 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 - **Notification-dependent rows are conditional on the notifications capability (R18).** When
   `notifications_available` is off,
   [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step is
-  skipped, so `notification_target`, `evening_prompt_enabled`, `evening_prompt_time`, and
-  `prompt_timeout_h` are neither offered nor required. Like the deadline capability, this one
-  removes no option from `select.smart_charging_mode`. `reminder_lead_h` stays with the deadline
-  capability, since UC12 presents it on the deadline-gated step.
+  skipped, so `notification_target`, the three per-notification enable toggles
+  (`deadline_notice_enabled`, `plug_in_reminder_enabled`, `evening_prompt_enabled`),
+  `evening_prompt_time`, and `prompt_timeout_h` are neither offered nor required. Like the deadline
+  capability, this one removes no option from `select.smart_charging_mode`. `reminder_lead_h` stays
+  with the deadline capability, since UC12 presents it on the deadline-gated step.
+- **Each notification is additionally conditional on its own enable toggle (R18).** The capability
+  being on is necessary but not sufficient: `deadline_notice_enabled` gates R5's unreachable-deadline
+  notice, `plug_in_reminder_enabled` gates R12's plug-in reminder, and `evening_prompt_enabled` gates
+  R13's evening home-day prompt. All three default to on. A toggle being off suppresses only that
+  notification — the underlying state rows (e.g.
+  `binary_sensor.smart_charging_plug_in_reminder`) still resolve, and no charging behaviour changes.
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
   manual selection; without the CapTar capability, `Captar` is not offered for manual selection.
