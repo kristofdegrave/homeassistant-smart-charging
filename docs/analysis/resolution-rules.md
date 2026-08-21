@@ -263,6 +263,14 @@ not-yet-established billed peak can't push the limit down too far (row 2).
   before the `min()` with the maximum peak, so it can raise but never push the effective peak
   limit above the maximum peak — see the glossary term for why the floor exists.
 - The limit never exceeds the maximum peak, even under urgency (C3).
+- **When the CapTar [capability](system-overview.md#ubiquitous-language) is absent (R18), nothing
+  consults this rule's result.** The peak clamp is the sole control-decision consumer of the
+  effective peak limit, and it does not run at all on such an installation (R3, `control-cycle.md`
+  step 5); the value still resolves by row 2 and is still surfaced read-only for observability, but
+  no charging decision turns on it. This rule therefore needs no capability branch of its own — it
+  degrades by simply not being reached. The consequence for R5 is that the ceiling raise (row 1)
+  becomes a no-op there, leaving `Manual` with no working deadline lever at all and `Auto` with only
+  its escalation to `Power` (Auto mode-selection, below).
 - When the required current exceeds the maximum permitted rate even so — regardless of
   profile — the System delivers the maximum permitted rate and notifies the user that the
   deadline is unreachable (R5). The notification fires on the same terms while a missed-deadline hold
