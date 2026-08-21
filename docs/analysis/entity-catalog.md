@@ -240,10 +240,10 @@ toggles.*
 | `prompt_timeout_h` | config-options | options | h | 2 | evening prompt timeout (R13) | — | user (anytime), UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
 | `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | (UC05) | user (anytime), UC12 |
-| `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | (UC10) | user (anytime), UC12 |
+| `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | UC10 | user (anytime), UC12 |
 | `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (R13, R18) | UC08 | user (anytime), UC12 |
 | `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime), UC12 |
-| `binary_sensor.smart_charging_plug_in_reminder` | state | — | bool | `on` while a plug-in reminder is currently due (car home, disconnected, below the active SOC limit, within the lead time of the next departure) | plug-in reminder (R12) | (UC11) | (UC10) |
+| `binary_sensor.smart_charging_plug_in_reminder` | state | — | bool | `on` while a plug-in reminder is currently due (car home, disconnected, below the active SOC limit, within the lead time of the next departure) | plug-in reminder (R12) | (UC11) | UC10 |
 
 ---
 
