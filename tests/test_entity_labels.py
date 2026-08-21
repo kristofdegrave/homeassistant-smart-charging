@@ -1,10 +1,13 @@
-"""HA-harness tests for SmartChargingEntity's label-application mechanism (C5, #601).
+"""HA-harness tests for SmartChargingEntity's registry-sync mechanisms (C5, #601; ADR-0028).
 
 `tests/test_entity.py` stays plain pytest (no `hass`) -- it only exercises the pure
-`_object_id_suffix`/`unique_id` derivation. Label application needs the entity registry and a
-real `async_added_to_hass` call, so it lives here instead.
+`_object_id_suffix`/`unique_id` derivation. Registry-state sync (labels, and per ADR-0028,
+`disabled_by`) needs the entity registry, so it lives here instead. `sync_disabled_by` and
+`sync_labels` are the two setup-time registry helpers ADR-0028 introduces to replace the
+label-only mechanism this file used to test exclusively via a real `async_added_to_hass` call.
 """
 
+from homeassistant.const import Platform
 from homeassistant.core import State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -13,8 +16,8 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache_with_extra_data,
 )
 
-from custom_components.smart_charging.const import LABEL_SC_RUNTIME
-from custom_components.smart_charging.entity import SmartChargingEntity
+from custom_components.smart_charging.const import DOMAIN, LABEL_SC_RUNTIME
+from custom_components.smart_charging.entity import SmartChargingEntity, sync_disabled_by
 
 _OTHER_LABEL = "some_other_label"
 
@@ -96,3 +99,77 @@ async def test_async_added_to_hass_still_delegates_restore_state(hass):
 
     assert entity.restored_state is not None
     assert entity.restored_state.state == "restored"
+
+
+async def test_sync_disabled_by_disables_when_capability_absent(hass):
+    """ADR-0028: capability_met=False on a currently-enabled entity sets disabled_by."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+
+    entry = registry.async_get(entity.entity_id)
+    assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+
+async def test_sync_disabled_by_reenables_when_capability_returns(hass):
+    """ADR-0028: capability_met=True clears a disabled_by=INTEGRATION set by this mechanism."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    registry.async_update_entity(entity.entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
+
+    entry = registry.async_get(entity.entity_id)
+    assert entry.disabled_by is None
+
+
+async def test_sync_disabled_by_never_overrides_user_disable(hass):
+    """ADR-0028: a user's own disabled_by=USER must survive a capability change in either
+    direction -- this mechanism only ever flips its own None<->INTEGRATION pair."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    registry.async_update_entity(entity.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
+    assert registry.async_get(entity.entity_id).disabled_by is er.RegistryEntryDisabler.USER
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    assert registry.async_get(entity.entity_id).disabled_by is er.RegistryEntryDisabler.USER
+
+
+async def test_sync_disabled_by_is_idempotent(hass):
+    """ADR-0028: calling with the same capability_met twice in a row is a no-op the second time
+    -- every reload re-runs this sync, so it must not toggle or error on repetition."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    first = registry.async_get(entity.entity_id).disabled_by
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    second = registry.async_get(entity.entity_id).disabled_by
+
+    assert first is er.RegistryEntryDisabler.INTEGRATION
+    assert second is er.RegistryEntryDisabler.INTEGRATION
+
+
+async def test_sync_disabled_by_noop_when_not_yet_registered(hass):
+    """ADR-0028: a unique_id with no registry row yet (first-ever setup, before
+    async_add_entities creates one) must not raise -- entity_registry_enabled_default handles
+    that case instead."""
+    registry = er.async_get(hass)
+    unique_id = "entry1_never_registered"
+    entity_count_before = len(registry.entities)
+
+    sync_disabled_by(registry, Platform.SENSOR, unique_id, capability_met=False)
+
+    assert registry.async_get_entity_id(Platform.SENSOR, DOMAIN, unique_id) is None
+    assert len(registry.entities) == entity_count_before

@@ -9,6 +9,34 @@ from homeassistant.helpers.entity import Entity
 from .const import DOMAIN
 
 
+def sync_disabled_by(
+    registry: er.EntityRegistry, domain: str, unique_id: str, *, capability_met: bool
+) -> None:
+    """Pre-add registry sync (ADR-0028): flips disabled_by between None and
+    RegistryEntryDisabler.INTEGRATION as capability_met changes, for an entity that already has
+    a registry row. No-ops if the entity isn't registered yet (a brand-new entity's initial
+    disabled state is set by _attr_entity_registry_enabled_default at add time instead -- there
+    is no row for this call to act on before that) or if the row is somehow missing despite a
+    matching entity_id. Never touches any other existing disabled_by value (notably USER) in
+    either direction.
+
+    `domain` is the entity's platform domain (e.g. "sensor", "time") -- the same first
+    positional argument `registry.async_get_entity_id(domain, platform, unique_id)` itself
+    takes, where `platform` there means the *integration* domain (`DOMAIN`). Named `domain`
+    here, not `platform`, to avoid exactly that ambiguity.
+    """
+    entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+    if entity_id is None:
+        return
+    existing = registry.async_get(entity_id)
+    if existing is None:
+        return
+    if not capability_met and existing.disabled_by is None:
+        registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+    elif capability_met and existing.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+        registry.async_update_entity(entity_id, disabled_by=None)
+
+
 class SmartChargingEntity(Entity):
     """Common device grouping for owned entities; subclasses set their own unique_id."""
 
