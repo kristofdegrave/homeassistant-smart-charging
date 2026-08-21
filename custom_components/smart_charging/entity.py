@@ -5,7 +5,6 @@ from __future__ import annotations
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 
 from .const import DOMAIN
 
@@ -33,8 +32,8 @@ def sync_disabled_by(
     if existing is None:
         return
     if not capability_met and existing.disabled_by is None:
-        registry.async_update_entity(entity_id, disabled_by=RegistryEntryDisabler.INTEGRATION)
-    elif capability_met and existing.disabled_by is RegistryEntryDisabler.INTEGRATION:
+        registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+    elif capability_met and existing.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
         registry.async_update_entity(entity_id, disabled_by=None)
 
 
