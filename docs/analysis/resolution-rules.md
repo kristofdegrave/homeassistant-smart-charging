@@ -245,7 +245,8 @@ not-yet-established billed peak can't push the limit down too far (row 2).
 | 2 | Otherwise (normal operation) | `min(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
 
 - This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
-  `Manual`: raising the ceiling never itself raises what a mode requests, but a mode whose own
+  `Manual` (except when the CapTar capability is absent, where it is a no-op — see below):
+  raising the ceiling never itself raises what a mode requests, but a mode whose own
   request was previously clamped below the old ceiling (e.g. `Captar` or `Power`) can now draw
   more, up to whatever it already requests, C1, and C4 — bounded above by the [maximum permitted
   rate](system-overview.md#ubiquitous-language). A mode whose own request does not depend on
@@ -359,7 +360,9 @@ escalation and revert happen automatically.
 ## Requirements satisfied
 
 - **R5** — Departure deadline guarantee (the required-current computation above; the missed-deadline
-  hold; the effective-peak-limit raise, `Auto`'s and `Manual`'s shared lever; Auto mode-selection
+  hold; the effective-peak-limit raise, `Auto`'s and `Manual`'s shared lever — a no-op when the
+  CapTar capability is absent, leaving `Manual` with none, as the effective-peak-limit rule above
+  records; Auto mode-selection
   row 2, `Auto`'s second lever; the deadline-unreachable notification). R15 (EV battery capacity) feeds
   the required-current computation as a configuration parameter, not a behaviour of its own.
 - **R7** — Active SOC limit resolution.

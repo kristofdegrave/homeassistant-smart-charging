@@ -251,10 +251,9 @@ arrangement that motivates tuning them, accepting the consequences above as the 
 now gated the same way — it applies in every mode while the capability is present and in none while
 it is absent — and the grid supply ceiling clamp (C4), which is what actually protects the grid
 connection on a non-CapTar installation, stays on the
-ungated `grid` step. This use-case describes only the new step behaviour; the wording of
-**R18 AC5** and **R20 AC5** is reconciled in a companion requirements change rather than here, so
-this document does not restate what those criteria say about where the peak-protection fields are
-presented.
+ungated `grid` step. This use-case describes only the step behaviour; **R18 AC5** and **R20 AC5**
+already say the same thing in `requirements.md`, so this document does not restate what those
+criteria say about where the peak-protection fields are presented.
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.

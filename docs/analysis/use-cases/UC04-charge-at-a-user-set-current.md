@@ -37,11 +37,18 @@ Given the peak-protection option (`power_respect_peak`) is off
 When the System requests the configured Power target current
 Then the R3 peak clamp is skipped entirely and net import may exceed the effective peak limit, raising the monthly peak demand — bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1).
 
+**3a′ — CapTar capability absent** — branches from step 3.
+Given the CapTar [capability](../system-overview.md#ubiquitous-language) is absent (R18)
+When the System requests the configured Power target current
+Then the R3 peak clamp does not run at all — in this or any other mode (R3, `control-cycle.md`, step 5) — whatever `power_respect_peak` holds, so that option has no effect and is not even presented for configuration ([UC12](UC12-configure-installation-through-guided-flow.md), R18).
+And net import is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1), exactly as in 3a, but by the installation's declared billing arrangement rather than by a user choice — there is no CapTar peak to protect on such an installation, and no monthly peak demand billed against one.
+And the sustained-R3-breach stop and its `Power`-mode cooldown (Exception flows, State model) can never fire, since the clamp they respond to never runs.
+
 ## Exception flows
 
 **Peak / grid-ceiling clamp bounds or stops the set-point.**
 Given the System has requested the configured Power target current in `Power` mode
-When the peak-protection clamp (R3, only while `power_respect_peak` is on) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` would be exceeded on raw readings — for example household load leaves less than the minimum charging current of headroom
+When the peak-protection clamp (R3, only while the CapTar capability is present *and* `power_respect_peak` is on — 3a, 3a′) or the grid-supply-ceiling clamp (C4, always, applied after R3 on whatever current R3 leaves) in `control-cycle.md` would be exceeded on raw readings — for example household load leaves less than the minimum charging current of headroom
 Then the coordinator reduces the charger current — or, on a sustained R3 breach at the minimum charging current, stops it and starts the `Power`-mode cooldown (R11); a C4 breach clamps down (to 0 A if necessary) without starting a cooldown — so the clamp decides the set-point this cycle, not the mode. This is the normal, every-cycle shape of `Power`'s delivered current, not an unusual case: only the sustained-stop branch at the minimum charging current is exceptional.
 
 **State of charge reaches the active SOC limit.**
@@ -52,7 +59,7 @@ Then the System stops charging (0 A) and does not resume above that limit until 
 ## Postconditions
 
 - While `Power` mode is active, the car is connected below the active SOC limit, and headroom permits, the charger draws at the configured Power target current.
-- When the peak-protection option is enabled, net import stays at or below the effective peak limit minus the safety margin, so a `Power` session never raises the billed [monthly peak demand](../system-overview.md#ubiquitous-language) beyond what is already incurred (R3, C3). When disabled, net import may exceed that limit but never the grid supply ceiling minus the grid safety offset (C4).
+- While the CapTar capability is present (R18) and the peak-protection option is enabled, net import stays at or below the effective peak limit minus the safety margin, so a `Power` session never raises the billed [monthly peak demand](../system-overview.md#ubiquitous-language) beyond what is already incurred (R3, C3). When the option is disabled (3a), or whenever the CapTar capability is absent whatever the option holds (3a′), net import may exceed that limit but never the grid supply ceiling minus the grid safety offset (C4).
 - The charger current is only ever 0 A or between the minimum and maximum charging current (C1); the configured target current itself is always within that same range.
 - Charging never resumes above the active SOC limit (R7).
 
@@ -67,11 +74,16 @@ home-day flag, or the solar forecast. Like `Captar` (UC03) and unlike the solar 
 so there is nothing for a debounce to guard against. Unlike `Captar` (UC03), which always requests the maximum
 charging current, `Power`'s requested current is itself a user-configured value (default 10 A) —
 the mode does not decide how fast to charge, the user does. The only configurable branch is
-whether the R3 peak clamp applies at all, via `power_respect_peak` (default on); the
-grid-supply-ceiling clamp (C4) always applies regardless of that option, and neither clamp — nor
+whether the R3 peak clamp applies at all, via `power_respect_peak` (default on) — and that option
+only decides anything while the CapTar capability is present (R18): while it is absent the R3 clamp
+does not run in any mode (3a′), so `Power` behaves as it does with the option off whatever the
+option holds, and the sustained-R3-breach path into `Cooldown` can never fire. The
+grid-supply-ceiling clamp (C4) always applies regardless of that option and of any capability,
+and neither clamp — nor
 the target current itself — can ever exceed the maximum charging current (C1). The configured
 target current is a ceiling on what `Power` *requests*. The ceiling on what it *delivers* each
-cycle is different: C4, always, and R3 as well when enabled. That relationship holds continuously,
+cycle is different: C4, always, and R3 as well while the CapTar capability is present and the
+option is enabled. That relationship holds continuously,
 every cycle — the same way `Captar`'s (UC03) delivered current continuously tracks the R3
 peak-headroom clamp — not a reactive correction reserved for an unusual spike in household load.
 Choosing to run `Power` at all, what target current to set, and whether to accept its cost/peak
@@ -89,14 +101,14 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | SOC < active SOC limit & no cooldown → Charging |
-| Charging | configured Power target current requested; if `power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while respecting peak (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
+| Charging | configured Power target current requested; if the CapTar capability is present *and* `power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; without the capability the R3 clamp does not run whatever the option holds (3a′); either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while the CapTar capability is present and respecting peak — inapplicable without the capability, where R3 never runs (3a′) (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Power`-mode cooldown elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
 ## Domain events produced
 
 - `PowerChargingStarted` — the System began charging in `Power` mode at the configured target current (Idle/Cooldown → Charging).
-- `PowerChargingStopped` — a sustained R3 breach at the minimum charging current forced a stop (only while respecting peak); the System stopped charging (0 A) and started the `Power`-mode cooldown (R11).
+- `PowerChargingStopped` — a sustained R3 breach at the minimum charging current forced a stop (only while the CapTar capability is present and respecting peak — never on a non-CapTar installation, where R3 does not run, 3a′); the System stopped charging (0 A) and started the `Power`-mode cooldown (R11).
 - `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit (R7).
 
 ## Diagram
@@ -105,7 +117,7 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 stateDiagram-v2
     [*] --> Idle
     Idle --> Charging: SOC < active SOC limit & no cooldown
-    Charging --> Cooldown: sustained R3 breach at minimum<br/>current, only while respecting peak<br/>(stop → R11 cooldown)
+    Charging --> Cooldown: sustained R3 breach at minimum<br/>current, only while the CapTar capability<br/>is present and respecting peak<br/>(stop → R11 cooldown)
     Charging --> SocReached: SOC ≥ active SOC limit
     Cooldown --> Charging: cooldown elapsed<br/>& charging conditions hold
     Cooldown --> Idle: cooldown elapsed<br/>& charging conditions not held
@@ -113,11 +125,14 @@ stateDiagram-v2
     note right of Charging
         Set-point: request the configured Power
         target current (sc_power_target_current_a,
-        default 10 A). power_respect_peak on
-        (default): R3 peak clamp first fits it (raw)
-        to the peak headroom — net import ≤ effective
-        peak limit − safety margin. Off: R3 is
-        skipped entirely. Either way, the C4
+        default 10 A). CapTar capability present and
+        power_respect_peak on (default): R3 peak clamp
+        first fits it (raw) to the peak headroom — net
+        import ≤ effective peak limit − safety margin.
+        Option off, or CapTar capability absent (3a′,
+        R18, whatever the option holds): R3 is
+        skipped entirely — and with it the sustained-
+        breach path to Cooldown. Either way, the C4
         grid-ceiling clamp then fits whatever remains
         (raw) so net import stays below the grid
         supply ceiling − grid safety offset, every
