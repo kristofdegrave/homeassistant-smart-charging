@@ -218,8 +218,8 @@ Given the user declared the CapTar, solar, or deadline capability absent on the 
 did not declare the notifications capability present there (its default being absent)
 When the System advances past the `power` step
 Then the corresponding gated step (6, 7, 8, or 9 respectively) is skipped entirely and none of its
-fields is ever presented (R18 AC3, AC7; R14 AC1) — for the notifications capability, that is the
-notification-target mapping, the evening home-day prompt's enable flag and prompt time, and the
+fields is ever presented (R18 AC3, AC7, AC10; R14 AC1) — for the notifications capability, that is
+the notification-target mapping, the evening home-day prompt's enable flag and prompt time, and the
 prompt timeout, so a household that has not declared notifications wanted is never asked where to
 send them.
 No ungated step is ever skipped: `core`, `grid`, `ev_charger`, `vehicle`, and `power` are shown on
@@ -251,7 +251,7 @@ arrangement that motivates tuning them, accepting the consequences above as the 
 now gated the same way — it applies in every mode while the capability is present and in none while
 it is absent — and the grid supply ceiling clamp (C4), which is what actually protects the grid
 connection on a non-CapTar installation, stays on the
-ungated `grid` step. This use-case describes only the step behaviour; **R18 AC5** and **R20 AC5**
+ungated `grid` step. This use-case describes only the step behaviour; **R18 AC5** and **R20 AC3**
 already say the same thing in `requirements.md`, so this document does not restate what those
 criteria say about where the peak-protection fields are presented.
 
@@ -265,7 +265,7 @@ flag](../system-overview.md#ubiquitous-language) it feeds independently drives t
 `entity-catalog.md` records the Home day subgroup as *not* gated by the deadline capability. This
 is a deliberate, named exception to that gating, made because the flag's third consumer — the
 home-day departure override (R14 AC3), which applies only while the deadline capability is present
-(R13 AC2) — is the one that motivates wiring an *external* calendar or presence source in the
+(R13 AC3) — is the one that motivates wiring an *external* calendar or presence source in the
 first place. Its real-world consequence, stated plainly: a household that
 declares deadlines unmanaged but still wants the solar-reserve cap is no longer offered this mapping
 through the flow, and must drive the home-day flag through the evening prompt (UC08) or set the
@@ -417,7 +417,7 @@ Neither R18 nor R14 mandates *how many steps, in what order* — their acceptanc
 only whether a capability is configurable and whether its inputs are required.
 
 The **notifications capability** (`notifications_available`) this use-case adds to the `core` step
-is a fourth capability under R18's extensibility clause (AC9). It defaults to **absent** — a
+is a fourth capability under R18's extensibility clause (AC13). It defaults to **absent** — a
 deliberate, named departure from R18's blanket "Every capability defaults to *present*" rule, not
 an oversight. The three existing capabilities each record an installation fact that is already true
 of the installation before the flow asks: panels are installed or they are not, the connection
