@@ -69,16 +69,18 @@ async def test_sync_labels_applies_owned_labels(hass):
 
 async def test_sync_labels_noop_with_no_owned_or_manageable_labels(hass):
     """ADR-0028: a class with no owned_labels at all (e.g. SolarSurplusSensor) gets no
-    registry write -- not a call that happens to no-op, a genuine no-op."""
+    registry write at all -- not a call that happens to leave the labels empty, a genuine
+    no-op, checked via entry identity (registry entries are replaced, not mutated, on any real
+    update, so an unchanged identity proves no write happened)."""
     entity = _UnlabelledEntity(entry_id="entry1")
     platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
     registry = er.async_get(hass)
+    before = registry.async_get(entity.entity_id)
 
     sync_labels(registry, Platform.SENSOR, entity.unique_id, owned_labels=frozenset())
 
-    entry = registry.async_get(entity.entity_id)
-    assert entry.labels == set()
+    assert registry.async_get(entity.entity_id) is before
 
 
 async def test_sync_labels_merges_with_a_users_own_label(hass):
@@ -104,11 +106,15 @@ async def test_sync_labels_removes_label_when_owned_labels_drops_it(hass):
     """ADR-0028: a capability turning off (owned_labels no longer containing the label) must
     remove it, not just leave it stuck from a previous reload -- `manageable_labels` is the
     superset that makes removal possible, since `owned_labels` alone could only ever grow the
-    stored set (#674)."""
-    entity = _LabelledEntity(entry_id="entry1")
+    stored set (#674). Uses an _UnlabelledEntity and sets the precondition label explicitly
+    (rather than relying on _LabelledEntity's inherited async_added_to_hass hook, which T3.4
+    deletes -- this test must still prove removal once that hook is gone)."""
+    entity = _UnlabelledEntity(entry_id="entry1")
     platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
     registry = er.async_get(hass)
+    registry.async_update_entity(entity.entity_id, labels={LABEL_SC_RUNTIME})
+    assert registry.async_get(entity.entity_id).labels == {LABEL_SC_RUNTIME}
 
     sync_labels(
         registry,
@@ -120,6 +126,24 @@ async def test_sync_labels_removes_label_when_owned_labels_drops_it(hass):
 
     entry = registry.async_get(entity.entity_id)
     assert entry.labels == set()
+
+
+async def test_sync_labels_keys_on_unique_id_not_entity_id(hass):
+    """ADR-0028: sync_labels must resolve the entity purely from (domain, DOMAIN, unique_id) --
+    it works on a registry row that was never added to hass at all (no live entity instance,
+    no entity_id ever assigned on one), which is exactly the disabled-entity case its docstring
+    exists for."""
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(Platform.SENSOR, DOMAIN, "entry1_never_added")
+
+    sync_labels(
+        registry,
+        Platform.SENSOR,
+        "entry1_never_added",
+        owned_labels=frozenset({LABEL_SC_RUNTIME}),
+    )
+
+    assert registry.async_get(entry.entity_id).labels == {LABEL_SC_RUNTIME}
 
 
 async def test_sync_labels_noop_when_not_yet_registered(hass):
