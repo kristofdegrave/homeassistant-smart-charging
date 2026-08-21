@@ -230,26 +230,32 @@ the point at which 5a decides whether step 6 is shown at all.
 Given the `Power`-mode peak-protection option, the safety margin, maximum peak, peak floor, and
 peak-breach grace period
 When the CapTar capability is declared absent
-Then this step model no longer presents any of them, and the installation is left on their
-defaults. Its real-world consequence, stated plainly: the peak-protection option defaults **on**
-(R17 AC2) and the maximum peak defaults to **4 kW** (with a 2.5 kW peak floor), so a non-CapTar
-installation is clamped to a roughly 4 kW effective peak limit with **no path through this flow to
-raise that limit, and — the option being gated too — no path to switch the clamp off either** — on
-a 40 A single-phase (≈9 kW) connection, the upper part of the `Power`-mode current
-range becomes unreachable. Gating the option alongside the thresholds sharpens that consequence
-rather than contradicting it: a household that cannot raise the limit also cannot opt out of it, so
-neither lever remains. That is a behaviour change, not merely a lost tuning affordance.
+Then this step model no longer presents any of them, and the installation keeps whichever values it
+already holds — their defaults on a fresh install, but on reconfigure the values the entry last
+stored, since declaring a capability absent leaves its stored options values untouched (1a).
+On a fresh install the real-world consequence, stated plainly, is that the peak-protection option
+defaults **on** (R17 AC2) and the maximum peak defaults to **4 kW** (with a 2.5 kW peak floor), so a
+non-CapTar installation is clamped to a roughly 4 kW effective peak limit — on a 40 A single-phase
+(≈9 kW) connection, the upper part of the `Power`-mode current range becomes unreachable.
+On reconfigure the consequence runs in either direction: an entry that had switched the option
+**off** while CapTar was present keeps it off once CapTar is declared absent, so its `Power` mode
+stays unclamped by peak protection and is bounded only by the [grid supply
+ceiling](../system-overview.md#ubiquitous-language) (C4).
+Either way **no path through this flow remains to raise the limit, or to switch the clamp on or
+off** — gating the option alongside the thresholds sharpens that consequence rather than
+contradicting it, since whichever values the entry is left on, neither lever stays reachable.
+That is a behaviour change, not merely a lost tuning affordance.
 This **reverses** the previous step model, which presented these fields ungated on the strength of
 the peak-protection clamp (R3) protecting the grid connection itself rather than only the
 capacity-tariff bill. The reversal is deliberate: it groups every peak-protection field — the
-thresholds and the switch that turns the clamp they tune on or off — with the billing arrangement
-that motivates tuning them, accepting the clamp above as the price. The
-clamp itself is unchanged — R3 still applies in every mode, and the [grid supply
-ceiling](../system-overview.md#ubiquitous-language) clamp (C4), which is what actually protects the
-grid connection on a non-CapTar installation, stays on the ungated `grid` step. This use-case
-describes only the new step behaviour; reconciling the wording of **R18 AC5** and **R20 AC5** —
-which currently assert that the peak-protection *fields* apply, and are presented, whether or not
-the CapTar capability is present — is tracked separately and is out of scope here.
+thresholds and the switch that enables the clamp those thresholds tune — with the billing
+arrangement that motivates tuning them, accepting the consequences above as the price. The
+clamp itself is unchanged — R3 still applies in every mode, and the grid supply ceiling clamp (C4),
+which is what actually protects the grid connection on a non-CapTar installation, stays on the
+ungated `grid` step. This use-case describes only the new step behaviour; the wording of
+**R18 AC5** and **R20 AC5** is reconciled in a companion requirements change rather than here, so
+this document does not restate what those criteria say about where the peak-protection fields are
+presented.
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.
