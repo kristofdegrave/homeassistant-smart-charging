@@ -1,7 +1,7 @@
 # ADR-0025: Table-driven linear step sequence for the capability-gated config flow
 
 Date: 2026-08-13
-Status: Accepted
+Status: Superseded by ADR-0027
 
 ## Context
 
