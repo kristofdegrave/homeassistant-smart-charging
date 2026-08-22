@@ -78,4 +78,8 @@ async def test_home_day_switch_carries_runtime_label_after_setup(hass):
         Platform.SWITCH, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_HOME_DAY}"
     )
     assert entity_id is not None
-    assert registry.async_get(entity_id).labels == {LABEL_SC_RUNTIME}
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.labels == {LABEL_SC_RUNTIME}
+    # T3.1's scope is mechanism-only -- this entity is never capability-gated, unlike
+    # SolarSurplusSensor/SmartChargingDepartureTime. Pin that explicitly, not just by omission.
+    assert entry_reg.disabled_by is None
