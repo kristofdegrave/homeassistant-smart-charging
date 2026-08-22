@@ -1,17 +1,28 @@
 """HA-harness test for the target-current number entity (C2, ADR-0004)."""
 
+import pytest
 from homeassistant.components.number import NumberExtraStoredData
+from homeassistant.const import Platform
 from homeassistant.core import State
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
     MockEntityPlatform,
     mock_restore_cache_with_extra_data,
 )
 
-from custom_components.smart_charging.const import SOC_LIMIT_OVERRIDE_MIN
+from custom_components.smart_charging.const import (
+    DOMAIN,
+    LABEL_SC_RUNTIME,
+    OWNED_SUFFIX_SOC_LIMIT_OVERRIDE,
+    OWNED_SUFFIX_TARGET_CURRENT,
+    SOC_LIMIT_OVERRIDE_MIN,
+)
 from custom_components.smart_charging.number import (
     SocLimitOverrideNumber,
     TargetCurrentNumber,
 )
+from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
 
 async def test_set_value_writes_only_its_own_state(hass):
@@ -182,3 +193,30 @@ def test_init_clamps_out_of_range_default_soc_limit():
     an out-of-range configured default must clamp here too."""
     entity = SocLimitOverrideNumber(entry_id="abc", default=30.0)
     assert entity.native_value == SOC_LIMIT_OVERRIDE_MIN
+
+
+@pytest.mark.parametrize("suffix", [OWNED_SUFFIX_TARGET_CURRENT, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE])
+async def test_number_entity_carries_runtime_label_after_setup(hass, suffix):
+    """ADR-0028 (T3.2): TargetCurrentNumber's and SocLimitOverrideNumber's label sync moves
+    to a setup-time sync_labels call in async_setup_entry, replacing the async_added_to_hass
+    hook -- a pure mechanism move, no capability gating (neither entity is ever conditional).
+    Mirrors T3.1's HomeDaySwitch test: currently passes via the still-active hook alone
+    (T3.1/T3.2 don't delete it -- that's T3.4's job), so it's a regression guard for T3.4, not
+    a red/green TDD case in the usual sense. Directly confirmed (not just inferred) that the
+    setup-time sync_labels call itself -- not the hook -- is what writes the label: a
+    temporary diagnostic print inside async_setup_entry showed registry.async_get_entity_id
+    already resolving for both entities at the exact point sync_labels runs, immediately
+    after the non-awaited async_add_entities(entities) call, before any explicit
+    async_block_till_done -- so this isn't relying on the hook racing to finish later."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(Platform.NUMBER, DOMAIN, f"{entry.entry_id}_{suffix}")
+    assert entity_id is not None
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.labels == {LABEL_SC_RUNTIME}
+    assert entry_reg.disabled_by is None

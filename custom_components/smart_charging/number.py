@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from homeassistant.components.number import RestoreNumber
-from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
+from homeassistant.const import PERCENTAGE, Platform, UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import SmartChargingConfigEntry
@@ -15,7 +16,7 @@ from .const import (
     SOC_LIMIT_OVERRIDE_MAX,
     SOC_LIMIT_OVERRIDE_MIN,
 )
-from .entity import SmartChargingEntity
+from .entity import SmartChargingEntity, sync_labels
 
 
 class _RestoreClampedNumberMixin:
@@ -84,17 +85,19 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     runtime_data = entry.runtime_data
-    async_add_entities(
-        [
-            TargetCurrentNumber(
-                entry_id=entry.entry_id,
-                min_a=runtime_data.min_current,
-                max_a=runtime_data.max_current,
-                default=runtime_data.default_target_current,
-            ),
-            SocLimitOverrideNumber(
-                entry_id=entry.entry_id,
-                default=runtime_data.default_soc_limit,
-            ),
-        ]
-    )
+    entities = [
+        TargetCurrentNumber(
+            entry_id=entry.entry_id,
+            min_a=runtime_data.min_current,
+            max_a=runtime_data.max_current,
+            default=runtime_data.default_target_current,
+        ),
+        SocLimitOverrideNumber(
+            entry_id=entry.entry_id,
+            default=runtime_data.default_soc_limit,
+        ),
+    ]
+    async_add_entities(entities)
+    registry = er.async_get(hass)
+    for entity in entities:
+        sync_labels(registry, Platform.NUMBER, entity.unique_id, owned_labels=entity._owned_labels)
