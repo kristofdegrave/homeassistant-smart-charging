@@ -4,6 +4,7 @@ import logging
 from datetime import time
 
 import pytest
+from homeassistant.components.time import SERVICE_SET_VALUE
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.core import State
 from homeassistant.helpers import entity_registry as er
@@ -39,17 +40,9 @@ from tests.helpers import entry_data_base, entry_options_base, seed_charger_stat
 _WEEKDAY_SUFFIXES = (DAY_MON, DAY_TUE, DAY_WED, DAY_THU, DAY_FRI)
 _WEEKEND_SUFFIXES = (DAY_SAT, DAY_SUN)
 _USER_LABEL = "some_other_label"
-_ALL_DEPARTURE_SUFFIXES = (
-    DAY_MON,
-    DAY_TUE,
-    DAY_WED,
-    DAY_THU,
-    DAY_FRI,
-    DAY_SAT,
-    DAY_SUN,
-    DEPARTURE_OVERRIDE_HOLIDAY,
-    DEPARTURE_OVERRIDE_HOME_DAY,
-)
+# Derived from the same tables async_setup_entry itself builds from, so this can't drift from
+# the real 9-entity population the way a hand-copied tuple could.
+_ALL_DEPARTURE_SUFFIXES = tuple(suffix for suffix, _ in (*DAY_OF_WEEK_DEFAULTS, *OVERRIDE_DEFAULTS))
 
 
 @pytest.mark.parametrize("suffix", _WEEKDAY_SUFFIXES)
@@ -354,13 +347,16 @@ async def test_departure_time_enabled_when_deadline_available(hass):
 
 
 async def test_departure_time_label_and_disabled_by_both_reflect_capability(hass):
-    """ADR-0028 design doc §5: the one entity exercising both mechanisms together -- with
-    deadline_available=False, disabled_by must be INTEGRATION AND the sc_runtime label must be
-    absent, and this must hold even though the entity is never added to hass this reload
-    (sync_labels's unique_id-keyed lookup, not entity_id-keyed, is what makes that true)."""
+    """ADR-0028 design doc §5: the one entity exercising both mechanisms together. Starts
+    deadline_available=True (label present, entity live), then reloads with it False -- the
+    entity is registry-disabled and never added to hass this reload, yet BOTH disabled_by
+    becomes INTEGRATION AND the sc_runtime label is removed. Starting from a fresh install
+    with the capability already off would prove nothing (no label to remove, no hook to
+    replace) -- the label REMOVAL is what proves sync_labels's unique_id-keyed lookup (not
+    entity_id-keyed) works independent of whether the entity was added to hass this reload."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
-    data[CONF_DEADLINE_AVAILABLE] = False
+    data[CONF_DEADLINE_AVAILABLE] = True
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -371,6 +367,15 @@ async def test_departure_time_label_and_disabled_by_both_reflect_capability(hass
         Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
     )
     assert entity_id is not None
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.disabled_by is None
+    assert entry_reg.labels == {LABEL_SC_RUNTIME}
+
+    off_data = entry_data_base()
+    off_data[CONF_DEADLINE_AVAILABLE] = False
+    hass.config_entries.async_update_entry(entry, data=off_data)
+    await hass.async_block_till_done()
+
     entry_reg = registry.async_get(entity_id)
     assert entry_reg.disabled_by is er.RegistryEntryDisabler.INTEGRATION
     assert entry_reg.labels == set()
@@ -418,11 +423,12 @@ async def test_departure_time_restored_value_survives_disable_cycle(hass):
     """Correction to ADR-0028's Context, which assumed a set departure time would revert to
     its R14 constructor default across a deadline_available off->on cycle, on the reasoning
     that the RestoreEntity read only runs while the entity is added to hass. Empirically, it
-    doesn't need to run *during* the disabled window -- HA's RestoreStateData cache is keyed
-    by entity_id and isn't cleared just because the entity is temporarily registry-disabled, so
-    the value set before disabling is still there for async_added_to_hass to pick up once the
-    entity is added again on re-enable. Documents the actual (safe) behavior as a passing
-    assertion; the ADR's Consequences text needs a follow-up correction, tracked separately."""
+    doesn't need to run *during* the disabled window -- `RestoreEntity.async_will_remove_from_hass`
+    writes the entity's last state into HA's `RestoreStateData` cache (keyed by entity_id) on
+    every removal, disable-triggered or not, and that write is what `async_added_to_hass` reads
+    back on re-enable; the cache isn't cleared just because the entity was disabled for a while.
+    Documents the actual (safe) behavior as a passing assertion; the ADR's Consequences text
+    needs a follow-up correction -- tracked in issue #804."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_DEADLINE_AVAILABLE] = True
@@ -431,9 +437,16 @@ async def test_departure_time_restored_value_survives_disable_cycle(hass):
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    entity_id = "time.smart_charging_departure_mon"
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert entity_id is not None
     await hass.services.async_call(
-        "time", "set_value", {"entity_id": entity_id, "time": "07:30:00"}, blocking=True
+        Platform.TIME,
+        SERVICE_SET_VALUE,
+        {"entity_id": entity_id, "time": "07:30:00"},
+        blocking=True,
     )
     assert hass.states.get(entity_id).state == "07:30:00"
 
@@ -442,9 +455,19 @@ async def test_departure_time_restored_value_survives_disable_cycle(hass):
     hass.config_entries.async_update_entry(entry, data=off_data)
     await hass.async_block_till_done()
 
+    # Confirm this is a genuine disable/re-enable cycle, not just a plain reload -- otherwise
+    # the final assertion below would pass even if the gating were removed entirely.
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    # A previously-live entity leaves a restored/unavailable ghost state behind on removal
+    # rather than disappearing from the state machine outright (same shape T1.1 found for
+    # SolarSurplusSensor).
+    disabled_state = hass.states.get(entity_id)
+    assert disabled_state is None or disabled_state.state == STATE_UNAVAILABLE
+
     on_data = entry_data_base()
     on_data[CONF_DEADLINE_AVAILABLE] = True
     hass.config_entries.async_update_entry(entry, data=on_data)
     await hass.async_block_till_done()
 
+    assert registry.async_get(entity_id).disabled_by is None
     assert hass.states.get(entity_id).state == "07:30:00"
