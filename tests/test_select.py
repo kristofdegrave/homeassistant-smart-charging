@@ -168,12 +168,15 @@ async def test_select_entity_carries_runtime_label_after_setup(hass, suffix):
     list* (a separate, pre-existing, untouched mechanism), not this label/disabled_by
     machinery. Mirrors T3.1/T3.2's tests: currently passes via the still-active hook alone
     (T3.3 doesn't delete it -- that's T3.4's job), so it's a regression guard for T3.4, not a
-    red/green TDD case in the usual sense. Directly confirmed (not just inferred) that the
-    setup-time sync_labels call itself is what writes the label: a temporary diagnostic print
-    inside async_setup_entry showed registry.async_get_entity_id already resolving for both
-    entities at the exact point sync_labels runs, immediately after the non-awaited
-    async_add_entities(entities) call -- so this isn't relying on the hook racing to finish
-    later (the same class of concern T3.2's review raised and settled the same way)."""
+    red/green TDD case in the usual sense. Before landing this, a temporary diagnostic print
+    inserted directly inside async_setup_entry showed registry.async_get_entity_id already
+    resolving for both entities at the exact point sync_labels runs, immediately after the
+    non-awaited async_add_entities(entities) call -- confirming the setup-time call is not a
+    no-op racing the hook, the same class of concern T3.2's review raised and settled the
+    same way. That evidence was transient (the print was removed before commit) and can't be
+    re-run by a future reader from this file alone; the structural proof that survives is
+    T3.4 (#797): once the hook is deleted, this test and test_init.py's full-setup label
+    assertions must stay green using only this setup-time call site."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
