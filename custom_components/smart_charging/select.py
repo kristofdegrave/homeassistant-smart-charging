@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -22,7 +24,7 @@ from .const import (
     PROFILE_MANUAL,
     SOLAR_CAPABLE_MODES,
 )
-from .entity import SmartChargingEntity
+from .entity import SmartChargingEntity, sync_labels
 
 BASE_MODE_OPTIONS = list(BASE_CAPABLE_MODES)
 PROFILE_OPTIONS = [PROFILE_MANUAL, PROFILE_AUTO]
@@ -88,15 +90,17 @@ class ProfileSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Sel
 async def async_setup_entry(
     hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    async_add_entities(
-        [
-            ModeSelect(
-                entry_id=entry.entry_id,
-                solar_available=entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE),
-                captar_available=entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
-            ),
-            ProfileSelect(
-                entry_id=entry.entry_id,
-            ),
-        ]
-    )
+    entities = [
+        ModeSelect(
+            entry_id=entry.entry_id,
+            solar_available=entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE),
+            captar_available=entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE),
+        ),
+        ProfileSelect(
+            entry_id=entry.entry_id,
+        ),
+    ]
+    async_add_entities(entities)
+    registry = er.async_get(hass)
+    for entity in entities:
+        sync_labels(registry, Platform.SELECT, entity.unique_id, owned_labels=entity._owned_labels)
