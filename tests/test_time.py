@@ -4,7 +4,7 @@ import logging
 from datetime import time
 
 import pytest
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.core import State
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
@@ -24,6 +24,7 @@ from custom_components.smart_charging.const import (
     DAY_WED,
     DEPARTURE_OVERRIDE_HOLIDAY,
     DEPARTURE_OVERRIDE_HOME_DAY,
+    DOMAIN,
     LABEL_SC_RUNTIME,
 )
 from custom_components.smart_charging.time import (
@@ -33,10 +34,22 @@ from custom_components.smart_charging.time import (
     SmartChargingDepartureTime,
     async_setup_entry,
 )
+from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
 _WEEKDAY_SUFFIXES = (DAY_MON, DAY_TUE, DAY_WED, DAY_THU, DAY_FRI)
 _WEEKEND_SUFFIXES = (DAY_SAT, DAY_SUN)
 _USER_LABEL = "some_other_label"
+_ALL_DEPARTURE_SUFFIXES = (
+    DAY_MON,
+    DAY_TUE,
+    DAY_WED,
+    DAY_THU,
+    DAY_FRI,
+    DAY_SAT,
+    DAY_SUN,
+    DEPARTURE_OVERRIDE_HOLIDAY,
+    DEPARTURE_OVERRIDE_HOME_DAY,
+)
 
 
 @pytest.mark.parametrize("suffix", _WEEKDAY_SUFFIXES)
@@ -297,3 +310,141 @@ async def test_sc_runtime_label_removal_preserves_a_users_own_label(hass):
     await now_off.async_added_to_hass()
 
     assert registry.async_get(entity_id).labels == {_USER_LABEL}
+
+
+async def test_departure_time_disabled_by_default_when_deadline_unavailable(hass):
+    """ADR-0028: a fresh install with deadline_available=False registers all 9 departure-time
+    entities disabled."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for suffix in _ALL_DEPARTURE_SUFFIXES:
+        entity_id = registry.async_get_entity_id(
+            Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{suffix}"
+        )
+        assert entity_id is not None, suffix
+        assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION, (
+            suffix
+        )
+
+
+async def test_departure_time_enabled_when_deadline_available(hass):
+    """ADR-0028: deadline_available=True registers all 9 departure-time entities enabled."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = True
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for suffix in _ALL_DEPARTURE_SUFFIXES:
+        entity_id = registry.async_get_entity_id(
+            Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{suffix}"
+        )
+        assert entity_id is not None, suffix
+        assert registry.async_get(entity_id).disabled_by is None, suffix
+
+
+async def test_departure_time_label_and_disabled_by_both_reflect_capability(hass):
+    """ADR-0028 design doc §5: the one entity exercising both mechanisms together -- with
+    deadline_available=False, disabled_by must be INTEGRATION AND the sc_runtime label must be
+    absent, and this must hold even though the entity is never added to hass this reload
+    (sync_labels's unique_id-keyed lookup, not entity_id-keyed, is what makes that true)."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert entity_id is not None
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entry_reg.labels == set()
+
+
+async def test_departure_time_user_disable_survives_capability_toggle(hass):
+    """ADR-0028: a user's own disabled_by=USER on one departure-time entity must survive a
+    deadline_available toggle in either direction, while its label keeps tracking the
+    capability correctly regardless -- the two mechanisms are independent (design doc's
+    Decision), since the entity being force-enabled by the user doesn't mean the capability is
+    present."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = True
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert entity_id is not None
+    registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+
+    off_data = entry_data_base()
+    off_data[CONF_DEADLINE_AVAILABLE] = False
+    hass.config_entries.async_update_entry(entry, data=off_data)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.USER
+    assert registry.async_get(entity_id).labels == set()
+
+    on_data = entry_data_base()
+    on_data[CONF_DEADLINE_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=on_data)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.USER
+    assert registry.async_get(entity_id).labels == {LABEL_SC_RUNTIME}
+
+
+async def test_departure_time_restored_value_survives_disable_cycle(hass):
+    """Correction to ADR-0028's Context, which assumed a set departure time would revert to
+    its R14 constructor default across a deadline_available off->on cycle, on the reasoning
+    that the RestoreEntity read only runs while the entity is added to hass. Empirically, it
+    doesn't need to run *during* the disabled window -- HA's RestoreStateData cache is keyed
+    by entity_id and isn't cleared just because the entity is temporarily registry-disabled, so
+    the value set before disabling is still there for async_added_to_hass to pick up once the
+    entity is added again on re-enable. Documents the actual (safe) behavior as a passing
+    assertion; the ADR's Consequences text needs a follow-up correction, tracked separately."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = True
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entity_id = "time.smart_charging_departure_mon"
+    await hass.services.async_call(
+        "time", "set_value", {"entity_id": entity_id, "time": "07:30:00"}, blocking=True
+    )
+    assert hass.states.get(entity_id).state == "07:30:00"
+
+    off_data = entry_data_base()
+    off_data[CONF_DEADLINE_AVAILABLE] = False
+    hass.config_entries.async_update_entry(entry, data=off_data)
+    await hass.async_block_till_done()
+
+    on_data = entry_data_base()
+    on_data[CONF_DEADLINE_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=on_data)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(entity_id).state == "07:30:00"
