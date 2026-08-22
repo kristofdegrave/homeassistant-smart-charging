@@ -13,8 +13,9 @@ from homeassistant.components.sensor import (
     SensorExtraStoredData,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfElectricCurrent, UnitOfPower, UnitOfTime
+from homeassistant.const import Platform, UnitOfElectricCurrent, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -22,6 +23,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import SmartChargingConfigEntry
 from .const import (
     ATTR_PERIOD_MONTH,
+    CONF_SOLAR_AVAILABLE,
+    DEFAULT_SOLAR_AVAILABLE,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_ADAPTER_READINGS,
@@ -31,7 +34,7 @@ from .const import (
     STATUS_FAULT,
     STATUS_OK,
 )
-from .entity import SmartChargingEntity
+from .entity import SmartChargingEntity, sync_disabled_by
 
 
 class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
@@ -198,7 +201,8 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
 
 
 class SolarSurplusSensor(_CoordinatorFieldSensor):
-    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151)."""
+    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151). Registry-gated on
+    `solar_available` (ADR-0028) -- meaningless without a solar meter."""
 
     _attr_translation_key = "solar_surplus_w"
     _object_id_suffix = OWNED_SUFFIX_SOLAR_SURPLUS_W
@@ -206,6 +210,10 @@ class SolarSurplusSensor(_CoordinatorFieldSensor):
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry_id: str, coordinator, solar_available: bool = False) -> None:
+        super().__init__(entry_id, coordinator)
+        self._attr_entity_registry_enabled_default = solar_available
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.solar_surplus_w
@@ -262,6 +270,16 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data.coordinator
+    solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
+    solar_surplus_sensor = SolarSurplusSensor(
+        entry.entry_id, coordinator, solar_available=solar_available
+    )
+    sync_disabled_by(
+        er.async_get(hass),
+        Platform.SENSOR,
+        solar_surplus_sensor.unique_id,
+        capability_met=solar_available,
+    )
     async_add_entities(
         [
             ChargingStatusSensor(entry.entry_id, coordinator),
@@ -269,7 +287,7 @@ async def async_setup_entry(
             MonthlyPeakSensor(entry.entry_id, coordinator),
             EffectivePeakLimitSensor(entry.entry_id, coordinator),
             ActiveSocLimitSensor(entry.entry_id, coordinator),
-            SolarSurplusSensor(entry.entry_id, coordinator),
+            solar_surplus_sensor,
             PeakHeadroomSensor(entry.entry_id, coordinator),
             TimeToFullSensor(entry.entry_id, coordinator),
             AdapterReadingsSensor(entry.entry_id, coordinator),
