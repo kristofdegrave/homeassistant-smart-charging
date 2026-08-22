@@ -22,8 +22,9 @@ from datetime import time
 
 from homeassistant.components.time import TimeEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -41,7 +42,7 @@ from .const import (
     DEPARTURE_OVERRIDE_HOME_DAY,
     LABEL_SC_RUNTIME,
 )
-from .entity import SmartChargingEntity
+from .entity import SmartChargingEntity, sync_disabled_by, sync_labels
 
 WEEKDAY_DEFAULT = time(6, 0)
 
@@ -69,10 +70,16 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
 
     `_owned_labels` is set per-instance, gated on the deadline capability
     (`deadline_available`, R18): R19 AC4 requires these entities to be hidden from the
-    runtime dashboard when the deadline capability is absent. Entities are still created
-    either way -- only their dashboard visibility (the `sc_runtime` label) is gated.
-    `_manageable_labels` stays the class-level constant superset (`entity.py`), so a later
-    reload with the capability newly absent *removes* the label, not just adds it.
+    runtime dashboard when the deadline capability is absent. `_manageable_labels` stays the
+    class-level constant superset (`entity.py`), so a later reload with the capability newly
+    absent *removes* the label, not just adds it.
+
+    ADR-0028: `_attr_entity_registry_enabled_default` is likewise gated on `deadline_available`
+    -- registry-disabled (not just dashboard-hidden) when the capability is absent. The two
+    mechanisms stay independent on purpose: a user can force the entity back on
+    (`disabled_by=USER`) while the capability is still absent, and in that case the label must
+    still reflect `deadline_available` correctly so the dashboard stays consistent even for a
+    capability-absent entity the user chose to re-enable.
     """
 
     _manageable_labels = frozenset({LABEL_SC_RUNTIME})
@@ -89,6 +96,7 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
         super().__init__(entry_id)
         self._attr_native_value = default
         self._owned_labels = frozenset({LABEL_SC_RUNTIME}) if deadline_available else frozenset()
+        self._attr_entity_registry_enabled_default = deadline_available
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -108,14 +116,26 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     deadline_available = entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE)
-    async_add_entities(
-        [
-            SmartChargingDepartureTime(
-                entry.entry_id, suffix, default, deadline_available=deadline_available
-            )
-            for suffix, default in (*DAY_OF_WEEK_DEFAULTS, *OVERRIDE_DEFAULTS)
-        ]
-    )
+    entities = [
+        SmartChargingDepartureTime(
+            entry.entry_id, suffix, default, deadline_available=deadline_available
+        )
+        for suffix, default in (*DAY_OF_WEEK_DEFAULTS, *OVERRIDE_DEFAULTS)
+    ]
+    registry = er.async_get(hass)
+    for entity in entities:
+        sync_disabled_by(
+            registry, Platform.TIME, entity.unique_id, capability_met=deadline_available
+        )
+    async_add_entities(entities)
+    for entity in entities:
+        sync_labels(
+            registry,
+            Platform.TIME,
+            entity.unique_id,
+            owned_labels=entity._owned_labels,
+            manageable_labels=entity._manageable_labels,
+        )
 
 
 __all__ = [
