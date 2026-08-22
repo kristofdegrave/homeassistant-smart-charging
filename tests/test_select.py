@@ -8,13 +8,23 @@ constant-value regression -- pinning the literal is the point here, not an overs
 """
 
 import pytest
+from homeassistant.const import Platform
 from homeassistant.core import State
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
     MockEntityPlatform,
     mock_restore_cache,
 )
 
+from custom_components.smart_charging.const import (
+    DOMAIN,
+    LABEL_SC_RUNTIME,
+    OWNED_SUFFIX_MODE,
+    OWNED_SUFFIX_PROFILE,
+)
 from custom_components.smart_charging.select import ModeSelect, ProfileSelect
+from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
 
 async def test_select_option_writes_only_its_own_state(hass):
@@ -147,3 +157,35 @@ async def test_profile_added_to_hass_seeds_default_when_no_restored_state(hass):
 def test_profile_init_seeds_unique_id():
     entity = ProfileSelect(entry_id="abc")
     assert entity.unique_id == "abc_profile"
+
+
+@pytest.mark.parametrize("suffix", [OWNED_SUFFIX_MODE, OWNED_SUFFIX_PROFILE])
+async def test_select_entity_carries_runtime_label_after_setup(hass, suffix):
+    """ADR-0028 (T3.3): ModeSelect's and ProfileSelect's label sync moves to a setup-time
+    sync_labels call in async_setup_entry, replacing the async_added_to_hass hook -- a pure
+    mechanism move. Neither entity's registry disabled_by state is capability-gated:
+    ModeSelect's solar_available/captar_available constructor params only gate its *option
+    list* (a separate, pre-existing, untouched mechanism), not this label/disabled_by
+    machinery. Mirrors T3.1/T3.2's tests: currently passes via the still-active hook alone
+    (T3.3 doesn't delete it -- that's T3.4's job), so it's a regression guard for T3.4, not a
+    red/green TDD case in the usual sense. Before landing this, a temporary diagnostic print
+    inserted directly inside async_setup_entry showed registry.async_get_entity_id already
+    resolving for both entities at the exact point sync_labels runs, immediately after the
+    non-awaited async_add_entities(entities) call -- confirming the setup-time call is not a
+    no-op racing the hook, the same class of concern T3.2's review raised and settled the
+    same way. That evidence was transient (the print was removed before commit) and can't be
+    re-run by a future reader from this file alone; the structural proof that survives is
+    T3.4 (#797): once the hook is deleted, this test and test_init.py's full-setup label
+    assertions must stay green using only this setup-time call site."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(Platform.SELECT, DOMAIN, f"{entry.entry_id}_{suffix}")
+    assert entity_id is not None
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.labels == {LABEL_SC_RUNTIME}
+    assert entry_reg.disabled_by is None
