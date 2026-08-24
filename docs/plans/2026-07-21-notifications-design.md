@@ -152,8 +152,9 @@ in the flow rather than migrated.
 **No prompt-timeout option is wired.** UC08's own "Relationships" section states midnight is the
 *only* answer deadline and there is **no** separate configurable timeout. This slice therefore wires
 no prompt-timeout option (§9). A later slice briefly reversed this and presented such a field in the
-config flow; that reversal has since been reverted, and the field exists nowhere — so this section's
-original decision stands unchanged.
+config flow; the human partner has since reverted that reversal (2026-08-24, #813), and once the
+companion code removal (#818) lands the field will exist nowhere — so this section's original
+decision stands unchanged.
 
 ---
 
@@ -302,9 +303,10 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
    section stated midnight is the only answer deadline, with no separate configurable timeout. Per
    `project-plan.md` §1 (source doc wins over an anchor), UC08 was authoritative: this slice wires
    **no** timeout option and times the prompt out at midnight. The analysis-doc discrepancy this
-   section flagged has since been resolved in UC08's favour — the catalog row was removed and no
-   prompt timeout exists anywhere in the requirements, glossary, catalog, or code. Nothing remains
-   open here.
+   section flagged has since been resolved in UC08's favour (2026-08-24, #813) — the catalog row is
+   removed and no prompt timeout exists anywhere in the requirements, glossary, or catalog. The code
+   still presents `CONF_PROMPT_TIMEOUT_H` until the companion removal (#818) merges; once it does,
+   nothing will remain open here.
 2. **Should the catalog's `input_*`/`sc_` helper-style ids eventually be renamed to match their
    `CONF_*` config-entry realization, or do the two naming layers stay intentionally distinct?**
    **Resolution:** by precedent, not invention — realize the tuning values as config-entry options
