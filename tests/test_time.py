@@ -233,21 +233,6 @@ async def test_async_setup_entry_threads_deadline_capability_from_entry_data(has
         assert all(entity._owned_labels == expected for entity in added)
 
 
-# The four tests that used to live here (test_sc_runtime_label_is_registered_when_deadline_
-# capability_present / _is_absent_when_deadline_capability_off_from_the_start /
-# _is_removed_on_reload_after_capability_turned_off / _removal_preserves_a_users_own_label)
-# exercised SmartChargingEntity.async_added_to_hass directly -- the hook ADR-0028's T3.4
-# deletes. They're removed, not rewritten: the "present"/"removed on reload"/"preserves a
-# user's own label" cases are superseded by
-# test_departure_time_label_and_disabled_by_both_reflect_capability and
-# test_departure_time_user_disable_survives_capability_toggle below, exercised through the
-# real async_setup_entry/sync_labels path instead of the hook; the "absent from a fresh
-# install" case is vacuous regardless of mechanism (a fresh entity starts with no labels at
-# all), as that same newer test's own docstring already notes. The underlying merge-preserves-
-# a-users-label behavior stays covered generically, mechanism-side, by
-# tests/test_entity_labels.py's test_sync_labels_merges_with_a_users_own_label.
-
-
 async def test_departure_time_disabled_by_default_when_deadline_unavailable(hass):
     """ADR-0028: a fresh install with deadline_available=False registers all 9 departure-time
     entities disabled."""

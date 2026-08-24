@@ -108,13 +108,18 @@ async def test_sync_labels_removes_label_when_owned_labels_drops_it(hass):
     superset that makes removal possible, since `owned_labels` alone could only ever grow the
     stored set (#674). Uses an _UnlabelledEntity and sets the precondition label explicitly
     (rather than relying on _LabelledEntity's inherited async_added_to_hass hook, which T3.4
-    deletes -- this test must still prove removal once that hook is gone)."""
+    deleted -- this test must still prove removal with that hook gone). Also carries an
+    unrelated _OTHER_LABEL through the precondition and asserts it survives removal -- the
+    combination (existing - manageable) | owned dropping only the managed label while a
+    fresh-install/additive-only test (test_sync_labels_merges_with_a_users_own_label) never
+    exercises removal at all -- flagged during T3.4's review as a coverage gap left by
+    deleting the equivalent pre-ADR-0028 test_time.py case."""
     entity = _UnlabelledEntity(entry_id="entry1")
     platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
     registry = er.async_get(hass)
-    registry.async_update_entity(entity.entity_id, labels={LABEL_SC_RUNTIME})
-    assert registry.async_get(entity.entity_id).labels == {LABEL_SC_RUNTIME}
+    registry.async_update_entity(entity.entity_id, labels={LABEL_SC_RUNTIME, _OTHER_LABEL})
+    assert registry.async_get(entity.entity_id).labels == {LABEL_SC_RUNTIME, _OTHER_LABEL}
 
     sync_labels(
         registry,
@@ -125,7 +130,7 @@ async def test_sync_labels_removes_label_when_owned_labels_drops_it(hass):
     )
 
     entry = registry.async_get(entity.entity_id)
-    assert entry.labels == set()
+    assert entry.labels == {_OTHER_LABEL}
 
 
 async def test_sync_labels_keys_on_unique_id_not_entity_id(hass):
@@ -160,8 +165,12 @@ async def test_sync_labels_noop_when_not_yet_registered(hass):
 
 
 async def test_async_added_to_hass_still_delegates_restore_state(hass):
-    """Regression guard: a non-delegating `async_added_to_hass` override would silently break
-    every existing RestoreEntity-mixing owned entity's restore-on-restart behavior."""
+    """Regression guard: `SmartChargingEntity` carries no `async_added_to_hass` override of its
+    own (T3.4 deleted the label-sync one it used to have), so this pins the MRO shape --
+    `_RestoringLabelledEntity`'s own override's `super()` call must keep landing on
+    `RestoreEntity`. A future non-delegating override reintroduced on `SmartChargingEntity`
+    would silently break every existing RestoreEntity-mixing owned entity's restore-on-restart
+    behavior."""
     entity_id = "sensor.smart_charging_restoring_labelled"
     mock_restore_cache_with_extra_data(hass, ((State(entity_id, "restored"), {}),))
 
