@@ -256,18 +256,12 @@ CONF_SOLAR_STEP_PP = "solar_step_pp"  # R8 solar step-up step size
 CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"  # R8 solar step-up trigger gap
 CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"  # R9 overnight solar-reserve cap (runtime, R7 row 1)
 CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-reserve forecast gate
-# UC08 evening home-day prompt options (notifications design doc §3). sc_prompt_timeout_h
-# (CONF_PROMPT_TIMEOUT_H below) is now presented and stored too (guided-config-flow design,
-# "Decisions on two forks" §1) -- superseding notifications-design.md §3/§9's earlier
-# "deliberately NOT wired" call, made before UC12/R20 existed. No component reads it yet.
+# UC08 evening home-day prompt options (notifications design doc §3).
 CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
 CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
 # R12 plug-in reminder lead time (guided-config-flow design D-1; UC12 step 5). No component
 # reads this yet -- contract-first for the R12 plug-in-reminder slice (design, Deferrals).
 CONF_REMINDER_LEAD_H = "reminder_lead_h"
-# UC12 step 8 evening-prompt timeout (guided-config-flow design, "Decisions on two forks" §1).
-# No component reads this yet -- contract-first, same as CONF_REMINDER_LEAD_H above.
-CONF_PROMPT_TIMEOUT_H = "prompt_timeout_h"
 
 DEFAULT_MIN_CURRENT = 6.0
 DEFAULT_MAX_CURRENT = 16.0
@@ -303,7 +297,6 @@ DEFAULT_EVENING_PROMPT_TIME = "18:00:00"
 DEFAULT_REMINDER_LEAD_H = 8.0
 # R18 deadline capability, absent-key read fallback -- catalog "on (present)" (design D-1).
 DEFAULT_DEADLINE_AVAILABLE = True
-DEFAULT_PROMPT_TIMEOUT_H = 2.0  # entity-catalog.md default (R13)
 
 SOC_LIMIT_OVERRIDE_MIN = 50.0  # percent (R6) -- shared by number.py's own bounds and the
 SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (single source)
