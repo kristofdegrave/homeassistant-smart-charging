@@ -5,4 +5,4 @@ psutil==7.2.2
 pytest
 pytest-cov
 pytest-homeassistant-custom-component==0.13.346
-ruff==0.16.2
+ruff==0.16.3
