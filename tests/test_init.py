@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.components import frontend
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import Platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from homeassistant.setup import async_setup_component
@@ -25,6 +26,7 @@ from custom_components.smart_charging.const import (
     CONF_CAPTAR_COOLDOWN_MIN,
     CONF_CAR_HOME_ENTITY,
     CONF_CONTROL_INTERVAL_S,
+    CONF_DEADLINE_AVAILABLE,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_EV_BATTERY_CAPACITY_KWH,
     CONF_EV_SOC_ENTITY,
@@ -57,6 +59,7 @@ from custom_components.smart_charging.const import (
     MODE_OFF,
     MODE_POWER,
     MODE_SOLAR,
+    OWNED_SUFFIX_SOLAR_SURPLUS_W,
     PROFILE_AUTO,
     STATE_CHARGING,
     STATE_CONNECTED,
@@ -178,6 +181,50 @@ async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_no
             assert entry_reg.labels == {LABEL_SC_RUNTIME}, f"{suffix}: {entry_reg.labels!r}"
         else:
             assert entry_reg.labels == set(), f"{suffix}: {entry_reg.labels!r}"
+
+
+async def test_reload_capability_flip_leaves_correct_registry_state_across_entities(hass):
+    """ADR-0028, design doc §6 integration checkpoint: a full async_setup_entry ->
+    async_unload_entry -> async_setup_entry cycle (an options-flow reload, ADR-0008; exercised
+    here via hass.config_entries.async_reload, which runs exactly that unload/setup pair) with
+    solar_available and deadline_available both flipped in between leaves the registry in the
+    state design doc §5's table describes for the two entities gated by both mechanisms at
+    once: disabled_by flips in lockstep with each capability, and SmartChargingDepartureTime's
+    label keeps tracking deadline_available independently of its own disabled_by state."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = False
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    solar_entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    departure_entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_mon"
+    )
+    assert registry.async_get(solar_entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert (
+        registry.async_get(departure_entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    )
+    assert registry.async_get(departure_entity_id).labels == set()
+
+    flipped = entry_data_base()
+    flipped[CONF_SOLAR_AVAILABLE] = True
+    flipped[CONF_DEADLINE_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=flipped)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(solar_entity_id).disabled_by is None
+    assert hass.states.get(solar_entity_id) is not None
+    assert registry.async_get(departure_entity_id).disabled_by is None
+    assert hass.states.get(departure_entity_id) is not None
+    assert registry.async_get(departure_entity_id).labels == {LABEL_SC_RUNTIME}
 
 
 async def test_setup_registers_the_dashboard_panel_and_unload_removes_it(hass):
