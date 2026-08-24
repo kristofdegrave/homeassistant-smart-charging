@@ -256,7 +256,9 @@ CONF_SOLAR_STEP_PP = "solar_step_pp"  # R8 solar step-up step size
 CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"  # R8 solar step-up trigger gap
 CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"  # R9 overnight solar-reserve cap (runtime, R7 row 1)
 CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-reserve forecast gate
-# UC08 evening home-day prompt options (notifications design doc §3).
+# UC08 evening home-day prompt options (notifications design doc §3). No prompt-timeout field is
+# presented -- midnight is the only answer deadline (notifications-design.md §3/§9); a later slice
+# briefly presented one anyway, since reverted (#813/#818).
 CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
 CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
 # R12 plug-in reminder lead time (guided-config-flow design D-1; UC12 step 5). No component

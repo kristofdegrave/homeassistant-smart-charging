@@ -558,6 +558,9 @@ def _ungated_threshold_schema(
             CONF_EVENING_PROMPT_TIME,
             default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
         ): selector.TimeSelector(),
+        # No prompt-timeout field is presented here -- midnight is the only answer deadline
+        # (notifications-design.md §3/§9); a later slice briefly presented one anyway, since
+        # reverted (#813/#818).
     }
     if include_interval:
         schema[
