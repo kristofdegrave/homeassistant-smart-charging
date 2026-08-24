@@ -270,9 +270,9 @@ arrangement that motivates tuning them, accepting the consequences above as the 
 now gated the same way — it applies in every mode while the capability is present and in none while
 it is absent — and the grid supply ceiling clamp (C4), which is what actually protects the grid
 connection on a non-CapTar installation, stays on the
-ungated `grid` step. This use-case describes only the step behaviour; **R18 AC5**, **R20 AC3**, and
-**R20 AC5** already say the same thing in `requirements.md`, so this document does not restate what
-those criteria say about where the peak-protection fields are presented.
+ungated `grid` step. This use-case describes only the step behaviour; **R18 AC5** and **R20 AC3**
+already say the same thing in `requirements.md`, so this document does not restate what those
+criteria say about where the peak-protection fields are presented.
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.
@@ -342,8 +342,8 @@ it was before the flow started.
   the `power` step, so every catalogued adapter role and `config-options` key the flow is
   responsible for now has a field on some step.
 - The step set stays extensible: a capability added in a later release (R18's extensibility clause)
-  needs exactly one new step, appended after the existing capability-gated steps (6–9), with no
-  change to the fields or order of any other step. This is a
+  needs exactly one new step, at the insertion point R20 AC9 names — after the existing
+  capability-gated steps (6–9) — and changes no other step's fields or order. This is a
   structural property of the step grouping rather than a flow exercised here — the capability set is
   closed this release (R18), so no concrete scenario can walk it.
 - Every other use-case (UC01–UC11) can execute using the mappings, capabilities, and thresholds
@@ -409,30 +409,23 @@ flowchart TD
 
 ## Requirements satisfied
 
-Partially satisfies [R20](../requirements.md#r20--guided-installation-configuration) — the step
-grouping, the capability-gated skipping, the step-local validation, the mapping-only and
-threshold-only amendment paths, and the discard-on-abandon behaviour are this use-case's
-realization of R20's acceptance criteria (AC2 in part, AC6, AC7, AC8). Five of R20's criteria are
-written against the previous step model and no longer describe what this use-case does:
-
-- **AC1** — the first step's field list and the vehicle-charge-limit election; the `core` step now
-  presents the four capability declarations and the smoothing window, and the charge-limit mapping
-  is a `vehicle`-step field rather than an election.
-- **AC2** — its trailing clause ("followed by the vehicle-charge-limit step when that mapping is
-  elected") names a step this model removed; the rest of AC2, one step per declared capability in a
-  fixed documented order, still holds.
-- **AC3** — its clause "or to a declined optional mapping" is obsolete: the vehicle charge-limit
-  field is now always presented on the `vehicle` step and never declined through an election.
-- **AC4** — the EV state-of-charge mapping presented "on the first step that needs it" and "not
-  presented at all when neither capability is declared present"; it is now always presented, on the
-  ungated `vehicle` step (step 4).
-- **AC5** — ungated peak-protection fields, now CapTar-gated (5b); AC5's carve-out for the
-  `Power`-mode cooldown is also obsolete, since the flow now asks it.
-- **AC9** — its extensibility *property* still holds, but its literal insertion-point wording
-  ("before the vehicle-charge-limit step") names an anchor this model removed; the Postconditions
-  above restate the insertion point as "appended after the existing capability-gated steps".
-
-Reconciling R20's wording is tracked separately and is out of scope here.
+Satisfies [R20](../requirements.md#r20--guided-installation-configuration). The nine-step model
+above is this use-case's realization of every one of R20's acceptance criteria: the `core` step's
+capability declarations settle which of the later steps apply before any of them is shown (AC1);
+each capability declared present contributes exactly one gated step — 6 through 9, in the fixed
+order the step table records — and each amendment path counts only the steps its own half populates,
+which is why `captar` and `power` are absent from the reconfigure flow (AC2, 1a); no field of an
+absent capability is ever presented, while the one optional mapping no capability gates — the
+vehicle's own charge limit — sits on the always-shown `vehicle` step and may simply be left blank
+(AC3, 4a); the EV state-of-charge mapping is presented exactly once, on that same always-shown step,
+whatever the capability declarations (AC4); every ungated field the flow presents sits on the step
+of its own concern, the external home-day mapping being the single carve-out both documents name
+(AC5, 5c); every field is validated on the step that presents it, never only after the final step
+(AC6, Exception flows); the reconfigure and options flows each amend their own half prefilled and
+leave the other half untouched (AC7, 1a/1b); and abandoning the flow leaves the installation exactly
+as it was (AC8, Exception flows). AC9 alone is a structural property of the step grouping rather
+than a scenario this use-case can walk — the capability set is closed this release (R18 AC13) — and
+the Postconditions above record that this step model holds it.
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
 acceptance criteria that the solar, CapTar, deadline, and notifications capabilities are each
@@ -448,8 +441,8 @@ departure-time inputs are neither offered nor required when the deadline capabil
 Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
 only whether a capability is configurable and whether its inputs are required.
 
-The **notifications capability** (`notifications_available`) this use-case adds to the `core` step
-is a fourth capability, alongside the other three R18 already names as in scope this release
+The **notifications capability** (`notifications_available`) the `core` step presents is the fourth
+capability R18 names as in scope this release, alongside solar, CapTar, and deadline management
 (AC13). It defaults to **absent** — a deliberate, named departure from the default-present
 convention the other three capabilities follow, not an oversight. The three existing capabilities
 each record an installation fact that is already true of the installation before the flow asks:
