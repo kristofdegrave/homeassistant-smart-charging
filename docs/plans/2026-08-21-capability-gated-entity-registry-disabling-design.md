@@ -39,7 +39,6 @@ only). No `project-plan.md` edit is scheduled by this slice; ADR-0028 doesn't as
 | `HomeDaySwitch`/`TargetCurrentNumber`/`SocLimitOverrideNumber`/`ModeSelect`/`ProfileSelect` move their label-sync call site only | **In scope** — `switch.py`/`number.py`/`select.py` (§3.3) |
 | `MonthlyPeakSensor`/`EffectivePeakLimitSensor`/`PeakHeadroomSensor` | **Out of scope** — ADR-0028 Context explicitly excludes `captar_available` from entity-level gating |
 | Any change to `ModeSelect`'s option-list gating (`select.py`'s inline `BASE_/SOLAR_/CAPTAR_CAPABLE_MODES` construction) or `engines/capability_gate.py` | **Out of scope** — a separate, pre-existing mechanism (which modes are *selectable*), untouched by ADR-0028 |
-| A reseed/migration mechanism for `SmartChargingDepartureTime`'s restore-state gap | **Out of scope, by design** — ADR-0028 accepts this as a documented cost, not something to engineer around (§4) |
 | The runtime dashboard's static "Power flow" tile for `sensor.smart_charging_solar_surplus_w` | **Out of scope, deferral recorded** — see §4; not label-driven, so ADR-0022's label mechanism doesn't cover it, and ADR-0028 doesn't ask for a dashboard change |
 
 ---
@@ -184,11 +183,6 @@ capability-gated, only their sync mechanism moves.
 
 ## 4. Deliberate deferrals
 
-- **`SmartChargingDepartureTime`'s restore-state gap** (ADR-0028 Context): a user's set departure
-  time can revert to its R14 constructor default across a `deadline_available` off→on cycle,
-  since the `RestoreEntity` read only runs while the entity is added to hass. This is an accepted
-  cost per the ADR, not engineered around here — the TDD plan asserts the documented behavior
-  (revert to default) so it stays a decided outcome, not a silent, unasserted regression.
 - **`captar_available`-gated sensors**: excluded entirely, per ADR-0028's Context — not a
   narrower version of the mechanism, a deliberate non-application of it.
 - **A future notifications-capability-gated entity**: none exists yet; when one is added, it
@@ -218,7 +212,7 @@ state, none of it HA-free pure logic. No plain-pytest tests are added by this sl
 | Idempotency across repeated reloads, capability unchanged | both |
 | Label **and** `disabled_by` both correct while disabled | `SmartChargingDepartureTime` only (the one entity with both mechanisms) |
 | Regression: label still applied after the call-site move | `HomeDaySwitch`, `TargetCurrentNumber`, `SocLimitOverrideNumber`, `ModeSelect`, `ProfileSelect` |
-| Accepted-risk case: restored value does **not** survive an off/on cycle | `SmartChargingDepartureTime` |
+| Restored value **does** survive an off/on cycle (documents the actual, safe `RestoreEntity` behavior) | `SmartChargingDepartureTime` |
 
 `sync_disabled_by`/`sync_labels` themselves get direct unit-level HA-harness tests
 (`tests/test_entity_labels.py`) exercising the registry functions in isolation, independent of any
