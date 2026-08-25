@@ -13,20 +13,31 @@ from custom_components.smart_charging.config_flow import (
     CONFIG_TABLE,
     CORE_MAPPING_SCHEMA,
     DEADLINE_MAPPING_SCHEMA,
+    EV_CHARGER_MAPPING_SCHEMA,
+    GRID_MAPPING_SCHEMA,
+    NOTIFICATIONS_MAPPING_SCHEMA,
     OPTION_KEYS,
     OPTIONS_TABLE,
+    SOLAR_MAPPING_SCHEMA,
     UNGATED_MAPPING_SCHEMA,
     VEHICLE_LIMIT_MAPPING_SCHEMA,
+    VEHICLE_MAPPING_SCHEMA,
     FlowStep,
     SmartChargingConfigFlow,
     SmartChargingOptionsFlow,
     _captar_mapping_schema,
     _captar_threshold_schema,
+    _core_threshold_schema,
     _deadline_threshold_schema,
+    _ev_charger_threshold_schema,
+    _grid_threshold_schema,
+    _notifications_threshold_schema,
+    _power_threshold_schema,
     _solar_mapping_schema,
     _solar_threshold_schema,
     _TableWalkMixin,
     _ungated_threshold_schema,
+    _vehicle_threshold_schema,
 )
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
@@ -1526,10 +1537,14 @@ async def test_uc12_2a_captar_absent_skips_the_captar_step(hass):
 
 
 async def test_r20_ac3_captar_absent_install_stores_no_captar_threshold_keys(hass):
+    """T2 extends `_captar_threshold_schema` with the five peak-protection fields (UC12 5b),
+    which the live, ungated `thresholds` step also still asks today (`_ungated_threshold_
+    schema`, unaffected by this task) -- so those five are stored regardless of the CapTar
+    declaration until T4 retires the ungated fragment. Only `captar_cooldown_min` is unique
+    to the CapTar-gated step today; that is what this criterion actually checks."""
     result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
-    for key in _keys(_captar_threshold_schema()):
-        assert key not in result["options"]
+    assert CONF_CAPTAR_COOLDOWN_MIN not in result["options"]
 
 
 async def test_captar_step_error_can_be_corrected_and_the_flow_advances(hass):
@@ -2247,12 +2262,15 @@ def test_uc12_step4_captar_mapping_fragment_without_ev_soc():
     assert _keys(_captar_mapping_schema(include_ev_soc=False)) == set()
 
 
-def test_uc12_step4_captar_threshold_fragment():
-    assert _keys(_captar_threshold_schema()) == {CONF_CAPTAR_COOLDOWN_MIN}
-
-
-def test_uc12_step5_deadline_mapping_fragment():
-    assert _keys(DEADLINE_MAPPING_SCHEMA) == {CONF_DEPARTURE_EXTERNAL_ENTITY}
+# test_uc12_step4_captar_threshold_fragment / test_uc12_step5_deadline_mapping_fragment
+# (ADR-0025-era names) were retired here: T2 extends both `_captar_threshold_schema` (with
+# the five peak-protection fields, UC12 5b/R18 AC5) and `DEADLINE_MAPPING_SCHEMA` (with
+# home_day_external_entity, UC12 5c/R20 AC5) -- both rendered live by today's `captar`/
+# `deadline` steps ahead of T4's cut-over (design, "Schema fragments") -- and the resulting
+# key sets are exactly what
+# test_uc12_5b_captar_threshold_fragment_carries_the_peak_protection_fields and
+# test_uc12_5c_deadline_mapping_carries_the_home_day_external_carve_out (below) already
+# assert, so carrying both names forward would only duplicate the assertion.
 
 
 def test_uc12_step5_deadline_threshold_fragment():
@@ -2310,53 +2328,193 @@ def test_uc12_step8_ungated_threshold_fragment_with_interval():
     )
 
 
-def test_every_option_key_appears_in_exactly_one_threshold_fragment():
-    """ADR-0005: every OPTION_KEYS member has exactly one step that presents it -- no key
-    orphaned by the split, none asked twice."""
-    threshold_fragments = [
-        _solar_threshold_schema(),
-        _captar_threshold_schema(),
-        _deadline_threshold_schema(),
-        _ungated_threshold_schema(include_interval=False),
-    ]
-    all_keys: list[str] = []
-    for fragment in threshold_fragments:
-        all_keys.extend(_keys(fragment))
-    # control_interval_s is deliberately not an OPTION_KEYS member (it's appended separately
-    # at the terminal step, design "The terminal step and the bucket split") and only the
-    # options-flow variant of the ungated fragment carries it -- excluded here by using
-    # include_interval=False above.
-    assert sorted(all_keys) == sorted(set(OPTION_KEYS))
+# --- T2: the nine per-step schema fragments (topic-step config flow, ADR-0027 Consequences;
+# design "Schema fragments" table). These fragments are added alongside the ADR-0025 ones
+# above -- CORE_MAPPING_SCHEMA is not re-cut here (T4's concern), so it carries no key-set
+# test of its own; only its threshold half (_core_threshold_schema) does. ---
+
+# CORE_MAPPING_SCHEMA deliberately excluded: it still carries the old core mapping fields
+# (charger_current_entity et al.) until T4 re-cuts it to the four capability declarations --
+# add it here once that lands, or these tuples' disjointness/no-option-key-in-a-mapping
+# assertions permanently skip the core step.
+_NEW_MAPPING_FRAGMENTS = (
+    GRID_MAPPING_SCHEMA,
+    EV_CHARGER_MAPPING_SCHEMA,
+    VEHICLE_MAPPING_SCHEMA,
+    SOLAR_MAPPING_SCHEMA,
+    DEADLINE_MAPPING_SCHEMA,
+    NOTIFICATIONS_MAPPING_SCHEMA,
+)
+_NEW_THRESHOLD_FRAGMENTS = (
+    _core_threshold_schema(),
+    _grid_threshold_schema(),
+    _ev_charger_threshold_schema(),
+    _vehicle_threshold_schema(),
+    _power_threshold_schema(),
+    _captar_threshold_schema(),
+    _solar_threshold_schema(),
+    _deadline_threshold_schema(),
+    _notifications_threshold_schema(),
+)
 
 
-def test_no_field_appears_in_two_fragments_except_ev_soc():
-    """Every field belongs to exactly one fragment -- with one deliberate carve-out.
-    ev_soc_entity is a member of BOTH _solar_mapping_schema(include_ev_soc=True) and
-    _captar_mapping_schema(include_ev_soc=True) by design: the once-only rule (R20 AC4,
-    UC12 postcondition 3) is enforced at RENDER time by the include_ev_soc argument, not by
-    fragment membership. Compare the fragments built with include_ev_soc=False so the
-    carve-out is structural rather than a subtracted special case.
+def test_uc12_step1_core_threshold_fragment_has_exactly_uc12s_fields():
+    """UC12 step 1 threshold half: the smoothing window only when the control interval is not
+    requested. The core *mapping* half (the four capability declarations) is asserted in T4,
+    which is where CORE_MAPPING_SCHEMA is re-cut -- it renders live until then."""
+    assert _keys(_core_threshold_schema()) == {CONF_SMOOTHING_WINDOW}
 
-    Note this does NOT generalise UC12 postcondition 3 -- that postcondition is about what a
-    presented step shows (T8's traversal assertion), not a statement about fragment
-    membership."""
-    all_fragments = [
-        CORE_MAPPING_SCHEMA,
-        _solar_mapping_schema(include_ev_soc=False),
-        _solar_threshold_schema(),
-        _captar_mapping_schema(include_ev_soc=False),
-        _captar_threshold_schema(),
-        DEADLINE_MAPPING_SCHEMA,
-        _deadline_threshold_schema(),
-        VEHICLE_LIMIT_MAPPING_SCHEMA,
-        UNGATED_MAPPING_SCHEMA,
-        _ungated_threshold_schema(include_interval=False),
-    ]
+
+def test_uc12_step2_grid_fragments_have_exactly_uc12s_fields():
+    """UC12 step 2. Landing-order check (design D-4): CONF_LOW_TARIFF_STATES had not landed
+    on origin/main when this task ran, so GRID_MAPPING_SCHEMA carries CONF_LOW_TARIFF_ENTITY
+    exactly as it exists today and nothing else."""
+    assert _keys(GRID_MAPPING_SCHEMA) == {
+        CONF_NET_POWER_ENTITY,
+        CONF_GRID_VOLTAGE_ENTITY,
+        CONF_LOW_TARIFF_ENTITY,
+    }
+    assert _keys(_grid_threshold_schema()) == {
+        CONF_NOMINAL_VOLTAGE,
+        CONF_GRID_CEILING_A,
+        CONF_GRID_SAFETY_OFFSET_A,
+    }
+
+
+def test_uc12_step3_ev_charger_fragments_have_exactly_uc12s_fields():
+    """UC12 step 3."""
+    assert _keys(EV_CHARGER_MAPPING_SCHEMA) == {
+        CONF_CHARGER_CURRENT_ENTITY,
+        CONF_CHARGER_STATUS_ENTITY,
+        CONF_CONNECTED_STATES,
+        CONF_CHARGING_STATES,
+        CONF_CHARGER_POWER_ENTITY,
+    }
+    assert _keys(_ev_charger_threshold_schema()) == {CONF_MIN_CURRENT, CONF_MAX_CURRENT}
+
+
+def test_uc12_step4_vehicle_fragments_have_exactly_uc12s_fields():
+    """UC12 step 4 / R20 AC4: ev_soc_entity now lives on the always-shown `vehicle` step."""
+    assert _keys(VEHICLE_MAPPING_SCHEMA) == {
+        CONF_EV_SOC_ENTITY,
+        CONF_EV_BATTERY_CAPACITY_ENTITY,
+        CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
+        CONF_CAR_HOME_ENTITY,
+    }
+    assert _keys(_vehicle_threshold_schema()) == {
+        CONF_EV_BATTERY_CAPACITY_KWH,
+        CONF_DEFAULT_SOC_LIMIT,
+    }
+
+
+def test_uc12_step5_power_threshold_fragment_has_exactly_uc12s_fields():
+    """UC12 step 5: threshold-only, no mapping half."""
+    assert _keys(_power_threshold_schema()) == {
+        CONF_DEFAULT_TARGET_CURRENT,
+        CONF_POWER_COOLDOWN_MIN,
+    }
+
+
+def test_uc12_5b_captar_threshold_fragment_carries_the_peak_protection_fields():
+    """UC12 5b / R18 AC5: power_respect_peak, safety_margin_w, max_peak_kw, peak_floor_kw
+    and peak_grace_min now live on the CapTar-gated step and nowhere else."""
+    assert _keys(_captar_threshold_schema()) == {
+        CONF_CAPTAR_COOLDOWN_MIN,
+        CONF_POWER_RESPECT_PEAK,
+        CONF_SAFETY_MARGIN_W,
+        CONF_MAX_PEAK_KW,
+        CONF_PEAK_FLOOR_KW,
+        CONF_PEAK_GRACE_MIN,
+    }
+
+
+def test_uc12_step7_solar_fragments_have_exactly_uc12s_fields():
+    """Includes the new solar_power_entity mapping (design D-1) and both hold durations
+    plus the restart debounce, which epic #760's list omits and UC12 names."""
+    assert _keys(SOLAR_MAPPING_SCHEMA) == {CONF_SOLAR_POWER_ENTITY, CONF_SOLAR_FORECAST_ENTITY}
+    assert _keys(_solar_threshold_schema()) == {
+        CONF_SOLAR_START_THRESHOLD_W,
+        CONF_SOLAR_ONLY_START_THRESHOLD_W,
+        CONF_SOLAR_ONLY_STRATEGY,
+        CONF_SOLAR_ONLY_MIDPOINT,
+        CONF_SOLAR_HOLD_MIN,
+        CONF_SOLAR_ONLY_HOLD_MIN,
+        CONF_SOLAR_RESTART_DEBOUNCE_MIN,
+        CONF_SOLAR_COOLDOWN_MIN,
+        CONF_SOLAR_STEP_PP,
+        CONF_SOLAR_STEP_THRESHOLD_PP,
+        CONF_MAX_SOLAR_SOC,
+        CONF_SOLAR_RESERVE_SOC,
+        CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    }
+
+
+def test_uc12_5c_deadline_mapping_carries_the_home_day_external_carve_out():
+    """UC12 5c / R20 AC5: the single ungated field the flow places on a gated step."""
+    assert _keys(DEADLINE_MAPPING_SCHEMA) == {
+        CONF_DEPARTURE_EXTERNAL_ENTITY,
+        CONF_HOME_DAY_EXTERNAL_ENTITY,
+    }
+
+
+def test_uc12_step9_notifications_fragments_have_exactly_uc12s_fields():
+    """R18 AC11: all three per-notification enable toggles, each defaulting on, plus the
+    target mapping and the evening-prompt time."""
+    assert _keys(NOTIFICATIONS_MAPPING_SCHEMA) == {CONF_NOTIFICATION_TARGET_ENTITY}
+    assert _keys(_notifications_threshold_schema()) == {
+        CONF_DEADLINE_NOTICE_ENABLED,
+        CONF_PLUG_IN_REMINDER_ENABLED,
+        CONF_EVENING_PROMPT_ENABLED,
+        CONF_EVENING_PROMPT_TIME,
+    }
+
+
+def test_r20_ac4_no_field_belongs_to_two_fragments():
+    """R20 AC4 / ADR-0027 Context: ev_soc_entity moved to the ungated `vehicle` step, so the
+    include_ev_soc carve-out the seven-step model needed is gone -- fragments are now
+    strictly disjoint, with no exemption list. Runs over the new fragments only (T2's own
+    tuple): the retiring UNGATED_MAPPING_SCHEMA/_ungated_threshold_schema/CORE_MAPPING_SCHEMA
+    still exist until T4 and would overlap with them."""
     seen: set[str] = set()
-    for fragment in all_fragments:
+    for fragment in (*_NEW_MAPPING_FRAGMENTS, *_NEW_THRESHOLD_FRAGMENTS):
         overlap = _keys(fragment) & seen
         assert not overlap, f"field(s) {overlap} appear in more than one fragment"
         seen |= _keys(fragment)
+
+
+def test_option_keys_has_no_duplicate_member():
+    """Guards test_adr0005_every_option_key_appears_in_exactly_one_threshold_fragment's own
+    `sorted(...) == sorted(set(OPTION_KEYS))` below, which would silently tolerate a
+    duplicate OPTION_KEYS entry (a duplicate collapses under `set()` on both sides)."""
+    assert len(OPTION_KEYS) == len(set(OPTION_KEYS))
+
+
+def test_adr0005_every_option_key_appears_in_exactly_one_threshold_fragment():
+    """ADR-0005: every OPTION_KEYS member has exactly one step that presents it -- no key
+    orphaned by the split, none asked twice. Re-pointed (T2) at the new fragment tuple: the
+    old ADR-0025 tuple duplicated the three OPTION_KEYS members T2 appends and left them
+    absent from every old fragment."""
+    all_keys: list[str] = []
+    for fragment in _NEW_THRESHOLD_FRAGMENTS:
+        all_keys.extend(_keys(fragment))
+    assert sorted(all_keys) == sorted(set(OPTION_KEYS))
+
+
+def test_adr0005_no_option_key_appears_in_a_mapping_fragment():
+    """ADR-0005: the mapping half never carries a threshold/default key."""
+    mapping_keys: set[str] = set()
+    for fragment in _NEW_MAPPING_FRAGMENTS:
+        mapping_keys |= _keys(fragment)
+    assert not (mapping_keys & set(OPTION_KEYS))
+
+
+def test_uc12_1b_control_interval_is_only_in_the_core_threshold_fragment_when_requested():
+    """UC12 1b: _core_threshold_schema(include_interval=True) is the options flow's only
+    door to the control interval."""
+    assert CONF_CONTROL_INTERVAL_S not in _keys(_core_threshold_schema())
+    assert CONF_CONTROL_INTERVAL_S in _keys(_core_threshold_schema(include_interval=True))
+    for fragment in (*_NEW_MAPPING_FRAGMENTS, *_NEW_THRESHOLD_FRAGMENTS):
+        assert CONF_CONTROL_INTERVAL_S not in _keys(fragment)
 
 
 # --- C4 T1: the new constants (topic-step config flow, ADR-0027). ---

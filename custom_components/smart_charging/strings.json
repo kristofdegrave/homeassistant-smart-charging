@@ -43,7 +43,12 @@
         "description": "Map the entities CapTar's peak-shaving reads.",
         "data": {
           "ev_soc_entity": "EV state-of-charge entity",
-          "captar_cooldown_min": "Captar cooldown duration (min)"
+          "captar_cooldown_min": "Captar cooldown duration (min)",
+          "safety_margin_w": "CapTar peak safety margin (W)",
+          "max_peak_kw": "CapTar maximum peak (kW)",
+          "peak_floor_kw": "CapTar peak floor (kW)",
+          "peak_grace_min": "CapTar peak grace period (min)",
+          "power_respect_peak": "Power mode respects the peak limit"
         }
       },
       "deadline": {
@@ -51,7 +56,8 @@
         "description": "Map the departure-time entity used to track a deadline.",
         "data": {
           "departure_external_entity": "External departure-time entity (optional)",
-          "reminder_lead_h": "Plug-in reminder lead time (h)"
+          "reminder_lead_h": "Plug-in reminder lead time (h)",
+          "home_day_external_entity": "External home-day entity (optional)"
         }
       },
       "vehicle_limit": {
@@ -128,7 +134,12 @@
         "title": "CapTar thresholds",
         "description": "Tune CapTar's cooldown.",
         "data": {
-          "captar_cooldown_min": "Captar cooldown duration (min)"
+          "captar_cooldown_min": "Captar cooldown duration (min)",
+          "safety_margin_w": "CapTar peak safety margin (W)",
+          "max_peak_kw": "CapTar maximum peak (kW)",
+          "peak_floor_kw": "CapTar peak floor (kW)",
+          "peak_grace_min": "CapTar peak grace period (min)",
+          "power_respect_peak": "Power mode respects the peak limit"
         }
       },
       "deadline": {
