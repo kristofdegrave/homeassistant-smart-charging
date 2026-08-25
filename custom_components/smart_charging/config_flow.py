@@ -70,7 +70,6 @@ from .const import (
     CONF_SOLAR_STEP_THRESHOLD_PP,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
-    CONF_VEHICLE_LIMIT_MAPPED,
     DEFAULT_CAPTAR_AVAILABLE,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -111,8 +110,7 @@ from .const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
-    ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
-    ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
+    ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     ROUND_DOWN,
     ROUND_NEAREST,
@@ -124,13 +122,11 @@ from .const import (
     STEP_DEADLINE,
     STEP_EV_CHARGER,
     STEP_GRID,
-    STEP_MAPPINGS,
     STEP_NOTIFICATIONS,
     STEP_POWER,
     STEP_SOLAR,
     STEP_THRESHOLDS,
     STEP_VEHICLE,
-    STEP_VEHICLE_LIMIT,
 )
 
 # Threshold/default keys stored in config-entry OPTIONS (ADR-0005), not data.
@@ -270,66 +266,59 @@ class _TableWalkMixin:
         raise NotImplementedError
 
 
-# UC12 step 2's fixed order (solar -> captar -> deadline -> vehicle limit -> ungated mappings
-# -> ungated thresholds), independent of how many of CONFIG_TABLE's rows exist yet -- every
-# task that appends a row must keep the table a subsequence of this order (asserted by
-# tests/test_config_flow.py's test_uc12_step2_config_table_is_in_uc12s_fixed_order, which
-# spells the expected order out itself from UC12/const.py's STEP_* constants rather than
-# importing this constant, so the test stays an independent oracle rather than checking the
-# production table against itself). This constant is a documentation/cross-check aid for
-# whoever adds a row, not a runtime dependency of the dispatcher.
-#
-# CONFIG_TABLE carries all six rows as of T7; T8's traversal matrix is the exact-sequence
-# assertion this comment used to ask for on the config side (its own task, not duplicated
-# here). OPTIONS_TABLE carries all four of its own rows as of T10, asserted directly as
-# equality by that table's own order test (unlike CONFIG_TABLE, OPTIONS_TABLE landed complete
-# in one task, so there was no incremental build-out state to tolerate with a subsequence
-# check).
+# UC12's fixed nine-step order, table rows only (`core` excluded -- it is the shared entry
+# point both async_step_user/async_step_reconfigure delegate into, ADR-0027 point 5, design
+# "Step ids and the two tables"). Eight ids, `captar` before `solar` (ADR-0027, Consequences).
+# A documentation/cross-check aid for whoever adds a row (R20 AC9's extensibility criterion),
+# not a runtime dependency of the dispatcher -- CONFIG_TABLE's own order is what the dispatcher
+# actually walks.
 UC12_FIXED_STEP_ORDER = (
-    STEP_SOLAR,
+    STEP_GRID,
+    STEP_EV_CHARGER,
+    STEP_VEHICLE,
+    STEP_POWER,
     STEP_CAPTAR,
+    STEP_SOLAR,
     STEP_DEADLINE,
-    STEP_VEHICLE_LIMIT,
-    STEP_MAPPINGS,
-    STEP_THRESHOLDS,
+    STEP_NOTIFICATIONS,
 )
 
-# Populated incrementally -- see the module comment above. T3 added the two ungated rows
-# (`mappings`/`thresholds`, UC12 steps 7/8), needing no capability to be reached. T4 added
-# `solar`, gated on this run's own CONF_SOLAR_AVAILABLE answer. T5 added `captar`, gated the
-# same way on CONF_CAPTAR_AVAILABLE, placed after `solar` -- UC12's fixed order is what makes
-# `async_step_captar`'s `include_ev_soc` expression correct (see its docstring). T6 added
-# `deadline`, gated the same way on CONF_DEADLINE_AVAILABLE -- unlike solar/captar it carries
-# no step-local guard (UC12 marks neither of its fields required, R18 AC7). T7 adds
-# `vehicle_limit`, gated on the transient CONF_VEHICLE_LIMIT_MAPPED election (design D-2; popped
-# in `_async_finish`, never stored). All four gates read a value that's always present in
-# self._answers by the time any gate runs (CORE_MAPPING_SCHEMA marks each vol.Required). The
-# table is now complete for the install flow.
-# `thresholds` is additionally gated off for reconfigure (UC12 1a, design "Step ids" table row
-# 6): T9 wires async_step_reconfigure into this same table, so this gate is what makes step 8
-# skip itself in that mode -- no second table, no reconfigure-specific branch in the walk.
+# The config flow's own table (ADR-0027 Option C; T4 cut-over -- topic-step plan). Install and
+# reconfigure share this one table (ADR-0027 point 3/5): `power`/`captar` have no mapping half
+# at all, so both are gated off entirely in reconfigure mode (a per-step gate, not a stop
+# condition, because both sit in the *middle* of the fixed order). `solar`/`deadline`/
+# `notifications` are gated on this run's own answer from the `core` step; `grid`/`ev_charger`/
+# `vehicle` are always shown.
 CONFIG_TABLE: tuple[FlowStep, ...] = (
+    FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
+    FlowStep(step_id=STEP_EV_CHARGER, gate=lambda flow: True),
+    FlowStep(step_id=STEP_VEHICLE, gate=lambda flow: True),
+    FlowStep(step_id=STEP_POWER, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
+    FlowStep(
+        step_id=STEP_CAPTAR,
+        gate=lambda flow: (
+            bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))
+            and flow._mode is not FlowMode.RECONFIGURE
+        ),
+    ),
     FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
-    FlowStep(step_id=STEP_CAPTAR, gate=lambda flow: bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))),
     FlowStep(
         step_id=STEP_DEADLINE, gate=lambda flow: bool(flow._answers.get(CONF_DEADLINE_AVAILABLE))
     ),
     FlowStep(
-        step_id=STEP_VEHICLE_LIMIT,
-        gate=lambda flow: bool(flow._answers.get(CONF_VEHICLE_LIMIT_MAPPED)),
+        step_id=STEP_NOTIFICATIONS,
+        gate=lambda flow: bool(flow._answers.get(CONF_NOTIFICATIONS_AVAILABLE)),
     ),
-    FlowStep(step_id=STEP_MAPPINGS, gate=lambda flow: True),
-    FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
 )
 
-# The options flow's own table (ADR-0025 point 3): threshold halves only, no `core`/
-# `mappings`/`vehicle_limit` rows (mapping fields never appear here -- ADR-0005 restricts this
-# flow to the options bucket). Gated on the *stored* capability flags (`self.config_entry.data`),
-# never this run's own answers -- the options flow never re-asks a capability, only its
-# thresholds. Every gate reads defensively via `.get(key, DEFAULT_*)`, never bracket indexing:
-# `deadline_available` is a key this slice introduces (D-1) and is absent from every entry
-# written before it, so `entry.data[CONF_DEADLINE_AVAILABLE]` would KeyError on the first
-# Configure a pre-slice entry ever opens.
+# The options flow's own table (ADR-0025 point 3, untouched by T4 -- T7's concern): threshold
+# halves only, no `core`/`mappings`/`vehicle_limit` rows (mapping fields never appear here --
+# ADR-0005 restricts this flow to the options bucket). Gated on the *stored* capability flags
+# (`self.config_entry.data`), never this run's own answers -- the options flow never re-asks a
+# capability, only its thresholds. Every gate reads defensively via `.get(key, DEFAULT_*)`,
+# never bracket indexing: `deadline_available` is a key this slice introduces (D-1) and is
+# absent from every entry written before it, so `entry.data[CONF_DEADLINE_AVAILABLE]` would
+# KeyError on the first Configure a pre-slice entry ever opens.
 OPTIONS_TABLE: tuple[FlowStep, ...] = (
     FlowStep(
         step_id=STEP_SOLAR,
@@ -352,54 +341,13 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: True),
 )
 
-
-# --- Topic-step plan T3 (docs/plans/2026-08-25-topic-step-config-flow.md -- not the
-# ADR-0025 guided-flow plan's own T3 above, which added a different pair of rows years
-# earlier in this file's history): the two new (interim-named) tables for the nine topic
-# steps (ADR-0027 Decision, Option C unchanged in mechanism). Named NINE_STEP_CONFIG_TABLE/
-# NINE_STEP_OPTIONS_TABLE so they can coexist with the still-live CONFIG_TABLE/
-# OPTIONS_TABLE above -- T4 renames the first to CONFIG_TABLE and T7 the second to
-# OPTIONS_TABLE, each deleting the table it replaces in the same commit (topic-step plan
-# T3). Neither table is wired into `_table`/the framework entry points yet, so the live
-# flow is unchanged.
-#
-# `core` is deliberately not a NINE_STEP_CONFIG_TABLE row: it is the shared install/
-# reconfigure entry point both async_step_user and async_step_reconfigure delegate into
-# (ADR-0027 point 5, design "Step ids and the two tables"). It IS a NINE_STEP_OPTIONS_TABLE
-# row, because the options flow's own entry point, async_step_init, renders no form of its
-# own.
-NINE_STEP_CONFIG_TABLE: tuple[FlowStep, ...] = (
-    FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
-    FlowStep(step_id=STEP_EV_CHARGER, gate=lambda flow: True),
-    FlowStep(step_id=STEP_VEHICLE, gate=lambda flow: True),
-    # Neither `power` nor `captar` has a mapping half, so both must be absent from the
-    # reconfigure walk (UC12 1a, ADR-0027 point 3): reconfigure's subset is a per-step gate,
-    # not a stop condition, because both sit in the *middle* of the fixed order rather than
-    # at its end.
-    FlowStep(step_id=STEP_POWER, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
-    FlowStep(
-        step_id=STEP_CAPTAR,
-        gate=lambda flow: (
-            bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))
-            and flow._mode is not FlowMode.RECONFIGURE
-        ),
-    ),
-    FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
-    FlowStep(
-        step_id=STEP_DEADLINE, gate=lambda flow: bool(flow._answers.get(CONF_DEADLINE_AVAILABLE))
-    ),
-    FlowStep(
-        step_id=STEP_NOTIFICATIONS,
-        gate=lambda flow: bool(flow._answers.get(CONF_NOTIFICATIONS_AVAILABLE)),
-    ),
-)
-
-# Gated on the *stored* capability flags (`flow.config_entry.data`), never this run's own
-# answers -- the options flow never re-asks a capability, only its thresholds (ADR-0027
-# point 4). Every gate reads defensively via `.get(key, DEFAULT_*)`, never bracket indexing:
-# `notifications_available` is a key this slice introduces and is absent from every entry
-# written before it, so `entry.data[CONF_NOTIFICATIONS_AVAILABLE]` would KeyError the first
-# time an upgraded installation opens Configure.
+# Interim-named (topic-step plan T3): the options flow's own nine-topic-step table, not yet
+# wired into `SmartChargingOptionsFlow._table` -- OPTIONS_TABLE above still is, until T7
+# renames this to OPTIONS_TABLE (deleting the one above) the same way T4 renamed
+# NINE_STEP_CONFIG_TABLE to CONFIG_TABLE. `core` IS a row here (unlike CONFIG_TABLE), because
+# the options flow's own entry point, async_step_init, renders no form of its own. Gated on
+# the *stored* capability flags, defensively (`.get(key, DEFAULT_*)`): `notifications_available`
+# is a key this slice introduces and is absent from every entry written before it.
 NINE_STEP_OPTIONS_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_CORE, gate=lambda flow: True),
     FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
@@ -442,36 +390,25 @@ NINE_STEP_OPTIONS_TABLE: tuple[FlowStep, ...] = (
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_CHARGER_CURRENT_ENTITY): _entity("number"),
-        vol.Required(CONF_CHARGER_STATUS_ENTITY): _entity(["sensor", "binary_sensor"]),
-        vol.Required(CONF_CONNECTED_STATES): str,
-        vol.Required(CONF_CHARGING_STATES): str,
-        vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
-        vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
-        # Form default True (R20 AC1's "defaulting to present"; design, "Decisions on two
-        # forks" §2) -- deliberately diverges from DEFAULT_SOLAR_AVAILABLE (False), which
-        # stays the absent-key read fallback for an entry that predates this field.
+        # R20 AC1 / design D-1's success criterion: the four capability declarations and
+        # nothing else -- every other field this fragment used to carry (the charger/grid
+        # mappings, the transient vehicle-limit election) now lives on its own topic step
+        # (`grid`/`ev_charger`/`vehicle`).
+        # Form default True (R20 AC1's "defaulting to present"; design D-5) -- deliberately
+        # diverges from DEFAULT_SOLAR_AVAILABLE (False), which stays the absent-key read
+        # fallback for an entry that predates this field.
         vol.Required(CONF_SOLAR_AVAILABLE, default=True): bool,
         vol.Required(CONF_CAPTAR_AVAILABLE, default=DEFAULT_CAPTAR_AVAILABLE): bool,
         vol.Required(CONF_DEADLINE_AVAILABLE, default=DEFAULT_DEADLINE_AVAILABLE): bool,
-        vol.Required(CONF_VEHICLE_LIMIT_MAPPED, default=False): bool,
+        # New capability (D-1); form default and absent-key read fallback agree (design D-5,
+        # unlike solar's split) -- R18 AC9's default-absent exception.
+        vol.Required(CONF_NOTIFICATIONS_AVAILABLE, default=DEFAULT_NOTIFICATIONS_AVAILABLE): bool,
     }
 )
 
 
-def _solar_mapping_schema(include_ev_soc: bool) -> vol.Schema:
-    """UC12 step 3 mapping half. `ev_soc_entity` is included only when the once-only rule
-    (R20 AC4) puts it here rather than on the CapTar step -- the one field deliberately
-    shared with `_captar_mapping_schema` (design, "Schema fragments")."""
-    fields: dict = {}
-    if include_ev_soc:
-        fields[vol.Optional(CONF_EV_SOC_ENTITY)] = _entity("sensor")
-    fields[vol.Optional(CONF_SOLAR_FORECAST_ENTITY)] = _entity("sensor")
-    return vol.Schema(fields)
-
-
 def _solar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 3 threshold half."""
+    """UC12 (topic-step) step 7 threshold half."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -534,20 +471,10 @@ def _solar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
     )
 
 
-def _captar_mapping_schema(include_ev_soc: bool) -> vol.Schema:
-    """UC12 step 4 mapping half. See `_solar_mapping_schema` for the once-only ev_soc rule."""
-    fields: dict = {}
-    if include_ev_soc:
-        fields[vol.Optional(CONF_EV_SOC_ENTITY)] = _entity("sensor")
-    return vol.Schema(fields)
-
-
 def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 4 threshold half (the seven-step model, live today) / topic-step step 6's
-    CapTar-gated threshold half (ADR-0027, T3/T4). Extended here (T2) with the five
-    peak-protection fields (UC12 5b, R18 AC5) -- they now sit in this fragment AND
-    `_ungated_threshold_schema` at once, which is intentional until T4 retires the latter
-    (design, "Schema fragments"; plan T2's own re-pointing note)."""
+    """UC12 (topic-step) step 6 threshold half -- CapTar has no mapping half at all (design
+    field-to-step table): every mapping this step used to carry (`ev_soc_entity`) now lives
+    on the always-shown `vehicle` step (R20 AC4's once-only rule)."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -580,16 +507,15 @@ def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
 DEADLINE_MAPPING_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
-        # T2 (topic-step config-flow design, field-to-step table): the one ungated field a
-        # gated step carries (UC12 5c / R20 AC5's named carve-out). Sits in this fragment AND
-        # UNGATED_MAPPING_SCHEMA at once until T4 retires the latter.
+        # UC12 5c / R20 AC5's named carve-out: the one ungated field a capability-gated step
+        # carries.
         vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
     }
 )
 
 
 def _deadline_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 5 threshold half."""
+    """UC12 (topic-step) step 8 threshold half."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -599,27 +525,6 @@ def _deadline_threshold_schema(defaults: dict | None = None) -> vol.Schema:
             ): vol.Coerce(float),
         }
     )
-
-
-VEHICLE_LIMIT_MAPPING_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
-        vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
-    }
-)
-
-
-UNGATED_MAPPING_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
-        # RA4 notify-target role (notifications design doc §3/§6): must be a `notify`-domain
-        # entity; EntitySelector's own domain filter rejects a mismatched entity (vol.Invalid).
-        vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
-        vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
-        vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
-    }
-)
 
 
 def _ungated_threshold_schema(
@@ -700,15 +605,9 @@ def _ungated_threshold_schema(
     return vol.Schema(schema)
 
 
-# --- T2: the nine steps' schema fragments (ADR-0027, Consequences: "The schema fragments
-# are re-cut along topic lines"; design "Schema fragments" table). Added alongside the
-# ADR-0025 fragments above, which still render the live flow until T4's cut-over -- nothing
-# below is wired into CONFIG_TABLE/OPTIONS_TABLE yet (T3/T4/T7). CORE_MAPPING_SCHEMA is the
-# one step whose mapping half is not re-cut here (still the four ADR-0025 core mappings + the
-# capability decisions); its topic-step form is T4's concern, so only its threshold half is
-# added here. Every docstring below cites "UC12 (topic-step) step N" -- the ADR-0027/design
-# step numbering, which differs from the ADR-0025 fragments' own "UC12 step N" citations
-# above for the same step id until T4 retires the latter.
+# --- The nine topic steps' schema fragments (ADR-0027, Consequences: "The schema fragments
+# are re-cut along topic lines"; design "Schema fragments" table). CONFIG_TABLE above walks
+# these; OPTIONS_TABLE still walks the older ADR-0025 fragments above until T7 re-cuts it.
 
 
 def _core_threshold_schema(
@@ -896,36 +795,22 @@ def _notifications_threshold_schema(defaults: dict | None = None) -> vol.Schema:
     )
 
 
-def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:
-    """R18/design §3: Solar installed=True or CapTar available=True requires ev_soc
-    mapped -- a config-time guard, not a runtime fault. Shared by the install and
-    reconfigure steps so flipping either toggle through either path is rejected the
-    same way. Both must be False for ev_soc to stay optional."""
-    if user_input.get(CONF_SOLAR_AVAILABLE) and not user_input.get(CONF_EV_SOC_ENTITY):
-        return {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
-    if user_input.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE) and not user_input.get(
-        CONF_EV_SOC_ENTITY
-    ):
-        return {CONF_EV_SOC_ENTITY: ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE}
-    return None
-
-
-def _solar_forecast_missing_error(user_input: dict) -> dict[str, str] | None:
-    """Design doc §3: solar_forecast is required only when CONF_SOLAR_AVAILABLE is True
-    (R9's precondition is inert without the solar capability) -- same
-    required_when_solar_available-style guard ev_soc's own guard uses."""
-    if user_input.get(CONF_SOLAR_AVAILABLE) and not user_input.get(CONF_SOLAR_FORECAST_ENTITY):
-        return {CONF_SOLAR_FORECAST_ENTITY: ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE}
-    return None
-
-
-def _car_home_missing_error(user_input: dict) -> dict[str, str] | None:
-    """UC09 C2 / design §9.1: mapping vehicle_charge_limit requires car_home -- the
-    home-only write gate is not optional. Unmapped vehicle limit imposes no requirement."""
-    if user_input.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY) and not user_input.get(
-        CONF_CAR_HOME_ENTITY
-    ):
+def _car_home_missing_error(merged: dict) -> dict[str, str] | None:
+    """UC12 4a / design D-3: car_home_entity is required when EITHER a vehicle charge limit
+    is mapped OR the deadline capability is declared present -- two independent triggers, two
+    error codes, so the message never contradicts the form the household is looking at. The
+    charge-limit trigger is checked first, so a submission that trips both reports the one
+    tied to the field just filled in on this same step (`vehicle_charge_limit_entity`) rather
+    than the one answered earlier (`deadline_available`, on `core`) -- `merged` is
+    `{**self._answers, **user_input}` so this guard can read both. `_ev_soc_missing_error`/
+    `_solar_forecast_missing_error`, this guard's former siblings, are gone: both fields they
+    guarded are now plain `vol.Required` (ADR-0027 point 1)."""
+    if merged.get(CONF_CAR_HOME_ENTITY):
+        return None
+    if merged.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY):
         return {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED}
+    if merged.get(CONF_DEADLINE_AVAILABLE):
+        return {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE}
     return None
 
 
@@ -961,11 +846,11 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         *,
         extra_from: Callable[[Mapping[str, Any]], dict[str, Any]] | None = None,
     ) -> vol.Schema:
-        """UC12 1a / ADR-0025 point 2: reconfigure prefills a step's rendered schema from the
+        """UC12 1a / ADR-0027 point 2: reconfigure prefills a step's rendered schema from the
         stored entry -- a rendering-only concern; the accumulator itself is never seeded
         (install renders `schema` unchanged). `extra_from(entry.data)` augments the prefill
-        source for the one field with no stored key of its own -- the core step's transient
-        vehicle-limit election (design D-2)."""
+        source for the one field with no stored key of its own -- the `core` step's
+        `notifications_available` prefill (design D-7)."""
         if self._mode is not FlowMode.RECONFIGURE:
             return schema
         entry = self._get_reconfigure_entry()
@@ -973,13 +858,22 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return self.add_suggested_values_to_schema(schema, source)
 
     async def async_step_core(self, user_input=None):
-        """UC12 step 1: the core mappings + the three capability decisions + the
-        vehicle-limit election (design, "Schema fragments")."""
+        """UC12 (topic-step) step 1: the four capability decisions + the smoothing-window
+        threshold (design field-to-step table). D-7: on reconfigure, `notifications_available`
+        is prefilled from a stored flag when present, else derived from whether a notify
+        target is already mapped -- an entry that predates the key must not silently drop
+        that mapping the moment `_split_data` writes a narrower data bucket."""
+        schema = CORE_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_core_threshold_schema().schema)
         if user_input is None:
             schema = self._maybe_prefill(
-                CORE_MAPPING_SCHEMA,
+                schema,
                 extra_from=lambda data: {
-                    CONF_VEHICLE_LIMIT_MAPPED: bool(data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY))
+                    CONF_NOTIFICATIONS_AVAILABLE: data.get(
+                        CONF_NOTIFICATIONS_AVAILABLE,
+                        bool(data.get(CONF_NOTIFICATION_TARGET_ENTITY)),
+                    )
                 },
             )
             return self.async_show_form(step_id=STEP_CORE, data_schema=schema)
@@ -987,89 +881,9 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_CORE)
 
-    async def async_step_solar(self, user_input=None):
-        """UC12 step 3: the solar mapping + threshold halves, gated on solar declared this
-        run (design, "Schema fragments"). Step-local guard (ADR-0025 point 1): a missing
-        ev_soc/solar_forecast mapping re-shows this step with a field-local error -- the
-        `_mapping_errors` end-of-form safety net this replaced is gone entirely since T7."""
-        include_ev_soc = CONF_EV_SOC_ENTITY not in self._answers
-        schema = _solar_mapping_schema(include_ev_soc)
-        if self._mode is not FlowMode.RECONFIGURE:
-            schema = schema.extend(_solar_threshold_schema().schema)
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_SOLAR, data_schema=self._maybe_prefill(schema))
-
-        merged = {**self._answers, **user_input}
-        errors = _ev_soc_missing_error(merged) or {}
-        errors.update(_solar_forecast_missing_error(merged) or {})
-        if errors:
-            return self.async_show_form(
-                step_id=STEP_SOLAR,
-                data_schema=self.add_suggested_values_to_schema(schema, user_input),
-                errors=errors,
-            )
-
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_SOLAR)
-
-    async def async_step_captar(self, user_input=None):
-        """UC12 step 4: the CapTar mapping + threshold halves, gated on CapTar declared this
-        run (design, "Schema fragments"). `include_ev_soc` mirrors the solar step's own
-        expression; it is already False here whenever the solar step ran and collected the
-        mapping (R20 AC4's once-only rule), because UC12's fixed order places `solar` before
-        `captar` in CONFIG_TABLE and the solar step only advances after merging into
-        self._answers. Step-local guard (ADR-0025 point 1, "needs particular care" per the
-        design's Consequences): a missing ev_soc mapping re-shows this step with a
-        field-local error keyed off CapTar, not solar -- `_ev_soc_missing_error` checks the
-        solar branch first, which is inert here since solar_available is either False or
-        already satisfied by the time this step can be reached."""
-        include_ev_soc = CONF_EV_SOC_ENTITY not in self._answers
-        schema = _captar_mapping_schema(include_ev_soc)
-        if self._mode is not FlowMode.RECONFIGURE:
-            schema = schema.extend(_captar_threshold_schema().schema)
-        if user_input is None:
-            return self.async_show_form(
-                step_id=STEP_CAPTAR, data_schema=self._maybe_prefill(schema)
-            )
-
-        merged = {**self._answers, **user_input}
-        errors = _ev_soc_missing_error(merged) or {}
-        if errors:
-            return self.async_show_form(
-                step_id=STEP_CAPTAR,
-                data_schema=self.add_suggested_values_to_schema(schema, user_input),
-                errors=errors,
-            )
-
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_CAPTAR)
-
-    async def async_step_deadline(self, user_input=None):
-        """UC12 step 5: the departure-time mapping + reminder-lead threshold, gated on
-        deadline declared this run (design, "Schema fragments"). No step-local guard: UC12
-        marks neither field required (R18 AC7) -- unlike the solar/captar steps, a submission
-        here always advances."""
-        schema = DEADLINE_MAPPING_SCHEMA
-        if self._mode is not FlowMode.RECONFIGURE:
-            schema = schema.extend(_deadline_threshold_schema().schema)
-        if user_input is None:
-            return self.async_show_form(
-                step_id=STEP_DEADLINE, data_schema=self._maybe_prefill(schema)
-            )
-
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_DEADLINE)
-
-    # --- Topic-step plan T3: the five genuinely-new topic-step methods (ADR-0027
-    # Consequences).
-    # None of these is reachable from CONFIG_TABLE yet -- `_table` still points at the live
-    # seven-step table above, so the flow this integration ships today is unchanged. T4's
-    # cut-over is what points `_table` at NINE_STEP_CONFIG_TABLE and makes these reachable.
-
     async def async_step_grid(self, user_input=None):
         """UC12 (topic-step) step 2: the grid-connection mapping + threshold halves, always
-        shown (design "Config table"). No step-local guard here -- validation guards belong
-        to T4/T8, which is where this step becomes reachable."""
+        shown (design "Config table")."""
         schema = GRID_MAPPING_SCHEMA
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_grid_threshold_schema().schema)
@@ -1096,8 +910,10 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
     async def async_step_vehicle(self, user_input=None):
         """UC12 (topic-step) step 4: the vehicle mapping + threshold halves, always shown
         (design "Config table"). `ev_soc_entity` is `vol.Required` on VEHICLE_MAPPING_SCHEMA
-        (design D-2) -- the once-only cross-step guard it replaces is deleted at T4. The
-        field-level car-at-home rule (UC12 4a) is wired to this step in T8."""
+        (design D-2, R20 AC4) -- presented exactly once, whatever the capability
+        declarations. Step-local guard (ADR-0027 point 1, design D-3): a missing car_home
+        mapping re-shows this step with a field-local error, firing on either of UC12 4a's two
+        independent triggers (`_car_home_missing_error`)."""
         schema = VEHICLE_MAPPING_SCHEMA
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_vehicle_threshold_schema().schema)
@@ -1106,19 +922,70 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
                 step_id=STEP_VEHICLE, data_schema=self._maybe_prefill(schema)
             )
 
+        merged = {**self._answers, **user_input}
+        errors = _car_home_missing_error(merged)
+        if errors:
+            return self.async_show_form(
+                step_id=STEP_VEHICLE,
+                data_schema=self.add_suggested_values_to_schema(schema, user_input),
+                errors=errors,
+            )
+
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_VEHICLE)
 
     async def async_step_power(self, user_input=None):
         """UC12 (topic-step) step 5: threshold-only, no mapping half (design "Schema
-        fragments"). NINE_STEP_CONFIG_TABLE's own gate keeps this step out of reconfigure
-        once wired (T4) -- no `self._mode` check is needed in the method body itself."""
+        fragments"). CONFIG_TABLE's own gate keeps this step out of reconfigure -- no
+        `self._mode` check is needed in the method body itself."""
         schema = _power_threshold_schema()
         if user_input is None:
             return self.async_show_form(step_id=STEP_POWER, data_schema=schema)
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_POWER)
+
+    async def async_step_captar(self, user_input=None):
+        """UC12 (topic-step) step 6: threshold-only, no mapping half (design field-to-step
+        table) -- gated on CapTar declared this run AND mode is not reconfigure
+        (CONFIG_TABLE's own gate), so this step is unreachable during reconfigure and needs
+        neither `self._mode` branching nor `_maybe_prefill` in its own body."""
+        schema = _captar_threshold_schema()
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_CAPTAR)
+
+    async def async_step_solar(self, user_input=None):
+        """UC12 (topic-step) step 7: the solar mapping + threshold halves, gated on solar
+        declared this run (design "Config table"). `solar_forecast_entity` is `vol.Required`
+        on SOLAR_MAPPING_SCHEMA (design D-2) -- the once-only `_solar_forecast_missing_error`
+        guard it replaced is gone; HA's own schema validation rejects a missing value and
+        re-shows this step."""
+        schema = SOLAR_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_solar_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_SOLAR, data_schema=self._maybe_prefill(schema))
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_SOLAR)
+
+    async def async_step_deadline(self, user_input=None):
+        """UC12 (topic-step) step 8: the departure-time mapping (+ the home-day carve-out,
+        R20 AC5) + reminder-lead threshold, gated on deadline declared this run (design
+        "Config table"). No step-local guard: UC12 marks neither field required (R18 AC7)."""
+        schema = DEADLINE_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_deadline_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_DEADLINE, data_schema=self._maybe_prefill(schema)
+            )
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_DEADLINE)
 
     async def async_step_notifications(self, user_input=None):
         """UC12 (topic-step) step 9: the notify-target mapping + the three per-notification
@@ -1135,77 +1002,17 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_NOTIFICATIONS)
 
-    async def async_step_vehicle_limit(self, user_input=None):
-        """UC12 step 6: the vehicle charge-limit mapping + its paired car-home presence
-        mapping, gated on the transient election made on the core step (design D-2). UC12
-        step 6: "the two are always asked together". Step-local guard (ADR-0025 point 1,
-        design D-3): a missing car_home mapping re-shows this step with a field-local error,
-        the last of the three guards `_mapping_errors` used to combine to move step-local.
-
-        Unlike the solar/captar guards, this one reads `user_input` alone, never
-        `self._answers` -- both fields it checks are answered on this step, not carried over:
-        `vehicle_charge_limit_entity` is `vol.Required`, so the flow manager guarantees it is
-        in `user_input` before this method ever runs; `car_home_entity` appears on no other
-        guided step."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id=STEP_VEHICLE_LIMIT,
-                data_schema=self._maybe_prefill(VEHICLE_LIMIT_MAPPING_SCHEMA),
-            )
-
-        errors = _car_home_missing_error(user_input)
-        if errors:
-            return self.async_show_form(
-                step_id=STEP_VEHICLE_LIMIT,
-                data_schema=self.add_suggested_values_to_schema(
-                    VEHICLE_LIMIT_MAPPING_SCHEMA, user_input
-                ),
-                errors=errors,
-            )
-
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_VEHICLE_LIMIT)
-
-    async def async_step_mappings(self, user_input=None):
-        """UC12 step 7: the ungated entity-role mappings (design, "Schema fragments")."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id=STEP_MAPPINGS, data_schema=self._maybe_prefill(UNGATED_MAPPING_SCHEMA)
-            )
-
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_MAPPINGS)
-
-    async def async_step_thresholds(self, user_input=None):
-        """UC12 step 8: the ungated thresholds/defaults -- the install/reconfigure flows
-        never ask the control interval (design, "Schema fragments").
-
-        No mapping guard here: T3 kept a temporary `_mapping_errors` safety net on this step
-        (today's flat flow's end-of-form behaviour, preserved verbatim) until T4-T7 each moved
-        one guard to its own gated step. T7 moved the last one (`_car_home_missing_error`, to
-        the vehicle_limit step) and deleted both that call and `_mapping_errors` itself --
-        this step never had a mapping guard of its own to begin with (UC12 assigns none to the
-        ungated thresholds step). Render skips `_maybe_prefill` too -- unlike every other step
-        method, this one is unreachable in reconfigure at all (CONFIG_TABLE's own gate), so
-        there is never a reconfigure render to prefill."""
-        schema = _ungated_threshold_schema(include_interval=False)
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)
-
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_THRESHOLDS)
-
     async def _async_finish(self) -> config_entries.ConfigFlowResult:
-        """UC12 step 9 (install) / 1a (reconfigure): create or update the entry. Reconfigure
+        """UC12 step 10 (install) / 1a (reconfigure): create or update the entry. Reconfigure
         touches the data bucket only (ADR-0005) and reloads (ADR-0008); it never computes
-        `options` at all -- the `thresholds` row's own gate skips step 8 entirely in this
-        mode, so no threshold answer ever entered `self._answers` to intersect."""
-        self._answers.pop(CONF_VEHICLE_LIMIT_MAPPED, None)  # design D-2: transient, not stored
+        `options` at all -- neither `power` nor `captar` is reachable in this mode
+        (CONFIG_TABLE's own gates), so no threshold answer ever entered `self._answers` to
+        intersect."""
         data = _split_data(self._answers)
         if self._mode is FlowMode.RECONFIGURE:
             entry = self._get_reconfigure_entry()
             return self.async_update_reload_and_abort(entry, data=data)
-        # Intersection, not direct indexing (ADR-0025, Consequences): a capability declared
+        # Intersection, not direct indexing (ADR-0027, Consequences): a capability declared
         # absent this run never renders its step, so its OPTION_KEYS members are absent from
         # self._answers -- direct indexing would KeyError the moment any capability is off.
         options = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
@@ -1213,13 +1020,12 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return self.async_create_entry(title="Smart Charging", data=data, options=options)
 
     async def async_step_reconfigure(self, user_input=None):
-        """UC12 1a's reconfigure entry point (ADR-0025 point 4): delegate into the shared
+        """UC12 1a's reconfigure entry point (ADR-0027 point 5): delegate into the shared
         `core` step, framework-imposed name aside -- the same shared step methods and table
         install uses, with `self._mode` alone selecting each step's mapping-only render
-        (`_maybe_prefill`), the `thresholds` row's skip, and `_async_finish`'s terminal
-        branch. No guard logic of its own: every guard (`_ev_soc_missing_error`,
-        `_solar_forecast_missing_error`, `_car_home_missing_error`) is already step-local
-        (T4/T5/T7) and runs unconditionally regardless of `self._mode`."""
+        (`_maybe_prefill`), the `power`/`captar` rows' skip, and `_async_finish`'s terminal
+        branch. No guard logic of its own: `_car_home_missing_error` is already step-local and
+        runs unconditionally regardless of `self._mode`."""
         self._mode = FlowMode.RECONFIGURE
         self._answers = {}
         return await self.async_step_core()

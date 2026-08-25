@@ -2,35 +2,87 @@
   "config": {
     "step": {
       "core": {
-        "title": "Lader, net & mogelijkheden",
-        "description": "Koppel de entiteiten die je lader en het net vertegenwoordigen, en kies welke optionele mogelijkheden je wilt instellen. Elke mogelijkheid die je inschakelt, stelt daarna zijn eigen vervolgvragen.",
+        "title": "Mogelijkheden",
+        "description": "Kies welke optionele mogelijkheden je wilt instellen. Elke mogelijkheid die je inschakelt, stelt verderop in de flow zijn eigen vervolgvragen.",
+        "data": {
+          "solar_available": "Zonne-energie geïnstalleerd",
+          "captar_available": "CapTar beschikbaar",
+          "deadline_available": "Vertrekdeadline bijhouden",
+          "notifications_available": "Meldingen",
+          "smoothing_window": "Afvlakvenster (samples)"
+        }
+      },
+      "grid": {
+        "title": "Netaansluiting",
+        "description": "Koppel de entiteiten die je netaansluiting vertegenwoordigen.",
+        "data": {
+          "net_power_entity": "Netto vermogen-entiteit",
+          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
+          "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
+          "nominal_voltage": "Nominale netspanning (V)",
+          "grid_ceiling_a": "Netgrens (A)",
+          "grid_safety_offset_a": "Veiligheidsmarge net (A)"
+        }
+      },
+      "ev_charger": {
+        "title": "Laadpaal",
+        "description": "Koppel de entiteiten die je lader vertegenwoordigen.",
         "data": {
           "charger_current_entity": "Stroomregeling-entiteit van de lader",
           "charger_status_entity": "Statusentiteit van de lader",
           "connected_states": "Statussen die \"verbonden\" betekenen (kommagescheiden)",
           "charging_states": "Statussen die \"aan het laden\" betekenen (kommagescheiden)",
-          "net_power_entity": "Netto vermogen-entiteit",
           "charger_power_entity": "Vermogen-entiteit van de lader",
-          "solar_available": "Zonne-energie geïnstalleerd",
-          "captar_available": "CapTar beschikbaar",
-          "deadline_available": "Vertrekdeadline bijhouden",
-          "vehicle_limit_mapped": "Laadlimiet voertuig regelen"
+          "min_current": "Minimale laadstroom (A)",
+          "max_current": "Maximale laadstroom (A)"
+        }
+      },
+      "vehicle": {
+        "title": "Voertuig",
+        "description": "Koppel de entiteiten die je voertuig vertegenwoordigen.",
+        "data": {
+          "ev_soc_entity": "EV-laadniveau-entiteit",
+          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
+          "vehicle_charge_limit_entity": "Laadlimiet-regelentiteit voertuig (optioneel)",
+          "car_home_entity": "Aanwezigheidsentiteit auto-thuis (optioneel)",
+          "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
+          "default_soc_limit": "Standaard laadlimiet (%)"
+        }
+      },
+      "power": {
+        "title": "Vermogen-modus",
+        "description": "Stel de standaardwaarden van Vermogen-modus in.",
+        "data": {
+          "default_target_current": "Standaard doelstroom (A)",
+          "power_cooldown_min": "Afkoelduur Vermogen-modus (min)"
+        }
+      },
+      "captar": {
+        "title": "CapTar",
+        "description": "Stel de piekbeperkingsdrempels van CapTar in.",
+        "data": {
+          "captar_cooldown_min": "Afkoelduur Captar (min)",
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
+          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
+          "max_peak_kw": "CapTar maximale piek (kW)",
+          "peak_floor_kw": "CapTar minimale piek (kW)",
+          "peak_grace_min": "CapTar respijtperiode piek (min)"
         }
       },
       "solar": {
         "title": "Zon",
-        "description": "Koppel de entiteiten die Zon-modus gebruikt.",
+        "description": "Koppel de entiteiten die Zon-modus gebruikt en stel de drempelwaarden in.",
         "data": {
-          "ev_soc_entity": "EV-laadniveau-entiteit",
+          "solar_power_entity": "Zonneproductie-entiteit (optioneel)",
           "solar_forecast_entity": "Zonneprognose-entiteit",
           "solar_start_threshold_w": "Startdrempel Zon (W)",
           "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
-          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
-          "solar_only_hold_min": "Vasthoudduur na zonoverschot Alleen-zon (min)",
-          "solar_restart_debounce_min": "Herstartontdenderduur Zon/Alleen-zon (min)",
-          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
           "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
           "solar_only_midpoint": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)",
+          "solar_hold_min": "Vasthoudduur na zonoverschot (min)",
+          "solar_only_hold_min": "Vasthoudduur na zonoverschot Alleen-zon (min)",
+          "solar_cooldown_min": "Afkoelduur Zon/Alleen-zon (min)",
+          "solar_restart_debounce_min": "Herstartontdenderduur Zon/Alleen-zon (min)",
           "solar_step_pp": "Stapgrootte zon-stapverhoging (procentpunten)",
           "solar_step_threshold_pp": "Activeringsdrempel zon-stapverhoging (procentpunten)",
           "max_solar_soc": "Maximaal laadniveau zon-stapverhoging (%)",
@@ -38,73 +90,28 @@
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
         }
       },
-      "captar": {
-        "title": "CapTar",
-        "description": "Koppel de entiteiten die CapTar's piekbeperking gebruikt.",
-        "data": {
-          "ev_soc_entity": "EV-laadniveau-entiteit",
-          "captar_cooldown_min": "Afkoelduur Captar (min)",
-          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
-          "max_peak_kw": "CapTar maximale piek (kW)",
-          "peak_floor_kw": "CapTar minimale piek (kW)",
-          "peak_grace_min": "CapTar respijtperiode piek (min)",
-          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
-        }
-      },
       "deadline": {
         "title": "Vertrekdeadline",
         "description": "Koppel de externe vertrektijd-entiteit die voor de deadline wordt gebruikt.",
         "data": {
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
-          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)",
-          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)"
+          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
+          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)"
         }
       },
-      "vehicle_limit": {
-        "title": "Laadlimiet voertuig",
-        "description": "Koppel de laadlimiet-regeling van het voertuig en de aanwezigheidsentiteit auto-thuis die dit beperkt.",
+      "notifications": {
+        "title": "Meldingen",
+        "description": "Koppel het meldingsdoel en kies welke meldingen worden verstuurd.",
         "data": {
-          "vehicle_charge_limit_entity": "Laadlimiet-regelentiteit voertuig",
-          "car_home_entity": "Aanwezigheidsentiteit auto-thuis"
-        }
-      },
-      "mappings": {
-        "title": "Aanvullende koppelingen",
-        "description": "Optionele entiteitkoppelingen die niet aan een mogelijkheid hierboven gebonden zijn.",
-        "data": {
-          "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
-          "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
           "notification_target_entity": "Meldingsdoel-entiteit (optioneel, notify-domein)",
-          "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
-          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)"
-        }
-      },
-      "thresholds": {
-        "title": "Drempelwaarden en standaardinstellingen",
-        "description": "Stel de overige drempelwaarden en standaardinstellingen in.",
-        "data": {
-          "nominal_voltage": "Nominale netspanning (V)",
-          "min_current": "Minimale laadstroom (A)",
-          "max_current": "Maximale laadstroom (A)",
-          "grid_ceiling_a": "Netgrens (A)",
-          "grid_safety_offset_a": "Veiligheidsmarge net (A)",
-          "default_target_current": "Standaard doelstroom (A)",
-          "smoothing_window": "Afvlakvenster (samples)",
-          "default_soc_limit": "Standaard laadlimiet (%)",
-          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
-          "max_peak_kw": "CapTar maximale piek (kW)",
-          "peak_floor_kw": "CapTar minimale piek (kW)",
-          "peak_grace_min": "CapTar respijtperiode piek (min)",
-          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
-          "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
+          "deadline_notice_enabled": "Melding onbereikbare deadline ingeschakeld",
+          "plug_in_reminder_enabled": "Oplaadherinnering ingeschakeld",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
           "evening_prompt_time": "Tijdstip avondprompt thuisdag"
         }
       }
     },
     "error": {
-      "required_when_solar_available": "Verplicht wanneer Zonne-energie is geïnstalleerd",
-      "required_when_captar_available": "Verplicht wanneer CapTar beschikbaar is",
       "required_when_vehicle_limit_mapped": "Verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld",
       "required_when_deadline_available": "Verplicht wanneer vertrekdeadline bijhouden aan staat"
     }

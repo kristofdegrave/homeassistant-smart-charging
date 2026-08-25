@@ -213,16 +213,10 @@ CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
 CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
 # required when vehicle_charge_limit is mapped (design §9.1)
 CONF_CAR_HOME_ENTITY = "car_home_entity"
-# Transient guided-config-flow election, not a persisted id (design D-2; entity-catalog.md has
-# no row for it) -- gates the vehicle-charge-limit step and is popped before the data/options
-# split, so it never reaches _split_data's output.
-CONF_VEHICLE_LIMIT_MAPPED = "vehicle_limit_mapped"
 
 # Config-flow error codes (config_flow.py's mapping-step guards). Values must match
 # strings.json/translations/en.json's config.error keys exactly --
 # tests/test_config_flow_translations.py walks every one of these against that section.
-ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE = "required_when_solar_available"
-ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE = "required_when_captar_available"
 ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED = "required_when_vehicle_limit_mapped"
 # car_home_entity's second trigger (topic-step config-flow design D-3) -- UC12 4a's deadline-
 # capability half, reported on the `vehicle` step alongside the existing charge-limit trigger.
@@ -330,21 +324,17 @@ DEFAULT_PLUG_IN_REMINDER_ENABLED = True  # catalog "on" (design D-1; R18 AC11)
 SOC_LIMIT_OVERRIDE_MIN = 50.0  # percent (R6) -- shared by number.py's own bounds and the
 SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (single source)
 
-# Guided-config-flow step ids (ADR-0025, design D-5) -- shared by config_flow.py's two step
+# Guided-config-flow step ids (ADR-0027, design D-6) -- shared by config_flow.py's two step
 # tables and the translation-parity test. Only `async_step_user`/`async_step_reconfigure`/
-# `async_step_init` are framework-imposed names (ADR-0025 point 4) and are not listed here.
-STEP_CORE = "core"
-STEP_SOLAR = "solar"
-STEP_CAPTAR = "captar"
-STEP_DEADLINE = "deadline"
-STEP_VEHICLE_LIMIT = "vehicle_limit"
-STEP_MAPPINGS = "mappings"
-STEP_THRESHOLDS = "thresholds"
-
-# Topic-step config-flow ids (ADR-0027, Consequences; design D-6) -- the five new UC12 steps
-# the nine-step model adds beyond the four above. STEP_VEHICLE_LIMIT/STEP_MAPPINGS/
-# STEP_THRESHOLDS retire in T4; these five, plus the four above (minus the retiring three),
-# become the nine-step model's full set.
+# `async_step_init` are framework-imposed names (ADR-0027 point 5) and are not listed here.
+# `STEP_THRESHOLDS` is the one survivor of the retired ADR-0025 flat-model steps
+# (`STEP_VEHICLE_LIMIT`/`STEP_MAPPINGS` retired at T4): the options flow's own
+# `async_step_thresholds` still walks it until T7 re-cuts that table too (design, "Step ids").
+STEP_CORE = "core"  # UC12 step 1
+STEP_SOLAR = "solar"  # UC12 step 7
+STEP_CAPTAR = "captar"  # UC12 step 6
+STEP_DEADLINE = "deadline"  # UC12 step 8
+STEP_THRESHOLDS = "thresholds"  # options flow only (T7 retires this)
 STEP_GRID = "grid"  # UC12 step 2
 STEP_EV_CHARGER = "ev_charger"  # UC12 step 3
 STEP_VEHICLE = "vehicle"  # UC12 step 4
