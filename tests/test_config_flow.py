@@ -39,6 +39,7 @@ from custom_components.smart_charging.const import (
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEADLINE_AVAILABLE,
+    CONF_DEADLINE_NOTICE_ENABLED,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_DEPARTURE_EXTERNAL_ENTITY,
@@ -59,8 +60,11 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
+    CONF_NOTIFICATIONS_AVAILABLE,
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
+    CONF_PLUG_IN_REMINDER_ENABLED,
+    CONF_POWER_COOLDOWN_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
@@ -74,6 +78,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_POWER_ENTITY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_RESTART_DEBOUNCE_MIN,
     CONF_SOLAR_START_THRESHOLD_W,
@@ -84,13 +89,17 @@ from custom_components.smart_charging.const import (
     CONF_VEHICLE_LIMIT_MAPPED,
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
+    DEFAULT_DEADLINE_NOTICE_ENABLED,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_EVENING_PROMPT_ENABLED,
     DEFAULT_EVENING_PROMPT_TIME,
     DEFAULT_MAX_PEAK_KW,
     DEFAULT_MAX_SOLAR_SOC,
+    DEFAULT_NOTIFICATIONS_AVAILABLE,
     DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_PLUG_IN_REMINDER_ENABLED,
+    DEFAULT_POWER_COOLDOWN_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SAFETY_MARGIN_W,
@@ -102,6 +111,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     DOMAIN,
     ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE,
+    ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     ROLE_CAR_HOME,
@@ -112,9 +122,14 @@ from custom_components.smart_charging.const import (
     STEP_CAPTAR,
     STEP_CORE,
     STEP_DEADLINE,
+    STEP_EV_CHARGER,
+    STEP_GRID,
     STEP_MAPPINGS,
+    STEP_NOTIFICATIONS,
+    STEP_POWER,
     STEP_SOLAR,
     STEP_THRESHOLDS,
+    STEP_VEHICLE,
     STEP_VEHICLE_LIMIT,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
@@ -2342,6 +2357,36 @@ def test_no_field_appears_in_two_fragments_except_ev_soc():
         overlap = _keys(fragment) & seen
         assert not overlap, f"field(s) {overlap} appear in more than one fragment"
         seen |= _keys(fragment)
+
+
+# --- C4 T1: the new constants (topic-step config flow, ADR-0027). ---
+
+
+def test_d1_new_config_keys_match_the_entity_catalog():
+    """Design D-1: key strings and defaults come from entity-catalog.md, not invented.
+    notifications_available defaults False -- R18 AC9's named default-ABSENT exception,
+    the one capability whose form default and read fallback agree (design D-5)."""
+    assert CONF_NOTIFICATIONS_AVAILABLE == "notifications_available"
+    assert DEFAULT_NOTIFICATIONS_AVAILABLE is False
+    assert CONF_POWER_COOLDOWN_MIN == "power_cooldown_min"
+    assert DEFAULT_POWER_COOLDOWN_MIN == 10.0
+    assert CONF_DEADLINE_NOTICE_ENABLED == "deadline_notice_enabled"
+    assert DEFAULT_DEADLINE_NOTICE_ENABLED is True
+    assert CONF_PLUG_IN_REMINDER_ENABLED == "plug_in_reminder_enabled"
+    assert DEFAULT_PLUG_IN_REMINDER_ENABLED is True
+    assert CONF_SOLAR_POWER_ENTITY == "solar_power_entity"
+    assert ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE == "required_when_deadline_available"
+
+
+def test_adr0027_step_ids_are_uc12s_nine():
+    """ADR-0027, Consequences: STEP_GRID/EV_CHARGER/VEHICLE/POWER/NOTIFICATIONS added -- the
+    five topic ids the nine-step model needs beyond the four (core/solar/captar/deadline)
+    ADR-0025's model already carries."""
+    assert STEP_GRID == "grid"
+    assert STEP_EV_CHARGER == "ev_charger"
+    assert STEP_VEHICLE == "vehicle"
+    assert STEP_POWER == "power"
+    assert STEP_NOTIFICATIONS == "notifications"
 
 
 # --- T2: the step table and the shared dispatcher (guided config flow, ADR-0025 Option C). ---
