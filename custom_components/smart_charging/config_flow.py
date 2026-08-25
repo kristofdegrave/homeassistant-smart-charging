@@ -44,6 +44,7 @@ from .const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
+    CONF_NOTIFICATIONS_AVAILABLE,
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_PLUG_IN_REMINDER_ENABLED,
@@ -86,6 +87,7 @@ from .const import (
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_MIN_CURRENT,
     DEFAULT_NOMINAL_VOLTAGE,
+    DEFAULT_NOTIFICATIONS_AVAILABLE,
     DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_PLUG_IN_REMINDER_ENABLED,
@@ -120,9 +122,14 @@ from .const import (
     STEP_CAPTAR,
     STEP_CORE,
     STEP_DEADLINE,
+    STEP_EV_CHARGER,
+    STEP_GRID,
     STEP_MAPPINGS,
+    STEP_NOTIFICATIONS,
+    STEP_POWER,
     STEP_SOLAR,
     STEP_THRESHOLDS,
+    STEP_VEHICLE,
     STEP_VEHICLE_LIMIT,
 )
 
@@ -343,6 +350,85 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
         ),
     ),
     FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: True),
+)
+
+
+# --- T3: the two new (interim-named) tables for the nine topic steps (ADR-0027 Decision,
+# Option C unchanged in mechanism). Named NINE_STEP_CONFIG_TABLE/NINE_STEP_OPTIONS_TABLE so
+# they can coexist with the still-live CONFIG_TABLE/OPTIONS_TABLE above -- T4 renames the
+# first to CONFIG_TABLE and T7 the second to OPTIONS_TABLE, each deleting the table it
+# replaces in the same commit (plan T3). Neither table is wired into `_table`/the framework
+# entry points yet, so the live flow is unchanged.
+#
+# `core` is deliberately not a NINE_STEP_CONFIG_TABLE row: it is the shared install/
+# reconfigure entry point both async_step_user and async_step_reconfigure delegate into
+# (ADR-0027 point 5, design "Step ids and the two tables"). It IS a NINE_STEP_OPTIONS_TABLE
+# row, because the options flow's own entry point, async_step_init, renders no form of its
+# own.
+NINE_STEP_CONFIG_TABLE: tuple[FlowStep, ...] = (
+    FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
+    FlowStep(step_id=STEP_EV_CHARGER, gate=lambda flow: True),
+    FlowStep(step_id=STEP_VEHICLE, gate=lambda flow: True),
+    # Neither `power` nor `captar` has a mapping half, so both must be absent from the
+    # reconfigure walk (UC12 1a, ADR-0027 point 3): reconfigure's subset is a per-step gate,
+    # not a stop condition, because both sit in the *middle* of the fixed order rather than
+    # at its end.
+    FlowStep(step_id=STEP_POWER, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
+    FlowStep(
+        step_id=STEP_CAPTAR,
+        gate=lambda flow: (
+            bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))
+            and flow._mode is not FlowMode.RECONFIGURE
+        ),
+    ),
+    FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
+    FlowStep(
+        step_id=STEP_DEADLINE, gate=lambda flow: bool(flow._answers.get(CONF_DEADLINE_AVAILABLE))
+    ),
+    FlowStep(
+        step_id=STEP_NOTIFICATIONS,
+        gate=lambda flow: bool(flow._answers.get(CONF_NOTIFICATIONS_AVAILABLE)),
+    ),
+)
+
+# Gated on the *stored* capability flags (`flow.config_entry.data`), never this run's own
+# answers -- the options flow never re-asks a capability, only its thresholds (ADR-0027
+# point 4). Every gate reads defensively via `.get(key, DEFAULT_*)`, never bracket indexing:
+# `notifications_available` is a key this slice introduces and is absent from every entry
+# written before it, so `entry.data[CONF_NOTIFICATIONS_AVAILABLE]` would KeyError the first
+# time an upgraded installation opens Configure.
+NINE_STEP_OPTIONS_TABLE: tuple[FlowStep, ...] = (
+    FlowStep(step_id=STEP_CORE, gate=lambda flow: True),
+    FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
+    FlowStep(step_id=STEP_EV_CHARGER, gate=lambda flow: True),
+    FlowStep(step_id=STEP_VEHICLE, gate=lambda flow: True),
+    FlowStep(step_id=STEP_POWER, gate=lambda flow: True),
+    FlowStep(
+        step_id=STEP_CAPTAR,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE)
+        ),
+    ),
+    FlowStep(
+        step_id=STEP_SOLAR,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
+        ),
+    ),
+    FlowStep(
+        step_id=STEP_DEADLINE,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE)
+        ),
+    ),
+    FlowStep(
+        step_id=STEP_NOTIFICATIONS,
+        gate=lambda flow: bool(
+            flow.config_entry.data.get(
+                CONF_NOTIFICATIONS_AVAILABLE, DEFAULT_NOTIFICATIONS_AVAILABLE
+            )
+        ),
+    ),
 )
 
 
@@ -971,6 +1057,80 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_DEADLINE)
 
+    # --- T3: the five genuinely-new topic-step methods (ADR-0027 Consequences; plan T3).
+    # None of these is reachable from CONFIG_TABLE yet -- `_table` still points at the live
+    # seven-step table above, so the flow this integration ships today is unchanged. T4's
+    # cut-over is what points `_table` at NINE_STEP_CONFIG_TABLE and makes these reachable.
+
+    async def async_step_grid(self, user_input=None):
+        """UC12 (topic-step) step 2: the grid-connection mapping + threshold halves, always
+        shown (design "Config table"). No step-local guard here -- validation guards belong
+        to T4/T8, which is where this step becomes reachable."""
+        schema = GRID_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_grid_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_GRID, data_schema=self._maybe_prefill(schema))
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_GRID)
+
+    async def async_step_ev_charger(self, user_input=None):
+        """UC12 (topic-step) step 3: the charger mapping + threshold halves, always shown
+        (design "Config table")."""
+        schema = EV_CHARGER_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_ev_charger_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_EV_CHARGER, data_schema=self._maybe_prefill(schema)
+            )
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_EV_CHARGER)
+
+    async def async_step_vehicle(self, user_input=None):
+        """UC12 (topic-step) step 4: the vehicle mapping + threshold halves, always shown
+        (design "Config table"). `ev_soc_entity` is `vol.Required` on VEHICLE_MAPPING_SCHEMA
+        (design D-2) -- the once-only cross-step guard it replaces is deleted at T4. The
+        field-level car-at-home rule (UC12 4a) is wired to this step in T8."""
+        schema = VEHICLE_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_vehicle_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_VEHICLE, data_schema=self._maybe_prefill(schema)
+            )
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_VEHICLE)
+
+    async def async_step_power(self, user_input=None):
+        """UC12 (topic-step) step 5: threshold-only, no mapping half (design "Schema
+        fragments"). NINE_STEP_CONFIG_TABLE's own gate keeps this step out of reconfigure
+        once wired (T4) -- no `self._mode` check is needed in the method body itself."""
+        schema = _power_threshold_schema()
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_POWER, data_schema=schema)
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_POWER)
+
+    async def async_step_notifications(self, user_input=None):
+        """UC12 (topic-step) step 9: the notify-target mapping + the three per-notification
+        enable toggles (R18 AC11), gated on notifications declared this run (design "Config
+        table")."""
+        schema = NOTIFICATIONS_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_notifications_threshold_schema().schema)
+        if user_input is None:
+            return self.async_show_form(
+                step_id=STEP_NOTIFICATIONS, data_schema=self._maybe_prefill(schema)
+            )
+
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_NOTIFICATIONS)
+
     async def async_step_vehicle_limit(self, user_input=None):
         """UC12 step 6: the vehicle charge-limit mapping + its paired car-home presence
         mapping, gated on the transient election made on the core step (design D-2). UC12
@@ -1124,6 +1284,66 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
             return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_THRESHOLDS)
+
+    # --- T3: the five genuinely-new topic steps' threshold-only counterparts, plus
+    # `async_step_core` (design "Options table": `core` IS a NINE_STEP_OPTIONS_TABLE row,
+    # unlike the config table -- the options flow's own entry point, async_step_init,
+    # renders no form of its own, so this method must exist for that table's own
+    # reachability obligation, plan T3). None of these six is reachable from OPTIONS_TABLE
+    # yet -- `_table` still points at the live table above; T7's cut-over is what points
+    # `_table` at NINE_STEP_OPTIONS_TABLE and makes them reachable.
+
+    async def async_step_core(self, user_input=None):
+        """UC12 (topic-step) 1b, options-table row 1: the smoothing window + the control
+        interval (UC12 1b's own carve-out -- install/reconfigure never ask it; design
+        "Options table")."""
+        schema = _core_threshold_schema(self.config_entry.options, include_interval=True)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_CORE, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_CORE)
+
+    async def async_step_grid(self, user_input=None):
+        """UC12 (topic-step) step 2, threshold half only -- always shown."""
+        schema = _grid_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_GRID, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_GRID)
+
+    async def async_step_ev_charger(self, user_input=None):
+        """UC12 (topic-step) step 3, threshold half only -- always shown."""
+        schema = _ev_charger_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_EV_CHARGER, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_EV_CHARGER)
+
+    async def async_step_vehicle(self, user_input=None):
+        """UC12 (topic-step) step 4, threshold half only -- always shown."""
+        schema = _vehicle_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_VEHICLE, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_VEHICLE)
+
+    async def async_step_power(self, user_input=None):
+        """UC12 (topic-step) step 5, threshold half only -- always shown (unlike the config
+        flow's own `power` step, the options flow never gates it on flow mode)."""
+        schema = _power_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_POWER, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_POWER)
+
+    async def async_step_notifications(self, user_input=None):
+        """UC12 (topic-step) step 9, threshold half only -- gated on the *stored*
+        notifications capability (design "Options table")."""
+        schema = _notifications_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_NOTIFICATIONS, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_NOTIFICATIONS)
 
     async def _async_finish(self) -> config_entries.ConfigFlowResult:
         """UC12 1b: merge this run's answers into the stored options, never replace them
