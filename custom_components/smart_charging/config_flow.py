@@ -46,7 +46,6 @@ from .const import (
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
-    CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -85,7 +84,6 @@ from .const import (
     DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
-    DEFAULT_PROMPT_TIMEOUT_H,
     DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
@@ -153,11 +151,9 @@ OPTION_KEYS = (
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
-    # CONF_PROMPT_TIMEOUT_H lives on the ungated thresholds step (both flows);
     # CONF_REMINDER_LEAD_H lives on the deadline step's threshold half. T10 gave the options
     # flow its own table with a merge-not-replace terminal step (design, "The terminal step
-    # and the bucket split"), so both now round-trip through Configure+Save correctly.
-    CONF_PROMPT_TIMEOUT_H,
+    # and the bucket split"), so it round-trips through Configure+Save correctly.
     CONF_REMINDER_LEAD_H,
 )
 
@@ -562,10 +558,9 @@ def _ungated_threshold_schema(
             CONF_EVENING_PROMPT_TIME,
             default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
         ): selector.TimeSelector(),
-        vol.Required(
-            CONF_PROMPT_TIMEOUT_H,
-            default=d.get(CONF_PROMPT_TIMEOUT_H, DEFAULT_PROMPT_TIMEOUT_H),
-        ): vol.Coerce(float),
+        # No prompt-timeout field is presented here -- midnight is the only answer deadline
+        # (notifications-design.md §3/§9); a later slice briefly presented one anyway, since
+        # reverted (#813/#818).
     }
     if include_interval:
         schema[

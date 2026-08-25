@@ -62,7 +62,6 @@ from custom_components.smart_charging.const import (
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
     CONF_POWER_RESPECT_PEAK,
-    CONF_PROMPT_TIMEOUT_H,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -2262,8 +2261,7 @@ def test_uc12_step7_ungated_mapping_fragment():
     }
 
 
-# Final key set (design, "Schema fragments") -- T3 added CONF_PROMPT_TIMEOUT_H per
-# "Decisions on two forks" §1.
+# Final key set (design, "Schema fragments").
 _UNGATED_THRESHOLD_KEYS = {
     CONF_NOMINAL_VOLTAGE,
     CONF_MIN_CURRENT,
@@ -2281,7 +2279,6 @@ _UNGATED_THRESHOLD_KEYS = {
     CONF_POWER_RESPECT_PEAK,
     CONF_EVENING_PROMPT_ENABLED,
     CONF_EVENING_PROMPT_TIME,
-    CONF_PROMPT_TIMEOUT_H,
 }
 
 
