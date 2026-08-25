@@ -221,11 +221,11 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 
 ### Reminders & prompts
 
-*`notification_target`, `prompt_timeout_h`, `deadline_notice_enabled`, `plug_in_reminder_enabled`,
+*`notification_target`, `deadline_notice_enabled`, `plug_in_reminder_enabled`,
 `evening_prompt_enabled`, and `evening_prompt_time` are conditional on the [notifications
 capability](system-overview.md#ubiquitous-language) (`notifications_available`, R18): when it is
 off, [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step (9)
-is skipped, so none of the six is offered or required. `reminder_lead_h` is the exception — it is
+is skipped, so none of the five is offered or required. `reminder_lead_h` is the exception — it is
 presented on UC12's deadline-gated step (8) and so follows the [deadline
 capability](system-overview.md#ubiquitous-language) instead.*
 
@@ -237,7 +237,6 @@ toggles.*
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
-| `prompt_timeout_h` | config-options | options | h | 2 | evening prompt timeout (R13) | — | user (anytime), UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
 | `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | (UC05) | user (anytime), UC12 |
 | `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | UC10 | user (anytime), UC12 |
@@ -400,7 +399,7 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s `notifications` step is
   skipped, so `notification_target`, the per-notification enable toggles
   (`deadline_notice_enabled`, `plug_in_reminder_enabled`, `evening_prompt_enabled`),
-  `evening_prompt_time`, and `prompt_timeout_h` are neither offered nor required. Like the deadline
+  and `evening_prompt_time` are neither offered nor required. Like the deadline
   capability, this one removes no option from `select.smart_charging_mode`. `reminder_lead_h` stays
   with the deadline capability, since UC12 presents it on the deadline-gated step.
 - **Each notification is additionally conditional on its own
@@ -430,7 +429,7 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `notifications_available`) is config-entry **data**
   — set at initial setup, changed only via the reconfigure flow — and every install-time threshold,
   default, or the control interval (`control_interval_s`, `grid_supply_ceiling_a`, `max_peak_kw`,
-  `min_current_a`/`max_current_a`, the `solar_*` thresholds, `prompt_timeout_h`,
+  `min_current_a`/`max_current_a`, the `solar_*` thresholds,
   `reminder_lead_h`, `evening_prompt_*`, and the rest of the `config-options` rows above) is
   config-entry **options** — changeable anytime via Configure. Neither bucket has an entity id;
   this catalog lists them by config key instead. Two runtime user-set values remain an **open

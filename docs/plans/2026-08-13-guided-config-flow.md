@@ -35,16 +35,16 @@ No other module changes.
 collateral to discover mid-task. It is a plain-pytest module that imports `USER_SCHEMA`,
 `MAPPING_SCHEMA` and `OPTION_KEYS` from `config_flow.py` and asserts config-flow label parity against
 `config.step.user` / `config.step.reconfigure` / `options.step.init`, including
-`set(OPTION_KEYS) | {CONF_CONTROL_INTERVAL_S} <= options_data`. Four tasks hit it:
+`set(OPTION_KEYS) | {CONF_CONTROL_INTERVAL_S} <= options_data`. Three tasks hit it:
 
 | Task | What breaks `tests/test_translations.py` |
 | --- | --- |
 | T1 | appending `CONF_REMINDER_LEAD_H` to `OPTION_KEYS` — no `options.step.init.data` label for it yet |
-| T3 | appending `CONF_PROMPT_TIMEOUT_H` — same failure again |
+| T3 (as originally executed) | appending `CONF_PROMPT_TIMEOUT_H` — same failure again; reverted (2026-08-24, #813), code/test removal tracked in #818 |
 | T12 | deleting the three step blocks — `KeyError` on `strings["config"]["step"]["user"]` |
 | T13 | deleting `USER_SCHEMA` / `MAPPING_SCHEMA` — `ImportError` at **collection** time |
 
-The resolution is scheduled, not improvised: **T1 and T3 each add the new field's label** in the
+The resolution is scheduled, not improvised: **T1 adds the new field's label** in the
 same commit that appends the key, so the module stays green; **T12** removes
 `test_every_config_flow_field_has_a_label` outright, superseded by T12's own dynamic step/field
 parity check; **T13** then has no config-flow import left to break. The rest of the module
@@ -59,9 +59,10 @@ C4's own "Testable on its own" line), `ruff`.
 
 **Model:** Per CLAUDE.md, this is development work — execute on **Sonnet**.
 
-**Two forks the design doc raised are now decided** (see its "Decisions on two forks" section):
-`prompt_timeout_h` is presented (T3), and step 1's solar decision defaults `True` on the form while
-`DEFAULT_SOLAR_AVAILABLE` itself stays `False` (T3).
+**The one fork the design doc raised that still stands** (see its "Decisions on two forks" section):
+step 1's solar decision defaults `True` on the form while `DEFAULT_SOLAR_AVAILABLE` itself stays
+`False` (T3). The other fork — presenting a `prompt_timeout_h` option — was decided, implemented, and
+has since been reverted; no task in this plan presents or stores such a field.
 
 ---
 
@@ -130,15 +131,11 @@ half), `test_uc12_step4_captar_fragments_*`, `test_uc12_step5_deadline_fragments
 `test_uc12_step6_vehicle_limit_fragment_*`, `test_uc12_step7_ungated_mapping_fragment_*`,
 `test_uc12_step8_ungated_threshold_fragment_*` (with `include_interval` False **and** True — UC12 1b).
 
-**The ungated-threshold fragment's expected key set omits `prompt_timeout_h` at this task.** The
-design doc's fragment table lists it, but `CONF_PROMPT_TIMEOUT_H` is deliberately not added until T3
-(see Step 2), so asserting the table's full set here would leave T1 red on its own commit. Write the
-expectation without that one key and mark it:
-
-```python
-# T3 extends the ungated-threshold fragment -- and this expectation -- with
-# CONF_PROMPT_TIMEOUT_H (design, "Decisions on two forks" §1). Everything else is final.
-```
+The ungated-threshold fragment's expected key set is the design doc's fragment table verbatim, which
+now carries no prompt-timeout key — T1 itself never added one. T3 as originally executed later added
+one anyway (design doc's "Decisions on two forks" §1); the human partner has since reverted that
+(2026-08-24, #813), and `tests/test_config_flow.py` still asserts the key today, pending the code/test
+removal tracked in #818.
 
 Plus two whole-surface tests that make an omission impossible to miss:
 
@@ -172,8 +169,7 @@ named defaults like every one of its siblings (CLAUDE.md: no magic strings). Per
 `CONF_VEHICLE_LIMIT_MAPPED` (the transient election key, not a persisted id). Per **D-5**, add the
 `STEP_*` step-id constants. `CONF_REMINDER_LEAD_H` is appended to `OPTION_KEYS` in `config_flow.py`,
 and its label is added to `options.step.init.data` in `strings.json`/`en.json`/`nl.json` in the same
-commit so `tests/test_translations.py` stays green. (`CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`
-are added in T3, alongside the ungated-threshold fragment they belong to.)
+commit so `tests/test_translations.py` stays green.
 
 In `config_flow.py`, split `MAPPING_SCHEMA` and `_threshold_schema()` into the fragments named in the
 design doc's fragment table. `MAPPING_SCHEMA`, `_threshold_schema()` and `USER_SCHEMA` stay in place
@@ -234,11 +230,8 @@ gate, asserting it lands on the next passing row and calls `_async_finish` when 
 (accumulator; `async_step_user` delegates into the shared step-1 implementation), ADR-0005 (bucket
 split unchanged). **Test boundary:** HA harness, `tests/test_config_flow.py`.
 
-**Files:** edit `custom_components/smart_charging/config_flow.py`, `tests/test_config_flow.py`,
-and `const.py` (adds `CONF_PROMPT_TIMEOUT_H`/`DEFAULT_PROMPT_TIMEOUT_H`, appended to `OPTION_KEYS`),
-plus a one-line `prompt_timeout_h` label in `strings.json`, `translations/en.json` and
-`translations/nl.json` — same reason as T1: without it `tests/test_translations.py`'s
-`options.step.init.data` parity assertion goes red the moment the key joins `OPTION_KEYS`.
+**Files:** edit `custom_components/smart_charging/config_flow.py` and `tests/test_config_flow.py`.
+This task adds no new config key, so neither `const.py` nor the translation files are touched.
 
 **Step 1 — failing tests.** Replace `_run_user_flow`/`_create_entry` with a step-walking driver:
 
@@ -291,15 +284,13 @@ never ship an install path that can write an entry missing a required mapping. T
 guard to its own step; **T7 deletes both this call and `_mapping_errors` itself**, once all three
 step-local guards exist.
 
-Add `CONF_PROMPT_TIMEOUT_H` to the ungated threshold fragment and to `OPTION_KEYS` (design doc's
-"Decisions on two forks" §1). **Update the two now-false comments in the same commit:** the
-"`sc_prompt_timeout_h` is deliberately NOT wired here" block above `CONF_EVENING_PROMPT_ENABLED` in
-`const.py`, and the "No `sc_prompt_timeout_h` field -- deliberately not wired" comment inside
-`_threshold_schema()` in `config_flow.py`. Both must be rewritten to say what is still true — the
-field is now presented and stored per UC12 step 8, but **no component reads it yet** — and to name
-`docs/plans/2026-07-21-notifications-design.md` §3/§9 as the earlier decision this supersedes. That
-notifications design doc is out of this slice's scope guard and keeps a stale cross-reference as a
-result; the design doc records that divergence as deliberate and named.
+**Historical note (2026-08-24):** T3 as originally executed *did* add a prompt-timeout field to the
+ungated threshold fragment and to `OPTION_KEYS`, overwriting the "deliberately NOT wired" comments
+this task's brief once preserved. The human partner has since reverted that decision (design doc's
+"Decisions on two forks" §1, #813); the code/test removal — deleting `CONF_PROMPT_TIMEOUT_H` /
+`DEFAULT_PROMPT_TIMEOUT_H`, the schema field, and the `const.py`/`config_flow.py` comments that
+currently describe it as "presented and stored too" — is tracked separately in #818. Until #818
+merges, those comments do not yet say "deliberately NOT wired" again.
 
 Render step 1's solar decision with `default=True` (§2); add a comment
 naming the divergence between the *form* default (`True`, R20 AC1) and `DEFAULT_SOLAR_AVAILABLE`
@@ -543,6 +534,11 @@ harness.
 
 **Files:** edit `config_flow.py`, `tests/test_config_flow.py`.
 
+**Historical note (2026-08-24):** T10 as originally executed round-tripped `prompt_timeout_h`
+through the options bucket's own table alongside every other ungated threshold, since T3 had already
+added it to `OPTION_KEYS`. That field is reverted (#813); its round-trip removal is part of the
+companion code/test change tracked in #818, not a re-opening of this task.
+
 **Step 1 — failing tests.**
 
 ```python
@@ -694,8 +690,9 @@ with one block per step id under each section. Redistribute the existing labels;
 conditional qualifiers. Write each shared `config.step.*` title/description to read correctly in
 **both** a first-install and an edit-my-mappings context — ADR-0025 names this as the accepted
 editorial cost of sharing the table. Add labels for the new fields (`deadline_available`,
-`vehicle_limit_mapped`, `reminder_lead_h`, and `prompt_timeout_h`) in
-`strings.json`, `en.json` and `nl.json`.
+`vehicle_limit_mapped`, and `reminder_lead_h`) in `strings.json`, `en.json` and `nl.json`. T12 as
+originally executed also added a `prompt_timeout_h` label alongside these — that label is removed by
+the companion revert tracked in #818, not by this task.
 
 **Verify + commit.**
 
@@ -762,8 +759,11 @@ Before the final push, confirm each of the following and record it in the PR bod
    `tests/test_config_flow.py`, `tests/test_config_flow_translations.py` **and**
    `tests/test_translations.py` (whose `test_every_config_flow_field_has_a_label` T12 removed as
    superseded). Nothing else.
-7. Both forks the design doc raised (the prompt-timeout field; the solar form default) are reflected
-   in the code exactly as the design doc's "Decisions on two forks" section states.
+7. The one fork the design doc raised that still stands (the solar form default) is reflected in the
+   code exactly as the design doc's "Decisions on two forks" section states. The other fork
+   (`prompt_timeout_h`) was decided, implemented, and has since been reverted (2026-08-24, #813); this
+   item is satisfied once the companion code/test removal (#818) lands and no prompt-timeout field is
+   presented or stored on any path — not yet, as of this slice's original completion.
 
 ---
 
