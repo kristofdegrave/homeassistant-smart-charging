@@ -64,12 +64,13 @@ A related question worth settling explicitly: `SmartChargingDepartureTime` is a 
 whose restored value is only *read* inside `async_added_to_hass`, which never runs while the
 entity is registry-disabled — so it might appear that a user's set departure time would revert to
 its constructor default (R14) across a `deadline_available` off→on cycle. It doesn't:
-`RestoreEntity.async_will_remove_from_hass` writes the entity's last state into HA's
+`RestoreEntity.async_internal_will_remove_from_hass` writes the entity's last state into HA's
 `RestoreStateData` cache (keyed by `entity_id`) on *every* removal, disable-triggered or not, and
 that write is exactly what `async_added_to_hass` reads back on re-enable — the cache isn't cleared
-just because the entity was disabled for a while. So the restored value survives the cycle
-correctly, with no engineering required beyond what `RestoreEntity` already does — see
-Consequences.
+just because the entity was disabled for a while. So the restored value survives a same-runtime
+off→on cycle correctly, with no engineering required beyond what `RestoreEntity` already does
+(a restart-spanning disabled window isn't covered by this claim or by the test that demonstrates
+it — see Consequences).
 
 `notification_available` is a fourth capability of the same conceptual kind (functionally: a
 notify target being configured), but no owned entity depends on it today — out of scope for the
@@ -184,19 +185,17 @@ re-enable.
   `EffectivePeakLimitSensor`, `PeakHeadroomSensor` are unaffected by this ADR — see Context.
 - `time.py`: `SmartChargingDepartureTime` gains `_attr_entity_registry_enabled_default` and a
   `sync_disabled_by` call keyed on `deadline_available`, alongside its existing (now
-  setup-time-relocated) label gating. No restore-state cost: a user's set departure time survives
-  a `deadline_available` off→on cycle intact, because `RestoreEntity.async_will_remove_from_hass`
-  writes the entity's last state on every removal (disable-triggered or not), independent of
-  whether `async_added_to_hass` runs while disabled — see Context.
+  setup-time-relocated) label gating. No restore-state cost across a same-runtime
+  `deadline_available` off→on cycle — see Context for the mechanism.
 - `switch.py`, `number.py`, `select.py`: `HomeDaySwitch`, `TargetCurrentNumber`,
   `SocLimitOverrideNumber`, `ModeSelect`, `ProfileSelect` move their label-sync call from the
   removed `async_added_to_hass` hook to the same `sync_labels` call, after `async_add_entities`,
   in each file's `async_setup_entry` — no behavior change for these five; only the mechanism
   producing it changes.
-- Follow-up: file the implementation spec + TDD plan (`write-impl-spec`) once this ADR is
-  Accepted; it must cover the pre-add/post-add ordering, the USER-`disabled_by` non-override rule,
-  and the departure-time restore-state behavior above as an explicit test case, not just the
-  happy-path enable/disable transitions.
+- Follow-up: the implementation spec + TDD plan (`write-impl-spec`) this ADR called for has since
+  been filed and implemented (docs/plans/2026-08-21-capability-gated-entity-registry-disabling*.md,
+  epic #779); it covers the pre-add/post-add ordering, the USER-`disabled_by` non-override rule,
+  and the departure-time restore-state behavior above as an explicit test case.
 - Follow-up: if a future owned entity is ever gated by a notification-availability capability, it
   should use these same two helpers rather than inventing a third mechanism — this ADR's Decision
   is not scoped to today's flags, only its concrete task list is.

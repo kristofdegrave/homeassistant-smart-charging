@@ -348,15 +348,16 @@ async def test_departure_time_user_disable_survives_capability_toggle(hass):
 
 
 async def test_departure_time_restored_value_survives_disable_cycle(hass):
-    """Correction to ADR-0028's Context, which assumed a set departure time would revert to
-    its R14 constructor default across a deadline_available off->on cycle, on the reasoning
-    that the RestoreEntity read only runs while the entity is added to hass. Empirically, it
-    doesn't need to run *during* the disabled window -- `RestoreEntity.async_will_remove_from_hass`
-    writes the entity's last state into HA's `RestoreStateData` cache (keyed by entity_id) on
-    every removal, disable-triggered or not, and that write is what `async_added_to_hass` reads
-    back on re-enable; the cache isn't cleared just because the entity was disabled for a while.
-    Documents the actual (safe) behavior as a passing assertion; the ADR's Consequences text
-    needs a follow-up correction -- tracked in issue #804."""
+    """ADR-0028's Context originally assumed a set departure time would revert to its R14
+    constructor default across a deadline_available off->on cycle, on the reasoning that the
+    RestoreEntity read only runs while the entity is added to hass. Empirically, it doesn't
+    need to run *during* the disabled window --
+    `RestoreEntity.async_internal_will_remove_from_hass` writes the entity's last state into
+    HA's `RestoreStateData` cache (keyed by entity_id) on every removal, disable-triggered or
+    not, and that write is what `async_added_to_hass` reads back on re-enable; the cache isn't
+    cleared just because the entity was disabled for a while. Documents the actual (safe)
+    behavior as a passing assertion; the ADR's Context/Consequences text was corrected to match
+    (issue #804)."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_DEADLINE_AVAILABLE] = True

@@ -197,10 +197,12 @@ via `entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)`, per the des
   `deadline_available=False` then `True` again; assert `disabled_by` stays `USER` throughout, and
   the label still correctly tracks `deadline_available` (per the design's Decision — labels are
   independent of `disabled_by`).
-- `test_departure_time_restored_value_does_not_survive_disable_cycle`: set a non-default time,
-  reload with `deadline_available=False` (disabling it), reload again with `True`; assert the
-  entity's value is back to its R14 constructor default, **not** the previously-set time —
-  documents the accepted risk (design doc §4) as a passing assertion, not a TODO.
+- `test_departure_time_restored_value_survives_disable_cycle`: set a non-default time, reload
+  with `deadline_available=False` (disabling it), reload again with `True`; assert the entity's
+  value is still the previously-set time, not its R14 constructor default — documents the actual
+  (safe) `RestoreEntity` behavior as a passing assertion, not a TODO. (Corrected mid-task from
+  this task's original `does_not_survive`/"accepted risk" framing once empirical testing showed
+  the value actually survives; see ADR-0028's Context and issue #804.)
 - Re-run `tests/test_time.py:172-296`'s existing platform-level label assertions unchanged — they
   must still pass (the hook is still active; this task additionally wires the new `sync_labels`
   call, which writes the identical result).
