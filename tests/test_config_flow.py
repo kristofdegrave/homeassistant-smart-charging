@@ -2262,27 +2262,15 @@ def test_uc12_step4_captar_mapping_fragment_without_ev_soc():
     assert _keys(_captar_mapping_schema(include_ev_soc=False)) == set()
 
 
-def test_uc12_step4_captar_threshold_fragment():
-    """T2 extends this ADR-0025 fragment with the five peak-protection fields (UC12 5b, R18
-    AC5) -- it is rendered live by today's `captar` step, so the live step now asks them too,
-    ahead of T4's cut-over (design, "Schema fragments"; plan T2's own extension note)."""
-    assert _keys(_captar_threshold_schema()) == {
-        CONF_CAPTAR_COOLDOWN_MIN,
-        CONF_POWER_RESPECT_PEAK,
-        CONF_SAFETY_MARGIN_W,
-        CONF_MAX_PEAK_KW,
-        CONF_PEAK_FLOOR_KW,
-        CONF_PEAK_GRACE_MIN,
-    }
-
-
-def test_uc12_step5_deadline_mapping_fragment():
-    """T2 extends this ADR-0025 fragment with home_day_external_entity (UC12 5c / R20 AC5's
-    carve-out) -- rendered live by today's `deadline` step (design, "Schema fragments")."""
-    assert _keys(DEADLINE_MAPPING_SCHEMA) == {
-        CONF_DEPARTURE_EXTERNAL_ENTITY,
-        CONF_HOME_DAY_EXTERNAL_ENTITY,
-    }
+# test_uc12_step4_captar_threshold_fragment / test_uc12_step5_deadline_mapping_fragment
+# (ADR-0025-era names) were retired here: T2 extends both `_captar_threshold_schema` (with
+# the five peak-protection fields, UC12 5b/R18 AC5) and `DEADLINE_MAPPING_SCHEMA` (with
+# home_day_external_entity, UC12 5c/R20 AC5) -- both rendered live by today's `captar`/
+# `deadline` steps ahead of T4's cut-over (design, "Schema fragments") -- and the resulting
+# key sets are exactly what
+# test_uc12_5b_captar_threshold_fragment_carries_the_peak_protection_fields and
+# test_uc12_5c_deadline_mapping_carries_the_home_day_external_carve_out (below) already
+# assert, so carrying both names forward would only duplicate the assertion.
 
 
 def test_uc12_step5_deadline_threshold_fragment():
@@ -2345,6 +2333,10 @@ def test_uc12_step8_ungated_threshold_fragment_with_interval():
 # above -- CORE_MAPPING_SCHEMA is not re-cut here (T4's concern), so it carries no key-set
 # test of its own; only its threshold half (_core_threshold_schema) does. ---
 
+# CORE_MAPPING_SCHEMA deliberately excluded: it still carries the old core mapping fields
+# (charger_current_entity et al.) until T4 re-cuts it to the four capability declarations --
+# add it here once that lands, or these tuples' disjointness/no-option-key-in-a-mapping
+# assertions permanently skip the core step.
 _NEW_MAPPING_FRAGMENTS = (
     GRID_MAPPING_SCHEMA,
     EV_CHARGER_MAPPING_SCHEMA,
@@ -2488,6 +2480,13 @@ def test_r20_ac4_no_field_belongs_to_two_fragments():
         overlap = _keys(fragment) & seen
         assert not overlap, f"field(s) {overlap} appear in more than one fragment"
         seen |= _keys(fragment)
+
+
+def test_option_keys_has_no_duplicate_member():
+    """Guards test_adr0005_every_option_key_appears_in_exactly_one_threshold_fragment's own
+    `sorted(...) == sorted(set(OPTION_KEYS))` below, which would silently tolerate a
+    duplicate OPTION_KEYS entry (a duplicate collapses under `set()` on both sides)."""
+    assert len(OPTION_KEYS) == len(set(OPTION_KEYS))
 
 
 def test_adr0005_every_option_key_appears_in_exactly_one_threshold_fragment():

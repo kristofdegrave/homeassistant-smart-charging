@@ -454,11 +454,11 @@ def _captar_mapping_schema(include_ev_soc: bool) -> vol.Schema:
 
 
 def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 4 threshold half (ADR-0025, live today) / topic-step step 6's CapTar-gated
-    threshold half (ADR-0027, T3/T4). Extended here (T2) with the five peak-protection fields
-    (UC12 5b, R18 AC5) -- they now sit in this fragment AND `_ungated_threshold_schema` at
-    once, which is intentional until T4 retires the latter (design, "Schema fragments"; plan
-    T2's own re-pointing note)."""
+    """UC12 step 4 threshold half (the seven-step model, live today) / topic-step step 6's
+    CapTar-gated threshold half (ADR-0027, T3/T4). Extended here (T2) with the five
+    peak-protection fields (UC12 5b, R18 AC5) -- they now sit in this fragment AND
+    `_ungated_threshold_schema` at once, which is intentional until T4 retires the latter
+    (design, "Schema fragments"; plan T2's own re-pointing note)."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -491,7 +491,7 @@ def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
 DEADLINE_MAPPING_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
-        # T2 (topic-step config-flow design D-1/field-to-step table): the one ungated field a
+        # T2 (topic-step config-flow design, field-to-step table): the one ungated field a
         # gated step carries (UC12 5c / R20 AC5's named carve-out). Sits in this fragment AND
         # UNGATED_MAPPING_SCHEMA at once until T4 retires the latter.
         vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
@@ -611,21 +611,24 @@ def _ungated_threshold_schema(
     return vol.Schema(schema)
 
 
-# --- T2: the nine per-topic schema fragments (ADR-0027, Consequences: "The schema fragments
+# --- T2: the nine steps' schema fragments (ADR-0027, Consequences: "The schema fragments
 # are re-cut along topic lines"; design "Schema fragments" table). Added alongside the
 # ADR-0025 fragments above, which still render the live flow until T4's cut-over -- nothing
 # below is wired into CONFIG_TABLE/OPTIONS_TABLE yet (T3/T4/T7). CORE_MAPPING_SCHEMA is the
 # one step whose mapping half is not re-cut here (still the four ADR-0025 core mappings + the
 # capability decisions); its topic-step form is T4's concern, so only its threshold half is
-# added here.
+# added here. Every docstring below cites "UC12 (topic-step) step N" -- the ADR-0027/design
+# step numbering, which differs from the ADR-0025 fragments' own "UC12 step N" citations
+# above for the same step id until T4 retires the latter.
 
 
 def _core_threshold_schema(
     defaults: dict | None = None, *, include_interval: bool = False
 ) -> vol.Schema:
-    """UC12 step 1 threshold half: the smoothing window, plus the control interval on the
-    options flow only (UC12 1b; design, "Schema fragments"). `include_interval` migrates here
-    from `_ungated_threshold_schema` (design, "Schema fragments")."""
+    """UC12 (topic-step) step 1 threshold half: the smoothing window, plus the control
+    interval on the options flow only (UC12 1b; design, "Schema fragments").
+    `include_interval` migrates here from `_ungated_threshold_schema` (design, "Schema
+    fragments")."""
     d = defaults or {}
     schema: dict = {
         vol.Required(
@@ -658,7 +661,7 @@ GRID_MAPPING_SCHEMA = vol.Schema(
 
 
 def _grid_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 2 threshold half."""
+    """UC12 (topic-step) step 2 threshold half."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -690,7 +693,7 @@ EV_CHARGER_MAPPING_SCHEMA = vol.Schema(
 
 
 def _ev_charger_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 3 threshold half."""
+    """UC12 (topic-step) step 3 threshold half."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -721,7 +724,7 @@ VEHICLE_MAPPING_SCHEMA = vol.Schema(
 
 
 def _vehicle_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 4 threshold half."""
+    """UC12 (topic-step) step 4 threshold half."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -738,8 +741,8 @@ def _vehicle_threshold_schema(defaults: dict | None = None) -> vol.Schema:
 
 
 def _power_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 5 threshold half -- threshold-only, no mapping half (design "Schema
-    fragments")."""
+    """UC12 (topic-step) step 5 threshold half -- threshold-only, no mapping half (design
+    "Schema fragments")."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -770,14 +773,17 @@ SOLAR_MAPPING_SCHEMA = vol.Schema(
 
 NOTIFICATIONS_MAPPING_SCHEMA = vol.Schema(
     {
+        # RA4 notify-target role (notifications design doc §3/§6): must be a `notify`-domain
+        # entity; EntitySelector's own domain filter rejects a mismatched entity (vol.Invalid).
         vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
     }
 )
 
 
 def _notifications_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 9 threshold half: the three per-notification enable toggles (R18 AC11), each
-    defaulting on, plus the evening-prompt target mapping's own threshold pair."""
+    """UC12 (topic-step) step 9 threshold half: the three per-notification enable toggles
+    (R18 AC11), each defaulting on, plus the evening home-day prompt's own time-of-day
+    threshold."""
     d = defaults or {}
     return vol.Schema(
         {
