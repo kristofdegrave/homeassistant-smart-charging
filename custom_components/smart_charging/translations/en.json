@@ -2,35 +2,87 @@
   "config": {
     "step": {
       "core": {
-        "title": "Charger, grid & capabilities",
-        "description": "Map the entities that represent your charger and grid, and choose which optional capabilities to configure. Each capability you enable asks its own follow-up questions next.",
+        "title": "Capabilities",
+        "description": "Choose which optional capabilities to configure and tune the smoothing window. Each capability you enable asks its own follow-up questions later in the flow.",
+        "data": {
+          "solar_available": "Solar installed",
+          "captar_available": "CapTar available",
+          "deadline_available": "Departure deadline tracking",
+          "notifications_available": "Notifications",
+          "smoothing_window": "Smoothing window (samples)"
+        }
+      },
+      "grid": {
+        "title": "Grid connection",
+        "description": "Map the entities that represent your grid connection and tune its thresholds.",
+        "data": {
+          "net_power_entity": "Net grid power entity",
+          "grid_voltage_entity": "Grid voltage entity (optional)",
+          "low_tariff_entity": "Low-tariff entity (optional)",
+          "nominal_voltage": "Nominal grid voltage (V)",
+          "grid_ceiling_a": "Grid ceiling (A)",
+          "grid_safety_offset_a": "Grid safety offset (A)"
+        }
+      },
+      "ev_charger": {
+        "title": "EV charger",
+        "description": "Map the entities that represent your charger and tune its current limits.",
         "data": {
           "charger_current_entity": "Charger current control entity",
           "charger_status_entity": "Charger status entity",
           "connected_states": "States meaning \"connected\" (comma-separated)",
           "charging_states": "States meaning \"charging\" (comma-separated)",
-          "net_power_entity": "Net grid power entity",
           "charger_power_entity": "Charger power entity",
-          "solar_available": "Solar installed",
-          "captar_available": "CapTar available",
-          "deadline_available": "Departure deadline tracking",
-          "vehicle_limit_mapped": "Control a vehicle charge limit"
+          "min_current": "Minimum charging current (A)",
+          "max_current": "Maximum charging current (A)"
+        }
+      },
+      "vehicle": {
+        "title": "Vehicle",
+        "description": "Map the entities that represent your vehicle and tune its battery/charge-limit defaults.",
+        "data": {
+          "ev_soc_entity": "EV state-of-charge entity",
+          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
+          "vehicle_charge_limit_entity": "Vehicle charge-limit control entity (optional)",
+          "car_home_entity": "Car-home presence entity (optional)",
+          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
+          "default_soc_limit": "Default charge limit (%)"
+        }
+      },
+      "power": {
+        "title": "Power mode",
+        "description": "Tune Power mode's defaults.",
+        "data": {
+          "default_target_current": "Default target current (A)",
+          "power_cooldown_min": "Power mode cooldown duration (min)"
+        }
+      },
+      "captar": {
+        "title": "CapTar",
+        "description": "Tune CapTar's peak-shaving thresholds.",
+        "data": {
+          "captar_cooldown_min": "Captar cooldown duration (min)",
+          "power_respect_peak": "Power mode respects the peak limit",
+          "safety_margin_w": "CapTar peak safety margin (W)",
+          "max_peak_kw": "CapTar maximum peak (kW)",
+          "peak_floor_kw": "CapTar peak floor (kW)",
+          "peak_grace_min": "CapTar peak grace period (min)"
         }
       },
       "solar": {
         "title": "Solar",
-        "description": "Map the entities Solar mode reads.",
+        "description": "Map the entities Solar mode reads and tune its thresholds.",
         "data": {
-          "ev_soc_entity": "EV state-of-charge entity",
+          "solar_power_entity": "Solar production entity (optional)",
           "solar_forecast_entity": "Solar forecast entity",
           "solar_start_threshold_w": "Solar start threshold (W)",
           "solar_only_start_threshold_w": "SolarOnly start threshold (W)",
-          "solar_hold_min": "Solar post-surplus hold duration (min)",
-          "solar_only_hold_min": "SolarOnly post-surplus hold duration (min)",
-          "solar_restart_debounce_min": "Solar/SolarOnly restart debounce duration (min)",
-          "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
           "solar_only_strategy": "SolarOnly amp-step rounding strategy",
           "solar_only_midpoint": "SolarOnly round-nearest midpoint fraction",
+          "solar_hold_min": "Solar post-surplus hold duration (min)",
+          "solar_only_hold_min": "SolarOnly post-surplus hold duration (min)",
+          "solar_cooldown_min": "Solar/SolarOnly cooldown duration (min)",
+          "solar_restart_debounce_min": "Solar/SolarOnly restart debounce duration (min)",
           "solar_step_pp": "Solar step-up step size (percentage points)",
           "solar_step_threshold_pp": "Solar step-up trigger threshold (percentage points)",
           "max_solar_soc": "Solar step-up maximum SOC (%)",
@@ -38,73 +90,28 @@
           "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
         }
       },
-      "captar": {
-        "title": "CapTar",
-        "description": "Map the entities CapTar's peak-shaving reads.",
-        "data": {
-          "ev_soc_entity": "EV state-of-charge entity",
-          "captar_cooldown_min": "Captar cooldown duration (min)",
-          "safety_margin_w": "CapTar peak safety margin (W)",
-          "max_peak_kw": "CapTar maximum peak (kW)",
-          "peak_floor_kw": "CapTar peak floor (kW)",
-          "peak_grace_min": "CapTar peak grace period (min)",
-          "power_respect_peak": "Power mode respects the peak limit"
-        }
-      },
       "deadline": {
         "title": "Departure deadline",
-        "description": "Map the departure-time entity used to track a deadline.",
+        "description": "Map the departure-time and home-day entities used to track a deadline, and tune the plug-in reminder lead time.",
         "data": {
           "departure_external_entity": "External departure-time entity (optional)",
-          "reminder_lead_h": "Plug-in reminder lead time (h)",
-          "home_day_external_entity": "External home-day entity (optional)"
+          "home_day_external_entity": "External home-day entity (optional)",
+          "reminder_lead_h": "Plug-in reminder lead time (h)"
         }
       },
-      "vehicle_limit": {
-        "title": "Vehicle charge limit",
-        "description": "Map the vehicle charge-limit control and the car-home presence entity that gates it.",
+      "notifications": {
+        "title": "Notifications",
+        "description": "Map the notification target and choose which notifications to send.",
         "data": {
-          "vehicle_charge_limit_entity": "Vehicle charge-limit control entity",
-          "car_home_entity": "Car-home presence entity"
-        }
-      },
-      "mappings": {
-        "title": "Additional mappings",
-        "description": "Optional entity mappings not tied to any capability above.",
-        "data": {
-          "grid_voltage_entity": "Grid voltage entity (optional)",
-          "low_tariff_entity": "Low-tariff entity (optional)",
           "notification_target_entity": "Notification target entity (optional, notify domain)",
-          "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
-          "home_day_external_entity": "External home-day entity (optional)"
-        }
-      },
-      "thresholds": {
-        "title": "Thresholds and defaults",
-        "description": "Tune the remaining thresholds and defaults.",
-        "data": {
-          "nominal_voltage": "Nominal grid voltage (V)",
-          "min_current": "Minimum charging current (A)",
-          "max_current": "Maximum charging current (A)",
-          "grid_ceiling_a": "Grid ceiling (A)",
-          "grid_safety_offset_a": "Grid safety offset (A)",
-          "default_target_current": "Default target current (A)",
-          "smoothing_window": "Smoothing window (samples)",
-          "default_soc_limit": "Default charge limit (%)",
-          "safety_margin_w": "CapTar peak safety margin (W)",
-          "max_peak_kw": "CapTar maximum peak (kW)",
-          "peak_floor_kw": "CapTar peak floor (kW)",
-          "peak_grace_min": "CapTar peak grace period (min)",
-          "power_respect_peak": "Power mode respects the peak limit",
-          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
+          "deadline_notice_enabled": "Deadline-unreachable notice enabled",
+          "plug_in_reminder_enabled": "Plug-in reminder enabled",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
           "evening_prompt_time": "Evening home-day prompt time"
         }
       }
     },
     "error": {
-      "required_when_solar_available": "Required when Solar is installed",
-      "required_when_captar_available": "Required when CapTar is available",
       "required_when_vehicle_limit_mapped": "Required when the vehicle charge-limit entity is mapped",
       "required_when_deadline_available": "Required when departure deadline tracking is on"
     }

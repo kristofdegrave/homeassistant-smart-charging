@@ -10,13 +10,13 @@ without a matching translation key is caught automatically. This guarantee only 
 codes exposed as an `ERROR_*` constant -- a code introduced as a bare literal directly in
 config_flow.py (exactly the anti-pattern this file exists to close off) would not be seen.
 
-T12 extends this file with the same anti-hardcoding discipline for **step and field**
-parity (guided config flow, ADR-0025 Consequences: one `config.step.<id>` /
-`options.step.<id>` block per step id, install and reconfigure sharing `config.step.*`).
-The step ids and each step's field set are discovered from `config_flow.py`'s own tables
-and schema fragments -- the single source of truth the dispatcher itself uses -- rather
-than hardcoded here, so a step added to a table without a matching strings.json block (or
-a field moved to a different step without its label following) is caught automatically.
+This file also enforces the same anti-hardcoding discipline for **step and field** parity
+(ADR-0027 Consequences: one `config.step.<id>` / `options.step.<id>` block per step id,
+install and reconfigure sharing `config.step.*`). The step ids and each step's field set are
+discovered from `config_flow.py`'s own tables and schema fragments -- the single source of
+truth the dispatcher itself uses -- rather than hardcoded here, so a step added to a table
+without a matching strings.json block (or a field moved to a different step without its
+label following) is caught automatically.
 
 Only `strings.json`/`translations/en.json` are checked, not `translations/nl.json` -- HA
 falls back to `en` for missing keys, and requiring every locale to stay fully translated
@@ -71,34 +71,32 @@ def _keys(schema) -> set[str]:
 
 
 # Step ids the config/options flows can show, discovered from the tables themselves --
-# `core` is the shared entry point both install and reconfigure delegate into (ADR-0025
-# point 4) and is deliberately not a CONFIG_TABLE row of its own (design, "Step ids").
+# `core` is the shared entry point both install and reconfigure delegate into (ADR-0027
+# point 5) and is deliberately not a CONFIG_TABLE row of its own (design, "Step ids").
 CONFIG_STEP_IDS = {row.step_id for row in cf.CONFIG_TABLE} | {cf.STEP_CORE}
 OPTIONS_STEP_IDS = {row.step_id for row in cf.OPTIONS_TABLE}
 
-# Each step's field set, unioned across every schema variant it can render (both mapping
-# and threshold halves for the config flow; the once-only ev_soc rule's two include_ev_soc
-# variants for solar/captar) -- a field a step presents in ANY variant needs a label.
+# Each step's field set, unioned across every schema variant it can render (mapping half +
+# threshold half for the config flow) -- a field a step presents in ANY variant needs a label.
 CONFIG_STEP_FIELDS = {
-    cf.STEP_CORE: _keys(cf.CORE_MAPPING_SCHEMA),
-    cf.STEP_SOLAR: (
-        _keys(cf._solar_mapping_schema(include_ev_soc=True))
-        | _keys(cf._solar_mapping_schema(include_ev_soc=False))
-        | _keys(cf._solar_threshold_schema())
+    cf.STEP_CORE: _keys(cf.CORE_MAPPING_SCHEMA) | _keys(cf._core_threshold_schema()),
+    cf.STEP_GRID: _keys(cf.GRID_MAPPING_SCHEMA) | _keys(cf._grid_threshold_schema()),
+    cf.STEP_EV_CHARGER: (
+        _keys(cf.EV_CHARGER_MAPPING_SCHEMA) | _keys(cf._ev_charger_threshold_schema())
     ),
-    cf.STEP_CAPTAR: (
-        _keys(cf._captar_mapping_schema(include_ev_soc=True))
-        | _keys(cf._captar_mapping_schema(include_ev_soc=False))
-        | _keys(cf._captar_threshold_schema())
-    ),
+    cf.STEP_VEHICLE: _keys(cf.VEHICLE_MAPPING_SCHEMA) | _keys(cf._vehicle_threshold_schema()),
+    cf.STEP_POWER: _keys(cf._power_threshold_schema()),
+    cf.STEP_CAPTAR: _keys(cf._captar_threshold_schema()),
+    cf.STEP_SOLAR: _keys(cf.SOLAR_MAPPING_SCHEMA) | _keys(cf._solar_threshold_schema()),
     cf.STEP_DEADLINE: _keys(cf.DEADLINE_MAPPING_SCHEMA) | _keys(cf._deadline_threshold_schema()),
-    cf.STEP_VEHICLE_LIMIT: _keys(cf.VEHICLE_LIMIT_MAPPING_SCHEMA),
-    cf.STEP_MAPPINGS: _keys(cf.UNGATED_MAPPING_SCHEMA),
-    cf.STEP_THRESHOLDS: _keys(cf._ungated_threshold_schema(include_interval=False)),
+    cf.STEP_NOTIFICATIONS: (
+        _keys(cf.NOTIFICATIONS_MAPPING_SCHEMA) | _keys(cf._notifications_threshold_schema())
+    ),
 }
 
-# The options flow's own steps are threshold-only (ADR-0025 point 3, no mapping fields);
-# `thresholds` alone also asks the control interval (UC12 1b's own carve-out).
+# The options flow's own steps are threshold-only (ADR-0025 point 3, no mapping fields, still
+# untouched by this task -- T7's concern); `thresholds` alone also asks the control interval
+# (UC12 1b's own carve-out).
 OPTIONS_STEP_FIELDS = {
     cf.STEP_SOLAR: _keys(cf._solar_threshold_schema()),
     cf.STEP_CAPTAR: _keys(cf._captar_threshold_schema()),
