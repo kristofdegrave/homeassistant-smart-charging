@@ -211,7 +211,8 @@ CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
 # the factory-level role built from it stays optional (NF3) like its siblings above.
 CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
 CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
-# required when vehicle_charge_limit is mapped (design §9.1)
+# required when vehicle_charge_limit is mapped, OR when the deadline capability is declared
+# present (UC12 4a, topic-step config-flow design D-3)
 CONF_CAR_HOME_ENTITY = "car_home_entity"
 
 # Config-flow error codes (config_flow.py's mapping-step guards). Values must match
@@ -268,8 +269,9 @@ CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-r
 # briefly presented one anyway, since reverted (#813/#818).
 CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
 CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
-# R12 plug-in reminder lead time (guided-config-flow design D-1; UC12 step 5). No component
-# reads this yet -- contract-first for the R12 plug-in-reminder slice (design, Deferrals).
+# R12 plug-in reminder lead time (guided-config-flow design D-1); UC12 (topic-step) step 8,
+# the `deadline` step's threshold half. No component reads this yet -- contract-first for the
+# R12 plug-in-reminder slice (design, Deferrals).
 CONF_REMINDER_LEAD_H = "reminder_lead_h"
 # R18 AC11's conjunctive gate for the deadline-unreachable notice (R5), new key (topic-step
 # config-flow design D-1); catalog *Reminders & prompts*; UC12 step 9. No consumer yet --

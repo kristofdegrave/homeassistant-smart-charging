@@ -3,7 +3,7 @@
     "step": {
       "core": {
         "title": "Capabilities",
-        "description": "Choose which optional capabilities to configure. Each capability you enable asks its own follow-up questions later in the flow.",
+        "description": "Choose which optional capabilities to configure and tune the smoothing window. Each capability you enable asks its own follow-up questions later in the flow.",
         "data": {
           "solar_available": "Solar installed",
           "captar_available": "CapTar available",
@@ -14,7 +14,7 @@
       },
       "grid": {
         "title": "Grid connection",
-        "description": "Map the entities that represent your grid connection.",
+        "description": "Map the entities that represent your grid connection and tune its thresholds.",
         "data": {
           "net_power_entity": "Net grid power entity",
           "grid_voltage_entity": "Grid voltage entity (optional)",
@@ -26,7 +26,7 @@
       },
       "ev_charger": {
         "title": "EV charger",
-        "description": "Map the entities that represent your charger.",
+        "description": "Map the entities that represent your charger and tune its current limits.",
         "data": {
           "charger_current_entity": "Charger current control entity",
           "charger_status_entity": "Charger status entity",
@@ -39,7 +39,7 @@
       },
       "vehicle": {
         "title": "Vehicle",
-        "description": "Map the entities that represent your vehicle.",
+        "description": "Map the entities that represent your vehicle and tune its battery/charge-limit defaults.",
         "data": {
           "ev_soc_entity": "EV state-of-charge entity",
           "ev_battery_capacity_entity": "EV battery capacity entity (optional)",
@@ -92,7 +92,7 @@
       },
       "deadline": {
         "title": "Departure deadline",
-        "description": "Map the departure-time entity used to track a deadline.",
+        "description": "Map the departure-time and home-day entities used to track a deadline, and tune the plug-in reminder lead time.",
         "data": {
           "departure_external_entity": "External departure-time entity (optional)",
           "home_day_external_entity": "External home-day entity (optional)",

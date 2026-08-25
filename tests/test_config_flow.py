@@ -72,6 +72,7 @@ from custom_components.smart_charging.const import (
     CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
+    CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_NOTIFICATIONS_AVAILABLE,
     CONF_PEAK_FLOOR_KW,
@@ -81,6 +82,7 @@ from custom_components.smart_charging.const import (
     CONF_POWER_RESPECT_PEAK,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
+    CONF_SMOOTHING_WINDOW,
     CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_ENTITY,
@@ -101,10 +103,19 @@ from custom_components.smart_charging.const import (
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_DEADLINE_NOTICE_ENABLED,
+    DEFAULT_DEFAULT_TARGET_CURRENT,
+    DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_EVENING_PROMPT_ENABLED,
+    DEFAULT_GRID_CEILING_A,
+    DEFAULT_GRID_SAFETY_OFFSET_A,
+    DEFAULT_MAX_CURRENT,
+    DEFAULT_MIN_CURRENT,
+    DEFAULT_NOMINAL_VOLTAGE,
     DEFAULT_NOTIFICATIONS_AVAILABLE,
     DEFAULT_PLUG_IN_REMINDER_ENABLED,
     DEFAULT_POWER_COOLDOWN_MIN,
+    DEFAULT_SMOOTHING_WINDOW,
+    DEFAULT_SOC_LIMIT,
     DEFAULT_SOLAR_ONLY_STRATEGY,
     DOMAIN,
     ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
@@ -126,25 +137,6 @@ from custom_components.smart_charging.const import (
     STEP_VEHICLE,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
-
-# USER_INPUT is a plain dict fixture shaped like a pre-existing entry's DATA -- used directly
-# (never through the flow) by a test that builds a MockConfigEntry's data by hand.
-USER_INPUT = {
-    "charger_current_entity": "number.charger_current",
-    "charger_status_entity": "sensor.evse",
-    CONF_CONNECTED_STATES: "Connected, Cable",
-    CONF_CHARGING_STATES: "Charging, SuspendedEV",
-    "net_power_entity": "sensor.net_power",
-    "charger_power_entity": "sensor.charger_power",
-    "grid_voltage_entity": "sensor.grid_voltage",
-    CONF_EV_SOC_ENTITY: "sensor.ev_soc",
-    "nominal_voltage": 230.0,
-    "min_current": 6.0,
-    "max_current": 16.0,
-    CONF_GRID_CEILING_A: 25.0,
-    CONF_GRID_SAFETY_OFFSET_A: 2.0,
-    "default_target_current": 10.0,
-}
 
 # Per-step base fixtures for the guided install flow (UC12's nine topic steps). All four
 # capability decisions default False here, including solar -- even though solar's rendered
@@ -475,6 +467,21 @@ async def test_adr0005_install_splits_buckets_over_the_nine_step_answers(hass):
     }
     assert CONF_GRID_CEILING_A not in result["data"]
 
+    # Positive proof the ungated steps' threshold halves are actually asked and stored, not
+    # just that the gated ones are absent -- __init__.py reads several of these (min_current,
+    # max_current, nominal_voltage, grid_ceiling_a, default_target_current) by DIRECT
+    # indexing, so a dropped `.extend(...)` on core/grid/ev_charger/power would KeyError at
+    # setup with no config-flow test catching it otherwise.
+    assert result["options"][CONF_SMOOTHING_WINDOW] == DEFAULT_SMOOTHING_WINDOW
+    assert result["options"][CONF_NOMINAL_VOLTAGE] == DEFAULT_NOMINAL_VOLTAGE
+    assert result["options"][CONF_GRID_CEILING_A] == DEFAULT_GRID_CEILING_A
+    assert result["options"][CONF_GRID_SAFETY_OFFSET_A] == DEFAULT_GRID_SAFETY_OFFSET_A
+    assert result["options"][CONF_MIN_CURRENT] == DEFAULT_MIN_CURRENT
+    assert result["options"][CONF_MAX_CURRENT] == DEFAULT_MAX_CURRENT
+    assert result["options"][CONF_DEFAULT_TARGET_CURRENT] == DEFAULT_DEFAULT_TARGET_CURRENT
+    assert result["options"][CONF_POWER_COOLDOWN_MIN] == DEFAULT_POWER_COOLDOWN_MIN
+    assert result["options"][CONF_EV_BATTERY_CAPACITY_KWH] == DEFAULT_EV_BATTERY_CAPACITY_KWH
+    assert result["options"][CONF_DEFAULT_SOC_LIMIT] == DEFAULT_SOC_LIMIT
     assert result["options"][CONF_CONTROL_INTERVAL_S] == DEFAULT_CONTROL_INTERVAL_S
     # Every OPTION_KEYS member gated off this run (solar/captar/deadline/notifications all
     # absent) is genuinely absent from options -- an intersection, not a default stand-in.
@@ -622,11 +629,7 @@ async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_step_deadline
     """UC12 4a's SECOND independent trigger (design D-3): a present deadline capability
     (declared earlier, on `core`) without car_home is rejected here too, with the OTHER error
     code -- ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE, not the charge-limit one."""
-    result = await _run_install_flow(
-        hass,
-        capabilities={CONF_DEADLINE_AVAILABLE: True},
-        per_step_input={STEP_VEHICLE: VEHICLE_INPUT},
-    )
+    result = await _run_install_flow(hass, capabilities={CONF_DEADLINE_AVAILABLE: True})
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == STEP_VEHICLE
     assert result["errors"] == {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE}
@@ -645,6 +648,8 @@ async def test_car_home_guard_charge_limit_trigger_takes_precedence_when_both_fi
             }
         },
     )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_VEHICLE
     assert result["errors"] == {CONF_CAR_HOME_ENTITY: ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED}
 
 
@@ -707,7 +712,21 @@ async def test_uc12_power_step_is_threshold_only(hass):
 async def test_uc12_captar_step_is_threshold_only_no_ev_soc(hass):
     """CapTar has no mapping half at all in the topic-step model -- unlike the seven-step
     model, no ev_soc field ever appears on this step (it moved wholly to `vehicle`)."""
-    result = await _run_install_flow(hass, capabilities={CONF_CAPTAR_AVAILABLE: True})
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    for step_id in (STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE, STEP_POWER):
+        submission = (
+            {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True}
+            if step_id == STEP_CORE
+            else _INSTALL_STEP_BASES[step_id]
+        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+    assert result["step_id"] == STEP_CAPTAR
+    assert _keys(result["data_schema"]) == _keys(_captar_threshold_schema())
+    assert CONF_EV_SOC_ENTITY not in _keys(result["data_schema"])
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CAPTAR_INPUT)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
 
@@ -854,9 +873,9 @@ async def test_notification_target_entity_rejects_non_notify_domain(hass):
 
 _RECONFIGURE_ENTRY_DATA = {
     CONF_CHARGER_CURRENT_ENTITY: "number.charger_current",
-    "charger_status_entity": "sensor.evse",
-    "net_power_entity": "sensor.net_power",
-    "charger_power_entity": "sensor.charger_power",
+    CONF_CHARGER_STATUS_ENTITY: "sensor.evse",
+    CONF_NET_POWER_ENTITY: "sensor.net_power",
+    CONF_CHARGER_POWER_ENTITY: "sensor.charger_power",
     CONF_GRID_VOLTAGE_ENTITY: "sensor.grid_voltage",
     CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff",
     CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app",
@@ -918,16 +937,10 @@ async def test_uc12_1a_reconfigure_shows_mapping_fields_only_and_skips_power_cap
     assert result["step_id"] == STEP_NOTIFICATIONS
     assert _keys(result["data_schema"]) == _keys(NOTIFICATIONS_MAPPING_SCHEMA)
 
-    visited_steps = [STEP_NOTIFICATIONS]
+    # `notifications` is the last CONFIG_TABLE row, so submitting it finishes the walk
+    # directly -- the real proof that power/captar were skipped is the vehicle -> solar jump
+    # asserted above (line 936), not a post-hoc scan of a loop that never runs.
     result = await hass.config_entries.flow.async_configure(result["flow_id"], NOTIFICATIONS_INPUT)
-    while result["type"] == FlowResultType.FORM:
-        visited_steps.append(result["step_id"])
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], _INSTALL_STEP_BASES.get(result["step_id"], {})
-        )
-
-    assert STEP_POWER not in visited_steps
-    assert STEP_CAPTAR not in visited_steps
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
@@ -1595,6 +1608,17 @@ def test_every_config_step_method_is_in_the_table():
 def test_every_options_table_step_has_a_step_method():
     for row in OPTIONS_TABLE:
         assert f"async_step_{row.step_id}" in vars(SmartChargingOptionsFlow)
+
+
+def test_every_options_step_method_is_in_the_table_or_is_t3s_not_yet_wired_set():
+    """The converse: a step method absent from OPTIONS_TABLE *and* from the T3-added,
+    not-yet-wired set (`core`/`grid`/`ev_charger`/`vehicle`/`power`/`notifications` -- T7's
+    own cut-over) is unreachable and nothing raises."""
+    table_step_ids = {row.step_id for row in OPTIONS_TABLE}
+    for name in _non_framework_step_methods(
+        SmartChargingOptionsFlow, _OPTIONS_FLOW_FRAMEWORK_STEPS
+    ):
+        assert name.removeprefix("async_step_") in table_step_ids
 
 
 def test_uc12_config_table_is_uc12s_fixed_order_minus_the_core_entry_point():

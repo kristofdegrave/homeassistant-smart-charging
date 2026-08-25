@@ -3,7 +3,7 @@
     "step": {
       "core": {
         "title": "Mogelijkheden",
-        "description": "Kies welke optionele mogelijkheden je wilt instellen. Elke mogelijkheid die je inschakelt, stelt verderop in de flow zijn eigen vervolgvragen.",
+        "description": "Kies welke optionele mogelijkheden je wilt instellen en stel het afvlakvenster in. Elke mogelijkheid die je inschakelt, stelt verderop in de flow zijn eigen vervolgvragen.",
         "data": {
           "solar_available": "Zonne-energie geïnstalleerd",
           "captar_available": "CapTar beschikbaar",
@@ -14,7 +14,7 @@
       },
       "grid": {
         "title": "Netaansluiting",
-        "description": "Koppel de entiteiten die je netaansluiting vertegenwoordigen.",
+        "description": "Koppel de entiteiten die je netaansluiting vertegenwoordigen en stel de drempelwaarden in.",
         "data": {
           "net_power_entity": "Netto vermogen-entiteit",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
@@ -26,7 +26,7 @@
       },
       "ev_charger": {
         "title": "Laadpaal",
-        "description": "Koppel de entiteiten die je lader vertegenwoordigen.",
+        "description": "Koppel de entiteiten die je lader vertegenwoordigen en stel de stroomlimieten in.",
         "data": {
           "charger_current_entity": "Stroomregeling-entiteit van de lader",
           "charger_status_entity": "Statusentiteit van de lader",
@@ -39,7 +39,7 @@
       },
       "vehicle": {
         "title": "Voertuig",
-        "description": "Koppel de entiteiten die je voertuig vertegenwoordigen.",
+        "description": "Koppel de entiteiten die je voertuig vertegenwoordigen en stel de standaardwaarden voor batterij/laadlimiet in.",
         "data": {
           "ev_soc_entity": "EV-laadniveau-entiteit",
           "ev_battery_capacity_entity": "EV-batterijcapaciteit-entiteit (optioneel)",
@@ -92,7 +92,7 @@
       },
       "deadline": {
         "title": "Vertrekdeadline",
-        "description": "Koppel de externe vertrektijd-entiteit die voor de deadline wordt gebruikt.",
+        "description": "Koppel de vertrektijd- en thuisdag-entiteiten die voor de deadline worden gebruikt, en stel de voorlooptijd van de oplaadherinnering in.",
         "data": {
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
           "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)",
