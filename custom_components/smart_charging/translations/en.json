@@ -99,7 +99,8 @@
     "error": {
       "required_when_solar_available": "Required when Solar is installed",
       "required_when_captar_available": "Required when CapTar is available",
-      "required_when_vehicle_limit_mapped": "Required when the vehicle charge-limit entity is mapped"
+      "required_when_vehicle_limit_mapped": "Required when the vehicle charge-limit entity is mapped",
+      "required_when_deadline_available": "Required when deadlines are managed"
     }
   },
   "options": {
