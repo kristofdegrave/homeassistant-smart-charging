@@ -43,7 +43,9 @@ every behavioural task here is HA-harness), `ruff`.
 **No fork is left open.** The design's "Forks" section records that every candidate fork
 (config-entry migration/`VERSION`, the capability set, the step order, each field's bucket) is
 answered by a cited source. If a task uncovers a genuine new fork, **stop and report it** rather than
-guessing — do not resolve it inside a task.
+guessing — do not resolve it inside a task. Note D-7, added after review: an existing entry's stored
+notify-target mapping must survive the first reconfigure, and the fix is a prefill (T4 step-2 item 6,
+tested in T6), never a migration.
 
 ---
 
@@ -91,7 +93,9 @@ default … must be added"), ADR-0005 (bucket assignment), CLAUDE.md (no magic s
 **Test boundary:** plain assertions inside the HA-harness module `tests/test_config_flow.py` (no
 `hass` fixture needed; they live there for cohesion with the flow they describe).
 
-**Files:** edit `custom_components/smart_charging/const.py`, `tests/test_config_flow.py`.
+**Files:** edit `custom_components/smart_charging/const.py`, `custom_components/smart_charging/strings.json`,
+`custom_components/smart_charging/translations/en.json`,
+`custom_components/smart_charging/translations/nl.json`, `tests/test_config_flow.py`.
 
 **Step 1 — failing tests.**
 
@@ -101,24 +105,26 @@ def test_d1_new_config_keys_match_the_entity_catalog():
     notifications_available defaults False -- R18 AC9's named default-ABSENT exception,
     the one capability whose form default and read fallback agree (design D-5)."""
 
-def test_d1_new_threshold_keys_are_option_keys_members():
-    """ADR-0005: power_cooldown_min, deadline_notice_enabled and plug_in_reminder_enabled
-    are config-entry OPTIONS, so they must be in OPTION_KEYS or the terminal split routes
-    them to data."""
-
 def test_adr0027_step_ids_are_uc12s_nine():
     """ADR-0027, Consequences: STEP_GRID/EV_CHARGER/VEHICLE/POWER/NOTIFICATIONS added."""
 ```
 
-The first two fail with `ImportError`/`AttributeError` on the new constants; the third likewise.
+Both fail with `ImportError`/`AttributeError` on the new constants.
 
 **Step 2 — implement.** In `const.py`, add exactly the design D-1 table's ten constants
 (`CONF_NOTIFICATIONS_AVAILABLE`/`DEFAULT_NOTIFICATIONS_AVAILABLE`, `CONF_POWER_COOLDOWN_MIN`/
 `DEFAULT_POWER_COOLDOWN_MIN`, `CONF_DEADLINE_NOTICE_ENABLED`/`DEFAULT_DEADLINE_NOTICE_ENABLED`,
 `CONF_PLUG_IN_REMINDER_ENABLED`/`DEFAULT_PLUG_IN_REMINDER_ENABLED`, `CONF_SOLAR_POWER_ENTITY`,
 `ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE`) plus `STEP_GRID`, `STEP_EV_CHARGER`, `STEP_VEHICLE`,
-`STEP_POWER`, `STEP_NOTIFICATIONS`. Append the three new option keys to `OPTION_KEYS` in
-`config_flow.py`. Each constant carries a one-line comment naming its catalog row and requirement.
+`STEP_POWER`, `STEP_NOTIFICATIONS`. Each constant carries a one-line comment naming its catalog row
+and requirement.
+
+**`OPTION_KEYS` is deliberately NOT appended here.** `tests/test_config_flow.py:2298`'s
+`test_every_option_key_appears_in_exactly_one_threshold_fragment` asserts
+`sorted(all_keys) == sorted(set(OPTION_KEYS))` over the live threshold fragments, so appending
+`CONF_POWER_COOLDOWN_MIN`, `CONF_DEADLINE_NOTICE_ENABLED` and `CONF_PLUG_IN_REMINDER_ENABLED` before
+any fragment carries them would leave this commit red. The append belongs to **T2**, which lands the
+fragments and re-points that test in the same commit.
 
 **Do not delete anything yet** — `STEP_VEHICLE_LIMIT`/`STEP_MAPPINGS`/`STEP_THRESHOLDS`,
 `CONF_VEHICLE_LIMIT_MAPPED` and the two retiring `ERROR_*` codes are still live until T4.
@@ -139,7 +145,8 @@ moment the constant exists without a translation.
 threshold half → options). **Test boundary:** HA harness module `tests/test_config_flow.py`; these
 particular assertions need no `hass` fixture (design, Testing approach).
 
-**Files:** edit `config_flow.py`, `tests/test_config_flow.py`.
+**Files:** edit `config_flow.py`, `strings.json`, `translations/{en,nl}.json`,
+`tests/test_config_flow.py`, `tests/test_config_flow_translations.py`.
 
 **Step 1 — failing tests.** One key-set test per step, spelling the expected field set out from
 `CONF_*` constants (an independent oracle — never `_keys(fragment) == _keys(fragment)`):
@@ -199,18 +206,34 @@ Requiredness per design D-2: `vol.Required` for `ev_soc_entity` (on `VEHICLE_MAP
 `vehicle_charge_limit_entity`, `ev_battery_capacity_entity`, `grid_voltage_entity`,
 `low_tariff_entity`, `departure_external_entity`, `home_day_external_entity`.
 
-**Note on the two extended fragments:** `_captar_threshold_schema` and `DEADLINE_MAPPING_SCHEMA` are
-rendered live today, so extending them here changes what the *current* captar/deadline steps ask.
-That is intended and harmless — the fields are the same ones the live `thresholds`/`mappings` steps
-also ask for until T4 retires them, and T4's tests assert the post-cut-over field sets. Adjust the
-existing `tests/test_config_flow_translations.py` `CONFIG_STEP_FIELDS` map and add the corresponding
-labels to the three translation files in this same commit so the parity test stays green.
+**Also append the three new keys to `OPTION_KEYS`** (deferred from T1) — this is the commit where a
+fragment finally carries each of them.
+
+**The two extended fragments break two existing tests; both edits are part of this task, not
+collateral to discover.** `_captar_threshold_schema` and `DEADLINE_MAPPING_SCHEMA` are rendered live
+today, so extending them here means their five peak-protection fields and `home_day_external_entity`
+sit in *two* fragments at once until T4 retires `_ungated_threshold_schema`/`UNGATED_MAPPING_SCHEMA`.
+That is intended — the live steps keep asking everything they ask today — but it fails:
+
+| Existing test | Why it breaks | Fix in this task |
+| --- | --- | --- |
+| `tests/test_config_flow.py:2298` `test_every_option_key_appears_in_exactly_one_threshold_fragment` | duplicated keys break the sorted-list equality, and the three appended `OPTION_KEYS` members are in no *old* fragment | re-point it at the new fragment tuple (the same tuple the new coverage tests use) |
+| `tests/test_config_flow.py:2317` `test_no_field_appears_in_two_fragments_except_ev_soc` | its `all_fragments` list holds both the old and the extended fragments | re-point at the new tuple; **drop the `ev_soc` carve-out** — it exists only for the seven-step model's `include_ev_soc` rule, which is gone |
+
+Both re-points are one-time edits to tests whose old-fragment subject is deleted at T4 anyway, so
+this is not weakening an assertion — it is moving it onto the fragments that will survive.
+
+Update `tests/test_config_flow_translations.py`'s `CONFIG_STEP_FIELDS`/`OPTIONS_STEP_FIELDS` maps and
+add the corresponding labels in the same commit so the parity test stays green. Because both maps
+derive from `_captar_threshold_schema`, the five peak-protection labels are needed under **both**
+`config.step.captar` and `options.step.captar`; `home_day_external_entity`'s label is needed under
+`config.step.deadline`.
 
 **Verify + commit.**
 
 ---
 
-## Task T3: The two new tables and the nine step methods (defined, not yet wired)
+## Task T3: The two new tables and the five genuinely-new step methods
 
 **Realizes:** UC12's fixed order and gating; R20 AC2, AC7, AC9. **ADR honored:** ADR-0027 Decision
 (Option C, unchanged in mechanism), point 3 (reconfigure's subset is a per-step gate, not a stop
@@ -218,6 +241,20 @@ condition), point 4 (the options flow keeps its own table). **Test boundary:** H
 the table-shape assertions need no `hass` fixture.
 
 **Files:** edit `config_flow.py`, `tests/test_config_flow.py`.
+
+**Only five of the nine step methods are new here.** `async_step_core`, `async_step_solar`,
+`async_step_captar` and `async_step_deadline` already exist on `SmartChargingConfigFlow` (and
+`solar`/`captar`/`deadline` on the options flow); Python has no way to define a second method of the
+same name, and redefining them to render the new fragments would change the live flow in a task that
+claims not to. **They are re-cut in T4** (config side) and **T7** (options side). This task adds only
+`async_step_grid`, `async_step_ev_charger`, `async_step_vehicle`, `async_step_power` and
+`async_step_notifications`, which no live table reaches.
+
+For the same reason the two new tables get **interim names** — `NINE_STEP_CONFIG_TABLE` and
+`NINE_STEP_OPTIONS_TABLE` — so they can coexist with the live `CONFIG_TABLE`/`OPTIONS_TABLE`. T4
+renames the first to `CONFIG_TABLE` and T7 the second to `OPTIONS_TABLE`, each deleting the table it
+replaces in the same commit. Every test below names the interim table explicitly, so there is no
+ambiguity about which one it walks; T4/T7 rename the references along with the tables.
 
 **Step 1 — failing tests.**
 
@@ -241,12 +278,17 @@ def test_uc12_1b_options_gates_read_stored_flags_defensively():
 
 They fail with `AttributeError` on the new table/method names.
 
-**Step 2 — implement.** Define the nine `async_step_*` methods on `SmartChargingConfigFlow` and the
-nine on `SmartChargingOptionsFlow`, each rendering its own fragment(s) via the existing
-`_maybe_prefill`/`defaults` mechanisms and ending in `await self._async_advance(after=<its own id>)`.
-Define the two new tables. **Leave `_table` pointing at the current tables** and leave
+**Step 2 — implement.** Define the five new `async_step_*` methods on `SmartChargingConfigFlow` and
+their threshold-only counterparts on `SmartChargingOptionsFlow`, each rendering its own fragment(s)
+via the existing `_maybe_prefill`/`defaults` mechanisms and ending in
+`await self._async_advance(after=<its own id>)`. Define `NINE_STEP_CONFIG_TABLE` and
+`NINE_STEP_OPTIONS_TABLE`. **Leave `_table` pointing at the current tables** and leave
 `async_step_user`/`async_step_reconfigure`/`async_step_init` untouched — nothing is wired yet, so the
 live flow is unchanged and every existing behavioural test still passes.
+
+The reachability tests pass at this commit precisely because the four overlapping step ids already
+have methods; what this task proves is that the five new rows are reachable and the four inherited
+ones are not orphaned by the new order.
 
 For the gate assertions, test the gate callables directly against a small stub exposing `_answers`,
 `_mode` and `config_entry` — no `hass` needed.
@@ -272,6 +314,11 @@ with the nine live steps that replace them.
 **Step 1 — failing tests.**
 
 ```python
+def test_r20_ac1_core_mapping_is_exactly_the_four_capability_declarations():
+    """R20 AC1 / design success criterion 1: CORE_MAPPING_SCHEMA is the four capability
+    declarations and nothing more -- no mapping field survives on `core` from the seven-step
+    model, where it carried the four core mappings too. Deferred from T2, which leaves this
+    fragment live and untouched."""
 async def test_uc12_install_all_capabilities_walks_all_nine_steps_in_order(hass)
 async def test_uc12_install_default_capabilities_skips_notifications(hass):
     """R18 AC9 / UC12 5a: a household accepting the defaults is offered steps 6-8 but NOT
@@ -299,35 +346,49 @@ The first fails at the second form: the live flow shows `solar`, not `grid`.
 1. Re-cut `CORE_MAPPING_SCHEMA` to the four capability declarations (solar `default=True` per design
    D-5; captar/deadline `default=DEFAULT_*`; notifications `default=DEFAULT_NOTIFICATIONS_AVAILABLE`,
    i.e. `False`) and render `core` with `_core_threshold_schema()` extended in for install.
-2. Point `SmartChargingConfigFlow._table` at the new config table; `async_step_user` and
-   `async_step_reconfigure` keep delegating into `async_step_core`.
+2. Rename `NINE_STEP_CONFIG_TABLE` to `CONFIG_TABLE` (deleting the old one) and point
+   `SmartChargingConfigFlow._table` at it; `async_step_user` and `async_step_reconfigure` keep
+   delegating into `async_step_core`. Re-cut the four inherited config-side step methods
+   (`core`, `solar`, `captar`, `deadline`) onto their new fragments — T3 could not touch them.
 3. Move `ev_soc_entity` (`vol.Required`) and `car_home_entity` onto the `vehicle` step; make
    `solar_forecast_entity` a plain `vol.Required` on `solar` (ADR-0027 point 1).
-4. **Delete:** `UNGATED_MAPPING_SCHEMA`, `_ungated_threshold_schema`, `VEHICLE_LIMIT_MAPPING_SCHEMA`,
-   `_solar_mapping_schema`, `_captar_mapping_schema`, `_ev_soc_missing_error`,
-   `_solar_forecast_missing_error`, `async_step_mappings`, `async_step_thresholds`,
-   `async_step_vehicle_limit`, the old tables, `_maybe_prefill`'s now-unused `extra_from` parameter,
+4. **Delete:** `UNGATED_MAPPING_SCHEMA`, `VEHICLE_LIMIT_MAPPING_SCHEMA`, `_solar_mapping_schema`,
+   `_captar_mapping_schema`, `_ev_soc_missing_error`, `_solar_forecast_missing_error`,
+   `SmartChargingConfigFlow.async_step_mappings`, `async_step_thresholds` and
+   `async_step_vehicle_limit` (the **config** flow's — the options flow keeps its own
+   `async_step_thresholds` until T7), the old config table,
    `self._answers.pop(CONF_VEHICLE_LIMIT_MAPPED, None)`, and from `const.py`
-   `CONF_VEHICLE_LIMIT_MAPPED`, `STEP_VEHICLE_LIMIT`, `STEP_MAPPINGS`, `STEP_THRESHOLDS`,
+   `CONF_VEHICLE_LIMIT_MAPPED`, `STEP_VEHICLE_LIMIT`, `STEP_MAPPINGS`,
    `ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE`, `ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE` — plus the last
    two codes' `config.error` entries in all three translation files (design, "Guards and required
-   fields").
-5. Update `UC12_FIXED_STEP_ORDER` to the nine ids.
-6. `strings.json`/`en.json`/`nl.json`: remove the `config.step.vehicle_limit`/`mappings`/`thresholds`
+   fields"). `STEP_THRESHOLDS` and `_ungated_threshold_schema` stay until T7.
+5. Update `UC12_FIXED_STEP_ORDER` to the **eight** table-row ids (design, "Step ids and the two
+   tables": table rows only, `core` excluded as the shared entry point).
+6. Keep `_maybe_prefill`'s `extra_from` parameter and wire it on the reconfigure render of `core` to
+   prefill `notifications_available` from a stored `notification_target_entity` (design D-7). Its
+   named test lands in T6 with the rest of the reconfigure coverage.
+7. `strings.json`/`en.json`/`nl.json`: remove the `config.step.vehicle_limit`/`mappings`/`thresholds`
    blocks, add `grid`, `ev_charger`, `vehicle`, `power`, `notifications`, and re-home every field
    label to the block of the step that now presents it. Titles and descriptions must read correctly
    in **both** a first-install and an edit-my-mappings context (ADR-0027, Consequences: install and
    reconfigure share `config.step.*`), and the parenthetical "(required if …)" qualifiers stay
-   dropped — a field now appears only when it is required.
-7. Rebuild `tests/test_config_flow_translations.py`'s `CONFIG_STEP_FIELDS` map from the new
+   dropped — a field now appears only when it is required. The `options.step.*` blocks are untouched
+   here (T7 owns them), which is what keeps the still-live options flow's labels resolving.
+8. Rebuild `tests/test_config_flow_translations.py`'s `CONFIG_STEP_FIELDS` map from the new
    fragments; its module-level `assert set(CONFIG_STEP_FIELDS) == CONFIG_STEP_IDS` self-check must
-   still hold.
+   still hold. `OPTIONS_STEP_FIELDS` is left as it is — its `_ungated_threshold_schema` subject is
+   still alive.
 
-The options flow is untouched by this task and keeps walking its old table — it is re-cut in T7.
-Because `_ungated_threshold_schema` is deleted here, `SmartChargingOptionsFlow.async_step_thresholds`
-must be pointed at the new per-topic threshold fragments in this same commit as a **mechanical**
-change (same fields, same defaults, several forms instead of one) so the options flow keeps asking
-everything it asks today; T7 then gives it its proper table.
+**The options flow is untouched by this task and keeps walking its old table**, which is why
+`_ungated_threshold_schema` and `SmartChargingOptionsFlow.async_step_thresholds` **survive this
+commit** and are deleted in T7, where the options table is properly re-cut. A single
+`async_step_thresholds` cannot render several per-topic forms, and
+`tests/test_config_flow_translations.py:106` builds `OPTIONS_STEP_FIELDS[STEP_THRESHOLDS]` from that
+very fragment, with a module-level `assert set(OPTIONS_STEP_FIELDS) == OPTIONS_STEP_IDS` (line 113)
+that item 7 below does not touch. Keeping both alive until T7 is what makes this commit green, and it
+costs nothing: the atomicity argument for this task is about the **config** flow's catch-alls, which
+have no such interim owner. `STEP_THRESHOLDS` therefore also survives in `const.py` until T7, unlike
+`STEP_MAPPINGS`/`STEP_VEHICLE_LIMIT`.
 
 **Expect a wide rewrite of `tests/test_config_flow.py`** (≈2 500 lines): every test that drives the
 install path through `core → mappings → thresholds` is re-driven through the nine steps. Keep the
@@ -398,10 +459,25 @@ async def test_r20_ac7_withdrawing_a_capability_drops_its_mapping_fields_only(ha
     accumulator was never seeded from the entry, ADR-0027 point 2), while its thresholds
     stay in options untouched."""
 async def test_adr0008_reconfigure_reloads_the_entry(hass)
+
+@pytest.mark.parametrize("solar,captar,deadline,notifications", ALL_SIXTEEN)
+async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(hass, ...):
+    """ADR-0027 Consequences: every capability combination must be shown to traverse exactly
+    the steps UC12 prescribes, in order, for EACH of the three flows -- this is the
+    reconfigure third (T5 covers install, T7 options). Expected sequence: core, grid,
+    ev_charger, vehicle, then solar/deadline/notifications per their stored flags; never
+    power, never captar."""
+
+async def test_d7_reconfigure_prefills_notifications_available_from_a_stored_target(hass):
+    """Design D-7: an entry that predates notifications_available but stores a
+    notification_target_entity renders the declaration ON, reaches step 9, and keeps the
+    stored mapping -- the accumulator-never-seeded rule would otherwise drop it silently.
+    Assert the negative too: an entry with neither key renders the declaration OFF."""
 ```
 
-**Step 2 — implement.** Expect these to pass on T4's implementation; fix gates or `_maybe_prefill`
-call sites if not.
+**Step 2 — implement.** The traversal and subset tests should pass on T4's implementation; fix gates
+if not. `test_d7_...` needs T4's `extra_from` wiring (T4 step-2 item 6) — if that was skipped, add it
+here rather than weakening the test.
 
 **Verify + commit.**
 
@@ -435,12 +511,18 @@ async def test_r20_ac7_options_merges_into_stored_options_never_replaces_them(ha
 async def test_r18_ac11_options_can_toggle_one_notification_off_without_touching_the_others(hass)
 ```
 
-**Step 2 — implement.** Point `SmartChargingOptionsFlow._table` at the new options table; give it
-`async_step_core` (with `include_interval=True`), `grid`, `ev_charger`, `vehicle`, `power`,
-`captar`, `solar`, `deadline`, `notifications`, each rendering only its threshold fragment with
-`self.config_entry.options` as `defaults`. Delete `async_step_thresholds` and the old options table.
-Add the five new `options.step.*` blocks (and remove the retired ones) in all three translation
-files, and rebuild `OPTIONS_STEP_FIELDS` in the parity test module.
+**Step 2 — implement.** Rename `NINE_STEP_OPTIONS_TABLE` to `OPTIONS_TABLE` and point
+`SmartChargingOptionsFlow._table` at it; re-cut its inherited `solar`/`captar`/`deadline` step
+methods and add `async_step_core` (with `include_interval=True`), `grid`, `ev_charger`, `vehicle`,
+`power`, `notifications`, each rendering only its threshold fragment with
+`self.config_entry.options` as `defaults`.
+
+**This is where T4's deferred deletions land:** `SmartChargingOptionsFlow.async_step_thresholds`, the
+old options table, `_ungated_threshold_schema` and `const.py`'s `STEP_THRESHOLDS` all go here, once
+nothing renders them. Add the five new `options.step.*` blocks and remove the retired
+`options.step.thresholds` block in all three translation files, and rebuild `OPTIONS_STEP_FIELDS` in
+the parity test module (its `assert set(OPTIONS_STEP_FIELDS) == OPTIONS_STEP_IDS` self-check must
+still hold).
 
 **Verify + commit.**
 
@@ -545,10 +627,16 @@ both a first-install and an edit-my-mappings context"). **Test boundary:** plain
 
 **Files:** edit `strings.json`, `translations/en.json`, `translations/nl.json`.
 
-**Step 1 — failing checks.** `tests/test_translations.py`'s
-`test_strings_json_and_en_json_are_identical` and `test_nl_json_has_the_same_keys_as_en_json` are the
-red here if T4/T7 left any drift; `test_no_orphaned_step_block_or_field_label` catches a label left
-behind on a retired block.
+**Step 1 — failing checks.** Two modules, and they are not interchangeable:
+
+- `tests/test_translations.py` — `test_strings_json_and_en_json_are_identical` and
+  `test_nl_json_has_the_same_keys_as_en_json` are the red if T4/T7 left the three files out of sync.
+  That module holds nothing config-flow-specific any more (its third test is
+  `test_every_entity_translation_key_has_a_name`).
+- `tests/test_config_flow_translations.py:164` — `test_no_orphaned_step_block_or_field_label` is what
+  catches a label left behind on a retired block, and
+  `test_every_field_a_step_presents_has_a_label_in_that_steps_block` a re-homed field whose label did
+  not follow.
 
 **Step 2 — implement.** Reconcile all three files; write real Dutch for the five new step blocks and
 every re-homed label (never an English string in `nl.json`). Re-read each of the nine
@@ -593,13 +681,18 @@ Before the final commit, verify each of the following and record the result in t
    config-key indexing — every consumer reads `.get(<key>)` / `.get(<key>, DEFAULT_...)`. This is
    project-plan C4's integration checkpoint ("the entry C4 writes drives RA1's factory and the
    Store's data/options reads on setup") verified by construction.
-3. **No orphaned constant:** `grep -rn "STEP_VEHICLE_LIMIT\|STEP_MAPPINGS\|STEP_THRESHOLDS\|
-   CONF_VEHICLE_LIMIT_MAPPED\|ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE\|
-   ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE" custom_components tests` returns nothing.
+3. **No orphaned constant, and no interim name left behind:** `grep -rn "STEP_VEHICLE_LIMIT\|
+   STEP_MAPPINGS\|STEP_THRESHOLDS\|CONF_VEHICLE_LIMIT_MAPPED\|ERROR_REQUIRED_WHEN_SOLAR_AVAILABLE\|
+   ERROR_REQUIRED_WHEN_CAPTAR_AVAILABLE\|_ungated_threshold_schema\|UNGATED_MAPPING_SCHEMA\|
+   NINE_STEP_" custom_components tests` returns nothing — the last pattern catches a T3 interim table
+   name that T4/T7 forgot to rename.
 4. **No ADR-0025 citation as live authority** (T12).
 5. `SmartChargingConfigFlow.VERSION` is still `1` and no `async_migrate_entry` was added
    (ADR-0027, Consequences; design, Forks).
-6. Every one of the design's eleven success criteria has at least one named test.
+6. Every one of the design's eleven success criteria has at least one named test — with criterion
+   11's ADR-0008 **options-reload** half the one exception, covered by `tests/test_init.py`'s
+   existing update-listener tests (design, success criterion 11). Re-run that module and record it
+   rather than duplicating the assertion inside the scope guard.
 7. `manifest.json` untouched; no file outside the six-file scope guard changed.
 
 ---

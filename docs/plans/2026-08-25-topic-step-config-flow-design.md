@@ -112,7 +112,11 @@ The slice is done when all of the following hold, each pinned by a named test in
     declares (UC12 9). What each toggle *suppresses* is out of this slice (Deferrals).
 11. The entry the flow produces is still ADR-0005-shaped: mappings, capability flags and the derived
     state-translation table in **data**; thresholds, defaults and seed values in **options** (UC12
-    step 10); an options change still reloads the entry (ADR-0008).
+    step 10); an options change still reloads the entry (ADR-0008). The reload half is the one part
+    of this criterion **no task here re-tests**: the update listener lives in `__init__.py` and is
+    already pinned by `tests/test_init.py`, both outside this slice's scope guard. This slice changes
+    neither the listener nor the fact that the options flow calls `async_create_entry`, so that
+    coverage still holds; the plan's completion check re-runs it rather than duplicating it.
 
 ---
 
@@ -176,8 +180,12 @@ translation-parity test.
 
 `STEP_VEHICLE_LIMIT`, `STEP_MAPPINGS` and `STEP_THRESHOLDS` are **deleted**; `STEP_GRID`,
 `STEP_EV_CHARGER`, `STEP_VEHICLE`, `STEP_POWER` and `STEP_NOTIFICATIONS` are added.
-`UC12_FIXED_STEP_ORDER` (in `config_flow.py`) becomes the nine-id order above, with `captar` before
-`solar` (ADR-0027, Consequences).
+`UC12_FIXED_STEP_ORDER` (in `config_flow.py`) keeps today's semantics — **table rows only**, so
+**eight** ids, `grid` through `notifications`, with `captar` before `solar` (ADR-0027,
+Consequences). It stays what it is today: an independent subsequence oracle for `CONFIG_TABLE`, not
+a second spelling of UC12's step list. `core` is excluded for the same reason it is excluded from
+the table — it is the shared entry point (ADR-0027 point 5), and a constant that silently mixed
+entry points with rows would make the reachability test ambiguous about which it walks.
 
 ### The dispatcher, the accumulator, and the terminal split — all unchanged
 
@@ -204,17 +212,26 @@ of that structure". This slice therefore keeps, byte-for-byte in shape:
   stored options values untouched (UC12 1a/5b).
 
 Two things do disappear from `_maybe_prefill`'s call sites and `_async_finish`: the transient
-`CONF_VEHICLE_LIMIT_MAPPED` key and its `extra_from` augmentation on the core step, and the
-`self._answers.pop(CONF_VEHICLE_LIMIT_MAPPED, None)` line — the election is gone as a concept
-(ADR-0027, Context: "`vehicle_limit` is gone as a step"; UC12 4a). `_maybe_prefill`'s `extra_from`
-parameter has no remaining caller and is removed with it; every step now prefills from `entry.data`
-directly, because every mapping field it presents *is* a stored key.
+`CONF_VEHICLE_LIMIT_MAPPED` key, and the `self._answers.pop(CONF_VEHICLE_LIMIT_MAPPED, None)` line —
+the election is gone as a concept (ADR-0027, Context: "`vehicle_limit` is gone as a step"; UC12 4a).
+
+`_maybe_prefill`'s `extra_from` parameter **survives**, with a different job: prefilling the
+`notifications_available` declaration on reconfigure from a stored notify-target mapping (D-7).
 
 ### Field-to-step assignment
 
 Every field below is placed by UC12's own step text and bound by `entity-catalog.md`'s row; **none is
 added, moved, or renamed by this document.** "Half" is ADR-0005's bucket: mapping half → config-entry
 **data**, threshold half → config-entry **options**.
+
+**The names below are `const.py`'s stored keys, which for five values differ from the catalog's own
+spelling** — `grid_ceiling_a` (catalog `grid_supply_ceiling_a`), `nominal_voltage`
+(`nominal_voltage_v`), `min_current`/`max_current` (`min_current_a`/`max_current_a`),
+`solar_only_strategy`/`solar_only_midpoint` (`solar_only_rounding_strategy`/
+`solar_only_rounding_midpoint_pct`). That drift is pre-existing, it is the **stored** key in every
+shipped config entry, and renaming any of it would be exactly the config-entry migration ADR-0027's
+Consequences rule out. The table therefore reads in `const.py`'s spelling; the catalog row it cites is
+the same row either way.
 
 | UC12 # | Step | Mapping half (data) | Threshold half (options) |
 | --- | --- | --- | --- |
@@ -389,6 +406,15 @@ on/off. UC12's "when" is a condition on when the table is *consulted*, not a man
 form mid-step (which HA's flow API can only do by re-showing the step). This slice adopts that shape
 unchanged and adds nothing of its own.
 
+**Stated as the deviation it is:** ADR-0027's Consequences describe this fragment as "conditionally
+shaped by another field submitted on that same step". The shape adopted here is *not* conditionally
+shaped — the field is always rendered and simply inert when the mapped entity already reports
+on/off. The observable behaviour UC12 asks for is the same (a household whose tariff signal is
+already boolean never has to fill anything in), and the alternative — re-showing the `grid` step to
+reshape it after the entity is chosen — would break UC12's own "the same step is re-shown" error
+semantics by using a re-show for something that is not an error. Recorded here rather than passed
+over, so a reader comparing the ADR's wording with the implementation finds the reason.
+
 **Landing order with #746 — whichever lands second re-homes the field.** That slice targets
 `UNGATED_MAPPING_SCHEMA`/`STEP_MAPPINGS`, which this slice deletes. Concretely:
 
@@ -415,6 +441,37 @@ marks both explicitly so the asymmetry stays visible.
 and the translation-parity test (CLAUDE.md: no magic strings). Unchanged in kind from the superseded
 design's D-5; only the id set changes.
 
+**D-7 — On reconfigure, `notifications_available` is prefilled from a stored notify-target
+mapping.** UC12 1a requires `core`'s capability declarations to be shown "prefilled from the existing
+entry". For the three existing capabilities the stored flag *is* that prefill. `notifications_available`
+is new (D-1), so an entry that predates it has no value to prefill from — and rendering the field at
+its `False` form default would skip step 9 and, because the accumulator is never seeded and
+`_split_data` writes the whole data bucket, **silently drop a `notification_target_entity` that entry
+already stores**. That mapping is presented *ungated* by the flow this slice replaces, so real
+installations do hold it. UC12 1a's "declaring a capability absent drops that capability's mapping
+fields" describes a user's deliberate withdrawal, not a default-absent value on an entry that never
+saw the question.
+
+The fix is prefill, not a migration (ADR-0027 rules migrations out): the reconfigure render of `core`
+passes an augmented source, exactly as the previous model did for the transient election it derived
+from a stored mapping —
+
+```python
+self._maybe_prefill(
+    CORE_MAPPING_SCHEMA,
+    extra_from=lambda data: {
+        CONF_NOTIFICATIONS_AVAILABLE: data.get(
+            CONF_NOTIFICATIONS_AVAILABLE, bool(data.get(CONF_NOTIFICATION_TARGET_ENTITY))
+        )
+    },
+)
+```
+
+A stored flag always wins; the derivation applies only to an entry that lacks the key. This touches
+**reconfigure rendering only** — R18 AC9's default-absent still governs a fresh install, where there
+is no entry and no stored target, so a household that never engages with the question is still left
+un-notified. Pinned by a named test (plan T6).
+
 ---
 
 ## Forks
@@ -433,9 +490,12 @@ design's D-5; only the id set changes.
   `entity-catalog.md`.
 - **The branching mechanism** — ADR-0027's Decision (Option C, unchanged in mechanism).
 
-The three judgement calls that remained (D-2's requiredness, D-3's second error code, D-4's landing
-order) are implementation choices inside settled behaviour, not behavioural forks; each is recorded
-above with the source that constrains it and the alternative it declined.
+The four judgement calls that remained (D-2's requiredness, D-3's second error code, D-4's landing
+order, D-7's reconfigure prefill) are implementation choices inside settled behaviour, not
+behavioural forks; each is recorded above with the source that constrains it and the alternative it
+declined. D-7 is the one that only became visible on review: it is a *rendering* choice UC12 1a
+already mandates ("prefilled from the existing entry"), made concrete for a key no existing entry
+has — not a new default and not a migration.
 
 ---
 
@@ -466,8 +526,11 @@ fields it already owns, plus five keys it newly captures for consumers other sli
   (`_run_install_flow(hass, *, capabilities, per_step_input)` and friends) are re-cut for nine steps
   and four capabilities; `tests/helpers.py`'s `entry_data_base`/`entry_options_base` stay the
   fixtures for every non-flow module, so no other test file changes.
-- `tests/test_config_flow_translations.py` — **plain pytest** (it imports only `json`, `pathlib`,
-  `config_flow` and `const`), the correct boundary per ADR-0009 for a data-file parity check. Its
+- `tests/test_config_flow_translations.py` — **plain pytest**: it asserts only over JSON files and
+  the flow's own tables/fragments, needing no `hass` fixture, which is the correct ADR-0009 boundary
+  for a data-file parity check. (It does import `config_flow`, and so transitively
+  `homeassistant.*` — what puts it outside the harness is that it drives no HA runtime, not its
+  import graph.) Its
   `CONFIG_STEP_FIELDS`/`OPTIONS_STEP_FIELDS` maps are rebuilt from the new fragments; its module-level
   `assert set(CONFIG_STEP_FIELDS) == CONFIG_STEP_IDS` self-check keeps a step added to a table without
   a fields entry from passing vacuously.
@@ -519,6 +582,14 @@ require the mechanical re-citation pass described under Packaging.
   and CapTar-gating the peak-protection fields means an existing non-CapTar entry keeps stored values
   no flow can reach any more (UC12 5b) — dormant, and resumed exactly as stored if the capability is
   declared present again.
+- **An existing entry's stored notify-target mapping must not be dropped by the first reconfigure.**
+  `notification_target_entity` is presented **ungated** by the flow this slice replaces, so shipped
+  entries hold it; the new `notifications_available` flag is absent from all of them. Rendering that
+  declaration at its `False` default on reconfigure would skip step 9 and — the accumulator never
+  being seeded, `_split_data` writing the whole data bucket — silently discard the stored mapping.
+  D-7 handles this by prefilling the declaration from the stored mapping (rendering only; a fresh
+  install still defaults absent per R18 AC9), and the plan pins it with a named test. This is the
+  third data effect of the upgrade, alongside the two ADR-0027 attributes to UC12 above.
 - **Entries created before this change may lack fields a step now presents as required**
   (`ev_soc_entity` on a pre-guided entry, `notifications_available`). The reconfigure flow (UC12 1a)
   is the repair path; no automatic migration is introduced.
@@ -551,6 +622,14 @@ surface that is already fully specified. What is *outside* it, each with its own
 | `CONF_LOW_TARIFF_STATES` and the widened low-tariff selector | owned by the #746 slice (D-4); this slice only re-homes the field onto `grid` if that slice landed first | issue #746 |
 | Any change to the data/options boundary | ADR-0005 stands as written (ADR-0027: "ADR-0005's data/options boundary and ADR-0008's reload-on-change behaviour both stand exactly as written") | — |
 | Splitting the large `captar`/`solar` steps | ADR-0027, "What becomes harder": "splitting one later is an extra table row, but the decision of when to split is not made here" | a future issue, if ever |
+
+**Interim state of the three enable toggles, until the slices above land.** On a default
+(notifications-absent) install none of the three toggles is stored at all, so each resolves to its
+`True` default while no notification target is mapped. That is not a regression and needs no interim
+guard: `managers/notification_manager.py` already returns early when `ROLE_NOTIFICATION_TARGET` is
+absent from its adapter dict (`async_evaluate`: *"notification_target not mapped -- M3 stays
+inert"*, and the same check guards the unreachable-deadline notice), so M3 degrades silently rather
+than erroring each evening. The `notification_target` mapping is optional today for the same reason.
 
 **Safety caveat, stated out loud.** This slice moves a safety-relevant field group and a
 safety-relevant *gate*:
