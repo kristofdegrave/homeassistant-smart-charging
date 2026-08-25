@@ -15,6 +15,8 @@ from custom_components.smart_charging.config_flow import (
     DEADLINE_MAPPING_SCHEMA,
     EV_CHARGER_MAPPING_SCHEMA,
     GRID_MAPPING_SCHEMA,
+    NINE_STEP_CONFIG_TABLE,
+    NINE_STEP_OPTIONS_TABLE,
     NOTIFICATIONS_MAPPING_SCHEMA,
     OPTION_KEYS,
     OPTIONS_TABLE,
@@ -22,6 +24,7 @@ from custom_components.smart_charging.config_flow import (
     UNGATED_MAPPING_SCHEMA,
     VEHICLE_LIMIT_MAPPING_SCHEMA,
     VEHICLE_MAPPING_SCHEMA,
+    FlowMode,
     FlowStep,
     SmartChargingConfigFlow,
     SmartChargingOptionsFlow,
@@ -2558,8 +2561,39 @@ def test_adr0027_step_ids_are_uc12s_nine():
 # and async_step_reconfigure delegate into (T3), which is deliberately not a table row of its
 # own (design, "Step ids"). Omitting `core` here would make the converse test below fail the
 # moment T3 adds async_step_core, for a step that is correct by design, not a wiring bug.
-_CONFIG_FLOW_FRAMEWORK_STEPS = {"async_step_user", "async_step_reconfigure", "async_step_core"}
-_OPTIONS_FLOW_FRAMEWORK_STEPS = {"async_step_init"}
+#
+# T3 (topic-step config-flow plan) adds five further methods to each class
+# (grid/ev_charger/vehicle/power/notifications, plus async_step_core on the options flow --
+# see NINE_STEP_OPTIONS_TABLE's own "core IS a row" note) that exist but are reachable from
+# neither CONFIG_TABLE nor OPTIONS_TABLE yet -- both still point at the live ADR-0025 tables
+# until T4/T7's cut-over. Excluded here for the same reason `core` was excluded above: this
+# converse test would otherwise fail the moment T3 adds them, for methods that are correct
+# by design, not a wiring bug.
+#
+# Review finding: these entries are NOT permanent, unlike the true framework names above --
+# once T4/T7's cut-over points CONFIG_TABLE/OPTIONS_TABLE at NINE_STEP_CONFIG_TABLE/
+# NINE_STEP_OPTIONS_TABLE, every one of these six ids becomes a real table row and MUST be
+# removed from these sets, or this converse test silently stops covering it (the exact
+# wiring bug it exists to catch).
+_CONFIG_FLOW_FRAMEWORK_STEPS = {
+    "async_step_user",
+    "async_step_reconfigure",
+    "async_step_core",
+    f"async_step_{STEP_GRID}",
+    f"async_step_{STEP_EV_CHARGER}",
+    f"async_step_{STEP_VEHICLE}",
+    f"async_step_{STEP_POWER}",
+    f"async_step_{STEP_NOTIFICATIONS}",
+}
+_OPTIONS_FLOW_FRAMEWORK_STEPS = {
+    "async_step_init",
+    "async_step_core",
+    f"async_step_{STEP_GRID}",
+    f"async_step_{STEP_EV_CHARGER}",
+    f"async_step_{STEP_VEHICLE}",
+    f"async_step_{STEP_POWER}",
+    f"async_step_{STEP_NOTIFICATIONS}",
+}
 
 
 def _non_framework_step_methods(cls, framework: set[str]) -> set[str]:
@@ -2688,3 +2722,154 @@ async def test_adr0025_dispatcher_advances_past_a_failing_gate_and_finishes_when
     result = await flow._async_advance(after="not_a_table_member")
     assert result == "shown"
     assert calls == ["show_me"]
+
+
+# --- Topic-step plan T3: the two new (interim-named) tables and the five genuinely-new
+# step methods (ADR-0027 Decision, Option C unchanged in mechanism). NINE_STEP_CONFIG_TABLE/
+# NINE_STEP_OPTIONS_TABLE coexist with the still-live CONFIG_TABLE/OPTIONS_TABLE above --
+# nothing here is wired into async_step_user/async_step_reconfigure/async_step_init yet
+# (T4/T7's job), so every test below names the interim table explicitly.
+
+
+def test_uc12_config_table_is_uc12s_fixed_order_minus_the_core_entry_point():
+    """UC12 step table / ADR-0027 point 5: the nine-step model's eight table rows, captar
+    BEFORE solar; `core` is the shared entry point (ADR-0027 point 5) and deliberately not a
+    row. The expected order is spelled out here from const.py's STEP_* constants, not read
+    back from the table."""
+    assert [row.step_id for row in NINE_STEP_CONFIG_TABLE] == [
+        STEP_GRID,
+        STEP_EV_CHARGER,
+        STEP_VEHICLE,
+        STEP_POWER,
+        STEP_CAPTAR,
+        STEP_SOLAR,
+        STEP_DEADLINE,
+        STEP_NOTIFICATIONS,
+    ]
+
+
+def test_uc12_1b_options_table_is_all_nine_steps_including_core():
+    """UC12 1b / design "Options table": `core` IS a row here (unlike the config table) --
+    the options flow's own entry point, async_step_init, renders no form of its own."""
+    assert [row.step_id for row in NINE_STEP_OPTIONS_TABLE] == [
+        STEP_CORE,
+        STEP_GRID,
+        STEP_EV_CHARGER,
+        STEP_VEHICLE,
+        STEP_POWER,
+        STEP_CAPTAR,
+        STEP_SOLAR,
+        STEP_DEADLINE,
+        STEP_NOTIFICATIONS,
+    ]
+
+
+def test_adr0027_every_config_table_step_has_a_step_method():
+    """Renamed from test_adr0025_... (T12 does the rest of the re-citation pass). The named
+    discharge of Option C's stated Con: a row with no method is silently unreachable."""
+    for row in NINE_STEP_CONFIG_TABLE:
+        assert f"async_step_{row.step_id}" in vars(SmartChargingConfigFlow)
+
+
+def test_adr0027_every_options_table_step_has_a_step_method():
+    """Same obligation, for the options flow's own table (ADR-0027 point 4)."""
+    for row in NINE_STEP_OPTIONS_TABLE:
+        assert f"async_step_{row.step_id}" in vars(SmartChargingOptionsFlow)
+
+
+class _StubConfigFlow:
+    """UC12 1a / ADR-0027 point 3: a bare stand-in exposing exactly what NINE_STEP_CONFIG_
+    TABLE's gates read (`_answers`, `_mode`) -- no `hass` fixture needed to exercise gate
+    callables directly (plan T3, "table-shape assertions need no hass fixture")."""
+
+    def __init__(self, *, answers: dict, mode: FlowMode) -> None:
+        self._answers = answers
+        self._mode = mode
+
+
+def test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure():
+    """UC12 1a: neither has a mapping half, so both must be absent from the reconfigure walk
+    -- expressed as each row's own conjoined gate, not as a stop condition. Asserted with the
+    CapTar capability PRESENT, so the only reason `captar` is skipped is the conjoined
+    flow-mode half of its gate."""
+    power_gate = next(row for row in NINE_STEP_CONFIG_TABLE if row.step_id == STEP_POWER).gate
+    captar_gate = next(row for row in NINE_STEP_CONFIG_TABLE if row.step_id == STEP_CAPTAR).gate
+
+    reconfigure_flow = _StubConfigFlow(
+        answers={CONF_CAPTAR_AVAILABLE: True}, mode=FlowMode.RECONFIGURE
+    )
+    assert power_gate(reconfigure_flow) is False
+    assert captar_gate(reconfigure_flow) is False
+
+    install_flow = _StubConfigFlow(answers={CONF_CAPTAR_AVAILABLE: True}, mode=FlowMode.INSTALL)
+    assert power_gate(install_flow) is True
+    assert captar_gate(install_flow) is True
+
+
+def test_uc12_config_table_solar_deadline_notifications_gates_read_this_runs_own_answers():
+    """UC12 step table: each of the three plain capability gates (`solar`, `deadline`,
+    `notifications`) reads its OWN CONF_*_AVAILABLE answer, not any of the other two --
+    review finding: `test_adr0027_point3_...` above only exercises `power`/`captar`, so a
+    gate reading the wrong key (e.g. `notifications` reading CONF_DEADLINE_AVAILABLE) would
+    otherwise pass every test in this module."""
+    gates = {row.step_id: row.gate for row in NINE_STEP_CONFIG_TABLE}
+    install = FlowMode.INSTALL
+
+    only_solar = _StubConfigFlow(answers={CONF_SOLAR_AVAILABLE: True}, mode=install)
+    assert gates[STEP_SOLAR](only_solar) is True
+    assert gates[STEP_DEADLINE](only_solar) is False
+    assert gates[STEP_NOTIFICATIONS](only_solar) is False
+
+    only_deadline = _StubConfigFlow(answers={CONF_DEADLINE_AVAILABLE: True}, mode=install)
+    assert gates[STEP_SOLAR](only_deadline) is False
+    assert gates[STEP_DEADLINE](only_deadline) is True
+    assert gates[STEP_NOTIFICATIONS](only_deadline) is False
+
+    only_notifications = _StubConfigFlow(answers={CONF_NOTIFICATIONS_AVAILABLE: True}, mode=install)
+    assert gates[STEP_SOLAR](only_notifications) is False
+    assert gates[STEP_DEADLINE](only_notifications) is False
+    assert gates[STEP_NOTIFICATIONS](only_notifications) is True
+
+
+class _StubOptionsFlow:
+    """Bare stand-in for the gate callables in NINE_STEP_OPTIONS_TABLE, which read
+    `flow.config_entry.data` rather than `_answers`/`_mode`."""
+
+    def __init__(self, *, entry_data: dict) -> None:
+        self.config_entry = MockConfigEntry(domain=DOMAIN, data=entry_data, options={})
+
+
+def test_uc12_1b_options_gates_read_stored_flags_defensively():
+    """ADR-0027 point 4 + design "Step ids": every options gate is .get(key, DEFAULT_*), so an
+    entry predating notifications_available opens Configure without KeyError."""
+    stub = _StubOptionsFlow(entry_data={})  # predates every capability key
+    gates = {row.step_id: row.gate for row in NINE_STEP_OPTIONS_TABLE}
+
+    assert gates[STEP_CORE](stub) is True
+    assert gates[STEP_GRID](stub) is True
+    assert gates[STEP_EV_CHARGER](stub) is True
+    assert gates[STEP_VEHICLE](stub) is True
+    assert gates[STEP_POWER](stub) is True
+    # Defaults, absent-key read fallback (design D-1/D-5): captar True, solar False,
+    # deadline True, notifications False.
+    assert gates[STEP_CAPTAR](stub) is True
+    assert gates[STEP_SOLAR](stub) is False
+    assert gates[STEP_DEADLINE](stub) is True
+    assert gates[STEP_NOTIFICATIONS](stub) is False
+
+    # Review finding: the absent-key path alone can't distinguish "reads the stored flag"
+    # from "hardcoded to its default" -- a stub with every flag set to the INVERSE of its
+    # default closes that gap.
+    inverted = _StubOptionsFlow(
+        entry_data={
+            CONF_CAPTAR_AVAILABLE: False,
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_DEADLINE_AVAILABLE: False,
+            CONF_NOTIFICATIONS_AVAILABLE: True,
+        }
+    )
+    inverted_gates = {row.step_id: row.gate for row in NINE_STEP_OPTIONS_TABLE}
+    assert inverted_gates[STEP_CAPTAR](inverted) is False
+    assert inverted_gates[STEP_SOLAR](inverted) is True
+    assert inverted_gates[STEP_DEADLINE](inverted) is False
+    assert inverted_gates[STEP_NOTIFICATIONS](inverted) is True
