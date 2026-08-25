@@ -23,6 +23,7 @@ from .const import (
     CONF_CONNECTED_STATES,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEADLINE_AVAILABLE,
+    CONF_DEADLINE_NOTICE_ENABLED,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_DEPARTURE_EXTERNAL_ENTITY,
@@ -45,6 +46,8 @@ from .const import (
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
+    CONF_PLUG_IN_REMINDER_ENABLED,
+    CONF_POWER_COOLDOWN_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_REMINDER_LEAD_H,
     CONF_SAFETY_MARGIN_W,
@@ -58,6 +61,7 @@ from .const import (
     CONF_SOLAR_ONLY_MIDPOINT,
     CONF_SOLAR_ONLY_START_THRESHOLD_W,
     CONF_SOLAR_ONLY_STRATEGY,
+    CONF_SOLAR_POWER_ENTITY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_RESTART_DEBOUNCE_MIN,
     CONF_SOLAR_START_THRESHOLD_W,
@@ -70,6 +74,7 @@ from .const import (
     DEFAULT_CAPTAR_COOLDOWN_MIN,
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_DEADLINE_NOTICE_ENABLED,
     DEFAULT_DEFAULT_TARGET_CURRENT,
     DEFAULT_EV_BATTERY_CAPACITY_KWH,
     DEFAULT_EVENING_PROMPT_ENABLED,
@@ -83,6 +88,8 @@ from .const import (
     DEFAULT_NOMINAL_VOLTAGE,
     DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_PLUG_IN_REMINDER_ENABLED,
+    DEFAULT_POWER_COOLDOWN_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SAFETY_MARGIN_W,
@@ -155,6 +162,12 @@ OPTION_KEYS = (
     # flow its own table with a merge-not-replace terminal step (design, "The terminal step
     # and the bucket split"), so it round-trips through Configure+Save correctly.
     CONF_REMINDER_LEAD_H,
+    # T2 (topic-step config-flow design D-1): three new keys, deferred from T1 until a
+    # fragment actually carries each of them (_power_threshold_schema,
+    # _notifications_threshold_schema below).
+    CONF_POWER_COOLDOWN_MIN,
+    CONF_DEADLINE_NOTICE_ENABLED,
+    CONF_PLUG_IN_REMINDER_ENABLED,
 )
 
 
@@ -441,13 +454,35 @@ def _captar_mapping_schema(include_ev_soc: bool) -> vol.Schema:
 
 
 def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 step 4 threshold half."""
+    """UC12 step 4 threshold half (ADR-0025, live today) / topic-step step 6's CapTar-gated
+    threshold half (ADR-0027, T3/T4). Extended here (T2) with the five peak-protection fields
+    (UC12 5b, R18 AC5) -- they now sit in this fragment AND `_ungated_threshold_schema` at
+    once, which is intentional until T4 retires the latter (design, "Schema fragments"; plan
+    T2's own re-pointing note)."""
     d = defaults or {}
     return vol.Schema(
         {
             vol.Required(
                 CONF_CAPTAR_COOLDOWN_MIN,
                 default=d.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_POWER_RESPECT_PEAK,
+                default=d.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
+            ): bool,
+            vol.Required(
+                CONF_SAFETY_MARGIN_W,
+                default=d.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_PEAK_KW, default=d.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_PEAK_FLOOR_KW, default=d.get(CONF_PEAK_FLOOR_KW, DEFAULT_PEAK_FLOOR_KW)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_PEAK_GRACE_MIN,
+                default=d.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
             ): vol.Coerce(float),
         }
     )
@@ -456,6 +491,10 @@ def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
 DEADLINE_MAPPING_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_DEPARTURE_EXTERNAL_ENTITY): _entity("sensor"),
+        # T2 (topic-step config-flow design D-1/field-to-step table): the one ungated field a
+        # gated step carries (UC12 5c / R20 AC5's named carve-out). Sits in this fragment AND
+        # UNGATED_MAPPING_SCHEMA at once until T4 retires the latter.
+        vol.Optional(CONF_HOME_DAY_EXTERNAL_ENTITY): _entity(["binary_sensor", "input_boolean"]),
     }
 )
 
@@ -570,6 +609,196 @@ def _ungated_threshold_schema(
             )
         ] = vol.All(vol.Coerce(int), vol.Range(min=5))
     return vol.Schema(schema)
+
+
+# --- T2: the nine per-topic schema fragments (ADR-0027, Consequences: "The schema fragments
+# are re-cut along topic lines"; design "Schema fragments" table). Added alongside the
+# ADR-0025 fragments above, which still render the live flow until T4's cut-over -- nothing
+# below is wired into CONFIG_TABLE/OPTIONS_TABLE yet (T3/T4/T7). CORE_MAPPING_SCHEMA is the
+# one step whose mapping half is not re-cut here (still the four ADR-0025 core mappings + the
+# capability decisions); its topic-step form is T4's concern, so only its threshold half is
+# added here.
+
+
+def _core_threshold_schema(
+    defaults: dict | None = None, *, include_interval: bool = False
+) -> vol.Schema:
+    """UC12 step 1 threshold half: the smoothing window, plus the control interval on the
+    options flow only (UC12 1b; design, "Schema fragments"). `include_interval` migrates here
+    from `_ungated_threshold_schema` (design, "Schema fragments")."""
+    d = defaults or {}
+    schema: dict = {
+        vol.Required(
+            CONF_SMOOTHING_WINDOW,
+            default=d.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
+        ): vol.Coerce(int),
+    }
+    if include_interval:
+        schema[
+            vol.Required(
+                CONF_CONTROL_INTERVAL_S,
+                default=d.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S),
+            )
+        ] = vol.All(vol.Coerce(int), vol.Range(min=5))
+    return vol.Schema(schema)
+
+
+GRID_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
+        # Landing-order check (design D-4): #746 (CONF_LOW_TARIFF_STATES) had not landed on
+        # origin/main when this task ran, so this slice lands first -- this fragment carries
+        # CONF_LOW_TARIFF_ENTITY exactly as it exists today and nothing else. #746's own plan
+        # re-points its "add the field to UNGATED_MAPPING_SCHEMA" step at
+        # GRID_MAPPING_SCHEMA/STEP_GRID.
+        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+    }
+)
+
+
+def _grid_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 2 threshold half."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_NOMINAL_VOLTAGE,
+                default=d.get(CONF_NOMINAL_VOLTAGE, DEFAULT_NOMINAL_VOLTAGE),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_GRID_CEILING_A,
+                default=d.get(CONF_GRID_CEILING_A, DEFAULT_GRID_CEILING_A),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_GRID_SAFETY_OFFSET_A,
+                default=d.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
+            ): vol.Coerce(float),
+        }
+    )
+
+
+EV_CHARGER_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_CHARGER_CURRENT_ENTITY): _entity("number"),
+        vol.Required(CONF_CHARGER_STATUS_ENTITY): _entity(["sensor", "binary_sensor"]),
+        vol.Required(CONF_CONNECTED_STATES): str,
+        vol.Required(CONF_CHARGING_STATES): str,
+        vol.Required(CONF_CHARGER_POWER_ENTITY): _entity("sensor"),
+    }
+)
+
+
+def _ev_charger_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 3 threshold half."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, DEFAULT_MIN_CURRENT)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
+            ): vol.Coerce(float),
+        }
+    )
+
+
+VEHICLE_MAPPING_SCHEMA = vol.Schema(
+    {
+        # Required (design D-2, "Guards and required fields"): ADR-0027 point 1 makes this an
+        # unconditional vol.Required on the always-shown `vehicle` step -- the once-only
+        # cross-step guard (_ev_soc_missing_error) it replaces is deleted at T4.
+        vol.Required(CONF_EV_SOC_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_EV_BATTERY_CAPACITY_ENTITY): _entity("sensor"),
+        vol.Optional(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
+        # Optional here too (design D-2): the field-level car-at-home rule
+        # (_car_home_missing_error, UC12 4a) still fires on a filled-in charge limit or a
+        # present deadline capability -- that guard is wired to this step in T8.
+        vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
+    }
+)
+
+
+def _vehicle_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 4 threshold half."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_EV_BATTERY_CAPACITY_KWH,
+                default=d.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_DEFAULT_SOC_LIMIT,
+                default=d.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT),
+            ): vol.Coerce(float),
+        }
+    )
+
+
+def _power_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 5 threshold half -- threshold-only, no mapping half (design "Schema
+    fragments")."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_DEFAULT_TARGET_CURRENT,
+                default=d.get(CONF_DEFAULT_TARGET_CURRENT, DEFAULT_DEFAULT_TARGET_CURRENT),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_POWER_COOLDOWN_MIN,
+                default=d.get(CONF_POWER_COOLDOWN_MIN, DEFAULT_POWER_COOLDOWN_MIN),
+            ): vol.Coerce(float),
+        }
+    )
+
+
+SOLAR_MAPPING_SCHEMA = vol.Schema(
+    {
+        # New key (design D-1/D-2), optional -- nothing reads it yet (RA1's role construction
+        # is deferred, design Deferrals).
+        vol.Optional(CONF_SOLAR_POWER_ENTITY): _entity("sensor"),
+        # Required (design D-2, "Guards and required fields"): ADR-0027 point 1 makes this a
+        # plain vol.Required on the capability-gated `solar` step -- `_solar_forecast_missing_
+        # error` is deleted at T4.
+        vol.Required(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor"),
+    }
+)
+
+
+NOTIFICATIONS_MAPPING_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_NOTIFICATION_TARGET_ENTITY): _entity("notify"),
+    }
+)
+
+
+def _notifications_threshold_schema(defaults: dict | None = None) -> vol.Schema:
+    """UC12 step 9 threshold half: the three per-notification enable toggles (R18 AC11), each
+    defaulting on, plus the evening-prompt target mapping's own threshold pair."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_DEADLINE_NOTICE_ENABLED,
+                default=d.get(CONF_DEADLINE_NOTICE_ENABLED, DEFAULT_DEADLINE_NOTICE_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_PLUG_IN_REMINDER_ENABLED,
+                default=d.get(CONF_PLUG_IN_REMINDER_ENABLED, DEFAULT_PLUG_IN_REMINDER_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_EVENING_PROMPT_ENABLED,
+                default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_EVENING_PROMPT_TIME,
+                default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
+            ): selector.TimeSelector(),
+        }
+    )
 
 
 def _ev_soc_missing_error(user_input: dict) -> dict[str, str] | None:

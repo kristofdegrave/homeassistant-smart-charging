@@ -43,7 +43,12 @@
         "description": "Koppel de entiteiten die CapTar's piekbeperking gebruikt.",
         "data": {
           "ev_soc_entity": "EV-laadniveau-entiteit",
-          "captar_cooldown_min": "Afkoelduur Captar (min)"
+          "captar_cooldown_min": "Afkoelduur Captar (min)",
+          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
+          "max_peak_kw": "CapTar maximale piek (kW)",
+          "peak_floor_kw": "CapTar minimale piek (kW)",
+          "peak_grace_min": "CapTar respijtperiode piek (min)",
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
         }
       },
       "deadline": {
@@ -51,7 +56,8 @@
         "description": "Koppel de externe vertrektijd-entiteit die voor de deadline wordt gebruikt.",
         "data": {
           "departure_external_entity": "Externe vertrektijd-entiteit (optioneel)",
-          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)"
+          "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)",
+          "home_day_external_entity": "Externe thuisdag-entiteit (optioneel)"
         }
       },
       "vehicle_limit": {
@@ -128,7 +134,12 @@
         "title": "Drempelwaarden CapTar",
         "description": "Stel de afkoelduur van CapTar in.",
         "data": {
-          "captar_cooldown_min": "Afkoelduur Captar (min)"
+          "captar_cooldown_min": "Afkoelduur Captar (min)",
+          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
+          "max_peak_kw": "CapTar maximale piek (kW)",
+          "peak_floor_kw": "CapTar minimale piek (kW)",
+          "peak_grace_min": "CapTar respijtperiode piek (min)",
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
         }
       },
       "deadline": {
