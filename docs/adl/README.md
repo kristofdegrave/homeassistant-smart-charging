@@ -33,7 +33,7 @@ template.
 | [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion | Accepted |
 | [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Accepted |
-| [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow | Proposed |
+| [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow | Accepted |
 | [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.

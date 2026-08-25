@@ -1,7 +1,7 @@
 # ADR-0027: Table-driven linear step sequence for the nine-step, topic-grouped config flow
 
 Date: 2026-08-21
-Status: Proposed
+Status: Accepted
 
 ## Context
 
