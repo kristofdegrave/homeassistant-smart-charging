@@ -353,12 +353,15 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
 )
 
 
-# --- T3: the two new (interim-named) tables for the nine topic steps (ADR-0027 Decision,
-# Option C unchanged in mechanism). Named NINE_STEP_CONFIG_TABLE/NINE_STEP_OPTIONS_TABLE so
-# they can coexist with the still-live CONFIG_TABLE/OPTIONS_TABLE above -- T4 renames the
-# first to CONFIG_TABLE and T7 the second to OPTIONS_TABLE, each deleting the table it
-# replaces in the same commit (plan T3). Neither table is wired into `_table`/the framework
-# entry points yet, so the live flow is unchanged.
+# --- Topic-step plan T3 (docs/plans/2026-08-25-topic-step-config-flow.md -- not the
+# ADR-0025 guided-flow plan's own T3 above, which added a different pair of rows years
+# earlier in this file's history): the two new (interim-named) tables for the nine topic
+# steps (ADR-0027 Decision, Option C unchanged in mechanism). Named NINE_STEP_CONFIG_TABLE/
+# NINE_STEP_OPTIONS_TABLE so they can coexist with the still-live CONFIG_TABLE/
+# OPTIONS_TABLE above -- T4 renames the first to CONFIG_TABLE and T7 the second to
+# OPTIONS_TABLE, each deleting the table it replaces in the same commit (topic-step plan
+# T3). Neither table is wired into `_table`/the framework entry points yet, so the live
+# flow is unchanged.
 #
 # `core` is deliberately not a NINE_STEP_CONFIG_TABLE row: it is the shared install/
 # reconfigure entry point both async_step_user and async_step_reconfigure delegate into
@@ -1057,7 +1060,8 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_DEADLINE)
 
-    # --- T3: the five genuinely-new topic-step methods (ADR-0027 Consequences; plan T3).
+    # --- Topic-step plan T3: the five genuinely-new topic-step methods (ADR-0027
+    # Consequences).
     # None of these is reachable from CONFIG_TABLE yet -- `_table` still points at the live
     # seven-step table above, so the flow this integration ships today is unchanged. T4's
     # cut-over is what points `_table` at NINE_STEP_CONFIG_TABLE and makes these reachable.
@@ -1285,7 +1289,7 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_THRESHOLDS)
 
-    # --- T3: the five genuinely-new topic steps' threshold-only counterparts, plus
+    # --- Topic-step plan T3: the five genuinely-new topic steps' threshold-only counterparts, plus
     # `async_step_core` (design "Options table": `core` IS a NINE_STEP_OPTIONS_TABLE row,
     # unlike the config table -- the options flow's own entry point, async_step_init,
     # renders no form of its own, so this method must exist for that table's own
