@@ -402,20 +402,17 @@ Two fields in this slice's surface had no single citable answer across the exist
 each was raised as an explicit fork rather than resolved by guessing. One is decided and stands; the
 other was decided, implemented, and has since been reverted.
 
-**The evening prompt's timeout field — reverted (2026-08-24); the flow will present no such field
-once the code catches up.** This slice originally decided to present a `prompt_timeout_h` option, on
-the grounds that `entity-catalog.md` then carried a config-options row for it (default 2 h) and that
-UC12/R20 are the later authority over this flow's surface. It was implemented that way (T3/T10) even
-though nothing read the stored value — `docs/plans/2026-07-21-notifications-design.md` §3/§9 had
-deliberately not wired it, because UC08 has no separate timeout and midnight is the only answer
-deadline. **The human partner has since reverted that decision:** collecting a value no component
-consumes was judged a mistake, so the field is being removed from both the analysis documents and the
-code. This PR (#813) removes it from the analysis documents (catalog row, R18 AC10, the `capability`
-and `notifications capability` glossary entries, UC12's steps); the code/test removal — deleting
-`CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H` and the schema field they back — is tracked
-separately in #818. Until #818 merges, the constants and the field are still present in
-`const.py`/`config_flow.py`. Once both land, the earlier notifications-design decision stands
-unchanged.
+**The evening prompt's timeout field — reverted (2026-08-24); the flow presents no such field.**
+This slice originally decided to present a `prompt_timeout_h` option, on the grounds that
+`entity-catalog.md` then carried a config-options row for it (default 2 h) and that UC12/R20 are the
+later authority over this flow's surface. It was implemented that way (T3/T10) even though nothing
+read the stored value — `docs/plans/2026-07-21-notifications-design.md` §3/§9 had deliberately not
+wired it, because UC08 has no separate timeout and midnight is the only answer deadline. **The human
+partner has since reverted that decision:** collecting a value no component consumes was judged a
+mistake, so the field was removed from both the analysis documents (#813 — catalog row, R18 AC10,
+the `capability` and `notifications capability` glossary entries, UC12's steps) and the code (#818 —
+`CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H` and the schema field they backed). Both have
+merged; the earlier notifications-design decision stands unchanged.
 
 **The solar capability's default — form defaults `True`, constant stays `False`.** R18 AC1 and R20
 AC1 both say the capability declarations default to **present**; the glossary's `solar_available`

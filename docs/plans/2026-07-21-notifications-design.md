@@ -304,9 +304,9 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
    `project-plan.md` §1 (source doc wins over an anchor), UC08 was authoritative: this slice wires
    **no** timeout option and times the prompt out at midnight. The analysis-doc discrepancy this
    section flagged has since been resolved in UC08's favour (2026-08-24, #813) — the catalog row is
-   removed and no prompt timeout exists anywhere in the requirements, glossary, or catalog. The code
-   still presents `CONF_PROMPT_TIMEOUT_H` until the companion removal (#818) merges; once it does,
-   nothing will remain open here.
+   removed and no prompt timeout exists anywhere in the requirements, glossary, or catalog. The
+   companion code removal (#818) has since merged too, so `CONF_PROMPT_TIMEOUT_H` no longer exists
+   in `const.py`/`config_flow.py` either. Nothing remains open here.
 2. **Should the catalog's `input_*`/`sc_` helper-style ids eventually be renamed to match their
    `CONF_*` config-entry realization, or do the two naming layers stay intentionally distinct?**
    **Resolution:** by precedent, not invention — realize the tuning values as config-entry options

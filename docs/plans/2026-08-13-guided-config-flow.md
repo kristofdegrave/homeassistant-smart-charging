@@ -134,8 +134,7 @@ half), `test_uc12_step4_captar_fragments_*`, `test_uc12_step5_deadline_fragments
 The ungated-threshold fragment's expected key set is the design doc's fragment table verbatim, which
 now carries no prompt-timeout key — T1 itself never added one. T3 as originally executed later added
 one anyway (design doc's "Decisions on two forks" §1); the human partner has since reverted that
-(2026-08-24, #813), and `tests/test_config_flow.py` still asserts the key today, pending the code/test
-removal tracked in #818.
+(2026-08-24, #813/#818, both merged), and `tests/test_config_flow.py` no longer asserts the key.
 
 Plus two whole-surface tests that make an omission impossible to miss:
 
@@ -288,9 +287,8 @@ step-local guards exist.
 ungated threshold fragment and to `OPTION_KEYS`, overwriting the "deliberately NOT wired" comments
 this task's brief once preserved. The human partner has since reverted that decision (design doc's
 "Decisions on two forks" §1, #813); the code/test removal — deleting `CONF_PROMPT_TIMEOUT_H` /
-`DEFAULT_PROMPT_TIMEOUT_H`, the schema field, and the `const.py`/`config_flow.py` comments that
-currently describe it as "presented and stored too" — is tracked separately in #818. Until #818
-merges, those comments do not yet say "deliberately NOT wired" again.
+`DEFAULT_PROMPT_TIMEOUT_H`, the schema field, and restoring a comment naming why no such field is
+presented — has since landed too (#818, merged).
 
 Render step 1's solar decision with `default=True` (§2); add a comment
 naming the divergence between the *form* default (`True`, R20 AC1) and `DEFAULT_SOLAR_AVAILABLE`
@@ -536,8 +534,8 @@ harness.
 
 **Historical note (2026-08-24):** T10 as originally executed round-tripped `prompt_timeout_h`
 through the options bucket's own table alongside every other ungated threshold, since T3 had already
-added it to `OPTION_KEYS`. That field is reverted (#813); its round-trip removal is part of the
-companion code/test change tracked in #818, not a re-opening of this task.
+added it to `OPTION_KEYS`. That field is reverted (#813); its round-trip removal landed as part of
+the companion code/test change (#818, merged), not a re-opening of this task.
 
 **Step 1 — failing tests.**
 
@@ -691,8 +689,8 @@ conditional qualifiers. Write each shared `config.step.*` title/description to r
 **both** a first-install and an edit-my-mappings context — ADR-0025 names this as the accepted
 editorial cost of sharing the table. Add labels for the new fields (`deadline_available`,
 `vehicle_limit_mapped`, and `reminder_lead_h`) in `strings.json`, `en.json` and `nl.json`. T12 as
-originally executed also added a `prompt_timeout_h` label alongside these — that label is removed by
-the companion revert tracked in #818, not by this task.
+originally executed also added a `prompt_timeout_h` label alongside these — that label was removed
+by the companion revert (#818, merged), not by this task.
 
 **Verify + commit.**
 
@@ -761,9 +759,8 @@ Before the final push, confirm each of the following and record it in the PR bod
    superseded). Nothing else.
 7. The one fork the design doc raised that still stands (the solar form default) is reflected in the
    code exactly as the design doc's "Decisions on two forks" section states. The other fork
-   (`prompt_timeout_h`) was decided, implemented, and has since been reverted (2026-08-24, #813); this
-   item is satisfied once the companion code/test removal (#818) lands and no prompt-timeout field is
-   presented or stored on any path — not yet, as of this slice's original completion.
+   (`prompt_timeout_h`) was decided, implemented, and has since been reverted (2026-08-24, #813/#818,
+   both merged): not yet, as of this slice's original completion, but true as of the revert.
 
 ---
 
