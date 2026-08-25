@@ -1137,7 +1137,106 @@ async def test_reconfigure_still_runs_the_solar_steps_step_local_guard(hass):
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
 
+# --- Exception flows: domain mismatch and blank required fields (T9, UC12, R20 AC6). ---
+
+
+async def test_r20_ac6_wrong_domain_entity_is_rejected_on_the_step_that_presents_it(hass):
+    """UC12 exception flow 1 / R20 AC6: e.g. a `sensor` entity where charger_current_entity
+    requires a `number` domain -- the same step is re-shown, the flow does not advance, and no
+    later step is ever reached with an invalid earlier mapping in place. Proven here by
+    resubmitting a valid mapping afterwards and landing on the very next step, not a step
+    further along."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], GRID_INPUT)
+    assert result["step_id"] == STEP_EV_CHARGER
+
+    bad_input = {**EV_CHARGER_INPUT, CONF_CHARGER_CURRENT_ENTITY: "sensor.wrong_domain"}
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.flow.async_configure(result["flow_id"], bad_input)
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], EV_CHARGER_INPUT)
+    assert result["step_id"] == STEP_VEHICLE
+
+
+async def test_r20_ac6_blank_required_ev_soc_is_reported_on_the_vehicle_step(hass):
+    """R20 AC6 / ADR-0027 point 1: ev_soc_entity is now a plain vol.Required on the
+    always-shown `vehicle` step -- a blank submission surfaces as InvalidData from the flow
+    manager (a subclass of vol.Invalid), not as an end-of-flow error, and no entry is created."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    for step_id in (STEP_CORE, STEP_GRID, STEP_EV_CHARGER):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], _INSTALL_STEP_BASES[step_id]
+        )
+    assert result["step_id"] == STEP_VEHICLE
+
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
+async def test_r20_ac6_blank_required_solar_forecast_is_reported_on_the_solar_step(hass):
+    """R20 AC6 / ADR-0027 point 1: solar_forecast_entity is a plain vol.Required on the
+    capability-gated `solar` step -- a blank submission surfaces as InvalidData from the flow
+    manager, not as an end-of-flow error, and no entry is created."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    for step_id in (STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE, STEP_POWER):
+        submission = (
+            {**CORE_INPUT, CONF_SOLAR_AVAILABLE: True}
+            if step_id == STEP_CORE
+            else _INSTALL_STEP_BASES[step_id]
+        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+    assert result["step_id"] == STEP_SOLAR
+
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
 # --- Abandonment (UC12 exception flow 3 / R20 AC8). ---
+
+
+async def test_r20_ac8_abandoning_install_creates_no_entry(hass):
+    """UC12 exception flow 3 / R20 AC8, T9's own naming: closing the flow mid-walk creates no
+    entry -- the install-side counterpart to test_r20_ac8_abandoned_install_creates_no_entry."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_GRID
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    assert not hass.config_entries.async_entries(DOMAIN)
+    assert not hass.config_entries.flow.async_progress()
+
+
+async def test_r20_ac8_abandoning_reconfigure_leaves_the_entry_exactly_as_it_was(hass):
+    """R20 AC8, T9's own naming: closing a reconfigure flow mid-walk leaves both buckets
+    byte-for-byte as they were before the flow started."""
+    entry = await _create_entry(hass)
+    original_data = dict(entry.data)
+    original_options = dict(entry.options)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_GRID
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    assert dict(entry.data) == original_data
+    assert dict(entry.options) == original_options
 
 
 async def test_r20_ac8_abandoned_install_creates_no_entry(hass):
@@ -1343,6 +1442,26 @@ async def test_adr0008_options_change_reloads_the_entry(hass):
 
 
 async def test_r20_ac8_abandoned_options_flow_leaves_the_options_unchanged(hass):
+    entry = await _create_entry(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
+    original_options = dict(entry.options)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == STEP_SOLAR
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SOLAR_START_THRESHOLD_W: 999.0}
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == STEP_THRESHOLDS
+
+    hass.config_entries.options.async_abort(result["flow_id"])
+    assert dict(entry.options) == original_options
+
+
+async def test_r20_ac8_abandoning_options_leaves_the_options_bucket_exactly_as_it_was(hass):
+    """R20 AC8, T9's own naming: this test touches the OLD options path (OPTIONS_TABLE) --
+    T7 hasn't cut the options flow over to the nine-topic-step table at this branch point, so
+    it is exercised exactly as it behaves today. Byte-for-byte equality, not just a single
+    edited key, is what proves nothing else in the bucket moved either."""
     entry = await _create_entry(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
     original_options = dict(entry.options)
 
