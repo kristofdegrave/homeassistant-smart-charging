@@ -149,10 +149,12 @@ is needed: an entry that predates these keys reads each with its `DEFAULT_*` fal
 pattern the Captar slice established; the notify-target *data* field, being install-time, is validated
 in the flow rather than migrated.
 
-**Deliberately not wired: `input_number.sc_prompt_timeout_h` (catalog default 2 h).** UC08's own
-"Relationships" section states midnight is the *only* answer deadline and there is **no** separate
-configurable timeout. Source doc wins (§9 open question) — this slice does not wire a prompt-timeout
-option.
+**No prompt-timeout option is wired.** UC08's own "Relationships" section states midnight is the
+*only* answer deadline and there is **no** separate configurable timeout. This slice therefore wires
+no prompt-timeout option (§9). A later slice briefly reversed this and presented such a field in the
+config flow; the human partner has since reverted that reversal (2026-08-24, #813), and once the
+companion code removal (#818) lands the field will exist nowhere — so this section's original
+decision stands unchanged.
 
 ---
 
@@ -284,8 +286,8 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
   epic (#306, "Deadline & SOC Management"; implementation spec not yet written). R5-delivery is gated
   on the `DeadlineUnreachableNotified` event (§0/§9). This slice builds **no** departure-deadline
   resolver and **no** `departure_external` role.
-- **`Auto` profile / `sc_prompt_timeout_h` wiring** — the prompt-timeout catalog row is not wired
-  (§3/§9); midnight is the only deadline (UC08).
+- **`Auto` profile** — out of this slice. No prompt-timeout option is wired either (§3/§9); midnight
+  is the only deadline (UC08).
 - **Vehicle-limit sync (M2, UC09)** — a different Manager; no shared work here.
 - **Dashboard (C5, UC11), external-event Client wiring (C6)** — M3's action-event and tick wiring in
   this slice is the minimal in-Manager form; the formal C6 external-event-source Client is deferred.
@@ -297,13 +299,14 @@ Out of scope for this slice, each a later slice of `project-plan.md`:
 ## 9. Open questions / genuine gaps (flagged, not silently answered)
 
 1. **No prompt-timeout option is needed — settled, not open.** The entity-catalog "Reminders &
-   prompts" row lists a 2-hour `sc_prompt_timeout_h` (R13), but UC08's "Relationships" section states
-   midnight is the only answer deadline, with no separate configurable timeout. Per `project-plan.md`
-   §1 (source doc wins over an anchor), UC08 is authoritative: this slice wires **no** timeout option
-   and times the prompt out at midnight — that part is decided, not a gap. What remains genuinely open
-   is only the **analysis-doc discrepancy itself**: the catalog row and UC08 disagree with each other,
-   independent of what this slice builds, and should be reconciled via the write-requirement flow —
-   this design does not open that reconciliation.
+   prompts" group then listed a 2-hour `sc_prompt_timeout_h` row (R13), while UC08's "Relationships"
+   section stated midnight is the only answer deadline, with no separate configurable timeout. Per
+   `project-plan.md` §1 (source doc wins over an anchor), UC08 was authoritative: this slice wires
+   **no** timeout option and times the prompt out at midnight. The analysis-doc discrepancy this
+   section flagged has since been resolved in UC08's favour (2026-08-24, #813) — the catalog row is
+   removed and no prompt timeout exists anywhere in the requirements, glossary, or catalog. The code
+   still presents `CONF_PROMPT_TIMEOUT_H` until the companion removal (#818) merges; once it does,
+   nothing will remain open here.
 2. **Should the catalog's `input_*`/`sc_` helper-style ids eventually be renamed to match their
    `CONF_*` config-entry realization, or do the two naming layers stay intentionally distinct?**
    **Resolution:** by precedent, not invention — realize the tuning values as config-entry options

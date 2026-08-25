@@ -139,7 +139,7 @@ variants.
    `notifications` step, presenting the notification-target mapping, the three [per-notification
    enable toggles](../system-overview.md#ubiquitous-language) (R18 AC11) — one each for the
    unreachable-deadline notice (R5), the plug-in reminder (R12), and the evening home-day prompt
-   (R13) — and the evening home-day prompt's own time together with the prompt timeout (R13).
+   (R13) — and the evening home-day prompt's own time (R13).
    All three toggles are presented whatever the deadline capability declares, including
    `deadline_notice_enabled` and `plug_in_reminder_enabled`, whose notifications cannot fire at all
    without a departure deadline (R18 AC7): the toggles belong to the notification surface, gated by
@@ -199,7 +199,7 @@ threshold half of whichever gated steps the entry's already-declared capabilitie
 CapTar is available, `solar`'s thresholds
 when solar is installed, `deadline`'s reminder lead time when deadlines are managed, and
 `notifications`' three [per-notification enable
-toggles](../system-overview.md#ubiquitous-language), evening-prompt time, and prompt timeout when
+toggles](../system-overview.md#ubiquitous-language) and evening-prompt time when
 notifications are wanted.
 Submitting updates only the options bucket.
 
@@ -238,8 +238,8 @@ When the System advances past the `power` step
 Then the corresponding gated step (6, 7, 8, or 9 respectively) is skipped entirely and none of its
 fields is ever presented (R18 AC3, AC5, AC7, AC10; R14 AC1) — for the notifications capability,
 that is the notification-target mapping, the three [per-notification enable
-toggles](../system-overview.md#ubiquitous-language), the evening home-day prompt's time, and the
-prompt timeout, so a household that has not declared notifications wanted is never asked where to
+toggles](../system-overview.md#ubiquitous-language), and the evening home-day prompt's time,
+so a household that has not declared notifications wanted is never asked where to
 send them, nor which of the three notifications it wants.
 No ungated step is ever skipped: `core`, `grid`, `ev_charger`, `vehicle`, and `power` are shown on
 every install path, whatever the capability declarations.

@@ -243,7 +243,7 @@ re-submits its **stored** value rather than the module default.
 | `deadline` (UC12 5) | `DEADLINE_MAPPING_SCHEMA` — `departure_external_entity` (optional) | `_deadline_threshold_schema(defaults)` — `reminder_lead_h` | none |
 | `vehicle_limit` (UC12 6) | `VEHICLE_LIMIT_MAPPING_SCHEMA` — `vehicle_charge_limit_entity` (`vol.Required`), `car_home_entity` | — | `_car_home_missing_error` |
 | `mappings` (UC12 7) | `UNGATED_MAPPING_SCHEMA` — `grid_voltage_entity`, `low_tariff_entity`, `notification_target_entity`, `ev_battery_capacity_entity`, `home_day_external_entity` (all optional) | — | none |
-| `thresholds` (UC12 8) | — | `_ungated_threshold_schema(defaults, include_interval: bool)` — `nominal_voltage`, `min_current`, `max_current`, `grid_ceiling_a`, `grid_safety_offset_a`, `smoothing_window`, `default_soc_limit`, `default_target_current`, `safety_margin_w`, `max_peak_kw`, `peak_grace_min`, `ev_battery_capacity_kwh`, `power_respect_peak`, `evening_prompt_enabled`, `evening_prompt_time`, `prompt_timeout_h` (see "Decisions on two forks"), and `control_interval_s` **only when `include_interval`** (UC12 1b) | none |
+| `thresholds` (UC12 8) | — | `_ungated_threshold_schema(defaults, include_interval: bool)` — `nominal_voltage`, `min_current`, `max_current`, `grid_ceiling_a`, `grid_safety_offset_a`, `smoothing_window`, `default_soc_limit`, `default_target_current`, `safety_margin_w`, `max_peak_kw`, `peak_grace_min`, `ev_battery_capacity_kwh`, `power_respect_peak`, `evening_prompt_enabled`, `evening_prompt_time`, and `control_interval_s` **only when `include_interval`** (UC12 1b) | none |
 
 Every field above is placed by UC12's own step text; none is added or moved by this document. Note in
 particular that `grid_voltage_entity` moves from step 1's fragment to the ungated-mappings step (UC12
@@ -332,7 +332,7 @@ Per flow mode, `_async_finish` does:
 These are implementation choices inside already-settled behaviour — the only kind of decision this
 document is entitled to make. Each states the source that constrains it.
 
-**D-1 — New `const.py` constants.** UC12 presents three fields that have a row in
+**D-1 — New `const.py` constants.** UC12 presents two fields that have a row in
 `entity-catalog.md` but no constant in `const.py` today. Names and defaults are taken from the
 catalog, not invented:
 
@@ -342,8 +342,6 @@ catalog, not invented:
 | `DEFAULT_DEADLINE_AVAILABLE` | `True` | — | catalog "on (present)"; R18 AC6 "defaulting to present" |
 | `CONF_REMINDER_LEAD_H` | `"reminder_lead_h"` | options | catalog *Reminders & prompts*; R12; UC12 step 5 |
 | `DEFAULT_REMINDER_LEAD_H` | `8.0` | — | catalog default 8 h; R12 |
-| `CONF_PROMPT_TIMEOUT_H` | `"prompt_timeout_h"` | options | catalog *Reminders & prompts*; UC12 step 8 |
-| `DEFAULT_PROMPT_TIMEOUT_H` | `2.0` | — | catalog default 2 h |
 
 Four further `DEFAULT_*` constants are added at the same time — not because a field is new, but
 because four existing ungated thresholds are the only ones in `_threshold_schema()` whose fallback is
@@ -361,7 +359,7 @@ with no behavioural effect:
 | `DEFAULT_GRID_CEILING_A` | `25.0` | `d.get(CONF_GRID_CEILING_A, 25.0)` |
 | `DEFAULT_DEFAULT_TARGET_CURRENT` | `10.0` | `d.get(CONF_DEFAULT_TARGET_CURRENT, 10.0)` |
 
-`CONF_REMINDER_LEAD_H` and `CONF_PROMPT_TIMEOUT_H` are appended to `OPTION_KEYS`;
+`CONF_REMINDER_LEAD_H` is appended to `OPTION_KEYS`;
 `CONF_DEADLINE_AVAILABLE` needs no list membership, since `_split_data` is an exclusion filter and
 routes it to data automatically.
 
@@ -401,29 +399,23 @@ tables and the translation-parity test (CLAUDE.md: no magic strings).
 ## Decisions on two forks (settled by the human partner)
 
 Two fields in this slice's surface had no single citable answer across the existing docs/code, so
-each was raised as an explicit fork rather than resolved by guessing. Both are now decided.
+each was raised as an explicit fork rather than resolved by guessing. One is decided and stands; the
+other was decided, implemented, and has since been reverted.
 
-**The evening prompt's timeout field — present it.** UC12 step 8 lists "the evening home-day prompt
-fields (the evening prompt's enable flag, prompt time, **and timeout**)", and `entity-catalog.md`
-carries a `prompt_timeout_h` config-options row (default 2 h, R13). That same catalog row's **Read
-by** column is `—`, and `docs/plans/2026-07-21-notifications-design.md` §3/§9 deliberately did not
-wire it, because UC08 has no separate timeout (midnight is the only answer deadline) — a decision
-`config_flow.py` and `const.py` both carry an explicit comment about today. **Decision:** present it
-anyway. UC12/R20 are the later, approved authority over this flow's surface; the value is
-options-bucket data whose absent consumer is inert; and R20 AC5 carves out only values the flow
-*never presents on any path* (the control interval, the `Power`-mode cooldown) — not this one. Add
-`CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H`, place it on the ungated-threshold fragment,
-store it in options where nothing reads it yet (T3).
-
-*Consequences of reversing that earlier decision, named rather than left to rot:* the explicit
-"deliberately NOT wired" comments in `const.py` (above `CONF_EVENING_PROMPT_ENABLED`) and in
-`config_flow.py` (inside `_threshold_schema()`) become **false the moment T3 lands** and are
-rewritten there — the field is now presented and stored; what remains true is only that no component
-*reads* it yet. And `docs/plans/2026-07-21-notifications-design.md` §3/§9 keeps a cross-reference
-that is now stale in the other direction: it states the field is not wired into the config flow, and
-after this slice it is. That document is **out of scope** here (this slice edits no other plan doc),
-so the divergence is recorded as deliberate and named, not silently left inconsistent; correcting
-§3/§9 belongs to its own change.
+**The evening prompt's timeout field — reverted (2026-08-24); the flow will present no such field
+once the code catches up.** This slice originally decided to present a `prompt_timeout_h` option, on
+the grounds that `entity-catalog.md` then carried a config-options row for it (default 2 h) and that
+UC12/R20 are the later authority over this flow's surface. It was implemented that way (T3/T10) even
+though nothing read the stored value — `docs/plans/2026-07-21-notifications-design.md` §3/§9 had
+deliberately not wired it, because UC08 has no separate timeout and midnight is the only answer
+deadline. **The human partner has since reverted that decision:** collecting a value no component
+consumes was judged a mistake, so the field is being removed from both the analysis documents and the
+code. This PR (#813) removes it from the analysis documents (catalog row, R18 AC10, the `capability`
+and `notifications capability` glossary entries, UC12's steps); the code/test removal — deleting
+`CONF_PROMPT_TIMEOUT_H` / `DEFAULT_PROMPT_TIMEOUT_H` and the schema field they back — is tracked
+separately in #818. Until #818 merges, the constants and the field are still present in
+`const.py`/`config_flow.py`. Once both land, the earlier notifications-design decision stands
+unchanged.
 
 **The solar capability's default — form defaults `True`, constant stays `False`.** R18 AC1 and R20
 AC1 both say the capability declarations default to **present**; the glossary's `solar_available`

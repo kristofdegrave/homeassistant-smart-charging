@@ -92,8 +92,7 @@
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
-          "evening_prompt_time": "Tijdstip avondprompt thuisdag",
-          "prompt_timeout_h": "Time-out avondprompt thuisdag (u)"
+          "evening_prompt_time": "Tijdstip avondprompt thuisdag"
         }
       }
     },
@@ -158,7 +157,6 @@
           "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
           "evening_prompt_time": "Tijdstip avondprompt thuisdag",
-          "prompt_timeout_h": "Time-out avondprompt thuisdag (u)",
           "control_interval_s": "Regelinterval (s)"
         }
       }
