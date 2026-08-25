@@ -353,9 +353,8 @@ DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
 validates it is a `notify`-domain entity (rejecting a non-notify entity, mirroring the existing
 platform-validation guard); the three prompt fields (including the forecast threshold, UC08
 precondition 2, design §3) seed into **options** with their `DEFAULT_*`; the options flow round-trips
-edits to each; a pre-existing entry reads each with its `DEFAULT_*` (no migration). **Note:**
-`sc_prompt_timeout_h` is deliberately **not** added (design §3/§9 — UC08 has no separate timeout;
-source doc wins). **Step 3: Run** → FAIL.
+edits to each; a pre-existing entry reads each with its `DEFAULT_*` (no migration). **Note:** no
+prompt-timeout field is added (design §3/§9 — UC08 has no separate timeout; source doc wins). **Step 3: Run** → FAIL.
 **Step 4: Implement** — add the notify-target field to `MAPPING_SCHEMA` with `notify`-platform
 validation; add the three options fields to `OPTION_KEYS` + `_threshold_schema()`. **Step 5: Run** →
 PASS. **Step 6: Commit**
