@@ -100,7 +100,7 @@
       "required_when_solar_available": "Verplicht wanneer Zonne-energie is geïnstalleerd",
       "required_when_captar_available": "Verplicht wanneer CapTar beschikbaar is",
       "required_when_vehicle_limit_mapped": "Verplicht wanneer de laadlimiet-entiteit van het voertuig is gekoppeld",
-      "required_when_deadline_available": "Verplicht wanneer vertrektijden worden beheerd"
+      "required_when_deadline_available": "Verplicht wanneer vertrekdeadline bijhouden aan staat"
     }
   },
   "options": {

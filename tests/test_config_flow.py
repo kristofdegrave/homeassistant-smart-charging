@@ -2359,7 +2359,7 @@ def test_no_field_appears_in_two_fragments_except_ev_soc():
         seen |= _keys(fragment)
 
 
-# --- T1: the new constants (topic-step config flow, ADR-0027). ---
+# --- C4 T1: the new constants (topic-step config flow, ADR-0027). ---
 
 
 def test_d1_new_config_keys_match_the_entity_catalog():

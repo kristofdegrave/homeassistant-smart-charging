@@ -202,7 +202,8 @@ CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 # required only when CONF_SOLAR_AVAILABLE (R9 needs it) -- design doc §3
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 # optional, new key (topic-step config-flow design D-1/D-2) -- catalog *`Solar` mode*, the
-# solar_power adapter role; UC12 step 7. Role construction deferred to RA1 (design Deferrals).
+# solar_power adapter role (R10 smoothing, NF3 optional-role); UC12 step 7. Role construction
+# deferred to RA1 (design Deferrals).
 CONF_SOLAR_POWER_ENTITY = "solar_power_entity"
 # optional at the factory level (NF3) -- Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
@@ -322,7 +323,7 @@ DEFAULT_DEADLINE_AVAILABLE = True
 # R18 notifications capability, default absent AND absent-key read fallback -- both agree
 # (design D-1/D-5), unlike solar's form-vs-fallback split.
 DEFAULT_NOTIFICATIONS_AVAILABLE = False
-DEFAULT_POWER_COOLDOWN_MIN = 10.0  # minutes (design D-1, catalog default)
+DEFAULT_POWER_COOLDOWN_MIN = 10.0  # minutes (design D-1, catalog default; R11)
 DEFAULT_DEADLINE_NOTICE_ENABLED = True  # catalog "on" (design D-1; R18 AC11)
 DEFAULT_PLUG_IN_REMINDER_ENABLED = True  # catalog "on" (design D-1; R18 AC11)
 
