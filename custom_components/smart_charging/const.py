@@ -329,14 +329,10 @@ SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (si
 # Guided-config-flow step ids (ADR-0027, design D-6) -- shared by config_flow.py's two step
 # tables and the translation-parity test. Only `async_step_user`/`async_step_reconfigure`/
 # `async_step_init` are framework-imposed names (ADR-0027 point 5) and are not listed here.
-# `STEP_THRESHOLDS` is the one survivor of the retired ADR-0025 flat-model steps
-# (`STEP_VEHICLE_LIMIT`/`STEP_MAPPINGS` retired at T4): the options flow's own
-# `async_step_thresholds` still walks it until T7 re-cuts that table too (design, "Step ids").
 STEP_CORE = "core"  # UC12 step 1
 STEP_SOLAR = "solar"  # UC12 step 7
 STEP_CAPTAR = "captar"  # UC12 step 6
 STEP_DEADLINE = "deadline"  # UC12 step 8
-STEP_THRESHOLDS = "thresholds"  # options flow only (T7 retires this)
 STEP_GRID = "grid"  # UC12 step 2
 STEP_EV_CHARGER = "ev_charger"  # UC12 step 3
 STEP_VEHICLE = "vehicle"  # UC12 step 4

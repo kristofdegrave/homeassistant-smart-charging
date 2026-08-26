@@ -72,7 +72,9 @@ def _keys(schema) -> set[str]:
 
 # Step ids the config/options flows can show, discovered from the tables themselves --
 # `core` is the shared entry point both install and reconfigure delegate into (ADR-0027
-# point 5) and is deliberately not a CONFIG_TABLE row of its own (design, "Step ids").
+# point 5) and is deliberately not a CONFIG_TABLE row of its own (design, "Step ids"). Unlike
+# CONFIG_TABLE, `core` IS an OPTIONS_TABLE row (the options flow's own entry point,
+# async_step_init, renders no form of its own), so OPTIONS_STEP_IDS needs no such union.
 CONFIG_STEP_IDS = {row.step_id for row in cf.CONFIG_TABLE} | {cf.STEP_CORE}
 OPTIONS_STEP_IDS = {row.step_id for row in cf.OPTIONS_TABLE}
 
@@ -94,14 +96,19 @@ CONFIG_STEP_FIELDS = {
     ),
 }
 
-# The options flow's own steps are threshold-only (ADR-0025 point 3, no mapping fields, still
-# untouched by this task -- T7's concern); `thresholds` alone also asks the control interval
-# (UC12 1b's own carve-out).
+# The options flow's own steps are threshold-only (ADR-0027 point 4, no mapping fields); `core`
+# alone also asks the control interval (UC12 1b's own carve-out -- install/reconfigure never
+# ask it).
 OPTIONS_STEP_FIELDS = {
-    cf.STEP_SOLAR: _keys(cf._solar_threshold_schema()),
+    cf.STEP_CORE: _keys(cf._core_threshold_schema(include_interval=True)),
+    cf.STEP_GRID: _keys(cf._grid_threshold_schema()),
+    cf.STEP_EV_CHARGER: _keys(cf._ev_charger_threshold_schema()),
+    cf.STEP_VEHICLE: _keys(cf._vehicle_threshold_schema()),
+    cf.STEP_POWER: _keys(cf._power_threshold_schema()),
     cf.STEP_CAPTAR: _keys(cf._captar_threshold_schema()),
+    cf.STEP_SOLAR: _keys(cf._solar_threshold_schema()),
     cf.STEP_DEADLINE: _keys(cf._deadline_threshold_schema()),
-    cf.STEP_THRESHOLDS: _keys(cf._ungated_threshold_schema(include_interval=True)),
+    cf.STEP_NOTIFICATIONS: _keys(cf._notifications_threshold_schema()),
 }
 
 # Anti-vacuity guards (matching test_emitted_error_codes_is_non_empty's own rationale above):

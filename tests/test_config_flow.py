@@ -1,10 +1,12 @@
 """HA-harness config-flow tests (ADR-0005).
 
-T4 (topic-step config-flow plan, ADR-0027) cuts the install/reconfigure flow over from the
-seven-step ADR-0025 model to the nine topic steps; this file is rewritten accordingly. The
-options flow keeps walking its OLD table (untouched by this task -- T7's job), so its own
-tests below still drive it exactly as before.
+T4 (topic-step config-flow plan, ADR-0027) cut the install/reconfigure flow over from the
+seven-step ADR-0025 model to the nine topic steps. T7 completes the re-cut: the options flow
+now walks its own nine-topic-step OPTIONS_TABLE too (ADR-0027 point 4) -- threshold halves
+only, gated on the *stored* capability flags, and the sole presenter of the control interval.
 """
+
+import itertools
 
 import pytest
 import voluptuous as vol
@@ -19,7 +21,6 @@ from custom_components.smart_charging.config_flow import (
     DEADLINE_MAPPING_SCHEMA,
     EV_CHARGER_MAPPING_SCHEMA,
     GRID_MAPPING_SCHEMA,
-    NINE_STEP_OPTIONS_TABLE,
     NOTIFICATIONS_MAPPING_SCHEMA,
     OPTION_KEYS,
     OPTIONS_TABLE,
@@ -39,7 +40,6 @@ from custom_components.smart_charging.config_flow import (
     _power_threshold_schema,
     _solar_threshold_schema,
     _TableWalkMixin,
-    _ungated_threshold_schema,
     _vehicle_threshold_schema,
 )
 from custom_components.smart_charging.const import (
@@ -133,7 +133,6 @@ from custom_components.smart_charging.const import (
     STEP_NOTIFICATIONS,
     STEP_POWER,
     STEP_SOLAR,
-    STEP_THRESHOLDS,
     STEP_VEHICLE,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
@@ -266,12 +265,12 @@ async def _run_reconfigure_flow(hass, entry, *, capabilities=None, per_step_inpu
 
 
 async def _run_options_flow(hass, entry, *, per_step=None):
-    """Drive the options flow (still the OLD table, untouched by T4) across whichever steps
-    `OPTIONS_TABLE` shows for this entry's STORED capability flags. Unlike the install/
-    reconfigure drivers, the base submission for every step is empty: every threshold field is
-    `vol.Required(default=...)`, built fresh at render time from `self.config_entry.options`,
-    so an empty submission is exactly an unedited resubmission of the current stored value --
-    `per_step[<step id>]`'s overrides are the only values that actually change anything."""
+    """Drive the options flow across whichever steps `OPTIONS_TABLE` shows for this entry's
+    STORED capability flags (ADR-0027 point 4). Unlike the install/reconfigure drivers, the
+    base submission for every step is empty: every threshold field is `vol.Required(default=
+    ...)`, built fresh at render time from `self.config_entry.options`, so an empty submission
+    is exactly an unedited resubmission of the current stored value -- `per_step[<step id>]`'s
+    overrides are the only values that actually change anything."""
     overrides = per_step or {}
     consumed_overrides: set[str] = set()
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -290,15 +289,6 @@ async def _run_options_flow(hass, entry, *, per_step=None):
         "rendered this run (a capability answer this test relies on may be missing/typo'd)"
     )
     return result
-
-
-def _current_options(entry):
-    """`entry.options` filtered to the options flow's `thresholds` step's own schema keys --
-    valid only against that step. The install flow's `power` step now always stores
-    `power_cooldown_min` (T4), so a raw `dict(entry.options)` resubmission to `thresholds`
-    (which doesn't own that key) would be rejected as an unknown key."""
-    keys = _keys(_ungated_threshold_schema(include_interval=True))
-    return {k: v for k, v in entry.options.items() if k in keys}
 
 
 def _keys(schema) -> set[str]:
@@ -1203,7 +1193,158 @@ async def test_adr0027_accumulator_starts_empty_on_a_second_run(hass):
     assert CONF_SOLAR_START_THRESHOLD_W not in entry.options
 
 
-# --- The options flow: untouched by this task, still walks its OLD table. ---
+# --- The options flow: T7's own nine-topic-step OPTIONS_TABLE (UC12 1b, ADR-0027 point 4). ---
+
+
+async def test_uc12_1b_options_walks_all_five_ungated_steps_plus_declared_gated_ones(hass):
+    """UC12 1b / R20 AC2: every capability declared present -> the options flow walks all
+    nine steps, in UC12's fixed order (captar before solar) -- the same order CONFIG_TABLE
+    uses, prefixed by the shared `core` entry point."""
+    entry = await _create_entry(
+        hass,
+        capabilities=_ALL_CAPABILITIES_TRUE,
+        per_step_input={STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}},
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    visited = [result["step_id"]]
+    while result["type"] == FlowResultType.FORM:
+        step_id = result["step_id"]
+        if visited.count(step_id) > 1:
+            pytest.fail(f"step {step_id!r} re-shown twice; visited so far: {visited}")
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+        if result["type"] == FlowResultType.FORM:
+            visited.append(result["step_id"])
+
+    assert visited == [STEP_CORE, *UC12_FIXED_STEP_ORDER]
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_uc12_1b_control_interval_is_presented_on_the_options_core_step_only(hass):
+    """UC12 1b: install defaults it, reconfigure touches no options -- the options flow is
+    the only path that presents it. Assert its absence on both other flows too. The install
+    check must run BEFORE any entry exists (single-instance-allowed aborts a second one)."""
+    install_result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert install_result["step_id"] == STEP_CORE
+    assert CONF_CONTROL_INTERVAL_S not in _keys(install_result["data_schema"])
+    hass.config_entries.flow.async_abort(install_result["flow_id"])
+
+    entry = await _create_entry(hass)
+
+    options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert options_result["step_id"] == STEP_CORE
+    assert CONF_CONTROL_INTERVAL_S in _keys(options_result["data_schema"])
+
+    reconfigure_result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert reconfigure_result["step_id"] == STEP_CORE
+    assert CONF_CONTROL_INTERVAL_S not in _keys(reconfigure_result["data_schema"])
+    hass.config_entries.flow.async_abort(reconfigure_result["flow_id"])
+
+
+async def test_uc12_1b_options_never_presents_a_mapping_or_a_capability_declaration(hass):
+    """R20 AC7 / ADR-0027 point 4: the options flow's own table is threshold halves only --
+    no step it can show ever renders a mapping field or a capability declaration."""
+    mapping_fields = {k for frag in _ALL_MAPPING_FRAGMENTS for k in _keys(frag)}
+    capability_fields = {
+        CONF_SOLAR_AVAILABLE,
+        CONF_CAPTAR_AVAILABLE,
+        CONF_DEADLINE_AVAILABLE,
+        CONF_NOTIFICATIONS_AVAILABLE,
+    }
+
+    entry = await _create_entry(
+        hass,
+        capabilities=_ALL_CAPABILITIES_TRUE,
+        per_step_input={STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}},
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    while result["type"] == FlowResultType.FORM:
+        rendered = _keys(result["data_schema"])
+        assert not (rendered & mapping_fields), f"{result['step_id']} renders a mapping field"
+        assert not (rendered & capability_fields), (
+            f"{result['step_id']} renders a capability declaration"
+        )
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+_ALL_SIXTEEN = list(itertools.product([False, True], repeat=4))
+
+
+@pytest.mark.parametrize("solar,captar,deadline,notifications", _ALL_SIXTEEN)
+async def test_r20_ac2_options_traverses_exactly_the_stored_capabilities_steps(
+    hass, solar, captar, deadline, notifications
+):
+    """R20 AC2: the options flow walks the five ungated steps plus exactly the gated steps
+    whose capability is STORED present, in UC12's fixed order (captar before solar) --
+    all sixteen combinations of the four capability flags."""
+    per_step_input = {}
+    if deadline:
+        # D-3's vehicle-step guard: a present deadline capability requires car_home_entity
+        # on install, independent of this test's own concern.
+        per_step_input[STEP_VEHICLE] = {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}
+    entry = await _create_entry(
+        hass,
+        capabilities={
+            CONF_SOLAR_AVAILABLE: solar,
+            CONF_CAPTAR_AVAILABLE: captar,
+            CONF_DEADLINE_AVAILABLE: deadline,
+            CONF_NOTIFICATIONS_AVAILABLE: notifications,
+        },
+        per_step_input=per_step_input or None,
+    )
+    expected = [STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE, STEP_POWER]
+    if captar:
+        expected.append(STEP_CAPTAR)
+    if solar:
+        expected.append(STEP_SOLAR)
+    if deadline:
+        expected.append(STEP_DEADLINE)
+    if notifications:
+        expected.append(STEP_NOTIFICATIONS)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    visited = [result["step_id"]]
+    while result["type"] == FlowResultType.FORM:
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+        if result["type"] == FlowResultType.FORM:
+            visited.append(result["step_id"])
+
+    assert visited == expected
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_uc12_1b_options_gate_on_an_entry_predating_notifications_available(hass):
+    """Design 'Step ids': a MockConfigEntry whose data has no notifications_available key
+    (nor solar/captar/deadline_available -- every options gate's own absent-key fallback,
+    D-1) opens Configure without KeyError and skips step 9."""
+    data = entry_data_base()
+    assert CONF_SOLAR_AVAILABLE not in data
+    assert CONF_CAPTAR_AVAILABLE not in data
+    assert CONF_DEADLINE_AVAILABLE not in data
+    assert CONF_NOTIFICATIONS_AVAILABLE not in data
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    for step_id in (STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE, STEP_POWER):
+        assert result["step_id"] == step_id
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    # captar_available absent -> DEFAULT_CAPTAR_AVAILABLE True -> shown.
+    assert result["step_id"] == STEP_CAPTAR
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    # solar_available absent -> DEFAULT_SOLAR_AVAILABLE False -> skipped;
+    # deadline_available absent -> DEFAULT_DEADLINE_AVAILABLE True -> shown.
+    assert result["step_id"] == STEP_DEADLINE
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    # notifications_available absent -> DEFAULT_NOTIFICATIONS_AVAILABLE False -> skipped,
+    # so this finishes without KeyError.
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
 
 
 async def test_options_flow_round_trip_updates_options_not_data(hass):
@@ -1211,23 +1352,16 @@ async def test_options_flow_round_trip_updates_options_not_data(hass):
     entry = await _create_entry(hass)
     original_data = dict(entry.data)
 
-    options_result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert options_result["type"] == FlowResultType.FORM
-
-    new_options = {
-        "nominal_voltage": 230.0,
-        "min_current": 6.0,
-        "max_current": 16.0,
-        CONF_GRID_CEILING_A: 25.0,
-        CONF_GRID_SAFETY_OFFSET_A: 3.5,
-        "default_target_current": 10.0,
-        CONF_CONTROL_INTERVAL_S: 15,
-    }
-    options_result = await hass.config_entries.options.async_configure(
-        options_result["flow_id"], new_options
+    result = await _run_options_flow(
+        hass,
+        entry,
+        per_step={
+            STEP_CORE: {CONF_CONTROL_INTERVAL_S: 15},
+            STEP_GRID: {CONF_GRID_SAFETY_OFFSET_A: 3.5},
+        },
     )
     await hass.async_block_till_done()
-    assert options_result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_GRID_SAFETY_OFFSET_A] == 3.5
     assert entry.options[CONF_CONTROL_INTERVAL_S] == 15
     assert dict(entry.data) == original_data
@@ -1241,18 +1375,14 @@ async def test_options_flow_rejects_a_data_key(hass):
         domain=DOMAIN,
         data={CONF_CHARGER_CURRENT_ENTITY: "number.charger_current", CONF_STATUS_TRANSLATION: {}},
         options={
-            "nominal_voltage": 230.0,
-            "min_current": 6.0,
-            "max_current": 16.0,
-            CONF_GRID_CEILING_A: 25.0,
-            CONF_GRID_SAFETY_OFFSET_A: 2.0,
-            "default_target_current": 10.0,
+            CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW,
             CONF_CONTROL_INTERVAL_S: DEFAULT_CONTROL_INTERVAL_S,
         },
     )
     entry.add_to_hass(hass)
 
     options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert options_result["step_id"] == STEP_CORE
     tampered_options = dict(entry.options)
     tampered_options[CONF_CHARGER_CURRENT_ENTITY] = "number.some_other_charger"
 
@@ -1274,16 +1404,47 @@ async def test_options_flow_edits_solar_thresholds(hass):
 
 
 async def test_options_flow_edits_peak_protection_thresholds(hass):
-    entry = await _create_entry(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {**_current_options(entry), CONF_MAX_PEAK_KW: 5.0}
-    )
+    entry = await _create_entry(hass, capabilities={CONF_CAPTAR_AVAILABLE: True})
+    result = await _run_options_flow(hass, entry, per_step={STEP_CAPTAR: {CONF_MAX_PEAK_KW: 5.0}})
     await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_MAX_PEAK_KW] == 5.0
 
 
-async def test_r20_ac7_options_save_preserves_a_withdrawn_capabilitys_stored_thresholds(hass):
+async def test_r20_ac3_captar_absent_options_save_does_not_reintroduce_peak_protection_keys(hass):
+    """Issue #830's second note: while the options flow still walked the pre-T7 always-shown
+    `thresholds` step, a CapTar-absent install's peak-protection keys got re-introduced at
+    module defaults the first time Configure was opened and saved. Now that `captar` is a
+    gated OPTIONS_TABLE row, a CapTar-absent Configure+Save must not write any of them."""
+    entry = await _create_entry(hass)  # captar_available False (CORE_INPUT default)
+    for key in (
+        CONF_CAPTAR_COOLDOWN_MIN,
+        CONF_POWER_RESPECT_PEAK,
+        CONF_SAFETY_MARGIN_W,
+        CONF_MAX_PEAK_KW,
+        CONF_PEAK_FLOOR_KW,
+        CONF_PEAK_GRACE_MIN,
+    ):
+        assert key not in entry.options
+
+    result = await _run_options_flow(hass, entry)
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+    for key in (
+        CONF_CAPTAR_COOLDOWN_MIN,
+        CONF_POWER_RESPECT_PEAK,
+        CONF_SAFETY_MARGIN_W,
+        CONF_MAX_PEAK_KW,
+        CONF_PEAK_FLOOR_KW,
+        CONF_PEAK_GRACE_MIN,
+    ):
+        assert key not in entry.options
+
+
+async def test_r20_ac7_options_merges_into_stored_options_never_replaces_them(hass):
+    """A capability withdrawn through reconfigure leaves its thresholds in options; the next
+    Configure+Save must not delete them."""
     entry = await _create_entry(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
     await _run_options_flow(
         hass, entry, per_step={STEP_SOLAR: {CONF_SOLAR_START_THRESHOLD_W: 321.0}}
@@ -1303,23 +1464,20 @@ async def test_r20_ac7_options_save_preserves_a_withdrawn_capabilitys_stored_thr
     assert entry.options[CONF_SOLAR_START_THRESHOLD_W] == 321.0
 
 
-async def test_uc12_1b_options_flow_opens_on_an_entry_predating_deadline_available(hass):
-    data = entry_data_base()
-    assert CONF_DEADLINE_AVAILABLE not in data
-    assert CONF_SOLAR_AVAILABLE not in data
-    assert CONF_CAPTAR_AVAILABLE not in data
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
-    entry.add_to_hass(hass)
+async def test_r18_ac11_options_can_toggle_one_notification_off_without_touching_the_others(hass):
+    entry = await _create_entry(hass, capabilities={CONF_NOTIFICATIONS_AVAILABLE: True})
+    assert entry.options[CONF_DEADLINE_NOTICE_ENABLED] is True
+    assert entry.options[CONF_PLUG_IN_REMINDER_ENABLED] is True
+    assert entry.options[CONF_EVENING_PROMPT_ENABLED] is True
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["step_id"] == STEP_CAPTAR
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
-    assert result["step_id"] == STEP_DEADLINE
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
-    assert result["step_id"] == STEP_THRESHOLDS
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+    result = await _run_options_flow(
+        hass, entry, per_step={STEP_NOTIFICATIONS: {CONF_DEADLINE_NOTICE_ENABLED: False}}
+    )
     await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_DEADLINE_NOTICE_ENABLED] is False
+    assert entry.options[CONF_PLUG_IN_REMINDER_ENABLED] is True
+    assert entry.options[CONF_EVENING_PROMPT_ENABLED] is True
 
 
 async def test_adr0008_options_change_reloads_the_entry(hass):
@@ -1331,9 +1489,8 @@ async def test_adr0008_options_change_reloads_the_entry(hass):
 
     original_coordinator = entry.runtime_data.coordinator
 
-    result = await _run_options_flow(
-        hass, entry, per_step={STEP_THRESHOLDS: {CONF_MAX_PEAK_KW: 7.0}}
-    )
+    # captar_available absent -> DEFAULT_CAPTAR_AVAILABLE True -> STEP_CAPTAR is reachable.
+    result = await _run_options_flow(hass, entry, per_step={STEP_CAPTAR: {CONF_MAX_PEAK_KW: 7.0}})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 
@@ -1343,16 +1500,24 @@ async def test_adr0008_options_change_reloads_the_entry(hass):
 
 
 async def test_r20_ac8_abandoned_options_flow_leaves_the_options_unchanged(hass):
-    entry = await _create_entry(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
+    entry = await _create_entry(
+        hass,
+        capabilities={CONF_SOLAR_AVAILABLE: True, CONF_DEADLINE_AVAILABLE: True},
+        # D-3's vehicle-step guard: a present deadline capability requires car_home_entity.
+        per_step_input={STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}},
+    )
     original_options = dict(entry.options)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    for step_id in (STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE, STEP_POWER):
+        assert result["step_id"] == step_id
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["step_id"] == STEP_SOLAR
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_SOLAR_START_THRESHOLD_W: 999.0}
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == STEP_THRESHOLDS
+    assert result["step_id"] == STEP_DEADLINE
 
     hass.config_entries.options.async_abort(result["flow_id"])
     assert dict(entry.options) == original_options
@@ -1570,19 +1735,12 @@ _CONFIG_FLOW_FRAMEWORK_STEPS = {
     "async_step_reconfigure",
     "async_step_core",
 }
+# Unlike CONFIG_TABLE, `core` IS an OPTIONS_TABLE row (design "Options table": the options
+# flow's own entry point, async_step_init, renders no form of its own) -- so, unlike
+# `_CONFIG_FLOW_FRAMEWORK_STEPS`, `async_step_core` does NOT need excluding here: it is a
+# genuine table member and the converse test below passes it on that basis.
 _OPTIONS_FLOW_FRAMEWORK_STEPS = {
     "async_step_init",
-    # `async_step_core`/`grid`/`ev_charger`/`vehicle`/`power`/`notifications` exist on
-    # SmartChargingOptionsFlow (topic-step plan T3) but are unreachable from OPTIONS_TABLE
-    # until T7 re-cuts that table too -- excluded here for the same reason `core` is excluded
-    # above: this converse test would otherwise fail for methods that are correct by design,
-    # not a wiring bug.
-    "async_step_core",
-    f"async_step_{STEP_GRID}",
-    f"async_step_{STEP_EV_CHARGER}",
-    f"async_step_{STEP_VEHICLE}",
-    f"async_step_{STEP_POWER}",
-    f"async_step_{STEP_NOTIFICATIONS}",
 }
 
 
@@ -1610,10 +1768,8 @@ def test_every_options_table_step_has_a_step_method():
         assert f"async_step_{row.step_id}" in vars(SmartChargingOptionsFlow)
 
 
-def test_every_options_step_method_is_in_the_table_or_is_t3s_not_yet_wired_set():
-    """The converse: a step method absent from OPTIONS_TABLE *and* from the T3-added,
-    not-yet-wired set (`core`/`grid`/`ev_charger`/`vehicle`/`power`/`notifications` -- T7's
-    own cut-over) is unreachable and nothing raises."""
+def test_every_options_step_method_is_in_the_table():
+    """The converse: a step method absent from the table is unreachable and nothing raises."""
     table_step_ids = {row.step_id for row in OPTIONS_TABLE}
     for name in _non_framework_step_methods(
         SmartChargingOptionsFlow, _OPTIONS_FLOW_FRAMEWORK_STEPS
@@ -1637,30 +1793,11 @@ def test_uc12_config_table_is_uc12s_fixed_order_minus_the_core_entry_point():
     assert list(UC12_FIXED_STEP_ORDER) == [row.step_id for row in CONFIG_TABLE]
 
 
-def test_uc12_1b_options_table_is_in_uc12s_fixed_order():
-    """The options flow's own table is untouched by this task -- still the four ADR-0025 rows."""
-    assert [row.step_id for row in OPTIONS_TABLE] == [
-        STEP_SOLAR,
-        STEP_CAPTAR,
-        STEP_DEADLINE,
-        STEP_THRESHOLDS,
-    ]
-
-
-def test_uc12_1b_nine_step_options_table_survives_unwired_until_t7():
-    """NINE_STEP_OPTIONS_TABLE is dead code until T7's own cut-over -- this task does not
-    touch it, only asserts it still exists with its own nine-step shape."""
-    assert [row.step_id for row in NINE_STEP_OPTIONS_TABLE] == [
-        STEP_CORE,
-        STEP_GRID,
-        STEP_EV_CHARGER,
-        STEP_VEHICLE,
-        STEP_POWER,
-        STEP_CAPTAR,
-        STEP_SOLAR,
-        STEP_DEADLINE,
-        STEP_NOTIFICATIONS,
-    ]
+def test_uc12_1b_options_table_is_uc12s_fixed_order_plus_the_core_row():
+    """T7's own cut-over (design "Options table"): the options flow's own nine-topic-step
+    table -- `core` prefixed onto UC12's fixed eight-row order, unlike CONFIG_TABLE where
+    `core` is the shared entry point rather than a row of its own."""
+    assert [row.step_id for row in OPTIONS_TABLE] == [STEP_CORE, *UC12_FIXED_STEP_ORDER]
 
 
 async def test_dispatcher_advances_past_a_failing_gate_and_finishes_when_exhausted():

@@ -118,6 +118,59 @@
   },
   "options": {
     "step": {
+      "core": {
+        "title": "Core settings",
+        "description": "Tune the smoothing window and the control interval.",
+        "data": {
+          "smoothing_window": "Smoothing window (samples)",
+          "control_interval_s": "Control interval (s)"
+        }
+      },
+      "grid": {
+        "title": "Grid thresholds",
+        "description": "Tune your grid connection's thresholds.",
+        "data": {
+          "nominal_voltage": "Nominal grid voltage (V)",
+          "grid_ceiling_a": "Grid ceiling (A)",
+          "grid_safety_offset_a": "Grid safety offset (A)"
+        }
+      },
+      "ev_charger": {
+        "title": "EV charger thresholds",
+        "description": "Tune your charger's current limits.",
+        "data": {
+          "min_current": "Minimum charging current (A)",
+          "max_current": "Maximum charging current (A)"
+        }
+      },
+      "vehicle": {
+        "title": "Vehicle thresholds",
+        "description": "Tune your vehicle's battery and charge-limit defaults.",
+        "data": {
+          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
+          "default_soc_limit": "Default charge limit (%)"
+        }
+      },
+      "power": {
+        "title": "Power mode",
+        "description": "Tune Power mode's defaults.",
+        "data": {
+          "default_target_current": "Default target current (A)",
+          "power_cooldown_min": "Power mode cooldown duration (min)"
+        }
+      },
+      "captar": {
+        "title": "CapTar thresholds",
+        "description": "Tune CapTar's cooldown.",
+        "data": {
+          "captar_cooldown_min": "Captar cooldown duration (min)",
+          "safety_margin_w": "CapTar peak safety margin (W)",
+          "max_peak_kw": "CapTar maximum peak (kW)",
+          "peak_floor_kw": "CapTar peak floor (kW)",
+          "peak_grace_min": "CapTar peak grace period (min)",
+          "power_respect_peak": "Power mode respects the peak limit"
+        }
+      },
       "solar": {
         "title": "Solar thresholds",
         "description": "Tune Solar mode's thresholds.",
@@ -137,18 +190,6 @@
           "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
         }
       },
-      "captar": {
-        "title": "CapTar thresholds",
-        "description": "Tune CapTar's cooldown.",
-        "data": {
-          "captar_cooldown_min": "Captar cooldown duration (min)",
-          "safety_margin_w": "CapTar peak safety margin (W)",
-          "max_peak_kw": "CapTar maximum peak (kW)",
-          "peak_floor_kw": "CapTar peak floor (kW)",
-          "peak_grace_min": "CapTar peak grace period (min)",
-          "power_respect_peak": "Power mode respects the peak limit"
-        }
-      },
       "deadline": {
         "title": "Deadline settings",
         "description": "Tune the plug-in reminder lead time.",
@@ -156,27 +197,14 @@
           "reminder_lead_h": "Plug-in reminder lead time (h)"
         }
       },
-      "thresholds": {
-        "title": "Thresholds and defaults",
-        "description": "Tune the remaining thresholds, defaults, and the control interval.",
+      "notifications": {
+        "title": "Notifications",
+        "description": "Choose which notifications to send.",
         "data": {
-          "nominal_voltage": "Nominal grid voltage (V)",
-          "min_current": "Minimum charging current (A)",
-          "max_current": "Maximum charging current (A)",
-          "grid_ceiling_a": "Grid ceiling (A)",
-          "grid_safety_offset_a": "Grid safety offset (A)",
-          "default_target_current": "Default target current (A)",
-          "smoothing_window": "Smoothing window (samples)",
-          "default_soc_limit": "Default charge limit (%)",
-          "safety_margin_w": "CapTar peak safety margin (W)",
-          "max_peak_kw": "CapTar maximum peak (kW)",
-          "peak_floor_kw": "CapTar peak floor (kW)",
-          "peak_grace_min": "CapTar peak grace period (min)",
-          "power_respect_peak": "Power mode respects the peak limit",
-          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
+          "deadline_notice_enabled": "Deadline-unreachable notice enabled",
+          "plug_in_reminder_enabled": "Plug-in reminder enabled",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
-          "evening_prompt_time": "Evening home-day prompt time",
-          "control_interval_s": "Control interval (s)"
+          "evening_prompt_time": "Evening home-day prompt time"
         }
       }
     }

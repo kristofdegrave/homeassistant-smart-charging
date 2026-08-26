@@ -118,6 +118,59 @@
   },
   "options": {
     "step": {
+      "core": {
+        "title": "Kerninstellingen",
+        "description": "Stel het afvlakvenster en het regelinterval in.",
+        "data": {
+          "smoothing_window": "Afvlakvenster (samples)",
+          "control_interval_s": "Regelinterval (s)"
+        }
+      },
+      "grid": {
+        "title": "Drempelwaarden net",
+        "description": "Stel de drempelwaarden van je netaansluiting in.",
+        "data": {
+          "nominal_voltage": "Nominale netspanning (V)",
+          "grid_ceiling_a": "Netgrens (A)",
+          "grid_safety_offset_a": "Veiligheidsmarge net (A)"
+        }
+      },
+      "ev_charger": {
+        "title": "Drempelwaarden laadpaal",
+        "description": "Stel de stroomlimieten van je lader in.",
+        "data": {
+          "min_current": "Minimale laadstroom (A)",
+          "max_current": "Maximale laadstroom (A)"
+        }
+      },
+      "vehicle": {
+        "title": "Drempelwaarden voertuig",
+        "description": "Stel de standaardwaarden voor batterij en laadlimiet van je voertuig in.",
+        "data": {
+          "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
+          "default_soc_limit": "Standaard laadlimiet (%)"
+        }
+      },
+      "power": {
+        "title": "Vermogen-modus",
+        "description": "Stel de standaardwaarden van Vermogen-modus in.",
+        "data": {
+          "default_target_current": "Standaard doelstroom (A)",
+          "power_cooldown_min": "Afkoelduur Vermogen-modus (min)"
+        }
+      },
+      "captar": {
+        "title": "Drempelwaarden CapTar",
+        "description": "Stel de afkoelduur van CapTar in.",
+        "data": {
+          "captar_cooldown_min": "Afkoelduur Captar (min)",
+          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
+          "max_peak_kw": "CapTar maximale piek (kW)",
+          "peak_floor_kw": "CapTar minimale piek (kW)",
+          "peak_grace_min": "CapTar respijtperiode piek (min)",
+          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
+        }
+      },
       "solar": {
         "title": "Drempelwaarden Zon",
         "description": "Stel de drempelwaarden van Zon-modus in.",
@@ -137,18 +190,6 @@
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
         }
       },
-      "captar": {
-        "title": "Drempelwaarden CapTar",
-        "description": "Stel de afkoelduur van CapTar in.",
-        "data": {
-          "captar_cooldown_min": "Afkoelduur Captar (min)",
-          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
-          "max_peak_kw": "CapTar maximale piek (kW)",
-          "peak_floor_kw": "CapTar minimale piek (kW)",
-          "peak_grace_min": "CapTar respijtperiode piek (min)",
-          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
-        }
-      },
       "deadline": {
         "title": "Instellingen deadline",
         "description": "Stel de voorlooptijd van de oplaadherinnering in.",
@@ -156,27 +197,14 @@
           "reminder_lead_h": "Voorlooptijd oplaadherinnering (u)"
         }
       },
-      "thresholds": {
-        "title": "Drempelwaarden en standaardinstellingen",
-        "description": "Stel de overige drempelwaarden, standaardinstellingen en het regelinterval in.",
+      "notifications": {
+        "title": "Meldingen",
+        "description": "Kies welke meldingen worden verstuurd.",
         "data": {
-          "nominal_voltage": "Nominale netspanning (V)",
-          "min_current": "Minimale laadstroom (A)",
-          "max_current": "Maximale laadstroom (A)",
-          "grid_ceiling_a": "Netgrens (A)",
-          "grid_safety_offset_a": "Veiligheidsmarge net (A)",
-          "default_target_current": "Standaard doelstroom (A)",
-          "smoothing_window": "Afvlakvenster (samples)",
-          "default_soc_limit": "Standaard laadlimiet (%)",
-          "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
-          "max_peak_kw": "CapTar maximale piek (kW)",
-          "peak_floor_kw": "CapTar minimale piek (kW)",
-          "peak_grace_min": "CapTar respijtperiode piek (min)",
-          "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
-          "ev_battery_capacity_kwh": "Standaard EV-batterijcapaciteit (kWh)",
+          "deadline_notice_enabled": "Melding onbereikbare deadline ingeschakeld",
+          "plug_in_reminder_enabled": "Oplaadherinnering ingeschakeld",
           "evening_prompt_enabled": "Avondprompt thuisdag ingeschakeld",
-          "evening_prompt_time": "Tijdstip avondprompt thuisdag",
-          "control_interval_s": "Regelinterval (s)"
+          "evening_prompt_time": "Tijdstip avondprompt thuisdag"
         }
       }
     }
