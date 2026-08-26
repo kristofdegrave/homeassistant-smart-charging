@@ -63,7 +63,7 @@ def test_translations_en_json_has_every_emitted_error_code():
     assert not missing, f"translations/en.json's config.error section is missing: {sorted(missing)}"
 
 
-# --- T12: step and field parity (guided config flow, ADR-0025 Consequences). ---
+# --- T12: step and field parity (guided config flow, ADR-0027 Consequences). ---
 
 
 def _keys(schema) -> set[str]:
@@ -129,7 +129,7 @@ def _assert_title_and_description(relative_path, section, step_id, block):
 
 @pytest.mark.parametrize("relative_path", _CHECKED_FILES)
 def test_every_config_step_has_a_strings_block(relative_path):
-    """ADR-0025 Consequences: one config.step.<id> block per step id the config flow can
+    """ADR-0027 Consequences: one config.step.<id> block per step id the config flow can
     show, including the shared `core` block both install and reconfigure render."""
     blocks = _load(relative_path)["config"]["step"]
     missing = CONFIG_STEP_IDS - set(blocks)
@@ -195,7 +195,7 @@ def test_no_orphaned_step_block_or_field_label(relative_path):
 
 @pytest.mark.parametrize("relative_path", _CHECKED_FILES)
 def test_no_field_label_carries_a_conditional_qualifier(relative_path):
-    """ADR-0025 Consequences: '(required if Solar installed)'-style qualifiers are redundant
+    """ADR-0027 Consequences: '(required if Solar installed)'-style qualifiers are redundant
     once a field only appears when it is required, and must not contradict the new
     structure."""
     data = _load(relative_path)

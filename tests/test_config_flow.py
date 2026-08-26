@@ -1,9 +1,10 @@
 """HA-harness config-flow tests (ADR-0005).
 
 T4 (topic-step config-flow plan, ADR-0027) cut the install/reconfigure flow over from the
-seven-step ADR-0025 model to the nine topic steps. T7 completes the re-cut: the options flow
-now walks its own nine-topic-step OPTIONS_TABLE too (ADR-0027 point 4) -- threshold halves
-only, gated on the *stored* capability flags, and the sole presenter of the control interval.
+seven-step model ADR-0025 (superseded by ADR-0027) specified to the nine topic steps. T7
+completes the re-cut: the options flow now walks its own nine-topic-step OPTIONS_TABLE too
+(ADR-0027 point 4) -- threshold halves only, gated on the *stored* capability flags, and the
+sole presenter of the control interval.
 """
 
 import itertools
