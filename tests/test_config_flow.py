@@ -991,10 +991,7 @@ async def test_uc12_1a_reconfigure_never_shows_power_or_captar(hass):
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
     visited = []
-    overrides = {
-        STEP_CORE: {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True},
-        STEP_VEHICLE: {**VEHICLE_INPUT},
-    }
+    overrides = {STEP_CORE: {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True}}
     while result["type"] == FlowResultType.FORM:
         step_id = result["step_id"]
         visited.append(step_id)
@@ -1285,8 +1282,9 @@ async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(
     """ADR-0027 Consequences: every capability combination must be shown to traverse exactly
     the steps UC12 prescribes, in order, for EACH of the three flows -- this is the
     reconfigure third (T5 covers install, T7 options). Expected sequence: core, grid,
-    ev_charger, vehicle, then solar/deadline/notifications per their stored flags; never
-    power, never captar."""
+    ev_charger, vehicle, then solar/deadline/notifications per the capability answers given
+    on THIS run's own `core` step (reconfigure gates on `self._answers`, not `entry.data` --
+    that's the options flow's rule); never power, never captar."""
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
 
@@ -1310,10 +1308,13 @@ async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(
     visited = []
     while result["type"] == FlowResultType.FORM:
         step_id = result["step_id"]
+        if step_id in visited:
+            pytest.fail(f"step {step_id!r} re-shown; visited so far: {visited}")
         visited.append(step_id)
         submission = {**_INSTALL_STEP_BASES[step_id], **overrides.get(step_id, {})}
         result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
     assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
 
     expected = [STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE]
@@ -1329,8 +1330,7 @@ async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(
 async def test_d7_reconfigure_prefills_notifications_available_from_a_stored_target(hass):
     """Design D-7: an entry that predates notifications_available but stores a
     notification_target_entity renders the declaration ON, reaches step 9, and keeps the
-    stored mapping -- the accumulator-never-seeded rule would otherwise drop it silently.
-    Assert the negative too: an entry with neither key renders the declaration OFF."""
+    stored mapping -- the accumulator-never-seeded rule would otherwise drop it silently."""
     data = entry_data_base(**{CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app"})
     assert CONF_NOTIFICATIONS_AVAILABLE not in data
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
@@ -1374,19 +1374,49 @@ async def test_d7_reconfigure_prefills_notifications_available_from_a_stored_tar
     assert entry.data[CONF_NOTIFICATIONS_AVAILABLE] is True
     assert entry.data[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
 
-    # Negative: an entry with neither key renders the declaration OFF.
-    plain_data = entry_data_base()
-    assert CONF_NOTIFICATIONS_AVAILABLE not in plain_data
-    assert CONF_NOTIFICATION_TARGET_ENTITY not in plain_data
-    plain_entry = MockConfigEntry(domain=DOMAIN, data=plain_data, options=entry_options_base())
-    plain_entry.add_to_hass(hass)
 
-    plain_result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": plain_entry.entry_id},
+async def test_d7_reconfigure_stored_flag_false_wins_over_a_stored_target(hass):
+    """Design D-7: `data.get(CONF_NOTIFICATIONS_AVAILABLE, bool(data.get(TARGET)))` -- the
+    STORED flag wins whenever the key is present, and is only derived from the target when
+    the key predates this slice. An entry that already answered "no" on notifications, but
+    still carries a stale notification_target_entity from before it was withdrawn, must keep
+    rendering the declaration OFF -- a naive `bool(FLAG) or bool(TARGET)` fallback would flip
+    this back ON and make it impossible to ever leave notifications withdrawn on such an
+    entry."""
+    data = entry_data_base(
+        **{
+            CONF_NOTIFICATIONS_AVAILABLE: False,
+            CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app",
+        }
     )
-    plain_suggested = _suggested_values(plain_result)
-    assert plain_suggested[CONF_NOTIFICATIONS_AVAILABLE] is False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["step_id"] == STEP_CORE
+    suggested = _suggested_values(result)
+    assert suggested[CONF_NOTIFICATIONS_AVAILABLE] is False
+
+
+async def test_d7_reconfigure_declares_notifications_off_when_neither_key_is_stored(hass):
+    """Design D-7 negative case: an entry with neither notifications_available nor a stored
+    notification_target_entity renders the declaration OFF -- the derive-from-target fallback
+    has nothing to derive from."""
+    data = entry_data_base()
+    assert CONF_NOTIFICATIONS_AVAILABLE not in data
+    assert CONF_NOTIFICATION_TARGET_ENTITY not in data
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    suggested = _suggested_values(result)
+    assert suggested[CONF_NOTIFICATIONS_AVAILABLE] is False
 
 
 # --- Exception flow 1: domain mismatch (T9, UC12, R20 AC6). ---
