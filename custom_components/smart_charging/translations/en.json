@@ -10,6 +10,13 @@
           "deadline_available": "Departure deadline tracking",
           "notifications_available": "Notifications",
           "smoothing_window": "Smoothing window (samples)"
+        },
+        "data_description": {
+          "solar_available": "Turn on if a solar installation is present. Adds Solar and SolarOnly charging modes and asks their setup next.",
+          "captar_available": "Turn on if CapTar peak-shaving is available. Adds CapTar mode and asks its setup next.",
+          "deadline_available": "Turn on to track a departure deadline so charging can be scheduled to finish on time.",
+          "smoothing_window": "Number of recent power samples averaged before adjusting charging current, to avoid reacting to short spikes. Default 4.",
+          "notifications_available": "Turn on to enable notifications (deadline notices, plug-in and evening prompts). Adds the Notifications setup step next."
         }
       },
       "grid": {
@@ -22,6 +29,14 @@
           "nominal_voltage": "Nominal grid voltage (V)",
           "grid_ceiling_a": "Grid ceiling (A)",
           "grid_safety_offset_a": "Grid safety offset (A)"
+        },
+        "data_description": {
+          "net_power_entity": "The sensor reporting net grid power (import positive, export negative). Used to detect solar surplus and stay under the grid ceiling.",
+          "grid_voltage_entity": "Optional sensor reporting live grid voltage, used instead of the nominal voltage default when converting between power and current.",
+          "low_tariff_entity": "Optional binary_sensor/input_boolean indicating a low electricity tariff period is active.",
+          "nominal_voltage": "Grid voltage (V) used to convert between power and current when no live grid voltage entity is mapped. Default 230.",
+          "grid_ceiling_a": "Maximum current (A) the home's electrical connection can safely supply, including everything else in the house. Default 25.",
+          "grid_safety_offset_a": "Safety margin (A) subtracted from the grid ceiling before charging current is computed, to stay below the fuse rating. Default 2."
         }
       },
       "ev_charger": {
@@ -35,6 +50,15 @@
           "charger_power_entity": "Charger power entity",
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)"
+        },
+        "data_description": {
+          "charger_current_entity": "The number entity that sets the charger's requested current.",
+          "charger_status_entity": "The sensor or binary_sensor whose state reports whether the charger is connected and/or charging.",
+          "connected_states": "The raw states of the status entity above that mean \"connected\", separated by commas.",
+          "charging_states": "The raw states of the status entity above that mean \"charging\", separated by commas. A state listed in both fields is treated as charging.",
+          "charger_power_entity": "The sensor reporting the charger's own power draw.",
+          "min_current": "Lowest current (A) the charger will ever be asked to deliver while charging. Default 6.",
+          "max_current": "Highest current (A) the charger will ever be asked to deliver. Default 16."
         }
       },
       "vehicle": {
@@ -47,6 +71,14 @@
           "car_home_entity": "Car-home presence entity (optional)",
           "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
           "default_soc_limit": "Default charge limit (%)"
+        },
+        "data_description": {
+          "ev_soc_entity": "The sensor reporting the EV's state of charge (%). Required whenever Solar or CapTar is enabled, since their step-up logic needs it.",
+          "ev_battery_capacity_entity": "Optional sensor reporting the EV's battery capacity (kWh). Overrides the default battery capacity below when mapped.",
+          "vehicle_charge_limit_entity": "The number entity that sets the vehicle's own onboard charge-limit.",
+          "car_home_entity": "The presence entity (device_tracker, person, or binary_sensor) confirming the car is home. Writes to the charge-limit entity above only happen while this is on, so a car that's away is never written to.",
+          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh) used for time-to-full and required-current calculations when no battery capacity entity is mapped. Default 75.",
+          "default_soc_limit": "Charge limit (%) applied when no override is set. Default 80."
         }
       },
       "power": {
@@ -55,6 +87,10 @@
         "data": {
           "default_target_current": "Default target current (A)",
           "power_cooldown_min": "Power mode cooldown duration (min)"
+        },
+        "data_description": {
+          "default_target_current": "Charging current (A) used when no smarter mode applies. Default 10.",
+          "power_cooldown_min": "Minimum time (minutes) Power mode must wait after switching to another mode before switching back. Default 10."
         }
       },
       "captar": {
@@ -67,6 +103,14 @@
           "max_peak_kw": "CapTar maximum peak (kW)",
           "peak_floor_kw": "CapTar peak floor (kW)",
           "peak_grace_min": "CapTar peak grace period (min)"
+        },
+        "data_description": {
+          "captar_cooldown_min": "Minimum time (minutes) CapTar must wait between peak-shaving interventions. Default 10.",
+          "power_respect_peak": "When on, Power mode also respects the CapTar peak limit instead of ignoring it. Default on.",
+          "safety_margin_w": "Power margin (W) CapTar keeps below the maximum peak as a safety buffer. Default 250.",
+          "max_peak_kw": "Highest grid peak (kW) CapTar is allowed to let occur before intervening. Default 4.",
+          "peak_floor_kw": "Lowest value (kW) the effective peak limit is allowed to fall to. Default 2.5.",
+          "peak_grace_min": "Minutes CapTar tolerates being above the peak limit before intervening, to absorb brief spikes. Default 2."
         }
       },
       "solar": {
@@ -88,6 +132,23 @@
           "max_solar_soc": "Solar step-up maximum SOC (%)",
           "solar_reserve_soc": "Solar-reserve SOC cap (%)",
           "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
+        },
+        "data_description": {
+          "solar_forecast_entity": "The sensor providing a solar production forecast, used to decide whether the overnight solar-reserve SOC cap applies.",
+          "solar_start_threshold_w": "Net export power (W) that must be exceeded before Solar mode starts charging. Default 150.",
+          "solar_only_start_threshold_w": "Net export power (W) that must be exceeded before SolarOnly mode starts charging. Default 1300.",
+          "solar_only_strategy": "How SolarOnly rounds its computed amp step to a whole ampere: round up, round down, or round to nearest using the midpoint fraction below. Default round down.",
+          "solar_only_midpoint": "Fractional threshold (0-1) used only when the strategy above is round-nearest: a fraction at or above this rounds up. Default 0.5.",
+          "solar_hold_min": "How long (minutes) Solar keeps charging after surplus drops below its start threshold, to avoid rapid on/off cycling. Default 5.",
+          "solar_only_hold_min": "How long (minutes) SolarOnly keeps charging after surplus drops below its start threshold. Default 1.",
+          "solar_cooldown_min": "Minimum time (minutes) Solar/SolarOnly must wait after switching to another mode before switching back. Default 2.",
+          "solar_restart_debounce_min": "Minimum time (minutes) after Solar/SolarOnly stops before it is allowed to restart. Default 1.",
+          "solar_step_pp": "SOC percentage-point step size used each time solar step-up raises the target SOC. Default 5.",
+          "solar_step_threshold_pp": "How many percentage points of surplus SOC headroom must exist before solar step-up takes another step. Default 2.",
+          "max_solar_soc": "Highest SOC (%) solar step-up is allowed to raise the target to. Default 100.",
+          "solar_reserve_soc": "Overnight SOC cap (%) reserved for solar charging the next day, applied when the forecast is below the threshold below. Default 60.",
+          "solar_forecast_threshold_kwh": "Forecasted solar production (kWh) below which the solar-reserve SOC cap above is applied. Default 12.",
+          "solar_power_entity": "The sensor reporting the solar installation's own production power, used by dashboard tiles. Optional."
         }
       },
       "deadline": {
@@ -97,6 +158,11 @@
           "departure_external_entity": "External departure-time entity (optional)",
           "home_day_external_entity": "External home-day entity (optional)",
           "reminder_lead_h": "Plug-in reminder lead time (h)"
+        },
+        "data_description": {
+          "departure_external_entity": "Optional sensor providing the next departure time from an external source (e.g. a calendar). Leave blank to use the built-in weekly schedule instead.",
+          "home_day_external_entity": "Optional external binary_sensor/input_boolean marking today as a home day, overriding the evening prompt's answer.",
+          "reminder_lead_h": "How many hours before departure to send a plug-in reminder if the car isn't yet charging. Default 8."
         }
       },
       "notifications": {
@@ -108,6 +174,13 @@
           "plug_in_reminder_enabled": "Plug-in reminder enabled",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
           "evening_prompt_time": "Evening home-day prompt time"
+        },
+        "data_description": {
+          "notification_target_entity": "Optional notify-domain entity to send charging notifications and reminders to.",
+          "evening_prompt_enabled": "Turn on to ask each evening whether tomorrow is a home day. Default on.",
+          "evening_prompt_time": "Time of day the evening home-day prompt is sent. Default 18:00.",
+          "deadline_notice_enabled": "Turn on to notify when the current charging plan won't reach the target SOC by the deadline. Default on.",
+          "plug_in_reminder_enabled": "Turn on to remind you to plug in the car when it's expected home but not charging. Default on."
         }
       }
     },
@@ -124,6 +197,10 @@
         "data": {
           "smoothing_window": "Smoothing window (samples)",
           "control_interval_s": "Control interval (s)"
+        },
+        "data_description": {
+          "smoothing_window": "Number of recent power samples averaged before adjusting charging current, to avoid reacting to short spikes. Default 4.",
+          "control_interval_s": "How often (seconds) the control loop re-evaluates charging current. Default 10."
         }
       },
       "grid": {
@@ -133,6 +210,11 @@
           "nominal_voltage": "Nominal grid voltage (V)",
           "grid_ceiling_a": "Grid ceiling (A)",
           "grid_safety_offset_a": "Grid safety offset (A)"
+        },
+        "data_description": {
+          "nominal_voltage": "Grid voltage (V) used to convert between power and current when no live grid voltage entity is mapped. Default 230.",
+          "grid_ceiling_a": "Maximum current (A) the home's electrical connection can safely supply, including everything else in the house. Default 25.",
+          "grid_safety_offset_a": "Safety margin (A) subtracted from the grid ceiling before charging current is computed, to stay below the fuse rating. Default 2."
         }
       },
       "ev_charger": {
@@ -141,6 +223,10 @@
         "data": {
           "min_current": "Minimum charging current (A)",
           "max_current": "Maximum charging current (A)"
+        },
+        "data_description": {
+          "min_current": "Lowest current (A) the charger will ever be asked to deliver while charging. Default 6.",
+          "max_current": "Highest current (A) the charger will ever be asked to deliver. Default 16."
         }
       },
       "vehicle": {
@@ -149,6 +235,10 @@
         "data": {
           "ev_battery_capacity_kwh": "Default EV battery capacity (kWh)",
           "default_soc_limit": "Default charge limit (%)"
+        },
+        "data_description": {
+          "ev_battery_capacity_kwh": "Default EV battery capacity (kWh) used for time-to-full and required-current calculations when no battery capacity entity is mapped. Default 75.",
+          "default_soc_limit": "Charge limit (%) applied when no override is set. Default 80."
         }
       },
       "power": {
@@ -157,6 +247,10 @@
         "data": {
           "default_target_current": "Default target current (A)",
           "power_cooldown_min": "Power mode cooldown duration (min)"
+        },
+        "data_description": {
+          "default_target_current": "Charging current (A) used when no smarter mode applies. Default 10.",
+          "power_cooldown_min": "Minimum time (minutes) Power mode must wait after switching to another mode before switching back. Default 10."
         }
       },
       "captar": {
@@ -169,6 +263,14 @@
           "peak_floor_kw": "CapTar peak floor (kW)",
           "peak_grace_min": "CapTar peak grace period (min)",
           "power_respect_peak": "Power mode respects the peak limit"
+        },
+        "data_description": {
+          "captar_cooldown_min": "Minimum time (minutes) CapTar must wait between peak-shaving interventions. Default 10.",
+          "safety_margin_w": "Power margin (W) CapTar keeps below the maximum peak as a safety buffer. Default 250.",
+          "max_peak_kw": "Highest grid peak (kW) CapTar is allowed to let occur before intervening. Default 4.",
+          "peak_floor_kw": "Lowest value (kW) the effective peak limit is allowed to fall to. Default 2.5.",
+          "peak_grace_min": "Minutes CapTar tolerates being above the peak limit before intervening, to absorb brief spikes. Default 2.",
+          "power_respect_peak": "When on, Power mode also respects the CapTar peak limit instead of ignoring it. Default on."
         }
       },
       "solar": {
@@ -188,6 +290,21 @@
           "max_solar_soc": "Solar step-up maximum SOC (%)",
           "solar_reserve_soc": "Solar-reserve SOC cap (%)",
           "solar_forecast_threshold_kwh": "Solar-reserve forecast threshold (kWh)"
+        },
+        "data_description": {
+          "solar_start_threshold_w": "Net export power (W) that must be exceeded before Solar mode starts charging. Default 150.",
+          "solar_only_start_threshold_w": "Net export power (W) that must be exceeded before SolarOnly mode starts charging. Default 1300.",
+          "solar_hold_min": "How long (minutes) Solar keeps charging after surplus drops below its start threshold, to avoid rapid on/off cycling. Default 5.",
+          "solar_only_hold_min": "How long (minutes) SolarOnly keeps charging after surplus drops below its start threshold. Default 1.",
+          "solar_restart_debounce_min": "Minimum time (minutes) after Solar/SolarOnly stops before it is allowed to restart. Default 1.",
+          "solar_cooldown_min": "Minimum time (minutes) Solar/SolarOnly must wait after switching to another mode before switching back. Default 2.",
+          "solar_only_strategy": "How SolarOnly rounds its computed amp step to a whole ampere: round up, round down, or round to nearest using the midpoint fraction below. Default round down.",
+          "solar_only_midpoint": "Fractional threshold (0-1) used only when the strategy above is round-nearest: a fraction at or above this rounds up. Default 0.5.",
+          "solar_step_pp": "SOC percentage-point step size used each time solar step-up raises the target SOC. Default 5.",
+          "solar_step_threshold_pp": "How many percentage points of surplus SOC headroom must exist before solar step-up takes another step. Default 2.",
+          "max_solar_soc": "Highest SOC (%) solar step-up is allowed to raise the target to. Default 100.",
+          "solar_reserve_soc": "Overnight SOC cap (%) reserved for solar charging the next day, applied when the forecast is below the threshold below. Default 60.",
+          "solar_forecast_threshold_kwh": "Forecasted solar production (kWh) below which the solar-reserve SOC cap above is applied. Default 12."
         }
       },
       "deadline": {
@@ -195,6 +312,9 @@
         "description": "Tune the plug-in reminder lead time.",
         "data": {
           "reminder_lead_h": "Plug-in reminder lead time (h)"
+        },
+        "data_description": {
+          "reminder_lead_h": "How many hours before departure to send a plug-in reminder if the car isn't yet charging. Default 8."
         }
       },
       "notifications": {
@@ -205,6 +325,12 @@
           "plug_in_reminder_enabled": "Plug-in reminder enabled",
           "evening_prompt_enabled": "Evening home-day prompt enabled",
           "evening_prompt_time": "Evening home-day prompt time"
+        },
+        "data_description": {
+          "evening_prompt_enabled": "Turn on to ask each evening whether tomorrow is a home day. Default on.",
+          "evening_prompt_time": "Time of day the evening home-day prompt is sent. Default 18:00.",
+          "deadline_notice_enabled": "Turn on to notify when the current charging plan won't reach the target SOC by the deadline. Default on.",
+          "plug_in_reminder_enabled": "Turn on to remind you to plug in the car when it's expected home but not charging. Default on."
         }
       }
     }
