@@ -28,10 +28,12 @@ from .const import (
     CONF_CHARGER_STATUS_ENTITY,
     CONF_EV_SOC_ENTITY,
     CONF_NET_POWER_ENTITY,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_FORECAST_ENTITY,
     DASHBOARD_FILENAME,
     DASHBOARD_ICON,
     DASHBOARD_URL_PATH,
+    DEFAULT_SOLAR_AVAILABLE,
     LABEL_SC_RUNTIME,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_MODE,
@@ -83,9 +85,13 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
     cards = [
         _tile(entry.data[CONF_CHARGER_CURRENT_ENTITY]),
         _tile(entry.data[CONF_NET_POWER_ENTITY]),
-        _tile(_SOLAR_SURPLUS_ENTITY),
-        _tile(_EFFECTIVE_PEAK_LIMIT_ENTITY),
     ]
+    # ADR-0028/R19 AC4: SolarSurplusSensor is registry-disabled when solar_available is off,
+    # so its static tile must be omitted here too, or a no-solar install's dashboard shows a
+    # permanently-unavailable tile (#814).
+    if entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE):
+        cards.append(_tile(_SOLAR_SURPLUS_ENTITY))
+    cards.append(_tile(_EFFECTIVE_PEAK_LIMIT_ENTITY))
     solar_forecast_entity = entry.data.get(CONF_SOLAR_FORECAST_ENTITY)
     if solar_forecast_entity:
         cards.append(

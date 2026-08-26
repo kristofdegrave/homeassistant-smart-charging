@@ -11,6 +11,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     CONF_EV_SOC_ENTITY,
+    CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_FORECAST_ENTITY,
     DASHBOARD_FILENAME,
     DASHBOARD_URL_PATH,
@@ -122,8 +123,13 @@ def test_charging_status_section_omits_the_battery_tile_when_ev_soc_is_the_empty
     assert len(cards) == 6
 
 
-def test_power_flow_section_has_the_four_tiles_plus_a_conditional_markdown_card():
-    entry = _entry(**{CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast_tomorrow"})
+def test_power_flow_section_has_four_tiles_plus_markdown_card_when_solar_is_available():
+    entry = _entry(
+        **{
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast_tomorrow",
+        }
+    )
     cards = _cards(build_dashboard_config(entry), "Power flow")
 
     assert [c["entity"] for c in cards[:4]] == [
@@ -139,7 +145,7 @@ def test_power_flow_section_has_the_four_tiles_plus_a_conditional_markdown_card(
 
 
 def test_power_flow_section_omits_the_markdown_card_when_solar_forecast_is_unset():
-    entry = _entry()
+    entry = _entry(**{CONF_SOLAR_AVAILABLE: True})
     assert CONF_SOLAR_FORECAST_ENTITY not in entry.data
     cards = _cards(build_dashboard_config(entry), "Power flow")
 
@@ -147,10 +153,37 @@ def test_power_flow_section_omits_the_markdown_card_when_solar_forecast_is_unset
 
 
 def test_power_flow_section_omits_the_markdown_card_when_solar_forecast_is_the_empty_string():
-    entry = _entry(**{CONF_SOLAR_FORECAST_ENTITY: ""})
+    entry = _entry(**{CONF_SOLAR_AVAILABLE: True, CONF_SOLAR_FORECAST_ENTITY: ""})
     cards = _cards(build_dashboard_config(entry), "Power flow")
 
     assert len(cards) == 4
+
+
+def test_power_flow_section_omits_the_solar_surplus_tile_when_solar_is_unavailable():
+    """#814/R19 AC4: SolarSurplusSensor is registry-disabled when solar_available is off
+    (ADR-0028) -- the static Power-flow tile must not reference it either, or a no-solar
+    install's dashboard shows a permanently-unavailable tile. Default-unset key exercises
+    the same DEFAULT_SOLAR_AVAILABLE fallback the registry-disabling sync itself uses."""
+    entry = _entry()
+    assert CONF_SOLAR_AVAILABLE not in entry.data
+    cards = _cards(build_dashboard_config(entry), "Power flow")
+
+    assert [c["entity"] for c in cards] == [
+        "number.charger_current",  # CONF_CHARGER_CURRENT_ENTITY
+        "sensor.net_power",  # CONF_NET_POWER_ENTITY
+        "sensor.smart_charging_effective_peak_limit",
+    ]
+
+
+def test_power_flow_section_omits_the_solar_surplus_tile_when_solar_available_is_explicitly_false():
+    entry = _entry(**{CONF_SOLAR_AVAILABLE: False})
+    cards = _cards(build_dashboard_config(entry), "Power flow")
+
+    assert [c["entity"] for c in cards] == [
+        "number.charger_current",  # CONF_CHARGER_CURRENT_ENTITY
+        "sensor.net_power",  # CONF_NET_POWER_ENTITY
+        "sensor.smart_charging_effective_peak_limit",
+    ]
 
 
 def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card():
