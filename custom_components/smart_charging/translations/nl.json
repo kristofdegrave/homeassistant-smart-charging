@@ -14,9 +14,9 @@
         "data_description": {
           "solar_available": "Schakel in als er een zonne-installatie aanwezig is. Voegt de laadmodi Zon en Alleen-zon toe en stelt daarna hun instellingen in.",
           "captar_available": "Schakel in als CapTar-piekbeperking beschikbaar is. Voegt de CapTar-modus toe en stelt daarna de instellingen in.",
-          "deadline_available": "Schakel in om een vertrekdeadline bij te houden, zodat het opladen op tijd klaar kan zijn.",
-          "smoothing_window": "Aantal recente vermogenmetingen dat wordt gemiddeld voordat de laadstroom wordt aangepast, om te voorkomen dat op korte pieken wordt gereageerd. Standaard 4.",
-          "notifications_available": "Zet aan om meldingen in te schakelen (deadline-meldingen, aansluit- en avondherinneringen). Voegt de volgende stap Meldingen toe."
+          "deadline_available": "Zet aan om een vertrekdeadline bij te houden zodat het laden gepland kan worden om op tijd klaar te zijn. Voegt de volgende stap Deadline toe.",
+          "notifications_available": "Zet aan om meldingen in te schakelen (deadline-meldingen, aansluit- en avondherinneringen). Voegt de volgende stap Meldingen toe.",
+          "smoothing_window": "Aantal recente vermogenmetingen dat wordt gemiddeld voordat de laadstroom wordt aangepast, om te voorkomen dat op korte pieken wordt gereageerd. Standaard 4."
         }
       },
       "grid": {
@@ -73,10 +73,10 @@
           "default_soc_limit": "Standaard laadlimiet (%)"
         },
         "data_description": {
-          "ev_soc_entity": "The sensor reporting the EV's state of charge (%). Required whenever Solar or CapTar is enabled, since their step-up logic needs it.",
+          "ev_soc_entity": "De sensor die het laadniveau (%) van de EV rapporteert, gebruikt door de stapverhogingslogica van Zon en CapTar.",
           "ev_battery_capacity_entity": "Optionele sensor die de batterijcapaciteit (kWh) van de EV rapporteert. Overschrijft de standaard batterijcapaciteit hieronder wanneer gekoppeld.",
           "vehicle_charge_limit_entity": "De number-entiteit die de eigen laadlimiet van het voertuig instelt.",
-          "car_home_entity": "De aanwezigheidsentiteit (device_tracker, person of binary_sensor) die bevestigt dat de auto thuis is. Er wordt alleen naar de laadlimiet-entiteit hierboven geschreven zolang deze aan staat, zodat er nooit naar een afwezige auto wordt geschreven.",
+          "car_home_entity": "De aanwezigheidsentiteit (device_tracker, person of binary_sensor) die bevestigt dat de auto thuis is. Zolang deze uit staat, wordt het doorlopend synchroniseren naar de laadlimiet-entiteit hierboven gepauzeerd.",
           "ev_battery_capacity_kwh": "Standaard batterijcapaciteit (kWh) van de EV, gebruikt voor de berekening van tijd-tot-vol en benodigde stroom wanneer er geen batterijcapaciteit-entiteit gekoppeld is. Standaard 75.",
           "default_soc_limit": "Laadlimiet (%) toegepast wanneer er geen overschrijving is ingesteld. Standaard 80."
         }
@@ -90,7 +90,7 @@
         },
         "data_description": {
           "default_target_current": "Laadstroom (A) gebruikt wanneer geen slimmere modus van toepassing is. Standaard 10.",
-          "power_cooldown_min": "Minimale tijd (minuten) dat Power-modus moet wachten na het wisselen naar een andere modus voordat er teruggewisseld mag worden. Standaard 10."
+          "power_cooldown_min": "Minimale tijd (minuten) dat Power-modus moet wachten nadat het laden stopt voordat het opnieuw mag beginnen met laden. Standaard 10."
         }
       },
       "captar": {
@@ -105,12 +105,12 @@
           "peak_grace_min": "CapTar respijtperiode piek (min)"
         },
         "data_description": {
-          "captar_cooldown_min": "Minimale tijd (minuten) die CapTar moet wachten tussen piekbeperkende ingrepen. Standaard 10.",
+          "captar_cooldown_min": "Minimale tijd (minuten) die CapTar moet wachten nadat een piekgrensoverschrijding het stoppen afdwingt, voordat het weer mag laden. Standaard 10.",
           "power_respect_peak": "Indien aan, houdt Vermogen-modus ook rekening met de CapTar-piekgrens in plaats van deze te negeren. Standaard aan.",
-          "safety_margin_w": "Vermogensmarge (W) die CapTar als veiligheidsbuffer onder de maximale piek houdt. Standaard 250.",
-          "max_peak_kw": "Hoogste netpiek (kW) die CapTar toestaat voordat het ingrijpt. Standaard 4.",
+          "safety_margin_w": "Vermogensmarge (W) die CapTar van de effectieve piekgrens aftrekt als veiligheidsbuffer voordat de grens wordt berekend. Standaard 250.",
+          "max_peak_kw": "Hoogste waarde (kW) waarop de effectieve piekgrens mag uitkomen. Standaard 4.",
           "peak_floor_kw": "Laagste waarde (kW) waartoe de effectieve piekgrens mag zakken. Standaard 2,5.",
-          "peak_grace_min": "Minuten die CapTar boven de piekgrens tolereert voordat het ingrijpt, om korte pieken op te vangen. Standaard 2."
+          "peak_grace_min": "Minuten die CapTar boven de piekgrens tolereert voordat het laden stopt, om korte pieken op te vangen. Standaard 2."
         }
       },
       "solar": {
@@ -134,21 +134,21 @@
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
         },
         "data_description": {
+          "solar_power_entity": "De sensor die het eigen productievermogen van de zonne-installatie rapporteert, gebruikt door dashboardtegels. Optioneel.",
           "solar_forecast_entity": "De sensor die een zonneprognose levert, gebruikt om te bepalen of het nachtelijke zonnereserveplafond van toepassing is.",
-          "solar_start_threshold_w": "Netto teruglevering (W) die overschreden moet worden voordat Zon-modus begint met laden. Standaard 150.",
-          "solar_only_start_threshold_w": "Netto teruglevering (W) die overschreden moet worden voordat Alleen-zon-modus begint met laden. Standaard 1300.",
+          "solar_start_threshold_w": "Zonneoverschot (W) dat deze waarde moet bereiken of overschrijden voordat Zon-modus begint met laden. Standaard 150.",
+          "solar_only_start_threshold_w": "Zonneoverschot (W) dat deze waarde moet bereiken of overschrijden voordat Alleen-zon-modus begint met laden. Standaard 1300.",
           "solar_only_strategy": "Hoe Alleen-zon de berekende stroomstap afrondt naar een heel ampère: naar boven, naar beneden, of naar dichtstbijzijnde met de middelpuntfractie hieronder. Standaard naar beneden.",
           "solar_only_midpoint": "Fractiedrempel (0-1), alleen gebruikt bij de strategie \"dichtstbijzijnde\" hierboven: een fractie op of boven deze waarde wordt naar boven afgerond. Standaard 0,5.",
           "solar_hold_min": "Hoe lang (minuten) Zon blijft laden nadat het overschot onder de startdrempel zakt, om snel aan/uit schakelen te voorkomen. Standaard 5.",
           "solar_only_hold_min": "Hoe lang (minuten) Alleen-zon blijft laden nadat het overschot onder de startdrempel zakt. Standaard 1.",
-          "solar_cooldown_min": "Minimale tijd (minuten) die Zon/Alleen-zon moet wachten na het wisselen naar een andere modus voordat het terug mag wisselen. Standaard 2.",
-          "solar_restart_debounce_min": "Minimale tijd (minuten) nadat Zon/Alleen-zon stopt voordat het weer mag herstarten. Standaard 1.",
+          "solar_cooldown_min": "Minimale tijd (minuten) die Zon/Alleen-zon moet wachten nadat het laden stopt voordat het opnieuw mag beginnen met laden. Standaard 2.",
+          "solar_restart_debounce_min": "Hoe lang (minuten) een overschrijding van de startdrempel onafgebroken moet aanhouden, terwijl inactief na eerder te hebben geladen, voordat Zon/Alleen-zon herstart. Standaard 1.",
           "solar_step_pp": "Stapgrootte in procentpunten laadniveau bij elke stap die zon-stapverhoging het doel-laadniveau verhoogt. Standaard 5.",
-          "solar_step_threshold_pp": "Hoeveel procentpunten overschot-laadniveauruimte er moet zijn voordat zon-stapverhoging een volgende stap zet. Standaard 2.",
+          "solar_step_threshold_pp": "Hoe dicht (in procentpunten) het laadniveau bij de huidige streefwaarde mag komen voordat zon-stapverhoging een volgende stap zet. Standaard 2.",
           "max_solar_soc": "Hoogste laadniveau (%) waartoe zon-stapverhoging het doel mag verhogen. Standaard 100.",
-          "solar_reserve_soc": "Nachtelijk laadniveauplafond (%) gereserveerd voor zonneladen de volgende dag, toegepast wanneer de prognose onder de drempel hieronder ligt. Standaard 60.",
-          "solar_forecast_threshold_kwh": "Verwachte zonneopbrengst (kWh) waaronder het zonnereserveplafond hierboven wordt toegepast. Standaard 12.",
-          "solar_power_entity": "De sensor die het eigen productievermogen van de zonne-installatie rapporteert, gebruikt door dashboardtegels. Optioneel."
+          "solar_reserve_soc": "Nachtelijk laadniveauplafond (%) gereserveerd voor zonneladen de volgende dag, toegepast wanneer de prognose de drempel hieronder overschrijdt. Standaard 60.",
+          "solar_forecast_threshold_kwh": "Verwachte zonneopbrengst (kWh) waarboven het zonnereserveplafond hierboven wordt toegepast. Standaard 12."
         }
       },
       "deadline": {
@@ -177,10 +177,10 @@
         },
         "data_description": {
           "notification_target_entity": "Optionele entiteit uit het notify-domein waarnaar laadmeldingen en herinneringen worden gestuurd.",
-          "evening_prompt_enabled": "Schakel in om elke avond te vragen of morgen een thuisdag is. Standaard aan.",
-          "evening_prompt_time": "Tijdstip waarop de avondprompt voor thuisdag wordt gestuurd. Standaard 18:00.",
           "deadline_notice_enabled": "Zet aan om een melding te sturen wanneer het huidige laadplan de streef-SOC niet op tijd voor de deadline haalt. Standaard aan.",
-          "plug_in_reminder_enabled": "Zet aan om een herinnering te sturen om de auto aan te sluiten wanneer deze thuis wordt verwacht maar niet laadt. Standaard aan."
+          "plug_in_reminder_enabled": "Zet aan om een herinnering te sturen om de auto aan te sluiten wanneer deze thuis wordt verwacht maar niet laadt. Standaard aan.",
+          "evening_prompt_enabled": "Schakel in om elke avond te vragen of morgen een thuisdag is. Standaard aan.",
+          "evening_prompt_time": "Tijdstip waarop de avondprompt voor thuisdag wordt gestuurd. Standaard 18:00."
         }
       }
     },
@@ -250,7 +250,7 @@
         },
         "data_description": {
           "default_target_current": "Laadstroom (A) gebruikt wanneer geen slimmere modus van toepassing is. Standaard 10.",
-          "power_cooldown_min": "Minimale tijd (minuten) dat Power-modus moet wachten na het wisselen naar een andere modus voordat er teruggewisseld mag worden. Standaard 10."
+          "power_cooldown_min": "Minimale tijd (minuten) dat Power-modus moet wachten nadat het laden stopt voordat het opnieuw mag beginnen met laden. Standaard 10."
         }
       },
       "captar": {
@@ -265,11 +265,11 @@
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens"
         },
         "data_description": {
-          "captar_cooldown_min": "Minimale tijd (minuten) die CapTar moet wachten tussen piekbeperkende ingrepen. Standaard 10.",
-          "safety_margin_w": "Vermogensmarge (W) die CapTar als veiligheidsbuffer onder de maximale piek houdt. Standaard 250.",
-          "max_peak_kw": "Hoogste netpiek (kW) die CapTar toestaat voordat het ingrijpt. Standaard 4.",
+          "captar_cooldown_min": "Minimale tijd (minuten) die CapTar moet wachten nadat een piekgrensoverschrijding het stoppen afdwingt, voordat het weer mag laden. Standaard 10.",
+          "safety_margin_w": "Vermogensmarge (W) die CapTar van de effectieve piekgrens aftrekt als veiligheidsbuffer voordat de grens wordt berekend. Standaard 250.",
+          "max_peak_kw": "Hoogste waarde (kW) waarop de effectieve piekgrens mag uitkomen. Standaard 4.",
           "peak_floor_kw": "Laagste waarde (kW) waartoe de effectieve piekgrens mag zakken. Standaard 2,5.",
-          "peak_grace_min": "Minuten die CapTar boven de piekgrens tolereert voordat het ingrijpt, om korte pieken op te vangen. Standaard 2.",
+          "peak_grace_min": "Minuten die CapTar boven de piekgrens tolereert voordat het laden stopt, om korte pieken op te vangen. Standaard 2.",
           "power_respect_peak": "Indien aan, houdt Vermogen-modus ook rekening met de CapTar-piekgrens in plaats van deze te negeren. Standaard aan."
         }
       },
@@ -292,19 +292,19 @@
           "solar_forecast_threshold_kwh": "Prognosedrempel zonnereserve (kWh)"
         },
         "data_description": {
-          "solar_start_threshold_w": "Netto teruglevering (W) die overschreden moet worden voordat Zon-modus begint met laden. Standaard 150.",
-          "solar_only_start_threshold_w": "Netto teruglevering (W) die overschreden moet worden voordat Alleen-zon-modus begint met laden. Standaard 1300.",
+          "solar_start_threshold_w": "Zonneoverschot (W) dat deze waarde moet bereiken of overschrijden voordat Zon-modus begint met laden. Standaard 150.",
+          "solar_only_start_threshold_w": "Zonneoverschot (W) dat deze waarde moet bereiken of overschrijden voordat Alleen-zon-modus begint met laden. Standaard 1300.",
           "solar_hold_min": "Hoe lang (minuten) Zon blijft laden nadat het overschot onder de startdrempel zakt, om snel aan/uit schakelen te voorkomen. Standaard 5.",
           "solar_only_hold_min": "Hoe lang (minuten) Alleen-zon blijft laden nadat het overschot onder de startdrempel zakt. Standaard 1.",
-          "solar_restart_debounce_min": "Minimale tijd (minuten) nadat Zon/Alleen-zon stopt voordat het weer mag herstarten. Standaard 1.",
-          "solar_cooldown_min": "Minimale tijd (minuten) die Zon/Alleen-zon moet wachten na het wisselen naar een andere modus voordat het terug mag wisselen. Standaard 2.",
+          "solar_restart_debounce_min": "Hoe lang (minuten) een overschrijding van de startdrempel onafgebroken moet aanhouden, terwijl inactief na eerder te hebben geladen, voordat Zon/Alleen-zon herstart. Standaard 1.",
+          "solar_cooldown_min": "Minimale tijd (minuten) die Zon/Alleen-zon moet wachten nadat het laden stopt voordat het opnieuw mag beginnen met laden. Standaard 2.",
           "solar_only_strategy": "Hoe Alleen-zon de berekende stroomstap afrondt naar een heel ampère: naar boven, naar beneden, of naar dichtstbijzijnde met de middelpuntfractie hieronder. Standaard naar beneden.",
           "solar_only_midpoint": "Fractiedrempel (0-1), alleen gebruikt bij de strategie \"dichtstbijzijnde\" hierboven: een fractie op of boven deze waarde wordt naar boven afgerond. Standaard 0,5.",
           "solar_step_pp": "Stapgrootte in procentpunten laadniveau bij elke stap die zon-stapverhoging het doel-laadniveau verhoogt. Standaard 5.",
-          "solar_step_threshold_pp": "Hoeveel procentpunten overschot-laadniveauruimte er moet zijn voordat zon-stapverhoging een volgende stap zet. Standaard 2.",
+          "solar_step_threshold_pp": "Hoe dicht (in procentpunten) het laadniveau bij de huidige streefwaarde mag komen voordat zon-stapverhoging een volgende stap zet. Standaard 2.",
           "max_solar_soc": "Hoogste laadniveau (%) waartoe zon-stapverhoging het doel mag verhogen. Standaard 100.",
-          "solar_reserve_soc": "Nachtelijk laadniveauplafond (%) gereserveerd voor zonneladen de volgende dag, toegepast wanneer de prognose onder de drempel hieronder ligt. Standaard 60.",
-          "solar_forecast_threshold_kwh": "Verwachte zonneopbrengst (kWh) waaronder het zonnereserveplafond hierboven wordt toegepast. Standaard 12."
+          "solar_reserve_soc": "Nachtelijk laadniveauplafond (%) gereserveerd voor zonneladen de volgende dag, toegepast wanneer de prognose de drempel hieronder overschrijdt. Standaard 60.",
+          "solar_forecast_threshold_kwh": "Verwachte zonneopbrengst (kWh) waarboven het zonnereserveplafond hierboven wordt toegepast. Standaard 12."
         }
       },
       "deadline": {
@@ -327,10 +327,10 @@
           "evening_prompt_time": "Tijdstip avondprompt thuisdag"
         },
         "data_description": {
-          "evening_prompt_enabled": "Schakel in om elke avond te vragen of morgen een thuisdag is. Standaard aan.",
-          "evening_prompt_time": "Tijdstip waarop de avondprompt voor thuisdag wordt gestuurd. Standaard 18:00.",
           "deadline_notice_enabled": "Zet aan om een melding te sturen wanneer het huidige laadplan de streef-SOC niet op tijd voor de deadline haalt. Standaard aan.",
-          "plug_in_reminder_enabled": "Zet aan om een herinnering te sturen om de auto aan te sluiten wanneer deze thuis wordt verwacht maar niet laadt. Standaard aan."
+          "plug_in_reminder_enabled": "Zet aan om een herinnering te sturen om de auto aan te sluiten wanneer deze thuis wordt verwacht maar niet laadt. Standaard aan.",
+          "evening_prompt_enabled": "Schakel in om elke avond te vragen of morgen een thuisdag is. Standaard aan.",
+          "evening_prompt_time": "Tijdstip waarop de avondprompt voor thuisdag wordt gestuurd. Standaard 18:00."
         }
       }
     }
