@@ -125,7 +125,6 @@ from .const import (
     STEP_NOTIFICATIONS,
     STEP_POWER,
     STEP_SOLAR,
-    STEP_THRESHOLDS,
     STEP_VEHICLE,
 )
 
@@ -194,7 +193,11 @@ def _entity(domain: str | list[str] | None = None):
 # SmartChargingConfigFlow's own table is CONFIG_TABLE, SmartChargingOptionsFlow's is
 # OPTIONS_TABLE (both below); both are now complete, with a step method for every row (T3-T13).
 #
-# Historical note on the guard consolidation this replaced: the flat flow's `_mapping_errors`
+# Historical note on the guard consolidation this replaced (task numbers below are the
+# superseded ADR-0025-era guided-flow plan's own T3-T13 numbering, unrelated to the current
+# topic-step plan's T-numbers used elsewhere in this file, e.g. "T7 cut-over" further down --
+# the car-at-home rule this note calls "T7" is T8 in the current plan): the flat flow's
+# `_mapping_errors`
 # combined three guards (solar's/captar's shared ev_soc_entity requirement and vehicle_limit's
 # car_home_entity requirement) at a single thresholds-step safety net, because none of those
 # three had a step of its own to answer on. T5 gave solar/captar that step-local home for
@@ -311,44 +314,16 @@ CONFIG_TABLE: tuple[FlowStep, ...] = (
     ),
 )
 
-# The options flow's own table (ADR-0025 point 3, untouched by T4 -- T7's concern): threshold
-# halves only, no `core`/`mappings`/`vehicle_limit` rows (mapping fields never appear here --
-# ADR-0005 restricts this flow to the options bucket). Gated on the *stored* capability flags
-# (`self.config_entry.data`), never this run's own answers -- the options flow never re-asks a
-# capability, only its thresholds. Every gate reads defensively via `.get(key, DEFAULT_*)`,
-# never bracket indexing: `deadline_available` is a key this slice introduces (D-1) and is
-# absent from every entry written before it, so `entry.data[CONF_DEADLINE_AVAILABLE]` would
-# KeyError on the first Configure a pre-slice entry ever opens.
+# The options flow's own table (ADR-0027 point 4; T7 cut-over -- topic-step plan): threshold
+# halves only, gated on the *stored* capability flags (`self.config_entry.data`), never this
+# run's own answers -- the options flow never re-asks a capability, only its thresholds. `core`
+# IS a row here (unlike CONFIG_TABLE), because the options flow's own entry point,
+# async_step_init, renders no form of its own. Every gate reads defensively via
+# `.get(key, DEFAULT_*)`, never bracket indexing: `notifications_available` is a key this slice
+# introduces (D-1) and is absent from every entry written before it, so
+# `entry.data[CONF_NOTIFICATIONS_AVAILABLE]` would KeyError on the first Configure a pre-slice
+# entry ever opens.
 OPTIONS_TABLE: tuple[FlowStep, ...] = (
-    FlowStep(
-        step_id=STEP_SOLAR,
-        gate=lambda flow: bool(
-            flow.config_entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
-        ),
-    ),
-    FlowStep(
-        step_id=STEP_CAPTAR,
-        gate=lambda flow: bool(
-            flow.config_entry.data.get(CONF_CAPTAR_AVAILABLE, DEFAULT_CAPTAR_AVAILABLE)
-        ),
-    ),
-    FlowStep(
-        step_id=STEP_DEADLINE,
-        gate=lambda flow: bool(
-            flow.config_entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE)
-        ),
-    ),
-    FlowStep(step_id=STEP_THRESHOLDS, gate=lambda flow: True),
-)
-
-# Interim-named (topic-step plan T3): the options flow's own nine-topic-step table, not yet
-# wired into `SmartChargingOptionsFlow._table` -- OPTIONS_TABLE above still is, until T7
-# renames this to OPTIONS_TABLE (deleting the one above) the same way T4 renamed
-# NINE_STEP_CONFIG_TABLE to CONFIG_TABLE. `core` IS a row here (unlike CONFIG_TABLE), because
-# the options flow's own entry point, async_step_init, renders no form of its own. Gated on
-# the *stored* capability flags, defensively (`.get(key, DEFAULT_*)`): `notifications_available`
-# is a key this slice introduces and is absent from every entry written before it.
-NINE_STEP_OPTIONS_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_CORE, gate=lambda flow: True),
     FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
     FlowStep(step_id=STEP_EV_CHARGER, gate=lambda flow: True),
@@ -527,87 +502,12 @@ def _deadline_threshold_schema(defaults: dict | None = None) -> vol.Schema:
     )
 
 
-def _ungated_threshold_schema(
-    defaults: dict | None = None, *, include_interval: bool = False
-) -> vol.Schema:
-    """UC12 step 8. `include_interval` is True only for the options flow (UC12 1b) -- the
-    install and reconfigure flows never ask the control interval and default it instead."""
-    d = defaults or {}
-    schema: dict = {
-        vol.Required(
-            CONF_NOMINAL_VOLTAGE, default=d.get(CONF_NOMINAL_VOLTAGE, DEFAULT_NOMINAL_VOLTAGE)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_MIN_CURRENT, default=d.get(CONF_MIN_CURRENT, DEFAULT_MIN_CURRENT)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_MAX_CURRENT, default=d.get(CONF_MAX_CURRENT, DEFAULT_MAX_CURRENT)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_GRID_CEILING_A, default=d.get(CONF_GRID_CEILING_A, DEFAULT_GRID_CEILING_A)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_GRID_SAFETY_OFFSET_A,
-            default=d.get(CONF_GRID_SAFETY_OFFSET_A, DEFAULT_GRID_SAFETY_OFFSET_A),
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_SMOOTHING_WINDOW,
-            default=d.get(CONF_SMOOTHING_WINDOW, DEFAULT_SMOOTHING_WINDOW),
-        ): vol.Coerce(int),
-        vol.Required(
-            CONF_DEFAULT_SOC_LIMIT, default=d.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_DEFAULT_TARGET_CURRENT,
-            default=d.get(CONF_DEFAULT_TARGET_CURRENT, DEFAULT_DEFAULT_TARGET_CURRENT),
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_SAFETY_MARGIN_W,
-            default=d.get(CONF_SAFETY_MARGIN_W, DEFAULT_SAFETY_MARGIN_W),
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_MAX_PEAK_KW, default=d.get(CONF_MAX_PEAK_KW, DEFAULT_MAX_PEAK_KW)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_PEAK_FLOOR_KW, default=d.get(CONF_PEAK_FLOOR_KW, DEFAULT_PEAK_FLOOR_KW)
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_PEAK_GRACE_MIN,
-            default=d.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_EV_BATTERY_CAPACITY_KWH,
-            default=d.get(CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH),
-        ): vol.Coerce(float),
-        vol.Required(
-            CONF_POWER_RESPECT_PEAK,
-            default=d.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
-        ): bool,
-        vol.Required(
-            CONF_EVENING_PROMPT_ENABLED,
-            default=d.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED),
-        ): bool,
-        vol.Required(
-            CONF_EVENING_PROMPT_TIME,
-            default=d.get(CONF_EVENING_PROMPT_TIME, DEFAULT_EVENING_PROMPT_TIME),
-        ): selector.TimeSelector(),
-        # No prompt-timeout field is presented here -- midnight is the only answer deadline
-        # (notifications-design.md §3/§9); a later slice briefly presented one anyway, since
-        # reverted (#813/#818).
-    }
-    if include_interval:
-        schema[
-            vol.Required(
-                CONF_CONTROL_INTERVAL_S,
-                default=d.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S),
-            )
-        ] = vol.All(vol.Coerce(int), vol.Range(min=5))
-    return vol.Schema(schema)
-
-
 # --- The nine topic steps' schema fragments (ADR-0027, Consequences: "The schema fragments
-# are re-cut along topic lines"; design "Schema fragments" table). CONFIG_TABLE above walks
-# these; OPTIONS_TABLE still walks the older ADR-0025 fragments above until T7 re-cuts it.
+# are re-cut along topic lines"; design "Schema fragments" table). CONFIG_TABLE and
+# OPTIONS_TABLE both walk these -- `_ungated_threshold_schema`, the always-shown catch-all
+# fragment these disperse from, was deleted at T7 (design "Schema fragments": "disperse across
+# `core`, `grid`, `ev_charger`, `vehicle`, `power` and `captar` exactly as ADR-0027's
+# Consequences describe").
 
 
 def _core_threshold_schema(
@@ -1041,9 +941,12 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
 class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
     """Options flow: thresholds/defaults + control interval, editable anytime (ADR-0005).
 
-    Walks its own table (ADR-0025 point 3) -- threshold halves only, built from the same
-    fragments the config flow uses, gated on the stored capability flags rather than any
-    answer of this run's own.
+    Walks its own table (ADR-0027 point 4) -- threshold halves only, built from the same
+    per-topic fragments the config flow uses, gated on the *stored* capability flags rather
+    than any answer of this run's own. `core` IS a row here (unlike CONFIG_TABLE): the options
+    flow's own entry point, `async_step_init`, renders no form of its own, so `core`'s
+    threshold half (the smoothing window + the control interval, UC12 1b) needs a table row to
+    be reachable from.
 
     `self.config_entry` (from `config_entries.OptionsFlow`) resolves via `self.hass`
     and the flow-manager-assigned entry id, neither of which is set yet inside
@@ -1055,55 +958,11 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
     _table = OPTIONS_TABLE
 
     async def async_step_init(self, user_input=None):
-        """UC12 1b's entry point (ADR-0025 point 4): renders no form of its own, walks
+        """UC12 1b's entry point (ADR-0027 point 5): renders no form of its own, walks
         straight into the table."""
         self._mode = FlowMode.OPTIONS
         self._answers = {}
         return await self._async_advance(after=None)
-
-    async def async_step_solar(self, user_input=None):
-        """UC12 step 3, threshold half only -- no mapping fields, and no once-only ev_soc
-        rule to evaluate (that's a config-flow-only concern). Design D-4: `defaults` prefills
-        from the stored options directly, unlike the config flow's `add_suggested_values_to_schema`
-        prefill -- this preserves the flat options flow's existing re-submission behaviour."""
-        schema = _solar_threshold_schema(self.config_entry.options)
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_SOLAR, data_schema=schema)
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_SOLAR)
-
-    async def async_step_captar(self, user_input=None):
-        """UC12 step 4, threshold half only."""
-        schema = _captar_threshold_schema(self.config_entry.options)
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_CAPTAR)
-
-    async def async_step_deadline(self, user_input=None):
-        """UC12 step 5, threshold half only."""
-        schema = _deadline_threshold_schema(self.config_entry.options)
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_DEADLINE, data_schema=schema)
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_DEADLINE)
-
-    async def async_step_thresholds(self, user_input=None):
-        """UC12 step 8 -- always shown (ungated), and the one step that also asks the
-        control interval (UC12 1b's own carve-out: install/reconfigure never ask it)."""
-        schema = _ungated_threshold_schema(self.config_entry.options, include_interval=True)
-        if user_input is None:
-            return self.async_show_form(step_id=STEP_THRESHOLDS, data_schema=schema)
-        self._answers.update(user_input)
-        return await self._async_advance(after=STEP_THRESHOLDS)
-
-    # --- Topic-step plan T3: the five genuinely-new topic steps' threshold-only counterparts, plus
-    # `async_step_core` (design "Options table": `core` IS a NINE_STEP_OPTIONS_TABLE row,
-    # unlike the config table -- the options flow's own entry point, async_step_init,
-    # renders no form of its own, so this method must exist for that table's own
-    # reachability obligation, plan T3). None of these six is reachable from OPTIONS_TABLE
-    # yet -- `_table` still points at the live table above; T7's cut-over is what points
-    # `_table` at NINE_STEP_OPTIONS_TABLE and makes them reachable.
 
     async def async_step_core(self, user_input=None):
         """UC12 (topic-step) 1b, options-table row 1: the smoothing window + the control
@@ -1148,6 +1007,35 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_POWER)
 
+    async def async_step_captar(self, user_input=None):
+        """UC12 (topic-step) step 6, threshold half only -- gated on the *stored* CapTar
+        capability (design "Options table"), the peak-protection fields' only home."""
+        schema = _captar_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_CAPTAR)
+
+    async def async_step_solar(self, user_input=None):
+        """UC12 (topic-step) step 7, threshold half only -- gated on the *stored* solar
+        capability (design "Options table"). Design D-4: `defaults` prefills from the stored
+        options directly, unlike the config flow's `add_suggested_values_to_schema` prefill --
+        this preserves the flat options flow's existing re-submission behaviour."""
+        schema = _solar_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_SOLAR, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_SOLAR)
+
+    async def async_step_deadline(self, user_input=None):
+        """UC12 (topic-step) step 8, threshold half only -- gated on the *stored* deadline
+        capability (design "Options table")."""
+        schema = _deadline_threshold_schema(self.config_entry.options)
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_DEADLINE, data_schema=schema)
+        self._answers.update(user_input)
+        return await self._async_advance(after=STEP_DEADLINE)
+
     async def async_step_notifications(self, user_input=None):
         """UC12 (topic-step) step 9, threshold half only -- gated on the *stored*
         notifications capability (design "Options table")."""
@@ -1168,7 +1056,7 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
         # Not OPTION_KEYS-intersected like every other key above: control_interval_s is
         # deliberately not an OPTION_KEYS member (design, "The terminal step and the bucket
         # split"). Membership-guarded rather than direct indexing anyway, matching every
-        # other key's defensive style here, even though the unconditional `thresholds` gate
+        # other key's defensive style here, even though the unconditionally-gated `core` row
         # makes the key's absence unreachable today.
         if CONF_CONTROL_INTERVAL_S in self._answers:
             intersection[CONF_CONTROL_INTERVAL_S] = self._answers[CONF_CONTROL_INTERVAL_S]
