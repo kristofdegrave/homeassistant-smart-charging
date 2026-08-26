@@ -678,10 +678,11 @@ async def test_uc12_ev_charger_step_schema_shape(hass):
 # --- The `vehicle` step: ev_soc required, car_home guard. ---
 
 
-async def test_vehicle_step_ev_soc_missing_is_rejected(hass):
-    """ADR-0027 point 1: ev_soc_entity is a plain vol.Required on VEHICLE_MAPPING_SCHEMA now
-    (the once-only cross-step guard is gone) -- a submission missing it is rejected by HA's
-    own schema validation, not a step-local error dict."""
+async def test_r20_ac6_blank_required_ev_soc_is_reported_on_the_vehicle_step(hass):
+    """R20 AC6 / ADR-0027 point 1: ev_soc_entity is a plain vol.Required on
+    VEHICLE_MAPPING_SCHEMA now (the once-only cross-step guard is gone) -- a blank submission
+    surfaces as InvalidData from the flow manager (a subclass of vol.Invalid), not a
+    step-local error dict, and no entry is created."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -844,9 +845,10 @@ async def test_uc12_solar_step_presents_mapping_and_threshold_halves(hass):
     assert result["options"][CONF_SOLAR_ONLY_STRATEGY] == DEFAULT_SOLAR_ONLY_STRATEGY
 
 
-async def test_solar_forecast_missing_is_rejected(hass):
-    """ADR-0027 point 1: solar_forecast_entity is a plain vol.Required on SOLAR_MAPPING_SCHEMA
-    now -- a submission missing it is rejected by schema validation."""
+async def test_r20_ac6_blank_required_solar_forecast_is_reported_on_the_solar_step(hass):
+    """R20 AC6 / ADR-0027 point 1: solar_forecast_entity is a plain vol.Required on
+    SOLAR_MAPPING_SCHEMA now -- a blank submission surfaces as InvalidData from the flow
+    manager, not as an end-of-flow error, and no entry is created."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -1226,10 +1228,39 @@ async def test_reconfigure_still_runs_the_solar_steps_step_local_guard(hass):
         await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
 
+# --- Exception flow 1: domain mismatch (T9, UC12, R20 AC6). ---
+
+
+async def test_r20_ac6_wrong_domain_entity_is_rejected_on_the_step_that_presents_it(hass):
+    """UC12 exception flow 1 / R20 AC6: e.g. a `sensor` entity where charger_current_entity
+    requires a `number` domain -- rejected by the EntitySelector's own domain filter (`vol.
+    Invalid`, naming the offending field), the flow does not advance, and no entry is created.
+    Proven that the same step is still the one presented (not skipped, not corrupted) by
+    resubmitting a valid mapping afterwards and landing on the very next step, not one further
+    along."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CORE_INPUT)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], GRID_INPUT)
+    assert result["step_id"] == STEP_EV_CHARGER
+
+    bad_input = {**EV_CHARGER_INPUT, CONF_CHARGER_CURRENT_ENTITY: "sensor.wrong_domain"}
+    with pytest.raises(vol.Invalid) as excinfo:
+        await hass.config_entries.flow.async_configure(result["flow_id"], bad_input)
+    assert excinfo.value.path == [CONF_CHARGER_CURRENT_ENTITY]
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+    # Still parked on ev_charger, not advanced and not thrown back to an earlier step.
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], EV_CHARGER_INPUT)
+    assert result["step_id"] == STEP_VEHICLE
+
+
 # --- Abandonment (UC12 exception flow 3 / R20 AC8). ---
 
 
-async def test_r20_ac8_abandoned_install_creates_no_entry(hass):
+async def test_r20_ac8_abandoning_install_creates_no_entry(hass):
+    """UC12 exception flow 3 / R20 AC8: closing the flow mid-walk creates no entry."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -1242,7 +1273,9 @@ async def test_r20_ac8_abandoned_install_creates_no_entry(hass):
     assert not hass.config_entries.flow.async_progress()
 
 
-async def test_r20_ac8_abandoned_reconfigure_leaves_the_entry_unchanged(hass):
+async def test_r20_ac8_abandoning_reconfigure_leaves_the_entry_exactly_as_it_was(hass):
+    """R20 AC8: closing a reconfigure flow mid-walk leaves both buckets byte-for-byte as they
+    were before the flow started."""
     entry = await _create_entry(hass)
     original_data = dict(entry.data)
     original_options = dict(entry.options)
@@ -1431,7 +1464,12 @@ async def test_adr0008_options_change_reloads_the_entry(hass):
     assert new_coordinator is not original_coordinator
 
 
-async def test_r20_ac8_abandoned_options_flow_leaves_the_options_unchanged(hass):
+async def test_r20_ac8_abandoning_options_leaves_the_options_bucket_exactly_as_it_was(hass):
+    """R20 AC8: closing the options flow mid-walk leaves the options bucket byte-for-byte as
+    it was before the flow started. This exercises the OLD options path (OPTIONS_TABLE, gated
+    on `STEP_THRESHOLDS`) -- T7 hasn't cut the options flow over to the nine-topic-step table
+    yet at this branch point, and T7 is expected to retire/rewrite this test onto the new
+    table's own last step (design "The terminal step and the bucket split") when it does."""
     entry = await _create_entry(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
     original_options = dict(entry.options)
 
@@ -1789,6 +1827,77 @@ async def test_dispatcher_advances_past_a_failing_gate_and_finishes_when_exhaust
     result = await flow._async_advance(after="not_a_table_member")
     assert result == "shown"
     assert calls == ["show_me"]
+
+
+async def test_r20_ac9_a_tenth_gated_row_appended_changes_no_existing_step(hass, monkeypatch):
+    """R20 AC9 / ADR-0027 Decision ("a new capability is one table row plus one step method,
+    appended after the existing gated rows, with no existing step touched" -- the decisive
+    point over Option B): monkeypatch a synthetic tenth row (gated on a fake flag) onto the
+    END of CONFIG_TABLE with its own step method. The capability set is closed this release
+    (R18 AC13), so this criterion is only reachable by construction. Asserts (a) the new step
+    is reached when its flag is set, (b) skipped when it is not, and (c) the nine existing
+    steps' order and field sets are byte-identical either way."""
+    STEP_SYNTHETIC = "synthetic_tenth"
+    gate_flag = {"enabled": False}
+
+    async def async_step_synthetic_tenth(self, user_input=None):
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_SYNTHETIC, data_schema=vol.Schema({}))
+        return await self._async_advance(after=STEP_SYNTHETIC)
+
+    synthetic_row = FlowStep(step_id=STEP_SYNTHETIC, gate=lambda flow: gate_flag["enabled"])
+    monkeypatch.setattr(SmartChargingConfigFlow, "_table", (*CONFIG_TABLE, synthetic_row))
+    monkeypatch.setattr(
+        SmartChargingConfigFlow,
+        f"async_step_{STEP_SYNTHETIC}",
+        async_step_synthetic_tenth,
+        raising=False,
+    )
+
+    async def _walk():
+        """Drive the install flow, recording every visited step's field set alongside the
+        visited order."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        visited = [result["step_id"]]
+        field_sets = {result["step_id"]: _keys(result["data_schema"])}
+        step_inputs = {
+            **_INSTALL_STEP_BASES,
+            STEP_CORE: {**CORE_INPUT, **_ALL_CAPABILITIES_TRUE},
+            STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"},
+            STEP_SYNTHETIC: {},
+        }
+        while result["type"] == FlowResultType.FORM:
+            step_id = result["step_id"]
+            if visited.count(step_id) > 1:
+                pytest.fail(f"step {step_id!r} re-shown twice; visited so far: {visited}")
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], step_inputs[step_id]
+            )
+            if result["type"] == FlowResultType.FORM:
+                visited.append(result["step_id"])
+                field_sets[result["step_id"]] = _keys(result["data_schema"])
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        # single-instance-allowed: remove this run's entry so the next _walk() can install
+        # again rather than aborting.
+        await hass.config_entries.async_remove(result["result"].entry_id)
+        await hass.async_block_till_done()
+        return visited, field_sets
+
+    gate_flag["enabled"] = False
+    gated_off_visited, gated_off_fields = await _walk()
+    assert STEP_SYNTHETIC not in gated_off_visited
+    assert gated_off_visited == [STEP_CORE, *UC12_FIXED_STEP_ORDER]
+
+    gate_flag["enabled"] = True
+    gated_on_visited, gated_on_fields = await _walk()
+    assert gated_on_visited == [STEP_CORE, *UC12_FIXED_STEP_ORDER, STEP_SYNTHETIC]
+
+    # (c): the nine existing steps' order and field sets are byte-identical either way.
+    assert gated_off_visited == gated_on_visited[: len(gated_off_visited)]
+    for step_id in [STEP_CORE, *UC12_FIXED_STEP_ORDER]:
+        assert gated_off_fields[step_id] == gated_on_fields[step_id], step_id
 
 
 class _StubConfigFlow:
