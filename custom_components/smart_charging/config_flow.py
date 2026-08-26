@@ -189,25 +189,14 @@ def _entity(domain: str | list[str] | None = None):
     return selector.EntitySelector(selector.EntitySelectorConfig(**cfg))
 
 
-# --- The step-table dispatcher (guided config flow, ADR-0025 Option C). ---
+# --- The step-table dispatcher (guided config flow, ADR-0027 Option C). ---
 # SmartChargingConfigFlow's own table is CONFIG_TABLE, SmartChargingOptionsFlow's is
-# OPTIONS_TABLE (both below); both are now complete, with a step method for every row (T3-T13).
-#
-# Historical note on the guard consolidation this replaced (task numbers below are the
-# superseded ADR-0025-era guided-flow plan's own T3-T13 numbering, unrelated to the current
-# topic-step plan's T-numbers used elsewhere in this file, e.g. "T7 cut-over" further down --
-# the car-at-home rule this note calls "T7" is T8 in the current plan): the flat flow's
-# `_mapping_errors`
-# combined three guards (solar's/captar's shared ev_soc_entity requirement and vehicle_limit's
-# car_home_entity requirement) at a single thresholds-step safety net, because none of those
-# three had a step of its own to answer on. T5 gave solar/captar that step-local home for
-# ev_soc_entity; T7 gave vehicle_limit the same for car_home_entity via `_car_home_missing_error`
-# -- with all three guards step-local, the thresholds-step combiner and `_mapping_errors` itself
-# were deleted outright (ADR-0025, Consequences: the combiner has no *guided-flow step* left that
-# needs all three). T9 migrated `async_step_reconfigure` onto this same table (ADR-0025 point 4):
-# it now delegates into the shared `core` step instead of running its own flat form, so every
-# guard above already covers reconfigure too -- there is no longer a separate three-guard combine
-# to keep in sync with the guided flow's own.
+# OPTIONS_TABLE (both below). Validation is step-local (ADR-0027 point 1): the pre-guided-flow
+# flat form's `_mapping_errors` -- which combined the ev_soc_entity and car_home_entity guards
+# into one end-of-form check, because neither field had a step of its own to answer on -- has
+# no equivalent here. Each guard now lives on the step that presents the field it protects, and
+# `async_step_reconfigure` delegates into the shared `core` step rather than running its own
+# flat form, so every guard already covers reconfigure too.
 
 
 class FlowMode(StrEnum):
@@ -220,7 +209,7 @@ class FlowMode(StrEnum):
 
 @dataclass(frozen=True)
 class FlowStep:
-    """One row of a flow's ordered, gated step table (ADR-0025, Option C)."""
+    """One row of a flow's ordered, gated step table (ADR-0027, Option C)."""
 
     step_id: str
     gate: Callable[[Any], bool]  # takes the flow handler: a config flow or an options flow
@@ -237,7 +226,7 @@ class _TableWalkMixin:
     """
 
     _mode: FlowMode
-    _answers: dict[str, Any] | None = None  # per-run accumulator (ADR-0025 point 2)
+    _answers: dict[str, Any] | None = None  # per-run accumulator (ADR-0027 point 2)
     _table: ClassVar[tuple[FlowStep, ...]]  # no default -- a handler that forgets to set
     # this must AttributeError, not silently walk an empty table and finish early.
 
@@ -245,7 +234,7 @@ class _TableWalkMixin:
         """Show the first step after `after` whose gate passes; finish when none remain.
 
         `after` need not itself be a table row: the shared `core` entry point and the
-        framework-mandated `init` entry point (ADR-0025 point 4) are both legitimately not
+        framework-mandated `init` entry point (ADR-0027 point 5) are both legitimately not
         `_table` members. Scanning starts from the row *following* a matching step_id, or
         from the first row when `after` is `None` or not found in the table at all -- the
         same "start from row 0" behaviour serves both of those entry points correctly. Any
@@ -358,10 +347,10 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
 )
 
 
-# --- Per-step schema fragments (guided config flow, ADR-0025 Option C; UC12/R20). ---
-# The flat flow's own MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA (and _mapping_errors,
-# gone since T7) are deleted as of T13 -- every path now runs through CONFIG_TABLE/OPTIONS_TABLE
-# above. These fragments are the guided flow's own.
+# --- Per-step schema fragments (guided config flow, ADR-0027 Option C; UC12/R20). ---
+# The flat flow's own MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA (and _mapping_errors) are
+# gone -- every path now runs through CONFIG_TABLE/OPTIONS_TABLE above. These fragments are the
+# guided flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
@@ -606,8 +595,7 @@ VEHICLE_MAPPING_SCHEMA = vol.Schema(
         # Optional here too (design D-2): the field-level car-at-home rule
         # (_car_home_missing_error, UC12 4a) still fires on a filled-in charge limit or a
         # present deadline capability -- that guard is wired to this step below, in
-        # async_step_vehicle (topic-step plan T8, distinct from the T7 cited two comment
-        # blocks above, which is the earlier ADR-0025-era guided-flow plan's own numbering).
+        # async_step_vehicle (topic-step plan T8).
         vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
     }
 )
@@ -730,13 +718,13 @@ def _split_data(user_input: dict) -> dict:
 
 
 class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle the install-time and reconfigure flows (ADR-0005, ADR-0025)."""
+    """Handle the install-time and reconfigure flows (ADR-0005, ADR-0027)."""
 
     VERSION = 1
     _table = CONFIG_TABLE
 
     async def async_step_user(self, user_input=None):
-        """UC12's install entry point (ADR-0025 point 4): delegate into the shared `core`
+        """UC12's install entry point (ADR-0027 point 5): delegate into the shared `core`
         step, framework-imposed name aside."""
         self._mode = FlowMode.INSTALL
         self._answers = {}
