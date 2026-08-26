@@ -2072,7 +2072,7 @@ def _non_framework_step_methods(cls, framework: set[str]) -> set[str]:
     return {name for name in vars(cls) if name.startswith("async_step_") and name not in framework}
 
 
-def test_every_config_table_step_has_a_step_method():
+def test_adr0027_every_config_table_step_has_a_step_method():
     """Named discharge of Option C's stated Con: a row with no method is silently unreachable."""
     for row in CONFIG_TABLE:
         assert f"async_step_{row.step_id}" in vars(SmartChargingConfigFlow)
@@ -2085,7 +2085,7 @@ def test_every_config_step_method_is_in_the_table():
         assert name.removeprefix("async_step_") in table_step_ids
 
 
-def test_every_options_table_step_has_a_step_method():
+def test_adr0027_every_options_table_step_has_a_step_method():
     for row in OPTIONS_TABLE:
         assert f"async_step_{row.step_id}" in vars(SmartChargingOptionsFlow)
 

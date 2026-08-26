@@ -63,7 +63,7 @@ def test_translations_en_json_has_every_emitted_error_code():
     assert not missing, f"translations/en.json's config.error section is missing: {sorted(missing)}"
 
 
-# --- T12: step and field parity (guided config flow, ADR-0027 Consequences). ---
+# --- Step and field parity (guided config flow, ADR-0027 Consequences). ---
 
 
 def _keys(schema) -> set[str]:

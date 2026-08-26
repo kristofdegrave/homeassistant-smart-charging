@@ -191,10 +191,10 @@ def _entity(domain: str | list[str] | None = None):
 
 # --- The step-table dispatcher (guided config flow, ADR-0027 Option C). ---
 # SmartChargingConfigFlow's own table is CONFIG_TABLE, SmartChargingOptionsFlow's is
-# OPTIONS_TABLE (both below). Validation is step-local (ADR-0027 point 1): the flat flow's
-# `_mapping_errors` -- which combined the ev_soc_entity and car_home_entity guards at a single
-# thresholds-step safety net, because neither had a step of its own to answer on -- has no
-# equivalent here. Each guard now lives on the step that presents the field it protects, and
+# OPTIONS_TABLE (both below). Validation is step-local (ADR-0027 point 1): the pre-guided-flow
+# flat form's `_mapping_errors` -- which combined the ev_soc_entity and car_home_entity guards
+# into one end-of-form check, because neither field had a step of its own to answer on -- has
+# no equivalent here. Each guard now lives on the step that presents the field it protects, and
 # `async_step_reconfigure` delegates into the shared `core` step rather than running its own
 # flat form, so every guard already covers reconfigure too.
 
@@ -348,9 +348,9 @@ OPTIONS_TABLE: tuple[FlowStep, ...] = (
 
 
 # --- Per-step schema fragments (guided config flow, ADR-0027 Option C; UC12/R20). ---
-# The flat flow's own MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA (and _mapping_errors,
-# gone since T7) are deleted as of T13 -- every path now runs through CONFIG_TABLE/OPTIONS_TABLE
-# above. These fragments are the guided flow's own.
+# The flat flow's own MAPPING_SCHEMA/_threshold_schema()/USER_SCHEMA (and _mapping_errors) are
+# gone -- every path now runs through CONFIG_TABLE/OPTIONS_TABLE above. These fragments are the
+# guided flow's own.
 
 CORE_MAPPING_SCHEMA = vol.Schema(
     {
