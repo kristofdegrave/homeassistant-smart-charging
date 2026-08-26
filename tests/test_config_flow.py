@@ -1740,6 +1740,77 @@ async def test_dispatcher_advances_past_a_failing_gate_and_finishes_when_exhaust
     assert calls == ["show_me"]
 
 
+async def test_r20_ac9_a_tenth_gated_row_appended_changes_no_existing_step(hass, monkeypatch):
+    """R20 AC9 / ADR-0027 Decision ("a new capability is one table row plus one step method,
+    appended after the existing gated rows, with no existing step touched" -- the decisive
+    point over Option B): monkeypatch a synthetic tenth row (gated on a fake flag) onto the
+    END of CONFIG_TABLE with its own step method. The capability set is closed this release
+    (R18 AC13), so this criterion is only reachable by construction. Asserts (a) the new step
+    is reached when its flag is set, (b) skipped when it is not, and (c) the nine existing
+    steps' order and field sets are byte-identical either way."""
+    STEP_SYNTHETIC = "synthetic_tenth"
+    gate_flag = {"enabled": False}
+
+    async def async_step_synthetic_tenth(self, user_input=None):
+        if user_input is None:
+            return self.async_show_form(step_id=STEP_SYNTHETIC, data_schema=vol.Schema({}))
+        return await self._async_advance(after=STEP_SYNTHETIC)
+
+    synthetic_row = FlowStep(step_id=STEP_SYNTHETIC, gate=lambda flow: gate_flag["enabled"])
+    monkeypatch.setattr(SmartChargingConfigFlow, "_table", (*CONFIG_TABLE, synthetic_row))
+    monkeypatch.setattr(
+        SmartChargingConfigFlow,
+        f"async_step_{STEP_SYNTHETIC}",
+        async_step_synthetic_tenth,
+        raising=False,
+    )
+
+    async def _walk():
+        """Drive the install flow, recording every visited step's field set alongside the
+        visited order."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        visited = [result["step_id"]]
+        field_sets = {result["step_id"]: _keys(result["data_schema"])}
+        step_inputs = {
+            **_INSTALL_STEP_BASES,
+            STEP_CORE: {**CORE_INPUT, **_ALL_CAPABILITIES_TRUE},
+            STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"},
+            STEP_SYNTHETIC: {},
+        }
+        while result["type"] == FlowResultType.FORM:
+            step_id = result["step_id"]
+            if visited.count(step_id) > 1:
+                pytest.fail(f"step {step_id!r} re-shown twice; visited so far: {visited}")
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], step_inputs[step_id]
+            )
+            if result["type"] == FlowResultType.FORM:
+                visited.append(result["step_id"])
+                field_sets[result["step_id"]] = _keys(result["data_schema"])
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        # single-instance-allowed: remove this run's entry so the next _walk() can install
+        # again rather than aborting.
+        await hass.config_entries.async_remove(result["result"].entry_id)
+        await hass.async_block_till_done()
+        return visited, field_sets
+
+    gate_flag["enabled"] = False
+    gated_off_visited, gated_off_fields = await _walk()
+    assert STEP_SYNTHETIC not in gated_off_visited
+    assert gated_off_visited == [STEP_CORE, *UC12_FIXED_STEP_ORDER]
+
+    gate_flag["enabled"] = True
+    gated_on_visited, gated_on_fields = await _walk()
+    assert gated_on_visited == [STEP_CORE, *UC12_FIXED_STEP_ORDER, STEP_SYNTHETIC]
+
+    # (c): the nine existing steps' order and field sets are byte-identical either way.
+    assert gated_off_visited == gated_on_visited[: len(gated_off_visited)]
+    for step_id in [STEP_CORE, *UC12_FIXED_STEP_ORDER]:
+        assert gated_off_fields[step_id] == gated_on_fields[step_id], step_id
+
+
 class _StubConfigFlow:
     """A bare stand-in exposing exactly what CONFIG_TABLE's gates read (`_answers`, `_mode`)
     -- no `hass` fixture needed to exercise gate callables directly."""
