@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging import config_flow as config_flow_module
+from custom_components.smart_charging import const
 from custom_components.smart_charging.config_flow import (
     CONFIG_TABLE,
     CORE_MAPPING_SCHEMA,
@@ -1568,6 +1569,12 @@ def test_flat_flow_schema_surface_is_deleted():
     assert not hasattr(config_flow_module, "_ev_soc_missing_error")
     assert not hasattr(config_flow_module, "_solar_forecast_missing_error")
     assert not hasattr(config_flow_module, "async_step_vehicle_limit")
+    # T7's own deletions: the always-shown catch-all threshold fragment, the interim-named
+    # table it was cut over from, and the step id only it (and the retired options step
+    # `async_step_thresholds`) ever used.
+    assert not hasattr(config_flow_module, "_ungated_threshold_schema")
+    assert not hasattr(config_flow_module, "NINE_STEP_OPTIONS_TABLE")
+    assert not hasattr(const, "STEP_THRESHOLDS")
 
 
 def test_config_flow_class_has_no_retired_step_methods():
@@ -1896,24 +1903,28 @@ class _StubOptionsFlow:
 
 
 def test_uc12_1b_options_gates_read_stored_flags_defensively():
-    """ADR-0025 point 3: every options gate is .get(key, DEFAULT_*), so an entry predating
-    deadline_available opens Configure without KeyError."""
-    stub = _StubOptionsFlow(entry_data={})  # predates every capability key
+    """ADR-0027 point 4: every options gate is .get(key, DEFAULT_*), so an entry predating
+    notifications_available -- the key this slice actually introduces (D-1); the other three
+    capability keys already existed before this slice -- opens Configure without KeyError."""
     gates = {row.step_id: row.gate for row in OPTIONS_TABLE}
 
-    # Defaults, absent-key read fallback: captar True, solar False, deadline True.
+    stub = _StubOptionsFlow(entry_data={})  # predates every capability key
+    # Defaults, absent-key read fallback: captar True, solar False, deadline True,
+    # notifications False.
     assert gates[STEP_CAPTAR](stub) is True
     assert gates[STEP_SOLAR](stub) is False
     assert gates[STEP_DEADLINE](stub) is True
+    assert gates[STEP_NOTIFICATIONS](stub) is False
 
     inverted = _StubOptionsFlow(
         entry_data={
             CONF_CAPTAR_AVAILABLE: False,
             CONF_SOLAR_AVAILABLE: True,
             CONF_DEADLINE_AVAILABLE: False,
+            CONF_NOTIFICATIONS_AVAILABLE: True,
         }
     )
-    inverted_gates = {row.step_id: row.gate for row in OPTIONS_TABLE}
-    assert inverted_gates[STEP_CAPTAR](inverted) is False
-    assert inverted_gates[STEP_SOLAR](inverted) is True
-    assert inverted_gates[STEP_DEADLINE](inverted) is False
+    assert gates[STEP_CAPTAR](inverted) is False
+    assert gates[STEP_SOLAR](inverted) is True
+    assert gates[STEP_DEADLINE](inverted) is False
+    assert gates[STEP_NOTIFICATIONS](inverted) is True

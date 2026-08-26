@@ -193,7 +193,11 @@ def _entity(domain: str | list[str] | None = None):
 # SmartChargingConfigFlow's own table is CONFIG_TABLE, SmartChargingOptionsFlow's is
 # OPTIONS_TABLE (both below); both are now complete, with a step method for every row (T3-T13).
 #
-# Historical note on the guard consolidation this replaced: the flat flow's `_mapping_errors`
+# Historical note on the guard consolidation this replaced (task numbers below are the
+# superseded ADR-0025-era guided-flow plan's own T3-T13 numbering, unrelated to the current
+# topic-step plan's T-numbers used elsewhere in this file, e.g. "T7 cut-over" further down --
+# the car-at-home rule this note calls "T7" is T8 in the current plan): the flat flow's
+# `_mapping_errors`
 # combined three guards (solar's/captar's shared ev_soc_entity requirement and vehicle_limit's
 # car_home_entity requirement) at a single thresholds-step safety net, because none of those
 # three had a step of its own to answer on. T5 gave solar/captar that step-local home for

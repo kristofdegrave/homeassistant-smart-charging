@@ -161,7 +161,7 @@
       },
       "captar": {
         "title": "Drempelwaarden CapTar",
-        "description": "Stel de afkoelduur van CapTar in.",
+        "description": "Stel de piekbeperkingsdrempels van CapTar in.",
         "data": {
           "captar_cooldown_min": "Afkoelduur Captar (min)",
           "safety_margin_w": "CapTar veiligheidsmarge piek (W)",

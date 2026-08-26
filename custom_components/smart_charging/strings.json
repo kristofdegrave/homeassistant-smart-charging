@@ -161,7 +161,7 @@
       },
       "captar": {
         "title": "CapTar thresholds",
-        "description": "Tune CapTar's cooldown.",
+        "description": "Tune CapTar's peak-shaving thresholds.",
         "data": {
           "captar_cooldown_min": "Captar cooldown duration (min)",
           "safety_margin_w": "CapTar peak safety margin (W)",
