@@ -6,6 +6,8 @@ options flow keeps walking its OLD table (untouched by this task -- T7's job), s
 tests below still drive it exactly as before.
 """
 
+import itertools
+
 import pytest
 import voluptuous as vol
 from homeassistant import config_entries
@@ -199,6 +201,11 @@ _ALL_CAPABILITIES_TRUE = {
     CONF_DEADLINE_AVAILABLE: True,
     CONF_NOTIFICATIONS_AVAILABLE: True,
 }
+
+# Plan T5: every one of the 2**4 = 16 combinations of the four independent capability flags,
+# each a (solar, captar, deadline, notifications) tuple -- the full space CONFIG_TABLE's gates
+# must be proven correct across (ADR-0027 Consequences).
+ALL_SIXTEEN = list(itertools.product([False, True], repeat=4))
 
 
 async def _walk_flow(hass, init_result, *, per_step=None):
@@ -437,6 +444,88 @@ async def test_uc12_install_default_capabilities_skips_notifications(hass):
         STEP_DEADLINE,
     ]
     assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.parametrize("solar,captar,deadline,notifications", ALL_SIXTEEN)
+async def test_r20_ac2_install_traverses_exactly_uc12s_steps_in_order(
+    hass, solar, captar, deadline, notifications
+):
+    """R20 AC2 / AC3, UC12 5a (ADR-0027 Consequences): the five ungated steps (core, grid,
+    ev_charger, vehicle, power) always show, plus exactly one step per declared capability, in
+    UC12's fixed order (captar BEFORE solar). Expected sequence is computed here from the four
+    flags, not read back from CONFIG_TABLE -- this is the test that exercises the gate logic
+    itself, not a restatement of it."""
+    expected = [STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE, STEP_POWER]
+    if captar:
+        expected.append(STEP_CAPTAR)
+    if solar:
+        expected.append(STEP_SOLAR)
+    if deadline:
+        expected.append(STEP_DEADLINE)
+    if notifications:
+        expected.append(STEP_NOTIFICATIONS)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    visited = [result["step_id"]]
+    step_inputs = {
+        **_INSTALL_STEP_BASES,
+        STEP_CORE: {
+            **CORE_INPUT,
+            CONF_SOLAR_AVAILABLE: solar,
+            CONF_CAPTAR_AVAILABLE: captar,
+            CONF_DEADLINE_AVAILABLE: deadline,
+            CONF_NOTIFICATIONS_AVAILABLE: notifications,
+        },
+    }
+    # UC12 4a / design D-3: a present deadline capability requires car_home_entity on the
+    # always-shown `vehicle` step -- fixture-only concession, not the behavior under test here.
+    if deadline:
+        step_inputs[STEP_VEHICLE] = {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}
+
+    while result["type"] == FlowResultType.FORM:
+        step_id = result["step_id"]
+        if visited.count(step_id) > 1:
+            pytest.fail(f"step {step_id!r} re-shown twice; visited so far: {visited}")
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], step_inputs[step_id]
+        )
+        if result["type"] == FlowResultType.FORM:
+            visited.append(result["step_id"])
+
+    assert visited == expected
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.parametrize("solar,captar,deadline,notifications", ALL_SIXTEEN)
+async def test_r20_ac5_grid_and_charger_bounds_are_asked_on_every_install_path(
+    hass, solar, captar, deadline, notifications
+):
+    """Design, Safety caveat: grid_ceiling_a / grid_safety_offset_a / nominal_voltage (grid) and
+    min_current / max_current (ev_charger) sit on ungated steps and can never be skipped by a
+    capability gate, whatever the sixteen combinations declare."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            **CORE_INPUT,
+            CONF_SOLAR_AVAILABLE: solar,
+            CONF_CAPTAR_AVAILABLE: captar,
+            CONF_DEADLINE_AVAILABLE: deadline,
+            CONF_NOTIFICATIONS_AVAILABLE: notifications,
+        },
+    )
+    assert result["step_id"] == STEP_GRID
+    grid_keys = _keys(result["data_schema"])
+    assert {CONF_GRID_CEILING_A, CONF_GRID_SAFETY_OFFSET_A, CONF_NOMINAL_VOLTAGE} <= grid_keys
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], GRID_INPUT)
+    assert result["step_id"] == STEP_EV_CHARGER
+    ev_charger_keys = _keys(result["data_schema"])
+    assert {CONF_MIN_CURRENT, CONF_MAX_CURRENT} <= ev_charger_keys
 
 
 async def test_r20_ac4_ev_soc_is_asked_on_vehicle_with_no_capabilities_declared(hass):
