@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.3.0...v0.4.0) (2026-08-26)
+
+
+### Features
+
+* add sync_disabled_by registry helper (ADR-0028) ([#800](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/800)) ([1f415c2](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/1f415c24cc84cf3fa833a36616566df4b596377a))
+* add sync_labels registry helper (ADR-0028) ([#801](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/801)) ([b0443b6](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/b0443b6af97f1f6d4341c75292e6ae31c2780867))
+* compare_baseline regression case (T0.2, issue [#708](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/708)) ([#734](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/734)) ([e67411a](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/e67411a147061467fe154825379196a70781547e))
+* gate SmartChargingDepartureTime's registry state on deadline_available (ADR-0028) ([#803](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/803)) ([c65629d](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/c65629d89f83c335411f08b0546f7cd17022c91e))
+* gate SolarSurplusSensor's registry state on solar_available (ADR-0028) ([#802](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/802)) ([5fd8fd6](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/5fd8fd62dab14a3bbafdd26c97720f08cbe30a38))
+* SolarOnly post-surplus hold + restart debounce for solar modes ([#755](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/755), [#757](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/757)) ([#759](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/759)) ([212c3bd](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/212c3bdae0cddc4ed4f7b8590e066eda136f9507))
+* update_baseline script (T1.1, issue [#708](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/708)) ([#735](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/735)) ([53f8774](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/53f8774a107384c0edbd09c6b0f9b21b6099710a))
+
+
+### Bug Fixes
+
+* omit Power-flow solar-surplus tile when solar_available is off ([#849](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/849)) ([90d1a75](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/90d1a758b67a251c3ac74444fdeac49a374d0856)), closes [#814](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/814)
+* revert the unconsumed prompt_timeout_h config-flow field ([#818](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/818)) ([da7c334](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/da7c334a9a232e770863bae5bd03c24c53d0db67))
+* route Manual mode dispatch through the ADR-0017 policy registry ([#731](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/731)) ([89f3fe9](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/89f3fe981c7529716ef2673e257d1c33f1cf9755))
+
 ## [0.3.0](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.2.1...v0.3.0) (2026-08-17)
 
 
