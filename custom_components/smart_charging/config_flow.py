@@ -705,7 +705,8 @@ VEHICLE_MAPPING_SCHEMA = vol.Schema(
         vol.Optional(CONF_VEHICLE_CHARGE_LIMIT_ENTITY): _entity("number"),
         # Optional here too (design D-2): the field-level car-at-home rule
         # (_car_home_missing_error, UC12 4a) still fires on a filled-in charge limit or a
-        # present deadline capability -- that guard is wired to this step in T8.
+        # present deadline capability -- that guard is wired to this step below, in
+        # async_step_vehicle (T8).
         vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
     }
 )
