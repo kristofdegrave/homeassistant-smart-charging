@@ -1728,8 +1728,7 @@ async def test_r20_ac9_a_tenth_gated_row_appended_changes_no_existing_step(hass,
     )
 
     async def _walk():
-        """Drive the install flow, recording each of the nine existing steps' field set
-        (`None` for the synthetic step, which has no comparison partner) alongside the
+        """Drive the install flow, recording every visited step's field set alongside the
         visited order."""
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -1756,6 +1755,7 @@ async def test_r20_ac9_a_tenth_gated_row_appended_changes_no_existing_step(hass,
         # single-instance-allowed: remove this run's entry so the next _walk() can install
         # again rather than aborting.
         await hass.config_entries.async_remove(result["result"].entry_id)
+        await hass.async_block_till_done()
         return visited, field_sets
 
     gate_flag["enabled"] = False
