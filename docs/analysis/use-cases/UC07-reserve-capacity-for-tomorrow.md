@@ -178,11 +178,13 @@ stateDiagram-v2
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
 R9 portion of AC3 (the cap never applies while the solar capability is absent, since this
-use-case's own precondition above requires it present) and AC8 in full (while the deadline
-capability is absent, both deadline preconditions — no deadline resolved for tomorrow, and no
-missed-deadline hold in effect — are always satisfied, since neither can ever arise, so the cap
-depends only on its remaining conditions; R15 still resolves as configured but has no remaining
-effect, feeding only the deadline calculation this use-case's preconditions never reach).
+use-case's own precondition above requires it present) and the solar-reserve portion of AC8 (while
+the deadline capability is absent, both deadline preconditions — no deadline resolved for
+tomorrow, and no missed-deadline hold in effect — are always satisfied, since neither can ever
+arise, so the cap depends only on its remaining conditions). AC8's R15 clause (R15 still resolves
+as configured but has no remaining effect once the deadline capability is absent) is
+`resolution-rules.md`'s to claim, not this use-case's — R15 feeds only the required-current
+computation there, which this use-case's own preconditions never reach.
 
 Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution
 (R7, `resolution-rules.md`) and Auto mode-selection (R16, `resolution-rules.md`); the

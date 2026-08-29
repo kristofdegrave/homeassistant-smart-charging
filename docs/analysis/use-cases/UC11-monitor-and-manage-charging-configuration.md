@@ -66,9 +66,11 @@ Given any [capability](../system-overview.md#ubiquitous-language) is off (R18) �
 When the System renders the runtime configuration section
 Then every runtime entity that capability gates is omitted: the solar-dependent entities (e.g. the
 solar-reserve cap default) without the solar capability, and the departure-time rows without the
-deadline capability — exactly as `Solar`/`SolarOnly` are omitted from the active-mode selector
-under R18. The dashboard never shows a runtime control for a behaviour the installation cannot
-exercise.
+deadline capability. The dashboard never shows a runtime control for a behaviour the installation
+cannot exercise. `select.smart_charging_mode` is a distinct mechanism from this row-omission one —
+its option list, not its presence, narrows: `Solar`/`SolarOnly` drop out without the solar
+capability and `Captar` without the CapTar capability, fixed when the entity is created from the
+declared capabilities rather than re-rendered per capability check (`entity-catalog.md`).
 
 **5a — Edited value is out of its configured range** — branches from step 5.
 Given the user attempts to set a runtime value outside its configured minimum/maximum (e.g. a
@@ -136,12 +138,11 @@ flowchart TD
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
 manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered
-by `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent): the
-general "runtime entities gated by an absent capability omitted" rule this document's own R19 AC4
-already claims is what realizes it — this is not a decision of its own, the entity's option list
-is fixed at creation from the declared capabilities (ADR-0005/0008), not a runtime choice this
-use-case makes. `Auto`'s own selection behaviour under the same absence is `resolution-rules.md`'s,
-not this document's.
+by `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent, 4a
+above). This is a distinct mechanism from R19 AC4's runtime-entity omission — the selector's option
+list is fixed at entity creation from the declared capabilities (ADR-0005/0008), not a per-render
+decision this use-case makes. `Auto`'s own selection behaviour under the same absence remains
+`resolution-rules.md`'s claim, not this one's.
 
 Inherited from the shared mechanism (referenced, not restated): the [install-time / runtime
 configuration](../system-overview.md#ubiquitous-language) classification and the `Setup` column in

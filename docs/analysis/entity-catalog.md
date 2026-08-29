@@ -81,8 +81,8 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow), UC12 |
-| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow), UC12 |
+| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, UC11, (UC07) | user (reconfigure flow), UC12 |
+| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, control-cycle, UC03, UC11 | user (reconfigure flow), UC12 |
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
 | `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC08, UC10 | user (reconfigure flow), UC12 |
 
