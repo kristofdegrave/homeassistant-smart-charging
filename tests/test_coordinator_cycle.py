@@ -834,6 +834,8 @@ def _resolve_deadline_urgency(**overrides):
     kwargs.update(overrides)
     mode_desired_current = kwargs.pop("mode_desired_current")
     ctx_kwargs = {name: kwargs.pop(name) for name in _CTX_FIELD_NAMES}
+    # status/net_w/charger_w/now: unused by resolve_deadline_urgency, just CycleContext's own
+    # other required fields.
     ctx = CycleContext(status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, now=0.0, **ctx_kwargs)
     return resolve_deadline_urgency(
         ctx, DeadlineUrgencyInputs(**kwargs), mode_desired_current=mode_desired_current

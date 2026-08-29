@@ -495,6 +495,7 @@ class DeadlineUrgencyInputs:
 def resolve_deadline_urgency(
     ctx: CycleContext,
     inputs: DeadlineUrgencyInputs,
+    *,
     mode_desired_current: Callable[[str], float],
 ) -> DeadlineUrgencyResult:
     """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
@@ -510,6 +511,13 @@ def resolve_deadline_urgency(
     resolved deadline, the sensed battery capacity) happen in the coordinator before this is
     called -- this function only ever receives already-resolved plain values, per
     ADR-0009/0010's HA-free boundary.
+
+    `ctx` must already carry this cycle's resolved `active_soc_limit`/`solar_reserve_active`/
+    `sun_is_up`/`sun_is_down`/`low_tariff_active` -- the coordinator's SOC-gate and deadline/
+    reserve steps populate these before calling here (issue #563: reading them off `ctx`
+    instead of a dedicated, always-resolved `float` parameter widens `active_soc_limit`'s
+    apparent type to `ctx`'s own `float | None`, but a premature read still fails loudly on
+    arithmetic rather than silently using a stale/placeholder value).
 
     The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
     (urgent=False) every cycle -- never Captar's own already-escalated request, per
