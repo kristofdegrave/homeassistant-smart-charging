@@ -472,30 +472,34 @@ class DeadlineUrgencyResult:
     resolved_mode: str | None
 
 
+@dataclass(frozen=True)
+class DeadlineUrgencyInputs:
+    """The `resolve_deadline_urgency` inputs `CycleContext` doesn't already carry (issue
+    #563): per-call gating/config values, distinct from the per-cycle readings/derived state
+    `ctx` holds (`ev_soc`, `active_soc_limit`, `voltage`, `surplus_w`, `sun_is_up`,
+    `sun_is_down`, `low_tariff_active`, `solar_reserve_active`) -- those are read straight off
+    `ctx` instead of being duplicated here."""
+
+    deadline_resolvable: bool
+    active_mode: str
+    deadline_today: time | None
+    now_dt: datetime
+    effective_battery_capacity_kwh: float
+    max_current_a: float
+    auto_dispatchable: bool
+    solar_available: bool
+    captar_available: bool
+    solar_start_threshold_w: float
+
+
 def resolve_deadline_urgency(
+    ctx: CycleContext,
+    inputs: DeadlineUrgencyInputs,
     *,
-    deadline_resolvable: bool,
-    ev_soc: float | None,
-    active_mode: str,
-    active_soc_limit: float,
-    deadline_today: time | None,
-    now_dt: datetime,
-    effective_battery_capacity_kwh: float,
-    voltage: float,
-    surplus_w: float,
-    max_current_a: float,
-    auto_dispatchable: bool,
-    solar_available: bool,
-    captar_available: bool,
-    solar_start_threshold_w: float,
-    sun_is_up: bool,
-    sun_is_down: bool,
-    low_tariff_active: bool,
-    solar_reserve_active: bool,
     mode_desired_current: Callable[[str], float],
 ) -> DeadlineUrgencyResult:
     """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
-    (ADR-0006 steps 3-6; ADR-0012-style extraction). `deadline_resolvable` is the
+    (ADR-0006 steps 3-6; ADR-0012-style extraction). `inputs.deadline_resolvable` is the
     coordinator's own `status in CHARGEABLE_STATES and ev_soc is not None` check, computed
     ONCE there and passed in rather than re-derived here from `status`/`ev_soc` -- the
     coordinator already branches on that exact predicate to decide whether to even read
@@ -508,6 +512,13 @@ def resolve_deadline_urgency(
     called -- this function only ever receives already-resolved plain values, per
     ADR-0009/0010's HA-free boundary.
 
+    `ctx` must already carry this cycle's resolved `active_soc_limit`/`solar_reserve_active`/
+    `sun_is_up`/`sun_is_down`/`low_tariff_active` -- the coordinator's SOC-gate and deadline/
+    reserve steps populate these before calling here (issue #563: reading them off `ctx`
+    instead of a dedicated, always-resolved `float` parameter widens `active_soc_limit`'s
+    apparent type to `ctx`'s own `float | None`, but a premature read still fails loudly on
+    arithmetic rather than silently using a stale/placeholder value).
+
     The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
     (urgent=False) every cycle -- never Captar's own already-escalated request, per
     resolution-rules.md's explicit warning against that (it would make urgency look satisfied
@@ -517,52 +528,52 @@ def resolve_deadline_urgency(
     `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift apart between
     the two calls.
     """
-    if not deadline_resolvable:
+    if not inputs.deadline_resolvable:
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(required_a=None, urgent=False, unreachable=False),
             urgent=False,
             resolved_mode=None,
         )
 
-    baseline_mode = active_mode
+    baseline_mode = inputs.active_mode
     common_select_kwargs: dict[str, Any] = {}
-    if auto_dispatchable:
+    if inputs.auto_dispatchable:
         available_modes = resolve_available_modes(
-            solar_available=solar_available, captar_available=captar_available
+            solar_available=inputs.solar_available, captar_available=inputs.captar_available
         )
         common_select_kwargs = dict(
-            soc=ev_soc,
-            active_soc_limit=active_soc_limit,
+            soc=ctx.ev_soc,
+            active_soc_limit=ctx.active_soc_limit,
             available_modes=available_modes,
-            solar_capability_present=solar_available,
-            sun_is_up=sun_is_up,
-            solar_surplus_sufficient=surplus_w >= solar_start_threshold_w,
-            sun_is_down=sun_is_down,
-            low_tariff_active=low_tariff_active,
-            solar_reserve_active=solar_reserve_active,
+            solar_capability_present=inputs.solar_available,
+            sun_is_up=ctx.sun_is_up,
+            solar_surplus_sufficient=ctx.surplus_w >= inputs.solar_start_threshold_w,
+            sun_is_down=ctx.sun_is_down,
+            low_tariff_active=ctx.low_tariff_active,
+            solar_reserve_active=ctx.solar_reserve_active,
         )
         baseline_mode = PROFILE_POLICIES[PROFILE_AUTO].select(urgent=False, **common_select_kwargs)
 
     baseline_desired_a = mode_desired_current(baseline_mode)
 
     required = resolve_required_current(
-        deadline_today,
+        inputs.deadline_today,
         # engines/deadline.py combines this with a naive `time` (the departure-time
         # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
         # doesn't raise (both sides represent the same local wall clock either way).
         # Wall-clock subtraction on the two DST-transition days a year can be off by
         # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
-        now_dt.replace(tzinfo=None),
-        soc=ev_soc,
-        active_soc_limit=active_soc_limit,
-        ev_battery_capacity_kwh=effective_battery_capacity_kwh,
-        voltage=voltage,
+        inputs.now_dt.replace(tzinfo=None),
+        soc=ctx.ev_soc,
+        active_soc_limit=ctx.active_soc_limit,
+        ev_battery_capacity_kwh=inputs.effective_battery_capacity_kwh,
+        voltage=ctx.voltage,
         baseline_desired_a=baseline_desired_a,
         # A deliberate simplification of "maximum permitted rate"'s full peak-clamp-fitted
         # definition (system-overview.md glossary) down to C1's hard ceiling -- refining
         # this to the actual peak-fitted rate is deferred follow-up work, not handled
         # here; it only affects when DeadlineUnreachableNotified fires.
-        maximum_permitted_rate_a=max_current_a,
+        maximum_permitted_rate_a=inputs.max_current_a,
     )
 
     # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
@@ -571,7 +582,7 @@ def resolve_deadline_urgency(
     urgent = required.urgent or required.unreachable
 
     resolved_mode = None
-    if auto_dispatchable:
+    if inputs.auto_dispatchable:
         # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
         # never changes here while Manual, even under urgency) -- only Auto resolves its
         # own mode, via the real (non-baseline) urgent this time.
