@@ -26,6 +26,7 @@
           "net_power_entity": "Netto vermogen-entiteit",
           "grid_voltage_entity": "Netspanning-entiteit (optioneel)",
           "low_tariff_entity": "Laagtarief-entiteit (optioneel)",
+          "low_tariff_states": "Laagtarief ruwe statussen (optioneel)",
           "nominal_voltage": "Nominale netspanning (V)",
           "grid_ceiling_a": "Netgrens (A)",
           "grid_safety_offset_a": "Veiligheidsmarge net (A)"
@@ -33,7 +34,8 @@
         "data_description": {
           "net_power_entity": "De sensor die het netto vermogen op het net rapporteert (afname positief, teruglevering negatief). Wordt gebruikt om zonneoverschot te detecteren en onder de netgrens te blijven.",
           "grid_voltage_entity": "Optionele sensor die de live netspanning rapporteert, gebruikt in plaats van de standaard nominale spanning bij het omrekenen tussen vermogen en stroom.",
-          "low_tariff_entity": "Optionele binary_sensor/input_boolean die aangeeft dat er een laagtariefperiode actief is.",
+          "low_tariff_entity": "Optionele entiteit die aangeeft dat er een laagtariefperiode actief is. Een binary_sensor/input_boolean wordt direct gebruikt; een sensor/select/input_select heeft de ruwe statussen hieronder nodig.",
+          "low_tariff_states": "Kommagescheiden ruwe statussen die als laagtarief gelden (bijv. \"low, off-peak\"), voor een low_tariff_entity die niet al aan/uit is. Laat leeg indien niet nodig.",
           "nominal_voltage": "Netspanning (V) gebruikt om vermogen en stroom om te rekenen wanneer er geen live netspanning-entiteit gekoppeld is. Standaard 230.",
           "grid_ceiling_a": "Maximale stroom (A) die de elektrische aansluiting van de woning veilig kan leveren, inclusief al het overige huishoudelijke verbruik. Standaard 25.",
           "grid_safety_offset_a": "Veiligheidsmarge (A) die van de netgrens wordt afgetrokken voordat de laadstroom wordt berekend, om onder de zekeringwaarde te blijven. Standaard 2."

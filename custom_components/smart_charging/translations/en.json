@@ -26,6 +26,7 @@
           "net_power_entity": "Net grid power entity",
           "grid_voltage_entity": "Grid voltage entity (optional)",
           "low_tariff_entity": "Low-tariff entity (optional)",
+          "low_tariff_states": "Low-tariff raw states (optional)",
           "nominal_voltage": "Nominal grid voltage (V)",
           "grid_ceiling_a": "Grid ceiling (A)",
           "grid_safety_offset_a": "Grid safety offset (A)"
@@ -33,7 +34,8 @@
         "data_description": {
           "net_power_entity": "The sensor reporting net grid power (import positive, export negative). Used to detect solar surplus and stay under the grid ceiling.",
           "grid_voltage_entity": "Optional sensor reporting live grid voltage, used instead of the nominal voltage default when converting between power and current.",
-          "low_tariff_entity": "Optional binary_sensor/input_boolean indicating a low electricity tariff period is active.",
+          "low_tariff_entity": "Optional entity indicating a low electricity tariff period is active. A binary_sensor/input_boolean is used as-is; a sensor/select/input_select needs its raw states listed below.",
+          "low_tariff_states": "Comma-separated raw states that count as low tariff (e.g. \"low, off-peak\"), for a low_tariff_entity that isn't already on/off. Leave blank if not needed.",
           "nominal_voltage": "Grid voltage (V) used to convert between power and current when no live grid voltage entity is mapped. Default 230.",
           "grid_ceiling_a": "Maximum current (A) the home's electrical connection can safely supply, including everything else in the house. Default 25.",
           "grid_safety_offset_a": "Safety margin (A) subtracted from the grid ceiling before charging current is computed, to stay below the fuse rating. Default 2."

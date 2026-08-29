@@ -37,6 +37,7 @@ from .const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
+    CONF_LOW_TARIFF_STATES,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
@@ -527,12 +528,13 @@ GRID_MAPPING_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NET_POWER_ENTITY): _entity("sensor"),
         vol.Optional(CONF_GRID_VOLTAGE_ENTITY): _entity("sensor"),
-        # Landing-order check (design D-4): #746 (CONF_LOW_TARIFF_STATES) had not landed on
-        # origin/main when this task ran, so this slice lands first -- this fragment carries
-        # CONF_LOW_TARIFF_ENTITY exactly as it exists today and nothing else. #746's own plan
-        # re-points its "add the field to UNGATED_MAPPING_SCHEMA" step at
-        # GRID_MAPPING_SCHEMA/STEP_GRID.
-        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(["binary_sensor", "input_boolean"]),
+        # #746 (low_tariff state-translation): the tariff signal is not always a native
+        # on/off entity, so the selector accepts sensor/select/input_select too, paired
+        # with an optional raw-state-translation table (design doc §2).
+        vol.Optional(CONF_LOW_TARIFF_ENTITY): _entity(
+            ["binary_sensor", "input_boolean", "sensor", "select", "input_select"]
+        ),
+        vol.Optional(CONF_LOW_TARIFF_STATES): str,
     }
 )
 

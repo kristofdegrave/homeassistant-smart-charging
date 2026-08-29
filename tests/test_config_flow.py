@@ -17,6 +17,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging import config_flow as config_flow_module
 from custom_components.smart_charging import const
+from custom_components.smart_charging.adapters.factory import build_adapters
+from custom_components.smart_charging.adapters.tariff import LowTariffReadAdapter
 from custom_components.smart_charging.config_flow import (
     CONFIG_TABLE,
     CORE_MAPPING_SCHEMA,
@@ -69,6 +71,7 @@ from custom_components.smart_charging.const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
+    CONF_LOW_TARIFF_STATES,
     CONF_MAX_CURRENT,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
@@ -350,6 +353,104 @@ async def test_no_grid_voltage_still_creates_entry(hass):
     result = await _run_install_flow(hass)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_GRID_VOLTAGE_ENTITY not in result["data"]
+
+
+# --- low_tariff state-translation (issue #746, T3). ---
+
+
+@pytest.mark.parametrize("domain", ["sensor", "select", "input_select"])
+async def test_grid_step_accepts_widened_low_tariff_domains(hass, domain):
+    # Widened selector: a sensor/select/input_select tariff signal with a textual
+    # state must be selectable, not just binary_sensor/input_boolean.
+    entity_id = f"{domain}.tariff"
+    result = await _run_install_flow(
+        hass,
+        per_step_input={
+            STEP_GRID: {
+                **GRID_INPUT,
+                CONF_LOW_TARIFF_ENTITY: entity_id,
+                CONF_LOW_TARIFF_STATES: "low, off-peak",
+            }
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_LOW_TARIFF_ENTITY] == entity_id
+    assert result["data"][CONF_LOW_TARIFF_STATES] == "low, off-peak"
+
+
+async def test_grid_step_low_tariff_states_optional(hass):
+    # Submitting the grid step with CONF_LOW_TARIFF_ENTITY mapped but
+    # CONF_LOW_TARIFF_STATES left blank must still succeed.
+    result = await _run_install_flow(
+        hass,
+        per_step_input={
+            STEP_GRID: {**GRID_INPUT, CONF_LOW_TARIFF_ENTITY: "binary_sensor.low_tariff"}
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_LOW_TARIFF_ENTITY] == "binary_sensor.low_tariff"
+    assert CONF_LOW_TARIFF_STATES not in result["data"]
+
+
+async def test_reconfigure_grid_step_prefills_low_tariff_states(hass):
+    # Issue #499 class: an entry already carrying CONF_LOW_TARIFF_STATES must render
+    # it as the grid step's suggested value on reconfigure, and resubmitting the
+    # prefilled form unchanged must not null it out. Unlike CONF_CONNECTED_STATES/
+    # CONF_CHARGING_STATES, this field has no "known gap" carve-out; it must
+    # actually prefill (design doc §2).
+    data = dict(_RECONFIGURE_ENTRY_DATA)
+    data[CONF_LOW_TARIFF_ENTITY] = "sensor.tariff"
+    data[CONF_LOW_TARIFF_STATES] = "low, off-peak"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_GRID
+    suggested = _suggested_values(result)
+    assert suggested[CONF_LOW_TARIFF_ENTITY] == "sensor.tariff"
+    assert suggested[CONF_LOW_TARIFF_STATES] == "low, off-peak"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], suggested)
+    assert result["step_id"] == STEP_EV_CHARGER
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            **EV_CHARGER_INPUT,
+            CONF_CONNECTED_STATES: "Connected",
+            CONF_CHARGING_STATES: "Charging",
+        },
+    )
+    assert entry.data[CONF_LOW_TARIFF_STATES] == "low, off-peak"
+
+
+async def test_factory_builds_adapter_matching_flow_submitted_states(hass):
+    # Integration checkpoint (design doc §4 criterion 7): drive the config flow to
+    # produce a real entry with a sensor-domain low_tariff mapping and a states
+    # table, then feed entry.data into build_adapters and assert the resulting
+    # LowTariffReadAdapter's _low_states matches -- proving the flow's output and
+    # the factory's input actually agree, not just each half against hand-built
+    # fixtures.
+    result = await _run_install_flow(
+        hass,
+        per_step_input={
+            STEP_GRID: {
+                **GRID_INPUT,
+                CONF_LOW_TARIFF_ENTITY: "sensor.tariff",
+                CONF_LOW_TARIFF_STATES: "low, off-peak",
+            }
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    adapters = build_adapters(hass, result["data"])
+    adapter = adapters[const.ROLE_LOW_TARIFF]
+    assert isinstance(adapter, LowTariffReadAdapter)
+    assert adapter._low_states == {"low", "off-peak"}
 
 
 # --- Step 1 (plan T4) named tests. ---
