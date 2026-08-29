@@ -416,6 +416,26 @@ jobs:
           # added separately below so it triggers the review job.
           labels: ${{ steps.kind.outputs.type }}
 
+      # A successful draft that touches nothing under add-paths (e.g. a development/testing
+      # audit task that finds the codebase already clean) leaves create-pull-request with
+      # "branch not ahead of base" -> no PR, no pull-request-number. Without this step the two
+      # gates below never fire, and the issue is stuck on needs-draft with no comment and no
+      # further trigger (the workflow is labeled-event, one-shot) — see #467.
+      - name: Report a no-diff draft
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && !steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ inputs.issue_number }}
+          ADD_PATHS: ${{ steps.kind.outputs.add_paths }}
+        run: |
+          set -euo pipefail
+          gh issue edit "$ISSUE" --remove-label needs-draft || true
+          gh issue comment "$ISSUE" --body "🤖 The drafter completed but made no changes under the allowed path(s):
+          \`\`\`
+          $ADD_PATHS
+          \`\`\`
+          Either it found nothing to change, or the task needs a narrower/clarified description. If a change is still needed, clarify the issue body and re-label \`needs-draft\`."
+
       - name: Hand off to AI review
         if: steps.kind.outputs.proceed == 'true' && steps.cpr.outputs.pull-request-number
         env:
