@@ -1,8 +1,8 @@
 {
   "coordinator_cycle": {
-    "median_cpu_ms": 0.10000000000000009,
+    "median_cpu_ms": 0.06679478250000037,
     "median_rss_delta_kb": 0.0,
-    "median_peak_traced_memory_kb": 3.0078125,
-    "recorded_at": "2026-08-17"
+    "median_peak_traced_memory_kb": 2.9453125,
+    "recorded_at": "2026-08-29"
   }
 }
