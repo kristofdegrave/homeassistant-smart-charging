@@ -142,6 +142,102 @@ def test_compare_tolerance_boundary(tmp_path):
     assert any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
 
 
+def test_compare_zero_baseline_ok_within_absolute_tolerance(tmp_path):
+    """A seeded zero baseline (e.g. median_rss_delta_kb: 0.0, issue #739) can't use a percentage
+    delta -- guards the absolute-KB fallback instead of the old "+0.0% ok" always-passes bug."""
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "coordinator_cycle": {
+                    "median_cpu_ms": 10.0,
+                    "median_rss_delta_kb": 0.0,
+                    "median_peak_traced_memory_kb": 1000.0,
+                    "recorded_at": "2026-08-17",
+                }
+            }
+        )
+    )
+    results_path = tmp_path / "coordinator_cycle.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "median_cpu_ms": 10.0,
+                "median_rss_delta_kb": 50.0,  # within the absolute tolerance floor
+                "median_peak_traced_memory_kb": 1000.0,
+            }
+        )
+    )
+
+    rows = compare(str(results_path), str(baseline_path))
+
+    assert not any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
+    assert any("median_rss_delta_kb" in row and "(vs zero baseline)" in row for row in rows)
+
+
+def test_compare_zero_baseline_never_flags_a_negative_current_value(tmp_path):
+    """Guards the no-abs()-on-the-zero-baseline-branch fix -- current_value=-150.0 is RSS
+    *shrinking*, a real improvement, not a regression; abs(-150.0) > floor would wrongly flag it."""
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "coordinator_cycle": {
+                    "median_cpu_ms": 10.0,
+                    "median_rss_delta_kb": 0.0,
+                    "median_peak_traced_memory_kb": 1000.0,
+                    "recorded_at": "2026-08-17",
+                }
+            }
+        )
+    )
+    results_path = tmp_path / "coordinator_cycle.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "median_cpu_ms": 10.0,
+                "median_rss_delta_kb": -150.0,  # RSS shrank -- not a regression at any magnitude
+                "median_peak_traced_memory_kb": 1000.0,
+            }
+        )
+    )
+
+    rows = compare(str(results_path), str(baseline_path))
+
+    assert not any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
+
+
+def test_compare_zero_baseline_flags_regression_beyond_absolute_tolerance(tmp_path):
+    """150.0 KB exceeds median_rss_delta_kb's 100.0 KB floor (issue #739)."""
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "coordinator_cycle": {
+                    "median_cpu_ms": 10.0,
+                    "median_rss_delta_kb": 0.0,
+                    "median_peak_traced_memory_kb": 1000.0,
+                    "recorded_at": "2026-08-17",
+                }
+            }
+        )
+    )
+    results_path = tmp_path / "coordinator_cycle.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "median_cpu_ms": 10.0,
+                "median_rss_delta_kb": 150.0,  # beyond the absolute tolerance floor
+                "median_peak_traced_memory_kb": 1000.0,
+            }
+        )
+    )
+
+    rows = compare(str(results_path), str(baseline_path))
+
+    assert any("median_rss_delta_kb" in row and "REGRESSED" in row for row in rows)
+
+
 def test_compare_reports_missing_results_file_without_raising(tmp_path):
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text(

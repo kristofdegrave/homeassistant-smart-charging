@@ -1,16 +1,24 @@
 # Real performance tests for the coordinator — design
 
 **Date:** 2026-08-17
-**Status:** draft (issue #708, epic #706, ADR-0026)
+**Status:** draft (issue #708, epic #706, ADR-0026, ADR-0029)
 **Type:** implementation design (test-infrastructure slice — not a `docs/design/project-plan.md`
 build slice; this spec derives from the epic #706's work breakdown and
-[ADR-0026](../adl/0026-psutil-for-perf-test-cpu-rss-measurement.md), the same way a feature slice's
-design derives from `project-plan.md`)
+[ADR-0026](../adl/0026-psutil-for-perf-test-cpu-rss-measurement.md) /
+[ADR-0029](../adl/0029-process-time-for-perf-test-cpu-measurement.md), the same way a feature
+slice's design derives from `project-plan.md`)
 
 This document is the follow-up implementation spec issue #708 calls for: turning
 `tests/benchmarks/test_coordinator_perf.py` (issue #266's original CPU/memory tripwire) into a
 real performance test — real CPU-time accounting, real process memory (RSS), multi-run statistical
-treatment, and trend tracking across CI runs — per ADR-0026's decision to measure with `psutil`.
+treatment, and trend tracking across CI runs — per ADR-0026 (RSS via `psutil`) and ADR-0029 (CPU
+via stdlib `time.process_time()`).
+
+**Amended following issue #739 / ADR-0029.** The measurement-validity findings of issue #739
+changed how §2's CPU metric is sampled (`time.process_time()`, not `psutil`'s `cpu_times()` —
+ADR-0029 supersedes ADR-0026's CPU half only) and split the `tracemalloc` window out of the
+CPU/RSS window; §4's comparison gained a zero-baseline fallback. §2 therefore no longer matches
+ADR-0026 read alone — ADR-0026 remains authoritative for the RSS metric only.
 
 **This is test-infrastructure only: no `custom_components/` behavior change.** The coordinator's
 control-cycle logic, entities, config, and events are untouched; only the test file and CI wiring
@@ -22,65 +30,85 @@ change.
 
 Epic #706 lists three gaps in the current suite: wall-clock time instead of CPU time,
 `tracemalloc`'s traced-Python-heap peak instead of real process memory (RSS), and a single sample
-with no statistical treatment or trend tracking. ADR-0026 already decided the measurement
-primitive (`psutil`, chosen over stdlib `resource.getrusage` because `memory_info().rss` reports a
+with no statistical treatment or trend tracking. ADR-0026 already decided the memory primitive
+(`psutil`, chosen over stdlib `resource.getrusage` because `memory_info().rss` reports a
 *current* value that can be sampled before/after a block to compute an isolated delta, whereas
 `getrusage`'s `ru_maxrss` is a monotonic whole-process high-water mark that contaminates across
-test functions sharing one pytest process). This spec derives the concrete measurement code, the
-statistical treatment, and the trend-tracking mechanism; it invents no new measurement primitive
-and revisits no ADR-0026 trade-off.
+test functions sharing one pytest process), and ADR-0029 decided the CPU primitive
+(`time.process_time()`). This spec derives the concrete measurement code, the statistical
+treatment, and the trend-tracking mechanism; it invents no new measurement primitive and revisits
+no ADR-0026/ADR-0029 trade-off.
 
 | Epic #706 gap | This slice |
 | --- | --- |
-| Wall-clock time, not CPU time | **In scope** — replace `time.perf_counter()` with `psutil.Process().cpu_times()` before/after delta (§2) |
-| `tracemalloc` peak, not RSS | **In scope** — add `psutil.Process().memory_info().rss` before/after delta *alongside* `tracemalloc` (§2); ADR-0026's Consequences left this an open choice — this spec keeps `tracemalloc` for its genuine per-block Python-allocation attribution (a property neither `psutil` metric has) while adding RSS as the real-memory signal `tracemalloc` cannot provide |
+| Wall-clock time, not CPU time | **In scope** — replace `time.perf_counter()` with a `time.process_time()` before/after delta (§2; ADR-0029, which supersedes ADR-0026's CPU half) |
+| `tracemalloc` peak, not RSS | **In scope** — add `psutil.Process().memory_info().rss` before/after delta *alongside* `tracemalloc` (§2); ADR-0026's Consequences left this an open choice — this spec keeps `tracemalloc` for its genuine per-block Python-allocation attribution (a property RSS does not have) while adding RSS as the real-memory signal `tracemalloc` cannot provide, each measured in its **own** sub-batch window (§2, issue #739) |
 | Single sample, no statistical treatment | **In scope** — multiple batches, first batch discarded as warm-up, median (and a small-n p95 proxy) across the rest (§3) |
 | No trend/evolution tracking across CI runs | **In scope** — a committed rolling baseline JSON + a comparison step, not `github-action-benchmark` (§4 explains the choice) |
 | Whether `perf` stays `continue-on-error: true` | **Decided: stays advisory for now** — deferred to a follow-up issue once real trend history exists to calibrate a hard gate (§5); requires also fixing a pre-existing gap where the merge-blocking `test` job unintentionally collects `tests/benchmarks/` too (§5) |
 
 ---
 
-## 2. Measurement primitives (per ADR-0026)
+## 2. Measurement primitives (CPU per ADR-0029, RSS per ADR-0026)
 
-Both new primitives are sampled **before and after each batch** (not once per whole test run) —
+All primitives are sampled **before and after each batch** (not once per whole test run) —
 this is what makes a delta meaningful in a single, long-lived pytest process, per ADR-0026's own
 rationale.
 
-Illustrative shape only (the coordinator's own cycle is `async`, so the paired plan's real
-implementation is an `async def`, not the sync sketch below):
+Each batch runs the cycles **twice, in two separate sub-batches**: one window measuring CPU and
+RSS with `tracemalloc` *off*, and a second window measuring `tracemalloc`'s peak with no CPU/RSS
+sampling. Illustrative shape only (the coordinator's own cycle is `async`, so the paired plan's
+real implementation is two `async def`s, not the sync sketch below):
 
 ```python
+import time
+import tracemalloc
+
 import psutil
 
 _process = psutil.Process()
 
-def _cpu_ms_and_rss_delta_kb(run_batch):
-    cpu_before = _process.cpu_times()
+def _measure_cpu_and_rss(run_batch):
+    cpu_before = time.process_time()
     rss_before_kb = _process.memory_info().rss / 1024
+    run_batch()
+    cpu_after = time.process_time()
+    rss_after_kb = _process.memory_info().rss / 1024
+    return (cpu_after - cpu_before) * 1000, rss_after_kb - rss_before_kb
+
+def _measure_peak_memory(run_batch):
     tracemalloc.start()
     run_batch()
     _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    cpu_after = _process.cpu_times()
-    rss_after_kb = _process.memory_info().rss / 1024
-    cpu_ms = ((cpu_after.user + cpu_after.system) - (cpu_before.user + cpu_before.system)) * 1000
-    return cpu_ms, rss_after_kb - rss_before_kb, peak_bytes / 1024
+    return peak_bytes / 1024
 ```
 
-`cpu_times()` sums `user` + `system` seconds (both CPU cost, unlike wall-clock, which also counts
-time the process was scheduled out) — this is the direct replacement for `time.perf_counter()`.
-`rss_after_kb - rss_before_kb` is the batch's own net RSS growth, isolated from whatever earlier
-batches or earlier tests in the same process already allocated. `tracemalloc` keeps its existing
-per-batch `start()`/`stop()` scoping (already isolated per batch today) and keeps reporting peak
+`time.process_time()` returns this process's summed system-and-user CPU time (unlike wall-clock,
+which also counts time the process was scheduled out) — this is the direct replacement for
+`time.perf_counter()`. It is used **instead of** `psutil.Process().cpu_times()`, whose
+`/proc/<pid>/stat`-backed fields are quantized to the `USER_HZ` clock tick (~10 ms on Linux), too
+coarse at this suite's `_ITERATIONS = 200` to separate a real cost change from tick quantization;
+`process_time()` is backed by `clock_gettime(CLOCK_PROCESS_CPUTIME_ID)` and has no such floor
+(ADR-0029, issue #739). ADR-0029 supersedes ADR-0026's CPU half only — ADR-0026 stays authoritative
+for the RSS metric.
+
+`rss_after_kb - rss_before_kb` is the sub-batch's own net RSS growth, isolated from whatever earlier
+batches or earlier tests in the same process already allocated. `tracemalloc` keeps reporting peak
 *traced Python* memory — a different, still-useful signal (per-allocation attribution) that RSS
-cannot give.
+cannot give — but in its **own** window: running it inside the CPU/RSS window (as an earlier
+revision of this section sketched) charges `tracemalloc`'s per-allocation tracing overhead to both
+the CPU-ms and the RSS-delta readings, cost that is the tracer's and not the coordinator cycle's
+(issue #739). The price of the split is that each batch executes the cycles twice; the metrics'
+validity is worth the doubled runtime at this suite's size.
 
 ---
 
 ## 3. Statistical treatment (multi-run, warm-up discard, median/p95)
 
 A single sample is noisy on a shared CI runner (epic #706's stated gap). This slice runs
-**11 batches** of the existing `_ITERATIONS = 200` cycles each, discards the **first batch as
+**11 batches** of the existing `_ITERATIONS = 200` cycles each (run once per sub-batch, so twice
+per batch — §2), discards the **first batch as
 warm-up** (JIT-free CPython has no warm-up in the traditional sense, but the first batch still
 absorbs one-time costs — import caching, adapter object creation, the first `asyncio` event-loop
 scheduling round — that later batches don't pay), and reports **median** and a **p95 proxy** across
@@ -93,7 +121,8 @@ _WARMUP_BATCHES = 1
 async def _run_batches(coord):
     results = []
     for _ in range(_BATCHES):
-        cpu_ms, rss_delta_kb, peak_kb = await _measure_one_batch(coord)
+        cpu_ms, rss_delta_kb = await _measure_cpu_and_rss(coord)   # tracemalloc off (S2)
+        peak_kb = await _measure_peak_memory(coord)                # its own window (S2)
         results.append((cpu_ms / _ITERATIONS, rss_delta_kb, peak_kb))
     return results[_WARMUP_BATCHES:]
 ```
@@ -133,7 +162,8 @@ CI writing to branches unattended. A single committed `baseline.json`, updated *
 deliberately running a script and committing the result**, keeps the same manual-approval
 discipline the project already applies to every other change, at a fraction of the setup cost.
 
-**`tests/benchmarks/baseline.json`** (new, committed to the repo):
+**`tests/benchmarks/baseline.json`** (new, committed to the repo) — shape only; the numbers below
+are illustrative placeholders, not the committed values:
 
 ```json
 {
@@ -149,7 +179,10 @@ discipline the project already applies to every other change, at a fraction of t
 The first commit of this file uses the first real CI run's own output as its seed value (Task
 listed in the paired plan) — there is no pre-existing trustworthy baseline today (the current
 suite's ceilings are, per its own docstring, "deliberately generous... until a real baseline
-exists").
+exists"). A seeded value may legitimately be **`0.0`** — `median_rss_delta_kb` in practice is,
+because a batch of 200 cycles allocates nothing the allocator does not immediately reuse, so the
+process's RSS does not move at this iteration count (issue #739; re-seeding does not change this).
+That is why the comparison below cannot assume a percentage delta is always defined.
 
 **`tests/benchmarks/compare_baseline.py`** (new, invoked as a CI step, not part of the pytest run
 itself — keeps the comparison logic testable and runnable standalone):
@@ -160,12 +193,22 @@ def compare(results_path, baseline_path) -> list[str]:
     payload against baseline_path's stored medians, at a 25% tolerance (a deliberately
     loose first-cut threshold -- there is no real variance data yet to calibrate a
     tighter one; revisiting this number is part of the same follow-up §5 already
-    schedules). Never raises/exits non-zero on a regression -- advisory only (see design
-    doc S5); returns the rows for the caller to write to GITHUB_STEP_SUMMARY and to
-    decide whether to fail the job in a later, separate decision. If results_path does
-    not exist (the pytest step errored before writing it), returns a single row saying
-    so rather than raising."""
+    schedules). A metric whose stored baseline is zero has no defined percentage delta,
+    so it falls back to comparing abs(current) against a fixed absolute floor
+    (_ZERO_BASELINE_ABS_TOLERANCE, same unit as the metric), marked "(abs, zero
+    baseline)" in the delta column (issue #739). Never raises/exits non-zero on a
+    regression -- advisory only (see design doc S5); returns the rows for the caller to
+    write to GITHUB_STEP_SUMMARY and to decide whether to fail the job in a later,
+    separate decision. If results_path does not exist (the pytest step errored before
+    writing it), returns a single row saying so rather than raising."""
 ```
+
+The zero-baseline branch exists because the percentage comparison is *not* universally applicable:
+issue #739 found that a `0.0` baseline (which `median_rss_delta_kb` genuinely has) would otherwise
+make that metric's regression check permanently vacuous — every current value divides into an
+undefined or always-"ok" delta. The absolute floor is deliberately generous in the same first-cut
+spirit as `_TOLERANCE_PCT`, and well under the perf suite's own gross-regression ceilings (§3.1), so
+it flags a metric that has genuinely started moving without firing on ordinary runner noise.
 
 Runnable as a script with two positional arguments (`results_path`, `baseline_path`) — not via an
 environment variable — so the CI step and a human running it locally use the identical invocation
@@ -253,8 +296,12 @@ revisit whether `perf` should gate merges for a confirmed (not single-run) regre
 - `tests/benchmarks/compare_baseline.py` and `update_baseline.py` are HA-free pure functions
   (read/write JSON, do arithmetic) → get their own **plain-pytest** tests,
   `tests/benchmarks/test_compare_baseline.py`, covering: a metric within tolerance produces no
-  regression row; a metric beyond tolerance produces a row flagged as regressed; `update_baseline`
-  overwrites the three median fields and `recorded_at`, and nothing else.
+  regression row; a metric beyond tolerance produces a row flagged as regressed; a metric with a
+  **zero baseline** whose current value is within `_ZERO_BASELINE_ABS_TOLERANCE` reports `ok`
+  (`test_compare_zero_baseline_ok_within_absolute_tolerance`); the same metric beyond that
+  absolute floor is flagged as regressed
+  (`test_compare_zero_baseline_flags_regression_beyond_absolute_tolerance`) — both per issue #739;
+  `update_baseline` overwrites the three median fields and `recorded_at`, and nothing else.
 - `tests/conftest.py`'s autouse HA-harness fixture treats anything outside `_PURE_DIRS`/
   `_PURE_FILES` as needing `hass` (it is not itself scoped by directory beyond that check, so a
   new file under `tests/benchmarks/` — a directory that must stay HA-harness-capable for its
@@ -287,7 +334,9 @@ tests/conftest.py
                                   #   issue #729); continue-on-error: true unchanged (S5)
 
 requirements-test.txt
-  + psutil==7.2.2                 # pinned per ADR-0026; test-only, never shipped in the HACS
+  + psutil==7.2.2                 # pinned per ADR-0026 (RSS metric only -- the CPU metric is
+                                  #   stdlib time.process_time() per ADR-0029); test-only,
+                                  #   never shipped in the HACS
                                   #   package (custom_components/smart_charging/manifest.json)
 ```
 
