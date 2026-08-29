@@ -418,7 +418,7 @@ async def test_reconfigure_grid_step_prefills_low_tariff_states(hass):
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], suggested)
     assert result["step_id"] == STEP_EV_CHARGER
-    await hass.config_entries.flow.async_configure(
+    result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
             **EV_CHARGER_INPUT,
@@ -426,6 +426,16 @@ async def test_reconfigure_grid_step_prefills_low_tariff_states(hass):
             CONF_CHARGING_STATES: "Charging",
         },
     )
+    assert result["step_id"] == STEP_VEHICLE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_NOTIFICATIONS
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()
     assert entry.data[CONF_LOW_TARIFF_STATES] == "low, off-peak"
 
 
