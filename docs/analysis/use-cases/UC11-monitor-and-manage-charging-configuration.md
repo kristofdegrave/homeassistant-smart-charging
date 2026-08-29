@@ -67,10 +67,17 @@ When the System renders the runtime configuration section
 Then every runtime entity that capability gates is omitted: the solar-dependent entities (e.g. the
 solar-reserve cap default) without the solar capability, and the departure-time rows without the
 deadline capability. The dashboard never shows a runtime control for a behaviour the installation
-cannot exercise. `select.smart_charging_mode` is a distinct mechanism from this row-omission one —
-its option list, not its presence, narrows: `Solar`/`SolarOnly` drop out without the solar
-capability and `Captar` without the CapTar capability, fixed when the entity is created from the
-declared capabilities rather than re-rendered per capability check (`entity-catalog.md`).
+cannot exercise.
+
+**4b — The active-mode selector's own option list is narrower** — branches from step 4, a distinct
+mechanism from 4a's row omission.
+Given the solar capability (`solar_available`) or the CapTar capability (`captar_available`) is off
+(R18)
+When the System renders `select.smart_charging_mode`
+Then the entity itself is shown, unlike 4a's omitted rows, but its option list excludes
+`Solar`/`SolarOnly` (solar capability absent) or `Captar` (CapTar capability absent) — fixed when
+the entity is created from the declared capabilities, not re-rendered per capability check on
+every dashboard open (`entity-catalog.md`).
 
 **5a — Edited value is out of its configured range** — branches from step 5.
 Given the user attempts to set a runtime value outside its configured minimum/maximum (e.g. a
@@ -95,6 +102,9 @@ every other section of the dashboard continues to render normally.
   install-time configuration is presented on it —
   install-time configuration remains reachable only through the integration's configuration flow
   (R19, R20).
+- `select.smart_charging_mode` offers only the modes the declared solar and CapTar capabilities
+  permit — `Solar`/`SolarOnly` and/or `Captar` absent from its option list precisely when the
+  capability declaring them is off, `Power` and `Off` always present (4b, R18).
 - The current charging status (charger status, active profile, active mode, active SOC limit,
   current charger current) and the current solar surplus and net import are visible on the
   dashboard whenever it is open.
@@ -137,12 +147,12 @@ flowchart TD
   dashboard-specific logic change).
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
-manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered
-by `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent, 4a
-above). This is a distinct mechanism from R19 AC4's runtime-entity omission — the selector's option
-list is fixed at entity creation from the declared capabilities (ADR-0005/0008), not a per-render
-decision this use-case makes. `Auto`'s own selection behaviour under the same absence remains
-`resolution-rules.md`'s claim, not this one's.
+manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered by
+`select.smart_charging_mode` while the solar/CapTar capability declaring them is absent, 4b and
+Postconditions above). This is a distinct mechanism from R19 AC4's runtime-entity omission (4a) —
+the selector's option list is fixed at entity creation from the declared capabilities (ADR-0028),
+not a per-render decision this use-case makes. `Auto`'s own selection behaviour under the same
+absence remains `resolution-rules.md`'s claim, not this one's.
 
 Inherited from the shared mechanism (referenced, not restated): the [install-time / runtime
 configuration](../system-overview.md#ubiquitous-language) classification and the `Setup` column in

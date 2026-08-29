@@ -382,6 +382,9 @@ and the notification-suppression portion is
 [UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s/[UC10](use-cases/UC10-remind-to-plug-in.md)'s.
 The manual-selection half of AC2/AC5 (the mode selector's own option list) is
 [UC11](use-cases/UC11-monitor-and-manage-charging-configuration.md)'s, not a resolution rule.
+Also the R15 clause of AC8 (R15 has no remaining effect once the deadline capability is absent,
+above) — the solar-reserve half of AC8 is
+[UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)'s.
 
 Also realizes the *effective peak limit* glossary term (supporting R3, R5, C3). NF1 holds
 throughout: these are lookups the profile and coordinator consume, not mode logic. NF2 holds too:

@@ -84,7 +84,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, UC11, (UC07) | user (reconfigure flow), UC12 |
 | `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, control-cycle, UC03, UC11 | user (reconfigure flow), UC12 |
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
-| `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC08, UC10 | user (reconfigure flow), UC12 |
+| `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC05, UC08, UC10 | user (reconfigure flow), UC12 |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
@@ -238,7 +238,7 @@ toggles.*
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
-| `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | (UC05) | user (anytime), UC12 |
+| `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | UC05 | user (anytime), UC12 |
 | `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | UC10 | user (anytime), UC12 |
 | `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (R13, R18) | UC08 | user (anytime), UC12 |
 | `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime), UC12 |
