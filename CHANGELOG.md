@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.0...v0.4.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* perf suite CPU quantization, tracemalloc overlap, zero RSS baseline ([#858](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/858)) ([70cfd7d](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/70cfd7da8d0f613055d525e3b5a5099e1c30ba7d))
+* report a no-diff draft on _ai-draft.yml instead of stranding needs-draft ([#861](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/861)) ([009b5d8](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/009b5d8511c922c8ce02e2eda3739e03a2df50af)), closes [#467](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/467)
+
 ## [0.4.0](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.3.0...v0.4.0) (2026-08-26)
 
 

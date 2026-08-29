@@ -75,7 +75,7 @@ comment — the review must be posted.
 - **Locally**: the reviewer agents (`analysis-reviewer`, `adr-reviewer`, `system-design-reviewer`)
   are read-only — they return findings, they do not post. After one returns, the main session
   posts them here in local mode (no marker). This is the posting step of the CLAUDE.md review
-  protocol (analysis: step 3; ADR: step 2), which pushes the branch and opens the PR *before* the
+  protocol (analysis and ADR: step 3), which pushes the branch and opens the PR *before* the
   fresh-agent review, so there is a PR to attach the native review to. Anchor each reviewer
   finding that carries a file path + new-version line as an inline comment; put the rest in the
   body. If there is no PR (an uncommitted local draft), report the findings in the session

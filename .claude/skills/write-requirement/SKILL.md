@@ -8,24 +8,20 @@ description: Use when adding or changing a requirement (Rnn / NFnn), constraint 
 Add or change a requirement, non-functional requirement, constraint, or glossary term in the Smart
 Charging analysis layer. Every requirement describes **what** the system must do, never **how**.
 
-## The cycle (do every step, in order)
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge) — no exceptions, including typo-level or pure-wording edits.
+This skill covers only what's specific to a requirement — don't re-derive the universal steps
+here.
 
-0. **Open (or link) a GitHub issue** describing the intent and scope — a new requirement, or a
-   behavioral change to an existing one's acceptance criteria. Skip this step only for typo-level
-   or pure-wording edits that don't change behavior. Reference the issue in the eventual
-   commit/PR (`Closes #N`).
-1. **Draft** the requirement in `requirements.md` (or the constraint row / glossary term).
-2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness.
-   Confirm **every domain term is already in the `system-overview.md` glossary**; if not, add it
-   there first.
-3. **Propagate** — a new/changed requirement usually ripples: update the glossary, the mechanism
-   docs (`control-cycle.md` / `resolution-rules.md`), and `entity-catalog.md` (new `sc_` entities,
-   with defaults matching the requirement) so the whole analysis layer stays consistent.
-4. **Review** — launch the `analysis-reviewer` agent (fresh, separate Opus; never review inline).
-5. **Address** the feedback.
-6. **Commit** (`docs: <concise description>`, or `docs: review and refine <file>` for a doc pass),
-   referencing the issue from step 0.
-7. **Stop and report** before the next document.
+## Requirement-specific additions to the workflow
+
+- **Step 1 (draft)**: the requirement in `requirements.md` (or the constraint row / glossary
+  term). Before step 3's review, self-check per `CLAUDE.md`'s "Review protocol for analysis
+  documents" (6Cs + glossary-first) — the reviewer is `analysis-reviewer`.
+- **Propagate**, before step 3's review — a new/changed requirement usually ripples: update
+  the glossary, the mechanism docs (`control-cycle.md` / `resolution-rules.md`), and
+  `entity-catalog.md` (new `sc_` entities, with defaults matching the requirement) so the
+  whole analysis layer stays consistent.
 
 ## Requirement format
 
