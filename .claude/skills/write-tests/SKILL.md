@@ -10,6 +10,10 @@ project requires. Tests mirror the package 1:1 (`tests/` matches
 `custom_components/smart_charging/`). This skill is usually used *inside* `develop-task`'s TDD loop,
 but also stands alone when back-filling or expanding coverage.
 
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge). This skill covers only what's specific to test authoring — don't
+re-derive the universal steps here.
+
 ## Choose the harness first (ADR-0009)
 
 - **Plain pytest** — `tests/modes/`, `tests/engines/`: pure logic that imports **no**
@@ -24,32 +28,31 @@ If you cannot test a piece with plain pytest without importing `homeassistant`, 
 adapter/coordinator/entity — that is a design signal, not a reason to reach for the harness in a
 `modes/`/`engines/` test.
 
-## The cycle (do every step, in order)
+## Task-specific additions to the workflow
 
-0. **Open (or link) the issue / task** the tests belong to; work on its feature branch.
-1. **Identify the unit and its layer** — pure logic vs HA-coupled — and pick the harness above.
-2. **Name and structure each test as a behavior spec:**
-   - **Name** in **Should-When-Then** form — `test_should_<expected behavior>_when_<condition>` — so
-     the name reads as a spec sentence and still traces to the requirement / UC / ADR criterion it
-     verifies (e.g. `test_should_clamp_to_remaining_headroom_when_target_exceeds_grid_limit`,
-     `test_should_force_zero_and_fault_when_status_is_none`). Coverage stays checkable by name.
-   - **Structure the body** in three blocks — **Arrange / Act / Assert** — with `# Arrange`,
-     `# Act`, `# Assert` comments: `# Arrange` sets up state, `# Act` performs the single action
-     under test, `# Assert` checks the outcome. One behavior per test — exactly one action in `# Act`,
-     and assertions only under `# Assert`.
-3. **Cover the mandated cases:**
-   - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
-     unmapped raw state (all four; ADR-0009).
-   - **Engines:** each behavioral row/branch, plus **worked examples** for clamp math (grid-safety,
-     floor/cap) and the NF4 voltage fallback.
-   - **Coordinator:** happy path, status-gating-to-zero, clamp applied, fault path (required adapter
-     `None` → 0 A + `Fault`; grid voltage `None` → not a fault).
-   - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
-4. **Run red first** — confirm each test fails without the implementation (no vacuous asserts, no
-   asserting on a mock's own return). Mock only at the HA boundary.
-5. **Review** — launch the `test-reviewer` agent (fresh, separate Opus); post findings via the
-   `submit-pr-review` skill in **local mode**.
-6. **Address**, then **manual review**, then **commit** referencing the issue.
+- **Step 1 (do the work)**: identify the unit and its layer — pure logic vs HA-coupled — pick
+  the harness above, then:
+  - **Name and structure each test as a behavior spec:**
+    - **Name** in **Should-When-Then** form — `test_should_<expected behavior>_when_<condition>`
+      — so the name reads as a spec sentence and still traces to the requirement / UC / ADR
+      criterion it verifies (e.g.
+      `test_should_clamp_to_remaining_headroom_when_target_exceeds_grid_limit`,
+      `test_should_force_zero_and_fault_when_status_is_none`). Coverage stays checkable by name.
+    - **Structure the body** in three blocks — **Arrange / Act / Assert** — with `# Arrange`,
+      `# Act`, `# Assert` comments: `# Arrange` sets up state, `# Act` performs the single action
+      under test, `# Assert` checks the outcome. One behavior per test — exactly one action in
+      `# Act`, and assertions only under `# Assert`.
+  - **Cover the mandated cases:**
+    - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
+      unmapped raw state (all four; ADR-0009).
+    - **Engines:** each behavioral row/branch, plus **worked examples** for clamp math
+      (grid-safety, floor/cap) and the NF4 voltage fallback.
+    - **Coordinator:** happy path, status-gating-to-zero, clamp applied, fault path (required
+      adapter `None` → 0 A + `Fault`; grid voltage `None` → not a fault).
+    - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
+  - **Run red first** — confirm each test fails without the implementation (no vacuous asserts,
+    no asserting on a mock's own return). Mock only at the HA boundary.
+- **Step 3's reviewer**: `test-reviewer`.
 
 ## Rules
 

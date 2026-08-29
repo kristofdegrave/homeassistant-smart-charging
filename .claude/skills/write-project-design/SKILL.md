@@ -15,34 +15,35 @@ Löwy's "project design" step normally also assigns services to teams. On a solo
 step collapses into a single sequenced, independently-testable task list — the point is the
 *mechanical derivation from the architecture*, not who does each task.
 
-## The cycle (do every step, in order)
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge) — context label `documentation` (this artifact has no
+sequential number of its own). This skill covers only what's specific to the project design —
+don't re-derive the universal steps here.
 
-0. **Open (or link) a GitHub issue** describing the intent and scope. Branch as
-   `docs/<issue-number>`, per CLAUDE.md's branch-naming convention.
-1. **Read the approved `system-design.md`** — the service map, each service's classification
-   (Client/Manager/Engine/Resource Access/Resource), and the static diagram's call directions.
-2. **Derive the build order** mechanically from the call directions: Resource Access and Engines
-   before the Managers and Clients that depend on them (a service can only be built once every
-   service it calls exists or is stubbed). Don't renegotiate the order by convenience — it follows
-   from the architecture.
-3. **Flag ADR-worthy services** — a service boundary, protocol choice, or schema decision that
-   would be expensive to reverse gets a line item to open an ADR (via `write-adr`) *before* that
-   service is built, not after.
-4. **Write the task list**: one task per service (or a natural sub-slice of a large one), each
-   independently testable, in the build order from step 2. For each task, name what it depends on
-   and the integration checkpoint that proves it's wired correctly with its callers.
-5. **Self-check**: the build order doesn't contradict the static diagram's call directions; every
-   ADR-worthy service from step 3 has a task line before the service that depends on it; every
-   service in `system-design.md` appears in exactly one task (no service dropped, none duplicated).
-6. **Review** — launch the `system-design-reviewer` agent (fresh, separate Opus; never review
-   inline). It re-reads `system-design.md` alongside this plan to check consistency.
-7. **Address** the review feedback.
-8. **Commit and push** (`docs: add project plan` or `docs: revise project plan`), referencing the
-   issue from step 0 — commit and push freely; there is no pre-commit approval gate.
-9. **Manual approval gates the merge** — the human partner's explicit approval is required before
-   the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
-10. **Stop and report** status. The approved task list feeds `writing-plans`/implementation work
-    under `custom_components/`.
+## Design-specific additions to the workflow
+
+- **Step 1 (do the work)**, in order:
+  1. **Read the approved `system-design.md`** — the service map, each service's
+     classification (Client/Manager/Engine/Resource Access/Resource), and the static
+     diagram's call directions.
+  2. **Derive the build order** mechanically from the call directions: Resource Access and
+     Engines before the Managers and Clients that depend on them (a service can only be built
+     once every service it calls exists or is stubbed). Don't renegotiate the order by
+     convenience — it follows from the architecture.
+  3. **Flag ADR-worthy services** — a service boundary, protocol choice, or schema decision
+     that would be expensive to reverse gets a line item to open an ADR (via `write-adr`)
+     *before* that service is built, not after.
+  4. **Write the task list**: one task per service (or a natural sub-slice of a large one),
+     each independently testable, in the build order from the previous step. For each task,
+     name what it depends on and the integration checkpoint that proves it's wired correctly
+     with its callers.
+- **Self-check**, before step 3's review: the build order doesn't contradict the static
+  diagram's call directions; every ADR-worthy service has a task line before the service that
+  depends on it; every service in `system-design.md` appears in exactly one task (no service
+  dropped, none duplicated).
+- **Step 3's reviewer**: `system-design-reviewer` — it re-reads `system-design.md` alongside
+  this plan to check consistency.
+- The approved task list feeds `writing-plans`/implementation work under `custom_components/`.
 
 ## Rules
 

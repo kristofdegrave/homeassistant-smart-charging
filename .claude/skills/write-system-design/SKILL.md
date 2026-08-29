@@ -14,47 +14,47 @@ and where it sits in the pipeline: `docs/plans/2026-07-07-lowy-system-design-met
 If you catch yourself creating one service per use case, or naming a service after a UC verb
 phrase, stop — that is functional decomposition wearing this method's vocabulary.
 
-## The cycle (do every step, in order)
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge) — context label `documentation` (this artifact has no
+sequential number of its own). This skill covers only what's specific to the system design —
+don't re-derive the universal steps here.
 
-0. **Open (or link) a GitHub issue** describing the intent and scope. Skip only for a pure-wording
-   edit that doesn't change a service boundary or a call direction. Branch as `docs/<issue-number>`
-   (this artifact has no sequential number of its own), per CLAUDE.md's branch-naming convention.
-1. **Enumerate the use cases and flows** already drafted (`use-cases/UCnn-*.md`, `flows/*.md`).
-   List them; do not start decomposing from them yet — this list is what you validate against in
-   step 6, not the input to step 2.
-2. **Identify volatilities.** For each area of behavior across the enumerated use cases, ask: what
-   here is likely to change, along what axis, and why? (Examples in this domain: charger hardware
-   protocol, tariff/captar rule source, deadline-urgency policy, SOC data source, solar-capability
-   presence.) Write each volatility down explicitly with its rationale — this rationale is what the
-   reviewer checks for.
-3. **Encapsulate each volatility in exactly one service**, classified as one of:
-   - **Client** — a consumer of the system (HA automations/UI/entities).
-   - **Manager** — orchestrates one use case's flow, in a specific order; the "how".
-   - **Engine** — reusable business/policy logic scoped to one volatility; never orchestrates.
-   - **Resource Access** — encapsulates *how* one specific resource is reached; isolates that
-     access volatility from everything above it.
-   - **Resource** — the external thing itself (charger, HA entity state, tariff/captar source).
-4. **Static architecture diagram** (Mermaid `flowchart TD`): the service map with allowed call
-   directions only — Client → Manager → {Engine, Resource Access} → Resource. State explicitly
-   the one allowed pattern (if any) for Manager-to-Manager orchestration; state that Engines don't
-   orchestrate and Resource Access doesn't hold policy.
-5. **Dynamic diagrams** (Mermaid `sequenceDiagram`, one per major use case): show the Manager
-   orchestrating Engines/Resource Access to realize that use case's actual flow steps, in order.
-6. **Validate against the use-case list from step 1** — walk each use case's Given/When/Then or
-   flowchart steps against the static diagram; confirm each is reachable end-to-end. A use case
-   that maps one-to-one onto a single service is a warning sign, not a pass — revisit step 2/3.
-7. **Self-check**: every service's volatility rationale is explicit; no upward calls; no service
-   named after a use-case verb phrase; every domain term already exists in the
-   `system-overview.md` glossary (add it there first if not).
-8. **Review** — launch the `system-design-reviewer` agent (fresh, separate Opus; never review
-   inline).
-9. **Address** the review feedback.
-10. **Commit and push** (`docs: add system design` or `docs: revise system design`), referencing
-    the issue from step 0 — commit and push freely; there is no pre-commit approval gate.
-11. **Manual approval gates the merge** — the human partner's explicit approval is required before
-    the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
-12. **Stop and report** status. Once `system-design.md` is approved, the `write-project-design`
-    skill consumes it to produce the implementation task breakdown.
+## Design-specific additions to the workflow
+
+- **Step 1 (do the work)**, in order:
+  1. **Enumerate the use cases and flows** already drafted (`use-cases/UCnn-*.md`,
+     `flows/*.md`). List them; do not start decomposing from them yet — this list is what you
+     validate against in step 6 below, not the input to step 2.
+  2. **Identify volatilities.** For each area of behavior across the enumerated use cases,
+     ask: what here is likely to change, along what axis, and why? (Examples in this domain:
+     charger hardware protocol, tariff/captar rule source, deadline-urgency policy, SOC data
+     source, solar-capability presence.) Write each volatility down explicitly with its
+     rationale — this rationale is what the reviewer checks for.
+  3. **Encapsulate each volatility in exactly one service**, classified as one of:
+     - **Client** — a consumer of the system (HA automations/UI/entities).
+     - **Manager** — orchestrates one use case's flow, in a specific order; the "how".
+     - **Engine** — reusable business/policy logic scoped to one volatility; never orchestrates.
+     - **Resource Access** — encapsulates *how* one specific resource is reached; isolates
+       that access volatility from everything above it.
+     - **Resource** — the external thing itself (charger, HA entity state, tariff/captar
+       source).
+  4. **Static architecture diagram** (Mermaid `flowchart TD`): the service map with allowed
+     call directions only — Client → Manager → {Engine, Resource Access} → Resource. State
+     explicitly the one allowed pattern (if any) for Manager-to-Manager orchestration; state
+     that Engines don't orchestrate and Resource Access doesn't hold policy.
+  5. **Dynamic diagrams** (Mermaid `sequenceDiagram`, one per major use case): show the
+     Manager orchestrating Engines/Resource Access to realize that use case's actual flow
+     steps, in order.
+  6. **Validate against the use-case list from step 1** — walk each use case's Given/When/Then
+     or flowchart steps against the static diagram; confirm each is reachable end-to-end. A
+     use case that maps one-to-one onto a single service is a warning sign, not a pass —
+     revisit step 2/3.
+- **Self-check**, before step 3's review: every service's volatility rationale is explicit; no
+  upward calls; no service named after a use-case verb phrase; every domain term already
+  exists in the `system-overview.md` glossary (add it there first if not).
+- **Step 3's reviewer**: `system-design-reviewer`.
+- Once `system-design.md` is approved and merged, the `write-project-design` skill consumes it
+  to produce the implementation task breakdown.
 
 ## Rules
 
