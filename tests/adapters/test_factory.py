@@ -12,6 +12,7 @@ from custom_components.smart_charging.adapters.numeric import (
 from custom_components.smart_charging.adapters.presence import PresenceReadAdapter
 from custom_components.smart_charging.adapters.status import StatusReadAdapter
 from custom_components.smart_charging.adapters.sun import SunReadAdapter
+from custom_components.smart_charging.adapters.tariff import LowTariffReadAdapter
 from custom_components.smart_charging.adapters.time_read import TimeReadAdapter
 from custom_components.smart_charging.const import (
     CONF_CAR_HOME_ENTITY,
@@ -24,6 +25,7 @@ from custom_components.smart_charging.const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
+    CONF_LOW_TARIFF_STATES,
     CONF_NET_POWER_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
@@ -221,7 +223,7 @@ async def test_factory_builds_low_tariff_role_when_configured(hass):
     data = _data()
     data[CONF_LOW_TARIFF_ENTITY] = "binary_sensor.low_tariff"
     adapters = build_adapters(hass, data)
-    assert isinstance(adapters[ROLE_LOW_TARIFF], BooleanReadAdapter)
+    assert isinstance(adapters[ROLE_LOW_TARIFF], LowTariffReadAdapter)
     assert adapters[ROLE_LOW_TARIFF]._entity_id == "binary_sensor.low_tariff"
 
 
@@ -235,6 +237,21 @@ async def test_low_tariff_empty_string_treated_as_absent(hass):
     data[CONF_LOW_TARIFF_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_LOW_TARIFF not in adapters
+
+
+async def test_factory_passes_configured_low_tariff_states(hass):
+    data = _data()
+    data[CONF_LOW_TARIFF_ENTITY] = "sensor.tariff"
+    data[CONF_LOW_TARIFF_STATES] = "low, off-peak"
+    adapters = build_adapters(hass, data)
+    assert adapters[ROLE_LOW_TARIFF]._low_states == {"low", "off-peak"}
+
+
+async def test_factory_low_tariff_states_defaults_to_empty_when_not_configured(hass):
+    data = _data()
+    data[CONF_LOW_TARIFF_ENTITY] = "binary_sensor.low_tariff"
+    adapters = build_adapters(hass, data)
+    assert adapters[ROLE_LOW_TARIFF]._low_states == set()
 
 
 async def test_factory_builds_car_home_role_when_configured(hass):
