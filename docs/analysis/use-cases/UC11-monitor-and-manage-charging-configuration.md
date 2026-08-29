@@ -77,7 +77,7 @@ When the System renders `select.smart_charging_mode`
 Then the entity itself is shown, unlike 4a's omitted rows, but its option list excludes
 `Solar`/`SolarOnly` (solar capability absent) or `Captar` (CapTar capability absent) — fixed when
 the entity is created from the declared capabilities, not re-rendered per capability check on
-every dashboard open (`entity-catalog.md`).
+every dashboard open (ADR-0028).
 
 **5a — Edited value is out of its configured range** — branches from step 5.
 Given the user attempts to set a runtime value outside its configured minimum/maximum (e.g. a

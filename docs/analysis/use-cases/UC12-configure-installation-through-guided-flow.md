@@ -448,10 +448,10 @@ departure-time inputs as R18 AC7 does.
 Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
 only whether a capability is configurable and whether its inputs are required. Also AC12 in full:
 a changed capability's submit is the reconfigure flow (1a), and a changed per-notification toggle's
-submit is the options flow (1b, above) — both trigger a config-entry reload
-(`entity-catalog.md`'s reconfigure-flow timing note; every options-flow save reloads the entry the
-same way), so either kind of change is in force from the coordinator's first cycle after its own
-reload, meeting AC12's "within the next control cycle" by the one mechanism, not two.
+submit is the options flow (1b, above) — both trigger a config-entry reload (ADR-0008;
+`entity-catalog.md`'s reconfigure-flow timing note records the same fact for the capability half),
+so either kind of change is in force from the coordinator's first cycle after its own reload,
+meeting AC12's "within the next control cycle" by the one mechanism, not two.
 
 This use-case owns R18's *configurability* half — whether a capability or toggle is
 user-configurable, whether an absent capability's own inputs are offered/required, and the timing
@@ -464,9 +464,9 @@ selector's own option list, AC2/AC5), [UC06](UC06-store-abundant-solar.md) (R8 n
 [UC07](UC07-reserve-capacity-for-tomorrow.md) (R9 not applying, AC3, and its own solar-reserve
 portion of AC8), and [UC05](UC05-guarantee-ready-by-departure.md)/[UC10](UC10-remind-to-plug-in.md)/[UC08](UC08-plan-tomorrow-home-day.md)
 (R5/R12/R13 becoming undeliverable, AC7/AC10/AC11). AC13 (the capability model's own
-extensibility) is a structural property of the model itself, not a scenario any use-case walks —
-it has no document home, and none is expected: a future capability's own use-case would exercise
-it, not this one.
+extensibility) is cited above as context (this document, NF2) but has no *owning* document, and
+none is expected — it is a structural property of the model itself, not a scenario any use-case
+walks: a future capability's own use-case would exercise it, not this one.
 
 The **notifications capability** (`notifications_available`) the `core` step presents is the fourth
 capability R18 names as in scope this release, alongside solar, CapTar, and deadline management
