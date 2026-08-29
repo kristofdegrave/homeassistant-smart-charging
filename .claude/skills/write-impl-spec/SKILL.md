@@ -19,38 +19,38 @@ restating or overriding them. If you find yourself inventing a service or a beha
 open a GitHub issue against the owning doc and fix it there first (via its own issue-first
 review cycle), then resume.
 
-## The cycle (do every step, in order)
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge) — context label `specs`, branch `specs/<issue-number>`. This
+skill covers only what's specific to an implementation spec — don't re-derive the universal
+steps here.
 
-0. **Open (or link) a GitHub issue** describing the slice and its scope. Branch as
-   `feature/<slice>` (or `docs/<issue-number>` if the work is spec-only), per CLAUDE.md's
-   branch-naming convention.
-1. **Identify the slice** from `docs/design/project-plan.md`: which tasks/services it covers, in
-   what build order, and which ADR gates apply. List them — this is what the plan's sequence must
-   obey, not something to renegotiate for convenience.
-2. **Scope it** with the `brainstorming` skill: nail the slice boundary (the same discipline
-   applies to any slice, MVP or post-MVP), the minimal config surface, and the explicit
-   deferrals **before** writing. Get the human partner's decisions on any
-   real fork (a safety-relevant omission, a config field, an entity's home).
-3. **Write the design doc** (`...-<slice>-design.md`): success criteria, install-time config, the
-   control flow, a table **mapping every piece to its named service** in `system-design.md`,
-   deliberate deferrals (with any safety caveat stated out loud), testing approach, and packaging.
-4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized tasks
-   (failing test → minimal impl → green → commit), each naming exact file paths, the ADR it honors,
-   and its **test boundary per ADR-0009** (plain pytest for `modes/`/`engines/`; HA harness for
-   adapters, coordinator, entities, config flow). Name the integration checkpoints.
-5. **Self-check:** every task traces to a `project-plan.md` task and a `system-design.md` service
-   (no new service/call direction); behavior is cited from the analysis docs as a **test anchor**,
-   not restated; every ADR gate is opened before the task it blocks; every domain term is already in
-   the `system-overview.md` glossary; entity ids match ADR-0004 native naming.
-6. **Review** — launch the `impl-spec-reviewer` agent (fresh, separate Opus; never review inline).
-   Post its findings to the PR via the `submit-pr-review` skill in **local mode**.
-7. **Address** the review feedback.
-8. **Commit and push** (`docs: add <slice> implementation spec` / `... plan`), referencing the
-   issue — commit and push freely; there is no pre-commit approval gate.
-9. **Manual approval gates the merge** — the human partner's explicit approval is required before
-   the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
-10. **Stop and report** status. Once approved, the `develop-task` skill consumes the plan
-    task-by-task to write the code.
+## Spec-specific additions to the workflow
+
+- **Step 1 (do the work)**, in order:
+  1. **Identify the slice** from `docs/design/project-plan.md`: which tasks/services it
+     covers, in what build order, and which ADR gates apply. List them — this is what the
+     plan's sequence must obey, not something to renegotiate for convenience.
+  2. **Scope it** with the `brainstorming` skill: nail the slice boundary (the same
+     discipline applies to any slice, MVP or post-MVP), the minimal config surface, and the
+     explicit deferrals **before** writing. Get the human partner's decisions on any real
+     fork (a safety-relevant omission, a config field, an entity's home).
+  3. **Write the design doc** (`...-<slice>-design.md`): success criteria, install-time
+     config, the control flow, a table **mapping every piece to its named service** in
+     `system-design.md`, deliberate deferrals (with any safety caveat stated out loud),
+     testing approach, and packaging.
+  4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized
+     tasks (failing test → minimal impl → green → commit), each naming exact file paths, the
+     ADR it honors, and its **test boundary per ADR-0009** (plain pytest for `modes/`/
+     `engines/`; HA harness for adapters, coordinator, entities, config flow). Name the
+     integration checkpoints.
+- **Self-check**, before step 3's review: every task traces to a `project-plan.md` task and a
+  `system-design.md` service (no new service/call direction); behavior is cited from the
+  analysis docs as a **test anchor**, not restated; every ADR gate is opened before the task
+  it blocks; every domain term is already in the `system-overview.md` glossary; entity ids
+  match ADR-0004 native naming.
+- **Step 3's reviewer**: `impl-spec-reviewer`.
+- Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write
+  the code.
 
 ## Rules
 
