@@ -23,8 +23,8 @@ template/quality-check steps on top of this; they never replace it.
    merging auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>`
    on every PR except the one that finishes the issue. Move the issue's board **Status** to
    `In review`.
-3. **Review.** Fresh, separate reviewer agent for the artifact type, whichever model that
-   agent's own definition specifies — never inline in the main session. Before this, and
+3. **Review.** Fresh, separate reviewer agent for the artifact type, always **Opus** (per
+   CLAUDE.md's model-selection rule) — never inline in the main session. Before this, and
    before every later pass in the loop: check if the
    branch is behind `main`; if so, merge/rebase `main` in and resolve conflicts before
    reviewing, so review always runs against current `main`.
@@ -32,8 +32,9 @@ template/quality-check steps on top of this; they never replace it.
    (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
    once the PR exists, which step 2 guarantees is always before review.
 5. **Fix, comment, resolve.** Per finding addressed: fix it, reply on that thread describing
-   what was done, resolve via GraphQL `resolveReviewThread` (no REST endpoint). Resolve only
-   what was actually fixed; leave deferred/disputed/partial threads open and say why.
+   what was done, then resolve the thread (`finalize-pr-review` has the GraphQL mechanic — no
+   REST endpoint exists for this). Resolve only what was actually fixed; leave
+   deferred/disputed/partial threads open and say why.
 6. **Loop steps 3–5**, capped at **3 rounds**, until a pass finds no remaining Critical/Major
    findings. Still unresolved at round 3 → stop and escalate to the human partner with the
    disagreement instead of continuing; that usually needs a judgment call the loop can't make.
@@ -49,6 +50,12 @@ template/quality-check steps on top of this; they never replace it.
    board **Status** to `Done` once that happens. Once merged: verify the change landed on
    `origin/main` (`git ls-tree origin/main <path>`), then remove the task's worktree
    (`git worktree remove <path>`) right away if clean — don't wait for a bulk sweep.
+
+**Stop and report, interactive session only.** After each artifact/task is committed (step 1
+onward), report status and wait for the human partner before starting the next one — this is a
+control on autonomous artifact-chaining, not boilerplate: don't draft/commit a second document
+or task off the back of one that just landed without a check-in. Doesn't apply to the CI flow
+below, which runs its labeled steps to completion by design.
 
 ## Definition of Done (self-check before step 2)
 
@@ -159,10 +166,15 @@ below commits as `github-actions[bot]`, a separate, unrelated identity.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`, `specs`
   (implementation spec: design + TDD plan, `docs/plans/**`), `development`/`testing`
   (implementation tasks against an approved plan), `workflow` (CI/skill/agent-authoring
-  changes — see CI flow below, never auto-drafted). Design-doc issues (`docs/design/**`) fall
-  back to `documentation` until a dedicated label exists — this one isn't wired into the CI
-  flow's label set yet. A context label alone never triggers CI — only an *action* label
-  (`needs-draft` on an issue; `needs-review`/`needs-work` on a PR) spawns an AI job.
+  changes — see CI flow below, never auto-drafted), `documentation` (design-doc changes,
+  `docs/design/**` — review only, not yet wired into the CI drafter's label set). A context
+  label alone never triggers CI — only an *action* label (`needs-draft` on an issue;
+  `needs-review`/`needs-work` on a PR) spawns an AI job.
+
+  This vocabulary is listed in five places that must all move together: this doc,
+  `ai-pipeline.yml`'s header comment, `_ai-draft.yml`'s `context_labels` variable/case block,
+  `.github/setup-labels.sh`'s label definitions, and `file-task-issue/SKILL.md`. Adding or
+  renaming a label means updating all five, not just one.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) — they
   drive `_ai-draft.yml`'s `max_turns` tier, not labels. Size a sweep/audit-shaped task
   (cross-file invariant check, full-suite run, cross-check an ADR) up at least one tier from
@@ -207,8 +219,12 @@ identity.
   (`<context-label>/<issue-number>`, this doc's own scheme) from the label; `development`/
   `testing` additionally require a resolved `Plan:` line. Runs the skill's *content* steps only
   (draft, self-checks) — never its review/commit/report steps, since the workflow owns those.
-  Opens the PR with `Closes #<issue-number>` and this doc's default commit-message prefix for
-  that label, then adds `needs-review`.
+  Opens the PR with `Closes #<issue-number>` and its own, coarser commit-prefix mapping
+  (`_ai-draft.yml`'s `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for
+  `development`, `test` for `testing`) — deliberately simpler than the **Commit message
+  conventions** table above, since a single draft commit has no per-UC/per-task number to
+  interpolate yet; that granularity is added by later human/CI commits on the branch, which do
+  follow the table above. Then adds `needs-review`.
 - **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` runs the matching `*-reviewer`
   agent and posts findings via `submit-pr-review`'s CI mode, ending in a `clean`/`remarks`
   verdict marker. Unacknowledged human inline comments (no `ai-fix-ack` reply) count as

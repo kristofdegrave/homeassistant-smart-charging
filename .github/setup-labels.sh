@@ -30,5 +30,6 @@ label specs       006b75 "Implementation spec (design + TDD plan) work"
 label development c5def5 "Implementation task (code + tests), pinned to a Plan: docs/plans task"
 label testing     bfd4f2 "Test-authoring work, pinned to a Plan: docs/plans task"
 label workflow    e99695 "CI/skill/agent-authoring change (review only — no auto-drafter)"
+label documentation ededed "Design-doc change (docs/design/**); review only, not yet wired into the CI drafter's label set"
 
 echo "Labels created/updated."

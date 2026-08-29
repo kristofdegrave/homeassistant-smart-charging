@@ -15,14 +15,9 @@ re-derive the universal steps here.
 
 ## Is this decision ADR-worthy?
 
-Write an ADR when the choice is about **structure that would be expensive to reverse or
-that materially constrains future options** — e.g. how integration entities map to
-hardware, where a boundary/abstraction layer sits, a config-entry schema shape, a
-library/protocol dependency, a change to the coordinator/control-loop structure.
-
-Skip it for a variable name, a log message, or any implementation detail with no lasting
-structural consequence. When in doubt: would a future contributor benefit from knowing
-*why*, not just *what*? If yes, write the ADR.
+See `CLAUDE.md`'s "Architecture Decision Records (ADRs)" section for the worthiness test
+(structure that's expensive to reverse or materially constrains future options — vs. a
+variable name or log message with no lasting structural consequence).
 
 ## ADR-specific additions to the workflow
 

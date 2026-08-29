@@ -19,14 +19,12 @@ here.
 - **Numbering** (before drafting): for a new use-case, next sequential integer after the
   highest existing `UCnn`, zero-padded to 2 digits. This is the document's own number,
   unrelated to the branch/issue numbering the workflow handles.
-- **Step 1 (draft)**: against the template below.
-- **6Cs self-check**, before step 3's review: Clarity, Concision, Completeness, Consistency,
-  Correctness, Concreteness. Confirm **every domain term is already in the
-  `system-overview.md` glossary**; if not, add it to the glossary first (a separate edit).
+- **Step 1 (draft)**: against the template below. Before step 3's review, self-check per
+  `CLAUDE.md`'s "Review protocol for analysis documents" (6Cs + glossary-first) — the
+  reviewer is `analysis-reviewer`.
 - **Update `entity-catalog.md`**, before step 3's review — for every `sc_` entity the use-case
   touches, add this UC to the entity's *Read by* and/or *Written by* column. This is the last
   content step before review.
-- **Step 3's reviewer**: `analysis-reviewer`.
 
 ## Template (section order)
 

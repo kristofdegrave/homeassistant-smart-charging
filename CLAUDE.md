@@ -65,7 +65,7 @@ docs/adl/
 - **Architecture decisions** (`docs/adl/`) → use **Opus**
 - **Implementation specs / TDD plans** (`docs/plans/`) → use **Opus**
 - **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
-- **Review agents** (`*-reviewer`) → whichever model each agent's own definition (`.claude/agents/*.md` frontmatter) specifies; not hardcoded here — see [Development workflow](docs/reference/development-workflow.md) step 3
+- **Review agents** (`*-reviewer`, e.g. analysis-reviewer, adr-reviewer, system-design-reviewer, impl-spec-reviewer, test-reviewer, code-reviewer, workflow-reviewer) → use **Opus**, regardless of the artifact type being reviewed. Each agent's own `.claude/agents/*.md` frontmatter must say `model: opus`; CI's `_ai-review.yml` `model` input must default to `opus` — both must keep matching this rule, since CI self-applies the reviewer prompt and never reads that frontmatter.
 
 ---
 

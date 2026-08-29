@@ -12,6 +12,12 @@ skill turns it into one or more scoped, context-labeled issues that the labeled 
 This is a manual/interactive skill, not a CI-wired one: brainstorming is a genuine dialogue,
 so it stays a session task for now rather than a non-interactive drafter.
 
+The single-vs-multi-artifact filing decision, epic mechanics, and deferral rules are defined
+once in
+[docs/reference/development-workflow.md](../../../docs/reference/development-workflow.md)'s
+**From idea to issues** section — read that first. This skill adds only the brainstorming gate
+that has to happen before any of that filing.
+
 ## The cycle
 
 1. **Read the idea issue** — title, body, and anything it links to (docs, related issues).
@@ -21,16 +27,10 @@ so it stays a session task for now rather than a non-interactive drafter.
    is designed in detail" — that detail belongs to each child issue's own downstream skill
    (`write-use-case`, `write-adr`, `write-requirement`, `write-impl-spec`, `develop-task`,
    `write-tests`, or whatever `workflow` resolves to).
-3. **Decompose.** If the idea maps to a single artifact, file that one issue directly with its
-   context label (`uc`, `requirement`, `adr`, `specs`, `workflow`) — no epic needed. If it
-   spans more than one artifact type, file a **new epic issue** first (Size only, unchecked
-   checklist placeholder) — the epic is a separate issue, not the `idea` issue relabeled, since
-   it must stay open tracking children long after this idea is fully decomposed. File what's
-   already decidable now (ADR/spec/other already-scoped issues), appended to the epic
-   checklist as created. **Don't file `development`/`testing` children yet** — they need an
-   approved plan's `Plan:` line, which doesn't exist until the spec issue above is drafted and
-   reviewed; file those later, once that plan lands. A part that's still too fuzzy to scope
-   keeps the `idea` label itself and gets worked later — recursion is expected, not an error.
+3. **Decompose**, following development-workflow.md's **From idea to issues** cycle above
+   (single-artifact vs. multi-artifact epic filing, what to file now vs. defer). A part that's
+   still too fuzzy to scope keeps the `idea` label itself and gets worked later — recursion is
+   expected, not an error.
 4. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea
    issue gets one comment listing everything it was split into.
 5. **Close the idea issue** once it's fully captured — either directly in child issues (single-

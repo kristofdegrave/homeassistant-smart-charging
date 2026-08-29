@@ -16,15 +16,12 @@ here.
 ## Requirement-specific additions to the workflow
 
 - **Step 1 (draft)**: the requirement in `requirements.md` (or the constraint row / glossary
-  term).
-- **6Cs self-check**, before step 3's review: Clarity, Concision, Completeness, Consistency,
-  Correctness, Concreteness. Confirm **every domain term is already in the
-  `system-overview.md` glossary**; if not, add it there first.
+  term). Before step 3's review, self-check per `CLAUDE.md`'s "Review protocol for analysis
+  documents" (6Cs + glossary-first) — the reviewer is `analysis-reviewer`.
 - **Propagate**, before step 3's review — a new/changed requirement usually ripples: update
   the glossary, the mechanism docs (`control-cycle.md` / `resolution-rules.md`), and
   `entity-catalog.md` (new `sc_` entities, with defaults matching the requirement) so the
   whole analysis layer stays consistent.
-- **Step 3's reviewer**: `analysis-reviewer`.
 
 ## Requirement format
 
