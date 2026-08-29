@@ -24,6 +24,7 @@ from custom_components.smart_charging.const import (
 from custom_components.smart_charging.coordinator_cycle import (
     CycleContext,
     DeadlineUnreachableEdge,
+    DeadlineUrgencyInputs,
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
@@ -789,10 +790,26 @@ def test_solar_step_up_gate_treats_none_soc_as_zero():
 # --- resolve_deadline_urgency (ADR-0006 steps 3-6; extracted per #506) ---
 
 
-def _base_deadline_urgency_kwargs(**overrides):
-    """Shared defaults for resolve_deadline_urgency's many keyword arguments -- each test
-    below overrides only the handful that matter for its scenario, mirroring the production
-    function's own shared-kwargs dedup rationale (#506)."""
+# CycleContext fields resolve_deadline_urgency itself reads (issue #563: the rest of its old
+# 19-parameter list moved into DeadlineUrgencyInputs below).
+_CTX_FIELD_NAMES = frozenset(
+    {
+        "ev_soc",
+        "active_soc_limit",
+        "voltage",
+        "surplus_w",
+        "sun_is_up",
+        "sun_is_down",
+        "low_tariff_active",
+        "solar_reserve_active",
+    }
+)
+
+
+def _resolve_deadline_urgency(**overrides):
+    """Shared defaults for resolve_deadline_urgency's inputs -- each test below overrides only
+    the handful that matter for its scenario (#506's dedup rationale), split here between the
+    `CycleContext` fields it reads and the `DeadlineUrgencyInputs` it's called with (#563)."""
     kwargs = dict(
         deadline_resolvable=True,
         ev_soc=50.0,
@@ -815,7 +832,12 @@ def _base_deadline_urgency_kwargs(**overrides):
         mode_desired_current=lambda mode: 0.0,
     )
     kwargs.update(overrides)
-    return kwargs
+    mode_desired_current = kwargs.pop("mode_desired_current")
+    ctx_kwargs = {name: kwargs.pop(name) for name in _CTX_FIELD_NAMES}
+    ctx = CycleContext(status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, now=0.0, **ctx_kwargs)
+    return resolve_deadline_urgency(
+        ctx, DeadlineUrgencyInputs(**kwargs), mode_desired_current=mode_desired_current
+    )
 
 
 def test_resolve_deadline_urgency_short_circuits_when_not_resolvable():
@@ -831,13 +853,11 @@ def test_resolve_deadline_urgency_short_circuits_when_not_resolvable():
     def _fail_if_called(mode):
         raise AssertionError("mode_desired_current must not be called when not resolvable")
 
-    result = resolve_deadline_urgency(
-        **_base_deadline_urgency_kwargs(
-            deadline_resolvable=False,
-            ev_soc=None,
-            auto_dispatchable=False,
-            mode_desired_current=_fail_if_called,
-        )
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        ev_soc=None,
+        auto_dispatchable=False,
+        mode_desired_current=_fail_if_called,
     )
     assert result.required.required_a is None
     assert result.required.urgent is False
@@ -851,15 +871,13 @@ def test_resolve_deadline_urgency_no_deadline_resolved_means_no_urgency():
     returns required_a=None/urgent=False/unreachable=False regardless of SOC/capacity --
     mirrored here even under Auto dispatch, where baseline/real mode selection still runs
     (deadline is not a precondition for mode selection itself, only for urgency)."""
-    result = resolve_deadline_urgency(
-        **_base_deadline_urgency_kwargs(
-            deadline_today=None,
-            auto_dispatchable=True,
-            solar_available=True,
-            sun_is_up=True,
-            surplus_w=2000.0,
-            solar_start_threshold_w=1000.0,
-        )
+    result = _resolve_deadline_urgency(
+        deadline_today=None,
+        auto_dispatchable=True,
+        solar_available=True,
+        sun_is_up=True,
+        surplus_w=2000.0,
+        solar_start_threshold_w=1000.0,
     )
     assert result.required.required_a is None
     assert result.urgent is False
@@ -880,16 +898,14 @@ def test_resolve_deadline_urgency_manual_profile_baseline_is_the_active_mode_its
         calls.append(mode)
         return 5.0  # Power's own baseline desired current in this scenario
 
-    result = resolve_deadline_urgency(
-        **_base_deadline_urgency_kwargs(
-            active_mode=MODE_POWER,
-            auto_dispatchable=False,
-            deadline_today=time(11, 0),
-            ev_soc=50.0,
-            active_soc_limit=80.0,
-            effective_battery_capacity_kwh=10.0,
-            mode_desired_current=fake_mode_desired_current,
-        )
+    result = _resolve_deadline_urgency(
+        active_mode=MODE_POWER,
+        auto_dispatchable=False,
+        deadline_today=time(11, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        mode_desired_current=fake_mode_desired_current,
     )
     assert calls == [MODE_POWER]  # baseline dry-run used the active mode, not a selected one
     # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (5.0 A)
@@ -909,22 +925,20 @@ def test_resolve_deadline_urgency_escalates_from_baseline_off_to_captar_when_urg
         calls.append(mode)
         return 0.0  # Off's own baseline desired current is always 0 A
 
-    result = resolve_deadline_urgency(
-        **_base_deadline_urgency_kwargs(
-            active_mode=MODE_OFF,
-            auto_dispatchable=True,
-            deadline_today=time(11, 0),
-            ev_soc=50.0,
-            active_soc_limit=80.0,
-            effective_battery_capacity_kwh=10.0,
-            solar_available=False,
-            captar_available=True,
-            sun_is_up=False,
-            sun_is_down=False,  # row 4 doesn't match at baseline -- falls through to Off
-            low_tariff_active=False,
-            solar_reserve_active=False,
-            mode_desired_current=fake_mode_desired_current,
-        )
+    result = _resolve_deadline_urgency(
+        active_mode=MODE_OFF,
+        auto_dispatchable=True,
+        deadline_today=time(11, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        solar_available=False,
+        captar_available=True,
+        sun_is_up=False,
+        sun_is_down=False,  # row 4 doesn't match at baseline -- falls through to Off
+        low_tariff_active=False,
+        solar_reserve_active=False,
+        mode_desired_current=fake_mode_desired_current,
     )
     assert calls == [MODE_OFF]  # baseline (rows 3-5, urgent=False) resolved to Off
     # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (0 A)
@@ -943,21 +957,19 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     def fake_mode_desired_current(mode):
         return 16.0 if mode == MODE_SOLAR else 0.0
 
-    result = resolve_deadline_urgency(
-        **_base_deadline_urgency_kwargs(
-            active_mode=MODE_OFF,
-            auto_dispatchable=True,
-            deadline_today=time(11, 0),
-            ev_soc=79.0,
-            active_soc_limit=80.0,
-            effective_battery_capacity_kwh=10.0,
-            solar_available=True,
-            captar_available=True,
-            sun_is_up=True,
-            surplus_w=2000.0,
-            solar_start_threshold_w=1000.0,
-            mode_desired_current=fake_mode_desired_current,
-        )
+    result = _resolve_deadline_urgency(
+        active_mode=MODE_OFF,
+        auto_dispatchable=True,
+        deadline_today=time(11, 0),
+        ev_soc=79.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        solar_available=True,
+        captar_available=True,
+        sun_is_up=True,
+        surplus_w=2000.0,
+        solar_start_threshold_w=1000.0,
+        mode_desired_current=fake_mode_desired_current,
     )
     # energy_needed = 10 * (80-79)/100 = 0.1 kWh over 1h = 100 W = 0.435 A < baseline (16 A)
     assert result.required.urgent is False
@@ -974,13 +986,11 @@ def test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry():
         "custom_components.smart_charging.coordinator_cycle.PROFILE_POLICIES"
     ) as mock_policies:
         mock_policies.__getitem__.return_value.select.return_value = MODE_OFF
-        result = resolve_deadline_urgency(
-            **_base_deadline_urgency_kwargs(
-                auto_dispatchable=True,
-                deadline_today=time(11, 0),
-                ev_soc=50.0,
-                active_soc_limit=80.0,
-            )
+        result = _resolve_deadline_urgency(
+            auto_dispatchable=True,
+            deadline_today=time(11, 0),
+            ev_soc=50.0,
+            active_soc_limit=80.0,
         )
         # auto_dispatchable=True with no deadline slack (see the sibling escalation test above
         # for the same energy-needed math) makes both call sites fire: the baseline dry run
