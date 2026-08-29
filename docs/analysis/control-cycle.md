@@ -197,6 +197,10 @@ flowchart TD
 - **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop/restart-debounce invariant in step 7).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
+Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
+clamp-skip half of AC5 (step 5 is skipped entirely, not merely widened, while the CapTar
+capability is absent, so net import is bounded only by the grid supply ceiling clamp, C4, step 6).
+
 Upholds but does not home: **NF1** (coordinator executes, never chooses the mode — homed in
 `requirements.md`; mode choice, including deadline urgency's `Auto` escalation, in
 `resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline

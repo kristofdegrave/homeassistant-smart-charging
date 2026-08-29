@@ -446,7 +446,21 @@ requirement (R5, R12, R13) owns its own detail) — and
 [R14](../requirements.md#r14--configurable-departure-times) AC1, which says the same of the
 departure-time inputs as R18 AC7 does.
 Neither R18 nor R14 mandates *how many steps, in what order* — their acceptance criteria concern
-only whether a capability is configurable and whether its inputs are required.
+only whether a capability is configurable and whether its inputs are required. Also AC12: the
+reconfigure flow's submit reloads the config entry (Steps, above), which restarts the coordinator,
+so a changed capability is in force from its first cycle after the reload — satisfying AC12's
+"within the next control cycle" rather than conflicting with it (`entity-catalog.md`'s
+reconfigure-flow timing note records the same fact).
+
+This use-case owns only R18's *configurability* half — whether a capability or toggle is
+user-configurable, and whether an absent capability's own inputs are offered/required. The
+*behavioural* half — what an absent capability actually changes about charging or notifications —
+is owned by whichever document realizes that behaviour: `resolution-rules.md` (Auto's
+mode-selection branches, AC2/AC5/AC7), `control-cycle.md` (the peak clamp skipping entirely, AC5),
+[UC11](UC11-monitor-and-manage-charging-configuration.md) (the mode selector's own option list,
+AC2/AC5), [UC06](UC06-store-abundant-solar.md)/[UC07](UC07-reserve-capacity-for-tomorrow.md) (R8/R9
+not applying, AC3/AC8), and [UC05](UC05-guarantee-ready-by-departure.md)/[UC10](UC10-remind-to-plug-in.md)/[UC08](UC08-plan-tomorrow-home-day.md)
+(R5/R12/R13 becoming undeliverable, AC10/AC11).
 
 The **notifications capability** (`notifications_available`) the `core` step presents is the fourth
 capability R18 names as in scope this release, alongside solar, CapTar, and deadline management

@@ -134,6 +134,15 @@ flowchart TD
   an absent capability omitted; no install-time entity shown; new runtime entities require no
   dashboard-specific logic change).
 
+Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
+manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered
+by `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent): the
+general "runtime entities gated by an absent capability omitted" rule this document's own R19 AC4
+already claims is what realizes it — this is not a decision of its own, the entity's option list
+is fixed at creation from the declared capabilities (ADR-0005/0008), not a runtime choice this
+use-case makes. `Auto`'s own selection behaviour under the same absence is `resolution-rules.md`'s,
+not this document's.
+
 Inherited from the shared mechanism (referenced, not restated): the [install-time / runtime
 configuration](../system-overview.md#ubiquitous-language) classification and the `Setup` column in
 `entity-catalog.md`; the active-SOC-limit resolution (R7) and departure-deadline resolution (R14)

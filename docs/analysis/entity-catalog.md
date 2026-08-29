@@ -409,8 +409,10 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
   manual selection; without the CapTar capability, `Captar` is not offered for manual selection.
-  `Power` and `Off` are always offered. This is where R18's manual-availability criterion is
-  realized (the `Manual` profile itself needs no rule — the user sets the mode directly, and
+  `Power` and `Off` are always offered. This binds the entity; R18's manual-availability
+  criterion (AC2/AC5) is claimed and realized by
+  [UC11](use-cases/UC11-monitor-and-manage-charging-configuration.md), not this catalog (the
+  `Manual` profile itself needs no rule — the user sets the mode directly, and
   `sensor.smart_charging_active_mode` reflects that selection as the resolved active mode).
 - The `<dow>` row stands for seven concrete entities
   (`time.smart_charging_departure_mon` … `time.smart_charging_departure_sun`),

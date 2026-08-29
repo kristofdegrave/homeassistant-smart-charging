@@ -369,6 +369,17 @@ escalation and revert happen automatically.
 - **R14** — Departure deadline resolution.
 - **R16** — `Auto` profile mode-selection.
 
+Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
+`Auto`-selection half of AC2 (row 3 never matches while the solar capability is absent, so `Auto`
+falls through to `Captar`/`Off`) and of AC5 (row 4's opportunistic top-up never matches while the
+CapTar capability is absent, and row 2's escalation selects `Power` instead of `Captar`); and AC7's
+behavioural half in full (no deadline is ever resolved and row 2 never matches while the deadline
+capability is absent, which is why the `Power` carve-out is unreachable) — the input-suppression
+half of AC7 is `requirements.md`'s R14/`UC12`'s, and the notification half is
+[UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s/[UC10](use-cases/UC10-remind-to-plug-in.md)'s.
+The manual-selection half of AC2/AC5 (the mode selector's own option list) is
+[UC11](use-cases/UC11-monitor-and-manage-charging-configuration.md)'s, not a resolution rule.
+
 Also realizes the *effective peak limit* glossary term (supporting R3, R5, C3). NF1 holds
 throughout: these are lookups the profile and coordinator consume, not mode logic. NF2 holds too:
 neither urgency lever ever touches a mode's own logic — the peak-limit raise only widens an
