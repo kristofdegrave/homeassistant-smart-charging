@@ -23,6 +23,18 @@ boundary unchanged), `psutil==7.2.2` (new test-only dependency, ADR-0026), `ruff
 
 **Model:** Per CLAUDE.md, this is development work — execute on **Sonnet**.
 
+> **Amended following issue #739 / ADR-0029.** This plan's code sketches for the CPU metric, the
+> `tracemalloc` window, and the zero-baseline case were written against ADR-0026 alone and **no
+> longer match the shipped implementation**: CPU is now sampled with stdlib `time.process_time()`
+> ([ADR-0029](../adl/0029-process-time-for-perf-test-cpu-measurement.md), which supersedes
+> ADR-0026's CPU half only — RSS via `psutil` is untouched), CPU/RSS and `tracemalloc` are measured
+> in two separate sub-batch windows, and `compare_baseline.py` has a per-metric absolute-tolerance
+> fallback for a `0.0` baseline. See the amendment note in
+> [`2026-08-17-real-perf-tests-design.md`](2026-08-17-real-perf-tests-design.md) for the rationale;
+> `tests/benchmarks/test_coordinator_perf.py` and `tests/benchmarks/compare_baseline.py` are the
+> source of truth for current behavior. The task-by-task narrative below is left as the historical
+> record of how the suite was originally built.
+
 ---
 
 ## Conventions used throughout
@@ -231,6 +243,11 @@ and change the per-metric row to:
 **Step 4: Run to verify pass**, then re-run Task 0.1's test to confirm it still passes (10.5 vs.
 10.0 is a 5% delta, well within the new 25% tolerance).
 
+> **Amendment (issue #739):** the percentage-only tolerance shown here is superseded — a `0.0`
+> baseline (which `median_rss_delta_kb` legitimately has at this iteration count) makes a
+> percentage delta undefined, so the shipped `compare_baseline.py` adds a per-metric
+> absolute-tolerance fallback for that case. See `tests/benchmarks/compare_baseline.py`.
+
 **Step 5: Commit** — `feat: flag regressions beyond tolerance in compare_baseline (issue #708)`.
 
 ---
@@ -356,6 +373,14 @@ Run `pip install -r requirements-test.txt` to confirm it resolves.
 adding a new one (the design doc's success criterion is the same test name, new body). Replace
 `test_power_mode_cycle_perf` entirely:
 
+> **Amendment (issue #739):** the sketch below is **superseded** — see the amendment at the top of
+> this document. The shipped test uses `time.process_time()` rather than `_process.cpu_times()`
+> (ADR-0029), and splits `_measure_one_batch` into `_measure_cpu_and_rss` (tracemalloc explicitly
+> not running) and `_measure_peak_memory` (its own tracemalloc window), because tracing inside the
+> CPU/RSS window polluted both readings. Read
+> `tests/benchmarks/test_coordinator_perf.py` for the current code; the sketch is kept here only as
+> the historical record.
+
 ```python
 import statistics
 
@@ -449,6 +474,11 @@ Remove the now-unused `_MAX_AVG_CYCLE_MS`/`_MAX_PEAK_MEMORY_KB` constants and th
 (no longer used — `psutil.cpu_times()` replaces `time.perf_counter()` entirely, per the design
 doc's "replace," not "augment," decision for wall-clock specifically). Keep the `tracemalloc`
 import — still used for `median_peak_traced_memory_kb`.
+
+> **Amendment (issue #739):** `psutil.cpu_times()` is **no longer** the CPU primitive — stdlib
+> `time.process_time()` replaces `time.perf_counter()` instead (ADR-0029); `psutil` remains only
+> for RSS (ADR-0026). The `time` import therefore stays. See
+> `tests/benchmarks/test_coordinator_perf.py`.
 
 The four new ceilings (`_MAX_MEDIAN_CPU_MS`, `_MAX_MAX_CPU_MS`, `_MAX_MEDIAN_RSS_DELTA_KB`,
 `_MAX_MEDIAN_PEAK_MEMORY_KB`) are **placeholders, not derived from real data** — design doc §3.1
