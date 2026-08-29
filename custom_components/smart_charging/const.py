@@ -207,6 +207,8 @@ CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 CONF_SOLAR_POWER_ENTITY = "solar_power_entity"
 # optional at the factory level (NF3) -- Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
+# raw states meaning "low tariff", comma-separated (low-tariff state-translation design doc §2)
+CONF_LOW_TARIFF_STATES = "low_tariff_states"
 # RA4 role mapping (notifications design doc §3) -- required for M3 to deliver at all, though
 # the factory-level role built from it stays optional (NF3) like its siblings above.
 CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"

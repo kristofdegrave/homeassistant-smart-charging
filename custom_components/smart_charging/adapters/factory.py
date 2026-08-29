@@ -16,6 +16,7 @@ from ..const import (
     CONF_GRID_VOLTAGE_ENTITY,
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
+    CONF_LOW_TARIFF_STATES,
     CONF_NET_POWER_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
@@ -44,6 +45,7 @@ from .numeric import NumericReadAdapter, NumericReadWriteAdapter
 from .presence import PresenceReadAdapter
 from .status import StatusReadAdapter
 from .sun import SunReadAdapter
+from .tariff import LowTariffReadAdapter
 from .time_read import TimeReadAdapter
 
 
@@ -87,7 +89,9 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     if data.get(CONF_SOLAR_FORECAST_ENTITY):
         adapters[ROLE_SOLAR_FORECAST] = NumericReadAdapter(hass, data[CONF_SOLAR_FORECAST_ENTITY])
     if data.get(CONF_LOW_TARIFF_ENTITY):
-        adapters[ROLE_LOW_TARIFF] = BooleanReadAdapter(hass, data[CONF_LOW_TARIFF_ENTITY])
+        adapters[ROLE_LOW_TARIFF] = LowTariffReadAdapter(
+            hass, data[CONF_LOW_TARIFF_ENTITY], data.get(CONF_LOW_TARIFF_STATES, "")
+        )
     if data.get(CONF_CAR_HOME_ENTITY):
         adapters[ROLE_CAR_HOME] = PresenceReadAdapter(hass, data[CONF_CAR_HOME_ENTITY])
     if data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY):
