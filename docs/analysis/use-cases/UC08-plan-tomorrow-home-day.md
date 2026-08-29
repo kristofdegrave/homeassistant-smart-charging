@@ -138,6 +138,11 @@ sequenceDiagram
   - AC3 — a flag this use-case sets is consumed downstream, by R9's solar-reserve cap ([UC07](UC07-reserve-capacity-for-tomorrow.md)) and, while the deadline capability is present (R18), by R14's departure home-day override (`resolution-rules.md`). This use-case produces the flag and has no visibility into either consumer (Postconditions, Relationships).
   - AC4 — when no configured mechanism sets the flag, tomorrow is treated as not a home day: the outcome of the suppression exception flow when nothing else acts, and of a "no" answer or a timeout.
 
+Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
+R13 portion of AC10 (the evening prompt is undeliverable while the notifications capability is
+absent) and AC11 (`evening_prompt_enabled` gates it further, on top of the capability, defaulting
+on) — both realized by AC2 above.
+
 Inherited from the shared mechanism (referenced, not restated): the two-layer conjunctive notification gating and the per-notification enable toggles' defaults (R18 AC10/AC11, `system-overview.md`); the home-day flag's role in the solar-reserve cap (R9, [UC07](UC07-reserve-capacity-for-tomorrow.md)) and in the departure home-day override (R14, `resolution-rules.md`). This use-case also reads R9's forecast sensor and threshold as its own precondition for whether to prompt at all — a separate read from UC07's, evaluated at a different time, so the two can observe different forecast values without being inconsistent.
 
 ## Relationships

@@ -122,6 +122,12 @@ stateDiagram-v2
   - AC3 — the connect/disconnect de-dup rule for the same departure window.
   - AC4 — no reminder while already connected or already at/above the active SOC limit.
 
+Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
+R12 portion of AC7 (no reminder is ever sent while the deadline capability is absent, since this
+use-case's own precondition requires it present) and of AC10/AC11 (the reminder is undeliverable
+while the notifications capability is absent, and `plug_in_reminder_enabled` gates it further, on
+top of the capability, defaulting on) — realized by AC2 above.
+
 Inherited from the shared mechanism (referenced, not restated): the deadline-capability gate on this use-case as a whole (R18); the two-layer conjunctive notification gating and the per-notification enable toggles' defaults (R18 AC11, `system-overview.md`); the departure-deadline resolution and its next-departure-time note (R14, `resolution-rules.md`), the active-SOC-limit resolution (R7, `resolution-rules.md`), and `charger status`'s canonical values (`system-overview.md`).
 
 ## Relationships

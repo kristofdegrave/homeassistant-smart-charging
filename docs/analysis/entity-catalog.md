@@ -81,10 +81,10 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, (UC07) | user (reconfigure flow), UC12 |
-| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, UC03 | user (reconfigure flow), UC12 |
+| `solar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — solar (R18) | resolution-rules, UC01, UC02, UC06, UC11, (UC07) | user (reconfigure flow), UC12 |
+| `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, control-cycle, UC03, UC11 | user (reconfigure flow), UC12 |
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
-| `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC08, UC10 | user (reconfigure flow), UC12 |
+| `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC05, UC08, UC10 | user (reconfigure flow), UC12 |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
@@ -238,7 +238,7 @@ toggles.*
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
-| `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | (UC05) | user (anytime), UC12 |
+| `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | UC05 | user (anytime), UC12 |
 | `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | UC10 | user (anytime), UC12 |
 | `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (R13, R18) | UC08 | user (anytime), UC12 |
 | `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime), UC12 |
@@ -409,8 +409,10 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 - **The `select.smart_charging_mode` selector offers only the modes available under the current
   capabilities (R18).** Without the solar capability, `Solar` and `SolarOnly` are not offered for
   manual selection; without the CapTar capability, `Captar` is not offered for manual selection.
-  `Power` and `Off` are always offered. This is where R18's manual-availability criterion is
-  realized (the `Manual` profile itself needs no rule — the user sets the mode directly, and
+  `Power` and `Off` are always offered. This binds the entity; R18's manual-availability
+  criterion (AC2/AC5) is claimed and realized by
+  [UC11](use-cases/UC11-monitor-and-manage-charging-configuration.md), not this catalog (the
+  `Manual` profile itself needs no rule — the user sets the mode directly, and
   `sensor.smart_charging_active_mode` reflects that selection as the resolved active mode).
 - The `<dow>` row stands for seven concrete entities
   (`time.smart_charging_departure_mon` … `time.smart_charging_departure_sun`),

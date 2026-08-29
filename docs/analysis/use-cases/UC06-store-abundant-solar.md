@@ -94,6 +94,11 @@ stateDiagram-v2
 
 - **R8** — Solar SOC step-up (trigger on threshold proximity, step size, maximum clamp).
 
+Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
+R8 portion of AC3: the step-up never applies while the solar capability is absent, since this
+use-case's own precondition (above) requires it present — there is no solar mode running for it
+to extend.
+
 Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and lifecycle (R7, `resolution-rules.md`, priority row 2 — this use-case is the one that applies the row-2 value and its reset), the solar-reserve cap's higher priority (R9, R7 priority row 1), and the solar capability gate (R18).
 
 ## Relationships

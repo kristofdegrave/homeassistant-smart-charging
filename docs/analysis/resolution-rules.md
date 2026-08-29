@@ -364,10 +364,27 @@ escalation and revert happen automatically.
   CapTar capability is absent, leaving `Manual` with none, as the effective-peak-limit rule above
   records; Auto mode-selection
   row 2, `Auto`'s second lever; the deadline-unreachable notification). R15 (EV battery capacity) feeds
-  the required-current computation as a configuration parameter, not a behaviour of its own.
+  the required-current computation as a configuration parameter, not a behaviour of its own — R18
+  AC8's R15 clause follows directly: absent the deadline capability there is no required-current
+  computation for it to feed, so it has no remaining effect.
 - **R7** — Active SOC limit resolution.
 - **R14** — Departure deadline resolution.
 - **R16** — `Auto` profile mode-selection.
+
+Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
+`Auto`-selection half of AC2 (row 3 never matches while the solar capability is absent, so `Auto`
+falls through to `Captar`/`Off`) and of AC5 (row 4's opportunistic top-up never matches while the
+CapTar capability is absent, and row 2's escalation selects `Power` instead of `Captar`); and the
+mode-selection portion of AC7 (no deadline is ever resolved and row 2 never matches while the
+deadline capability is absent, which is why the `Power` carve-out is unreachable) — the
+input-suppression portion of AC7 is R14/[UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s,
+and the notification-suppression portion is
+[UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s/[UC10](use-cases/UC10-remind-to-plug-in.md)'s.
+The manual-selection half of AC2/AC5 (the mode selector's own option list) is
+[UC11](use-cases/UC11-monitor-and-manage-charging-configuration.md)'s, not a resolution rule.
+Also the R15 clause of AC8 (R15 has no remaining effect once the deadline capability is absent,
+above) — the solar-reserve half of AC8 is
+[UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)'s.
 
 Also realizes the *effective peak limit* glossary term (supporting R3, R5, C3). NF1 holds
 throughout: these are lookups the profile and coordinator consume, not mode logic. NF2 holds too:
