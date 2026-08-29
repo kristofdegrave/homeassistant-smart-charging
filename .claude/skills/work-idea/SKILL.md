@@ -21,15 +21,23 @@ so it stays a session task for now rather than a non-interactive drafter.
    is designed in detail" — that detail belongs to each child issue's own downstream skill
    (`write-use-case`, `write-adr`, `write-requirement`, `write-impl-spec`, `develop-task`,
    `write-tests`, or whatever `workflow` resolves to).
-3. **Decompose into child issues** — each child gets exactly **one** context label from the
-   pipeline's existing vocabulary: `uc`, `requirement`, `adr`, `specs`, `development`,
-   `testing`, `workflow`. A part that's still too fuzzy to scope keeps the `idea` label
-   itself and gets worked later — recursion is expected, not an error.
-4. **Cross-link** — every child issue body notes "Split from #NNN"; the parent issue gets one
-   comment listing all children once decomposition is done.
-5. **Close or leave open** — close the parent as completed once every part of the idea is
-   captured in a child issue. If some part isn't covered yet, say so explicitly in the
-   closing/summary comment instead of closing over the gap.
+3. **Decompose.** If the idea maps to a single artifact, file that one issue directly with its
+   context label (`uc`, `requirement`, `adr`, `specs`, `workflow`) — no epic needed. If it
+   spans more than one artifact type, file a **new epic issue** first (Size only, unchecked
+   checklist placeholder) — the epic is a separate issue, not the `idea` issue relabeled, since
+   it must stay open tracking children long after this idea is fully decomposed. File what's
+   already decidable now (ADR/spec/other already-scoped issues), appended to the epic
+   checklist as created. **Don't file `development`/`testing` children yet** — they need an
+   approved plan's `Plan:` line, which doesn't exist until the spec issue above is drafted and
+   reviewed; file those later, once that plan lands. A part that's still too fuzzy to scope
+   keeps the `idea` label itself and gets worked later — recursion is expected, not an error.
+4. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea
+   issue gets one comment listing everything it was split into.
+5. **Close the idea issue** once it's fully captured — either directly in child issues (single-
+   artifact case) or via the new epic (multi-artifact case). Closing the idea issue is about
+   the idea being decomposed, not about the resulting epic's children being *done* — the epic
+   itself stays open tracking those until they all finish. If some part isn't covered yet, say
+   so explicitly in the closing/summary comment instead of closing over the gap.
 6. **Stop here** — do not draft artifacts, open PRs, or write code in this cycle. That is each
    child issue's own next step, per CLAUDE.md's issue-first workflow.
 
@@ -45,6 +53,10 @@ so it stays a session task for now rather than a non-interactive drafter.
 ## Common mistakes
 
 - Closing the parent idea issue when only part of it was decomposed.
+- Relabeling/reusing the idea issue itself as the epic instead of filing a new, separate epic
+  issue — the epic must stay open tracking children long after the idea issue is closed.
+- Filing `development`/`testing` child issues before an approved plan exists for them to cite
+  in their `Plan:` line.
 - Giving a child issue two context labels (e.g. both `uc` and `requirement`) because the
   idea touches both — split it into two children instead.
 - Treating this as a green light to start implementing once issues exist — each child still

@@ -47,7 +47,7 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
    - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
 4. **Run red first** — confirm each test fails without the implementation (no vacuous asserts, no
    asserting on a mock's own return). Mock only at the HA boundary.
-5. **Review** — launch the `test-reviewer` agent (fresh, separate Opus); post findings via the
+5. **Review** — launch the `test-reviewer` agent (fresh, separate); post findings via the
    `submit-pr-review` skill in **local mode**.
 6. **Address**, then **manual review**, then **commit** referencing the issue.
 

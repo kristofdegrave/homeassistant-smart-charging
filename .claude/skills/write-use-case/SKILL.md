@@ -9,26 +9,24 @@ Author a Smart Charging use-case (`docs/analysis/use-cases/UCnn-*.md`) following
 analysis-first methodology. Use-cases capture **goal-oriented behaviour** in Given/When/Then; they
 reference the shared mechanism docs rather than restating them.
 
-## The cycle (do every step, in order)
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge) — no exceptions, including typo-level or pure-wording edits.
+This skill covers only what's specific to a use-case — don't re-derive the universal steps
+here.
 
-0. **Open (or link) a GitHub issue** describing the intent and scope — a new use-case, or a
-   behavioral change to an existing one (a change to acceptance criteria, a state model, or a
-   set-point rule). Skip this step only for typo-level or pure-wording edits that don't change
-   behavior. Reference the issue in the eventual commit/PR (`Closes #N`). For a new use-case,
-   number it next — next sequential integer after the highest existing `UCnn`, zero-padded to 2
-   digits — and branch as `uc/nn` (this number, not the issue number), per CLAUDE.md's
-   branch-naming convention. For a change to an existing use-case, branch as `uc/nn` using that
-   use-case's existing number.
-1. **Draft** against the template below.
-2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness.
-   Confirm **every domain term is already in the `system-overview.md` glossary**; if not, add it to
-   the glossary first (that is a separate edit).
-3. **Update `entity-catalog.md`** — for every `sc_` entity the use-case touches, add this UC to the
-   entity's *Read by* and/or *Written by* column. This is the last content step before review.
-4. **Review** — launch the `analysis-reviewer` agent (fresh, separate Opus; never review inline).
-5. **Address** the feedback.
-6. **Commit** with `docs: review and refine UCnn-<slug>`, referencing the issue from step 0.
-7. **Stop and report** status before starting the next document.
+## Use-case-specific additions to the workflow
+
+- **Numbering** (before drafting): for a new use-case, next sequential integer after the
+  highest existing `UCnn`, zero-padded to 2 digits. This is the document's own number,
+  unrelated to the branch/issue numbering the workflow handles.
+- **Step 1 (draft)**: against the template below.
+- **6Cs self-check**, before step 3's review: Clarity, Concision, Completeness, Consistency,
+  Correctness, Concreteness. Confirm **every domain term is already in the
+  `system-overview.md` glossary**; if not, add it to the glossary first (a separate edit).
+- **Update `entity-catalog.md`**, before step 3's review — for every `sc_` entity the use-case
+  touches, add this UC to the entity's *Read by* and/or *Written by* column. This is the last
+  content step before review.
+- **Step 3's reviewer**: `analysis-reviewer`.
 
 ## Template (section order)
 

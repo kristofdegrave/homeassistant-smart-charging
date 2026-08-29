@@ -1,4 +1,4 @@
-﻿# Smart Charging — Project Guide
+# Smart Charging — Project Guide
 
 ## Methodology: Analysis-first, spec-driven development
 
@@ -65,7 +65,19 @@ docs/adl/
 - **Architecture decisions** (`docs/adl/`) → use **Opus**
 - **Implementation specs / TDD plans** (`docs/plans/`) → use **Opus**
 - **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
-- **All review agents** (`*-reviewer`, e.g. analysis-reviewer, adr-reviewer, system-design-reviewer, impl-spec-reviewer, test-reviewer, code-reviewer) → use **Opus**, regardless of the artifact type being reviewed
+- **Review agents** (`*-reviewer`) → whichever model each agent's own definition (`.claude/agents/*.md` frontmatter) specifies; not hardcoded here — see [Development workflow](docs/reference/development-workflow.md) step 3
+
+---
+
+## Development workflow
+
+Every unit of work — a doc, an ADR, a design, or code — follows one universal lifecycle:
+issue → isolated worktree → PR against `main` → review → fix/reply/resolve → loop (capped at
+3 rounds) → `needs-approval` → manual merge → worktree cleanup. Full steps, git identity, and
+issue/branch conventions:
+[docs/reference/development-workflow.md](docs/reference/development-workflow.md). The
+artifact-specific sections below (analysis docs, ADRs) layer their own template/quality-check
+steps on top of it; they never replace it.
 
 ---
 
@@ -92,30 +104,26 @@ Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
 
 ## Review protocol for analysis documents
 
-Every **new** analysis document — and every **change** to an existing one (`docs/analysis/**`) — must go through this cycle before it is committed:
+New or changed documents under `docs/analysis/**` follow the
+[Development workflow](docs/reference/development-workflow.md), with these artifact-specific
+additions:
 
-0. **Open (or link) a GitHub issue** describing the intent and scope, before drafting — required for a new document or any change that affects a requirement's acceptance criteria, a use-case's behavior, or a state model. Skip this step only for typo-level or pure-wording edits that don't change behavior. Reference the issue in the eventual commit/PR (`Closes #N`).
-1. **Draft** against the applicable template.
-2. **6Cs self-check** — Clarity, Concision, Completeness, Consistency, Correctness, Concreteness. Confirm every domain term used already exists in the `system-overview.md` glossary; if not, **add it to the glossary first**.
-3. **Fresh-agent review** — always spin up a dedicated, separate **Opus** agent for the review; **never review inline** in the main session. The review checks:
-   - **Cross-document consistency** — consistent with all other analysis documents (system-overview, requirements, mechanism docs, other use-cases). Terms match the glossary; requirement IDs match what the document references.
-   - **Requirement coverage** — the document satisfies every requirement it claims, and every requirement is reachable from at least one document.
-
-   The reviewer agent is read-only and only returns findings. Once it returns, **the main session posts those findings to the PR as a native review** — inline comments on the exact lines, same surface CI uses — by following the `submit-pr-review` skill in **local mode** (no verdict marker; a local review is human-identity feedback, not an automatic fix cycle). This requires the PR to already exist, which the interactive-review workflow guarantees (branch pushed and PR opened before the review). If there is no PR yet (an uncommitted local draft), report the findings inline in the session instead.
-4. **Address** the review feedback in the draft.
-5. **Commit and push** the addressed draft to the PR branch with `docs: review and refine <filename>` — commit and push freely; there is no pre-commit approval gate.
-6. **Manual approval gates the merge** — the human partner's explicit approval is required before the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit. The fresh-agent review does not replace this; **both are always required** before merge.
-7. **Stop and report** — after each committed document, report status and wait before starting the next.
-
-**Merge policy:** no pull request is ever auto-merged. Every PR — including CI-drafted ones — requires the human partner's **explicit manual approval** before merge (enforced by `CODEOWNERS` + branch protection). CI may draft and review a PR, but never merges or self-approves it, and neither does the assistant.
-
-**Branch naming:** `<type>/<N>` — the type matches the artifact, and `N` is the artifact's own
-sequential number, not the GitHub issue number: `adr/0003` for ADR-0003, `uc/04` for UC04. Determine
-the number (next sequential integer for that artifact type) before creating the branch, so the
-branch name is stable from the start. For artifact types with no sequential number of their own
-(e.g. a `requirements.md`/`system-overview.md` change spanning several Rnn/Cnn entries), fall back
-to `docs/<issue-number>`. Extend the numbered pattern to any future numbered artifact type (one
-issue, one branch, one PR) rather than inventing a new scheme.
+- **Step 1 (draft)**: draft against the applicable template.
+- **6Cs self-check**, done before step 3's fresh-agent review: Clarity, Concision,
+  Completeness, Consistency, Correctness, Concreteness. Confirm every domain term used
+  already exists in the `system-overview.md` glossary; if not, **add it to the glossary
+  first**.
+- **Step 3's reviewer** is `analysis-reviewer`, checking:
+  - **Cross-document consistency** — consistent with all other analysis documents
+    (system-overview, requirements, mechanism docs, other use-cases). Terms match the
+    glossary; requirement IDs match what the document references.
+  - **Requirement coverage** — the document satisfies every requirement it claims, and every
+    requirement is reachable from at least one document.
+- **Never reference PR numbers or issue tracking statuses** (e.g. "PR #30, still open",
+  "issue #29, resolved", "has landed") inside the document body. These are ephemeral
+  repo-management facts that rot as PRs merge and issues close and don't belong in a document
+  meant to record durable reasoning — describe the underlying fact directly instead (e.g.
+  "has since been reworded", not "issue #29 has since reworded"). This applies to ADRs too.
 
 ---
 
@@ -132,39 +140,26 @@ or a one-off implementation detail with no lasting structural consequence — wh
 doubt, ask whether a future contributor would benefit from knowing *why*, not just
 *what*.
 
-Use the `write-adr` skill for the full cycle. In short:
+Use the `write-adr` skill for the full cycle. Follows the
+[Development workflow](docs/reference/development-workflow.md), with these artifact-specific
+additions:
 
-0. **Open (or link) a GitHub issue** describing the decision to be made, before drafting.
-1. **Draft** against `docs/adl/template.md`, numbering sequentially and listing every
-   option seriously considered, not just the chosen one.
-2. **Review** — a fresh, separate agent (Opus) checks the ADR against existing ADRs
-   (no silent contradictions; supersede, don't edit, a prior decision) and against the
-   analysis/design docs it touches. The agent only returns findings; the main session then
-   posts them to the PR as a native review via the `submit-pr-review` skill in **local mode**
-   (no verdict marker), exactly as the analysis review protocol's step 3 describes.
-3. **Commit and push** (`docs: add ADR-NNNN <slug>`), referencing the issue from step 0 — commit and push freely; there is no pre-commit approval gate.
-4. **Manual approval gates the merge** — the human partner's explicit approval is required before the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before each commit.
-5. **Stop and report** — status before starting the next ADR.
+- **Step 1 (draft)**: draft against `docs/adl/template.md`, numbering sequentially and
+  listing every option seriously considered, not just the chosen one. Never renumber; a
+  decision that changes is superseded by a new ADR, never edited in place.
+- **Step 3's reviewer** is `adr-reviewer`, checking the ADR against existing ADRs (no silent
+  contradictions — supersede, don't edit, a prior decision) and against the analysis/design
+  docs it touches.
+- No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
+  above; the rule applies equally here.
 
 ---
 
-## Task issues (`development`/`testing` context label)
+## Issue conventions
 
-Every task issue filed against an approved `docs/plans/<slice>.md` TDD plan — the kind that gets
-the `development` or `testing` context label and, once ready, `needs-draft` — must include a line
-in its body of the **exact** form:
-
-```text
-Plan: docs/plans/<file>.md#T<task-number>
-```
-
-This is parsed by `.github/workflows/_ai-draft.yml` as the sole containment mechanism that lets the
-automated drafter act on untrusted issue-body text: the line must be anchored (nothing else on it —
-no backticks, no trailing `(PR #NNN)` prose, no surrounding sentence) so it resolves to exactly one
-plan file and one task id. `<task-number>` matches the plan doc's own task numbering (e.g. `T3.1`,
-`T5`). Everything else about the task — rationale, blockers, PR back-references — belongs in the
-surrounding prose; only this one line needs the strict form. Get it right when the issue is filed;
-retrofitting it after a failed `needs-draft` run just wastes a cycle.
+Context labels, project-board Size/Estimate fields, epic-first filing for multi-artifact
+strands, the anchored `Plan:` line task issues must carry, and branch naming — see
+[docs/reference/development-workflow.md](docs/reference/development-workflow.md).
 
 ---
 
@@ -184,4 +179,3 @@ When writing or changing a skill (`.claude/skills/`), an agent definition
 the per-artifact checklists that keep these lean by construction (single source of truth per
 fact, scoped reads, bound the loop not the turn). Quality and review-integrity rules above
 always win over any token saving.
-

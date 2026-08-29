@@ -9,6 +9,10 @@ Capture an architectural decision as a numbered, immutable Architecture Decision
 (`docs/adl/NNNN-kebab-case-title.md`), per `docs/adl/0001-use-architecture-decision-records.md`
 (the decision to use ADRs at all, and why the template looks the way it does).
 
+Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+review → fix/resolve → merge). This skill covers only what's specific to an ADR — don't
+re-derive the universal steps here.
+
 ## Is this decision ADR-worthy?
 
 Write an ADR when the choice is about **structure that would be expensive to reverse or
@@ -20,48 +24,37 @@ Skip it for a variable name, a log message, or any implementation detail with no
 structural consequence. When in doubt: would a future contributor benefit from knowing
 *why*, not just *what*? If yes, write the ADR.
 
-## The cycle (do every step, in order)
+## ADR-specific additions to the workflow
 
-0. **Open (or link) a GitHub issue** describing the decision to be made, before drafting.
-   Skip this step only when the ADR merely documents a decision already approved in an
-   issue/PR that exists (link it instead). Reference the issue in the eventual
-   commit/PR (`Closes #N`).
-1. **Number it** — next sequential integer after the highest existing `docs/adl/NNNN-*`,
-   zero-padded to 4 digits. Never reuse or renumber; a superseded ADR keeps its number.
-   Branch as `adr/NNNN` (this number, not the issue number), per CLAUDE.md's branch-naming
-   convention.
-2. **Draft** against `docs/adl/template.md`: Status, Context, **Considered options**
-   (every option seriously evaluated, each with Pro/Con — not just the chosen one),
-   Decision, Consequences.
-3. **Self-check** (no 6Cs pass — that check is for behavioral requirements/use-cases;
-   an ADR's correctness is judged by whether its options and trade-offs are real, not by
-   Clarity/Concision/etc.):
-   - Context states the forces at play without presupposing the answer.
-   - Every considered option has at least one genuine Pro and one genuine Con — an
-     option with no real Con is a sign it wasn't seriously considered, or a real Con is
-     being hidden.
-   - Decision references the options' trade-offs rather than restating them.
-   - Consequences names concrete follow-up (issues to open, docs to update), not just
-     restating the decision.
-   - `docs/adl/README.md` (the ADL) has a new row for this ADR, and the number matches
-     step 1 — the reviewer checks both and will raise a finding if either is missing.
-4. **Cross-check against existing ADRs and design docs** — does this decision contradict
-   an existing `Accepted` ADR? If so, this record supersedes it: set the new ADR's
-   Status normally, and edit the *old* ADR's Status line only, to
-   `Superseded by ADR-NNNN` — never rewrite the old ADR's Context/Decision/Consequences.
-5. **Review** — launch the `adr-reviewer` agent (fresh, separate Opus; never review
-   inline). It checks template conformance, that every option has a genuine Pro and Con,
-   that the Decision references those trade-offs, that Consequences actually follow, and
-   cross-ADR consistency (including the immutability rule). Don't use `analysis-reviewer`
-   — that agent is scoped to `docs/analysis/**` and doesn't cover `docs/adl/**`.
-6. **Address** the review feedback.
-7. **Commit and push** (`docs: add ADR-NNNN <slug>`, or `docs: supersede ADR-000X with
-   ADR-NNNN`), referencing the issue from step 0 — commit and push freely; there is no
-   pre-commit approval gate.
-8. **Manual approval gates the merge** — the human partner's explicit approval is required
-   before the PR is **merged** (enforced by `CODEOWNERS` + branch protection), not before
-   each commit.
-9. **Stop and report** status before starting the next document.
+- **Numbering** (part of step 1, before drafting): next sequential integer after the
+  highest existing `docs/adl/NNNN-*`, zero-padded to 4 digits. Never reuse or renumber; a
+  superseded ADR keeps its number. This is the ADR document's own number, unrelated to the
+  branch or issue numbering the workflow doc handles.
+- **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered
+  options** (every option seriously evaluated, each with Pro/Con — not just the chosen
+  one), Decision, Consequences.
+- **Self-check**, before step 3's review (no 6Cs pass — that check is for behavioral
+  requirements/use-cases; an ADR's correctness is judged by whether its options and
+  trade-offs are real, not by Clarity/Concision/etc.):
+  - Context states the forces at play without presupposing the answer.
+  - Every considered option has at least one genuine Pro and one genuine Con — an
+    option with no real Con is a sign it wasn't seriously considered, or a real Con is
+    being hidden.
+  - Decision references the options' trade-offs rather than restating them.
+  - Consequences names concrete follow-up (issues to open, docs to update), not just
+    restating the decision.
+  - `docs/adl/README.md` (the ADL) has a new row for this ADR, and the number matches
+    the numbering step above — the reviewer checks both and will raise a finding if
+    either is missing.
+- **Cross-check against existing ADRs and design docs**, before step 3: does this
+  decision contradict an existing `Accepted` ADR? If so, this record supersedes it: set
+  the new ADR's Status normally, and edit the *old* ADR's Status line only, to
+  `Superseded by ADR-NNNN` — never rewrite the old ADR's Context/Decision/Consequences.
+- **Step 3's reviewer**: `adr-reviewer`. It checks template conformance, that every
+  option has a genuine Pro and Con, that the Decision references those trade-offs, that
+  Consequences actually follow, and cross-ADR consistency (including the immutability
+  rule). Don't use `analysis-reviewer` — that agent is scoped to `docs/analysis/**` and
+  doesn't cover `docs/adl/**`.
 
 ## Rules
 

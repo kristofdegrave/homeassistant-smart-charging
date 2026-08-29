@@ -22,6 +22,8 @@ deciding *what* the issue is about.
    - `development` — implementation task (code + tests), pinned to a plan
    - `testing` — test-authoring task, pinned to a plan
    - `workflow` — CI/skill/agent-authoring change (review only, no auto-drafter)
+   - `documentation` — design-doc change (`docs/design/**`); not yet wired into the CI
+     drafter's label set
 
    Context labels are safe to add freely — they don't trigger CI. Only an *action* label
    (`needs-draft`, `needs-review`, `needs-work`) fires a job, and that's a separate, later step.
