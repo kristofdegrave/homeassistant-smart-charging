@@ -43,9 +43,8 @@ don't re-derive the universal steps here.
   - Native entity naming (ADR-0004); config data/options split (ADR-0005); package layout
     (ADR-0002/0010).
 - **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s Development
-  workflow section, which links the full reference (`docs/reference/development-workflow.md`)
-  — read it before starting. Covers ruff/pytest green, coverage matches the change,
-  runtime-verified not just test-verified.
+  workflow section — read it before starting. Covers ruff/pytest green, coverage matches the
+  change, runtime-verified not just test-verified.
 - **Step 3's reviewer**: `code-reviewer`. Receive its findings with the
   `receiving-code-review` skill — verify, don't perform.
 

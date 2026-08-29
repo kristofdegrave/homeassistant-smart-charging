@@ -156,10 +156,9 @@ of the producer's logic.
 
 ## Git identity
 
-Claude commits, comments, and opens PRs as the human partner's own GitHub account,
-`kristofdegrave` — there is no separate bot account (a prior `kristofdegrave-bot` account was
-banned and is no longer used). This applies to the interactive session only — the CI flow
-below commits as `github-actions[bot]`, a separate, unrelated identity.
+Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
+separate bot account for the interactive session. This applies to the interactive session
+only — the CI flow below commits as `github-actions[bot]`, a separate, unrelated identity.
 
 ## Issue conventions
 
@@ -208,8 +207,7 @@ the same issue needs a second, separate PR, suffix a third segment describing th
 ## CI flow (`.github/workflows/_ai-*.yml`)
 
 The automated, label-driven equivalent of steps 0–9 above — same lifecycle, different actor.
-Commits here are made as `github-actions[bot]`, not the interactive session's `kristofdegrave`
-identity.
+Commits here are made as `github-actions[bot]`, not the interactive session's own identity.
 
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label.
   `workflow` is never auto-drafted — no safe path containment exists for untrusted issue
