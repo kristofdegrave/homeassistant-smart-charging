@@ -138,21 +138,9 @@ number is the GitHub issue number. If extra work on the same issue needs a secon
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 
-Today the only exception to the number segment is `adr` (below) — adding another means
-updating both this doc and `_ai-draft.yml`'s branch-resolution step, which hardcodes the `adr`
-case; a skill can't declare an override CI doesn't already know about.
-
-**Exception: `adr`** — branches as `adr/<adr-number>` (the ADR's own zero-padded sequential
-number, e.g. `adr/0007`, scanned from `docs/adl/` — not the issue number) so the branch name
-identifies which ADR is in flight at a glance without cross-referencing the issue. Covers both
-interactive and CI-drafted ADR work; see `write-adr` for the numbering step. Since the number
-comes from what's merged on `main` rather than from a unique issue number, it isn't
-collision-free the way `<label>/<issue-number>` is: **only one ADR may be in flight (drafted
-but not yet merged) at a time.** CI enforces this by refusing to draft a second ADR onto an
-`adr/<n>` branch that already exists upstream (see the CI-flow bullet below); interactively,
-don't start a second ADR's branch until the first one's PR has merged. If a second, unrelated
-PR is genuinely needed for the same ADR, it keeps the same `adr/<adr-number>` branch (there is
-no issue number in this branch scheme to append a `<slug>` segment to).
+A context label's own skill may override the number segment when there's a concrete reason
+to key the branch off the artifact's own identity instead of the issue's — state the
+exception and its reason in that skill, don't leave it implicit here.
 
 ## CI flow (`.github/workflows/_ai-*.yml`)
 
@@ -164,12 +152,9 @@ Commits here are made as `github-actions[bot]`, not the interactive session's ow
   content outside `docs/**`/`custom_components/**`/`tests/**` — a human authors that draft by
   hand; only its review step is automated.
 - **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
-  (`<context-label>/<issue-number>`, this doc's own scheme — except `adr`, per the **Branch
-  naming** exception above) from the label; `development`/`testing` additionally require a
-  resolved `Plan:` line. For `adr`, a dedicated step after Checkout resolves the next ADR
-  number and refuses (clears `needs-draft`, comments why) if that number's branch already
-  exists upstream, rather than silently resetting/force-pushing whatever PR is already there —
-  the one-ADR-in-flight rule above, enforced. Runs the skill's *content* steps only
+  (`<context-label>/<issue-number>`, this doc's own scheme, or a label's own override per
+  the **Branch naming** note above) from the label; `development`/`testing` additionally
+  require a resolved `Plan:` line. Runs the skill's *content* steps only
   (draft, self-checks) — never its review/commit/report steps, since the workflow owns those.
   Opens the PR with `Closes #<issue-number>` and its own, coarser commit-prefix mapping
   (`_ai-draft.yml`'s `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for
