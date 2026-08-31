@@ -185,6 +185,20 @@ def _build_translation(connected: str, charging: str) -> dict[str, str]:
     return translation
 
 
+def _unbuild_translation(translation: Mapping[str, str]) -> dict[str, str]:
+    """Reconstruct the two raw comma-separated state fields from a stored translation dict.
+
+    Reconfigure prefill for the ev_charger step: only `CONF_STATUS_TRANSLATION` is persisted
+    (`_split_data` drops the raw comma-separated fields), so the two text fields must be
+    reconstructed from it rather than read back directly. The two-way split is exhaustive by
+    construction -- `_build_translation` is the translation dict's only producer and never
+    assigns a value other than `STATE_CONNECTED`/`STATE_CHARGING`."""
+    return {
+        CONF_CONNECTED_STATES: ", ".join(s for s, v in translation.items() if v == STATE_CONNECTED),
+        CONF_CHARGING_STATES: ", ".join(s for s, v in translation.items() if v == STATE_CHARGING),
+    }
+
+
 def _entity(domain: str | list[str] | None = None):
     cfg = {} if domain is None else {"domain": domain}
     return selector.EntitySelector(selector.EntitySelectorConfig(**cfg))
@@ -792,9 +806,11 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_ev_charger_threshold_schema().schema)
         if user_input is None:
-            return self.async_show_form(
-                step_id=STEP_EV_CHARGER, data_schema=self._maybe_prefill(schema)
+            schema = self._maybe_prefill(
+                schema,
+                extra_from=lambda data: _unbuild_translation(data[CONF_STATUS_TRANSLATION]),
             )
+            return self.async_show_form(step_id=STEP_EV_CHARGER, data_schema=schema)
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_EV_CHARGER)
