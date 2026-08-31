@@ -189,6 +189,19 @@ jobs:
         if: steps.kind.outputs.proceed == 'true'
         uses: actions/checkout@v7
 
+      # ADRs branch as adr/<adr-number> instead of adr/<issue-number> (contribution-workflow.md's
+      # branch-naming exception, mirrored in write-adr) so the branch name identifies which ADR
+      # is in flight without cross-referencing the issue. Only resolvable after Checkout, since
+      # it scans docs/adl/ — the "kind" step above runs before the repo is on disk.
+      - name: Resolve ADR branch
+        id: adr_branch
+        if: steps.kind.outputs.proceed == 'true' && steps.kind.outputs.type == 'adr'
+        run: |
+          set -euo pipefail
+          last=$(ls docs/adl 2>/dev/null | grep -E '^[0-9]{4}-.*\.md$' | sed -E 's/^([0-9]{4})-.*/\1/' | sort -n | tail -1 || true)
+          next=$(printf '%04d' "$((10#${last:-0} + 1))")
+          printf 'branch=adr/%s\n' "$next" >> "$GITHUB_OUTPUT"
+
       # The label-parsing step above only checks the `Plan: ...` line's format (no repo checked
       # out yet); this checks the reference actually resolves. A typo'd or stale reference must
       # not reach the drafter — it would either invent scope or fail confusingly mid-draft.
@@ -406,7 +419,7 @@ jobs:
 
             The `needs-review` label starts the automatic review->fix loop (max 2 cycles).
             **A maintainer's manual review and approval is required before merge** (per CLAUDE.md).
-          branch: "${{ steps.kind.outputs.branch }}"
+          branch: "${{ steps.adr_branch.outputs.branch || steps.kind.outputs.branch }}"
           delete-branch: true
           # Defense in depth against prompt injection via the issue text: even if the
           # drafter is tricked into writing outside its intended tree, only that tree's changes
