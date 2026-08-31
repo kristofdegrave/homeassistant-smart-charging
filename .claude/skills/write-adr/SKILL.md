@@ -28,6 +28,7 @@ variable name or log message with no lasting structural consequence).
 - **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered
   options** (every option seriously evaluated, each with Pro/Con — not just the chosen
   one), Decision, Consequences.
+- **Step 2 (PR)**: one PR per ADR — see **Rules** below.
 - **Self-check**, before step 3's review (no 6Cs pass — that check is for behavioral
   requirements/use-cases; an ADR's correctness is judged by whether its options and
   trade-offs are real, not by Clarity/Concision/etc.):
@@ -53,8 +54,15 @@ variable name or log message with no lasting structural consequence).
 
 ## Rules
 
-- **One decision per ADR.** If a design doc bundles several architectural choices,
+- **One problem, one decision per ADR.** Each ADR addresses exactly one problem and
+  records exactly one decision. If a design doc bundles several architectural choices,
   split them into separate ADRs rather than one ADR with multiple unrelated decisions.
+- **One PR per ADR.** No PR contains more than one ADR, or an ADR plus unrelated non-ADR
+  work, even if they're closely related — file a separate issue and open a separate PR
+  per ADR so each decision gets its own review. This doesn't cap an ADR at one PR
+  outright: a genuine follow-up on the same ADR still follows the workflow doc's
+  multi-PR convention for that issue. The ADL row (see the Self-check bullet above) and
+  any supersession Status-line edit belong to the same ADR's PR, not a separate one.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences
   to reflect a change of mind — write a new ADR that supersedes it.
 - **List the rejected options for real.** An ADR whose only "considered option" is the
@@ -69,4 +77,5 @@ variable name or log message with no lasting structural consequence).
 - An option with no genuine Con (usually means the alternative wasn't actually explored).
 - Editing an old ADR's Decision text instead of writing a new ADR that supersedes it.
 - Bundling two independent structural choices into one ADR.
+- Bundling two ADRs, or an ADR plus unrelated work, into one PR.
 
