@@ -45,6 +45,9 @@ variable name or log message with no lasting structural consequence).
   decision contradict an existing `Accepted` ADR? If so, this record supersedes it: set
   the new ADR's Status normally, and edit the *old* ADR's Status line only, to
   `Superseded by ADR-NNNN` — never rewrite the old ADR's Context/Decision/Consequences.
+- **Step 2 (PR)**: one PR per ADR. Never combine two ADRs, or an ADR with unrelated
+  non-ADR work, into a single PR — each gets its own issue and its own PR, even when
+  several ADRs are needed for the same initiative.
 - **Step 3's reviewer**: `adr-reviewer`. It checks template conformance, that every
   option has a genuine Pro and Con, that the Decision references those trade-offs, that
   Consequences actually follow, and cross-ADR consistency (including the immutability
@@ -53,8 +56,12 @@ variable name or log message with no lasting structural consequence).
 
 ## Rules
 
-- **One decision per ADR.** If a design doc bundles several architectural choices,
+- **One problem, one decision per ADR.** Each ADR addresses exactly one problem and
+  records exactly one decision. If a design doc bundles several architectural choices,
   split them into separate ADRs rather than one ADR with multiple unrelated decisions.
+- **One PR per ADR.** Never combine multiple ADRs — or an ADR with unrelated work — into
+  a single PR, even if they're closely related; file separate issues and open separate
+  PRs so each decision gets its own review.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences
   to reflect a change of mind — write a new ADR that supersedes it.
 - **List the rejected options for real.** An ADR whose only "considered option" is the
@@ -69,4 +76,5 @@ variable name or log message with no lasting structural consequence).
 - An option with no genuine Con (usually means the alternative wasn't actually explored).
 - Editing an old ADR's Decision text instead of writing a new ADR that supersedes it.
 - Bundling two independent structural choices into one ADR.
+- Bundling two ADRs, or an ADR plus unrelated work, into one PR.
 
