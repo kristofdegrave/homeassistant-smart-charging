@@ -70,12 +70,14 @@ Always read:
   reason string, and its `case` block; and `.github/setup-labels.sh`'s label definitions. A
   change to one that doesn't update the rest is a Major finding (silent drift in the
   vocabulary the whole label-driven pipeline trusts).
-- `docs/reference/development-workflow.md` is the canonical lifecycle doc; `CLAUDE.md` and
-  every skill's "Follows this project's development workflow" line only point to it, never
-  restate its steps. When this file changes, cross-check its claims about `_ai-draft.yml`/
-  `_ai-review.yml`/`_ai-fix.yml` behavior (commit-prefix mapping, branch scheme, loop caps)
-  against those files' actual current behavior — a plausible-sounding claim that drifted from
-  what the workflow file actually does is a Major finding.
+- `docs/reference/contribution-workflow.md` is the canonical lifecycle doc (with
+  `docs/reference/definition-of-done.md` and `docs/reference/idea-to-issues.md` covering the
+  phases just outside it); `CLAUDE.md` and every skill's "Follows this project's contribution
+  workflow" line only point to these, never restate their steps. When one of these files
+  changes, cross-check its claims about `_ai-draft.yml`/`_ai-review.yml`/`_ai-fix.yml` behavior
+  (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
+  behavior — a plausible-sounding claim that drifted from what the workflow file actually does
+  is a Major finding.
 
 **(5) Non-negotiables unaffected**
 - Write and review still happen in separate sessions/agents (a skill or workflow must never

@@ -9,7 +9,7 @@ Author a Smart Charging use-case (`docs/analysis/use-cases/UCnn-*.md`) following
 analysis-first methodology. Use-cases capture **goal-oriented behaviour** in Given/When/Then; they
 reference the shared mechanism docs rather than restating them.
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge) — no exceptions, including typo-level or pure-wording edits.
 This skill covers only what's specific to a use-case — don't re-derive the universal steps
 here.

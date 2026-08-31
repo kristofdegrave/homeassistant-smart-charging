@@ -8,7 +8,7 @@ description: Use when adding or changing a requirement (Rnn / NFnn), constraint 
 Add or change a requirement, non-functional requirement, constraint, or glossary term in the Smart
 Charging analysis layer. Every requirement describes **what** the system must do, never **how**.
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge) — no exceptions, including typo-level or pure-wording edits.
 This skill covers only what's specific to a requirement — don't re-derive the universal steps
 here.

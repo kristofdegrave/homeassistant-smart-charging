@@ -15,7 +15,7 @@ Löwy's "project design" step normally also assigns services to teams. On a solo
 step collapses into a single sequenced, independently-testable task list — the point is the
 *mechanical derivation from the architecture*, not who does each task.
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge) — context label `documentation` (this artifact has no
 sequential number of its own). This skill covers only what's specific to the project design —
 don't re-derive the universal steps here.
