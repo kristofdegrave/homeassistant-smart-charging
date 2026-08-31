@@ -42,9 +42,9 @@ don't re-derive the universal steps here.
     voltage `None` → nominal, not a fault (ADR-0007).
   - Native entity naming (ADR-0004); config data/options split (ADR-0005); package layout
     (ADR-0002/0010).
-- **Definition of Done** (use `verification-before-completion`): per
-  `docs/reference/definition-of-done.md` — read it before starting. Covers ruff/pytest green,
-  coverage matches the change, runtime-verified not just test-verified.
+- **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s
+  Contribution workflow section — read it before starting. Covers ruff/pytest green, coverage
+  matches the change, runtime-verified not just test-verified.
 - **Step 3's reviewer**: `code-reviewer`. Receive its findings with the
   `receiving-code-review` skill — verify, don't perform.
 
