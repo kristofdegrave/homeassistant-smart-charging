@@ -28,6 +28,7 @@ variable name or log message with no lasting structural consequence).
 - **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered
   options** (every option seriously evaluated, each with Pro/Con — not just the chosen
   one), Decision, Consequences.
+- **Step 2 (PR)**: one PR per ADR — see **Rules** below.
 - **Self-check**, before step 3's review (no 6Cs pass — that check is for behavioral
   requirements/use-cases; an ADR's correctness is judged by whether its options and
   trade-offs are real, not by Clarity/Concision/etc.):
@@ -45,9 +46,6 @@ variable name or log message with no lasting structural consequence).
   decision contradict an existing `Accepted` ADR? If so, this record supersedes it: set
   the new ADR's Status normally, and edit the *old* ADR's Status line only, to
   `Superseded by ADR-NNNN` — never rewrite the old ADR's Context/Decision/Consequences.
-- **Step 2 (PR)**: one PR per ADR. Never combine two ADRs, or an ADR with unrelated
-  non-ADR work, into a single PR — each gets its own issue and its own PR, even when
-  several ADRs are needed for the same initiative.
 - **Step 3's reviewer**: `adr-reviewer`. It checks template conformance, that every
   option has a genuine Pro and Con, that the Decision references those trade-offs, that
   Consequences actually follow, and cross-ADR consistency (including the immutability
@@ -59,9 +57,12 @@ variable name or log message with no lasting structural consequence).
 - **One problem, one decision per ADR.** Each ADR addresses exactly one problem and
   records exactly one decision. If a design doc bundles several architectural choices,
   split them into separate ADRs rather than one ADR with multiple unrelated decisions.
-- **One PR per ADR.** Never combine multiple ADRs — or an ADR with unrelated work — into
-  a single PR, even if they're closely related; file separate issues and open separate
-  PRs so each decision gets its own review.
+- **One PR per ADR.** No PR contains more than one ADR, or an ADR plus unrelated non-ADR
+  work, even if they're closely related — file a separate issue and open a separate PR
+  per ADR so each decision gets its own review. This doesn't cap an ADR at one PR
+  outright: a genuine follow-up on the same ADR still follows the workflow doc's
+  multi-PR convention for that issue. The ADL row (see the Self-check bullet above) and
+  any supersession Status-line edit belong to the same ADR's PR, not a separate one.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences
   to reflect a change of mind — write a new ADR that supersedes it.
 - **List the rejected options for real.** An ADR whose only "considered option" is the
