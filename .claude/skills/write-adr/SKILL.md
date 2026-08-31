@@ -24,13 +24,13 @@ variable name or log message with no lasting structural consequence).
 - **Numbering** (part of step 1, before drafting): next sequential integer after the
   highest existing `docs/adl/NNNN-*`, zero-padded to 4 digits. Never reuse or renumber; a
   superseded ADR keeps its number.
-- **Branch naming exception**: unlike every other context label (`<context-label>/<issue-
-  number>`, per `contribution-workflow.md`), an ADR branches as `adr/<adr-number>` — the
-  number from the step above, not the issue number — so the branch name alone identifies
-  which ADR is in flight. Resolve the number before creating the worktree/branch, not after.
-  In CI, `_ai-draft.yml` resolves this the same way (scans `docs/adl/` right after checkout,
-  before drafting) so the branch and the document agree; re-derive the number at draft time
-  rather than trusting the branch name, in case another ADR merged in the meantime.
+- **Branch naming exception**: an ADR branches as `adr/<adr-number>` instead of the usual
+  `<context-label>/<issue-number>` — the number from the step above, not the issue number.
+  See `contribution-workflow.md`'s **Branch naming** section for the full rationale and the
+  one-ADR-in-flight constraint this implies (the number isn't collision-free across concurrent
+  ADRs the way an issue number is). Resolve the number before creating the worktree/branch,
+  not after; CI does the equivalent in `_ai-draft.yml` right after checkout, and refuses to
+  draft a second ADR onto a branch that already exists.
 - **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered
   options** (every option seriously evaluated, each with Pro/Con — not just the chosen
   one), Decision, Consequences.
