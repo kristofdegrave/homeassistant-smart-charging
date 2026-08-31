@@ -1,7 +1,7 @@
 # ADR-0031: Config-entry values also exposed as disabled-by-default diagnostic sensors
 
 Date: 2026-08-31
-Status: Proposed
+Status: Accepted
 
 ## Context
 
