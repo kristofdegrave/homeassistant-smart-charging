@@ -12,7 +12,10 @@ owned **control and diagnostic** entities are **native platform entities** under
 all: they live in the config entry as **data** (capabilities — set at initial setup, changed only
 via the reconfigure flow) or **options** (thresholds/defaults/control interval — changeable
 anytime via Configure), and this catalog lists them by their **config key**, not an entity id (see
-Notes). Two runtime helper values remain an open question under ADR-0004 and
+Notes). Per [ADR-0031](../adl/0031-config-values-as-disabled-by-default-diagnostic-sensors.md),
+most of these rows also have a read-only, disabled-by-default sensor mirror listed as a sibling
+row directly beneath them (see Notes) — the config-entry value itself remains the sole place to
+*set* it; the sensor only lets a household *see* it without opening Configure. Two runtime helper values remain an open question under ADR-0004 and
 keep the legacy `sc_` `input_*` helper-entity form for now (see Notes). The
 [glossary](system-overview.md#ubiquitous-language) stays authoritative for each
 term's **meaning**; this catalog is authoritative for each entity's, config key's, or role's
@@ -40,7 +43,13 @@ every row of that concern regardless of role; the **Role** column distinguishes 
   install-time configuration, a `config-data`/`config-options` row is never presented on the runtime
   dashboard (R19) — it is reached only through the
   [configuration flow](system-overview.md#ubiquitous-language) (R20), whose step grouping decides
-  when each such row is presented but never which rows exist.
+  when each such row is presented but never which rows exist. Per
+  [ADR-0031](../adl/0031-config-values-as-disabled-by-default-diagnostic-sensors.md), most such rows
+  also carry a sibling `state` row — a read-only, disabled-by-default sensor mirror (see Notes) —
+  purely for in-UI visibility; that mirror is itself never presented on the runtime dashboard either
+  (R19 governs the `LABEL_SC_RUNTIME`/[ADR-0022](../adl/0022-runtime-dashboard-delivery-mechanism.md)
+  entity set specifically, not entity existence in general), and its existence does not change this
+  row's own `Setup`/`Role` classification.
   `—` marks `adapter role` rows (a code-level mapping, not a catalogued entity) and `state` rows
   that are pure system-computed status (e.g. the monthly peak demand), neither of which carries a
   runtime/install-time classification.
@@ -85,6 +94,10 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `captar_available` | config-data | data | — | on (present) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18) | resolution-rules, control-cycle, UC03, UC11 | user (reconfigure flow), UC12 |
 | `deadline_available` | config-data | data | — | on (present) | [deadline capability](system-overview.md#ubiquitous-language) (R18) | resolution-rules, UC05, UC07, UC10, UC11 | user (reconfigure flow), UC12 |
 | `notifications_available` | config-data | data | — | off (absent) | [notifications capability](system-overview.md#ubiquitous-language) (R18) | UC05, UC08, UC10 | user (reconfigure flow), UC12 |
+| `sensor.smart_charging_solar_available` | state | — | — | mirrors `solar_available` (config-data); disabled by default (ADR-0031) | [capability](system-overview.md#ubiquitous-language) — solar (R18), read-only mirror | — | — |
+| `sensor.smart_charging_captar_available` | state | — | — | mirrors `captar_available` (config-data); disabled by default (ADR-0031) | [capability](system-overview.md#ubiquitous-language) — CapTar (R18), read-only mirror | — | — |
+| `sensor.smart_charging_deadline_available` | state | — | — | mirrors `deadline_available` (config-data); disabled by default (ADR-0031) | [deadline capability](system-overview.md#ubiquitous-language) (R18), read-only mirror | — | — |
+| `sensor.smart_charging_notifications_available` | state | — | — | mirrors `notifications_available` (config-data); disabled by default (ADR-0031) | [notifications capability](system-overview.md#ubiquitous-language) (R18), read-only mirror | — | — |
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
@@ -97,6 +110,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC11 | user, UC11 |
 | `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
 | `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_smoothing_window` | state | — | cycles | mirrors `smoothing_window` (config-options); disabled by default (ADR-0031) | [smoothed value](system-overview.md#ubiquitous-language) (R10), read-only mirror | — | — |
 | `select.smart_charging_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) — the `Manual` profile's mode-override selection | control-cycle, UC11 | user (Manual), UC11 |
 
 ### Installation
@@ -104,8 +118,11 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `grid_supply_ceiling_a` | config-options | options | A | 40 (reference setup) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_grid_supply_ceiling_a` | state | — | A | mirrors `grid_supply_ceiling_a` (config-options); disabled by default (ADR-0031) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4), read-only mirror | — | — |
 | `grid_safety_offset_a` | config-options | options | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_grid_safety_offset_a` | state | — | A | mirrors `grid_safety_offset_a` (config-options); disabled by default (ADR-0031) | [grid safety offset](system-overview.md#ubiquitous-language) (C4), read-only mirror | — | — |
 | `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_nominal_voltage_v` | state | — | V | mirrors `nominal_voltage_v` (config-options); disabled by default (ADR-0031) | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4), read-only mirror | — | — |
 | `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
 | `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02, UC11 | — |
 | `low_tariff` | adapter role | — | bool | mapped to the installation's tariff signal; when the mapped entity does not already report on/off, a user-supplied state-translation table lists which raw states count as low tariff, with every other raw state resolving to not-low-tariff (NF3; optional — treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
@@ -117,7 +134,9 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `min_current_a` | config-options | options | A | 6 (IEC 61851 floor) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04 | user (anytime), UC12 |
+| `sensor.smart_charging_min_current_a` | state | — | A | mirrors `min_current_a` (config-options); disabled by default (ADR-0031) | [minimum charging current](system-overview.md#ubiquitous-language) (C1), read-only mirror | — | — |
 | `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime), UC12 |
+| `sensor.smart_charging_max_current_a` | state | — | A | mirrors `max_current_a` (config-options); disabled by default (ADR-0031) | [maximum charging current](system-overview.md#ubiquitous-language) (C1), read-only mirror | — | — |
 | `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02, UC11 | — |
 | `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10, UC11 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
@@ -127,11 +146,16 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `safety_margin_w` | config-options | options | W | 250 | [safety margin](system-overview.md#ubiquitous-language) — see the Captar-dependent-rows note | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_safety_margin_w` | state | — | W | mirrors `safety_margin_w` (config-options); disabled by default (ADR-0031) | [safety margin](system-overview.md#ubiquitous-language), read-only mirror | — | — |
 | `max_peak_kw` | config-options | options | kW | 4 (defaults to inverter ceiling) | [maximum peak](system-overview.md#ubiquitous-language) — see the Captar-dependent-rows note | resolution-rules | user (anytime), UC12 |
+| `sensor.smart_charging_max_peak_kw` | state | — | kW | mirrors `max_peak_kw` (config-options); disabled by default (ADR-0031) | [maximum peak](system-overview.md#ubiquitous-language), read-only mirror | — | — |
 | `peak_floor_kw` | config-options | options | kW | 2.5 | [peak floor](system-overview.md#ubiquitous-language) — see the Captar-dependent-rows note | resolution-rules | user (anytime), UC12 |
+| `sensor.smart_charging_peak_floor_kw` | state | — | kW | mirrors `peak_floor_kw` (config-options); disabled by default (ADR-0031) | [peak floor](system-overview.md#ubiquitous-language), read-only mirror | — | — |
 | `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period — see the Captar-dependent-rows note | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_peak_grace_min` | state | — | min | mirrors `peak_grace_min` (config-options); disabled by default (ADR-0031) | R3 peak-breach grace period, read-only mirror | — | — |
 | `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
 | `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime), UC12 |
+| `sensor.smart_charging_captar_cooldown_min` | state | — | min | mirrors `captar_cooldown_min` (config-options); disabled by default (ADR-0031) | `Captar`-mode cooldown (R11), read-only mirror | — | — |
 
 ### `Power` mode
 
@@ -139,7 +163,9 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11, UC12 (seeds initial value) |
 | `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) — see the Captar-dependent-rows note | UC04 | user (anytime), UC12 |
+| `sensor.smart_charging_power_respect_peak` | state | — | — | mirrors `power_respect_peak` (config-options); disabled by default (ADR-0031) | `Power` peak-protection option (R17), read-only mirror | — | — |
 | `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime), UC12 |
+| `sensor.smart_charging_power_cooldown_min` | state | — | min | mirrors `power_cooldown_min` (config-options); disabled by default (ADR-0031) | `Power`-mode cooldown (R11), read-only mirror | — | — |
 
 ### Diagnostic outputs
 
@@ -167,6 +193,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `number.smart_charging_soc_limit_override` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11, UC12 (seeds initial value) |
 | `ev_battery_capacity_kwh` | config-options | options | kWh | 75 | EV battery capacity (R15) | resolution-rules, control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_ev_battery_capacity_kwh` | state | — | kWh | mirrors `ev_battery_capacity_kwh` (config-options); disabled by default (ADR-0031) | EV battery capacity (R15), read-only mirror | — | — |
 | `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06, (UC11) | — |
 | `ev_battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules, control-cycle | — |
 | `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09, UC10 | — |
@@ -183,9 +210,13 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `solar_start_threshold_w` | config-options | options | W | 150 | [solar start threshold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_start_threshold_w` | state | — | W | mirrors `solar_start_threshold_w` (config-options); disabled by default (ADR-0031) | [solar start threshold](system-overview.md#ubiquitous-language) (R1), read-only mirror | — | — |
 | `solar_hold_min` | config-options | options | min | 5 | [post-surplus hold](system-overview.md#ubiquitous-language) (R1) | UC01 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_hold_min` | state | — | min | mirrors `solar_hold_min` (config-options); disabled by default (ADR-0031) | [post-surplus hold](system-overview.md#ubiquitous-language) (R1), read-only mirror | — | — |
 | `solar_cooldown_min` | config-options | options | min | 2 | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_cooldown_min` | state | — | min | mirrors `solar_cooldown_min` (config-options); disabled by default (ADR-0031) | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly`, read-only mirror | — | — |
 | `solar_restart_debounce_min` | config-options | options | min | 1 | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_restart_debounce_min` | state | — | min | mirrors `solar_restart_debounce_min` (config-options); disabled by default (ADR-0031) | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly`, read-only mirror | — | — |
 | `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading (smoothed per R10; not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w`) | control-cycle | — |
 
 ### `SolarOnly` mode
@@ -193,9 +224,13 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `solar_only_start_threshold_w` | config-options | options | W | 1300 | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2) | UC02 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_only_start_threshold_w` | state | — | W | mirrors `solar_only_start_threshold_w` (config-options); disabled by default (ADR-0031) | [solar start threshold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2), read-only mirror | — | — |
 | `solar_only_hold_min` | config-options | options | min | 1 | [post-surplus hold](system-overview.md#ubiquitous-language) — SolarOnly instance, the bounded exception to the zero-grid-import guarantee (R2, R11) | UC02 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_only_hold_min` | state | — | min | mirrors `solar_only_hold_min` (config-options); disabled by default (ADR-0031) | [post-surplus hold](system-overview.md#ubiquitous-language) — SolarOnly instance (R2, R11), read-only mirror | — | — |
 | `solar_only_rounding_strategy` | config-options | options | — | `round_down` / `round_up` / `nearest` (= round to nearest) (default `round_down`) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2) | UC02 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_only_rounding_strategy` | state | — | — | mirrors `solar_only_rounding_strategy` (config-options); disabled by default (ADR-0031) | [amp-step rounding](system-overview.md#ubiquitous-language) strategy (R2), read-only mirror | — | — |
 | `solar_only_rounding_midpoint_pct` | config-options | options | % | 50 (0–100) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2) | UC02 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_only_rounding_midpoint_pct` | state | — | % | mirrors `solar_only_rounding_midpoint_pct` (config-options); disabled by default (ADR-0031) | [amp-step rounding](system-overview.md#ubiquitous-language) midpoint — `nearest` strategy only (R2), read-only mirror | — | — |
 
 Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mode) — R11 applies one cooldown and one restart debounce to both solar modes.
 
@@ -204,8 +239,11 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `max_solar_soc` | config-options | options | % | 100 (50–100) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8) | resolution-rules, UC06 | user (anytime), UC12 |
+| `sensor.smart_charging_max_solar_soc` | state | — | % | mirrors `max_solar_soc` (config-options); disabled by default (ADR-0031) | [solar step-up](system-overview.md#ubiquitous-language) ceiling (R8), read-only mirror | — | — |
 | `solar_step_pp` | config-options | options | pp | 5 | solar step-up size (R8) | UC06 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_step_pp` | state | — | pp | mirrors `solar_step_pp` (config-options); disabled by default (ADR-0031) | solar step-up size (R8), read-only mirror | — | — |
 | `solar_step_threshold_pp` | config-options | options | pp | 2 | solar step-up trigger gap (R8) | UC06 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_step_threshold_pp` | state | — | pp | mirrors `solar_step_threshold_pp` (config-options); disabled by default (ADR-0031) | solar step-up trigger gap (R8), read-only mirror | — | — |
 
 ### Solar-reserve cap
 
@@ -213,6 +251,7 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11, UC12 (seeds initial value) |
 | `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_forecast_threshold_kwh` | state | — | kWh | mirrors `solar_forecast_threshold_kwh` (config-options); disabled by default (ADR-0031) | solar-reserve forecast threshold (R9), read-only mirror | — | — |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, (UC11) | — |
 
 ---
@@ -238,10 +277,15 @@ toggles.*
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
+| `sensor.smart_charging_reminder_lead_h` | state | — | h | mirrors `reminder_lead_h` (config-options); disabled by default (ADR-0031) | plug-in reminder lead time (R12), read-only mirror | — | — |
 | `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | UC05 | user (anytime), UC12 |
+| `sensor.smart_charging_deadline_notice_enabled` | state | — | — | mirrors `deadline_notice_enabled` (config-options); disabled by default (ADR-0031) | unreachable-deadline notice enable (R5, R18), read-only mirror | — | — |
 | `plug_in_reminder_enabled` | config-options | options | — | on | plug-in reminder enable (R12, R18) | UC10 | user (anytime), UC12 |
+| `sensor.smart_charging_plug_in_reminder_enabled` | state | — | — | mirrors `plug_in_reminder_enabled` (config-options); disabled by default (ADR-0031) | plug-in reminder enable (R12, R18), read-only mirror | — | — |
 | `evening_prompt_enabled` | config-options | options | — | on | evening home-day prompt enable (R13, R18) | UC08 | user (anytime), UC12 |
+| `sensor.smart_charging_evening_prompt_enabled` | state | — | — | mirrors `evening_prompt_enabled` (config-options); disabled by default (ADR-0031) | evening home-day prompt enable (R13, R18), read-only mirror | — | — |
 | `evening_prompt_time` | config-options | options | time | 18:00 | evening prompt time (UC08) | UC08 | user (anytime), UC12 |
+| `sensor.smart_charging_evening_prompt_time` | state | — | time | mirrors `evening_prompt_time` (config-options); disabled by default (ADR-0031) | evening prompt time (UC08), read-only mirror | — | — |
 | `binary_sensor.smart_charging_plug_in_reminder` | state | — | bool | `on` while a plug-in reminder is currently due (car home, disconnected, below the active SOC limit, within the lead time of the next departure) | plug-in reminder (R12) | (UC11) | UC10 |
 
 ---
@@ -422,6 +466,21 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   the home-day entities (Deadline / urgency) also drive the solar-reserve cap (R9, Solar); how they
   are set is deliberately left open (R13) — currently via the evening prompt (UC08, Notification) or
   an external source. They are filed under their primary area to avoid duplicate rows.
+- **Config-value mirror sensors (ADR-0031).** Every `config-options` row except `control_interval_s`
+  (excluded per [ADR-0005](../adl/0005-config-entry-structure-and-interval.md)'s own "not an owned
+  entity" wording for that one value — [ADR-0031](../adl/0031-config-values-as-disabled-by-default-diagnostic-sensors.md)
+  honors it by carving the row out rather than arguing around it), plus the four capability booleans
+  under *Capabilities*, now has a sibling `state` row directly beneath it in the same table:
+  `sensor.smart_charging_<key>`, a read-only, disabled-by-default mirror of that same value
+  (`entity_registry_enabled_default = False`), so a household can see it without opening Configure.
+  These 35 sensors are not computed by the control cycle — set once at config-entry setup/reload
+  from the already-resolved config, the same source the coordinator itself reads — so their
+  `Written by` column reads `—`, unlike the *Diagnostic outputs* section's cycle-computed sensors,
+  whose `Written by` names `control-cycle`. They are never presented on the runtime dashboard
+  (`LABEL_SC_RUNTIME`/[ADR-0022](../adl/0022-runtime-dashboard-delivery-mechanism.md)'s entity set,
+  R19) and do not change the source row's own `Setup`/`Role` classification — the config entry
+  remains the sole place to *set* the value. `control_interval_s`, entity-role mappings, and
+  state-translation tables have no mirror sensor (ADR-0031's scope).
 - **Owned entities vs. config-entry data/options — ADR-0005 resolution.** Per
   [ADR-0004](../adl/0004-owned-vs-mapped-entities.md), only the integration's owned **control and
   diagnostic** entities are native `smart_charging_` platform entities (the
