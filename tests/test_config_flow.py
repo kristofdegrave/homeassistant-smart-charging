@@ -396,8 +396,8 @@ async def test_reconfigure_grid_step_prefills_low_tariff_states(hass):
     # Issue #499 class: an entry already carrying CONF_LOW_TARIFF_STATES must render
     # it as the grid step's suggested value on reconfigure, and resubmitting the
     # prefilled form unchanged must not null it out. Unlike CONF_CONNECTED_STATES/
-    # CONF_CHARGING_STATES, this field has no "known gap" carve-out; it must
-    # actually prefill (design doc §2).
+    # CONF_CHARGING_STATES, this field is itself the raw value stored on the entry
+    # (design doc §2) -- no reconstruction from a derived value is needed to prefill it.
     data = dict(_RECONFIGURE_ENTRY_DATA)
     data[CONF_LOW_TARIFF_ENTITY] = "sensor.tariff"
     data[CONF_LOW_TARIFF_STATES] = "low, off-peak"
@@ -1238,6 +1238,54 @@ async def test_reconfigure_form_prefills_existing_mappings(hass):
     assert result["step_id"] == STEP_NOTIFICATIONS
     suggested = _suggested_values(result)
     assert suggested[CONF_NOTIFICATION_TARGET_ENTITY] == "notify.mobile_app"
+
+
+async def test_reconfigure_ev_charger_step_prefills_charger_states_from_stored_translation(hass):
+    # _unbuild_translation reconstructs connected_states/charging_states from the stored
+    # CONF_STATUS_TRANSLATION dict, grouping every raw state by its translated value -- a
+    # single state per bucket (as in _RECONFIGURE_ENTRY_DATA) can't distinguish a correct
+    # ", ".join from e.g. joining with "", so this uses multiple states per bucket. It also
+    # resubmits the prefilled form unchanged end-to-end (the low-tariff sibling test's
+    # pattern, test_reconfigure_grid_step_prefills_low_tariff_states) to prove the stored
+    # translation survives a reconfigure run that never touches this step's values.
+    data = dict(_RECONFIGURE_ENTRY_DATA)
+    data[CONF_STATUS_TRANSLATION] = {
+        "Connected": STATE_CONNECTED,
+        "Cable": STATE_CONNECTED,
+        "Charging": STATE_CHARGING,
+        "SuspendedEV": STATE_CHARGING,
+    }
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_GRID
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_EV_CHARGER
+    suggested = _suggested_values(result)
+    assert suggested[CONF_CONNECTED_STATES] == "Connected, Cable"
+    assert suggested[CONF_CHARGING_STATES] == "Charging, SuspendedEV"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], suggested)
+    assert result["step_id"] == STEP_VEHICLE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_NOTIFICATIONS
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data[CONF_STATUS_TRANSLATION] == data[CONF_STATUS_TRANSLATION]
 
 
 async def test_r20_ac7_withdrawing_a_capability_drops_its_mapping_fields_only(hass):
