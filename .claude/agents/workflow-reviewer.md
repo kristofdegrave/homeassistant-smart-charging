@@ -65,17 +65,19 @@ Always read:
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The context-label vocabulary is inherently listed in several places — `ai-pipeline.yml`'s
-  header comment; `_ai-draft.yml`'s `context_labels` variable, its "No context label found"
-  reason string, and its `case` block; and `.github/setup-labels.sh`'s label definitions. A
-  change to one that doesn't update the rest is a Major finding (silent drift in the
-  vocabulary the whole label-driven pipeline trusts).
-- `docs/reference/development-workflow.md` is the canonical lifecycle doc; `CLAUDE.md` and
-  every skill's "Follows this project's development workflow" line only point to it, never
-  restate its steps. When this file changes, cross-check its claims about `_ai-draft.yml`/
-  `_ai-review.yml`/`_ai-fix.yml` behavior (commit-prefix mapping, branch scheme, loop caps)
-  against those files' actual current behavior — a plausible-sounding claim that drifted from
-  what the workflow file actually does is a Major finding.
+- The context-label vocabulary is inherently listed in four places, matching the canonical list
+  in `CLAUDE.md`'s **Issue conventions** section: `ai-pipeline.yml`'s header comment;
+  `_ai-draft.yml`'s `context_labels` variable, its "No context label found" reason string, and
+  its `case` block; and `.github/setup-labels.sh`'s label definitions. A change to one that
+  doesn't update the rest is a Major finding (silent drift in the vocabulary the whole
+  label-driven pipeline trusts).
+- The issue-to-merge lifecycle is defined in `CLAUDE.md`'s **Contribution workflow** section;
+  `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line only point
+  to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
+  cross-check their claims about `_ai-draft.yml`/`_ai-review.yml`/`_ai-fix.yml` behavior
+  (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
+  behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
+  is a Major finding.
 
 **(5) Non-negotiables unaffected**
 - Write and review still happen in separate sessions/agents (a skill or workflow must never

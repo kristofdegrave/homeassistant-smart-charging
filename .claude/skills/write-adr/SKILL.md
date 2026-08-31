@@ -9,7 +9,7 @@ Capture an architectural decision as a numbered, immutable Architecture Decision
 (`docs/adl/NNNN-kebab-case-title.md`), per `docs/adl/0001-use-architecture-decision-records.md`
 (the decision to use ADRs at all, and why the template looks the way it does).
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge). This skill covers only what's specific to an ADR — don't
 re-derive the universal steps here.
 

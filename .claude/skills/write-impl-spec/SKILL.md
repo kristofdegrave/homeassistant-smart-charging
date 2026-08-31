@@ -19,7 +19,7 @@ restating or overriding them. If you find yourself inventing a service or a beha
 open a GitHub issue against the owning doc and fix it there first (via its own issue-first
 review cycle), then resume.
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge) — context label `specs`, branch `specs/<issue-number>`. This
 skill covers only what's specific to an implementation spec — don't re-derive the universal
 steps here.

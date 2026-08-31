@@ -69,15 +69,19 @@ docs/adl/
 
 ---
 
-## Development workflow
+## Contribution workflow
 
 Every unit of work — a doc, an ADR, a design, or code — follows one universal lifecycle:
 issue → isolated worktree → PR against `main` → review → fix/reply/resolve → loop (capped at
 3 rounds) → `needs-approval` → manual merge → worktree cleanup. Full steps, git identity, and
 issue/branch conventions:
-[docs/reference/development-workflow.md](docs/reference/development-workflow.md). The
-artifact-specific sections below (analysis docs, ADRs) layer their own template/quality-check
-steps on top of it; they never replace it.
+[docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md). Two
+related references sit just outside that lifecycle: what happens before an issue exists
+([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md), epic decomposition) and
+the completion bar an author self-checks before opening the PR
+([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
+commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
+their own template/quality-check steps on top of these; they never replace them.
 
 ---
 
@@ -105,7 +109,7 @@ Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
 ## Review protocol for analysis documents
 
 New or changed documents under `docs/analysis/**` follow the
-[Development workflow](docs/reference/development-workflow.md), with these artifact-specific
+[Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
 - **Step 1 (draft)**: draft against the applicable template.
@@ -141,7 +145,7 @@ doubt, ask whether a future contributor would benefit from knowing *why*, not ju
 *what*.
 
 Use the `write-adr` skill for the full cycle. Follows the
-[Development workflow](docs/reference/development-workflow.md), with these artifact-specific
+[Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
 - **Step 1 (draft)**: draft against `docs/adl/template.md`, numbering sequentially and
@@ -157,9 +161,11 @@ additions:
 
 ## Issue conventions
 
-Context labels, project-board Size/Estimate fields, epic-first filing for multi-artifact
-strands, the anchored `Plan:` line task issues must carry, and branch naming — see
-[docs/reference/development-workflow.md](docs/reference/development-workflow.md).
+Context labels, project-board Size/Estimate fields, the anchored `Plan:` line task issues must
+carry, and branch naming — see
+[docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md). Epic-first
+filing for multi-artifact strands — see
+[docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
 
 ---
 

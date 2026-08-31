@@ -13,9 +13,8 @@ This is a manual/interactive skill, not a CI-wired one: brainstorming is a genui
 so it stays a session task for now rather than a non-interactive drafter.
 
 The single-vs-multi-artifact filing decision, epic mechanics, and deferral rules are defined
-once in `CLAUDE.md`'s **Issue conventions** section (**From idea to issues**) — read that
-first. This skill adds only the brainstorming gate that has to happen before any of that
-filing.
+once in `CLAUDE.md`'s **Issue conventions** section — read that first. This skill adds only the
+brainstorming gate that has to happen before any of that filing.
 
 ## The cycle
 
@@ -26,8 +25,9 @@ filing.
    is designed in detail" — that detail belongs to each child issue's own downstream skill
    (`write-use-case`, `write-adr`, `write-requirement`, `write-impl-spec`, `develop-task`,
    `write-tests`, or whatever `workflow` resolves to).
-3. **Decompose**, following the **From idea to issues** cycle above (single-artifact vs.
-   multi-artifact epic filing, what to file now vs. defer). A part that's
+3. **Decompose**, following the epic-decomposition cycle in `CLAUDE.md`'s **Issue conventions**
+   section (single-artifact vs. multi-artifact epic filing, what to file now vs. defer). A part
+   that's
    still too fuzzy to scope keeps the `idea` label itself and gets worked later — recursion is
    expected, not an error.
 4. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea

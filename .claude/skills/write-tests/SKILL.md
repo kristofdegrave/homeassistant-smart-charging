@@ -10,7 +10,7 @@ project requires. Tests mirror the package 1:1 (`tests/` matches
 `custom_components/smart_charging/`). This skill is usually used *inside* `develop-task`'s TDD loop,
 but also stands alone when back-filling or expanding coverage.
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge). This skill covers only what's specific to test authoring — don't
 re-derive the universal steps here.
 

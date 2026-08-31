@@ -10,7 +10,7 @@ test-covered code under `custom_components/smart_charging/`, test-first. The pla
 build and *in what order*; this skill is *how* one task gets built and verified. **Development work
 runs on Sonnet** (per CLAUDE.md's model-selection rule).
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge). This skill covers only what's specific to a development task —
 don't re-derive the universal steps here.
 
@@ -42,9 +42,9 @@ don't re-derive the universal steps here.
     voltage `None` → nominal, not a fault (ADR-0007).
   - Native entity naming (ADR-0004); config data/options split (ADR-0005); package layout
     (ADR-0002/0010).
-- **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s Development
-  workflow section — read it before starting. Covers ruff/pytest green, coverage matches the
-  change, runtime-verified not just test-verified.
+- **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s
+  Contribution workflow section — read it before starting. Covers ruff/pytest green, coverage
+  matches the change, runtime-verified not just test-verified.
 - **Step 3's reviewer**: `code-reviewer`. Receive its findings with the
   `receiving-code-review` skill — verify, don't perform.
 

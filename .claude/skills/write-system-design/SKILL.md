@@ -14,7 +14,7 @@ and where it sits in the pipeline: `docs/plans/2026-07-07-lowy-system-design-met
 If you catch yourself creating one service per use case, or naming a service after a UC verb
 phrase, stop — that is functional decomposition wearing this method's vocabulary.
 
-Follows this project's development workflow, defined in `CLAUDE.md` (issue → worktree → PR →
+Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
 review → fix/resolve → merge) — context label `documentation` (this artifact has no
 sequential number of its own). This skill covers only what's specific to the system design —
 don't re-derive the universal steps here.
