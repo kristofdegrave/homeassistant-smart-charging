@@ -1222,16 +1222,14 @@ async def test_reconfigure_form_prefills_existing_mappings(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], suggested)
     assert result["step_id"] == STEP_EV_CHARGER
 
-    # connected_states/charging_states have no stored raw value to prefill (known gap,
-    # tracked separately) -- the user must always retype these two required fields.
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {
-            **_suggested_values(result),
-            CONF_CONNECTED_STATES: "Connected",
-            CONF_CHARGING_STATES: "Charging",
-        },
-    )
+    # connected_states/charging_states are reconstructed from the stored translation dict
+    # (`_unbuild_translation`), since only CONF_STATUS_TRANSLATION is persisted -- the raw
+    # comma-separated fields the user typed have no stored key of their own.
+    suggested = _suggested_values(result)
+    assert suggested[CONF_CONNECTED_STATES] == "Connected"
+    assert suggested[CONF_CHARGING_STATES] == "Charging"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], suggested)
     assert result["step_id"] == STEP_VEHICLE
     suggested = _suggested_values(result)
     assert suggested[CONF_EV_SOC_ENTITY] == "sensor.ev_soc"
