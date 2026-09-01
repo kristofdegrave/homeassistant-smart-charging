@@ -6,7 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, Platform, UnitOfPower
+from homeassistant.const import (
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    Platform,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.core import State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
@@ -20,10 +27,18 @@ from custom_components.smart_charging import sensor as sensor_module
 from custom_components.smart_charging.const import (
     ATTR_PERIOD_MONTH,
     CONF_DEADLINE_AVAILABLE,
+    CONF_DEADLINE_NOTICE_ENABLED,
     CONF_NOTIFICATIONS_AVAILABLE,
+    CONF_PLUG_IN_REMINDER_ENABLED,
+    CONF_POWER_COOLDOWN_MIN,
+    CONF_REMINDER_LEAD_H,
     CONF_SOLAR_AVAILABLE,
     DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_DEADLINE_NOTICE_ENABLED,
     DEFAULT_NOTIFICATIONS_AVAILABLE,
+    DEFAULT_PLUG_IN_REMINDER_ENABLED,
+    DEFAULT_POWER_COOLDOWN_MIN,
+    DEFAULT_REMINDER_LEAD_H,
     DOMAIN,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     STATUS_FAULT,
@@ -538,9 +553,15 @@ async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
         entry = SimpleNamespace(
             entry_id="entry1",
             data={CONF_SOLAR_AVAILABLE: True},
+            options={},
             runtime_data=SimpleNamespace(
                 coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
-                config=SimpleNamespace(solar_available=False, captar_available=False),
+                config=SimpleNamespace(
+                    solar_available=False,
+                    captar_available=False,
+                    evening_prompt_enabled=True,
+                    evening_prompt_time="18:00",
+                ),
             ),
         )
 
@@ -651,9 +672,15 @@ async def test_async_setup_entry_registers_capability_config_mirror_sensors(hass
             CONF_DEADLINE_AVAILABLE: False,
             CONF_NOTIFICATIONS_AVAILABLE: True,
         },
+        options={},
         runtime_data=SimpleNamespace(
             coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=True)),
-            config=SimpleNamespace(solar_available=True, captar_available=False),
+            config=SimpleNamespace(
+                solar_available=True,
+                captar_available=False,
+                evening_prompt_enabled=True,
+                evening_prompt_time="18:00",
+            ),
         ),
     )
 
@@ -683,9 +710,15 @@ async def test_async_setup_entry_registers_capability_config_mirror_sensors_seco
     entry = SimpleNamespace(
         entry_id="entry1",
         data={},  # DEFAULT_DEADLINE_AVAILABLE is True -- this alone would NOT prove the read
+        options={},
         runtime_data=SimpleNamespace(
             coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
-            config=SimpleNamespace(solar_available=False, captar_available=False),
+            config=SimpleNamespace(
+                solar_available=False,
+                captar_available=False,
+                evening_prompt_enabled=False,
+                evening_prompt_time="18:00",
+            ),
         ),
     )
 
@@ -704,4 +737,118 @@ async def test_async_setup_entry_registers_capability_config_mirror_sensors_seco
     )
     assert mirrors["notifications_available"].native_value == _format_mirror_value(
         DEFAULT_NOTIFICATIONS_AVAILABLE
+    )
+
+
+async def test_async_setup_entry_registers_power_and_notification_config_mirror_sensors(hass):
+    """T4 (#894): power_cooldown_min/reminder_lead_h/deadline_notice_enabled/
+    plug_in_reminder_enabled are NOT SmartChargingConfig fields (unlike their siblings
+    captar_cooldown_min/solar_cooldown_min etc.) -- they must read entry.options.get(CONF_X,
+    DEFAULT_X) directly, not entry.runtime_data.config, which has no such attributes at all
+    (a wrong read would raise AttributeError, not silently return a wrong value). entry.options
+    is rigged to disagree with every one of the four DEFAULT_* constants, so a sensor that
+    silently fell back to the default instead of reading the entry would fail this test.
+    evening_prompt_enabled/evening_prompt_time (the other two T4 values) ARE SmartChargingConfig
+    fields and read from entry.runtime_data.config as usual."""
+    captured_entities = []
+
+    def _capture(entities):
+        captured_entities.extend(entities)
+
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={},
+        options={
+            CONF_POWER_COOLDOWN_MIN: 42.0,
+            CONF_REMINDER_LEAD_H: 3.0,
+            CONF_DEADLINE_NOTICE_ENABLED: False,  # DEFAULT_DEADLINE_NOTICE_ENABLED is True
+            CONF_PLUG_IN_REMINDER_ENABLED: False,  # DEFAULT_PLUG_IN_REMINDER_ENABLED is True
+        },
+        runtime_data=SimpleNamespace(
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
+            config=SimpleNamespace(
+                solar_available=False,
+                captar_available=False,
+                evening_prompt_enabled=True,
+                evening_prompt_time="19:30",
+            ),
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    mirrors = {
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
+    }
+    assert mirrors["power_cooldown_min"].native_value == 42.0
+    assert mirrors["reminder_lead_h"].native_value == 3.0
+    assert mirrors["deadline_notice_enabled"].native_value == STATE_OFF
+    assert mirrors["plug_in_reminder_enabled"].native_value == STATE_OFF
+    assert mirrors["evening_prompt_enabled"].native_value == STATE_ON
+    assert mirrors["evening_prompt_time"].native_value == "19:30"
+
+    assert mirrors["power_cooldown_min"].native_unit_of_measurement == UnitOfTime.MINUTES
+    assert mirrors["reminder_lead_h"].native_unit_of_measurement == UnitOfTime.HOURS
+    # The other four have no unit/device_class per the design doc's mapping table --
+    # evening_prompt_time deliberately: its value is a plain "HH:MM" string, not a datetime, so
+    # no SensorDeviceClass.TIMESTAMP applies despite entity-catalog.md's "time" column.
+    for suffix in (
+        "power_cooldown_min",
+        "reminder_lead_h",
+        "deadline_notice_enabled",
+        "plug_in_reminder_enabled",
+        "evening_prompt_enabled",
+        "evening_prompt_time",
+    ):
+        assert mirrors[suffix].device_class is None
+    for suffix in (
+        "deadline_notice_enabled",
+        "plug_in_reminder_enabled",
+        "evening_prompt_enabled",
+        "evening_prompt_time",
+    ):
+        assert mirrors[suffix].native_unit_of_measurement is None
+
+
+async def test_async_setup_entry_power_and_notification_mirrors_fall_back_to_their_own_defaults(
+    hass,
+):
+    """The DEFAULT_* companion to the test above -- an entry whose options omit all four keys, so
+    each mirror must fall back to its OWN DEFAULT_* constant, not another's, not a shared one."""
+    captured_entities = []
+
+    def _capture(entities):
+        captured_entities.extend(entities)
+
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={},
+        options={},
+        runtime_data=SimpleNamespace(
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
+            config=SimpleNamespace(
+                solar_available=False,
+                captar_available=False,
+                evening_prompt_enabled=False,
+                evening_prompt_time="18:00",
+            ),
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    mirrors = {
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
+    }
+    assert mirrors["power_cooldown_min"].native_value == DEFAULT_POWER_COOLDOWN_MIN
+    assert mirrors["reminder_lead_h"].native_value == DEFAULT_REMINDER_LEAD_H
+    assert mirrors["deadline_notice_enabled"].native_value == _format_mirror_value(
+        DEFAULT_DEADLINE_NOTICE_ENABLED
+    )
+    assert mirrors["plug_in_reminder_enabled"].native_value == _format_mirror_value(
+        DEFAULT_PLUG_IN_REMINDER_ENABLED
     )

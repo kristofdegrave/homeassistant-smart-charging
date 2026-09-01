@@ -31,10 +31,18 @@ from . import SmartChargingConfigEntry
 from .const import (
     ATTR_PERIOD_MONTH,
     CONF_DEADLINE_AVAILABLE,
+    CONF_DEADLINE_NOTICE_ENABLED,
     CONF_NOTIFICATIONS_AVAILABLE,
+    CONF_PLUG_IN_REMINDER_ENABLED,
+    CONF_POWER_COOLDOWN_MIN,
+    CONF_REMINDER_LEAD_H,
     CONF_SOLAR_AVAILABLE,
     DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_DEADLINE_NOTICE_ENABLED,
     DEFAULT_NOTIFICATIONS_AVAILABLE,
+    DEFAULT_PLUG_IN_REMINDER_ENABLED,
+    DEFAULT_POWER_COOLDOWN_MIN,
+    DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SOLAR_AVAILABLE,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
@@ -339,8 +347,9 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors, T1 slice: the four Capabilities rows only -- T2-T4 append
-    # the remaining 31 to this same list (design doc's 35-row mapping table).
+    # ADR-0031 config-mirror sensors: T1's four Capabilities rows plus (below) T4's six
+    # Power-mode/Notification rows -- T2/T3 append the remaining 25 to this same list (design
+    # doc's 35-row mapping table).
     mirror_specs = [
         _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
         _ConfigMirrorSpec("captar_available", None, None, config.captar_available),
@@ -356,6 +365,37 @@ async def async_setup_entry(
             None,
             entry.data.get(CONF_NOTIFICATIONS_AVAILABLE, DEFAULT_NOTIFICATIONS_AVAILABLE),
         ),
+        # T4 slice (#894): power_cooldown_min/reminder_lead_h/deadline_notice_enabled/
+        # plug_in_reminder_enabled are NOT SmartChargingConfig fields (unlike their siblings
+        # captar_cooldown_min/solar_cooldown_min etc.) -- read entry.options directly, same as
+        # the two entry.data-sourced capabilities above. evening_prompt_enabled/_time ARE
+        # SmartChargingConfig fields and read from `config` as usual.
+        _ConfigMirrorSpec(
+            "power_cooldown_min",
+            UnitOfTime.MINUTES,
+            None,
+            entry.options.get(CONF_POWER_COOLDOWN_MIN, DEFAULT_POWER_COOLDOWN_MIN),
+        ),
+        _ConfigMirrorSpec(
+            "reminder_lead_h",
+            UnitOfTime.HOURS,
+            None,
+            entry.options.get(CONF_REMINDER_LEAD_H, DEFAULT_REMINDER_LEAD_H),
+        ),
+        _ConfigMirrorSpec(
+            "deadline_notice_enabled",
+            None,
+            None,
+            entry.options.get(CONF_DEADLINE_NOTICE_ENABLED, DEFAULT_DEADLINE_NOTICE_ENABLED),
+        ),
+        _ConfigMirrorSpec(
+            "plug_in_reminder_enabled",
+            None,
+            None,
+            entry.options.get(CONF_PLUG_IN_REMINDER_ENABLED, DEFAULT_PLUG_IN_REMINDER_ENABLED),
+        ),
+        _ConfigMirrorSpec("evening_prompt_enabled", None, None, config.evening_prompt_enabled),
+        _ConfigMirrorSpec("evening_prompt_time", None, None, config.evening_prompt_time),
     ]
 
     async_add_entities(
