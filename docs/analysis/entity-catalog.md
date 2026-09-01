@@ -220,7 +220,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_solar_cooldown_min` | state | — | min | mirrors `solar_cooldown_min` (config-options); disabled by default (ADR-0031) | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | user | — |
 | `solar_restart_debounce_min` | config-options | options | min | 1 | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
 | `sensor.smart_charging_solar_restart_debounce_min` | state | — | min | mirrors `solar_restart_debounce_min` (config-options); disabled by default (ADR-0031) | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | user | — |
-| `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading, read but not (yet) smoothed (R10 AC1's sampling/averaging is deferred pending #587's real-consumer decision); not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w` | control-cycle | — |
+| `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading (R10); not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w` | control-cycle | — |
 
 ### `SolarOnly` mode
 

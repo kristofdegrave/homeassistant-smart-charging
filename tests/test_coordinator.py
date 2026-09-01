@@ -974,6 +974,37 @@ async def test_adapter_readings_surfaces_solar_power_when_wired(hass):
     assert result.adapter_readings[ROLE_SOLAR_POWER] == 1234.0
 
 
+async def test_adapter_readings_surfaces_solar_power_even_when_disconnected(hass):
+    """Companion to test_adapter_readings_surfaces_solar_power_when_wired above -- proves the
+    "not gated by charger status" half of that test's docstring claim, which the STATE_CHARGING
+    case alone cannot: ROLE_EV_SOC (the sibling optional role read in the same _run_cycle,
+    coordinator.py:437) IS gated on CHARGEABLE_STATES (see
+    test_adapter_readings_role_never_read_is_none, which reads None for ev_soc under
+    STATE_DISCONNECTED), so a status-gated read is a real, non-hypothetical failure mode this
+    test rules out for ROLE_SOLAR_POWER's own read site in `_read_cycle_inputs`
+    (coordinator.py:290), which sits upstream of any status check."""
+    adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, ev_soc_role=False)
+    adapters[ROLE_SOLAR_POWER] = _FakeNumeric(1234.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.adapter_readings[ROLE_SOLAR_POWER] == 1234.0
+
+
+async def test_solar_power_none_reading_does_not_fault_the_cycle(hass):
+    """ROLE_SOLAR_POWER is read via `_read_role` in `_read_cycle_inputs`, ahead of the
+    required-role `None` check (coordinator.py:290-293) -- a safety-relevant ordering, since
+    the three required roles DO fault the cycle on a None reading. This is a regression test
+    for that ordering: a future change that folded solar_power into the required-role check,
+    or reordered it below that check, would still pass every other test in this file but must
+    fail this one."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0)
+    adapters[ROLE_SOLAR_POWER] = _FakeNumeric(None)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.fault is False
+    assert result.adapter_readings[ROLE_SOLAR_POWER] is None
+
+
 async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):
     """A role wired but not read on a given cycle (car disconnected -> ev_soc not read this
     time) keeps its last-read value rather than disappearing (ADR-0021's "most recently read

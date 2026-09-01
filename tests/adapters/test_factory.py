@@ -112,13 +112,6 @@ async def test_grid_voltage_empty_string_treated_as_absent(hass):
     assert ROLE_GRID_VOLTAGE not in adapters
 
 
-async def test_missing_required_role_raises_key_error(hass):
-    data = _data()
-    del data[CONF_CHARGER_CURRENT_ENTITY]
-    with pytest.raises(KeyError):
-        build_adapters(hass, data)
-
-
 async def test_factory_builds_solar_power_role_when_configured(hass):
     """Issue #911: solar_power was accepted by the config flow but never wired into the
     factory -- the same "documented in const.py, missing from build_adapters" gap as
@@ -140,6 +133,13 @@ async def test_solar_power_empty_string_treated_as_absent(hass):
     data[CONF_SOLAR_POWER_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_SOLAR_POWER not in adapters
+
+
+async def test_missing_required_role_raises_key_error(hass):
+    data = _data()
+    del data[CONF_CHARGER_CURRENT_ENTITY]
+    with pytest.raises(KeyError):
+        build_adapters(hass, data)
 
 
 async def test_factory_builds_ev_soc_role_when_configured(hass):
