@@ -1,5 +1,5 @@
-"""HA-harness test for the Fault/OK status sensor (ADR-0007), the active-mode sensor, and
-the peak-protection diagnostic sensors (C3)."""
+"""HA-harness test for the Fault/OK status sensor (ADR-0007), the active-mode sensor, the
+peak-protection diagnostic sensors (C3), and the ADR-0031 config-mirror diagnostic sensors."""
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -1029,7 +1029,7 @@ async def test_async_setup_entry_registers_ev_solar_config_mirror_sensors(hass):
 # --- T6 integration checkpoint (#896, ADR-0031) ---------------------------------------------
 
 
-async def test_async_setup_entry_registers_44_sensors_with_no_duplicate_suffix(hass):
+async def test_async_setup_entry_registers_every_sensor_with_no_duplicate_suffix(hass):
     """T6 (#896): the full async_setup_entry call -- 9 pre-existing class-based diagnostic
     sensors plus all 35 ADR-0031 config-mirror sensors -- registers 44 entities with no
     duplicate unique_id/_object_id_suffix (ADR-0013), and every one of the 35 mirrors carries
@@ -1046,7 +1046,9 @@ async def test_async_setup_entry_registers_44_sensors_with_no_duplicate_suffix(h
         data={CONF_SOLAR_AVAILABLE: True},
         options={},
         runtime_data=SimpleNamespace(
-            coordinator=SimpleNamespace(data=None),
+            # Neither attribute is read by async_setup_entry -- matches the sibling stub shape
+            # used elsewhere in this file, not load-bearing for the 44 count.
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=True)),
             config=_mirror_test_config(),
         ),
     )
@@ -1087,6 +1089,7 @@ async def test_config_mirror_sensor_reflects_the_new_value_after_an_options_relo
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_max_current_a"
     )
     assert entity_id is not None
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
     assert hass.states.get(entity_id) is None  # disabled by default -- no state yet
 
     registry.async_update_entity(entity_id, disabled_by=None)
