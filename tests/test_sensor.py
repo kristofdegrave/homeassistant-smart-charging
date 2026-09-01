@@ -1,5 +1,5 @@
-"""HA-harness test for the Fault/OK status sensor (ADR-0007), the active-mode sensor, and
-the peak-protection diagnostic sensors (C3)."""
+"""HA-harness test for the Fault/OK status sensor (ADR-0007), the active-mode sensor, the
+peak-protection diagnostic sensors (C3), and the ADR-0031 config-mirror diagnostic sensors."""
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -32,6 +32,7 @@ from custom_components.smart_charging.const import (
     ATTR_PERIOD_MONTH,
     CONF_DEADLINE_AVAILABLE,
     CONF_DEADLINE_NOTICE_ENABLED,
+    CONF_MAX_CURRENT,
     CONF_NOTIFICATIONS_AVAILABLE,
     CONF_PLUG_IN_REMINDER_ENABLED,
     CONF_POWER_COOLDOWN_MIN,
@@ -1023,3 +1024,88 @@ async def test_async_setup_entry_registers_ev_solar_config_mirror_sensors(hass):
         assert sensor.device_class == device_class, object_id_suffix
         assert sensor.unique_id == f"entry1_{object_id_suffix}", object_id_suffix
         assert sensor.translation_key == object_id_suffix, object_id_suffix
+
+
+# --- T6 integration checkpoint (#896, ADR-0031) ---------------------------------------------
+
+
+async def test_async_setup_entry_registers_every_sensor_with_no_duplicate_suffix(hass):
+    """T6 (#896): the full async_setup_entry call -- 9 pre-existing class-based diagnostic
+    sensors plus all 35 ADR-0031 config-mirror sensors -- registers 44 entities with no
+    duplicate unique_id/_object_id_suffix (ADR-0013), and every one of the 35 mirrors carries
+    the exact attribute set ADR-0031 mandates: entity_category=DIAGNOSTIC,
+    entity_registry_enabled_default=False, and no LABEL_SC_RUNTIME (checked structurally via
+    `_owned_labels`, not by omission -- ADR-0031's "never on the runtime dashboard" claim)."""
+    captured_entities = []
+
+    def _capture(entities):
+        captured_entities.extend(entities)
+
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={CONF_SOLAR_AVAILABLE: True},
+        options={},
+        runtime_data=SimpleNamespace(
+            # Neither attribute is read by async_setup_entry -- matches the sibling stub shape
+            # used elsewhere in this file, not load-bearing for the 44 count.
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=True)),
+            config=_mirror_test_config(),
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    assert len(captured_entities) == 44
+
+    suffixes = [e._object_id_suffix for e in captured_entities]
+    assert len(suffixes) == len(set(suffixes))
+
+    unique_ids = [e.unique_id for e in captured_entities]
+    assert len(unique_ids) == len(set(unique_ids))
+
+    mirrors = [e for e in captured_entities if isinstance(e, _ConfigMirrorSensor)]
+    assert len(mirrors) == 35
+    for sensor in mirrors:
+        assert sensor.entity_category == EntityCategory.DIAGNOSTIC, sensor._object_id_suffix
+        assert sensor.entity_registry_enabled_default is False, sensor._object_id_suffix
+        assert sensor._owned_labels == frozenset(), sensor._object_id_suffix
+
+
+async def test_config_mirror_sensor_reflects_the_new_value_after_an_options_reload(hass):
+    """T6 (#896): the one realistic failure mode of a "resolved-once" sensor -- a config-mirror
+    sensor's value must NOT stay frozen from the entry's first setup. Enables the disabled-by-
+    default max_current_a mirror, changes CONF_MAX_CURRENT via an options update (ADR-0008's
+    add_update_listener triggers the reload automatically, same as the config-flow's own options
+    step), and asserts the live entity state reflects the new value, not the original one."""
+    seed_charger_states(hass, status="Charging")
+    options = entry_options_base()
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_max_current_a"
+    )
+    assert entity_id is not None
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None  # disabled by default -- no state yet
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    original_state = hass.states.get(entity_id)
+    assert original_state is not None
+    assert float(original_state.state) == options[CONF_MAX_CURRENT]
+
+    new_options = dict(options)
+    new_options[CONF_MAX_CURRENT] = options[CONF_MAX_CURRENT] + 8.0
+    hass.config_entries.async_update_entry(entry, options=new_options)
+    await hass.async_block_till_done()
+
+    reloaded_state = hass.states.get(entity_id)
+    assert reloaded_state is not None
+    assert float(reloaded_state.state) == new_options[CONF_MAX_CURRENT]
+    assert reloaded_state.state != original_state.state
