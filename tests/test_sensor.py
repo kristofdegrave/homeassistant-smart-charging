@@ -614,9 +614,10 @@ def test_active_soc_limit_sensor_unique_id_scoped_to_entry():
 def _mirror_test_config(**overrides):
     """A SmartChargingConfig-shaped SimpleNamespace covering every field a config-mirror sensor
     spec (T1-T4) reads, each set to a distinct, non-zero/non-default value by default so a
-    sensor reading the wrong field fails loudly rather than by coincidence. `**overrides` lets a
-    test set only the fields it actually cares about (e.g. capability booleans) without
-    re-declaring the rest."""
+    sensor reading the wrong field fails loudly rather than by coincidence -- self-checked below
+    (T3/T4 append more fields to `base`; the assertion catches a future collision the same way).
+    `**overrides` lets a test set only the fields it actually cares about (e.g. capability
+    booleans) without re-declaring the rest."""
     base = dict(
         solar_available=True,
         captar_available=True,
@@ -624,16 +625,23 @@ def _mirror_test_config(**overrides):
         grid_ceiling_a=33.0,
         grid_safety_offset_a=3.0,
         nominal_voltage=231.0,
-        min_current=7.0,
+        min_current=7.5,
         max_current=17.0,
         safety_margin_w=260.0,
         max_peak_kw=4.4,
         peak_floor_kw=2.6,
-        peak_grace_min=3.0,
+        peak_grace_min=3.5,
         captar_cooldown_min=11.0,
         power_respect_peak=False,
         evening_prompt_enabled=True,
         evening_prompt_time="20:15",
+    )
+    numeric_values = [
+        v for v in base.values() if isinstance(v, (int, float)) and not isinstance(v, bool)
+    ]
+    assert len(numeric_values) == len(set(numeric_values)), (
+        "_mirror_test_config's base values must stay pairwise distinct -- a collision would let "
+        "a sensor reading the wrong config field pass this fixture's tests by coincidence"
     )
     base.update(overrides)
     return SimpleNamespace(**base)
