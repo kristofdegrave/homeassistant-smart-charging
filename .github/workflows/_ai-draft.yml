@@ -198,7 +198,7 @@ jobs:
       # is in flight without cross-referencing the issue. Only resolvable after Checkout, since
       # it scans docs/adl/ — the "kind" step above runs before the repo is on disk.
       #
-      # Only one ADR may be in flight at a time (contribution-workflow.md, write-adr): the next
+      # Only one ADR may be in flight at a time (write-adr): the next
       # number is a function of what's merged on main, not of the issue number, so it isn't
       # collision-free the way adr/<issue-number> was. If a second `adr` issue gets labeled
       # before the first ADR's PR merges, both would compute the same next number and the second
@@ -222,20 +222,20 @@ jobs:
           # this guard exists to prevent — so the exit status is captured and only a clean 2
           # is treated as "safe to draft."
           set +e
-          git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1
+          err=$(git ls-remote --exit-code --heads origin "$branch" 2>&1 >/dev/null)
           rc=$?
           set -e
 
           if [ "$rc" -eq 0 ]; then
             gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
-            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Another ADR is already in flight on \`$branch\` (the next available ADR number). Only one ADR may be drafted at a time — wait for that PR to merge, or if \`$branch\` has no open PR (a leftover from an abandoned draft), delete the stale branch. Then re-label \`needs-draft\`."
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Another ADR is already in flight on \`$branch\` (the next available ADR number). Only one ADR may be drafted at a time — wait for that PR to merge, or if \`$branch\` has no open PR (a leftover from an abandoned draft, possibly this same issue's own earlier attempt), delete the stale branch. Then re-label \`needs-draft\`."
             printf 'ok=false\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$rc" -ne 2 ]; then
-            echo "::warning::git ls-remote failed checking for '$branch' (exit $rc) instead of cleanly reporting the ref is absent (exit 2) — refusing to draft rather than risk clobbering an in-flight ADR branch."
+            echo "::warning::git ls-remote failed checking for '$branch' (exit $rc): $err — refusing to draft rather than risk clobbering an in-flight ADR branch."
             gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
-            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Couldn't verify whether \`$branch\` is already in use (git ls-remote failed, exit $rc) — refusing to draft rather than risk clobbering an in-flight ADR branch. Re-label \`needs-draft\` to retry."
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Couldn't verify whether \`$branch\` is already in use (git ls-remote failed, exit $rc: $err) — refusing to draft rather than risk clobbering an in-flight ADR branch. Re-label \`needs-draft\` to retry."
             printf 'ok=false\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi

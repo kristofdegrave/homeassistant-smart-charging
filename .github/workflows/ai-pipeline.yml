@@ -11,6 +11,9 @@ name: AI documentation pipeline
 # Labels
 #   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
 #   Context/type : uc | requirement | adr | specs | development | testing | workflow
+#     `adr` is also load-bearing in the draft job's concurrency group expression below (keys
+#     the shared ai-draft-adr group) — a rename there needs updating too, or the guard silently
+#     degrades back to per-issue grouping with no error.
 # A context label says WHAT to draft and gives the reviewer context; the action label is the
 # go-signal. `development`/`testing` drafts must additionally pin an approved task via a
 # `Plan: docs/plans/<file>.md#T<task-number>` line in the issue body — see _ai-draft.yml's header
@@ -81,6 +84,14 @@ jobs:
       # what's merged on main, so two `adr` issues labeled minutes apart could otherwise both
       # pass its collision check before either pushes a branch. Every other context label keeps
       # the plain per-issue group.
+      #
+      # Known residual limit, accepted rather than engineered around (GitHub Actions keeps at
+      # most one queued run per group with cancel-in-progress: false — a third `adr` issue
+      # labeled `needs-draft` while two are already running/queued silently cancels the second
+      # one's queued run, leaving that issue stuck on `needs-draft` with no comment). ADR issues
+      # are filed rarely enough (one at a time, per write-adr) that three in flight
+      # simultaneously is not expected in practice; the "Resolve ADR branch" step's own guard
+      # still prevents a silent clobber if it ever happens.
       group: >-
         ${{ contains(github.event.issue.labels.*.name, 'adr') && 'ai-draft-adr' || format('ai-draft-{0}', github.event.issue.number) }}
       cancel-in-progress: false
