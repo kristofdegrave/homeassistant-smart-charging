@@ -156,6 +156,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period — see the Captar-dependent-rows note | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_peak_grace_min` | state | — | min | mirrors `peak_grace_min` (config-options); disabled by default (ADR-0031) | R3 peak-breach grace period | user | — |
 | `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
+| `monthly_peak_external` | adapter role | — | kW | mapped to a smart-meter/DSO capacity-tariff peak sensor (NF3; optional — treated as absent, no effect on the resolved monthly-peak-demand operand, when not configured) | [external monthly-peak reading](system-overview.md#ubiquitous-language) (R3) | resolution-rules | — |
 | `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime), UC12 |
 | `sensor.smart_charging_captar_cooldown_min` | state | — | min | mirrors `captar_cooldown_min` (config-options); disabled by default (ADR-0031) | `Captar`-mode cooldown (R11) | user | — |
 
@@ -177,7 +178,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `sensor.smart_charging_active_mode` | state | — | — | resolved active mode: equals `select.smart_charging_mode` under `Manual`, `Auto`'s selection under `Auto` | [active mode](system-overview.md#ubiquitous-language) — the resolved value in effect | UC11 | control-cycle (resolved from the `Manual` selector or `Auto` selection) |
 | `sensor.smart_charging_desired_current` | state | — | A | the active mode module's desired charger current, before the peak/grid clamps | desired charger current (control-cycle step 4) | (UC11) | control-cycle |
-| `sensor.smart_charging_effective_peak_limit` | state | — | kW | `min(max(monthly_peak_demand, peak_floor_kw), maximum_peak)`, raised to the maximum peak during urgency (R5); resolved per `resolution-rules.md` | [effective peak limit](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
+| `sensor.smart_charging_effective_peak_limit` | state | — | kW | `min(max(max(monthly_peak_demand, monthly_peak_external), peak_floor_kw), maximum_peak)`, raised to the maximum peak during urgency (R5); resolved per `resolution-rules.md` | [effective peak limit](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_active_soc_limit` | state | — | % | resolved active SOC limit per `resolution-rules.md` (Active SOC limit table): solar-reserve cap → solar step-up → default; the entity `ActiveSocLimitChanged` fires on (ADR-0011) | [active SOC limit](system-overview.md#ubiquitous-language) — the resolved value in effect | UC09, (UC11) | control-cycle |
 | `sensor.smart_charging_status` | state | — | — | `OK` / `Fault` (ADR-0007) | integration health status (ADR-0007) | (UC11) | control-cycle |
 | `sensor.smart_charging_solar_surplus_w` | state | — | W | `charger_power − net_power`, computed fresh each control cycle, never stored | [solar surplus](system-overview.md#ubiquitous-language) | UC11 | control-cycle |

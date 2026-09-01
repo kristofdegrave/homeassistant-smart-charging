@@ -236,13 +236,15 @@ below, the active-SOC-limit rule above (the cap's row-1 precondition), UC05, UC0
 
 Resolves the [effective peak limit](system-overview.md#ubiquitous-language) — the ceiling on
 net import that charging must stay below. Priority order: deadline urgency raises the limit;
-otherwise it is the lesser of the configured maximum and the billed peak, floored so a low or
-not-yet-established billed peak can't push the limit down too far (row 2).
+otherwise it is the lesser of the configured maximum and the billed peak — itself raised to the
+[external monthly-peak reading](system-overview.md#ubiquitous-language) when one is mapped and
+higher — floored so a low or not-yet-established billed peak can't push the limit down too far
+(row 2).
 
 | Priority | Condition | Effective peak limit |
 | --- | --- | --- |
 | 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5 — possible only while the [deadline capability](system-overview.md#ubiquitous-language) is present, R18) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
-| 2 | Otherwise (normal operation) | `min(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
+| 2 | Otherwise (normal operation) | `min(max(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[external monthly-peak reading](system-overview.md#ubiquitous-language)`), `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
 
 - This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
   `Manual` (except when the CapTar capability is absent, where it is a no-op — see below):
@@ -263,6 +265,14 @@ not-yet-established billed peak can't push the limit down too far (row 2).
 - The [peak floor](system-overview.md#ubiquitous-language) (row 2) is applied with `max()`
   before the `min()` with the maximum peak, so it can raise but never push the effective peak
   limit above the maximum peak — see the glossary term for why the floor exists.
+- The [external monthly-peak reading](system-overview.md#ubiquitous-language) (row 2), when
+  mapped and available, is merged with `max()` against the internally-tracked monthly peak
+  demand before the peak-floor `max()` and the maximum-peak `min()` are applied — so it too can
+  raise but never push the effective peak limit above the maximum peak (R3). The merge is
+  recomputed fresh every control cycle from both sources; it never overwrites the
+  internally-tracked monthly peak demand, so a live spike this integration observes between
+  external-sensor refreshes is not discarded. When unmapped or unavailable, this operand is
+  simply the internally-tracked monthly peak demand.
 - The limit never exceeds the maximum peak, even under urgency (C3).
 - **When the CapTar [capability](system-overview.md#ubiquitous-language) is absent (R18), nothing
   consults this rule's result.** The peak clamp is the sole control-decision consumer of the

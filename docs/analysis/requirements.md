@@ -41,7 +41,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R3 — CapTar peak protection
 
 **Priority:** Must
-**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it. Applies only while the CapTar capability is present (R18).
+**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it. The effective peak limit's monthly-peak-demand operand resolves to the higher of the system's own self-tracked value and an optional external monthly-peak sensor's reading. Applies only while the CapTar capability is present (R18).
 
 **Acceptance criteria:**
 
@@ -52,6 +52,8 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The charger stops (0 A) only when it is already at the minimum charging current and net import still exceeds the effective peak limit minus the safety margin continuously for a configurable grace period (default 2 minutes); a momentary breach does not stop charging.
 - [ ] The charger may use all headroom up to the effective peak limit minus the safety margin, including capacity freed when other household appliances switch off.
 - [ ] The effective peak limit's monthly-peak-demand operand never falls below a configurable peak floor (default 2.5 kW), and the floor never raises the effective peak limit above the configured maximum peak.
+- [ ] When an [external monthly-peak reading](system-overview.md#ubiquitous-language) is mapped (optional, NF3; absent by default) and available, the effective peak limit's monthly-peak-demand operand never resolves below that reading — in addition to never falling below the peak floor above — and, like the peak floor, never raises the effective peak limit above the configured maximum peak.
+- [ ] When the external monthly-peak reading is unmapped or unavailable, this operand rests on the internally-tracked monthly peak demand alone, unaffected by the criterion above.
 
 ---
 
