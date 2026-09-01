@@ -49,6 +49,7 @@ from .const import (
     ROLE_LOW_TARIFF,
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLES_ADAPTER_READINGS_EXCLUDED,
     SOC_LIMIT_OVERRIDE_MAX,
@@ -267,7 +268,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
         extracted methods (ADR-0023). Also caches each read role's value into
         `self._role_readings` (ADR-0021) -- the three required reads cache directly here,
-        grid voltage's optional read caches inside `_read_role` (issue #717). `_run_cycle`
+        grid voltage's and solar power's optional reads cache inside `_read_role` (issue #717,
+        #911). `_run_cycle`
         decides whether to advance `self._role_readings_at`, since that depends on whether
         this cycle succeeded as a whole (the required-adapter read succeeding is necessary
         but not sufficient, #648)."""
@@ -281,6 +283,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Grid voltage is the one role where None is NOT a fault (NF4).
         measured_v = await self._read_role(ROLE_GRID_VOLTAGE)
         voltage = resolve_voltage(measured_v, self._config.nominal_voltage)
+
+        # Solar power: read every cycle, same as grid voltage, but not yet a control-path
+        # operand -- issue #911 wires this role for reading (adapter_readings mirror) only.
+        # R10 AC1's sampling/averaging and #587's real-consumer decision stay deferred.
+        await self._read_role(ROLE_SOLAR_POWER)
 
         # Any required role missing -> fault (ADR-0007).
         if status is None or net_w is None or charger_w is None:

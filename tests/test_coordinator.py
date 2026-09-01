@@ -49,6 +49,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLES_ADAPTER_READINGS_EXCLUDED,
     SOC_LIMIT_OVERRIDE_MAX,
@@ -958,6 +959,19 @@ async def test_adapter_readings_caches_deadline_and_reserve_block_reads(hass):
     assert result.adapter_readings[ROLE_LOW_TARIFF] is True
     assert result.adapter_readings[ROLE_SOLAR_FORECAST] == 15.0
     assert result.adapter_readings[ROLE_EV_BATTERY_CAPACITY] == 60.0
+
+
+async def test_adapter_readings_surfaces_solar_power_when_wired(hass):
+    """Issue #911: once the factory wires ROLE_SOLAR_POWER, this role's reading must
+    automatically show up in sensor.smart_charging_adapter_readings's attributes with no
+    further code change beyond `_read_cycle_inputs`'s own `_read_role` call (ADR-0021's "new
+    roles just add attribute keys, no new entity, no new ADR" design) -- it is read every
+    cycle, same as grid voltage, and is not gated by charger status/mode."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0)
+    adapters[ROLE_SOLAR_POWER] = _FakeNumeric(1234.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.adapter_readings[ROLE_SOLAR_POWER] == 1234.0
 
 
 async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):
