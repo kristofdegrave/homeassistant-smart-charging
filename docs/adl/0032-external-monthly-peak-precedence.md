@@ -13,14 +13,15 @@ role's reading, and the internally-tracked monthly peak demand from
 (`engines/billing_protection.py`) takes a single monthly-peak operand for its row-2 clamp —
 this ADR decides which of the two (or what combination) feeds it when both are present.
 
-R3's row 2 exists to keep charging from raising the household's real monthly peak demand
-above the effective peak limit; within it, the peak floor sub-part exists so a low or
-not-yet-established monthly peak demand doesn't resolve the effective peak limit down near
-0 kW and needlessly block charging. The scenario motivating ADR-0030/this ADR is an instance
-of the floor problem — the tracked monthly peak demand under-representing the real one — so
-a merge rule that fixes it has to be judged against both halves of row 2's purpose: does it
-still let a too-low internal reading be raised (the goal), and does it risk letting a too-high
-reading raise the limit further than R3's own purpose intends (the failure mode to avoid)?
+`resolution-rules.md`'s row 2 supports R3 by keeping charging from raising the household's
+real monthly peak demand above the effective peak limit; within it, the peak floor sub-part
+exists so a low or not-yet-established monthly peak demand doesn't resolve the effective peak
+limit down near 0 kW and needlessly block charging. The scenario motivating ADR-0030/this ADR
+is an instance of the floor problem — the tracked monthly peak demand under-representing the
+real one — so a merge rule that fixes it has to be judged against both halves of row 2's
+purpose: does it still let a too-low internal reading be raised (the goal), and does it risk
+letting a too-high reading raise the limit further than R3's own purpose intends (the failure
+mode to avoid)?
 
 When the external role is unmapped or its reading is unavailable, all options below fall
 back to the internally-tracked value alone (the same optional-role default ADR-0030
@@ -51,10 +52,13 @@ already bounds the result, unchanged.
   new one this option adds), but for as long as the bad reading persists, charging would
   itself be allowed to draw up to that higher limit, which is the real monthly peak demand
   this project bills against — the exact outcome R3 exists to prevent, not merely a display
-  artifact. Of the three causes, only a persistent unit mismatch stays wrong indefinitely; a
-  DSO rollover or a corrected mapping self-corrects on its next read, since the merge is
-  computed fresh each cycle at the call site and never overwrites the internally-tracked
-  value.
+  artifact. The merge is computed fresh each cycle and never overwrites the
+  internally-tracked value, so a DSO rollover or a corrected mapping stops *widening* the gap
+  on its next read — but that only bounds how much further the internal tracker's own state
+  can be inflated going forward; it does not undo the higher draw already folded into
+  `monthly_peak_kw` by `PeakDemandState.update` (which observes the real, elevated `net_w`)
+  while the bad reading was in effect. All three causes leave that already-recorded increase
+  in place for the rest of the month — only a persistent unit mismatch keeps making it worse.
 
 ### Option B — External always wins when mapped
 
@@ -84,33 +88,38 @@ whenever it disagrees upward.
 
 - Pro: No second operand at the call site and no second published number to reconcile —
   `monthly_peak_kw` stays "the" monthly peak demand everywhere it's read, including the
-  existing owned entity, and Option A's two-numbers legibility concern does not arise.
+  existing owned entity, and the two-numbers legibility concern raised in Option A's
+  Consequences does not arise.
 - Con: A bad external reading (wrong unit, wrong entity, stale pre-rollover value) is no
-  longer a per-cycle operand that self-corrects on its next read (as Option A's is) — it
-  gets folded permanently into the tracker's own running state for the month, the same state
-  the `MonthlyPeakSensor`'s restore-on-restart behavior (ADR-0030's Context) persists across
-  restarts. Recovering from a bad seed would need an explicit correction, not just fixing
-  the mapping. It also changes `update_monthly_peak_demand`'s contract (currently a pure
-  function of the smoothed reading and the month) to take a second input, a broader change
-  than either Option A or B needs.
+  longer a per-cycle operand that stops widening the gap on its next read (as Option A's
+  does) — it gets folded permanently into the tracker's own running state for the month, the
+  same state `MonthlyPeakSensor`'s restore-on-restart behavior (`sensor.py`,
+  `coordinator_cycle.py`) persists across restarts. Recovering from a bad seed would need an
+  explicit correction, not just fixing the mapping. `PeakDemandState.seed()`
+  (`coordinator_cycle.py`) already provides a second write path onto the tracked state, so
+  this would not need to change `update_monthly_peak_demand`'s own pure-function signature —
+  but the permanence itself is a real cost neither Option A nor B carries.
 
 ## Decision
 
 **Option A**, `max(external, internal)`. Option C keeps a single published quantity, which
-is a real simplicity win, but at the cost of making a bad external reading permanent for the
-tracked month instead of self-correcting per cycle (Option A's own Con, resolved for two of
-its three causes; Option C's Con notes it is not resolved for any of them) — a heavier
-structural cost for the readability it buys, and it changes a currently pure function's
-contract to do so. Option B's simpler single-source-of-truth story is real, but it does not
-fully close the risk Option A's own Con raises either (a wrong-unit or stale external
-reading is just as authoritative under Option B, with no internal-tracker value to catch
-it), while giving up Option A's Pro of the internal tracker still catching a live spike
-between external refreshes. Option A's residual risk — a bad external reading raising the
-effective peak limit as high as `maximum peak` for as long as it persists — is accepted
-because `maximum peak` is itself the ceiling the system is otherwise willing to charge to
-under deadline urgency (row 1); this decision does not introduce a way to exceed that
-ceiling, it only makes row 2 reach it under a wrong reading the same way row 1 already can
-under urgency.
+is a real simplicity win, but at the cost of folding a bad external reading permanently into
+the tracked month's state, needing an explicit correction to undo (Option C's Con) rather
+than Option A's per-cycle recomputation, which at least stops a corrected or rolled-over
+external reading from widening the gap any further (Option A's own Con) — a heavier
+structural cost for the readability C buys. Option B's simpler single-source-of-truth story
+is real, but it does not fully close the risk Option A's own Con raises either (a wrong-unit
+or stale external reading is just as authoritative under Option B, with no internal-tracker
+value to catch it), while giving up Option A's Pro of the internal tracker still catching a
+live spike between external refreshes. Option A's residual risk is accepted with an accurate
+accounting of what it actually bounds: a bad external reading can raise the effective peak
+limit as high as `maximum peak` for as long as it persists, and any extra draw charging
+takes under that inflated limit is folded into `monthly_peak_kw` for the rest of the month
+regardless of whether the external reading later corrects — recomputing fresh each cycle
+stops the gap from growing further, it does not undo it. This is accepted because
+`maximum peak` is itself the ceiling the system is otherwise willing to charge to under
+deadline urgency (row 1); this decision does not introduce a way to exceed that ceiling, and
+the same already-happened-this-month exposure exists for row 1 under urgency today.
 
 ## Consequences
 
@@ -118,17 +127,19 @@ under urgency.
   computing `max(external_reading, monthly_peak_kw)` as the value passed into today's
   `min(max(monthly, floor), max)` clamp — exact call-site placement and signature change
   belong to the implementation spec, not this ADR.
-- `docs/analysis/resolution-rules.md`'s row-2 formula and `docs/analysis/entity-catalog.md`'s
-  description of `sensor.smart_charging_effective_peak_limit` both currently state the
-  operand as bare monthly peak demand; both need updating to reflect the merged operand once
-  the implementation spec lands.
-- `monthly_peak_kw`'s existing meaning ("the integration's own tracked peak") is unchanged;
-  the merged value used by `resolve_effective_peak_limit` becomes a distinct, larger-scoped
-  quantity. `sensor.smart_charging_effective_peak_limit` already exposes the resolved value
-  that actually drives the clamp, so the merge is not invisible to a user — the
-  `monthly_peak_kw` owned entity, however, would then show a number lower than the one
-  driving the clamp whenever the external reading is higher; whether that needs a rename,
-  a second entity, or no change beyond documentation is deferred to the implementation spec.
+- `docs/analysis/resolution-rules.md`'s row-2 formula, `docs/analysis/entity-catalog.md`'s
+  description of `sensor.smart_charging_effective_peak_limit`, and
+  `docs/analysis/system-overview.md`'s own hardcoded row-2 formula all currently state the
+  operand as bare monthly peak demand; all three need updating to reflect the merged operand
+  once the implementation spec lands.
+- `sensor.smart_charging_monthly_peak_kw`'s existing meaning ("the integration's own tracked
+  peak") is unchanged; the merged value used by `resolve_effective_peak_limit` becomes a
+  distinct, larger-scoped quantity. `sensor.smart_charging_effective_peak_limit` already
+  exposes the resolved value that actually drives the clamp, so the merge is not invisible to
+  a user — `sensor.smart_charging_monthly_peak_kw`, however, would then show a number lower
+  than the one driving the clamp whenever the external reading is higher; whether that needs
+  a rename, a second entity, or no change beyond documentation is deferred to the
+  implementation spec.
 - Whether the external role's raw reading, alongside `monthly_peak_kw`, is also worth
   surfacing on the ADR-0021 adapter-readings diagnostic sensor (today scoped to wired
   read-adapter-role values, which already includes the external role's raw reading by the
