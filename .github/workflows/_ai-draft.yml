@@ -193,10 +193,11 @@ jobs:
         if: steps.kind.outputs.proceed == 'true'
         uses: actions/checkout@v7
 
-      # ADRs branch as adr/<adr-number> instead of adr/<issue-number> (contribution-workflow.md's
-      # branch-naming exception, mirrored in write-adr) so the branch name identifies which ADR
-      # is in flight without cross-referencing the issue. Only resolvable after Checkout, since
-      # it scans docs/adl/ — the "kind" step above runs before the repo is on disk.
+      # ADRs branch as adr/<adr-number> instead of adr/<issue-number> — an override of
+      # contribution-workflow.md's <context-label>/<issue-number> scheme, defined in write-adr —
+      # so the branch name identifies which ADR is in flight without cross-referencing the
+      # issue. Only resolvable after Checkout, since it scans docs/adl/ — the "kind" step above
+      # runs before the repo is on disk.
       #
       # Only one ADR may be in flight at a time (write-adr): the next
       # number is a function of what's merged on main, not of the issue number, so it isn't
@@ -225,6 +226,11 @@ jobs:
           err=$(git ls-remote --exit-code --heads origin "$branch" 2>&1 >/dev/null)
           rc=$?
           set -e
+          # Collapse to one line and cap length before it's echoed into a `::warning::` command
+          # or an issue comment: a multi-line remote error would otherwise mangle the workflow
+          # annotation (only its first line survives) and any `::`-prefixed line in it could be
+          # misread as a workflow command.
+          err=$(printf '%s' "$err" | tr '\n' ' ' | cut -c1-500)
 
           if [ "$rc" -eq 0 ]; then
             gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
