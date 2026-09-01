@@ -1,7 +1,7 @@
 # ADR-0030: External monthly-peak sensor — optional adapter role
 
 Date: 2026-08-31
-Status: Proposed
+Status: Accepted
 
 ## Context
 
