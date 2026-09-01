@@ -14,11 +14,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    PERCENTAGE,
     STATE_OFF,
     STATE_ON,
     Platform,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfTime,
 )
@@ -348,9 +350,12 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors: T1's four Capabilities rows, T2's twelve Installation/
-    # Charger/Peak protection rows, and T4's six Power-mode/Notification rows -- T3 appends the
-    # remaining 13 EV/Solar rows to this same list (design doc's 35-row mapping table).
+    # ADR-0031 config-mirror sensors (design doc's 35-row mapping table). T1: the four
+    # Capabilities rows. T2: the twelve Installation/Charger/Peak protection rows. T3: the
+    # 13 EV/Solar rows -- note solar_only_strategy/solar_only_midpoint are the
+    # SmartChargingConfig field names for the solar_only_rounding_strategy/
+    # solar_only_rounding_midpoint_pct catalog ids (naming-drift section, design doc). T4:
+    # the six Power-mode/Notification rows.
     mirror_specs = [
         _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
         _ConfigMirrorSpec("captar_available", None, None, config.captar_available),
@@ -446,6 +451,50 @@ async def async_setup_entry(
         ),
         _ConfigMirrorSpec("evening_prompt_enabled", None, None, config.evening_prompt_enabled),
         _ConfigMirrorSpec("evening_prompt_time", None, None, config.evening_prompt_time),
+        _ConfigMirrorSpec(
+            "ev_battery_capacity_kwh",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            None,
+            config.ev_battery_capacity_kwh,
+        ),
+        _ConfigMirrorSpec(
+            "solar_start_threshold_w",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            config.solar_start_threshold_w,
+        ),
+        _ConfigMirrorSpec("solar_hold_min", UnitOfTime.MINUTES, None, config.solar_hold_min),
+        _ConfigMirrorSpec(
+            "solar_cooldown_min", UnitOfTime.MINUTES, None, config.solar_cooldown_min
+        ),
+        _ConfigMirrorSpec(
+            "solar_restart_debounce_min",
+            UnitOfTime.MINUTES,
+            None,
+            config.solar_restart_debounce_min,
+        ),
+        _ConfigMirrorSpec(
+            "solar_only_start_threshold_w",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            config.solar_only_start_threshold_w,
+        ),
+        _ConfigMirrorSpec(
+            "solar_only_hold_min", UnitOfTime.MINUTES, None, config.solar_only_hold_min
+        ),
+        _ConfigMirrorSpec("solar_only_rounding_strategy", None, None, config.solar_only_strategy),
+        _ConfigMirrorSpec(
+            "solar_only_rounding_midpoint_pct", PERCENTAGE, None, config.solar_only_midpoint
+        ),
+        _ConfigMirrorSpec("max_solar_soc", PERCENTAGE, None, config.max_solar_soc),
+        _ConfigMirrorSpec("solar_step_pp", "pp", None, config.solar_step_pp),
+        _ConfigMirrorSpec("solar_step_threshold_pp", "pp", None, config.solar_step_threshold_pp),
+        _ConfigMirrorSpec(
+            "solar_forecast_threshold_kwh",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            None,
+            config.solar_forecast_threshold_kwh,
+        ),
     ]
 
     async_add_entities(
