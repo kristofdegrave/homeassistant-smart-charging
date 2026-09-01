@@ -627,7 +627,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 23 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 27 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
@@ -652,6 +652,13 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         "departure_sun": "time.smart_charging_departure_sun",
         "departure_holiday": "time.smart_charging_departure_holiday",
         "departure_home_day": "time.smart_charging_departure_home_day",
+        # ADR-0031 config-mirror sensors, T1 slice (#888) -- disabled by default, but still
+        # registered (a disabled entity keeps a registry row; only hass.states omits it), so
+        # they belong in this completeness set the same as every enabled owned entity above.
+        "solar_available": "sensor.smart_charging_solar_available",
+        "captar_available": "sensor.smart_charging_captar_available",
+        "deadline_available": "sensor.smart_charging_deadline_available",
+        "notifications_available": "sensor.smart_charging_notifications_available",
     }
     for uid_suffix, want_id in expected.items():
         domain = want_id.split(".", 1)[0]

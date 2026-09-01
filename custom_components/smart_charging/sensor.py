@@ -13,7 +13,14 @@ from homeassistant.components.sensor import (
     SensorExtraStoredData,
     SensorStateClass,
 )
-from homeassistant.const import Platform, UnitOfElectricCurrent, UnitOfPower, UnitOfTime
+from homeassistant.const import (
+    STATE_OFF,
+    STATE_ON,
+    Platform,
+    UnitOfElectricCurrent,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
@@ -23,7 +30,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import SmartChargingConfigEntry
 from .const import (
     ATTR_PERIOD_MONTH,
+    CONF_DEADLINE_AVAILABLE,
+    CONF_NOTIFICATIONS_AVAILABLE,
     CONF_SOLAR_AVAILABLE,
+    DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_NOTIFICATIONS_AVAILABLE,
     DEFAULT_SOLAR_AVAILABLE,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
@@ -266,10 +277,52 @@ class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
         return dict(data.adapter_readings) if data is not None else {}
 
 
+def _format_mirror_value(value: Any) -> Any:
+    """bool -> STATE_ON/STATE_OFF (matches the "on"/"off" default entity-catalog.md already
+    documents for these values); every other type passes through unchanged."""
+    if isinstance(value, bool):
+        return STATE_ON if value else STATE_OFF
+    return value
+
+
+@dataclass(frozen=True)
+class _ConfigMirrorSpec:
+    """One row of the config-mirror sensor spec list `async_setup_entry` builds (ADR-0031,
+    entity-catalog.md). `value` is already resolved by `async_setup_entry` from whichever of the
+    three source buckets the design doc names -- `_ConfigMirrorSensor` itself never reads the
+    config entry."""
+
+    object_id_suffix: str
+    unit: str | None
+    device_class: SensorDeviceClass | None
+    value: Any
+
+
+class _ConfigMirrorSensor(SmartChargingEntity, SensorEntity):
+    """Diagnostic (ADR-0031): read-only mirror of one config-entry value, resolved once at
+    entry setup/reload from the entry's own config -- never recomputed mid-cycle, unlike
+    `_CoordinatorFieldSensor`'s per-cycle `CycleResult` reads. Disabled by default for every
+    installation (not capability-gated), so only the first-registration
+    `entity_registry_enabled_default` applies -- `sync_disabled_by` (ADR-0028) is for values that
+    come and go with a capability, which none of these do."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, entry_id: str, spec: _ConfigMirrorSpec) -> None:
+        self._object_id_suffix = spec.object_id_suffix
+        super().__init__(entry_id)
+        self._attr_translation_key = spec.object_id_suffix
+        self._attr_native_unit_of_measurement = spec.unit
+        self._attr_device_class = spec.device_class
+        self._attr_native_value = _format_mirror_value(spec.value)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data.coordinator
+    config = entry.runtime_data.config
     solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
     solar_surplus_sensor = SolarSurplusSensor(
         entry.entry_id, coordinator, solar_available=solar_available
@@ -280,6 +333,26 @@ async def async_setup_entry(
         solar_surplus_sensor.unique_id,
         capability_met=solar_available,
     )
+
+    # ADR-0031 config-mirror sensors, T1 slice: the four Capabilities rows only -- T2-T4 append
+    # the remaining 31 to this same list (design doc's 35-row mapping table).
+    mirror_specs = [
+        _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
+        _ConfigMirrorSpec("captar_available", None, None, config.captar_available),
+        _ConfigMirrorSpec(
+            "deadline_available",
+            None,
+            None,
+            entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE),
+        ),
+        _ConfigMirrorSpec(
+            "notifications_available",
+            None,
+            None,
+            entry.data.get(CONF_NOTIFICATIONS_AVAILABLE, DEFAULT_NOTIFICATIONS_AVAILABLE),
+        ),
+    ]
+
     async_add_entities(
         [
             ChargingStatusSensor(entry.entry_id, coordinator),
@@ -291,5 +364,6 @@ async def async_setup_entry(
             PeakHeadroomSensor(entry.entry_id, coordinator),
             TimeToFullSensor(entry.entry_id, coordinator),
             AdapterReadingsSensor(entry.entry_id, coordinator),
+            *(_ConfigMirrorSensor(entry.entry_id, spec) for spec in mirror_specs),
         ]
     )
