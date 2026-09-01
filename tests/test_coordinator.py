@@ -978,16 +978,18 @@ async def test_adapter_readings_surfaces_solar_power_even_when_disconnected(hass
     """Companion to test_adapter_readings_surfaces_solar_power_when_wired above -- proves the
     "not gated by charger status" half of that test's docstring claim, which the STATE_CHARGING
     case alone cannot: ROLE_EV_SOC (the sibling optional role read in the same _run_cycle,
-    coordinator.py:437) IS gated on CHARGEABLE_STATES (see
-    test_adapter_readings_role_never_read_is_none, which reads None for ev_soc under
-    STATE_DISCONNECTED), so a status-gated read is a real, non-hypothetical failure mode this
-    test rules out for ROLE_SOLAR_POWER's own read site in `_read_cycle_inputs`
-    (coordinator.py:290), which sits upstream of any status check."""
-    adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, ev_soc_role=False)
+    coordinator.py:437) IS gated on CHARGEABLE_STATES -- asserted directly below alongside
+    solar_power's own reading, so the gated-vs-ungated contrast is self-contained in this one
+    test rather than only by reference to test_adapter_readings_role_never_read_is_none.
+    A status-gated read is a real, non-hypothetical failure mode this test rules out for
+    ROLE_SOLAR_POWER's own read site in `_read_cycle_inputs` (coordinator.py:290), which sits
+    upstream of any status check."""
+    adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, ev_soc_role=True)
     adapters[ROLE_SOLAR_POWER] = _FakeNumeric(1234.0)
     _coord, result = await _run(hass, adapters, _config(), target=8.0)
 
     assert result.adapter_readings[ROLE_SOLAR_POWER] == 1234.0
+    assert result.adapter_readings[ROLE_EV_SOC] is None  # never read: car disconnected
 
 
 async def test_solar_power_none_reading_does_not_fault_the_cycle(hass):
