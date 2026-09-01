@@ -539,6 +539,21 @@ async def test_setup_falls_back_to_every_default_for_a_pre_solar_entry(hass):
     assert config.evening_prompt_time == "18:00:00"
 
 
+async def test_runtime_data_exposes_the_same_config_object_the_coordinator_holds(hass):
+    """#888 (T0): SmartChargingConfig is built once in __init__.py and passed to the
+    coordinator, which stores it privately as `self._config` -- no platform file could reach
+    it until now. `entry.runtime_data.config` must be the *same* object (not a re-resolved
+    copy), so a later config-mirror sensor reading it can never drift from what the coordinator
+    itself sees."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.config is entry.runtime_data.coordinator._config
+
+
 async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass, freezer):
     """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
     CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
