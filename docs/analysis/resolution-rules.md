@@ -272,7 +272,7 @@ higher — floored so a low or not-yet-established billed peak can't push the li
   recomputed fresh every control cycle from both sources; it never overwrites the
   internally-tracked monthly peak demand, so a live spike this integration observes between
   external-sensor refreshes is not discarded. When unmapped or unavailable, this operand is
-  simply the internally-tracked monthly peak demand, unchanged from before.
+  simply the internally-tracked monthly peak demand.
 - The limit never exceeds the maximum peak, even under urgency (C3).
 - **When the CapTar [capability](system-overview.md#ubiquitous-language) is absent (R18), nothing
   consults this rule's result.** The peak clamp is the sole control-decision consumer of the

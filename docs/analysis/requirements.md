@@ -41,7 +41,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R3 — CapTar peak protection
 
 **Priority:** Must
-**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it. The effective peak limit's monthly-peak-demand operand may optionally be seeded from an external monthly-peak sensor in addition to the system's own self-tracked value. Applies only while the CapTar capability is present (R18).
+**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it. The effective peak limit's monthly-peak-demand operand resolves to the higher of the system's own self-tracked value and an optional external monthly-peak sensor's reading. Applies only while the CapTar capability is present (R18).
 
 **Acceptance criteria:**
 

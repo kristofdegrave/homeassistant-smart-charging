@@ -156,7 +156,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period — see the Captar-dependent-rows note | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_peak_grace_min` | state | — | min | mirrors `peak_grace_min` (config-options); disabled by default (ADR-0031) | R3 peak-breach grace period | user | — |
 | `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `monthly_peak_external` | adapter role | — | kW | mapped to a smart-meter/DSO capacity-tariff peak sensor (NF3; optional — treated as absent, no effect on the resolved monthly-peak operand, when not configured) | [external monthly-peak reading](system-overview.md#ubiquitous-language) (R3) | resolution-rules | — |
+| `monthly_peak_external` | adapter role | — | kW | mapped to a smart-meter/DSO capacity-tariff peak sensor (NF3; optional — treated as absent, no effect on the resolved monthly-peak-demand operand, when not configured) | [external monthly-peak reading](system-overview.md#ubiquitous-language) (R3) | resolution-rules | — |
 | `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime), UC12 |
 | `sensor.smart_charging_captar_cooldown_min` | state | — | min | mirrors `captar_cooldown_min` (config-options); disabled by default (ADR-0031) | `Captar`-mode cooldown (R11) | user | — |
 
