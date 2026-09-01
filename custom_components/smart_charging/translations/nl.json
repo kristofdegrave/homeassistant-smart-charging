@@ -383,28 +383,28 @@
         "name": "Adapteraflezingen"
       },
       "solar_available": {
-        "name": "Zon beschikbaar"
+        "name": "Zonne-energie geïnstalleerd"
       },
       "captar_available": {
         "name": "CapTar beschikbaar"
       },
       "deadline_available": {
-        "name": "Deadline beschikbaar"
+        "name": "Vertrekdeadline bijhouden"
       },
       "notifications_available": {
-        "name": "Meldingen beschikbaar"
+        "name": "Meldingen"
       },
       "smoothing_window": {
         "name": "Afvlakvenster"
       },
       "grid_supply_ceiling_a": {
-        "name": "Netaansluitlimiet"
+        "name": "Netgrens"
       },
       "grid_safety_offset_a": {
-        "name": "Netveiligheidsmarge"
+        "name": "Veiligheidsmarge net"
       },
       "nominal_voltage_v": {
-        "name": "Nominale spanning"
+        "name": "Nominale netspanning"
       },
       "min_current_a": {
         "name": "Minimale laadstroom"
@@ -413,79 +413,79 @@
         "name": "Maximale laadstroom"
       },
       "safety_margin_w": {
-        "name": "Veiligheidsmarge"
+        "name": "CapTar veiligheidsmarge piek"
       },
       "max_peak_kw": {
-        "name": "Maximale piek"
+        "name": "CapTar maximale piek"
       },
       "peak_floor_kw": {
-        "name": "Piekvloer"
+        "name": "CapTar minimale piek"
       },
       "peak_grace_min": {
-        "name": "Piek respijtperiode"
+        "name": "CapTar respijtperiode piek"
       },
       "captar_cooldown_min": {
-        "name": "CapTar afkoeltijd"
+        "name": "Afkoelduur CapTar"
       },
       "power_respect_peak": {
-        "name": "Power-modus houdt rekening met piek"
+        "name": "Vermogen-modus houdt rekening met piek"
       },
       "power_cooldown_min": {
-        "name": "Power-modus afkoeltijd"
+        "name": "Afkoelduur Vermogen-modus"
       },
       "reminder_lead_h": {
-        "name": "Aansluitherinnering voorlooptijd"
+        "name": "Voorlooptijd oplaadherinnering"
       },
       "deadline_notice_enabled": {
-        "name": "Melding onhaalbare deadline ingeschakeld"
+        "name": "Melding onbereikbare deadline ingeschakeld"
       },
       "plug_in_reminder_enabled": {
-        "name": "Aansluitherinnering ingeschakeld"
+        "name": "Oplaadherinnering ingeschakeld"
       },
       "evening_prompt_enabled": {
-        "name": "Avondmelding thuisdag ingeschakeld"
+        "name": "Avondprompt thuisdag ingeschakeld"
       },
       "evening_prompt_time": {
-        "name": "Tijdstip avondmelding"
+        "name": "Tijdstip avondprompt thuisdag"
       },
       "ev_battery_capacity_kwh": {
-        "name": "EV-batterijcapaciteit"
+        "name": "Standaard EV-batterijcapaciteit"
       },
       "solar_start_threshold_w": {
-        "name": "Zonnestartdrempel"
+        "name": "Startdrempel Zon"
       },
       "solar_hold_min": {
-        "name": "Zon nahouden na overschot"
+        "name": "Vasthoudduur na zonoverschot"
       },
       "solar_cooldown_min": {
-        "name": "Zonmodus afkoeltijd"
+        "name": "Afkoelduur Zon/Alleen-zon"
       },
       "solar_restart_debounce_min": {
-        "name": "Zon herstart-ontdender"
+        "name": "Herstartontdenderduur Zon/Alleen-zon"
       },
       "solar_only_start_threshold_w": {
-        "name": "Alleen-zon startdrempel"
+        "name": "Startdrempel Alleen-zon"
       },
       "solar_only_hold_min": {
-        "name": "Alleen-zon nahouden na overschot"
+        "name": "Vasthoudduur na zonoverschot Alleen-zon"
       },
       "solar_only_rounding_strategy": {
-        "name": "Alleen-zon afrondstrategie"
+        "name": "Afrondingsstrategie stroomstap Alleen-zon"
       },
       "solar_only_rounding_midpoint_pct": {
-        "name": "Alleen-zon afrondmiddelpunt"
+        "name": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)"
       },
       "max_solar_soc": {
-        "name": "Zon-opstap plafond"
+        "name": "Maximaal laadniveau zon-stapverhoging"
       },
       "solar_step_pp": {
-        "name": "Zon-opstapgrootte"
+        "name": "Stapgrootte zon-stapverhoging"
       },
       "solar_step_threshold_pp": {
-        "name": "Zon-opstap triggermarge"
+        "name": "Activeringsdrempel zon-stapverhoging"
       },
       "solar_forecast_threshold_kwh": {
-        "name": "Zonreserve-voorspellingsdrempel"
+        "name": "Prognosedrempel zonnereserve"
       }
     },
     "switch": {

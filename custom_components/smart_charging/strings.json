@@ -383,28 +383,28 @@
         "name": "Adapter readings"
       },
       "solar_available": {
-        "name": "Solar available"
+        "name": "Solar installed"
       },
       "captar_available": {
         "name": "CapTar available"
       },
       "deadline_available": {
-        "name": "Deadline available"
+        "name": "Departure deadline tracking"
       },
       "notifications_available": {
-        "name": "Notifications available"
+        "name": "Notifications"
       },
       "smoothing_window": {
         "name": "Smoothing window"
       },
       "grid_supply_ceiling_a": {
-        "name": "Grid supply ceiling"
+        "name": "Grid ceiling"
       },
       "grid_safety_offset_a": {
         "name": "Grid safety offset"
       },
       "nominal_voltage_v": {
-        "name": "Nominal voltage"
+        "name": "Nominal grid voltage"
       },
       "min_current_a": {
         "name": "Minimum charging current"
@@ -413,16 +413,16 @@
         "name": "Maximum charging current"
       },
       "safety_margin_w": {
-        "name": "Safety margin"
+        "name": "CapTar peak safety margin"
       },
       "max_peak_kw": {
-        "name": "Maximum peak"
+        "name": "CapTar maximum peak"
       },
       "peak_floor_kw": {
-        "name": "Peak floor"
+        "name": "CapTar peak floor"
       },
       "peak_grace_min": {
-        "name": "Peak grace period"
+        "name": "CapTar peak grace period"
       },
       "captar_cooldown_min": {
         "name": "CapTar cooldown"
@@ -437,7 +437,7 @@
         "name": "Plug-in reminder lead time"
       },
       "deadline_notice_enabled": {
-        "name": "Unreachable deadline notice enabled"
+        "name": "Deadline-unreachable notice enabled"
       },
       "plug_in_reminder_enabled": {
         "name": "Plug-in reminder enabled"
@@ -446,10 +446,10 @@
         "name": "Evening home-day prompt enabled"
       },
       "evening_prompt_time": {
-        "name": "Evening prompt time"
+        "name": "Evening home-day prompt time"
       },
       "ev_battery_capacity_kwh": {
-        "name": "EV battery capacity"
+        "name": "Default EV battery capacity"
       },
       "solar_start_threshold_w": {
         "name": "Solar start threshold"
@@ -458,31 +458,31 @@
         "name": "Solar post-surplus hold"
       },
       "solar_cooldown_min": {
-        "name": "Solar mode cooldown"
+        "name": "Solar/SolarOnly cooldown"
       },
       "solar_restart_debounce_min": {
-        "name": "Solar restart debounce"
+        "name": "Solar/SolarOnly restart debounce"
       },
       "solar_only_start_threshold_w": {
-        "name": "Solar-only start threshold"
+        "name": "SolarOnly start threshold"
       },
       "solar_only_hold_min": {
-        "name": "Solar-only post-surplus hold"
+        "name": "SolarOnly post-surplus hold"
       },
       "solar_only_rounding_strategy": {
-        "name": "Solar-only rounding strategy"
+        "name": "SolarOnly amp-step rounding strategy"
       },
       "solar_only_rounding_midpoint_pct": {
-        "name": "Solar-only rounding midpoint"
+        "name": "SolarOnly round-nearest midpoint"
       },
       "max_solar_soc": {
-        "name": "Solar step-up ceiling"
+        "name": "Solar step-up maximum SOC"
       },
       "solar_step_pp": {
-        "name": "Solar step-up size"
+        "name": "Solar step-up step size"
       },
       "solar_step_threshold_pp": {
-        "name": "Solar step-up trigger gap"
+        "name": "Solar step-up trigger threshold"
       },
       "solar_forecast_threshold_kwh": {
         "name": "Solar-reserve forecast threshold"
