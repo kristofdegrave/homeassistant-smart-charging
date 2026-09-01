@@ -76,7 +76,13 @@ jobs:
       issues: write
       pull-requests: write
     concurrency:
-      group: ai-draft-${{ github.event.issue.number }}
+      # ADR drafts additionally share one group across issues (not just per-issue), serializing
+      # them: the "Resolve ADR branch" step in _ai-draft.yml picks the next ADR number from
+      # what's merged on main, so two `adr` issues labeled minutes apart could otherwise both
+      # pass its collision check before either pushes a branch. Every other context label keeps
+      # the plain per-issue group.
+      group: >-
+        ${{ contains(github.event.issue.labels.*.name, 'adr') && 'ai-draft-adr' || format('ai-draft-{0}', github.event.issue.number) }}
       cancel-in-progress: false
     uses: ./.github/workflows/_ai-draft.yml
     secrets: inherit

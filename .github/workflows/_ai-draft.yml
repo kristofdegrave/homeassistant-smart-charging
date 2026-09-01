@@ -155,6 +155,10 @@ jobs:
           emit type "$present"
           emit skill "$skill"
           emit artifact "$artifact"
+          # For `adr`, this is a placeholder only — the "Resolve ADR branch" step below
+          # overrides it with adr/<adr-number> (branch name keys off the next ADR number, not
+          # the issue number), so "Open pull request" always reads
+          # steps.adr_branch.outputs.branch first for that type.
           emit branch "$present/$ISSUE_NUMBER"
           emit model "$model"
           emit commit_prefix "$commit_prefix"
@@ -212,9 +216,26 @@ jobs:
           next=$(printf '%04d' "$((10#${last:-0} + 1))")
           branch="adr/$next"
 
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+          # Fail-closed: `--exit-code` returns 2 for "ref doesn't exist" (the only case that
+          # should let drafting proceed) and 128/other on a genuine failure (network blip, auth
+          # issue). Both used to fall through to "proceed" — exactly the clobbering scenario
+          # this guard exists to prevent — so the exit status is captured and only a clean 2
+          # is treated as "safe to draft."
+          set +e
+          git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1
+          rc=$?
+          set -e
+
+          if [ "$rc" -eq 0 ]; then
             gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
-            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Another ADR is already in flight on \`$branch\` (the next available ADR number). Only one ADR may be drafted at a time — wait for that PR to merge (or close it), then re-label \`needs-draft\`."
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Another ADR is already in flight on \`$branch\` (the next available ADR number). Only one ADR may be drafted at a time — wait for that PR to merge, or if \`$branch\` has no open PR (a leftover from an abandoned draft), delete the stale branch. Then re-label \`needs-draft\`."
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$rc" -ne 2 ]; then
+            echo "::warning::git ls-remote failed checking for '$branch' (exit $rc) instead of cleanly reporting the ref is absent (exit 2) — refusing to draft rather than risk clobbering an in-flight ADR branch."
+            gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Couldn't verify whether \`$branch\` is already in use (git ls-remote failed, exit $rc) — refusing to draft rather than risk clobbering an in-flight ADR branch. Re-label \`needs-draft\` to retry."
             printf 'ok=false\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
