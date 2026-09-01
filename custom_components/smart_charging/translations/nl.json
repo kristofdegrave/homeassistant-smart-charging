@@ -381,6 +381,111 @@
       },
       "adapter_readings": {
         "name": "Adapteraflezingen"
+      },
+      "solar_available": {
+        "name": "Zonne-energie geïnstalleerd"
+      },
+      "captar_available": {
+        "name": "CapTar beschikbaar"
+      },
+      "deadline_available": {
+        "name": "Vertrekdeadline bijhouden"
+      },
+      "notifications_available": {
+        "name": "Meldingen"
+      },
+      "smoothing_window": {
+        "name": "Afvlakvenster"
+      },
+      "grid_supply_ceiling_a": {
+        "name": "Netgrens"
+      },
+      "grid_safety_offset_a": {
+        "name": "Veiligheidsmarge net"
+      },
+      "nominal_voltage_v": {
+        "name": "Nominale netspanning"
+      },
+      "min_current_a": {
+        "name": "Minimale laadstroom"
+      },
+      "max_current_a": {
+        "name": "Maximale laadstroom"
+      },
+      "safety_margin_w": {
+        "name": "CapTar veiligheidsmarge piek"
+      },
+      "max_peak_kw": {
+        "name": "CapTar maximale piek"
+      },
+      "peak_floor_kw": {
+        "name": "CapTar minimale piek"
+      },
+      "peak_grace_min": {
+        "name": "CapTar respijtperiode piek"
+      },
+      "captar_cooldown_min": {
+        "name": "Afkoelduur CapTar"
+      },
+      "power_respect_peak": {
+        "name": "Vermogen-modus houdt rekening met piek"
+      },
+      "power_cooldown_min": {
+        "name": "Afkoelduur Vermogen-modus"
+      },
+      "reminder_lead_h": {
+        "name": "Voorlooptijd oplaadherinnering"
+      },
+      "deadline_notice_enabled": {
+        "name": "Melding onbereikbare deadline ingeschakeld"
+      },
+      "plug_in_reminder_enabled": {
+        "name": "Oplaadherinnering ingeschakeld"
+      },
+      "evening_prompt_enabled": {
+        "name": "Avondprompt thuisdag ingeschakeld"
+      },
+      "evening_prompt_time": {
+        "name": "Tijdstip avondprompt thuisdag"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "Standaard EV-batterijcapaciteit"
+      },
+      "solar_start_threshold_w": {
+        "name": "Startdrempel Zon"
+      },
+      "solar_hold_min": {
+        "name": "Vasthoudduur na zonoverschot"
+      },
+      "solar_cooldown_min": {
+        "name": "Afkoelduur Zon/Alleen-zon"
+      },
+      "solar_restart_debounce_min": {
+        "name": "Herstartontdenderduur Zon/Alleen-zon"
+      },
+      "solar_only_start_threshold_w": {
+        "name": "Startdrempel Alleen-zon"
+      },
+      "solar_only_hold_min": {
+        "name": "Vasthoudduur na zonoverschot Alleen-zon"
+      },
+      "solar_only_rounding_strategy": {
+        "name": "Afrondingsstrategie stroomstap Alleen-zon"
+      },
+      "solar_only_rounding_midpoint_pct": {
+        "name": "Middelpuntfractie afronden-op-dichtstbijzijnde (Alleen-zon)"
+      },
+      "max_solar_soc": {
+        "name": "Maximaal laadniveau zon-stapverhoging"
+      },
+      "solar_step_pp": {
+        "name": "Stapgrootte zon-stapverhoging"
+      },
+      "solar_step_threshold_pp": {
+        "name": "Activeringsdrempel zon-stapverhoging"
+      },
+      "solar_forecast_threshold_kwh": {
+        "name": "Prognosedrempel zonnereserve"
       }
     },
     "switch": {
