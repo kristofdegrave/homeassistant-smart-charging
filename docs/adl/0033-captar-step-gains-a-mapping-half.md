@@ -19,8 +19,9 @@ use case to resolve, not decided here".
 The natural home for the mapping is the `captar` step. That is where every other input to the same
 clamp already lives: [ADR-0027](0027-config-flow-topic-step-structure.md)'s nine-step topic-grouped
 model puts the four peak-protection thresholds and the `Power`-mode peak-protection switch on
-`captar` (UC12 5b), gated on `CONF_CAPTAR_AVAILABLE`, on the reasoning that gating a clamp's
-thresholds but not its on/off switch would split one topic across two steps. The external
+`captar` (UC12 5b) — beside the `Captar`-mode cooldown, which is the step's one field that tunes the
+mode rather than the clamp — all gated on `CONF_CAPTAR_AVAILABLE`, on the reasoning that gating a
+clamp's thresholds but not its on/off switch would split one topic across two steps. The external
 monthly-peak reading is an operand of that same clamp and, like the thresholds, has no effect
 whatever while the CapTar capability is absent — R3's clamp does not run at all in that case, so
 the reading has no consumer.
@@ -37,10 +38,14 @@ Two of ADR-0027's Consequences restate the same enumeration — the schema-fragm
 ("with `power` and `captar` threshold-only and no step mapping-only") and the test-obligation
 consequence ("cover the reconfigure subset explicitly (that `power` and `captar` never appear)").
 `custom_components/smart_charging/config_flow.py` implements it: `CONFIG_TABLE`'s `STEP_CAPTAR` row
-conjoins `flow._mode is not FlowMode.RECONFIGURE` into its gate alongside the capability test, and
-two tests assert it by name —
+conjoins `flow._mode is not FlowMode.RECONFIGURE` into its gate alongside the capability test. Two
+tests assert the enumeration by name —
 `tests/test_config_flow.py::test_uc12_1a_reconfigure_never_shows_power_or_captar` and
-`::test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure`.
+`::test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` — and two more encode it
+structurally without naming it, including the sixteen-combination reconfigure traversal matrix
+(`::test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves`) that discharges ADR-0027's own
+"every capability combination traverses exactly the steps UC12 prescribes" obligation. The
+Consequences below enumerate the full set.
 
 The collision is narrower than it first looks, and the distinction matters for what this ADR has to
 change. Point 3 states two things: an abstract **rule** (each row's gate conjoins its capability
@@ -54,9 +59,24 @@ still has no mapping half and still never appears in reconfigure.
 
 [ADR-0001](0001-use-architecture-decision-records.md)'s immutability rule forbids editing an
 Accepted ADR's Context/Decision/Consequences to reflect a change of fact, so correcting ADR-0027's
-sentence in place is not available. The question this ADR answers is therefore: **where does the
-external monthly-peak mapping live in the nine-step flow, and what does ADR-0027 point 3 owe as a
-result?**
+sentence in place is not available.
+
+That leaves two recording shapes, and which one applies is a force here rather than an open choice
+— the same framing ADR-0027 itself used when it set out why replacing ADR-0025 had to be a supersede
+rather than an edit. ADR-0001 knows only the full form: a new ADR replaces an old one whole, and the
+old one's Status becomes `Superseded by ADR-NNNN`. That form fits when the successor can stand alone
+in the predecessor's place — as ADR-0027 could, because ADR-0025's reasoning was written in terms of
+step identities that had ceased to exist. It does not fit here. This ADR does not replace ADR-0027;
+it *depends* on it, and specifically on the very point it corrects — point 3's rule is the mechanism
+that makes the new placement work, and points 1, 2, 4 and 5 are untouched. Retiring ADR-0027 whole
+would therefore either leave the nine-step structure recorded nowhere current, or oblige this record
+to restate it verbatim for no gain, and would mark as historical a decision the shipped code still
+implements. So the applicable form is a **partial supersede**: the enumeration is replaced, the
+record that contains it stays Accepted and current. That shape is not in ADR-0001's vocabulary, and
+adopting it is a consequence this ADR owns rather than a mechanism it can cite.
+
+The question this ADR answers is therefore: **where does the external monthly-peak mapping live in
+the nine-step flow, and what does ADR-0027 point 3 owe as a result?**
 
 The forces are otherwise those ADR-0027 already recorded and are not re-derived: the fixed step
 order and complete traversal, the data/options split at a single terminal call
@@ -99,7 +119,7 @@ and low-tariff mappings — the closest topic match among the five ungated steps
   peak-protection fields. It splits the peak-protection topic across two steps, the same defect
   ADR-0027 cited when it refused to leave `power_respect_peak` on the `power` step. And it forces a
   carve-out in `entity-catalog.md`'s CapTar-dependent-rows note, which would then have to say this
-  one CapTar-dependent field is presented ungated while its five siblings are not.
+  one CapTar-dependent field is presented ungated while its six siblings on that step are not.
 
 ### Option C — A new ungated single-field step
 
@@ -148,10 +168,13 @@ thresholds belong to a mapping half. Point 3's *enumeration* is superseded; its 
   Crucially, it needs no new mechanism: point 3's own gate rule already yields the right answer once
   `captar` has a mapping half, so the change is to one row's evaluated conditions and one new schema
   fragment, not to how gating works.
-- Con: It falsifies a sentence in an Accepted, shipped ADR, which costs a superseding record, a
-  `CONFIG_TABLE` change, a new `_captar_mapping_schema`, re-worded `captar` translation strings that
-  must now read correctly in a reconfigure context as well as an install one, and the rewrite of two
-  tests named after the very claim being narrowed. It also removes a property a reader could
+- Con: It falsifies a sentence in an Accepted, shipped ADR, which costs a superseding record — and
+  one of a shape ADR-0001's vocabulary does not currently have, per Context — plus a `CONFIG_TABLE`
+  change, a new `_captar_mapping_schema`, mode branching and prefill in `async_step_captar`,
+  re-worded `captar` translation strings that must now read correctly in a reconfigure context as
+  well as an install one, and the rewrite of every test that spells the enumeration out — two named
+  after it, plus the sixteen-combination reconfigure traversal matrix. It also removes a property a
+  reader could
   previously rely on — that a step's mapping-half status is fixed by its topic — since a step can
   now *acquire* a mapping half, meaning any future field addition has to re-ask the reconfigure
   question rather than assume the answer.
@@ -173,9 +196,11 @@ the smallest diff — but its own Con is decisive on both counts: it makes the f
 unrepairable mapping out of the one most likely to need repair, and it would preserve the
 enumeration only by putting the code in contradiction with the rule the same point states.
 
-What makes E cheap is the distinction drawn in the Context. **This ADR supersedes ADR-0027 point 3's
-enumeration, not its rule.** The rule — each row's gate conjoins its capability condition with
-"this flow mode renders a half this step has" — is correct as written and already generalizes to
+What keeps E's cost confined — not small, but confined to one clause of the record and to the code
+and tests that spell that clause out — is the distinction drawn in the Context. **This ADR
+supersedes ADR-0027 point 3's enumeration, not its rule.** The rule — each row's gate conjoins its
+capability condition with "this flow mode renders a half this step has" — is correct as written and
+already generalizes to
 this case without amendment: reconfigure renders mapping halves, `captar` now has one, so its gate
 reduces to its plain capability test, and `power`, which still has none, still evaluates false in
 reconfigure exactly as before. Only the concrete claim that `power` **and** `captar` are the
@@ -184,13 +209,14 @@ enumeration — the schema-fragment line and the test-obligation line — and ar
 act, in the same way, for the same reason. Everything else in ADR-0027 stands unchanged: the
 table-driven linear structure, points 1, 2, 4 and 5, and the whole of its remaining Consequences.
 
-Because the correction is confined to one clause, **ADR-0027's Status stays `Accepted`** and its
-body is not touched (ADR-0001's immutability rule). A full `Superseded by` status would be actively
-misleading — it would retire a decision whose mechanism this ADR relies on and re-affirms, and would
-oblige a fresh record to restate the nine-step structure verbatim for no gain. The ADL index row for
-ADR-0027 is annotated instead, since `docs/adl/README.md` is a navigational index rather than an
-ADR body and is not covered by the immutability rule; ADR-0025's row was likewise updated when it
-was superseded.
+The recording shape follows from the force stated in Context: this is a partial supersede, so
+**ADR-0027's Status stays `Accepted`** and its body is not touched (ADR-0001's immutability rule).
+The pointer to this record goes in the ADL index instead — in the *title* cell of ADR-0027's row,
+leaving the Status cell verbatim `Accepted`, so no row ever carries a status ADR-0027's own header
+does not. `docs/adl/README.md` is a navigational index rather than an ADR body and is not covered by
+the immutability rule, but it is not a place to invent status vocabulary either. Adopting a partial
+supersede at all is a process precedent, and it is recorded as one in the Consequences rather than
+smuggled in as a table edit.
 
 This also answers **ADR-0030's explicitly deferred question**. Of the two homes it named, neither is
 chosen: the answer is a *gated* placement on the existing `captar` step rather than "a new ungated
@@ -208,39 +234,69 @@ decision and describes the resulting user-visible behaviour; this ADR settles th
   line ("with `power` and `captar` threshold-only and no step mapping-only") and the test-obligation
   line ("that `power` and `captar` never appear") — are read the same narrowed way. `power` remains
   the flow's only threshold-only step and still never appears in reconfigure. `docs/adl/README.md`
-  gains a row for this ADR and annotates ADR-0027's row to point at it, in this same change, so a
-  reader arriving at ADR-0027 finds the narrowing before reading point 3.
+  gains a row for this ADR and annotates the *title* cell of ADR-0027's row to point at it, in this
+  same change, leaving that row's Status cell verbatim `Accepted`. That pointer only reaches a
+  reader who arrives via the index; ADR-0030 and `config_flow.py`'s own `CONFIG_TABLE` comment both
+  link or cite straight into ADR-0027, so the comment block named in the next Consequence is the
+  compensating pointer for a reader coming from the code, and re-pointing it is part of the same
+  work rather than a cosmetic tidy.
 - **`power` becomes the only row with a conjoined gate.** `CONFIG_TABLE`'s `STEP_CAPTAR` row drops
   its `and flow._mode is not FlowMode.RECONFIGURE` conjunct and reduces to
   `bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))`, joining `solar`/`deadline`/`notifications` as a
   plain capability gate; the comment block above `CONFIG_TABLE` that spells out the old pairing must
   be re-worded with it. `STEP_POWER`'s row is unchanged and is now the sole place where the
   flow-mode half of point 3's rule does any work.
-- **A `captar` mapping fragment reappears, with different contents.** ADR-0027 dissolved
-  `_captar_mapping_schema` when the EV state-of-charge field moved to `vehicle`; a fragment of the
-  same name returns carrying exactly one optional entity selector for the external monthly-peak
-  sensor. Its unit contract and unavailable/unknown handling are ADR-0030's obligations and are not
-  re-decided here.
+- **`async_step_captar` gains mode branching and prefill.** Its docstring today states it needs
+  neither `self._mode` branching nor `_maybe_prefill` in its own body, and its body has neither —
+  correct while the step was install-only, wrong from here. It must acquire both, exactly as every
+  other step with a mapping half already has. The prefill half is not cosmetic: an optional mapping
+  rendered without suggested values on a reconfigure form is silently dropped on save, a bug class
+  this repo already carries a named regression test for. `_async_finish`'s docstring, which asserts
+  neither `power` nor `captar` is reachable in reconfigure mode, goes stale at the same moment — its
+  *logic* stays correct, since the terminal split is bucket-driven, but the reasoning it records no
+  longer holds.
+- **The options flow is unaffected and must stay that way.** The new field is data-bucket
+  (ADR-0005) and the options flow writes options only (ADR-0027 point 4), so `OPTIONS_TABLE`'s
+  `captar` row keeps rendering the threshold half alone. Point 3's rule already delivers this — the
+  options flow renders no mapping halves for any step — but it is the one place an implementer could
+  plausibly over-apply this decision, so it is stated rather than left to inference.
+- **A `captar` mapping fragment reappears, with different contents.** ADR-0027 only removed
+  `_captar_mapping_schema`'s `include_ev_soc` parameter; the implementation went further and
+  dissolved the fragment outright once the EV state-of-charge field moved to `vehicle`, leaving it
+  with nothing to carry. A fragment of the same name now returns, carrying exactly one optional
+  entity selector for the external monthly-peak sensor. Its unit contract and unavailable/unknown
+  handling are ADR-0030's obligations and are not re-decided here.
 - **Withdrawing CapTar treats the mapping and the thresholds differently, and that needs no new
-  rule.** The mapping is a data-bucket field and the five peak-protection thresholds are
-  options-bucket fields (ADR-0005), so declaring CapTar absent at a later reconfigure drops the
+  rule.** The mapping is a data-bucket field and the step's six existing values — the four
+  peak-protection thresholds, the `Power`-mode peak-protection switch, and the `Captar`-mode
+  cooldown — are options-bucket fields (ADR-0005), so declaring CapTar absent at a later reconfigure
+  drops the
   mapping from the data bucket under UC12 1a's existing rule for any withdrawn capability's mapping
   fields, while the thresholds simply lie dormant and resume on exactly their stored values if the
   capability returns. Re-declaring CapTar present therefore requires re-mapping the sensor. This
   asymmetry falls out of the buckets the two field kinds already live in; this ADR neither invents
   nor needs a special case for it. `entity-catalog.md`'s CapTar-dependent-rows note is where that
   asymmetry is documented.
-- **The two named tests must be rewritten, not deleted, and the coverage they hold must grow.**
-  `test_uc12_1a_reconfigure_never_shows_power_or_captar` and
-  `test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` both assert the
-  superseded enumeration in their names, docstrings and bodies. The `power` half of what they
-  protect is still required — nothing here weakens it, and it is now the *only* case that exercises
-  the flow-mode half of point 3's rule, so losing it would leave that rule untested. Each becomes a
-  `power`-only test under a name that no longer claims `captar`, plus new positive coverage that
-  `captar` is walked in reconfigure with CapTar present (rendering only the mapping field) and
-  skipped with CapTar absent. Per [ADR-0009](0009-testing-strategy.md) the traversal case is an
-  HA-harness test and the gate case is plain pytest, matching how the two existing tests are already
-  split. Naming and writing them is the implementation spec's job, not this ADR's.
+- **Four tests encode the superseded enumeration; all four are rewritten, none deleted.** Two assert
+  it by name — `test_uc12_1a_reconfigure_never_shows_power_or_captar` and
+  `test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` — in their names,
+  docstrings and bodies. Two more encode it structurally: the sixteen-combination reconfigure matrix
+  `test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves`, whose expected-step list never
+  appends `STEP_CAPTAR` and so fails eight of its sixteen parametrisations, and
+  `test_uc12_1a_reconfigure_shows_mapping_halves_only`, which walks every capability present and
+  asserts `vehicle` is followed directly by `solar`. The reconfigure walk helper's own docstring
+  restates the enumeration too. The matrix test is the one that discharges ADR-0027's "every
+  capability combination traverses exactly the steps UC12 prescribes" obligation, so it is the
+  substantive one of the four, not the bookkeeping.
+  The `power` half of what the named pair protects is still required — nothing here weakens it, and
+  it is now the *only* coverage of the flow-mode half of point 3's rule, so losing it would leave
+  that rule untested. Each of the two becomes a `power`-only test under a name that no longer claims
+  `captar`; the matrix and the walk-through gain `captar` in their expected reconfigure sequence
+  whenever CapTar is present, rendering the mapping field alone. New coverage is owed for the
+  reconfigure prefill of that field, since an unprefilled optional mapping is the silent-drop bug
+  class named above. Per [ADR-0009](0009-testing-strategy.md) the traversal cases are HA-harness
+  tests and the gate case is plain pytest, matching how the existing tests are already split.
+  Naming and writing them is the implementation spec's job, not this ADR's.
 - **`captar`'s translation block must read correctly in two contexts.** ADR-0027 requires each
   step's shared `config.step.*` block to work for both install and reconfigure. `captar`'s title and
   description are written today for a threshold-only screen and would be wrong above a
@@ -251,9 +307,13 @@ decision and describes the resulting user-visible behaviour; this ADR settles th
   unmapped, which is exactly the state such an entry is already in. No existing key changes name,
   type or bucket.
 - **ADR-0030's deferred placement question is closed** — gated, on the `captar` step. The remaining
-  open work in that strand is the requirement and use-case text (UC12 6a) and then the
-  implementation spec, which owns the table row, the fragment, the translations and the test rewrite
-  named above.
+  open work in that strand is the analysis text and then the implementation spec, which owns the
+  table row, the fragment, the step method, the translations and the test rewrite named above. Two
+  analysis edits are specifically owed, because both currently assert the superseded enumeration as
+  present fact: UC12 states that `captar` and `power` are both absent from the reconfigure flow, in
+  its flow narrative, its diagram and its Postconditions, and must instead describe `captar`'s
+  mapping half (UC12 6a); and R18 AC5's list of fields the CapTar-gated step presents is a closed
+  enumeration that does not yet include this mapping.
 - **What becomes harder.** A reader can no longer infer a step's reconfigure behaviour from whether
   it is capability-gated: `captar` is capability-gated *and* present in reconfigure, while `power`
   has no capability gate at all *and* is absent from it — the two properties are now visibly
@@ -261,6 +321,14 @@ decision and describes the resulting user-visible behaviour; this ADR settles th
   actually be applied rather than pattern-matched. Relatedly, mapping-half status is now
   demonstrably a property a step can acquire, so any future field added to a threshold-only step has
   to re-ask whether that step now belongs in the reconfigure walk.
+- **This sets a process precedent for partial supersedes, deliberately.** ADR-0001's vocabulary has
+  only the whole-record form, and this is the first ADR to replace one clause of a still-current
+  decision. The shape is recorded here so a future one follows it rather than re-inventing it: the
+  narrowing ADR states in bold which clause it replaces and which reasoning survives, the narrowed
+  ADR keeps its Status and its body untouched, and the ADL index carries the pointer in the narrowed
+  row's title cell — never in its status cell, which stays verbatim what the ADR's own header says.
+  The precedent is available for reuse, not for stretching: a decision whose *reasoning* no longer
+  holds is a full supersede, as ADR-0025 was, not a narrowing.
 - **What this forecloses — and what it does not.** It does not establish that every optional mapping
   belongs on a capability-gated step. The reason this one does is specific and checkable: its sole
   consumer is a clamp that does not run when the capability is absent, so the field is inert without
