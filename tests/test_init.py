@@ -627,7 +627,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 27 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 33 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
@@ -659,6 +659,13 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         "captar_available": "sensor.smart_charging_captar_available",
         "deadline_available": "sensor.smart_charging_deadline_available",
         "notifications_available": "sensor.smart_charging_notifications_available",
+        # ADR-0031 config-mirror sensors, T4 slice (#894).
+        "power_cooldown_min": "sensor.smart_charging_power_cooldown_min",
+        "reminder_lead_h": "sensor.smart_charging_reminder_lead_h",
+        "deadline_notice_enabled": "sensor.smart_charging_deadline_notice_enabled",
+        "plug_in_reminder_enabled": "sensor.smart_charging_plug_in_reminder_enabled",
+        "evening_prompt_enabled": "sensor.smart_charging_evening_prompt_enabled",
+        "evening_prompt_time": "sensor.smart_charging_evening_prompt_time",
     }
     for uid_suffix, want_id in expected.items():
         domain = want_id.split(".", 1)[0]
