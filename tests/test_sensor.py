@@ -612,6 +612,7 @@ def test_active_soc_limit_sensor_unique_id_scoped_to_entry():
 
 # --- Config-mirror diagnostic sensors (ADR-0031, #888) -------------------------------------
 
+
 def _mirror_test_config(**overrides):
     """A SmartChargingConfig-shaped SimpleNamespace covering every field a config-mirror sensor
     spec (T1-T4) reads, each set to a distinct, non-zero/non-default value by default so a
