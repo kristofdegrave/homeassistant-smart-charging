@@ -347,8 +347,9 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors, T1 slice: the four Capabilities rows only -- T2-T4 append
-    # the remaining 31 to this same list (design doc's 35-row mapping table).
+    # ADR-0031 config-mirror sensors: T1's four Capabilities rows plus (below) T4's six
+    # Power-mode/Notification rows -- T2/T3 append the remaining 25 to this same list (design
+    # doc's 35-row mapping table).
     mirror_specs = [
         _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
         _ConfigMirrorSpec("captar_available", None, None, config.captar_available),

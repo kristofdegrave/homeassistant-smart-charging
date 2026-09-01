@@ -791,6 +791,25 @@ async def test_async_setup_entry_registers_power_and_notification_config_mirror_
 
     assert mirrors["power_cooldown_min"].native_unit_of_measurement == UnitOfTime.MINUTES
     assert mirrors["reminder_lead_h"].native_unit_of_measurement == UnitOfTime.HOURS
+    # The other four have no unit/device_class per the design doc's mapping table --
+    # evening_prompt_time deliberately: its value is a plain "HH:MM" string, not a datetime, so
+    # no SensorDeviceClass.TIMESTAMP applies despite entity-catalog.md's "time" column.
+    for suffix in (
+        "power_cooldown_min",
+        "reminder_lead_h",
+        "deadline_notice_enabled",
+        "plug_in_reminder_enabled",
+        "evening_prompt_enabled",
+        "evening_prompt_time",
+    ):
+        assert mirrors[suffix].device_class is None
+    for suffix in (
+        "deadline_notice_enabled",
+        "plug_in_reminder_enabled",
+        "evening_prompt_enabled",
+        "evening_prompt_time",
+    ):
+        assert mirrors[suffix].native_unit_of_measurement is None
 
 
 async def test_async_setup_entry_power_and_notification_mirrors_fall_back_to_their_own_defaults(
