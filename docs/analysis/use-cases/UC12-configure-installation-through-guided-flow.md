@@ -66,9 +66,10 @@ state-translation tables, and the capability declarations — config-entry *data
 half** (thresholds, defaults, and seed values — config-entry *options*), per
 [ADR-0005](../../adl/0005-config-entry-structure-and-interval.md). Which halves a given flow shows
 is what distinguishes the three flows: install shows both halves of every step it reaches,
-reconfigure shows only mapping halves (1a), and options shows only threshold halves (1b). Two steps
-have only one half — `captar` and `power` are threshold-only, so neither appears in the reconfigure
-flow at all.
+reconfigure shows only mapping halves (1a), and options shows only threshold halves (1b). One step
+has only one half — `power` is threshold-only, so it never appears in the reconfigure flow at all.
+`captar` has a mapping half too — the optional external monthly-peak mapping (6a) — so it
+appears in the reconfigure flow whenever CapTar is available, showing only that one field.
 
 The step ids (`core`, `grid`, `ev_charger`, …) are structural labels for the flow's own steps, not
 ubiquitous-language terms; the glossary defines the concepts each step captures, not the steps.
@@ -116,14 +117,18 @@ variants.
    order, skipping any capability the user declared absent (5a).
 6. **Given** the installation bills against a capacity tariff, **when** the System shows the
    `captar` step, **then** it presents the `Captar`-mode cooldown duration (R11), the `Power`-mode
-   peak-protection option (R17), and the
+   peak-protection option (R17), the
    peak-protection thresholds — [safety margin](../system-overview.md#ubiquitous-language),
    [maximum peak](../system-overview.md#ubiquitous-language), [peak
-   floor](../system-overview.md#ubiquitous-language), and peak-breach grace period (R3) — all of
+   floor](../system-overview.md#ubiquitous-language), and peak-breach grace period (R3) — and the
+   optional external monthly-peak mapping (R3, 6a), all of
    which this step model gates on the CapTar capability, a deliberate change from the previous step
    model (5b). The peak-protection option sits here, not on the ungated `power` step, because it
    switches the very clamp those thresholds tune: gating the thresholds but not their on/off switch
-   would split one topic across two steps.
+   would split one topic across two steps. The external monthly-peak mapping sits here for the same
+   reason: it feeds the same clamp's monthly-peak-demand operand, has no effect on it at all while
+   this capability is absent (R3 AC1), and is left unmapped by default — not every installation's
+   smart meter or capacity-tariff sensor exposes a peak reading the flow can map.
 7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
    presents the solar-production and solar-forecast mappings and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
@@ -171,12 +176,13 @@ Then it shows only the **mapping half** of each step, prefilled from the existin
 capability declarations; `grid`'s net-power, grid-voltage, and low-tariff mappings; `ev_charger`'s
 charger-current, charger-status, and charger-power mappings; `vehicle`'s EV state-of-charge,
 EV-battery-capacity-sensor, vehicle-charge-limit, and car-at-home mappings — unconditionally, since
-the `vehicle` step is ungated; `solar`'s solar-production and solar-forecast mappings when solar is
+the `vehicle` step is ungated; `captar`'s optional external monthly-peak mapping when CapTar is
+available (6a); `solar`'s solar-production and solar-forecast mappings when solar is
 declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
 managed; and `notifications`' notification-target mapping when notifications are wanted. Only the
-`core`, `grid`, `ev_charger`, and `vehicle` mapping halves are shown unconditionally; `solar`,
-`deadline`, and `notifications` each appear only while their own capability is declared present.
-The `captar` and `power` steps never appear, since neither has a mapping half.
+`core`, `grid`, `ev_charger`, and `vehicle` mapping halves are shown unconditionally; `captar`,
+`solar`, `deadline`, and `notifications` each appear only while their own capability is declared
+present. The `power` step never appears, since it has no mapping half.
 Submitting updates only the data bucket and reloads the config entry. A capability declared absent
 here that was present before drops that capability's mapping fields from the data bucket on save;
 any of its thresholds already stored in the options bucket are left untouched (changing them is the
@@ -289,6 +295,20 @@ offered this mapping
 through the flow, and must drive the home-day flag through the evening prompt (UC08) or set the
 owned home-day switch directly (UC11) instead. Nothing about how the flag behaves once set changes.
 
+**6a — The external monthly-peak mapping is the `captar` step's first mapping field** — branches
+from step 6.
+Given the CapTar capability is declared present
+When the System shows the `captar` step
+Then it presents, alongside the peak-protection thresholds, an optional external monthly-peak
+mapping — left unmapped by default, since not every installation's smart meter or
+capacity-tariff sensor exposes a peak reading the flow can map (R3). Because this is the step's
+first mapping-half field, `captar` gains a mapping half for the first time: unlike `power`, which
+remains threshold-only and therefore absent from the reconfigure flow (1a), `captar` now appears in
+the reconfigure flow too — showing only this one field, since none of its thresholds belong to a
+mapping half. Leaving the mapping unset on install, or clearing it on reconfigure, is equivalent:
+the role is simply unmapped, and R3 AC9 governs the effective peak limit's monthly-peak-demand
+operand exactly as if this field had never been offered at all.
+
 ## Exception flows
 
 **A mapped entity is of the wrong domain for its role.**
@@ -363,7 +383,7 @@ flowchart TD
         I3 --> I4["4 vehicle (always)"]
         I4 --> I5["5 power"]
         I5 --> ID{"Which capabilities<br/>are present?"}
-        ID -- captar --> I6["6 captar:<br/>cooldown + peak protection (5b)"]
+        ID -- captar --> I6["6 captar:<br/>cooldown + peak protection (5b)<br/>+ optional monthly-peak mapping (6a)"]
         ID -- solar --> I7["7 solar"]
         ID -- deadline --> I8["8 deadline (incl. home-day, 5c)"]
         ID -- notifications --> I9["9 notifications"]
@@ -378,15 +398,17 @@ flowchart TD
     subgraph Reconfigure["Reconfigure flow (1a) — mapping halves only"]
         R1["1 core: capability<br/>declarations, prefilled"] --> R2["2 grid, 3 ev_charger,<br/>4 vehicle — mappings"]
         R2 --> RD{"Which capabilities<br/>are present?"}
+        RD -- captar --> R6["6 captar: external<br/>monthly-peak mapping (6a)"]
         RD -- solar --> R7["7 solar mappings"]
         RD -- deadline --> R8["8 deadline mappings"]
         RD -- notifications --> R9["9 notifications mapping"]
         RD -- "absent" --> RSkip["Skip that step (5a)"]
-        R7 --> RSubmit["Update data bucket only<br/>+ reload entry"]
+        R6 --> RSubmit["Update data bucket only<br/>+ reload entry"]
+        R7 --> RSubmit
         R8 --> RSubmit
         R9 --> RSubmit
         RSkip --> RSubmit
-        RNote["5 power and 6 captar never appear:<br/>no mapping half"] -.-> RD
+        RNote["5 power never appears:<br/>no mapping half"] -.-> RD
     end
 
     subgraph Options["Options flow (1b) — threshold halves only"]
@@ -414,8 +436,9 @@ mappings and thresholds every installation needs are grouped onto the always-sho
 (1–5), and each amendment path presents only its own half of that model (AC1, 1a/1b);
 each capability declared present contributes exactly one gated step — 6 through 9, in the fixed
 order the step table records — and each amendment path counts only the steps its own half populates,
-which is why `captar` and `power`, neither of which has a mapping half, are absent from the
-reconfigure flow (AC2, 1a); no field of an
+which is why `power`, which has no mapping half, is absent from the reconfigure flow, while
+`captar` — now that it has one, the optional external monthly-peak mapping (6a) — appears there too
+whenever CapTar is present (AC2, 1a); no field of an
 absent capability is ever presented, while the one optional mapping no capability gates — the
 vehicle's own charge limit — sits on the always-shown `vehicle` step and may simply be left blank
 (AC3, 4a); the EV state-of-charge mapping is presented exactly once, on that same always-shown step,
@@ -433,9 +456,10 @@ the Postconditions above record that this step model holds it.
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
 acceptance criteria that the solar, CapTar, deadline, and notifications capabilities are each
 user-configurable (AC1, AC4, AC6, AC9), that solar's own inputs are not required to be configured
-when it is absent (AC3), that the `Power`-mode peak-protection option and the four peak-protection
-thresholds are presented on the CapTar-gated step 6 and nowhere else, so a non-CapTar installation
-is never offered them (AC5, 5b), that the departure-time inputs and the plug-in reminder's lead time
+when it is absent (AC3), that the `Power`-mode peak-protection option, the four peak-protection
+thresholds, and the optional external monthly-peak mapping are presented on the CapTar-gated step 6
+and nowhere else, so a non-CapTar installation is never offered them (AC5, 5b, 6a), that the
+departure-time inputs and the plug-in reminder's lead time
 are neither offered nor required when the deadline capability is absent, since step 8 is skipped
 whole (AC7, 5a), and that each notification's own [per-notification enable
 toggle](../system-overview.md#ubiquitous-language) is user-configurable (AC11, in the part that

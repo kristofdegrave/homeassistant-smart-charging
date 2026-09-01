@@ -156,7 +156,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period — see the Captar-dependent-rows note | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_peak_grace_min` | state | — | min | mirrors `peak_grace_min` (config-options); disabled by default (ADR-0031) | R3 peak-breach grace period | user | — |
 | `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
-| `monthly_peak_external` | adapter role | — | kW | mapped to a smart-meter/DSO capacity-tariff peak sensor (NF3; optional — treated as absent, no effect on the resolved monthly-peak-demand operand, when not configured) | [external monthly-peak reading](system-overview.md#ubiquitous-language) (R3) | resolution-rules | — |
+| `monthly_peak_external` | adapter role | — | kW | mapped to a smart-meter/DSO capacity-tariff peak sensor (NF3; optional — treated as absent, no effect on the resolved monthly-peak-demand operand, when not configured) | [external monthly-peak reading](system-overview.md#ubiquitous-language) (R3) — see the Captar-dependent-rows note | resolution-rules | — |
 | `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime), UC12 |
 | `sensor.smart_charging_captar_cooldown_min` | state | — | min | mirrors `captar_cooldown_min` (config-options); disabled by default (ADR-0031) | `Captar`-mode cooldown (R11) | user | — |
 
@@ -425,24 +425,31 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 - **Captar-dependent rows are conditional on the CapTar capability (R18).** When
   `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly. The *Peak protection* subgroup's thresholds (`safety_margin_w`,
-  `max_peak_kw`, `peak_floor_kw`, `peak_grace_min`) and the `Power`-mode peak-protection option
-  (`power_respect_peak`, catalogued under *`Power` mode*) then have no effect at all: the R3 clamp
-  does not run when this capability is absent (R18, R3), in any mode, so there is nothing for these
-  five values to tune or to switch on and off, whatever they hold. Net import on such an
-  installation is bounded only by the grid supply ceiling (C4) — typically a much higher ceiling
-  than these thresholds would impose. They are also not presented:
-  [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b) puts all five on the
-  flow's CapTar-gated step. The entry keeps whichever values it already holds — the defaults on a
-  fresh install, or on reconfigure the values it last stored (UC12 1a leaves a withdrawn
-  capability's stored options values untouched) — but they lie dormant until the capability is
-  declared present again, at which point the clamp resumes on exactly those values.
+  `max_peak_kw`, `peak_floor_kw`, `peak_grace_min`), the optional `monthly_peak_external` mapping,
+  and the `Power`-mode peak-protection option (`power_respect_peak`, catalogued under *`Power`
+  mode*) then have no effect at all: the R3 clamp does not run when this capability is absent (R18,
+  R3), in any mode, so there is nothing for these six values to tune, switch on and off, or — for
+  the mapping — raise the resolved monthly-peak-demand operand by (R3 AC8/AC9), whatever they
+  hold or map to. Net import on such an installation is bounded only by the grid supply ceiling
+  (C4) — typically a much higher ceiling than these thresholds would impose. They are also not
+  presented: [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b, 6a) puts
+  all six on the flow's CapTar-gated step. The five threshold values are options-bucket fields
+  (ADR-0005): the entry keeps whichever value each already holds — the defaults on a fresh install,
+  or on reconfigure the value it last stored (UC12 1a leaves a withdrawn capability's stored
+  options values untouched) — but they lie dormant until the capability is declared present again,
+  at which point the clamp resumes on exactly those values. The `monthly_peak_external` mapping is
+  a data-bucket field instead (NF3): withdrawing CapTar on reconfigure drops it from the data
+  bucket exactly as it drops any other withdrawn capability's mapping fields (UC12 1a), so it does
+  not resume dormant — re-declaring CapTar present later requires re-mapping it, unlike the
+  thresholds' seamless resume.
   `sensor.smart_charging_effective_peak_limit` and `sensor.smart_charging_peak_headroom_a` — the
   latter derived from the same operands — still resolve and are still surfaced for observability,
   but no control decision consults either while the capability is absent, since the only step that
-  reads them is skipped. The five values' own config-value mirror sensors (ADR-0031, see Notes)
-  keep showing whatever dormant value the entry holds, the same way the values themselves stay
-  stored but unused — the mirror is a passive readout, so its behaviour follows its source row
-  without a separate rule.
+  reads them is skipped. The five threshold values' own config-value mirror sensors (ADR-0031, see
+  Notes) keep showing whatever dormant value the entry holds, the same way the values themselves
+  stay stored but unused — the mirror is a passive readout, so its behaviour follows its source row
+  without a separate rule; the mapping has no mirror sensor of its own (adapter roles never do,
+  ADR-0031's scope).
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When
   `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
