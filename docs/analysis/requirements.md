@@ -52,6 +52,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The charger stops (0 A) only when it is already at the minimum charging current and net import still exceeds the effective peak limit minus the safety margin continuously for a configurable grace period (default 2 minutes); a momentary breach does not stop charging.
 - [ ] The charger may use all headroom up to the effective peak limit minus the safety margin, including capacity freed when other household appliances switch off.
 - [ ] The effective peak limit's monthly-peak-demand operand never falls below a configurable peak floor (default 2.5 kW), and the floor never raises the effective peak limit above the configured maximum peak.
+- [ ] When an [external monthly-peak reading](system-overview.md#ubiquitous-language) is mapped (optional, NF3; absent by default), the effective peak limit's monthly-peak-demand operand never resolves below that reading — in addition to never falling below the peak floor above — for as long as the mapped reading stays available; when it is unmapped or unavailable, this operand rests on the internally-tracked monthly peak demand alone, unaffected by this criterion.
 
 ---
 
