@@ -1,5 +1,5 @@
-"""Charging status sensor (Fault/OK, ADR-0007), active-mode diagnostic sensor, and the
-peak-protection diagnostic sensors (C3)."""
+"""Charging status sensor (Fault/OK, ADR-0007), active-mode diagnostic sensor, the
+peak-protection diagnostic sensors (C3), and the ADR-0031 config-mirror diagnostic sensors."""
 
 from __future__ import annotations
 
@@ -323,6 +323,11 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data.coordinator
     config = entry.runtime_data.config
+    # Reads entry.data directly (not config.solar_available, which holds the same value) --
+    # predates T0/#888's runtime_data.config and a regression test now pins this exact read
+    # path (test_solar_surplus_sensor_config_read_matches_other_platforms); left as-is rather
+    # than unified onto `config` to avoid touching ADR-0028's already-settled gating logic as a
+    # side effect of this task.
     solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
     solar_surplus_sensor = SolarSurplusSensor(
         entry.entry_id, coordinator, solar_available=solar_available

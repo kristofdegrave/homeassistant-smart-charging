@@ -552,6 +552,14 @@ async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
     assert solar_sensor.entity_registry_enabled_default is True
     assert captured_calls == [True]
 
+    # The solar_available config-mirror sensor (#888) must read entry.runtime_data.config, not
+    # entry.data -- this fixture rigs the two to disagree (data=True, config=False) specifically
+    # so a mirror reading the wrong bucket would report STATE_ON instead of STATE_OFF here.
+    solar_available_mirror = next(
+        e for e in captured_entities if getattr(e, "unique_id", None) == "entry1_solar_available"
+    )
+    assert solar_available_mirror.native_value == STATE_OFF
+
 
 def test_active_mode_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
@@ -597,8 +605,12 @@ def test_config_mirror_sensor_reads_from_its_spec():
     async_setup_entry, never re-read) -- pinned to a non-bool value since _format_mirror_value
     changes a bool's own representation (see test above), so `native_value == spec.value` would
     be false for a bool spec."""
+    # Fictional suffix/unit/device_class pairing, deliberately -- a real catalog object_id here
+    # (e.g. "grid_supply_ceiling_a") would pair it with the WRONG unit/device_class for that row
+    # (that one is amperes/CURRENT per the design doc's mapping table), a copy-paste hazard for
+    # whoever writes T2's real fixtures.
     spec = _ConfigMirrorSpec(
-        object_id_suffix="grid_supply_ceiling_a",
+        object_id_suffix="example_config_value",
         unit=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         value=4.0,
@@ -607,8 +619,8 @@ def test_config_mirror_sensor_reads_from_its_spec():
 
     assert sensor.entity_category == EntityCategory.DIAGNOSTIC
     assert sensor.entity_registry_enabled_default is False
-    assert sensor.unique_id == "abc_grid_supply_ceiling_a"
-    assert sensor.translation_key == "grid_supply_ceiling_a"
+    assert sensor.unique_id == "abc_example_config_value"
+    assert sensor.translation_key == "example_config_value"
     assert sensor.native_value == 4.0
     assert sensor.native_unit_of_measurement == UnitOfPower.WATT
     assert sensor.device_class == SensorDeviceClass.POWER
@@ -648,7 +660,9 @@ async def test_async_setup_entry_registers_capability_config_mirror_sensors(hass
     await sensor_module.async_setup_entry(hass, entry, _capture)
 
     mirrors = {
-        e._object_id_suffix: e for e in captured_entities if isinstance(e, _ConfigMirrorSensor)
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
     }
     assert mirrors["solar_available"].native_value == STATE_ON
     assert mirrors["captar_available"].native_value == STATE_OFF
@@ -656,9 +670,11 @@ async def test_async_setup_entry_registers_capability_config_mirror_sensors(hass
     assert mirrors["notifications_available"].native_value == STATE_ON
 
 
-async def test_async_setup_entry_registers_capability_config_mirror_sensors_all_off(hass):
-    """The inverse-value companion to the test above -- an all-off entry, so neither test could
-    pass by coincidentally reading the same source bucket's default for both cases."""
+async def test_async_setup_entry_registers_capability_config_mirror_sensors_second_entry(hass):
+    """The inverse-value companion to the test above -- solar_available/captar_available flip to
+    off and entry.data omits both deadline_available/notifications_available entirely (each must
+    fall back to its OWN DEFAULT_*, not the other's, nor the first test's values) -- so neither
+    test could pass by coincidentally reading the same source bucket's default for both cases."""
     captured_entities = []
 
     def _capture(entities):
@@ -676,7 +692,9 @@ async def test_async_setup_entry_registers_capability_config_mirror_sensors_all_
     await sensor_module.async_setup_entry(hass, entry, _capture)
 
     mirrors = {
-        e._object_id_suffix: e for e in captured_entities if isinstance(e, _ConfigMirrorSensor)
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
     }
     assert mirrors["solar_available"].native_value == STATE_OFF
     assert mirrors["captar_available"].native_value == STATE_OFF
