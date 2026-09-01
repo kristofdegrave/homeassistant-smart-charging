@@ -19,6 +19,9 @@ per task, filed once this plan lands. Test boundary named per task (design doc's
 
 ## T1 — `_ConfigMirrorSensor` mechanism, proven on the four capabilities
 
+- Also amend `config.py`'s module docstring: "only coordinator.py/coordinator_cycle.py take this
+  dataclass directly" becomes stale the moment `sensor.py` reads `entry.runtime_data.config` too
+  (T0, #890, code-reviewer finding) — update it to name `sensor.py` as a second direct consumer.
 - Failing test (`tests/test_sensor.py`): a `_ConfigMirrorSensor` built from a `_ConfigMirrorSpec`
   has `entity_category == EntityCategory.DIAGNOSTIC`, `entity_registry_enabled_default is False`,
   `unique_id == f"{entry_id}_{object_id_suffix}"`, `translation_key == object_id_suffix`, and
