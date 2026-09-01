@@ -627,7 +627,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 45 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 58 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
@@ -680,6 +680,22 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         "plug_in_reminder_enabled": "sensor.smart_charging_plug_in_reminder_enabled",
         "evening_prompt_enabled": "sensor.smart_charging_evening_prompt_enabled",
         "evening_prompt_time": "sensor.smart_charging_evening_prompt_time",
+        # ADR-0031 config-mirror sensors, T3 slice (#888) -- EV/Solar values.
+        "ev_battery_capacity_kwh": "sensor.smart_charging_ev_battery_capacity_kwh",
+        "solar_start_threshold_w": "sensor.smart_charging_solar_start_threshold_w",
+        "solar_hold_min": "sensor.smart_charging_solar_hold_min",
+        "solar_cooldown_min": "sensor.smart_charging_solar_cooldown_min",
+        "solar_restart_debounce_min": "sensor.smart_charging_solar_restart_debounce_min",
+        "solar_only_start_threshold_w": "sensor.smart_charging_solar_only_start_threshold_w",
+        "solar_only_hold_min": "sensor.smart_charging_solar_only_hold_min",
+        "solar_only_rounding_strategy": "sensor.smart_charging_solar_only_rounding_strategy",
+        "solar_only_rounding_midpoint_pct": (
+            "sensor.smart_charging_solar_only_rounding_midpoint_pct"
+        ),
+        "max_solar_soc": "sensor.smart_charging_max_solar_soc",
+        "solar_step_pp": "sensor.smart_charging_solar_step_pp",
+        "solar_step_threshold_pp": "sensor.smart_charging_solar_step_threshold_pp",
+        "solar_forecast_threshold_kwh": "sensor.smart_charging_solar_forecast_threshold_kwh",
     }
     for uid_suffix, want_id in expected.items():
         domain = want_id.split(".", 1)[0]

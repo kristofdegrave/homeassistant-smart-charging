@@ -7,12 +7,14 @@ from types import SimpleNamespace
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
+    PERCENTAGE,
     STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
     Platform,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfTime,
 )
@@ -610,14 +612,14 @@ def test_active_soc_limit_sensor_unique_id_scoped_to_entry():
 
 # --- Config-mirror diagnostic sensors (ADR-0031, #888) -------------------------------------
 
-
 def _mirror_test_config(**overrides):
     """A SmartChargingConfig-shaped SimpleNamespace covering every field a config-mirror sensor
     spec (T1-T4) reads, each set to a distinct, non-zero/non-default value by default so a
     sensor reading the wrong field fails loudly rather than by coincidence -- self-checked below
-    (T3/T4 append more fields to `base`; the assertion catches a future collision the same way).
-    `**overrides` lets a test set only the fields it actually cares about (e.g. capability
-    booleans) without re-declaring the rest."""
+    (a future field addition to `base` is caught the same way). `**overrides` lets a test set
+    only the fields it actually cares about (e.g. capability booleans) without re-declaring the
+    rest. The single shared fixture for every config-mirror test in this file (T1-T4) -- do not
+    add a second one; extend this `base` dict instead."""
     base = dict(
         solar_available=True,
         captar_available=True,
@@ -635,6 +637,19 @@ def _mirror_test_config(**overrides):
         power_respect_peak=False,
         evening_prompt_enabled=True,
         evening_prompt_time="20:15",
+        ev_battery_capacity_kwh=75.5,
+        solar_start_threshold_w=155.0,
+        solar_hold_min=5.5,
+        solar_cooldown_min=2.5,
+        solar_restart_debounce_min=1.5,
+        solar_only_start_threshold_w=1305.0,
+        solar_only_hold_min=1.25,
+        solar_only_strategy="round_down",
+        solar_only_midpoint=51.0,
+        max_solar_soc=99.0,
+        solar_step_pp=5.25,
+        solar_step_threshold_pp=2.25,
+        solar_forecast_threshold_kwh=12.5,
     )
     numeric_values = [
         v for v in base.values() if isinstance(v, (int, float)) and not isinstance(v, bool)
@@ -936,3 +951,74 @@ async def test_async_setup_entry_registers_t2_config_mirror_sensors(hass):
         assert sensor.device_class == device_class, object_id_suffix
         assert sensor.entity_category == EntityCategory.DIAGNOSTIC
         assert sensor.entity_registry_enabled_default is False
+
+
+# --- EV/Solar config-mirror sensors (T3, ADR-0031, #888) -----------------------------------
+
+# (object_id_suffix, SmartChargingConfig field it reads, unit, device_class) -- per the design
+# doc's 35-row mapping table. object_id_suffix diverges from the config field name for the two
+# solar_only_rounding_* rows (design doc's naming-drift section).
+_T3_MIRROR_ROWS = [
+    ("ev_battery_capacity_kwh", "ev_battery_capacity_kwh", UnitOfEnergy.KILO_WATT_HOUR, None),
+    (
+        "solar_start_threshold_w",
+        "solar_start_threshold_w",
+        UnitOfPower.WATT,
+        SensorDeviceClass.POWER,
+    ),
+    ("solar_hold_min", "solar_hold_min", UnitOfTime.MINUTES, None),
+    ("solar_cooldown_min", "solar_cooldown_min", UnitOfTime.MINUTES, None),
+    ("solar_restart_debounce_min", "solar_restart_debounce_min", UnitOfTime.MINUTES, None),
+    (
+        "solar_only_start_threshold_w",
+        "solar_only_start_threshold_w",
+        UnitOfPower.WATT,
+        SensorDeviceClass.POWER,
+    ),
+    ("solar_only_hold_min", "solar_only_hold_min", UnitOfTime.MINUTES, None),
+    ("solar_only_rounding_strategy", "solar_only_strategy", None, None),
+    ("solar_only_rounding_midpoint_pct", "solar_only_midpoint", PERCENTAGE, None),
+    ("max_solar_soc", "max_solar_soc", PERCENTAGE, None),
+    ("solar_step_pp", "solar_step_pp", "pp", None),
+    ("solar_step_threshold_pp", "solar_step_threshold_pp", "pp", None),
+    (
+        "solar_forecast_threshold_kwh",
+        "solar_forecast_threshold_kwh",
+        UnitOfEnergy.KILO_WATT_HOUR,
+        None,
+    ),
+]
+
+
+async def test_async_setup_entry_registers_ev_solar_config_mirror_sensors(hass):
+    captured_entities = []
+
+    def _capture(entities):
+        captured_entities.extend(entities)
+
+    config = _mirror_test_config()
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={},
+        options={},
+        runtime_data=SimpleNamespace(
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
+            config=config,
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    mirrors = {
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
+    }
+    for object_id_suffix, field, unit, device_class in _T3_MIRROR_ROWS:
+        sensor = mirrors[object_id_suffix]
+        expected = getattr(config, field)
+        assert sensor.native_value == _format_mirror_value(expected), object_id_suffix
+        assert sensor.native_unit_of_measurement == unit, object_id_suffix
+        assert sensor.device_class == device_class, object_id_suffix
+        assert sensor.unique_id == f"entry1_{object_id_suffix}", object_id_suffix
+        assert sensor.translation_key == object_id_suffix, object_id_suffix
