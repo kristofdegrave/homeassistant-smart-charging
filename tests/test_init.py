@@ -627,7 +627,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 33 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 45 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
@@ -659,6 +659,20 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         "captar_available": "sensor.smart_charging_captar_available",
         "deadline_available": "sensor.smart_charging_deadline_available",
         "notifications_available": "sensor.smart_charging_notifications_available",
+        # ADR-0031 config-mirror sensors, T2 slice (#888) -- Installation/Charger/Peak
+        # protection. Same disabled-by-default/still-registered note as the T1 rows above.
+        "smoothing_window": "sensor.smart_charging_smoothing_window",
+        "grid_supply_ceiling_a": "sensor.smart_charging_grid_supply_ceiling_a",
+        "grid_safety_offset_a": "sensor.smart_charging_grid_safety_offset_a",
+        "nominal_voltage_v": "sensor.smart_charging_nominal_voltage_v",
+        "min_current_a": "sensor.smart_charging_min_current_a",
+        "max_current_a": "sensor.smart_charging_max_current_a",
+        "safety_margin_w": "sensor.smart_charging_safety_margin_w",
+        "max_peak_kw": "sensor.smart_charging_max_peak_kw",
+        "peak_floor_kw": "sensor.smart_charging_peak_floor_kw",
+        "peak_grace_min": "sensor.smart_charging_peak_grace_min",
+        "captar_cooldown_min": "sensor.smart_charging_captar_cooldown_min",
+        "power_respect_peak": "sensor.smart_charging_power_respect_peak",
         # ADR-0031 config-mirror sensors, T4 slice (#894).
         "power_cooldown_min": "sensor.smart_charging_power_cooldown_min",
         "reminder_lead_h": "sensor.smart_charging_reminder_lead_h",

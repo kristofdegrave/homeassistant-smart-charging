@@ -18,6 +18,7 @@ from homeassistant.const import (
     STATE_ON,
     Platform,
     UnitOfElectricCurrent,
+    UnitOfElectricPotential,
     UnitOfPower,
     UnitOfTime,
 )
@@ -347,9 +348,9 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors: T1's four Capabilities rows plus (below) T4's six
-    # Power-mode/Notification rows -- T2/T3 append the remaining 25 to this same list (design
-    # doc's 35-row mapping table).
+    # ADR-0031 config-mirror sensors: T1's four Capabilities rows, T2's twelve Installation/
+    # Charger/Peak protection rows, and T4's six Power-mode/Notification rows -- T3 appends the
+    # remaining 13 EV/Solar rows to this same list (design doc's 35-row mapping table).
     mirror_specs = [
         _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
         _ConfigMirrorSpec("captar_available", None, None, config.captar_available),
@@ -365,6 +366,55 @@ async def async_setup_entry(
             None,
             entry.data.get(CONF_NOTIFICATIONS_AVAILABLE, DEFAULT_NOTIFICATIONS_AVAILABLE),
         ),
+        # T2 slice: Installation/Charger/Peak protection (12 values). object_id_suffix is the
+        # catalog's documented id; four diverge from the SmartChargingConfig field name they
+        # read (design doc's naming-drift table) -- grid_supply_ceiling_a/grid_ceiling_a,
+        # nominal_voltage_v/nominal_voltage, min_current_a/min_current, max_current_a/max_current.
+        _ConfigMirrorSpec("smoothing_window", "cycles", None, config.smoothing_window),
+        _ConfigMirrorSpec(
+            "grid_supply_ceiling_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.grid_ceiling_a,
+        ),
+        _ConfigMirrorSpec(
+            "grid_safety_offset_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.grid_safety_offset_a,
+        ),
+        _ConfigMirrorSpec(
+            "nominal_voltage_v",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            config.nominal_voltage,
+        ),
+        _ConfigMirrorSpec(
+            "min_current_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.min_current,
+        ),
+        _ConfigMirrorSpec(
+            "max_current_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.max_current,
+        ),
+        _ConfigMirrorSpec(
+            "safety_margin_w", UnitOfPower.WATT, SensorDeviceClass.POWER, config.safety_margin_w
+        ),
+        _ConfigMirrorSpec(
+            "max_peak_kw", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, config.max_peak_kw
+        ),
+        _ConfigMirrorSpec(
+            "peak_floor_kw", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, config.peak_floor_kw
+        ),
+        _ConfigMirrorSpec("peak_grace_min", UnitOfTime.MINUTES, None, config.peak_grace_min),
+        _ConfigMirrorSpec(
+            "captar_cooldown_min", UnitOfTime.MINUTES, None, config.captar_cooldown_min
+        ),
+        _ConfigMirrorSpec("power_respect_peak", None, None, config.power_respect_peak),
         # T4 slice (#894): power_cooldown_min/reminder_lead_h/deadline_notice_enabled/
         # plug_in_reminder_enabled are NOT SmartChargingConfig fields (unlike their siblings
         # captar_cooldown_min/solar_cooldown_min etc.) -- read entry.options directly, same as
