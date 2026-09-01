@@ -29,6 +29,7 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
     ROLE_CAR_HOME,
@@ -44,6 +45,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLE_VEHICLE_CHARGE_LIMIT,
 )
@@ -108,6 +110,29 @@ async def test_grid_voltage_empty_string_treated_as_absent(hass):
     data[CONF_GRID_VOLTAGE_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_GRID_VOLTAGE not in adapters
+
+
+async def test_factory_builds_solar_power_role_when_configured(hass):
+    """Issue #911: solar_power was accepted by the config flow but never wired into the
+    factory -- the same "documented in const.py, missing from build_adapters" gap as
+    #498's notification_target before it."""
+    data = _data()
+    data[CONF_SOLAR_POWER_ENTITY] = "sensor.solar_power"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_SOLAR_POWER], NumericReadAdapter)
+    assert adapters[ROLE_SOLAR_POWER]._entity_id == "sensor.solar_power"
+
+
+async def test_solar_power_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_SOLAR_POWER not in adapters
+
+
+async def test_solar_power_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_SOLAR_POWER_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_SOLAR_POWER not in adapters
 
 
 async def test_missing_required_role_raises_key_error(hass):

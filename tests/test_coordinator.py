@@ -49,6 +49,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLES_ADAPTER_READINGS_EXCLUDED,
     SOC_LIMIT_OVERRIDE_MAX,
@@ -958,6 +959,52 @@ async def test_adapter_readings_caches_deadline_and_reserve_block_reads(hass):
     assert result.adapter_readings[ROLE_LOW_TARIFF] is True
     assert result.adapter_readings[ROLE_SOLAR_FORECAST] == 15.0
     assert result.adapter_readings[ROLE_EV_BATTERY_CAPACITY] == 60.0
+
+
+async def test_adapter_readings_surfaces_solar_power_when_wired(hass):
+    """Issue #911: once the factory wires ROLE_SOLAR_POWER, this role's reading must
+    automatically show up in sensor.smart_charging_adapter_readings's attributes with no
+    further code change beyond `_read_cycle_inputs`'s own `_read_role` call (ADR-0021's "new
+    roles just add attribute keys, no new entity, no new ADR" design) -- it is read every
+    cycle, same as grid voltage, and is not gated by charger status/mode."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0)
+    adapters[ROLE_SOLAR_POWER] = _FakeNumeric(1234.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.adapter_readings[ROLE_SOLAR_POWER] == 1234.0
+
+
+async def test_adapter_readings_surfaces_solar_power_even_when_disconnected(hass):
+    """Companion to test_adapter_readings_surfaces_solar_power_when_wired above -- proves the
+    "not gated by charger status" half of that test's docstring claim, which the STATE_CHARGING
+    case alone cannot: ROLE_EV_SOC (the sibling optional role read in the same _run_cycle,
+    coordinator.py:437) IS gated on CHARGEABLE_STATES -- asserted directly below alongside
+    solar_power's own reading, so the gated-vs-ungated contrast is self-contained in this one
+    test rather than only by reference to test_adapter_readings_role_never_read_is_none.
+    A status-gated read is a real, non-hypothetical failure mode this test rules out for
+    ROLE_SOLAR_POWER's own read site in `_read_cycle_inputs` (coordinator.py:290), which sits
+    upstream of any status check."""
+    adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, ev_soc_role=True)
+    adapters[ROLE_SOLAR_POWER] = _FakeNumeric(1234.0)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.adapter_readings[ROLE_SOLAR_POWER] == 1234.0
+    assert result.adapter_readings[ROLE_EV_SOC] is None  # never read: car disconnected
+
+
+async def test_solar_power_none_reading_does_not_fault_the_cycle(hass):
+    """ROLE_SOLAR_POWER is read via `_read_role` in `_read_cycle_inputs`, ahead of the
+    required-role `None` check (coordinator.py:290-293) -- a safety-relevant ordering, since
+    the three required roles DO fault the cycle on a None reading. This is a regression test
+    for that ordering: a future change that folded solar_power into the required-role check,
+    or reordered it below that check, would still pass every other test in this file but must
+    fail this one."""
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0)
+    adapters[ROLE_SOLAR_POWER] = _FakeNumeric(None)
+    _coord, result = await _run(hass, adapters, _config(), target=8.0)
+
+    assert result.fault is False
+    assert result.adapter_readings[ROLE_SOLAR_POWER] is None
 
 
 async def test_adapter_readings_caches_a_role_not_read_this_cycle(hass):
