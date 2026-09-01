@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import STATE_UNAVAILABLE, Platform
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, Platform, UnitOfPower
 from homeassistant.core import State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
@@ -19,7 +19,11 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.smart_charging import sensor as sensor_module
 from custom_components.smart_charging.const import (
     ATTR_PERIOD_MONTH,
+    CONF_DEADLINE_AVAILABLE,
+    CONF_NOTIFICATIONS_AVAILABLE,
     CONF_SOLAR_AVAILABLE,
+    DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_NOTIFICATIONS_AVAILABLE,
     DOMAIN,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     STATUS_FAULT,
@@ -36,6 +40,9 @@ from custom_components.smart_charging.sensor import (
     PeakHeadroomSensor,
     SolarSurplusSensor,
     TimeToFullSensor,
+    _ConfigMirrorSensor,
+    _ConfigMirrorSpec,
+    _format_mirror_value,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 
@@ -532,7 +539,8 @@ async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
             entry_id="entry1",
             data={CONF_SOLAR_AVAILABLE: True},
             runtime_data=SimpleNamespace(
-                coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False))
+                coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
+                config=SimpleNamespace(solar_available=False, captar_available=False),
             ),
         )
 
@@ -543,6 +551,14 @@ async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
     solar_sensor = next(e for e in captured_entities if isinstance(e, SolarSurplusSensor))
     assert solar_sensor.entity_registry_enabled_default is True
     assert captured_calls == [True]
+
+    # The solar_available config-mirror sensor (#888) must read entry.runtime_data.config, not
+    # entry.data -- this fixture rigs the two to disagree (data=True, config=False) specifically
+    # so a mirror reading the wrong bucket would report STATE_ON instead of STATE_OFF here.
+    solar_available_mirror = next(
+        e for e in captured_entities if getattr(e, "unique_id", None) == "entry1_solar_available"
+    )
+    assert solar_available_mirror.native_value == STATE_OFF
 
 
 def test_active_mode_unique_id_scoped_to_entry():
@@ -572,3 +588,120 @@ def test_active_soc_limit_sensor_unique_id_scoped_to_entry():
     coord = SimpleNamespace(data=None)
     sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
     assert sensor.unique_id == "abc_active_soc_limit"
+
+
+# --- Config-mirror diagnostic sensors (ADR-0031, #888) -------------------------------------
+
+
+def test_format_mirror_value_maps_bool_to_state_on_off_else_passthrough():
+    assert _format_mirror_value(True) == STATE_ON
+    assert _format_mirror_value(False) == STATE_OFF
+    assert _format_mirror_value(4.0) == 4.0
+    assert _format_mirror_value("round_down") == "round_down"
+
+
+def test_config_mirror_sensor_reads_from_its_spec():
+    """A _ConfigMirrorSensor holds its value verbatim from the spec (resolved once by
+    async_setup_entry, never re-read) -- pinned to a non-bool value since _format_mirror_value
+    changes a bool's own representation (see test above), so `native_value == spec.value` would
+    be false for a bool spec."""
+    # Fictional suffix/unit/device_class pairing, deliberately -- a real catalog object_id here
+    # (e.g. "grid_supply_ceiling_a") would pair it with the WRONG unit/device_class for that row
+    # (that one is amperes/CURRENT per the design doc's mapping table), a copy-paste hazard for
+    # whoever writes T2's real fixtures.
+    spec = _ConfigMirrorSpec(
+        object_id_suffix="example_config_value",
+        unit=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        value=4.0,
+    )
+    sensor = _ConfigMirrorSensor(entry_id="abc", spec=spec)
+
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+    assert sensor.entity_registry_enabled_default is False
+    assert sensor.unique_id == "abc_example_config_value"
+    assert sensor.translation_key == "example_config_value"
+    assert sensor.native_value == 4.0
+    assert sensor.native_unit_of_measurement == UnitOfPower.WATT
+    assert sensor.device_class == SensorDeviceClass.POWER
+
+
+def test_config_mirror_sensor_formats_a_bool_spec_value():
+    spec = _ConfigMirrorSpec(
+        object_id_suffix="power_respect_peak", unit=None, device_class=None, value=True
+    )
+    sensor = _ConfigMirrorSensor(entry_id="abc", spec=spec)
+    assert sensor.native_value == STATE_ON
+
+
+async def test_async_setup_entry_registers_capability_config_mirror_sensors(hass):
+    """Proves both non-options source buckets in one setup call: solar_available/
+    captar_available come off entry.runtime_data.config (they ARE SmartChargingConfig fields);
+    deadline_available/notifications_available come off entry.data directly (they are NOT --
+    entity-catalog.md/#888's design doc)."""
+    captured_entities = []
+
+    def _capture(entities):
+        captured_entities.extend(entities)
+
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={
+            CONF_SOLAR_AVAILABLE: True,
+            CONF_DEADLINE_AVAILABLE: False,
+            CONF_NOTIFICATIONS_AVAILABLE: True,
+        },
+        runtime_data=SimpleNamespace(
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=True)),
+            config=SimpleNamespace(solar_available=True, captar_available=False),
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    mirrors = {
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
+    }
+    assert mirrors["solar_available"].native_value == STATE_ON
+    assert mirrors["captar_available"].native_value == STATE_OFF
+    assert mirrors["deadline_available"].native_value == STATE_OFF
+    assert mirrors["notifications_available"].native_value == STATE_ON
+
+
+async def test_async_setup_entry_registers_capability_config_mirror_sensors_second_entry(hass):
+    """The inverse-value companion to the test above -- solar_available/captar_available flip to
+    off and entry.data omits both deadline_available/notifications_available entirely (each must
+    fall back to its OWN DEFAULT_*, not the other's, nor the first test's values) -- so neither
+    test could pass by coincidentally reading the same source bucket's default for both cases."""
+    captured_entities = []
+
+    def _capture(entities):
+        captured_entities.extend(entities)
+
+    entry = SimpleNamespace(
+        entry_id="entry1",
+        data={},  # DEFAULT_DEADLINE_AVAILABLE is True -- this alone would NOT prove the read
+        runtime_data=SimpleNamespace(
+            coordinator=SimpleNamespace(_config=SimpleNamespace(solar_available=False)),
+            config=SimpleNamespace(solar_available=False, captar_available=False),
+        ),
+    )
+
+    await sensor_module.async_setup_entry(hass, entry, _capture)
+
+    mirrors = {
+        e.unique_id.removeprefix(f"{entry.entry_id}_"): e
+        for e in captured_entities
+        if isinstance(e, _ConfigMirrorSensor)
+    }
+    assert mirrors["solar_available"].native_value == STATE_OFF
+    assert mirrors["captar_available"].native_value == STATE_OFF
+    # entry.data has neither key -- both must fall back to their own DEFAULT_*, not each other's.
+    assert mirrors["deadline_available"].native_value == _format_mirror_value(
+        DEFAULT_DEADLINE_AVAILABLE
+    )
+    assert mirrors["notifications_available"].native_value == _format_mirror_value(
+        DEFAULT_NOTIFICATIONS_AVAILABLE
+    )

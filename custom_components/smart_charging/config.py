@@ -12,7 +12,8 @@ re-default or re-index it themselves -- a missing/misspelled field is now a cons
 
 Deliberately NOT a `Mapping`/dict: `NotificationManager` (M3) is out of this issue's scope and
 keeps its own small `Mapping[str, Any]` (built in `__init__.py` from this same object's fields,
-so the two never drift apart) -- only coordinator.py/coordinator_cycle.py take this dataclass
+so the two never drift apart) -- only coordinator.py/coordinator_cycle.py, plus (since #888)
+sensor.py's `_ConfigMirrorSensor` reading it off `entry.runtime_data.config`, take this dataclass
 directly.
 """
 
