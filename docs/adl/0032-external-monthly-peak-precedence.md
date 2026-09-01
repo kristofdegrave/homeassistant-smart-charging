@@ -1,7 +1,7 @@
 # ADR-0032: External monthly-peak sensor — precedence semantics
 
 Date: 2026-08-31
-Status: Proposed
+Status: Accepted
 
 ## Context
 
