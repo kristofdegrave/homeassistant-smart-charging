@@ -155,6 +155,10 @@ jobs:
           emit type "$present"
           emit skill "$skill"
           emit artifact "$artifact"
+          # For `adr`, this is a placeholder only — the "Resolve ADR branch" step below
+          # overrides it with adr/<adr-number> (branch name keys off the next ADR number, not
+          # the issue number), so "Open pull request" always reads
+          # steps.adr_branch.outputs.branch first for that type.
           emit branch "$present/$ISSUE_NUMBER"
           emit model "$model"
           emit commit_prefix "$commit_prefix"
@@ -188,6 +192,62 @@ jobs:
       - name: Checkout
         if: steps.kind.outputs.proceed == 'true'
         uses: actions/checkout@v7
+
+      # ADRs branch as adr/<adr-number> instead of adr/<issue-number> — an override of
+      # contribution-workflow.md's <context-label>/<issue-number> scheme, defined in write-adr —
+      # so the branch name identifies which ADR is in flight without cross-referencing the
+      # issue. Only resolvable after Checkout, since it scans docs/adl/ — the "kind" step above
+      # runs before the repo is on disk.
+      #
+      # Only one ADR may be in flight at a time (write-adr): the next
+      # number is a function of what's merged on main, not of the issue number, so it isn't
+      # collision-free the way adr/<issue-number> was. If a second `adr` issue gets labeled
+      # before the first ADR's PR merges, both would compute the same next number and the second
+      # create-pull-request call would silently reset/force-push the first PR's branch. Guard
+      # against that here: refuse instead of clobbering if adr/<next> already exists upstream.
+      - name: Resolve ADR branch
+        id: adr_branch
+        if: steps.kind.outputs.proceed == 'true' && steps.kind.outputs.type == 'adr'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          last=$(ls docs/adl 2>/dev/null | grep -E '^[0-9]{4}-.*\.md$' | sed -E 's/^([0-9]{4})-.*/\1/' | sort -n | tail -1 || true)
+          next=$(printf '%04d' "$((10#${last:-0} + 1))")
+          branch="adr/$next"
+
+          # Fail-closed: `--exit-code` returns 2 for "ref doesn't exist" (the only case that
+          # should let drafting proceed) and 128/other on a genuine failure (network blip, auth
+          # issue). Both used to fall through to "proceed" — exactly the clobbering scenario
+          # this guard exists to prevent — so the exit status is captured and only a clean 2
+          # is treated as "safe to draft."
+          set +e
+          err=$(git ls-remote --exit-code --heads origin "$branch" 2>&1 >/dev/null)
+          rc=$?
+          set -e
+          # Collapse to one line and cap length before it's echoed into a `::warning::` command
+          # or an issue comment: a multi-line remote error would otherwise mangle the workflow
+          # annotation (only its first line survives) and any `::`-prefixed line in it could be
+          # misread as a workflow command.
+          err=$(printf '%s' "$err" | tr '\n' ' ' | cut -c1-500)
+
+          if [ "$rc" -eq 0 ]; then
+            gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Another ADR is already in flight on \`$branch\` (the next available ADR number). Only one ADR may be drafted at a time — wait for that PR to merge, or if \`$branch\` has no open PR (a leftover from an abandoned draft, possibly this same issue's own earlier attempt), delete the stale branch. Then re-label \`needs-draft\`."
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$rc" -ne 2 ]; then
+            echo "::warning::git ls-remote failed checking for '$branch' (exit $rc): $err — refusing to draft rather than risk clobbering an in-flight ADR branch."
+            gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --remove-label needs-draft || true
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "🤖 Couldn't verify whether \`$branch\` is already in use (git ls-remote failed, exit $rc: $err) — refusing to draft rather than risk clobbering an in-flight ADR branch. Re-label \`needs-draft\` to retry."
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
+          printf 'ok=true\n' >> "$GITHUB_OUTPUT"
 
       # The label-parsing step above only checks the `Plan: ...` line's format (no repo checked
       # out yet); this checks the reference actually resolves. A typo'd or stale reference must
@@ -230,7 +290,7 @@ jobs:
 
       # Cheap pre-flight: fail on a bad key / no credits / rate limit BEFORE the Opus run spins up.
       - name: Smoke-test the Anthropic API
-        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false'
         uses: ./.github/actions/anthropic-smoke-test
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -246,7 +306,7 @@ jobs:
       # is built to avoid. Falls back to empty (-> the M tier in the next step) on any problem.
       - name: Read the issue's project-board Size field
         id: size
-        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false'
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           ISSUE: ${{ inputs.issue_number }}
@@ -285,7 +345,7 @@ jobs:
 
       - name: Resolve max_turns from context + Size
         id: turns
-        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false'
         env:
           TYPE: ${{ steps.kind.outputs.type }}
           SIZE: ${{ steps.size.outputs.value }}
@@ -333,7 +393,7 @@ jobs:
 
       - name: Draft the artifact with Claude Code
         id: claude
-        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false'
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -383,7 +443,7 @@ jobs:
       # Cost/turns/token visibility in the job summary. always() (scoped to the draftable path)
       # so it reports even when the Claude call errored.
       - name: Log draft cost
-        if: always() && steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
+        if: always() && steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false'
         uses: ./.github/actions/ai-cost-summary
         with:
           execution_file: ${{ steps.claude.outputs.execution_file }}
@@ -393,7 +453,7 @@ jobs:
 
       - name: Open pull request
         id: cpr
-        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false'
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -406,7 +466,7 @@ jobs:
 
             The `needs-review` label starts the automatic review->fix loop (max 2 cycles).
             **A maintainer's manual review and approval is required before merge** (per CLAUDE.md).
-          branch: "${{ steps.kind.outputs.branch }}"
+          branch: "${{ steps.adr_branch.outputs.branch || steps.kind.outputs.branch }}"
           delete-branch: true
           # Defense in depth against prompt injection via the issue text: even if the
           # drafter is tricked into writing outside its intended tree, only that tree's changes
@@ -422,7 +482,7 @@ jobs:
       # gates below never fire, and the issue is stuck on needs-draft with no comment and no
       # further trigger (the workflow is labeled-event, one-shot) — see #467.
       - name: Report a no-diff draft
-        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && !steps.cpr.outputs.pull-request-number
+        if: steps.kind.outputs.proceed == 'true' && steps.plan.outputs.ok != 'false' && steps.adr_branch.outputs.ok != 'false' && !steps.cpr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE: ${{ inputs.issue_number }}

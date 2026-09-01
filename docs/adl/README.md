@@ -37,5 +37,6 @@ template.
 | [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities | Proposed |
 | [0029](0029-process-time-for-perf-test-cpu-measurement.md) | stdlib `time.process_time()` for perf-test CPU measurement, `psutil` retained for RSS | Accepted |
 | [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role | Accepted |
+| [0031](0031-config-values-as-disabled-by-default-diagnostic-sensors.md) | Config-entry values also exposed as disabled-by-default diagnostic sensors | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.

@@ -1,5 +1,5 @@
-"""Charging status sensor (Fault/OK, ADR-0007), active-mode diagnostic sensor, and the
-peak-protection diagnostic sensors (C3)."""
+"""Charging status sensor (Fault/OK, ADR-0007), active-mode diagnostic sensor, the
+peak-protection diagnostic sensors (C3), and the ADR-0031 config-mirror diagnostic sensors."""
 
 from __future__ import annotations
 
@@ -13,7 +13,17 @@ from homeassistant.components.sensor import (
     SensorExtraStoredData,
     SensorStateClass,
 )
-from homeassistant.const import Platform, UnitOfElectricCurrent, UnitOfPower, UnitOfTime
+from homeassistant.const import (
+    PERCENTAGE,
+    STATE_OFF,
+    STATE_ON,
+    Platform,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityCategory
@@ -23,7 +33,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import SmartChargingConfigEntry
 from .const import (
     ATTR_PERIOD_MONTH,
+    CONF_DEADLINE_AVAILABLE,
+    CONF_DEADLINE_NOTICE_ENABLED,
+    CONF_NOTIFICATIONS_AVAILABLE,
+    CONF_PLUG_IN_REMINDER_ENABLED,
+    CONF_POWER_COOLDOWN_MIN,
+    CONF_REMINDER_LEAD_H,
     CONF_SOLAR_AVAILABLE,
+    DEFAULT_DEADLINE_AVAILABLE,
+    DEFAULT_DEADLINE_NOTICE_ENABLED,
+    DEFAULT_NOTIFICATIONS_AVAILABLE,
+    DEFAULT_PLUG_IN_REMINDER_ENABLED,
+    DEFAULT_POWER_COOLDOWN_MIN,
+    DEFAULT_REMINDER_LEAD_H,
     DEFAULT_SOLAR_AVAILABLE,
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
@@ -266,10 +288,57 @@ class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
         return dict(data.adapter_readings) if data is not None else {}
 
 
+def _format_mirror_value(value: Any) -> Any:
+    """bool -> STATE_ON/STATE_OFF (matches the "on"/"off" default entity-catalog.md already
+    documents for these values); every other type passes through unchanged."""
+    if isinstance(value, bool):
+        return STATE_ON if value else STATE_OFF
+    return value
+
+
+@dataclass(frozen=True)
+class _ConfigMirrorSpec:
+    """One row of the config-mirror sensor spec list `async_setup_entry` builds (ADR-0031,
+    entity-catalog.md). `value` is already resolved by `async_setup_entry` from whichever of the
+    three source buckets the design doc names -- `_ConfigMirrorSensor` itself never reads the
+    config entry."""
+
+    object_id_suffix: str
+    unit: str | None
+    device_class: SensorDeviceClass | None
+    value: Any
+
+
+class _ConfigMirrorSensor(SmartChargingEntity, SensorEntity):
+    """Diagnostic (ADR-0031): read-only mirror of one config-entry value, resolved once at
+    entry setup/reload from the entry's own config -- never recomputed mid-cycle, unlike
+    `_CoordinatorFieldSensor`'s per-cycle `CycleResult` reads. Disabled by default for every
+    installation (not capability-gated), so only the first-registration
+    `entity_registry_enabled_default` applies -- `sync_disabled_by` (ADR-0028) is for values that
+    come and go with a capability, which none of these do."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, entry_id: str, spec: _ConfigMirrorSpec) -> None:
+        self._object_id_suffix = spec.object_id_suffix
+        super().__init__(entry_id)
+        self._attr_translation_key = spec.object_id_suffix
+        self._attr_native_unit_of_measurement = spec.unit
+        self._attr_device_class = spec.device_class
+        self._attr_native_value = _format_mirror_value(spec.value)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: SmartChargingConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data.coordinator
+    config = entry.runtime_data.config
+    # Reads entry.data directly (not config.solar_available, which holds the same value) --
+    # predates T0/#888's runtime_data.config and a regression test now pins this exact read
+    # path (test_solar_surplus_sensor_config_read_matches_other_platforms); left as-is rather
+    # than unified onto `config` to avoid touching ADR-0028's already-settled gating logic as a
+    # side effect of this task.
     solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
     solar_surplus_sensor = SolarSurplusSensor(
         entry.entry_id, coordinator, solar_available=solar_available
@@ -280,6 +349,154 @@ async def async_setup_entry(
         solar_surplus_sensor.unique_id,
         capability_met=solar_available,
     )
+
+    # ADR-0031 config-mirror sensors (design doc's 35-row mapping table). T1: the four
+    # Capabilities rows. T2: the twelve Installation/Charger/Peak protection rows. T3: the
+    # 13 EV/Solar rows -- note solar_only_strategy/solar_only_midpoint are the
+    # SmartChargingConfig field names for the solar_only_rounding_strategy/
+    # solar_only_rounding_midpoint_pct catalog ids (naming-drift section, design doc). T4:
+    # the six Power-mode/Notification rows.
+    mirror_specs = [
+        _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
+        _ConfigMirrorSpec("captar_available", None, None, config.captar_available),
+        _ConfigMirrorSpec(
+            "deadline_available",
+            None,
+            None,
+            entry.data.get(CONF_DEADLINE_AVAILABLE, DEFAULT_DEADLINE_AVAILABLE),
+        ),
+        _ConfigMirrorSpec(
+            "notifications_available",
+            None,
+            None,
+            entry.data.get(CONF_NOTIFICATIONS_AVAILABLE, DEFAULT_NOTIFICATIONS_AVAILABLE),
+        ),
+        # T2 slice: Installation/Charger/Peak protection (12 values). object_id_suffix is the
+        # catalog's documented id; four diverge from the SmartChargingConfig field name they
+        # read (design doc's naming-drift table) -- grid_supply_ceiling_a/grid_ceiling_a,
+        # nominal_voltage_v/nominal_voltage, min_current_a/min_current, max_current_a/max_current.
+        _ConfigMirrorSpec("smoothing_window", "cycles", None, config.smoothing_window),
+        _ConfigMirrorSpec(
+            "grid_supply_ceiling_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.grid_ceiling_a,
+        ),
+        _ConfigMirrorSpec(
+            "grid_safety_offset_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.grid_safety_offset_a,
+        ),
+        _ConfigMirrorSpec(
+            "nominal_voltage_v",
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            config.nominal_voltage,
+        ),
+        _ConfigMirrorSpec(
+            "min_current_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.min_current,
+        ),
+        _ConfigMirrorSpec(
+            "max_current_a",
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            config.max_current,
+        ),
+        _ConfigMirrorSpec(
+            "safety_margin_w", UnitOfPower.WATT, SensorDeviceClass.POWER, config.safety_margin_w
+        ),
+        _ConfigMirrorSpec(
+            "max_peak_kw", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, config.max_peak_kw
+        ),
+        _ConfigMirrorSpec(
+            "peak_floor_kw", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, config.peak_floor_kw
+        ),
+        _ConfigMirrorSpec("peak_grace_min", UnitOfTime.MINUTES, None, config.peak_grace_min),
+        _ConfigMirrorSpec(
+            "captar_cooldown_min", UnitOfTime.MINUTES, None, config.captar_cooldown_min
+        ),
+        _ConfigMirrorSpec("power_respect_peak", None, None, config.power_respect_peak),
+        # T4 slice (#894): power_cooldown_min/reminder_lead_h/deadline_notice_enabled/
+        # plug_in_reminder_enabled are NOT SmartChargingConfig fields (unlike their siblings
+        # captar_cooldown_min/solar_cooldown_min etc.) -- read entry.options directly, same as
+        # the two entry.data-sourced capabilities above. evening_prompt_enabled/_time ARE
+        # SmartChargingConfig fields and read from `config` as usual.
+        _ConfigMirrorSpec(
+            "power_cooldown_min",
+            UnitOfTime.MINUTES,
+            None,
+            entry.options.get(CONF_POWER_COOLDOWN_MIN, DEFAULT_POWER_COOLDOWN_MIN),
+        ),
+        _ConfigMirrorSpec(
+            "reminder_lead_h",
+            UnitOfTime.HOURS,
+            None,
+            entry.options.get(CONF_REMINDER_LEAD_H, DEFAULT_REMINDER_LEAD_H),
+        ),
+        _ConfigMirrorSpec(
+            "deadline_notice_enabled",
+            None,
+            None,
+            entry.options.get(CONF_DEADLINE_NOTICE_ENABLED, DEFAULT_DEADLINE_NOTICE_ENABLED),
+        ),
+        _ConfigMirrorSpec(
+            "plug_in_reminder_enabled",
+            None,
+            None,
+            entry.options.get(CONF_PLUG_IN_REMINDER_ENABLED, DEFAULT_PLUG_IN_REMINDER_ENABLED),
+        ),
+        _ConfigMirrorSpec("evening_prompt_enabled", None, None, config.evening_prompt_enabled),
+        _ConfigMirrorSpec("evening_prompt_time", None, None, config.evening_prompt_time),
+        _ConfigMirrorSpec(
+            "ev_battery_capacity_kwh",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            None,
+            config.ev_battery_capacity_kwh,
+        ),
+        _ConfigMirrorSpec(
+            "solar_start_threshold_w",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            config.solar_start_threshold_w,
+        ),
+        _ConfigMirrorSpec("solar_hold_min", UnitOfTime.MINUTES, None, config.solar_hold_min),
+        _ConfigMirrorSpec(
+            "solar_cooldown_min", UnitOfTime.MINUTES, None, config.solar_cooldown_min
+        ),
+        _ConfigMirrorSpec(
+            "solar_restart_debounce_min",
+            UnitOfTime.MINUTES,
+            None,
+            config.solar_restart_debounce_min,
+        ),
+        _ConfigMirrorSpec(
+            "solar_only_start_threshold_w",
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            config.solar_only_start_threshold_w,
+        ),
+        _ConfigMirrorSpec(
+            "solar_only_hold_min", UnitOfTime.MINUTES, None, config.solar_only_hold_min
+        ),
+        _ConfigMirrorSpec("solar_only_rounding_strategy", None, None, config.solar_only_strategy),
+        _ConfigMirrorSpec(
+            "solar_only_rounding_midpoint_pct", PERCENTAGE, None, config.solar_only_midpoint
+        ),
+        _ConfigMirrorSpec("max_solar_soc", PERCENTAGE, None, config.max_solar_soc),
+        _ConfigMirrorSpec("solar_step_pp", "pp", None, config.solar_step_pp),
+        _ConfigMirrorSpec("solar_step_threshold_pp", "pp", None, config.solar_step_threshold_pp),
+        _ConfigMirrorSpec(
+            "solar_forecast_threshold_kwh",
+            UnitOfEnergy.KILO_WATT_HOUR,
+            None,
+            config.solar_forecast_threshold_kwh,
+        ),
+    ]
+
     async_add_entities(
         [
             ChargingStatusSensor(entry.entry_id, coordinator),
@@ -291,5 +508,6 @@ async def async_setup_entry(
             PeakHeadroomSensor(entry.entry_id, coordinator),
             TimeToFullSensor(entry.entry_id, coordinator),
             AdapterReadingsSensor(entry.entry_id, coordinator),
+            *(_ConfigMirrorSensor(entry.entry_id, spec) for spec in mirror_specs),
         ]
     )

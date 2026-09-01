@@ -134,10 +134,13 @@ only — the CI flow below commits as `github-actions[bot]`, a separate, unrelat
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `specs`, `development`, `testing`, `workflow`, `documentation`),
-number is the GitHub issue number (not the artifact's own sequential number — an ADR's
-0001/0002/... numbering is document content, unrelated to its branch name). If extra work on
-the same issue needs a second, separate PR, suffix a third segment describing the split:
-`<context-label>/<issue-number>/<slug>` (e.g. `development/142/followup`).
+number is the GitHub issue number. If extra work on the same issue needs a second, separate
+PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
+(e.g. `development/142/followup`).
+
+A context label's own skill may override the number segment when there's a concrete reason
+to key the branch off the artifact's own identity instead of the issue's — state the
+exception and its reason in that skill, don't leave it implicit here.
 
 ## CI flow (`.github/workflows/_ai-*.yml`)
 
@@ -149,8 +152,9 @@ Commits here are made as `github-actions[bot]`, not the interactive session's ow
   content outside `docs/**`/`custom_components/**`/`tests/**` — a human authors that draft by
   hand; only its review step is automated.
 - **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
-  (`<context-label>/<issue-number>`, this doc's own scheme) from the label; `development`/
-  `testing` additionally require a resolved `Plan:` line. Runs the skill's *content* steps only
+  (`<context-label>/<issue-number>`, this doc's own scheme, or a label's own override per
+  the **Branch naming** note above) from the label; `development`/`testing` additionally
+  require a resolved `Plan:` line. Runs the skill's *content* steps only
   (draft, self-checks) — never its review/commit/report steps, since the workflow owns those.
   Opens the PR with `Closes #<issue-number>` and its own, coarser commit-prefix mapping
   (`_ai-draft.yml`'s `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for

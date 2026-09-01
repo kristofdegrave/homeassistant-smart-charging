@@ -103,11 +103,16 @@ PLATFORMS = [
 class SmartChargingRuntimeData:
     """This entry's config-entry-scoped runtime state, set once onto `entry.runtime_data`.
     `vehicle_limit_manager` (M2) is None when CONF_VEHICLE_CHARGE_LIMIT_ENTITY
-    is unmapped -- every other field is always populated."""
+    is unmapped -- every other field is always populated.
+
+    `config` is the same `SmartChargingConfig` instance the coordinator holds (#888) -- exposed
+    here so a platform file (e.g. a config-mirror diagnostic sensor) can read an already-resolved
+    value without a second `opts.get(CONF_X, DEFAULT_X)` resolution."""
 
     coordinator: SmartChargingCoordinator
     notification_manager: NotificationManager
     vehicle_limit_manager: VehicleLimitManager | None
+    config: SmartChargingConfig
     min_current: float
     max_current: float
     default_target_current: float
@@ -228,6 +233,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         coordinator=coordinator,
         notification_manager=notification_manager,
         vehicle_limit_manager=vehicle_limit_manager,
+        config=config,
         min_current=min_current,
         max_current=max_current,
         default_target_current=default_target_current,

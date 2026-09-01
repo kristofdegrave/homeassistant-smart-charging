@@ -539,6 +539,21 @@ async def test_setup_falls_back_to_every_default_for_a_pre_solar_entry(hass):
     assert config.evening_prompt_time == "18:00:00"
 
 
+async def test_runtime_data_exposes_the_same_config_object_the_coordinator_holds(hass):
+    """#888 (T0): SmartChargingConfig is built once in __init__.py and passed to the
+    coordinator, which stores it privately as `self._config` -- no platform file could reach
+    it until now. `entry.runtime_data.config` must be the *same* object (not a re-resolved
+    copy), so a later config-mirror sensor reading it can never drift from what the coordinator
+    itself sees."""
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.config is entry.runtime_data.coordinator._config
+
+
 async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(hass, freezer):
     """#327 (T6.1): behavioral companion to the dict-wiring test above -- proves
     CONF_SOLAR_RESERVE_SOC actually flows from the config entry's options into a live cycle's
@@ -612,7 +627,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 23 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 58 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
@@ -637,6 +652,50 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         "departure_sun": "time.smart_charging_departure_sun",
         "departure_holiday": "time.smart_charging_departure_holiday",
         "departure_home_day": "time.smart_charging_departure_home_day",
+        # ADR-0031 config-mirror sensors, T1 slice (#888) -- disabled by default, but still
+        # registered (a disabled entity keeps a registry row; only hass.states omits it), so
+        # they belong in this completeness set the same as every enabled owned entity above.
+        "solar_available": "sensor.smart_charging_solar_available",
+        "captar_available": "sensor.smart_charging_captar_available",
+        "deadline_available": "sensor.smart_charging_deadline_available",
+        "notifications_available": "sensor.smart_charging_notifications_available",
+        # ADR-0031 config-mirror sensors, T2 slice (#888) -- Installation/Charger/Peak
+        # protection. Same disabled-by-default/still-registered note as the T1 rows above.
+        "smoothing_window": "sensor.smart_charging_smoothing_window",
+        "grid_supply_ceiling_a": "sensor.smart_charging_grid_supply_ceiling_a",
+        "grid_safety_offset_a": "sensor.smart_charging_grid_safety_offset_a",
+        "nominal_voltage_v": "sensor.smart_charging_nominal_voltage_v",
+        "min_current_a": "sensor.smart_charging_min_current_a",
+        "max_current_a": "sensor.smart_charging_max_current_a",
+        "safety_margin_w": "sensor.smart_charging_safety_margin_w",
+        "max_peak_kw": "sensor.smart_charging_max_peak_kw",
+        "peak_floor_kw": "sensor.smart_charging_peak_floor_kw",
+        "peak_grace_min": "sensor.smart_charging_peak_grace_min",
+        "captar_cooldown_min": "sensor.smart_charging_captar_cooldown_min",
+        "power_respect_peak": "sensor.smart_charging_power_respect_peak",
+        # ADR-0031 config-mirror sensors, T4 slice (#894).
+        "power_cooldown_min": "sensor.smart_charging_power_cooldown_min",
+        "reminder_lead_h": "sensor.smart_charging_reminder_lead_h",
+        "deadline_notice_enabled": "sensor.smart_charging_deadline_notice_enabled",
+        "plug_in_reminder_enabled": "sensor.smart_charging_plug_in_reminder_enabled",
+        "evening_prompt_enabled": "sensor.smart_charging_evening_prompt_enabled",
+        "evening_prompt_time": "sensor.smart_charging_evening_prompt_time",
+        # ADR-0031 config-mirror sensors, T3 slice (#888) -- EV/Solar values.
+        "ev_battery_capacity_kwh": "sensor.smart_charging_ev_battery_capacity_kwh",
+        "solar_start_threshold_w": "sensor.smart_charging_solar_start_threshold_w",
+        "solar_hold_min": "sensor.smart_charging_solar_hold_min",
+        "solar_cooldown_min": "sensor.smart_charging_solar_cooldown_min",
+        "solar_restart_debounce_min": "sensor.smart_charging_solar_restart_debounce_min",
+        "solar_only_start_threshold_w": "sensor.smart_charging_solar_only_start_threshold_w",
+        "solar_only_hold_min": "sensor.smart_charging_solar_only_hold_min",
+        "solar_only_rounding_strategy": "sensor.smart_charging_solar_only_rounding_strategy",
+        "solar_only_rounding_midpoint_pct": (
+            "sensor.smart_charging_solar_only_rounding_midpoint_pct"
+        ),
+        "max_solar_soc": "sensor.smart_charging_max_solar_soc",
+        "solar_step_pp": "sensor.smart_charging_solar_step_pp",
+        "solar_step_threshold_pp": "sensor.smart_charging_solar_step_threshold_pp",
+        "solar_forecast_threshold_kwh": "sensor.smart_charging_solar_forecast_threshold_kwh",
     }
     for uid_suffix, want_id in expected.items():
         domain = want_id.split(".", 1)[0]
