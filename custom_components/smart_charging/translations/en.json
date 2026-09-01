@@ -381,6 +381,111 @@
       },
       "adapter_readings": {
         "name": "Adapter readings"
+      },
+      "solar_available": {
+        "name": "Solar available"
+      },
+      "captar_available": {
+        "name": "CapTar available"
+      },
+      "deadline_available": {
+        "name": "Deadline available"
+      },
+      "notifications_available": {
+        "name": "Notifications available"
+      },
+      "smoothing_window": {
+        "name": "Smoothing window"
+      },
+      "grid_supply_ceiling_a": {
+        "name": "Grid supply ceiling"
+      },
+      "grid_safety_offset_a": {
+        "name": "Grid safety offset"
+      },
+      "nominal_voltage_v": {
+        "name": "Nominal voltage"
+      },
+      "min_current_a": {
+        "name": "Minimum charging current"
+      },
+      "max_current_a": {
+        "name": "Maximum charging current"
+      },
+      "safety_margin_w": {
+        "name": "Safety margin"
+      },
+      "max_peak_kw": {
+        "name": "Maximum peak"
+      },
+      "peak_floor_kw": {
+        "name": "Peak floor"
+      },
+      "peak_grace_min": {
+        "name": "Peak grace period"
+      },
+      "captar_cooldown_min": {
+        "name": "CapTar cooldown"
+      },
+      "power_respect_peak": {
+        "name": "Power mode respects peak"
+      },
+      "power_cooldown_min": {
+        "name": "Power mode cooldown"
+      },
+      "reminder_lead_h": {
+        "name": "Plug-in reminder lead time"
+      },
+      "deadline_notice_enabled": {
+        "name": "Unreachable deadline notice enabled"
+      },
+      "plug_in_reminder_enabled": {
+        "name": "Plug-in reminder enabled"
+      },
+      "evening_prompt_enabled": {
+        "name": "Evening home-day prompt enabled"
+      },
+      "evening_prompt_time": {
+        "name": "Evening prompt time"
+      },
+      "ev_battery_capacity_kwh": {
+        "name": "EV battery capacity"
+      },
+      "solar_start_threshold_w": {
+        "name": "Solar start threshold"
+      },
+      "solar_hold_min": {
+        "name": "Solar post-surplus hold"
+      },
+      "solar_cooldown_min": {
+        "name": "Solar mode cooldown"
+      },
+      "solar_restart_debounce_min": {
+        "name": "Solar restart debounce"
+      },
+      "solar_only_start_threshold_w": {
+        "name": "Solar-only start threshold"
+      },
+      "solar_only_hold_min": {
+        "name": "Solar-only post-surplus hold"
+      },
+      "solar_only_rounding_strategy": {
+        "name": "Solar-only rounding strategy"
+      },
+      "solar_only_rounding_midpoint_pct": {
+        "name": "Solar-only rounding midpoint"
+      },
+      "max_solar_soc": {
+        "name": "Solar step-up ceiling"
+      },
+      "solar_step_pp": {
+        "name": "Solar step-up size"
+      },
+      "solar_step_threshold_pp": {
+        "name": "Solar step-up trigger gap"
+      },
+      "solar_forecast_threshold_kwh": {
+        "name": "Solar-reserve forecast threshold"
       }
     },
     "switch": {
