@@ -240,9 +240,11 @@ per ADR-0021's own precedent.
   including when the reading is `None` because the raw state is unmapped or the entity is
   unavailable, so no new read, cache entry, or retain-last special case is introduced (ADR-0021's
   retain-last behaviour applies to *optional* roles that may go unread on a cycle, e.g. `ev_soc`
-  while disconnected — not to this one). The one case that does not reach the assignment is the
-  adapter's own `read()` raising outright: the cache then keeps the prior cycle's value rather
-  than advancing to `None`, same as any other unhandled exception funneling to `_async_update_data`'s
+  while disconnected — not to this one). The one case that does not reach the assignment is any of
+  the three required-role reads in that same block raising outright — `net_power`'s or
+  `charger_power`'s `read()`, not only `charger_status`'s own, since all three reads happen before
+  any of the three cache assignments: the cache then keeps the prior cycle's value rather than
+  advancing to `None`, same as any other unhandled exception funneling to `_async_update_data`'s
   fault path — a pre-existing, narrow staleness window this decision does not change or need to
   close, since both surfaces still read the one shared cache either way.
 - What the implementation spec must settle explicitly is how a `None` reading presents. The adapter
@@ -267,5 +269,5 @@ per ADR-0021's own precedent.
   template could re-derive from the raw entity), **and** a requirement or use-case asks for that
   value to be displayed, historised, or triggered on. The second half is what does the work: no
   other role wired today meets it, including `low_tariff` and `car_home`, whose adapters also
-  normalize. Wiring `solar_power` or `ROLE_MONTHLY_PEAK_EXTERNAL` does not by itself earn either
+  normalize. Wiring `solar_power` or `monthly_peak_external` does not by itself earn either
   one a sensor.
