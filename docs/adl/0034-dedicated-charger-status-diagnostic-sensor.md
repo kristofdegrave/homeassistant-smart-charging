@@ -78,8 +78,8 @@ attribute form at all, deliberately (write-only from the control cycle's perspec
 Manager outside it), so promoting one would be a new decision about *that* exclusion rather than an
 application of ADR-0021's exception clause, and nothing asks for one. Two roles have no reading to
 promote either way: `solar_power`, listed in `entity-catalog.md` but not yet wired by
-`adapters/factory.py`, and `ROLE_MONTHLY_PEAK_EXTERNAL`, decided by ADR-0030 but likewise not yet
-wired.
+`adapters/factory.py`, and `monthly_peak_external`, decided by ADR-0030 (as
+`ROLE_MONTHLY_PEAK_EXTERNAL`) but likewise not yet wired there.
 
 ## Considered options
 
@@ -236,10 +236,15 @@ per ADR-0021's own precedent.
 - The new sensor's state and `adapter_readings`' `charger_status` attribute must be fed from the
   same cached reading, so the two can never report different values for the same cycle. This is
   cheap for this role specifically: `coordinator.py`'s required-role read already assigns
-  `self._role_readings[ROLE_CHARGER_STATUS]` every cycle, including when the reading is `None`, so
-  no new read, cache entry, or retain-last special case is introduced (ADR-0021's retain-last
-  behaviour applies to *optional* roles that may go unread on a cycle, e.g. `ev_soc` while
-  disconnected — not to this one).
+  `self._role_readings[ROLE_CHARGER_STATUS]` on every cycle that reaches that assignment,
+  including when the reading is `None` because the raw state is unmapped or the entity is
+  unavailable, so no new read, cache entry, or retain-last special case is introduced (ADR-0021's
+  retain-last behaviour applies to *optional* roles that may go unread on a cycle, e.g. `ev_soc`
+  while disconnected — not to this one). The one case that does not reach the assignment is the
+  adapter's own `read()` raising outright: the cache then keeps the prior cycle's value rather
+  than advancing to `None`, same as any other unhandled exception funneling to `_async_update_data`'s
+  fault path — a pre-existing, narrow staleness window this decision does not change or need to
+  close, since both surfaces still read the one shared cache either way.
 - What the implementation spec must settle explicitly is how a `None` reading presents. The adapter
   returns `None` both when the raw entity is missing/unavailable/unknown and when its raw state has
   no entry in the translation table, and this role's `None` also faults the cycle (ADR-0007). The
