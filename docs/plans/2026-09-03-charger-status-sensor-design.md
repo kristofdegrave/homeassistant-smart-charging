@@ -79,31 +79,53 @@ class ChargerStatusSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "charger_status"
     _object_id_suffix = OWNED_SUFFIX_CHARGER_STATUS
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.adapter_readings.get(ROLE_CHARGER_STATUS)
 ```
 
 `_field_default` is left at `_CoordinatorFieldSensor`'s own default (`None`), matching "no cycle
-yet -> unknown."
+yet -> unknown" — HA's `enum` device class treats a `None` `native_value` as the entity's
+`unknown` state regardless of `options`, so this needs no special-casing against the `options`
+list.
 
-**`device_class` — decided: none.** `SensorDeviceClass.ENUM` requires a fixed `options` list and
-constrains `native_value` to exactly those options or `None`; ADR-0034 flags it as "the natural
-fit" but explicitly leaves the call to this spec. This design does **not** adopt it: the sibling
-`ChargingStatusSensor` (also a small fixed-vocabulary string state, `Fault`/`OK`) carries no
-device class either, and `AdapterReadingsSensor`'s own `charger_status` attribute — the value this
-sensor must never disagree with — is a bare string with no `ENUM` typing of its own. Adding
-`ENUM` only to this one surface would let the two surfaces diverge in *type* (one constrained,
-one not) while ADR-0034 requires them to never diverge in *value*; omitting it keeps both
-surfaces the same plain string (or `None`), consistent with every other same-shape owned sensor
-in this file. This does mean the tile shows the raw lowercase tokens
-(`disconnected`/`connected`/`charging`) untranslated in both locales, same as `ChargingStatusSensor`'s
-own `Fault`/`OK` states today — `_attr_translation_key` (per this file's existing pattern) only
-translates the entity's *name*, not its state values, and this design adds no
-`entity.sensor.charger_status.state.*` translation block, so no new state-translation
-capability is claimed here. That gap (no owned sensor in this file translates its state values
-today) is accepted as a pre-existing cost this design does not take on fixing, not a benefit
-`ENUM` would have specifically added.
+**`device_class` — decided: `SensorDeviceClass.ENUM`, reversing this design's earlier draft.**
+An earlier version of this section declined `ENUM` on the reasoning that it would let this
+sensor's typing diverge from `AdapterReadingsSensor`'s untyped `charger_status` attribute. That
+reasoning was wrong and is corrected here (raised on PR review): `device_class` is a
+presentation-layer annotation on *this* entity, not a property of the shared value itself —
+declaring it here changes nothing about what string `adapter_readings`' attribute holds, so
+ADR-0034's "must never diverge in value" constraint is untouched either way. Once that objection
+is removed, `ENUM` is the correct fit ADR-0034 already names as "the natural fit": the role's
+value genuinely is a fixed, closed vocabulary (`STATE_DISCONNECTED`/`STATE_CONNECTED`/
+`STATE_CHARGING`, `const.py:47-49`) — exactly what `options` exists to declare — and `None`
+still means unknown, satisfying the "must not become unavailable" requirement unchanged.
+
+Adopting `ENUM` also earns real per-state translation, which HA's `enum` device class supports
+via `entity.sensor.charger_status.state.<value>` keys — `strings.json` / `translations/en.json`
+gain the English names, `translations/nl.json` its Dutch equivalents (reusing this project's own
+existing config-flow wording, `strings.json`'s `connected_states`/`charging_states` field
+descriptions: "verbonden" for connected, "aan het laden" for charging; "niet verbonden" for
+disconnected, not previously used elsewhere in this project):
+
+```json
+"charger_status": {
+  "name": "Charger status",
+  "state": {
+    "disconnected": "Disconnected",
+    "connected": "Connected",
+    "charging": "Charging"
+  }
+}
+```
+
+This does **not** change `ChargingStatusSensor` (ADR-0007's `Fault`/`OK` sensor, unrelated) or
+`AdapterReadingsSensor` (still untyped) — neither is touched by this decision, and neither
+regresses: both remain exactly as they are today, still without a device class or state
+translation of their own. That is a pre-existing gap this design does not take on fixing for
+either of them.
 
 `const.py` gains one constant alongside the other `OWNED_SUFFIX_*` names
 (`const.py:91-105`):
@@ -122,8 +144,8 @@ ChargerStatusSensor(entry.entry_id, coordinator),
 ```
 
 `strings.json` / `translations/en.json` / `translations/nl.json` each gain one
-`entity.sensor.charger_status.name` entry ("Charger status" / Dutch equivalent), distinct from
-the existing `status` entry ("Status").
+`entity.sensor.charger_status` block per above: a `name` entry ("Charger status" / Dutch
+equivalent, distinct from the existing `status` entry's "Status") plus the `state` block.
 
 ## Dashboard rebind (`dashboard.py`)
 
@@ -189,7 +211,9 @@ slice this size:
 - `tests/test_sensor.py`: new sensor's `native_value` reflects `data.adapter_readings`, defaults
   to `None` with no coordinator data yet, unique id is `<entry_id>_charger_status`, entity
   category is diagnostic — same four-test shape `AdapterReadingsSensor`'s own tests already use
-  (`tests/test_sensor.py:391-420`), minus the attributes assertion this sensor doesn't have.
+  (`tests/test_sensor.py:391-420`), minus the attributes assertion this sensor doesn't have, plus
+  one new assertion `AdapterReadingsSensor` has no counterpart for: `device_class ==
+  SensorDeviceClass.ENUM` and `options == [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]`.
 - `test_all_sensor_object_id_suffixes_are_unique` (`tests/test_sensor.py:423-440`) — existing
   ADR-0013 collision guard, but its `sensor_classes` list is **hardcoded**, not introspective:
   `ChargerStatusSensor` must be added to it explicitly, or the guard silently excludes the new
@@ -218,9 +242,9 @@ cross-cutting test needed for a change this narrow.
 
 ## Deferrals
 
-- The `enum` device class — considered and explicitly declined above, not deferred; a future
-  spec could revisit if translated per-state display via `device_class` becomes worth the
-  divergence-in-type risk.
+- Adding a matching `state` translation block to `ChargingStatusSensor` (`Fault`/`OK`) or any
+  other existing sensor — out of scope; this design only adds one for the new sensor it
+  introduces, and does not retrofit the pattern onto sensors this issue doesn't touch.
 - Any change to `adapter_readings`'s own attribute — ADR-0034 keeps the duplication; out of
   scope here as it is for the ADR.
 - Registry-gating this sensor by capability (ADR-0028's pattern) — not asked for by ADR-0034;

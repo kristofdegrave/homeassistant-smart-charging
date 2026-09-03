@@ -17,20 +17,30 @@ own precedent for a slice this size.
   - `native_value is None` when `coordinator.data is None` (no cycle yet).
   - `unique_id == "abc_charger_status"`.
   - `entity_category == EntityCategory.DIAGNOSTIC`.
+  - `device_class == SensorDeviceClass.ENUM` and
+    `options == [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]`.
 - Add `OWNED_SUFFIX_CHARGER_STATUS = "charger_status"` to `const.py`, alongside the other
   `OWNED_SUFFIX_*` constants (`const.py:91-105`).
 - Add `ChargerStatusSensor(_CoordinatorFieldSensor)` to `sensor.py` per the design doc's Sensor
   shape section: `_attr_translation_key = "charger_status"`,
   `_object_id_suffix = OWNED_SUFFIX_CHARGER_STATUS`,
-  `_attr_entity_category = EntityCategory.DIAGNOSTIC`, `_coordinator_value` returns
-  `data.adapter_readings.get(ROLE_CHARGER_STATUS)`. Import `ROLE_CHARGER_STATUS` from `const.py`
-  (already used elsewhere in the package; new import into `sensor.py` only).
+  `_attr_entity_category = EntityCategory.DIAGNOSTIC`,
+  `_attr_device_class = SensorDeviceClass.ENUM`,
+  `_attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]`, `_coordinator_value`
+  returns `data.adapter_readings.get(ROLE_CHARGER_STATUS)`. Import `ROLE_CHARGER_STATUS` from
+  `const.py` (already used elsewhere in the package; new import into `sensor.py` only) —
+  `SensorDeviceClass` and `STATE_DISCONNECTED`/`STATE_CONNECTED`/`STATE_CHARGING` are already
+  imported into `sensor.py`/`const.py` respectively.
 - Register it in `async_setup_entry`'s `async_add_entities` list, directly after
   `ChargingStatusSensor(entry.entry_id, coordinator)` (`sensor.py:502`) — the design doc's
   deliberate side-by-side grouping.
-- Add one `entity.sensor.charger_status.name` block ("Charger status") to `strings.json` and to
+- Add one `entity.sensor.charger_status` block to `strings.json` and to
   `translations/en.json`/`translations/nl.json`, alongside the existing `status` block
-  (`strings.json:358-360`) — distinct name, distinct key.
+  (`strings.json:358-360`) — a `name` ("Charger status", distinct name/key from `status`) plus a
+  `state` block translating all three of `disconnected`/`connected`/`charging` (English names in
+  strings.json/en.json; Dutch in nl.json, reusing this project's existing "verbonden"/"aan het
+  laden" wording from the config-flow field descriptions, plus "niet verbonden" for
+  disconnected).
 - Failing test (`tests/test_sensor.py:429-440`): add `ChargerStatusSensor` to
   `test_all_sensor_object_id_suffixes_are_unique`'s hardcoded `sensor_classes` list — this is
   the ADR-0013 collision guard the design doc's Testing approach cites, and it is a hardcoded
