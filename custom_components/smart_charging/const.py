@@ -103,6 +103,7 @@ OWNED_SUFFIX_SOLAR_SURPLUS_W = "solar_surplus_w"
 OWNED_SUFFIX_TIME_TO_FULL = "time_to_full"
 OWNED_SUFFIX_PEAK_HEADROOM_A = "peak_headroom_a"
 OWNED_SUFFIX_ADAPTER_READINGS = "adapter_readings"
+OWNED_SUFFIX_CHARGER_STATUS = "charger_status"
 
 # Runtime dashboard (C5, #601) -- HA label marking every runtime-classified owned entity for the
 # `auto-entities` card (2026-07-08-runtime-dashboard-design.md Decision 1).

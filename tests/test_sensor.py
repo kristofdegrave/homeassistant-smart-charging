@@ -46,6 +46,10 @@ from custom_components.smart_charging.const import (
     DEFAULT_REMINDER_LEAD_H,
     DOMAIN,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    ROLE_CHARGER_STATUS,
+    STATE_CHARGING,
+    STATE_CONNECTED,
+    STATE_DISCONNECTED,
     STATUS_FAULT,
     STATUS_OK,
 )
@@ -54,6 +58,7 @@ from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
     ActiveSocLimitSensor,
     AdapterReadingsSensor,
+    ChargerStatusSensor,
     ChargingStatusSensor,
     EffectivePeakLimitSensor,
     MonthlyPeakSensor,
@@ -420,6 +425,92 @@ def test_adapter_readings_sensor_is_diagnostic():
     assert sensor.entity_category == EntityCategory.DIAGNOSTIC
 
 
+@pytest.mark.parametrize(
+    "reading",
+    [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING, None],
+)
+async def test_charger_status_sensor_reflects_the_adapter_readings_role(hass, reading):
+    coord = SimpleNamespace(data=SimpleNamespace(adapter_readings={ROLE_CHARGER_STATUS: reading}))
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == reading
+
+
+async def test_charger_status_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_charger_status_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_charger_status"
+
+
+def test_charger_status_sensor_is_diagnostic():
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+def test_charger_status_sensor_is_a_fixed_enum():
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.device_class == SensorDeviceClass.ENUM
+    assert sensor.options == [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]
+
+
+class _StubStatusCoordinator:
+    """Minimal CoordinatorEntity-compatible stub -- `async_add_listener` is required by
+    CoordinatorEntity.async_added_to_hass, which registering through a real platform
+    (below) exercises."""
+
+    def __init__(self, data):
+        self.data = data
+        self.last_update_success = True
+
+    def async_add_listener(self, update_callback, context=None):
+        return lambda: None
+
+
+async def test_charger_status_sensor_registers_as_unknown_not_unavailable_when_none(hass):
+    """Platform-level guard (ADR-0034): a None reading must render as HA's `unknown` state,
+    never `unavailable` -- UC11's exception flow requires the rest of the dashboard to keep
+    rendering. Asserting the bare `native_value`/`available` attributes (as the tests above
+    do) cannot catch a regression that also breaks `CoordinatorEntity.available` or HA's own
+    ENUM device_class/options validation, which only runs when a state is actually written
+    through a real platform (same precedent as test_monthly_peak_sensor_is_registered_with_
+    valid_statistics_metadata above)."""
+    coord = _StubStatusCoordinator(
+        data=SimpleNamespace(adapter_readings={ROLE_CHARGER_STATUS: None})
+    )
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    entity_id = "sensor.smart_charging_charger_status"
+    sensor.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="sensor")
+    await platform.async_add_entities([sensor])
+
+    state = hass.states.get(entity_id)
+    assert state.state == "unknown"
+    assert state.state != STATE_UNAVAILABLE
+
+
+async def test_charger_status_sensor_registers_the_reading_through_a_real_platform(hass):
+    """Companion to the unknown-state guard above: a real (non-None) reading renders through
+    HA's ENUM device_class/options validation without being rejected."""
+    coord = _StubStatusCoordinator(
+        data=SimpleNamespace(adapter_readings={ROLE_CHARGER_STATUS: STATE_CHARGING})
+    )
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    entity_id = "sensor.smart_charging_charger_status"
+    sensor.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="sensor")
+    await platform.async_add_entities([sensor])
+
+    state = hass.states.get(entity_id)
+    assert state.state == STATE_CHARGING
+
+
 def test_all_sensor_object_id_suffixes_are_unique():
     """T6 integration checkpoint (#602): a static, independent guard for ADR-0013's
     per-entity object_id pin -- two sensor classes sharing an `_object_id_suffix` would
@@ -429,6 +520,7 @@ def test_all_sensor_object_id_suffixes_are_unique():
     coord = SimpleNamespace(data=None)
     sensor_classes = [
         ChargingStatusSensor,
+        ChargerStatusSensor,
         ActiveModeSensor,
         MonthlyPeakSensor,
         EffectivePeakLimitSensor,
@@ -1030,9 +1122,10 @@ async def test_async_setup_entry_registers_ev_solar_config_mirror_sensors(hass):
 
 
 async def test_async_setup_entry_registers_every_sensor_with_no_duplicate_suffix(hass):
-    """T6 (#896): the full async_setup_entry call -- 9 pre-existing class-based diagnostic
-    sensors plus all 35 ADR-0031 config-mirror sensors -- registers 44 entities with no
-    duplicate unique_id/_object_id_suffix (ADR-0013), and every one of the 35 mirrors carries
+    """T6 (#896): the full async_setup_entry call -- 10 pre-existing class-based diagnostic
+    sensors (9 plus ChargerStatusSensor, ADR-0034, #924) plus all 35 ADR-0031 config-mirror
+    sensors -- registers 45 entities with no duplicate unique_id/_object_id_suffix (ADR-0013),
+    and every one of the 35 mirrors carries
     the exact attribute set ADR-0031 mandates: entity_category=DIAGNOSTIC,
     entity_registry_enabled_default=False, and no LABEL_SC_RUNTIME (checked structurally via
     `_owned_labels`, not by omission -- ADR-0031's "never on the runtime dashboard" claim)."""
@@ -1055,7 +1148,7 @@ async def test_async_setup_entry_registers_every_sensor_with_no_duplicate_suffix
 
     await sensor_module.async_setup_entry(hass, entry, _capture)
 
-    assert len(captured_entities) == 44
+    assert len(captured_entities) == 45
 
     suffixes = [e._object_id_suffix for e in captured_entities]
     assert len(suffixes) == len(set(suffixes))
