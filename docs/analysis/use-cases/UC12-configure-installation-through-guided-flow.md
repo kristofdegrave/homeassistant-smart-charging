@@ -278,9 +278,10 @@ in the first place. R3 itself is now gated the same way — it applies in every 
 capability is present and in none while it is absent — and the grid supply ceiling clamp (C4),
 which is what actually protects the grid connection on a non-CapTar installation, stays on the
 ungated `grid` step.
-The optional external monthly-peak mapping (6a) is gated the identical way but does not behave like
-the five values above on withdrawal — `entity-catalog.md`'s Captar-dependent-rows note owns that
-asymmetry (data-bucket field, dropped rather than left dormant).
+The optional external monthly-peak mapping (6a) is gated the identical way, R18 AC5 naming it
+alongside those five values, but it does not behave like them on withdrawal:
+`entity-catalog.md`'s Captar-dependent-rows note owns that asymmetry (data-bucket field, dropped
+rather than left dormant).
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.
@@ -466,10 +467,9 @@ acceptance criteria that the solar, CapTar, deadline, and notifications capabili
 user-configurable (AC1, AC4, AC6, AC9), that solar's own inputs are not required to be configured
 when it is absent (AC3), that the `Power`-mode peak-protection option and the four peak-protection
 thresholds are presented on the CapTar-gated step 6 and nowhere else, so a non-CapTar installation
-is never offered them (AC5, 5b); the optional external monthly-peak mapping is presented on that
-same step and nowhere else for the identical never-offered-without-CapTar reason, though R18 AC5's
-enumeration does not yet name it — R20 AC3's general absent-capability rule and R3 AC1's vacuity
-clause are what require this placement until R18 AC5 is amended to match (6a); that the
+is never offered them (AC5, 5b); that the optional external monthly-peak mapping, which AC5 names
+alongside those five, is presented on that same step and nowhere else for the identical
+never-offered-without-CapTar reason (AC5, 6a); that the
 departure-time inputs and the plug-in reminder's lead time
 are neither offered nor required when the deadline capability is absent, since step 8 is skipped
 whole (AC7, 5a), and that each notification's own [per-notification enable

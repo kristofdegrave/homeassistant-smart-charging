@@ -17,7 +17,9 @@ re-derive the universal steps here.
 
 See `CLAUDE.md`'s "Architecture Decision Records (ADRs)" section for the worthiness test
 (structure that's expensive to reverse or materially constrains future options — vs. a
-variable name or log message with no lasting structural consequence).
+variable name or log message with no lasting structural consequence), its calibration
+test for borderline cases, and its two carve-outs (test/CI/dev-tooling choices;
+domain/business rules) — check those before drafting, not just the headline definition.
 
 ## ADR-specific additions to the workflow
 

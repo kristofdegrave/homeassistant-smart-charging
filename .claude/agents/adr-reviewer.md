@@ -62,6 +62,15 @@ broken reference, and judge the ADR on internal merit instead.
 **(5) "One decision per ADR"**
 - Flag an ADR that bundles two or more independent structural choices — it should be split.
 
+**(6) ADR-worthiness**
+- Apply CLAUDE.md's "Architecture Decision Records (ADRs)" section — the architectural-
+  decision definition, its calibration test, and its two carve-outs (test/CI/dev-tooling
+  choices; domain/business rules) — to the decision this ADR records. A decision that
+  fails that bar is a **Major** finding: name which carve-out or definition clause it
+  fails, and suggest where it belongs instead (a PR description, `requirements.md`,
+  `resolution-rules.md`). Apply this to the ADR under review, not to the existing log —
+  don't retroactively flag an already-Accepted ADR for this.
+
 ## Output
 
 Report issues grouped by severity: **Critical / Major / Minor / Nit**, each with a specific
