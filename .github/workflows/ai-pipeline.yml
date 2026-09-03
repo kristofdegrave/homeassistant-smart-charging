@@ -61,6 +61,7 @@ on:
       - ".claude/skills/**"
       - ".claude/agents/**"
       - ".github/setup-labels.sh"
+      - ".github/ISSUE_TEMPLATE/**"
       - "custom_components/**"
       - "tests/**"
 
