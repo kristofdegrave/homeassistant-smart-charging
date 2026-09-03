@@ -1,6 +1,6 @@
 ---
 name: workflow-reviewer
-description: Use to review a change under .github/workflows/, .claude/skills/, .claude/agents/, .github/setup-labels.sh, .github/ISSUE_TEMPLATE/, docs/reference/, or CLAUDE.md (a new file or a change to one) before it is committed. Provides the fresh, separate Opus review CLAUDE.md's "Authoring AI artifacts" section requires. Read-only; reports issues by severity and never edits files.
+description: Use to review a change under .github/workflows/, .claude/skills/, .claude/agents/, .github/setup-labels.sh, .github/ISSUE_TEMPLATE/, docs/reference/, or CLAUDE.md (a new file or a change to one) before it is committed. Provides the fresh, separate Opus review CLAUDE.md's "Authoring AI artifacts" section requires for skills/agents/CI workers, and the same independent-review bar for the label vocabulary and issue forms that drive them. Read-only; reports issues by severity and never edits files.
 tools: Read, Glob, Grep
 model: opus
 ---
@@ -31,6 +31,9 @@ Always read:
 - `CLAUDE.md`'s "Authoring AI artifacts" section.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
+- If a changed file is under `.github/ISSUE_TEMPLATE/`: `.github/setup-labels.sh` and
+  `docs/reference/contribution-workflow.md`'s **Issue conventions** section, to check the
+  form's `labels:` value and required fields against the canonical vocabulary/format.
 
 ## Review checklist
 
@@ -73,6 +76,13 @@ Always read:
   its `case` block; and `.github/setup-labels.sh`'s label definitions. A change to one that
   doesn't update the rest is a Major finding (silent drift in the vocabulary the whole
   label-driven pipeline trusts).
+- If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is one
+  of the canonical context labels above (a form advertising a label that doesn't exist yet is a
+  Major finding); any process claim the form's body makes (e.g. `adr.yml` pointing at CLAUDE.md's
+  ADR section) still matches what that reference currently says; and, for `development`/
+  `testing`-context forms, the fields it requires still line up with what `_ai-draft.yml`
+  actually parses (e.g. the anchored `Plan:` line format from `contribution-workflow.md`'s
+  **Issue conventions**).
 - The issue-to-merge lifecycle is defined in `CLAUDE.md`'s **Contribution workflow** section;
   `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line only point
   to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
