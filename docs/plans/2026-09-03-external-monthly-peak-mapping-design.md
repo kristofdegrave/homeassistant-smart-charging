@@ -38,7 +38,10 @@ flow). No slice's **service** is widened — no new service, no new call directi
 **enumeration** does grow, and that is stated rather than glossed: `project-plan.md` lists RA2's
 roles as a closed five (`solar_forecast`, `low_tariff`, `car_home`, `departure_external`,
 `home_day_external`) and its integration checkpoint counts "all thirteen non-vehicle-limit roles",
-so a fourteenth role extends both. `ROLE_SOLAR_POWER` set the precedent for treating that as a
+and this change extends both. The checkpoint's number is itself already stale — `const.py` defines
+16 roles today, 15 of them non-vehicle-limit — so the new role is not "a fourteenth"; correcting
+that count is `project-plan.md`'s own housekeeping, not this spec's.
+`ROLE_SOLAR_POWER` set the precedent for treating such growth as a
 slice extension rather than a new slice. No test pins either number, so nothing breaks — but this
 document holds ADR-0027 to the distinction between an enumeration and the rule behind it, and owes
 `project-plan.md` the same.
@@ -99,7 +102,9 @@ The important half of this decision is the fallback. When the state is missing, 
 `PowerConverter.VALID_UNITS`** — the adapter returns `None`. That is not the same state as
 factory-level role absence (T1 pins the difference deliberately: an unmapped key leaves the role
 out of the dict entirely), but the two are **equivalent at the merge**, which is what matters here:
-`resolve_monthly_peak_operand` receives `None` either way, and R3 AC9 then governs. It deliberately does **not** fall back
+`resolve_monthly_peak_operand` receives `None` either way, and R3 AC9 then governs. This is
+**ADR-0007**'s existing fault semantics reused rather than a new rule — ADR-0030 pins the
+unavailable/unknown handling to it explicitly — so no new fault path is introduced here. It deliberately does **not** fall back
 to assuming kW, because the two mistakes are not symmetric: a W reading misread as kW (4090 →
 4090 kW) drives the operand straight to `max_peak_kw`, which *widens* the clamp and removes the
 protection R3 exists to give, whereas the reverse mistake resolves to a tiny value the peak floor
@@ -122,7 +127,7 @@ unit rather than burying it in the coordinator. `resolve_effective_peak_limit`'s
 docstring and existing tests are untouched.
 
 **D-3 — The merge is computed once per cycle, at the tracker's own call site.** `coordinator.py`
-already computes `monthly_peak_kw` once (~line 418) and feeds it to *both*
+already computes `monthly_peak_kw` once (~line 417) and feeds it to *both*
 `resolve_effective_peak_limit` calls (~line 422, the provisional pre-`ctx` value used only for the
 `ev_soc`-fault early return, and ~line 621, the final one). The external read and the merge slot in
 directly beneath that single assignment, and both call sites then take the merged local. There is
@@ -141,22 +146,35 @@ being write-only — so ADR-0030's "surfaces by the existing default" holds stru
 sensor-side change at all.
 
 **D-5 — No CapTar capability gate on the merge, because the mapping cannot outlive the
-capability.** R3's clamp does not run when CapTar is absent, so a merged operand would be inert
-there anyway. It is also unreachable: the mapping is a data-bucket field collected only on the
-CapTar-gated step, and reconfigure rewrites the data bucket wholesale (D-8), so withdrawing CapTar
-removes the key, which removes the factory branch, which leaves `external_kw` at `None`. Adding an
-explicit `captar_available` guard to the merge would be a second, redundant expression of a fact
-the buckets already enforce.
+capability.** The mapping is a data-bucket field collected only on the CapTar-gated step, and
+reconfigure rewrites the data bucket wholesale (D-8), so withdrawing CapTar removes the key, which
+removes the factory branch, which leaves `external_kw` at `None`. A guard would therefore be a
+second, redundant expression of a fact the buckets already enforce.
+
+That reachability argument is the whole of the justification, deliberately. The tempting second leg
+— "R3's clamp does not run when CapTar is absent, so a merged operand would be inert there anyway"
+— is what `requirements.md` R3 and `resolution-rules.md` say, but it is **not** what the shipped
+code does: `_apply_peak_clamp` (`coordinator.py` ~917-947) carries no `captar_available` gate at
+all. Its only skip is `MODE_POWER` with `power_respect_peak` off, and it is called unconditionally
+from `_run_cycle` (~662); `captar_available` reaches only mode selection (via
+`capability_gate.resolve_available_modes`), the mode select entity, and a diagnostic mirror. On a
+CapTar-absent entry the clamp simply runs against the default `max_peak_kw`/`peak_floor_kw`.
+
+That divergence between the analysis docs and the code predates this change and is not this
+spec's to resolve — it is recorded here only so the decision does not rest on it, and so the T3
+test derived from D-5 asserts the property that is actually true (the merge is ungated) rather
+than one that would go red.
 
 **D-6 — `sensor.smart_charging_monthly_peak_kw` keeps its meaning; no rename, no second entity.**
 ADR-0032 leaves this open. The sensor documents "the integration's own tracked peak", and that is
 still exactly what `CycleResult.monthly_peak_kw` carries after this change — the merge happens
 downstream of it, in a separate local. A rename would break a `RestoreSensor` whose stored state
 seeds the tracker across restarts, for a naming nicety. A second entity is unwarranted because the
-merged value is already observable three times over: `sensor.smart_charging_effective_peak_limit`
-shows the resolved value that actually drives the clamp, `sensor.smart_charging_peak_headroom_a` is
-derived from that same operand and so tracks it automatically (`coordinator.py` ~639), and the
-external operand's raw reading shows on the adapter-readings sensor (D-4). What remains is a
+merged value is already observable: `sensor.smart_charging_effective_peak_limit` shows the resolved
+value the operand feeds directly and that actually drives the clamp, and the external operand's raw
+reading shows on the adapter-readings sensor (D-4). `sensor.smart_charging_peak_headroom_a` moves
+with it too (`coordinator.py` ~639), though in amps and after folding in voltage and baseline, so it
+corroborates rather than displays the operand. What remains is a
 documentation obligation, and
 `entity-catalog.md` already discharges it — its `effective_peak_limit` row states the merged
 formula in full.
@@ -192,7 +210,7 @@ are load-bearing for this field and currently unasserted for it.
 | Adapter | `adapters/numeric.py` | `PowerKilowattReadAdapter(_ReadOnlyAdapter)` (D-1) |
 | Factory branch | `adapters/factory.py` | `if data.get(CONF_MONTHLY_PEAK_EXTERNAL_ENTITY): adapters[ROLE_MONTHLY_PEAK_EXTERNAL] = PowerKilowattReadAdapter(hass, data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY])` — the truthiness-`.get` idiom `ROLE_HOME_DAY_EXTERNAL` and `ROLE_LOW_TARIFF` already use, so an unmapped key leaves the role out of the dict |
 | Merge | `engines/billing_protection.py` | `resolve_monthly_peak_operand` (D-2) |
-| Per-cycle read + merge | `coordinator.py` (~418-427) | `_read_role` then the merge, feeding both `resolve_effective_peak_limit` call sites (D-3, D-4) |
+| Per-cycle read + merge | `coordinator.py` (~417-427) | `_read_role` then the merge, feeding both `resolve_effective_peak_limit` call sites (D-3, D-4) |
 | Schema fragment | `config_flow.py` | `CAPTAR_MAPPING_SCHEMA` (below) |
 | Table gate | `config_flow.py` `CONFIG_TABLE` | plain capability gate (below) |
 | Step method | `config_flow.py` `async_step_captar` | the `async_step_solar` idiom (below) |
@@ -286,7 +304,12 @@ Only `config.step.captar` changes, in all three files:
 - `options.step.captar` is **unchanged** (its own orphaned-field check is per section, and the
   options step stays threshold-only).
 
-`title` ("CapTar") already reads correctly in both contexts and does not change.
+`title` ("CapTar") does **not** change, and that narrows ADR-0033 rather than following it: its
+Consequences say the title *and* description are both written for a threshold-only screen and
+would be wrong above a single-mapping reconfigure form. Inspection of `strings.json` finds the
+title is the bare word "CapTar", which carries no threshold framing and reads correctly above
+either form — so only the description needs the rework. Named here as a deviation rather than
+left as a silent omission.
 
 ### The two fixtures that fail quietly
 
@@ -329,10 +352,12 @@ leave that rule untested.
 | `test_uc12_1a_reconfigure_shows_mapping_halves_only` (~1107) | asserts `vehicle` is followed directly by `solar` | inserts the `captar` step, asserting its rendered keys equal `_keys(CAPTAR_MAPPING_SCHEMA)` exactly |
 | `test_uc12_captar_step_is_threshold_only_no_ev_soc` (~903) | **install**-side; asserts rendered keys equal the threshold schema's exactly | renamed off "threshold_only"; asserts the keys equal mapping ∪ threshold, and keeps its `CONF_EV_SOC_ENTITY not in` assertion, which is still true and still worth pinning |
 
-Two comments restate the enumeration in prose and move with them: `_run_reconfigure_flow`'s
-docstring (`tests/test_config_flow.py` ~262-266), and the section header above the
-`power`/`captar` cases (~line 888, "The `power`/`captar` steps: threshold-only, gated off in
-reconfigure").
+Three comments restate the enumeration in prose and move with them: `_run_reconfigure_flow`'s
+docstring (`tests/test_config_flow.py` ~262-266); the section header above the `power`/`captar`
+cases (~line 888, "The `power`/`captar` steps: threshold-only, gated off in reconfigure"); and an
+inline comment at ~1135-1136 ("power/captar have no mapping half -- both skipped entirely in
+reconfigure") that sits inside a test T6 rewrites anyway, so it is carried along in practice — but
+it is counted here rather than left to the T8 sweep to catch.
 
 ## Mapping to `system-design.md` services
 
@@ -350,8 +375,10 @@ which stays pure and HA-import-free per ADR-0010.
 ## Testing approach (ADR-0009)
 
 - **Plain pytest** — `resolve_monthly_peak_operand` (pure logic, `tests/engines/test_billing_protection.py`);
-  the `CONFIG_TABLE` gate-evaluation test (a lambda against a stub flow, as the existing one
-  already is); the translation-file content tests (`tests/test_config_flow_translations.py`,
+  the `CONFIG_TABLE` gate-evaluation test (a lambda against a stub flow needing no `hass` fixture,
+  as the existing one already is — loosely, since it lives in a module that imports `homeassistant`;
+  `tests/test_engine_purity.py` is the only genuinely HA-free tier here); the translation-file
+  content tests (`tests/test_config_flow_translations.py`,
   `tests/test_translations.py`).
 - **HA harness** — the adapter (entity states, units, `unavailable`/`unknown`); the factory; the
   coordinator's per-cycle merge; every config-flow traversal, prefill and terminal-split test.

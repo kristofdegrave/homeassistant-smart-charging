@@ -31,7 +31,9 @@ Test boundary: **HA harness** (`tests/adapters/test_numeric.py` for the adapter,
   `PowerKilowattReadAdapter`; an entry without the key (and one with it set to `""`/`None`) leaves
   the role **absent from `adapters`** — not present-and-returning-`None`, since ADR-0030's
   optional-role contract is factory-level absence.
-- Failing test — `ROLE_MONTHLY_PEAK_EXTERNAL not in ROLES_ADAPTER_READINGS_EXCLUDED` (D-4: the
+- Regression pin, not a failing test — `ROLE_MONTHLY_PEAK_EXTERNAL not in
+  ROLES_ADAPTER_READINGS_EXCLUDED` is green the moment the const lands, so it drives nothing
+  red-to-green and is filed accordingly rather than dressed up as a TDD step (D-4: the
   role is read by `_run_cycle`, so ADR-0021's diagnostic sensor must pick it up by the existing
   default, and that must be pinned rather than left to inference).
 - Add to `const.py`: `CONF_MONTHLY_PEAK_EXTERNAL_ENTITY = "monthly_peak_external_entity"` in the
@@ -85,16 +87,22 @@ Test boundary: **HA harness** (`tests/test_coordinator.py`).
   integration observes between external-sensor refreshes is not discarded". A single-cycle
   assertion only reaches the first. Because `monthly_peak_kw` is produced by
   `self._peak_demand.update(...)` *before* the merge, a refactor that wrote the merged value back
-  into the tracker — `seed_monthly_peak` / `PeakDemandState.seed()` is a real, reachable boundary
-  (`coordinator.py` ~1001-1007) — would pass a one-cycle test and only surface on the next cycle,
+  into the tracker — `seed_monthly_peak` (`coordinator.py` ~1001-1007), which delegates to
+  `PeakDemandState.seed()` in `coordinator_cycle.py`, is a real and reachable boundary — would pass
+  a one-cycle test and only surface on the next cycle,
   by which time the contaminated value is indistinguishable from a genuine spike.
 - Failing test: the mapped role's raw reading appears in `CycleResult.adapter_readings` under
   `monthly_peak_external` (D-4, via `_read_role`'s own cache write).
-- Failing test — **D-5, pinned rather than assumed**: with the role mapped and reading high but
-  `captar_available` **off**, the merge still runs unguarded and the cycle behaves exactly as the
-  CapTar-absent path does today (R3's clamp does not apply there, so the merged operand is inert).
-  Without this, nothing objects to a later contributor adding a `captar_available` guard to the
-  merge — a second, redundant expression of what the buckets already enforce, and the one place
+- Failing test — **D-5, pinned as the property that is actually true**: with the role mapped and
+  reading high but `captar_available` **off**, the merge still runs, and
+  `CycleResult.effective_peak_limit_kw` resolves from the external reading exactly as it does with
+  the capability on. Assert *that* — the merge is not gated on `captar_available` — and nothing
+  else. Do **not** assert the cycle is otherwise unchanged from the CapTar-absent path:
+  `_apply_peak_clamp` carries no capability gate (D-5's second paragraph), so a higher operand
+  really does move `effective_peak_limit_kw`, `peak_headroom_a` and potentially
+  `commanded_current` on such an entry. That movement is in the loosening direction and is
+  pre-existing behaviour, not a regression this change introduces. Without this test, nothing
+  objects to a later contributor adding a `captar_available` guard to the merge — the one place
   D-5's reasoning could be silently undone.
 - Failing test — both call sites, not just the final one: on a cycle that takes the `ev_soc`-fault
   early return (the path fed by the provisional `resolve_effective_peak_limit(urgent=False)` call
@@ -102,7 +110,7 @@ Test boundary: **HA harness** (`tests/test_coordinator.py`).
   failure D-3 exists to prevent: updating the final call site alone leaves the provisional one on
   the unmerged value, and no existing test would notice.
 - In `coordinator.py`, directly beneath the single `monthly_peak_kw = self._peak_demand.update(...)`
-  assignment (~line 418): `external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)`,
+  assignment (~line 417): `external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)`,
   then `peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)`. Pass
   `peak_operand_kw` at **both** `resolve_effective_peak_limit` call sites (~422, ~621). No CapTar
   gate on the merge (D-5).
@@ -178,10 +186,17 @@ existing test, which is what lets T6 be a pure gate-and-tests commit.
   `async_step_reconfigure`'s, which restates the two-row skip directly.
 - Green, commit: `refactor: give async_step_captar mode branching and prefill (ADR-0033, #922)`.
 
-## T6 — The gate flip, and the five tests that spell out the superseded enumeration
+## T6 — The gate flip, and four of the five tests that spell out the superseded enumeration
 
-Test boundary: **plain pytest** for the gate-evaluation test (a lambda against a stub flow, as the
-existing one already is); **HA harness** for every traversal test.
+Test boundary: **plain pytest** for the gate-evaluation test (a lambda against a stub flow needing
+no `hass` fixture, as the existing one already is — though it lives in `tests/test_config_flow.py`,
+which imports `homeassistant` at module scope, so this is the loose sense of the term;
+`tests/test_engine_purity.py` is the only genuinely HA-free tier in this plan); **HA harness** for
+every traversal test.
+
+The fifth of the five enumeration tests, `test_uc12_captar_step_is_threshold_only_no_ev_soc`
+(~903), is **not** here — it is install-side, so it goes red at T4 and is rewritten there. This
+task owns the four reconfigure-side ones.
 
 - **Rewrite** `test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` (~2401) into
   a `power`-only test under a name that no longer claims `captar`. Keep the `power` assertion
@@ -236,8 +251,13 @@ licence to weaken the test.
   property that matters; surviving the save is.
 - Failing test — **clearing** (UC12 6a: "leaving the mapping unset or clearing it is equivalent
   either way"): reconfigure the same entry, submit the `captar` step with the field omitted, and
-  assert the key is absent from `entry.data` afterwards and the role is absent from the rebuilt
-  adapter set.
+  assert the key is absent from `entry.data` afterwards. Scope the assertion to `entry.data`, which
+  is what the flow owns: `tests/test_config_flow.py` drives flows against a bare `MockConfigEntry`
+  and only drains the reload, never inspecting `runtime_data`, so an "and the role is absent from
+  the rebuilt adapter set" half does not belong here. The factory's own behaviour on a missing key
+  is already covered by T1 (beside `test_factory_builds_adapter_matching_flow_submitted_states`,
+  ~442), and the two together give the end-to-end property without either test reaching past its
+  harness.
 - Failing test — **withdrawal** (`entity-catalog.md`'s Captar-dependent-rows note): reconfigure an
   entry that has the mapping stored, declare `captar_available` **off** on the `core` step, finish,
   and assert (a) `CONF_MONTHLY_PEAK_EXTERNAL_ENTITY` is gone from `entry.data`, and (b) the six
@@ -263,7 +283,9 @@ licence to weaken the test.
   half" / is "threshold-only" on its own. The second pattern is the one that catches a `captar`-only
   restatement like `_captar_threshold_schema`'s; ADR-0033 warns the enumerated count is a floor,
   not a total, so this sweep is the backstop rather than a formality.
-- This closes #922's build tasks and, with them, epic #873.
+- This closes #922's build tasks — the last of epic #873's *build* work. The epic itself stays
+  open until R18 AC5's amendment lands, which the Follow-up section below defers as analysis work
+  under its own review protocol.
 
 ## Follow-up (not this plan)
 
