@@ -72,6 +72,7 @@ def test_every_entity_translation_key_has_a_name():
     # sensor.py
     sensor_keys = (
         "status",
+        "charger_status",
         "active_mode",
         "monthly_peak_kw",
         "effective_peak_limit",

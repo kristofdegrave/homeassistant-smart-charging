@@ -358,6 +358,14 @@
       "status": {
         "name": "Status"
       },
+      "charger_status": {
+        "name": "Charger status",
+        "state": {
+          "disconnected": "Disconnected",
+          "connected": "Connected",
+          "charging": "Charging"
+        }
+      },
       "active_mode": {
         "name": "Active mode"
       },

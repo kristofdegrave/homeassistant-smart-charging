@@ -46,6 +46,10 @@ from custom_components.smart_charging.const import (
     DEFAULT_REMINDER_LEAD_H,
     DOMAIN,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    ROLE_CHARGER_STATUS,
+    STATE_CHARGING,
+    STATE_CONNECTED,
+    STATE_DISCONNECTED,
     STATUS_FAULT,
     STATUS_OK,
 )
@@ -54,6 +58,7 @@ from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
     ActiveSocLimitSensor,
     AdapterReadingsSensor,
+    ChargerStatusSensor,
     ChargingStatusSensor,
     EffectivePeakLimitSensor,
     MonthlyPeakSensor,
@@ -420,6 +425,41 @@ def test_adapter_readings_sensor_is_diagnostic():
     assert sensor.entity_category == EntityCategory.DIAGNOSTIC
 
 
+@pytest.mark.parametrize(
+    "reading",
+    [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING, None],
+)
+async def test_charger_status_sensor_reflects_the_adapter_readings_role(hass, reading):
+    coord = SimpleNamespace(data=SimpleNamespace(adapter_readings={ROLE_CHARGER_STATUS: reading}))
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value == reading
+
+
+async def test_charger_status_sensor_defaults_to_none_when_no_data_yet(hass):
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.native_value is None
+
+
+def test_charger_status_sensor_unique_id_scoped_to_entry():
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.unique_id == "abc_charger_status"
+
+
+def test_charger_status_sensor_is_diagnostic():
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+def test_charger_status_sensor_is_a_fixed_enum():
+    coord = SimpleNamespace(data=None)
+    sensor = ChargerStatusSensor(entry_id="abc", coordinator=coord)
+    assert sensor.device_class == SensorDeviceClass.ENUM
+    assert sensor.options == [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]
+
+
 def test_all_sensor_object_id_suffixes_are_unique():
     """T6 integration checkpoint (#602): a static, independent guard for ADR-0013's
     per-entity object_id pin -- two sensor classes sharing an `_object_id_suffix` would
@@ -437,6 +477,7 @@ def test_all_sensor_object_id_suffixes_are_unique():
         PeakHeadroomSensor,
         TimeToFullSensor,
         AdapterReadingsSensor,
+        ChargerStatusSensor,
     ]
     suffixes = [cls(entry_id="abc", coordinator=coord)._object_id_suffix for cls in sensor_classes]
     assert len(suffixes) == len(set(suffixes))
@@ -1030,9 +1071,10 @@ async def test_async_setup_entry_registers_ev_solar_config_mirror_sensors(hass):
 
 
 async def test_async_setup_entry_registers_every_sensor_with_no_duplicate_suffix(hass):
-    """T6 (#896): the full async_setup_entry call -- 9 pre-existing class-based diagnostic
-    sensors plus all 35 ADR-0031 config-mirror sensors -- registers 44 entities with no
-    duplicate unique_id/_object_id_suffix (ADR-0013), and every one of the 35 mirrors carries
+    """T6 (#896): the full async_setup_entry call -- 10 pre-existing class-based diagnostic
+    sensors (9 plus ChargerStatusSensor, ADR-0034, #924) plus all 35 ADR-0031 config-mirror
+    sensors -- registers 45 entities with no duplicate unique_id/_object_id_suffix (ADR-0013),
+    and every one of the 35 mirrors carries
     the exact attribute set ADR-0031 mandates: entity_category=DIAGNOSTIC,
     entity_registry_enabled_default=False, and no LABEL_SC_RUNTIME (checked structurally via
     `_owned_labels`, not by omission -- ADR-0031's "never on the runtime dashboard" claim)."""
@@ -1055,7 +1097,7 @@ async def test_async_setup_entry_registers_every_sensor_with_no_duplicate_suffix
 
     await sensor_module.async_setup_entry(hass, entry, _capture)
 
-    assert len(captured_entities) == 44
+    assert len(captured_entities) == 45
 
     suffixes = [e._object_id_suffix for e in captured_entities]
     assert len(suffixes) == len(set(suffixes))

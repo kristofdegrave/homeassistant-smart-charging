@@ -358,6 +358,14 @@
       "status": {
         "name": "Status"
       },
+      "charger_status": {
+        "name": "Laderstatus",
+        "state": {
+          "disconnected": "Niet verbonden",
+          "connected": "Verbonden",
+          "charging": "Aan het laden"
+        }
+      },
       "active_mode": {
         "name": "Actieve modus"
       },
