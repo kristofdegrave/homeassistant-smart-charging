@@ -44,10 +44,11 @@ Two tests assert the enumeration by name —
 `::test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` — and two more encode
 it structurally without naming it, including the sixteen-combination reconfigure traversal matrix
 (`::test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves`) that discharges ADR-0027's
-own "every capability combination traverses exactly the steps UC12 prescribes" obligation. Two
-more sit outside the reconfigure walk altogether — one install-side, one asserting the mapping
-fragment's absence as a module symbol. The Consequences below enumerate them, as a floor rather
-than a closed list.
+own obligation that "every capability combination … must be shown to traverse exactly the steps
+UC12 prescribes, in order". Two more sit outside the reconfigure walk altogether — one
+install-side, and one asserting the mapping fragment's absence as a module symbol, which turns out
+to need no change once the fragment returns under its conventional name. Five of the six therefore
+need rewriting, and the Consequences below enumerate those as a floor rather than a closed list.
 
 The collision is narrower than it first looks, and the distinction matters for what this ADR has
 to change. Point 3 states two things: an abstract **rule** (each row's gate conjoins its
@@ -95,9 +96,9 @@ is appended without touching another step.
 Keep ADR-0027 point 3 exactly as written by not giving the role a config-flow home at all: the
 `ROLE_MONTHLY_PEAK_EXTERNAL` key exists in `const.py`, but nothing in the flow ever maps it.
 
-- Pro: Zero change to any shipped decision, table row, schema fragment, translation string or
-  test — the baseline every other option pays its cost against. It also defers a placement
-  question that a later, larger config-flow rework might answer more cheaply.
+- Pro: Zero change to any shipped decision, table row, schema fragment, translation string or test
+  — the baseline every other option pays its cost against. It also defers a placement question
+  that a later, larger config-flow rework might answer more cheaply.
 - Con: It makes ADR-0030's role permanently unreachable. The flow is this integration's only
   entity-mapping mechanism ([ADR-0003](0003-hardware-abstraction-adapters.md)); there is no YAML
   or service path a household could use instead, so an unmapped role means the reported
@@ -174,18 +175,18 @@ its thresholds belong to a mapping half. Point 3's *enumeration* is superseded; 
   mechanism: point 3's own gate rule already yields the right answer once `captar` has a mapping
   half, so the change is to one row's evaluated conditions and one new schema fragment, not to how
   gating works.
-- Con: It falsifies a sentence in an Accepted, shipped ADR, which costs a superseding record —
-  and one of a shape ADR-0001's vocabulary does not currently have, per Context — plus a
+- Con: It falsifies a sentence in an Accepted, shipped ADR, which costs a superseding record — and
+  one of a shape ADR-0001's vocabulary does not currently have, per Context — plus a
   `CONFIG_TABLE` change, a new `CAPTAR_MAPPING_SCHEMA`, mode branching and prefill in
   `async_step_captar`, re-worded `captar` translation strings that must now read correctly in a
   reconfigure context as well as an install one and a translation-parity fixture updated to match,
   and the rewrite of every test that spells the enumeration out — two named after it, the
   sixteen-combination reconfigure traversal matrix, the mapping-halves walk-through and an
   install-side schema-equality test — plus a mapping-fragment roster that has to grow without any
-  test going red to say so.
-  It also removes a property a reader could previously rely on — that a step's mapping-half status
-  is fixed by its topic — since a step can now *acquire* a mapping half, meaning any future field
-  addition has to re-ask the reconfigure question rather than assume the answer.
+  test going red to say so. It also removes a property a reader could previously rely on — that a
+  step's mapping-half status is fixed by its topic — since a step can now *acquire* a mapping
+  half, meaning any future field addition has to re-ask the reconfigure question rather than
+  assume the answer.
 
 ## Decision
 
@@ -314,26 +315,26 @@ only; the resulting user-visible behaviour belongs in UC12, which owes a new alt
   step's rendered keys equal the threshold schema's exactly, which fails as soon as the step
   renders a mapping field too — every other step extends its mapping half with its threshold half
   on install — and takes the test's own name with it. The reconfigure walk helper's docstring and
-  the section-header comment above the `power`/`captar` cases restate the enumeration as well.
-  The count is a floor, not a total, and the sweep it starts must look for two different failure
+  the section-header comment above the `power`/`captar` cases restate the enumeration as well. The
+  count is a floor, not a total, and the sweep it starts must look for two different failure
   shapes. The loud one is an assertion that goes red: any test fixing `captar`'s exact schema keys
-  or an exact step sequence. The quiet one is a roster that must *grow* — `_ALL_MAPPING_FRAGMENTS`
-  enumerates every mapping half the flow has, and omitting the new constant there fails nothing at
-  all; the invariants driven off that roster simply stop covering the new field. Given that this
-  decision turns on a step *acquiring* a mapping half, a fixture that silently under-covers the
-  acquired one is the more dangerous of the two. Of these, the reconfigure matrix is the
-  substantive test — it discharges the reconfigure third of ADR-0027's "every capability
-  combination traverses exactly the steps UC12 prescribes" obligation (install and options have
-  their own matrices). The `power` half of what the named pair protects is
-  still required — nothing here weakens it, and it is now the *only* coverage of the flow-mode
-  half of point 3's rule, so losing it would leave that rule untested. Each of the two becomes a
-  `power`-only test under a name that no longer claims `captar`; the matrix and the walk-through
-  gain `captar` in their expected reconfigure sequence whenever CapTar is present, rendering the
-  mapping field alone. New coverage is owed for the reconfigure prefill of that field, since an
-  unprefilled optional mapping is the silent-drop bug class named above. Per
-  [ADR-0009](0009-testing-strategy.md) the traversal cases are HA-harness tests and the gate case
-  is plain pytest, matching how the existing tests are already split. Naming and writing them is
-  the implementation spec's job, not this ADR's.
+  or an exact step sequence. The quiet one is a roster that must *grow* —
+  `tests/test_config_flow.py::_ALL_MAPPING_FRAGMENTS` enumerates every mapping half the flow has,
+  and omitting the new constant there fails nothing at all; the invariants driven off that roster
+  simply stop covering the new field. Given that this decision turns on a step *acquiring* a
+  mapping half, a fixture that silently under-covers the acquired one is the more dangerous of the
+  two. Of these, the reconfigure matrix is the substantive test — it discharges the reconfigure
+  third of ADR-0027's "every capability combination … must be shown to traverse exactly the steps
+  UC12 prescribes, in order" obligation (install and options have their own matrices). The `power`
+  half of what the named pair protects is still required — nothing here weakens it, and it is now
+  the *only* coverage of the flow-mode half of point 3's rule, so losing it would leave that rule
+  untested. Each of the two becomes a `power`-only test under a name that no longer claims
+  `captar`; the matrix and the walk-through gain `captar` in their expected reconfigure sequence
+  whenever CapTar is present, rendering the mapping field alone. New coverage is owed for the
+  reconfigure prefill of that field, since an unprefilled optional mapping is the silent-drop bug
+  class named above. Per [ADR-0009](0009-testing-strategy.md) the traversal cases are HA-harness
+  tests and the gate case is plain pytest, matching how the existing tests are already split.
+  Naming and writing them is the implementation spec's job, not this ADR's.
 - **`captar`'s translation block must read correctly in two contexts.** ADR-0027 requires each
   step's shared `config.step.*` block to work for both install and reconfigure. `captar`'s title
   and description are written today for a threshold-only screen and would be wrong above a
@@ -354,13 +355,12 @@ only; the resulting user-visible behaviour belongs in UC12, which owes a new alt
   owns the table row, the fragment, the step method, the translations and the test rewrite named
   above. Two analysis edits are specifically owed because each currently asserts the superseded
   enumeration as present fact: UC12 states that `captar` and `power` are both absent from the
-  reconfigure flow, in its flow narrative, its diagram note and its Requirements-satisfied section,
-  and must instead describe `captar`'s mapping half; and R18 AC5's list of fields the CapTar-gated
-  step
-  presents is a closed enumeration that does not yet include this mapping. A third is owed for
-  completeness rather than correction: `entity-catalog.md`'s CapTar-dependent-rows note must gain
-  the data-bucket mapping beside the options-bucket values it already covers, and with it the
-  withdrawal asymmetry described above.
+  reconfigure flow in four places — twice in its flow narrative, once in its diagram note and once
+  in its Requirements-satisfied section — and must instead describe `captar`'s mapping half; and
+  R18 AC5's list of fields the CapTar-gated step presents is a closed enumeration that does not
+  yet include this mapping. A third is owed for completeness rather than correction:
+  `entity-catalog.md`'s CapTar-dependent-rows note must gain the data-bucket mapping beside the
+  options-bucket values it already covers, and with it the withdrawal asymmetry described above.
 - **What becomes harder.** A reader can no longer infer a step's reconfigure behaviour from
   whether it is capability-gated: `captar` is capability-gated *and* present in reconfigure, while
   `power` has no capability gate at all *and* is absent from it — the two properties are now
