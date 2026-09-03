@@ -1,7 +1,7 @@
 # ADR-0033: External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half
 
 Date: 2026-09-01
-Status: Proposed
+Status: Accepted
 
 ## Context
 
