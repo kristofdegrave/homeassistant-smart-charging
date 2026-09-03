@@ -33,12 +33,13 @@ template.
 | [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion | Accepted |
 | [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Superseded by ADR-0029 |
-| [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow | Accepted |
+| [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow — point 3's step enumeration narrowed by [ADR-0033](0033-captar-step-gains-a-mapping-half.md) | Accepted |
 | [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities | Proposed |
 | [0029](0029-process-time-for-perf-test-cpu-measurement.md) | stdlib `time.process_time()` for perf-test CPU measurement, `psutil` retained for RSS | Accepted |
 | [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role | Accepted |
 | [0031](0031-config-values-as-disabled-by-default-diagnostic-sensors.md) | Config-entry values also exposed as disabled-by-default diagnostic sensors | Accepted |
 | [0032](0032-external-monthly-peak-precedence.md) | External monthly-peak sensor — precedence semantics | Accepted |
+| [0033](0033-captar-step-gains-a-mapping-half.md) | External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half | Accepted |
 | [0034](0034-dedicated-charger-status-diagnostic-sensor.md) | Dedicated diagnostic sensor for the `charger_status` role (extends ADR-0021) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
