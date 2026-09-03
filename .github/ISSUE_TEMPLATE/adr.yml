@@ -12,8 +12,8 @@ body:
         Before filing: is this decision ADR-worthy? Write one when the choice is about
         structure that would be expensive to reverse or materially constrains future
         options — skip it for a variable name, a log message, or any implementation
-        detail with no lasting structural consequence. See [CLAUDE.md's "Architecture
-        Decision Records (ADRs)" section](https://github.com/kristofdegrave/homeassistant-smart-charging/blob/main/CLAUDE.md#architecture-decision-records-adrs)
+        detail with no lasting structural consequence. See
+        [CLAUDE.md's "Architecture Decision Records (ADRs)" section](https://github.com/kristofdegrave/homeassistant-smart-charging/blob/main/CLAUDE.md#architecture-decision-records-adrs)
         for the full worthiness test, its calibration test for borderline cases, and its
         carve-outs (test/CI/dev-tooling choices; domain/business rules) — an issue that
         fails it will still get caught by `adr-reviewer` if you add `needs-draft`, but
