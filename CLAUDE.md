@@ -144,6 +144,21 @@ or a one-off implementation detail with no lasting structural consequence — wh
 doubt, ask whether a future contributor would benefit from knowing *why*, not just
 *what*.
 
+The calibration test for a borderline case: would reversing or swapping this choice
+require touching more than one module, or changing a contract other code depends on? If
+no, it isn't architectural, however carefully it was deliberated — deliberation quality
+is not the bar, reversibility and structural reach are. Two categories worth naming
+explicitly because they recur:
+
+- **Test, CI, or dev-tooling choices** (a benchmarking library, a measurement helper, a
+  lint tool) are not architectural unless the *product* code itself takes a structural
+  dependency on them — a library used only inside `tests/` or a workflow script belongs
+  in a PR description, not an ADR.
+- **Domain/business rules** (a formula, a precedence order, which values are surfaced) —
+  even when seriously debated — are not architectural; they belong in
+  `docs/analysis/requirements.md` or a resolution-rules doc, not an ADR, unless the rule
+  also changes a structural boundary.
+
 Use the `write-adr` skill for the full cycle. Follows the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
