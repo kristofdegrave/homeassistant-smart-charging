@@ -144,20 +144,31 @@ or a one-off implementation detail with no lasting structural consequence — wh
 doubt, ask whether a future contributor would benefit from knowing *why*, not just
 *what*.
 
-The calibration test for a borderline case: would reversing or swapping this choice
-require touching more than one module, or changing a contract other code depends on? If
-no, it isn't architectural, however carefully it was deliberated — deliberation quality
-is not the bar, reversibility and structural reach are. Two categories worth naming
-explicitly because they recur:
+For a borderline case not obviously covered above, a calibration test: would reversing
+or swapping this choice require touching more than one module, or changing a contract
+other code depends on? This supplements, not overrides, the categories already listed —
+a choice in one of those categories (e.g. a library/protocol dependency, a config-entry
+schema shape) is still architectural even where good encapsulation means swapping it
+touches only one module. Documented deliberation is a signal something needed the
+decision, not proof it was architectural on its own — pair it with the reach test above,
+using the *why*-a-future-contributor-benefits question as the tiebreaker. Two recurring
+categories:
 
 - **Test, CI, or dev-tooling choices** (a benchmarking library, a measurement helper, a
   lint tool) are not architectural unless the *product* code itself takes a structural
-  dependency on them — a library used only inside `tests/` or a workflow script belongs
-  in a PR description, not an ADR.
+  dependency on them — a library used only inside `tests/` belongs in a PR description,
+  not an ADR. This doesn't extend to the CI/automation pipeline's own structure (trust
+  boundaries, job topology, review-loop caps), which stays ADR-worthy — only to which
+  tool/library a script happens to call.
 - **Domain/business rules** (a formula, a precedence order, which values are surfaced) —
   even when seriously debated — are not architectural; they belong in
-  `docs/analysis/requirements.md` or a resolution-rules doc, not an ADR, unless the rule
-  also changes a structural boundary.
+  `docs/analysis/requirements.md` or `docs/analysis/resolution-rules.md`, not an ADR.
+  Surfacing, renaming, or mirroring an existing config value as an entity is not, on its
+  own, a structural boundary change and doesn't escape this carve-out.
+
+This tightened bar applies to new decisions; it does not retroactively make an existing
+Accepted ADR non-architectural — supersede it instead if a past decision no longer holds
+(per `docs/adl/template.md`), never edit it in place to remove it.
 
 Use the `write-adr` skill for the full cycle. Follows the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
