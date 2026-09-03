@@ -14,11 +14,13 @@ also covering commit message conventions).
    **Issue conventions** below). Board **Status** defaults to `Backlog`.
 1. **Do the work in an isolated `git worktree`, always.** No exceptions, even a one-line fix —
    removes the shared-checkout risk of a concurrent session switching branches underneath you.
-   Create the worktree from an up-to-date `main` — `git fetch origin && git worktree add
-   <path> -b <branch> origin/main` (not a stale local `main`) — so the new branch starts from
-   the latest merged work rather than whatever `main` happened to be at the last fetch.
    Branch name: `<context-label>/<issue-number>` (see **Issue conventions** below for the
-   full scheme, including the multi-PR suffix). As soon as you actually start
+   full scheme, including the multi-PR suffix). Create the worktree from an up-to-date `main`
+   — `git fetch origin && git worktree add -b <branch> <path> origin/main` (not a stale local
+   `main`) — so the new branch starts from the latest merged work rather than whatever `main`
+   happened to be at the last fetch; the one exception is deliberately stacking on a
+   not-yet-merged prior task's branch per step 2, in which case fetch first and branch off that
+   instead. As soon as you actually start
    writing/developing (not at issue-filing time), move the issue's board **Status** to
    `In progress`. Work can be interactive, with intermediate commits. Before step 2, self-check
    against the [Definition of Done](definition-of-done.md).
@@ -34,8 +36,8 @@ also covering commit message conventions).
 3. **Review.** Fresh, separate reviewer agent for the artifact type, always **Opus** (per
    CLAUDE.md's model-selection rule) — never inline in the main session. Before this, and
    before every later pass in the loop: check if the
-   branch is behind `main`; if so, merge/rebase `main` in and resolve conflicts before
-   reviewing, so review always runs against current `main`.
+   branch is behind `origin/main`; if so, merge/rebase `origin/main` in and resolve conflicts
+   before reviewing, so review always runs against current `main`.
 4. **Post findings to the PR before fixing.** Native GitHub PR review with inline comments
    (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
    once the PR exists, which step 2 guarantees is always before review.
