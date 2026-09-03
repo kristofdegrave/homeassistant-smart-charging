@@ -68,7 +68,7 @@ broken reference, and judge the ADR on internal merit instead.
   choices; domain/business rules) — to the decision this ADR records. A decision that
   fails that bar is a **Major** finding: name which carve-out or definition clause it
   fails, and suggest where it belongs instead (a PR description, `requirements.md`,
-  `resolution-rules.md`). Only applies to ADRs opened after that section existed —
+  `resolution-rules.md`). Apply this to the ADR under review, not to the existing log —
   don't retroactively flag an already-Accepted ADR for this.
 
 ## Output

@@ -144,15 +144,13 @@ or a one-off implementation detail with no lasting structural consequence — wh
 doubt, ask whether a future contributor would benefit from knowing *why*, not just
 *what*.
 
-For a borderline case not obviously covered above, a calibration test: would reversing
-or swapping this choice require touching more than one module, or changing a contract
-other code depends on? This supplements, not overrides, the categories already listed —
-a choice in one of those categories (e.g. a library/protocol dependency, a config-entry
-schema shape) is still architectural even where good encapsulation means swapping it
-touches only one module. Documented deliberation is a signal something needed the
-decision, not proof it was architectural on its own — pair it with the reach test above,
-using the *why*-a-future-contributor-benefits question as the tiebreaker. Two recurring
-categories:
+For a borderline case, a calibration test: would reversing or swapping this choice touch
+more than one module, or a contract other code depends on? It supplements, not
+overrides, the categories above — a *product-code* choice there (e.g. a library the
+shipped integration depends on, a config-entry schema shape) stays architectural even
+when well encapsulated; the two carve-outs below narrow that for their own categories.
+Serious deliberation alone isn't proof either way — weigh it against the reach test and
+the *why*-a-future-contributor-benefits question. Two recurring categories:
 
 - **Test, CI, or dev-tooling choices** (a benchmarking library, a measurement helper, a
   lint tool) are not architectural unless the *product* code itself takes a structural
@@ -163,12 +161,16 @@ categories:
 - **Domain/business rules** (a formula, a precedence order, which values are surfaced) —
   even when seriously debated — are not architectural; they belong in
   `docs/analysis/requirements.md` or `docs/analysis/resolution-rules.md`, not an ADR.
-  Surfacing, renaming, or mirroring an existing config value as an entity is not, on its
-  own, a structural boundary change and doesn't escape this carve-out.
+  Surfacing, renaming, or mirroring an existing config value or computed reading as an
+  entity is not, on its own, a structural boundary change and doesn't escape this
+  carve-out.
 
 This tightened bar applies to new decisions; it does not retroactively make an existing
 Accepted ADR non-architectural — supersede it instead if a past decision no longer holds
-(per `docs/adl/template.md`), never edit it in place to remove it.
+(per `docs/adl/template.md`), never edit it in place to remove it. If an Accepted ADR's
+Consequences state a forward-looking bar for future decisions in a category one of the
+carve-outs above now excludes, this carve-out governs going forward and that ADR should
+be superseded to say so, rather than the conflict being left implicit.
 
 Use the `write-adr` skill for the full cycle. Follows the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
