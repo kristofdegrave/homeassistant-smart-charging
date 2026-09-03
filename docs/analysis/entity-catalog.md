@@ -432,8 +432,9 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   the mapping — raise the resolved monthly-peak-demand operand by (R3 AC8/AC9), whatever they
   hold or map to. Net import on such an installation is bounded only by the grid supply ceiling
   (C4) — typically a much higher ceiling than these thresholds would impose. They are also not
-  presented: [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b, 6a) puts
-  all six on the flow's CapTar-gated step. The four thresholds and the peak-protection option are
+  presented: R18 AC5 names all six as CapTar-gated fields of the installation flow, and
+  [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b, 6a) puts them on the
+  flow's CapTar-gated step. The four thresholds and the peak-protection option are
   options-bucket fields (ADR-0005): the entry keeps whichever value each already holds — the
   defaults on a fresh install,
   or on reconfigure the value it last stored (UC12 1a leaves a withdrawn capability's stored
