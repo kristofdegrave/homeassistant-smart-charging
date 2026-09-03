@@ -190,19 +190,26 @@ slice this size:
   to `None` with no coordinator data yet, unique id is `<entry_id>_charger_status`, entity
   category is diagnostic — same four-test shape `AdapterReadingsSensor`'s own tests already use
   (`tests/test_sensor.py:391-420`), minus the attributes assertion this sensor doesn't have.
-- `test_all_sensor_object_id_suffixes_are_unique` (`tests/test_sensor.py:423`) — existing
-  integration checkpoint; must still pass once `OWNED_SUFFIX_CHARGER_STATUS` is added, with no
-  new task needed to cover it (it iterates whatever is registered).
+- `test_all_sensor_object_id_suffixes_are_unique` (`tests/test_sensor.py:423-440`) — existing
+  ADR-0013 collision guard, but its `sensor_classes` list is **hardcoded**, not introspective:
+  `ChargerStatusSensor` must be added to it explicitly, or the guard silently excludes the new
+  class.
+- `test_every_owned_entity_id_matches_entity_catalog` (`tests/test_init.py`) — the real
+  full-registration guard for this change: its `expected` dict is an exhaustive owned-entity
+  set enforced by a final `assert registered == expected_by_domain`, so the new sensor's
+  `entity_id` must be added there too, or a full `async_setup_entry` fails that assertion.
 - `tests/test_dashboard.py`: `test_charging_status_section_has_the_seven_documented_tiles`
   (`tests/test_dashboard.py:92-105`) — the entity in position 0 changes from the raw mapped
   entity (`"sensor.evse"`) to `"sensor.smart_charging_charger_status"`.
-- `tests/test_translations.py` — existing suite already asserts every `strings.json` key has a
-  matching translation; the new key is covered by that existing sweep, no new test.
+- `tests/test_translations.py` — the en/nl parity tests cover the new key automatically, but
+  `test_every_entity_translation_key_has_a_name`'s `sensor_keys` tuple
+  (`tests/test_translations.py:73-118`) is hardcoded too: `"charger_status"` must be added to it.
 
 **Integration checkpoint:** a full `async_setup_entry` run producing both the new sensor entity
 and a dashboard config whose "Charging status" section's first tile is that sensor's entity id —
-covered by the `test_dashboard.py` case above plus the existing `test_init.py` setup coverage; no
-new cross-cutting test needed for a change this narrow.
+`test_every_owned_entity_id_matches_entity_catalog`'s addition above already exercises the full
+setup half; `test_dashboard.py`'s case above exercises the tile-binding half. No new
+cross-cutting test needed for a change this narrow.
 
 ## Packaging
 
