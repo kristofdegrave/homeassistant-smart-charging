@@ -180,8 +180,9 @@ its thresholds belong to a mapping half. Point 3's *enumeration* is superseded; 
   `async_step_captar`, re-worded `captar` translation strings that must now read correctly in a
   reconfigure context as well as an install one and a translation-parity fixture updated to match,
   and the rewrite of every test that spells the enumeration out — two named after it, the
-  sixteen-combination reconfigure traversal matrix and the mapping-halves walk-through, plus an
-  install-side schema-equality test and one asserting the mapping fragment does not exist at all.
+  sixteen-combination reconfigure traversal matrix, the mapping-halves walk-through and an
+  install-side schema-equality test — plus a mapping-fragment roster that has to grow without any
+  test going red to say so.
   It also removes a property a reader could previously rely on — that a step's mapping-half status
   is fixed by its topic — since a step can now *acquire* a mapping half, meaning any future field
   addition has to re-ask the reconfigure question rather than assume the answer.
@@ -229,9 +230,9 @@ is chosen: the answer is a *gated* placement on the existing `captar` step rathe
 ungated step" or "a place reachable regardless of `CONF_CAPTAR_AVAILABLE`". The consequence
 ADR-0030 was guarding against — the role being unmappable for a non-CapTar install — is accepted
 deliberately, because R3's clamp does not run without the CapTar capability, so on such an install
-the role has no consumer and a mapping for it would be inert. UC12 6a is the analysis-side
-counterpart of this decision and describes the resulting user-visible behaviour; this ADR settles
-the structural half.
+the role has no consumer and a mapping for it would be inert. This ADR settles the structural half
+only; the resulting user-visible behaviour belongs in UC12, which owes a new alternate flow for it
+(6a) as part of the analysis work named in the Consequences.
 
 ## Consequences
 
@@ -282,10 +283,11 @@ the structural half.
   `*_MAPPING_SCHEMA` constants (`GRID_MAPPING_SCHEMA`, `SOLAR_MAPPING_SCHEMA`,
   `DEADLINE_MAPPING_SCHEMA`) while only threshold halves are `_x_threshold_schema(defaults)`
   functions, because only they take stored defaults. A mapping half carrying one optional entity
-  selector takes none, so this is `CAPTAR_MAPPING_SCHEMA`, a constant — which is also what keeps
-  the deleted-symbol assertion named in the test Consequence below honest rather than merely
-  reverted. Its unit contract and unavailable/unknown handling are ADR-0030's obligations and are
-  not re-decided here.
+  selector takes none, so this is `CAPTAR_MAPPING_SCHEMA`, a constant. That is also why the test
+  pinning the old symbol's absence needs no change: it asserts `_captar_mapping_schema` is gone,
+  and it stays gone. The new fragment is a different symbol under the convention that applies to
+  it, not a reversion. Its unit contract and unavailable/unknown handling are ADR-0030's
+  obligations and are not re-decided here.
 - **Withdrawing CapTar treats the mapping and the thresholds differently, and that needs no new
   rule.** The mapping is a data-bucket field and the step's six existing values — the four
   peak-protection thresholds, the `Power`-mode peak-protection switch, and the `Captar`-mode
@@ -298,7 +300,7 @@ the structural half.
   CapTar-dependent-rows note is where that asymmetry belongs — it covers only the options-bucket
   values today, and extending it is one of the analysis edits named below, on the model of the
   deadline note's existing carve-out for the external home-day mapping.
-- **At least six tests encode the superseded enumeration; all are rewritten, none deleted.** Two
+- **At least five tests encode the superseded enumeration; all are rewritten, none deleted.** Two
   assert it by name — `test_uc12_1a_reconfigure_never_shows_power_or_captar` and
   `test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` — in their names,
   docstrings and bodies. Two more encode it structurally in the *reconfigure* walk: the
@@ -306,22 +308,23 @@ the structural half.
   `test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves`, whose expected-step list
   never appends `STEP_CAPTAR` and so fails eight of its sixteen parametrisations, and
   `test_uc12_1a_reconfigure_shows_mapping_halves_only`, which walks every capability present and
-  asserts `vehicle` is followed directly by `solar`. Two more sit outside the reconfigure walk
-  entirely and are easy to miss for that reason:
+  asserts `vehicle` is followed directly by `solar`. One sits outside the reconfigure walk
+  entirely and is easy to miss for that reason:
   `test_uc12_captar_step_is_threshold_only_no_ev_soc` asserts on the **install** flow that the
   step's rendered keys equal the threshold schema's exactly, which fails as soon as the step
   renders a mapping field too — every other step extends its mapping half with its threshold half
-  on install — and takes the test's own name with it; and
-  `test_flat_flow_schema_surface_is_deleted` asserts the `captar` mapping fragment does **not**
-  exist as a module symbol, which the mapping-fragment Consequence above directly contradicts. The
-  reconfigure walk helper's docstring and the section-header comment above the `power`/`captar`
-  cases restate the enumeration as well. The count is stated as a floor, not a total: any test
-  asserting exact schema keys or an exact step sequence for `captar` is in scope, and the
-  enumeration here is the starting point for that sweep rather than a closed list. Of these, the
-  reconfigure matrix is the substantive one — it discharges the reconfigure third of ADR-0027's
-  "every capability combination traverses exactly the steps UC12 prescribes" obligation (install
-  and options have their own matrices) — and the deleted-symbol assertion is the one that fails
-  for a reason unrelated to traversal at all. The `power` half of what the named pair protects is
+  on install — and takes the test's own name with it. The reconfigure walk helper's docstring and
+  the section-header comment above the `power`/`captar` cases restate the enumeration as well.
+  The count is a floor, not a total, and the sweep it starts must look for two different failure
+  shapes. The loud one is an assertion that goes red: any test fixing `captar`'s exact schema keys
+  or an exact step sequence. The quiet one is a roster that must *grow* — `_ALL_MAPPING_FRAGMENTS`
+  enumerates every mapping half the flow has, and omitting the new constant there fails nothing at
+  all; the invariants driven off that roster simply stop covering the new field. Given that this
+  decision turns on a step *acquiring* a mapping half, a fixture that silently under-covers the
+  acquired one is the more dangerous of the two. Of these, the reconfigure matrix is the
+  substantive test — it discharges the reconfigure third of ADR-0027's "every capability
+  combination traverses exactly the steps UC12 prescribes" obligation (install and options have
+  their own matrices). The `power` half of what the named pair protects is
   still required — nothing here weakens it, and it is now the *only* coverage of the flow-mode
   half of point 3's rule, so losing it would leave that rule untested. Each of the two becomes a
   `power`-only test under a name that no longer claims `captar`; the matrix and the walk-through
@@ -338,9 +341,10 @@ the structural half.
   `translations/nl.json` need re-wording plus a label and description for the new field. The
   translation-parity fixture must move with them: it hard-codes the `captar` step's config-flow
   field set as the threshold schema's keys alone, so adding the label without updating that entry
-  fails parity — and its anti-vacuity guard, which exists to stop exactly this kind of silent
-  escape. The fixture's options-side entry for `captar` correctly stays threshold-only, which is
-  the same invariant as the options-flow Consequence above, seen from the fixture side.
+  fails the orphaned-field parity check. The fixture's own anti-vacuity guards are keyed on step
+  ids and are not implicated: this decision adds a field to an existing step, not a step. The
+  fixture's options-side entry for `captar` correctly stays threshold-only, which is the same
+  invariant as the options-flow Consequence above, seen from the fixture side.
 - **No config-entry migration and no `VERSION` bump.** The change adds one optional data-bucket
   key that entries created earlier will not have; ADR-0030's role is absent at the factory level
   when unmapped, which is exactly the state such an entry is already in. No existing key changes
@@ -350,8 +354,9 @@ the structural half.
   owns the table row, the fragment, the step method, the translations and the test rewrite named
   above. Two analysis edits are specifically owed because each currently asserts the superseded
   enumeration as present fact: UC12 states that `captar` and `power` are both absent from the
-  reconfigure flow, in its flow narrative, its diagram and its Postconditions, and must instead
-  describe `captar`'s mapping half (UC12 6a); and R18 AC5's list of fields the CapTar-gated step
+  reconfigure flow, in its flow narrative, its diagram note and its Requirements-satisfied section,
+  and must instead describe `captar`'s mapping half; and R18 AC5's list of fields the CapTar-gated
+  step
   presents is a closed enumeration that does not yet include this mapping. A third is owed for
   completeness rather than correction: `entity-catalog.md`'s CapTar-dependent-rows note must gain
   the data-bucket mapping beside the options-bucket values it already covers, and with it the
