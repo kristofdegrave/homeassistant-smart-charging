@@ -627,13 +627,14 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     await hass.async_block_till_done()
 
     registry = er.async_get(hass)
-    # (unique_id suffix, expected catalog entity_id) for all 58 owned entities.
+    # (unique_id suffix, expected catalog entity_id) for all 59 owned entities.
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
         "target_current": "number.smart_charging_target_current",  # no catalog row (design §2)
         "soc_limit_override": "number.smart_charging_soc_limit_override",
         "status": "sensor.smart_charging_status",
+        "charger_status": "sensor.smart_charging_charger_status",
         "active_mode": "sensor.smart_charging_active_mode",
         "monthly_peak_kw": "sensor.smart_charging_monthly_peak_kw",
         "effective_peak_limit": "sensor.smart_charging_effective_peak_limit",

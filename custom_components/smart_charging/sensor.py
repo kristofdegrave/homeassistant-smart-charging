@@ -1,5 +1,12 @@
 """Charging status sensor (Fault/OK, ADR-0007), active-mode diagnostic sensor, the
-peak-protection diagnostic sensors (C3), and the ADR-0031 config-mirror diagnostic sensors."""
+peak-protection diagnostic sensors (C3), the dedicated charger_status diagnostic sensor
+(ADR-0034), and the ADR-0031 config-mirror diagnostic sensors.
+
+`ChargingStatusSensor` (ADR-0007's Fault/OK health readout) and `ChargerStatusSensor`
+(ADR-0034's translated connected/charging/disconnected readout) are deliberately
+similarly-named but unrelated -- see each class's own docstring. `dashboard.py`'s
+`_charging_status_cards` names the dashboard *section*, not either sensor.
+"""
 
 from __future__ import annotations
 
@@ -50,9 +57,14 @@ from .const import (
     MODE_OFF,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_ADAPTER_READINGS,
+    OWNED_SUFFIX_CHARGER_STATUS,
     OWNED_SUFFIX_PEAK_HEADROOM_A,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     OWNED_SUFFIX_TIME_TO_FULL,
+    ROLE_CHARGER_STATUS,
+    STATE_CHARGING,
+    STATE_CONNECTED,
+    STATE_DISCONNECTED,
     STATUS_FAULT,
     STATUS_OK,
 )
@@ -288,6 +300,20 @@ class AdapterReadingsSensor(_CoordinatorPushMixin, SensorEntity):
         return dict(data.adapter_readings) if data is not None else {}
 
 
+class ChargerStatusSensor(_CoordinatorFieldSensor):
+    """Diagnostic: the canonical translated charger state from the same per-cycle reading
+    adapter_readings' charger_status attribute carries (ADR-0034)."""
+
+    _attr_translation_key = "charger_status"
+    _object_id_suffix = OWNED_SUFFIX_CHARGER_STATUS
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_CHARGING]
+
+    def _coordinator_value(self, data: Any) -> Any:
+        return data.adapter_readings.get(ROLE_CHARGER_STATUS)
+
+
 def _format_mirror_value(value: Any) -> Any:
     """bool -> STATE_ON/STATE_OFF (matches the "on"/"off" default entity-catalog.md already
     documents for these values); every other type passes through unchanged."""
@@ -500,6 +526,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             ChargingStatusSensor(entry.entry_id, coordinator),
+            ChargerStatusSensor(entry.entry_id, coordinator),
             ActiveModeSensor(entry.entry_id, coordinator),
             MonthlyPeakSensor(entry.entry_id, coordinator),
             EffectivePeakLimitSensor(entry.entry_id, coordinator),
