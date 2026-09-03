@@ -125,10 +125,10 @@ variants.
    which this step model gates on the CapTar capability, a deliberate change from the previous step
    model (5b). The peak-protection option sits here, not on the ungated `power` step, because it
    switches the very clamp those thresholds tune: gating the thresholds but not their on/off switch
-   would split one topic across two steps. The external monthly-peak mapping sits here for the same
-   reason: it feeds the same clamp's monthly-peak-demand operand, has no effect on it at all while
-   this capability is absent (R3 AC1), and is left unmapped by default — not every installation's
-   smart meter or capacity-tariff sensor exposes a peak reading the flow can map.
+   would split one topic across two steps. The external monthly-peak mapping sits here for a
+   parallel reason: it feeds the same clamp's monthly-peak-demand operand and has no effect on it
+   at all while this capability is absent (R3 AC1) — 6a gives the mapping's own rationale for why
+   it is left unmapped by default.
 7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
    presents the solar-production and solar-forecast mappings and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
@@ -277,6 +277,11 @@ in the first place. R3 itself is now gated the same way — it applies in every 
 capability is present and in none while it is absent — and the grid supply ceiling clamp (C4),
 which is what actually protects the grid connection on a non-CapTar installation, stays on the
 ungated `grid` step.
+The optional external monthly-peak mapping (6a) is gated the identical way but behaves differently
+on withdrawal: being a data-bucket field rather than one of the five options-bucket values above,
+it is dropped from the data bucket on reconfigure exactly as any other withdrawn capability's
+mapping fields are (1a), not left dormant to resume automatically — see 6a for the mapping's own
+withdraw/resume behaviour.
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.
@@ -299,15 +304,20 @@ owned home-day switch directly (UC11) instead. Nothing about how the flag behave
 from step 6.
 Given the CapTar capability is declared present
 When the System shows the `captar` step
-Then it presents, alongside the peak-protection thresholds, an optional external monthly-peak
-mapping — left unmapped by default, since not every installation's smart meter or
-capacity-tariff sensor exposes a peak reading the flow can map (R3). Because this is the step's
-first mapping-half field, `captar` gains a mapping half for the first time: unlike `power`, which
-remains threshold-only and therefore absent from the reconfigure flow (1a), `captar` now appears in
-the reconfigure flow too — showing only this one field, since none of its thresholds belong to a
-mapping half. Leaving the mapping unset on install, or clearing it on reconfigure, is equivalent:
-the role is simply unmapped, and R3 AC9 governs the effective peak limit's monthly-peak-demand
-operand exactly as if this field had never been offered at all.
+Then it presents, alongside the peak-protection thresholds, the optional external monthly-peak
+mapping [ADR-0030](../../adl/0030-external-monthly-peak-sensor.md) added — left unmapped by
+default, since not every installation's smart meter or capacity-tariff sensor exposes a peak
+reading the flow can map (R3). This is the step's only mapping-half field: unlike `power`, which
+remains threshold-only and is therefore absent from the reconfigure flow (1a), `captar`'s mapping
+half means it appears in the reconfigure flow too — showing only this one field, since none of its
+thresholds belong to a mapping half.
+[ADR-0033](../../adl/0033-captar-step-gains-a-mapping-half.md) settles this placement, narrowing
+ADR-0027 point 3's enumeration (`power` alone stays threshold-only) rather than its general per-step
+gating rule, and closes ADR-0030's own deferred placement question with a gated answer: this
+mapping is offered only while CapTar is declared present, never on an ungated step. Leaving the
+mapping unset on install, or clearing it on reconfigure, is equivalent: the role is simply
+unmapped, and R3 AC9 governs the effective peak limit's monthly-peak-demand operand exactly as if
+this field had never been offered at all.
 
 ## Exception flows
 
@@ -456,10 +466,12 @@ the Postconditions above record that this step model holds it.
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) —
 acceptance criteria that the solar, CapTar, deadline, and notifications capabilities are each
 user-configurable (AC1, AC4, AC6, AC9), that solar's own inputs are not required to be configured
-when it is absent (AC3), that the `Power`-mode peak-protection option, the four peak-protection
-thresholds, and the optional external monthly-peak mapping are presented on the CapTar-gated step 6
-and nowhere else, so a non-CapTar installation is never offered them (AC5, 5b, 6a), that the
-departure-time inputs and the plug-in reminder's lead time
+when it is absent (AC3), that the `Power`-mode peak-protection option and the four peak-protection
+thresholds are presented on the CapTar-gated step 6 and nowhere else, so a non-CapTar installation
+is never offered them (AC5, 5b); the optional external monthly-peak mapping is presented on that
+same step and nowhere else for the identical never-offered-without-CapTar reason, though R18 AC5
+does not itself name it — R20 AC3's general absent-capability rule and R3 AC1's vacuity clause are
+what require this placement (6a); that the departure-time inputs and the plug-in reminder's lead time
 are neither offered nor required when the deadline capability is absent, since step 8 is skipped
 whole (AC7, 5a), and that each notification's own [per-notification enable
 toggle](../system-overview.md#ubiquitous-language) is user-configurable (AC11, in the part that

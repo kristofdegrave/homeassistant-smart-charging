@@ -433,8 +433,9 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   hold or map to. Net import on such an installation is bounded only by the grid supply ceiling
   (C4) — typically a much higher ceiling than these thresholds would impose. They are also not
   presented: [UC12](use-cases/UC12-configure-installation-through-guided-flow.md) (5b, 6a) puts
-  all six on the flow's CapTar-gated step. The five threshold values are options-bucket fields
-  (ADR-0005): the entry keeps whichever value each already holds — the defaults on a fresh install,
+  all six on the flow's CapTar-gated step. The four thresholds and the peak-protection option are
+  options-bucket fields (ADR-0005): the entry keeps whichever value each already holds — the
+  defaults on a fresh install,
   or on reconfigure the value it last stored (UC12 1a leaves a withdrawn capability's stored
   options values untouched) — but they lie dormant until the capability is declared present again,
   at which point the clamp resumes on exactly those values. The `monthly_peak_external` mapping is
@@ -445,8 +446,9 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `sensor.smart_charging_effective_peak_limit` and `sensor.smart_charging_peak_headroom_a` — the
   latter derived from the same operands — still resolve and are still surfaced for observability,
   but no control decision consults either while the capability is absent, since the only step that
-  reads them is skipped. The five threshold values' own config-value mirror sensors (ADR-0031, see
-  Notes) keep showing whatever dormant value the entry holds, the same way the values themselves
+  reads them is skipped. The four thresholds' and the peak-protection option's own config-value
+  mirror sensors (ADR-0031, see Notes) keep showing whatever dormant value the entry holds, the
+  same way the values themselves
   stay stored but unused — the mirror is a passive readout, so its behaviour follows its source row
   without a separate rule; the mapping has no mirror sensor of its own (adapter roles never do,
   ADR-0031's scope).
