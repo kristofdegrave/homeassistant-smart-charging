@@ -34,7 +34,14 @@ strand for two checkable reasons rather than by preference:
 
 Slices touched, per `project-plan.md`: **RA2** (policy-input read adapters), **E5**
 (Billing-Protection Engine), **M1** (the Coordinator's per-cycle read), **C4** (the config/options
-flow). No slice's service definition is widened.
+flow). No slice's **service** is widened — no new service, no new call direction. RA2's role
+**enumeration** does grow, and that is stated rather than glossed: `project-plan.md` lists RA2's
+roles as a closed five (`solar_forecast`, `low_tariff`, `car_home`, `departure_external`,
+`home_day_external`) and its integration checkpoint counts "all thirteen non-vehicle-limit roles",
+so a fourteenth role extends both. `ROLE_SOLAR_POWER` set the precedent for treating that as a
+slice extension rather than a new slice. No test pins either number, so nothing breaks — but this
+document holds ADR-0027 to the distinction between an enumeration and the rule behind it, and owes
+`project-plan.md` the same.
 
 **Out of scope**, and named rather than left silent:
 
@@ -84,13 +91,15 @@ this build assumes, instead of merely referencing it.
 all; the existing roles that use it rest on a documented unit convention. ADR-0030 records that
 DSO/smart-meter peak sensors "commonly report in W", so that convention cannot be relied on here.
 A new `PowerKilowattReadAdapter` in the same module reads the state's own
-`unit_of_measurement` attribute and converts to kW via Home Assistant's
-`homeassistant.util.unit_conversion.PowerConverter`.
+`unit_of_measurement` attribute and converts to `UnitOfPower.KILO_WATT` via Home Assistant's
+`homeassistant.util.unit_conversion.PowerConverter` — the constant, not a `"kW"` literal.
 
 The important half of this decision is the fallback. When the state is missing, `unavailable`,
 `unknown` or non-numeric — or when the unit attribute is **absent or not a member of
-`PowerConverter.VALID_UNITS`** — the adapter returns `None`, which ADR-0007's optional-role
-semantics turn into "role absent" and R3 AC9 then governs. It deliberately does **not** fall back
+`PowerConverter.VALID_UNITS`** — the adapter returns `None`. That is not the same state as
+factory-level role absence (T1 pins the difference deliberately: an unmapped key leaves the role
+out of the dict entirely), but the two are **equivalent at the merge**, which is what matters here:
+`resolve_monthly_peak_operand` receives `None` either way, and R3 AC9 then governs. It deliberately does **not** fall back
 to assuming kW, because the two mistakes are not symmetric: a W reading misread as kW (4090 →
 4090 kW) drives the operand straight to `max_peak_kw`, which *widens* the clamp and removes the
 protection R3 exists to give, whereas the reverse mistake resolves to a tiny value the peak floor
@@ -125,8 +134,10 @@ call site already records for `ctx.effective_peak_limit_kw`.
 read: it returns `None` when the role is unwired and otherwise mirrors the value into
 `_role_readings`, which `_current_adapter_readings` filters into
 `sensor.smart_charging_adapter_readings`. The role is **not** added to
-`ROLES_ADAPTER_READINGS_EXCLUDED` — it is read by `_run_cycle` itself, unlike the two roles that
-are excluded — so ADR-0030's "surfaces by the existing default" holds structurally, with no
+`ROLES_ADAPTER_READINGS_EXCLUDED` (five members today) — it is read by `_run_cycle` itself, unlike
+the three roles excluded because another Manager rather than `_run_cycle` reads them
+(`ROLE_CAR_HOME`, `ROLE_VEHICLE_CHARGE_LIMIT`, `ROLE_HOME_DAY_EXTERNAL`) and the two excluded for
+being write-only — so ADR-0030's "surfaces by the existing default" holds structurally, with no
 sensor-side change at all.
 
 **D-5 — No CapTar capability gate on the merge, because the mapping cannot outlive the
@@ -142,9 +153,11 @@ ADR-0032 leaves this open. The sensor documents "the integration's own tracked p
 still exactly what `CycleResult.monthly_peak_kw` carries after this change — the merge happens
 downstream of it, in a separate local. A rename would break a `RestoreSensor` whose stored state
 seeds the tracker across restarts, for a naming nicety. A second entity is unwarranted because the
-merged value is already observable twice over: `sensor.smart_charging_effective_peak_limit` shows
-the resolved value that actually drives the clamp, and the external operand's raw reading shows on
-the adapter-readings sensor (D-4). What remains is a documentation obligation, and
+merged value is already observable three times over: `sensor.smart_charging_effective_peak_limit`
+shows the resolved value that actually drives the clamp, `sensor.smart_charging_peak_headroom_a` is
+derived from that same operand and so tracks it automatically (`coordinator.py` ~639), and the
+external operand's raw reading shows on the adapter-readings sensor (D-4). What remains is a
+documentation obligation, and
 `entity-catalog.md` already discharges it — its `effective_peak_limit` row states the merged
 formula in full.
 
@@ -241,8 +254,13 @@ return await self._async_advance(after=STEP_CAPTAR)
 ```
 
 Its docstring today asserts the step "needs neither `self._mode` branching nor `_maybe_prefill` in
-its own body" and must be rewritten with it. Two further docstrings go stale at the same moment
-without their logic changing, and ADR-0033 names both: `_async_finish`'s, which reasons that
+its own body" and must be rewritten with it. A fourth docstring goes stale one task earlier, the
+moment the fragment itself lands: `_captar_threshold_schema`'s (~454-456) opens "UC12 (topic-step)
+step 6 threshold half -- CapTar has no mapping half at all". ADR-0033 names three and warns the
+count is a floor, not a total; this is the one the floor misses, and it is also the one a
+`power`-and-`captar` prose sweep cannot find, since it names `captar` alone. Two further docstrings
+go stale at the same moment as `async_step_captar`'s without their logic changing, and ADR-0033
+names both: `_async_finish`'s, which reasons that
 "neither `power` nor `captar` is reachable in this mode, so no threshold answer ever entered
 `self._answers`" — the terminal split is bucket-driven, so the code stays correct while that
 reasoning does not (`captar` is now reachable, but contributes no `OPTION_KEYS` member in
@@ -276,12 +294,11 @@ ADR-0033 warns that the dangerous failure here is not a red assertion but a rost
 *grow*. There are two, in two different files:
 
 - `tests/test_config_flow.py::_ALL_MAPPING_FRAGMENTS` (~line 2132) — a seven-tuple today, because
-  `power` and `captar` have no mapping half. Five invariants walk it
-  (`test_r20_ac4_no_field_belongs_to_two_fragments`,
-  `test_adr0005_no_option_key_appears_in_a_mapping_fragment`,
-  `test_adr0005_every_option_key_appears_in_exactly_one_threshold_fragment`,
-  `test_uc12_1b_control_interval_is_only_in_the_core_threshold_fragment_when_requested`, and —
-  the one that matters most here —
+  `power` and `captar` have no mapping half. Four invariants walk it
+  (`test_r20_ac4_no_field_belongs_to_two_fragments` ~2154,
+  `test_adr0005_no_option_key_appears_in_a_mapping_fragment` ~2175,
+  `test_uc12_1b_control_interval_is_only_in_the_core_threshold_fragment_when_requested` ~2182,
+  and — the one that matters most here, ~1718 —
   `test_uc12_1b_options_never_presents_a_mapping_or_a_capability_declaration`, which derives the
   set of forbidden options-flow fields from this very roster). Omitting `CAPTAR_MAPPING_SCHEMA`
   fails nothing at all; the invariants simply stop covering the new field. Adding it, conversely,
@@ -308,13 +325,14 @@ leave that rule untested.
 | --- | --- | --- |
 | `test_uc12_1a_reconfigure_never_shows_power_or_captar` (~1083) | asserts both absent from the reconfigure walk with CapTar present | `power`-only, renamed; a second test asserts `captar` **is** visited on that same walk |
 | `test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure` (~2401) | both gates evaluate `False` in reconfigure | `power`-only, renamed; plus an assertion that `STEP_CAPTAR`'s gate is now mode-independent — `True` in both modes when CapTar is on, `False` in both when off |
-| `test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves` (~1425, 16 parametrisations) | expected sequence never appends `STEP_CAPTAR`; fails 8 of 16 | appends `STEP_CAPTAR` after `STEP_VEHICLE` whenever `captar` is true, before `STEP_SOLAR` |
+| `test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves` (~1426, 16 parametrisations decorated at ~1425) | expected sequence never appends `STEP_CAPTAR`; fails 8 of 16 | appends `STEP_CAPTAR` after `STEP_VEHICLE` whenever `captar` is true, before `STEP_SOLAR` |
 | `test_uc12_1a_reconfigure_shows_mapping_halves_only` (~1107) | asserts `vehicle` is followed directly by `solar` | inserts the `captar` step, asserting its rendered keys equal `_keys(CAPTAR_MAPPING_SCHEMA)` exactly |
 | `test_uc12_captar_step_is_threshold_only_no_ev_soc` (~903) | **install**-side; asserts rendered keys equal the threshold schema's exactly | renamed off "threshold_only"; asserts the keys equal mapping ∪ threshold, and keeps its `CONF_EV_SOC_ENTITY not in` assertion, which is still true and still worth pinning |
 
-Two comments restate the enumeration in prose and move with them: the reconfigure walk helper's
-docstring, and the section header above the `power`/`captar` cases (~line 888, "The
-`power`/`captar` steps: threshold-only, gated off in reconfigure").
+Two comments restate the enumeration in prose and move with them: `_run_reconfigure_flow`'s
+docstring (`tests/test_config_flow.py` ~262-266), and the section header above the
+`power`/`captar` cases (~line 888, "The `power`/`captar` steps: threshold-only, gated off in
+reconfigure").
 
 ## Mapping to `system-design.md` services
 
@@ -342,6 +360,11 @@ Mandated edge cases, each owed an explicit assertion: role unmapped; mapped but 
 mapped but `unknown`; mapped with a non-numeric state; mapped with **no** unit attribute; mapped
 with a non-power unit; mapped in W; mapped in kW; external below internal (internal wins); external
 above internal (external wins); external above `max_peak_kw` (the existing `min()` still bounds it);
+external above internal but below `peak_floor_kw` (the floor still wins — the other half of
+`resolution-rules.md` row 2's nesting, and the symmetric case to the `max_peak_kw` one above);
+CapTar declared absent with the mapping still stored (the merge is unguarded by design, so D-5 is
+pinned rather than left as an invitation to add a `captar_available` guard nothing would object to);
+the tracked peak surviving a cycle after the external reading disappears (D-6's no-overwrite half);
 mapping cleared on reconfigure; CapTar withdrawn on reconfigure.
 
 ## Packaging and migration

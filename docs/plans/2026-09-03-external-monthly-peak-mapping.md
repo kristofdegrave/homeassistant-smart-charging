@@ -14,8 +14,9 @@ T4, and the gate/step pair split across T5–T6.
 
 ## T1 — Const keys, the unit-normalising adapter, and the factory branch
 
-Test boundary: **HA harness** (`tests/test_adapters.py`, `tests/test_factory.py` — follow whichever
-files already cover `ROLE_HOME_DAY_EXTERNAL`).
+Test boundary: **HA harness** (`tests/adapters/test_numeric.py` for the adapter, beside
+`NumericReadAdapter`'s own cases; `tests/adapters/test_factory.py` for the factory branch, beside
+`ROLE_HOME_DAY_EXTERNAL`'s).
 
 - Failing test — the adapter (parametrised over one state per case): a
   `PowerKilowattReadAdapter` over a `sensor` entity returns `4.09` for state `"4090"` with
@@ -38,7 +39,8 @@ files already cover `ROLE_HOME_DAY_EXTERNAL`).
   in the roles block — the id `entity-catalog.md` already uses.
 - Add `PowerKilowattReadAdapter(_ReadOnlyAdapter)` to `adapters/numeric.py`, converting via
   `homeassistant.util.unit_conversion.PowerConverter` and guarding on
-  `PowerConverter.VALID_UNITS`.
+  `PowerConverter.VALID_UNITS`. The conversion target is `UnitOfPower.KILO_WATT` from
+  `homeassistant.const`, never a `"kW"` literal (no-magic-strings).
 - Add the factory branch in `adapters/factory.py`, using the truthiness-`.get` idiom
   `ROLE_HOME_DAY_EXTERNAL`/`ROLE_LOW_TARIFF` already use.
 - Green, commit: `feat: add the external monthly-peak adapter role (ADR-0030, #922)`.
@@ -53,13 +55,18 @@ Test boundary: **plain pytest** (`tests/engines/test_billing_protection.py`).
   `(2.0, 0.0) == 2.0` (a genuine `0.0` reading is a value, not a stand-in for "absent" — the
   distinction `None` carries, and the one case where a truthiness test instead of an `is None`
   test would be wrong).
-- Failing test: an external reading above `max_peak_kw`, run through
-  `resolve_monthly_peak_operand` and then `resolve_effective_peak_limit`, still resolves to
-  `max_peak_kw` — the existing `min()` step is untouched and still bounds the result
-  (`resolution-rules.md` row 2).
+- Failing test — **both ends of the existing nesting**, since `resolve_effective_peak_limit` is
+  `min(max(operand, peak_floor_kw), max_peak_kw)` and the merge only changes the operand: an
+  external reading above `max_peak_kw`, run through `resolve_monthly_peak_operand` and then
+  `resolve_effective_peak_limit`, still resolves to `max_peak_kw`; and an external reading that
+  beats the internal value but still sits below `peak_floor_kw` resolves to the floor. Both halves
+  of `resolution-rules.md` row 2's nesting stay intact — the merge raises the operand, it does not
+  escape the clamp at either end.
 - Add `resolve_monthly_peak_operand(internal_kw: float, external_kw: float | None) -> float` to
   `engines/billing_protection.py` (D-2). Do **not** change `resolve_effective_peak_limit`'s
-  signature, docstring or existing tests. The module keeps its no-HA-imports property (ADR-0010).
+  signature, docstring or existing tests. The module keeps its no-HA-imports property (ADR-0010),
+  and that is already enforced rather than merely intended: `tests/test_engine_purity.py` covers
+  the new function for free the moment it lands in this module.
 - Green, commit: `feat: add the monthly-peak operand merge rule (ADR-0032, #922)`.
 
 ## T3 — The coordinator reads the role and merges once per cycle
@@ -69,12 +76,26 @@ Test boundary: **HA harness** (`tests/test_coordinator.py`).
 - Failing test: with the role mapped and reporting a value **above** the tracked peak, one cycle's
   `CycleResult.effective_peak_limit_kw` resolves from the external reading; with it mapped
   **below**, from the tracked one; with it unmapped, exactly as today (the pinned no-op case).
-- Failing test: `CycleResult.monthly_peak_kw` still carries the **internally-tracked** value even
-  when the external reading is higher (D-6 — the sensor's documented meaning is unchanged, and
-  this is the assertion that stops a later refactor from quietly repointing it at the merged
-  value).
+- Failing test — **two cycles, not one**: `CycleResult.monthly_peak_kw` still carries the
+  **internally-tracked** value even when the external reading is higher (D-6 — the sensor's
+  documented meaning is unchanged), and it is *still* the tracked value on a second cycle from
+  which the external reading has gone. The second cycle is the load-bearing half.
+  `resolution-rules.md` row 2's note claims two things — the merge is recomputed fresh each cycle,
+  **and** it "never overwrites the internally-tracked monthly peak demand, so a live spike this
+  integration observes between external-sensor refreshes is not discarded". A single-cycle
+  assertion only reaches the first. Because `monthly_peak_kw` is produced by
+  `self._peak_demand.update(...)` *before* the merge, a refactor that wrote the merged value back
+  into the tracker — `seed_monthly_peak` / `PeakDemandState.seed()` is a real, reachable boundary
+  (`coordinator.py` ~1001-1007) — would pass a one-cycle test and only surface on the next cycle,
+  by which time the contaminated value is indistinguishable from a genuine spike.
 - Failing test: the mapped role's raw reading appears in `CycleResult.adapter_readings` under
   `monthly_peak_external` (D-4, via `_read_role`'s own cache write).
+- Failing test — **D-5, pinned rather than assumed**: with the role mapped and reading high but
+  `captar_available` **off**, the merge still runs unguarded and the cycle behaves exactly as the
+  CapTar-absent path does today (R3's clamp does not apply there, so the merged operand is inert).
+  Without this, nothing objects to a later contributor adding a `captar_available` guard to the
+  merge — a second, redundant expression of what the buckets already enforce, and the one place
+  D-5's reasoning could be silently undone.
 - Failing test — both call sites, not just the final one: on a cycle that takes the `ev_soc`-fault
   early return (the path fed by the provisional `resolve_effective_peak_limit(urgent=False)` call
   at ~line 422), the resolved limit also reflects the external reading. This is the specific
@@ -110,9 +131,16 @@ orphaned-label check, and updating the roster without the label trips the missin
   `CONF_EV_SOC_ENTITY not in` assertion unchanged — still true, still worth pinning.
 - Add `CAPTAR_MAPPING_SCHEMA` to `config_flow.py` (D's "schema fragment" section) and extend it
   with the threshold half in `async_step_captar` for the install render.
+- Rewrite `_captar_threshold_schema`'s own docstring (`config_flow.py` ~454-456). It reads "UC12
+  (topic-step) step 6 threshold half -- **CapTar has no mapping half at all** (design
+  field-to-step table)", and this task is the moment that becomes false. It is the fourth stale
+  docstring, and the one ADR-0033's "a floor, not a total" caveat catches: unlike the three T5
+  rewrites, it names `captar` **alone**, so T8's `power`-paired-with-`captar` sweep would miss it.
+  It should say the step now carries a mapping half of its own, while keeping its still-true point
+  that `ev_soc_entity` lives on the always-shown `vehicle` step (R20 AC4's once-only rule).
 - Add `CAPTAR_MAPPING_SCHEMA` to `tests/test_config_flow.py::_ALL_MAPPING_FRAGMENTS` (~2132),
   between `VEHICLE_MAPPING_SCHEMA` and `SOLAR_MAPPING_SCHEMA` to keep table order. This is the
-  silent under-coverage ADR-0033 warns about: omitting it fails nothing, it just stops five
+  silent under-coverage ADR-0033 warns about: omitting it fails nothing, it just stops four
   invariants from covering the new field — including
   `test_uc12_1b_options_never_presents_a_mapping_or_a_capability_declaration` (~1718), which
   derives its forbidden-field set from this roster and so extends the options-flow guarantee to
@@ -186,8 +214,9 @@ existing one already is); **HA harness** for every traversal test.
   a mapping half, and cite ADR-0033 beside ADR-0027. ADR-0033 makes this pointer part of the work,
   not a tidy — it is one of only two paths by which a reader reaches point 3 without seeing the
   narrowing.
-- Reword the two prose restatements that move with the tests: the reconfigure-walk helper's
-  docstring, and the section header above the `power`/`captar` cases (~888, "The `power`/`captar`
+- Reword the two prose restatements that move with the tests: `_run_reconfigure_flow`'s docstring
+  (`tests/test_config_flow.py` ~262-266, "`power`/`captar` are gated off entirely in this mode
+  (UC12 1a)"), and the section header above the `power`/`captar` cases (~888, "The `power`/`captar`
   steps: threshold-only, gated off in reconfigure").
 - Green, commit: `feat: show the captar step in the reconfigure flow (ADR-0033, #922)`.
 
@@ -228,8 +257,12 @@ licence to weaken the test.
   `sensor.smart_charging_adapter_readings` carries `monthly_peak_external` and
   `sensor.smart_charging_effective_peak_limit` reflects the merged operand; reconfigure, confirm
   the `captar` step appears showing that field alone, prefilled.
-- Grep for stale prose one last time: no comment or docstring under `custom_components/` or
-  `tests/` should still pair `power` with `captar` as the threshold-only steps.
+- Grep for stale prose one last time, on **two** patterns, because the two failure shapes differ:
+  no comment or docstring under `custom_components/` or `tests/` should still pair `power` with
+  `captar` as the threshold-only steps, **and** none should still say `captar` has "no mapping
+  half" / is "threshold-only" on its own. The second pattern is the one that catches a `captar`-only
+  restatement like `_captar_threshold_schema`'s; ADR-0033 warns the enumerated count is a floor,
+  not a total, so this sweep is the backstop rather than a formality.
 - This closes #922's build tasks and, with them, epic #873.
 
 ## Follow-up (not this plan)
