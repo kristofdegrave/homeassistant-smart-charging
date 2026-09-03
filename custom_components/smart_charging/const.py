@@ -123,6 +123,11 @@ ROLE_CHARGER_STATUS = "charger_status"
 ROLE_NET_POWER = "net_power"
 ROLE_CHARGER_POWER = "charger_power"
 ROLE_GRID_VOLTAGE = "grid_voltage"
+# RA1 extension: raw solar-production reading, optional at the factory level (NF3), plain
+# numeric passthrough like grid_voltage/ev_soc -- issue #911 wires this role for reading only.
+# R10 AC1's sampling/averaging for solar_power stays deferred pending #587's real-consumer
+# decision; this role is NOT yet smoothed and is NOT an operand of solar surplus.
+ROLE_SOLAR_POWER = "solar_power"
 # RA1 extension (R15): sensed EV battery capacity, optional at the factory level.
 ROLE_EV_BATTERY_CAPACITY = "ev_battery_capacity"
 # RA2 (R14): external departure-deadline override, optional at the factory level.
@@ -202,8 +207,8 @@ CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 # required only when CONF_SOLAR_AVAILABLE (R9 needs it) -- design doc §3
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
 # optional, new key (topic-step config-flow design D-1/D-2) -- catalog *`Solar` mode*, the
-# solar_power adapter role (R10 smoothing, NF3 optional-role); UC12 step 7. Role construction
-# deferred to RA1 (design Deferrals).
+# solar_power adapter role (NF3 optional-role); UC12 step 7. Wired for reading only (issue
+# #911); R10 AC1's sampling/averaging for this role stays deferred pending #587.
 CONF_SOLAR_POWER_ENTITY = "solar_power_entity"
 # optional at the factory level (NF3) -- Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"

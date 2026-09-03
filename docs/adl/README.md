@@ -40,5 +40,6 @@ template.
 | [0031](0031-config-values-as-disabled-by-default-diagnostic-sensors.md) | Config-entry values also exposed as disabled-by-default diagnostic sensors | Accepted |
 | [0032](0032-external-monthly-peak-precedence.md) | External monthly-peak sensor — precedence semantics | Accepted |
 | [0033](0033-captar-step-gains-a-mapping-half.md) | External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half | Accepted |
+| [0034](0034-dedicated-charger-status-diagnostic-sensor.md) | Dedicated diagnostic sensor for the `charger_status` role (extends ADR-0021) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
