@@ -14,6 +14,9 @@ also covering commit message conventions).
    **Issue conventions** below). Board **Status** defaults to `Backlog`.
 1. **Do the work in an isolated `git worktree`, always.** No exceptions, even a one-line fix —
    removes the shared-checkout risk of a concurrent session switching branches underneath you.
+   Create the worktree from an up-to-date `main` — `git fetch origin && git worktree add
+   <path> -b <branch> origin/main` (not a stale local `main`) — so the new branch starts from
+   the latest merged work rather than whatever `main` happened to be at the last fetch.
    Branch name: `<context-label>/<issue-number>` (see **Issue conventions** below for the
    full scheme, including the multi-PR suffix). As soon as you actually start
    writing/developing (not at issue-filing time), move the issue's board **Status** to
