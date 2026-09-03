@@ -278,10 +278,10 @@ in the first place. R3 itself is now gated the same way — it applies in every 
 capability is present and in none while it is absent — and the grid supply ceiling clamp (C4),
 which is what actually protects the grid connection on a non-CapTar installation, stays on the
 ungated `grid` step.
-The optional external monthly-peak mapping (6a) is gated the identical way — R18 AC5 names it
-alongside those five values — but does not behave like
-the five values above on withdrawal — `entity-catalog.md`'s Captar-dependent-rows note owns that
-asymmetry (data-bucket field, dropped rather than left dormant).
+The optional external monthly-peak mapping (6a) is gated the identical way, R18 AC5 naming it
+alongside those five values, but it does not behave like them on withdrawal:
+`entity-catalog.md`'s Captar-dependent-rows note owns that asymmetry (data-bucket field, dropped
+rather than left dormant).
 
 **5c — The external home-day mapping is presented on the deadline-gated step** — branches from
 step 5, the point at which 5a decides whether step 8 is shown at all.
