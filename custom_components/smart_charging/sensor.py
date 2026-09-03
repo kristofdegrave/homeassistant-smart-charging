@@ -1,5 +1,12 @@
 """Charging status sensor (Fault/OK, ADR-0007), active-mode diagnostic sensor, the
-peak-protection diagnostic sensors (C3), and the ADR-0031 config-mirror diagnostic sensors."""
+peak-protection diagnostic sensors (C3), the dedicated charger_status diagnostic sensor
+(ADR-0034), and the ADR-0031 config-mirror diagnostic sensors.
+
+`ChargingStatusSensor` (ADR-0007's Fault/OK health readout) and `ChargerStatusSensor`
+(ADR-0034's translated connected/charging/disconnected readout) are deliberately
+similarly-named but unrelated -- see each class's own docstring. `dashboard.py`'s
+`_charging_status_cards` names the dashboard *section*, not either sensor.
+"""
 
 from __future__ import annotations
 

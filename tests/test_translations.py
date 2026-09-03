@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from custom_components.smart_charging import number, select, sensor, switch
 from custom_components.smart_charging import time as time_platform
@@ -117,6 +118,14 @@ def test_every_entity_translation_key_has_a_name():
     )
     for key in sensor_keys:
         assert key in entity["sensor"]
+
+    # sensor.py: charger_status is an ENUM device_class -- its translated state values must
+    # match its `options` exactly, or a dropped/renamed state key silently falls back to the
+    # raw untranslated value in the UI (ADR-0034's entire reason for choosing ENUM).
+    charger_status_sensor = sensor.ChargerStatusSensor(
+        entry_id="abc", coordinator=SimpleNamespace(data=None)
+    )
+    assert set(entity["sensor"]["charger_status"]["state"]) == set(charger_status_sensor.options)
 
     # switch.py
     assert "home_day" in entity["switch"]
