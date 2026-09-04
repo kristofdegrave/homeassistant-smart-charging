@@ -31,10 +31,15 @@ Always read:
 - `CLAUDE.md`'s "Authoring AI artifacts" section.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
+- If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
+  (`.claude/agents/`): `docs/reference/ci-pipeline.md` for each job's stated scope
+  (draft/review/fix are one task each) and the `needs-*` label contract.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.github/setup-labels.sh` and
   `docs/reference/contribution-workflow.md`'s **Issue conventions** section, to check the
-  form's `labels:` value against the canonical vocabulary; and, for `adr.yml`, `CLAUDE.md`'s
-  **Architecture Decision Records** section, since the form points at it.
+  form's `labels:` value against the canonical vocabulary; `docs/reference/ci-pipeline.md`'s
+  **Label vocabulary sync** section, to check the CI-side files stay in sync; and, for
+  `adr.yml`, `CLAUDE.md`'s **Architecture Decision Records** section, since the form points at
+  it.
 
 ## Review checklist
 
@@ -71,15 +76,12 @@ Always read:
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The context-label vocabulary is inherently listed in four places, matching the canonical list
-  in `docs/reference/contribution-workflow.md`'s **Issue conventions** section: `ai-pipeline.yml`'s
-  header comment; `_ai-draft.yml`'s `context_labels` variable, its "No context label found"
-  reason string, and its `case` block; and `.github/setup-labels.sh`'s label definitions. A
-  change to one that doesn't update the rest is a Major finding (silent drift in the vocabulary
-  the whole label-driven pipeline trusts). Three of those labels additionally have an issue
-  form whose `.github/ISSUE_TEMPLATE/*.yml` `labels:` key stamps it (`adr.yml` → `adr`,
-  `requirement.yml` → `requirement`, `use-case.yml` → `uc`) — adding a label doesn't require a
-  new form, but renaming one does require updating any form that stamps it.
+- The context-label vocabulary's values are canonical in
+  `docs/reference/contribution-workflow.md`'s **Issue conventions**; the CI-side sync
+  obligation — every pipeline place that vocabulary is baked into and must move together — is
+  documented in `docs/reference/ci-pipeline.md`'s **Label vocabulary sync** section. A change
+  to one place that doesn't update the rest is a Major finding (silent drift in the vocabulary
+  the whole label-driven pipeline trusts).
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.github/setup-labels.sh` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a
@@ -92,6 +94,11 @@ Always read:
   (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
   behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
   is a Major finding.
+- If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
+  interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
+  itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive
+  session does review/fix locally instead. Flag as Major (silently hands work to CI the human
+  didn't ask for, and can collide with CI's own loop-cap accounting).
 
 **(5) Non-negotiables unaffected**
 - Write and review still happen in separate sessions/agents (a skill or workflow must never
