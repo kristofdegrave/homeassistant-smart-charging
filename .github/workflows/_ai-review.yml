@@ -341,7 +341,7 @@ jobs:
             If any changed file is under `docs/plans/`, apply the full review checklist in
             .claude/agents/impl-spec-reviewer.md for those files.
             If any changed file is under `.github/workflows/`, `.claude/skills/`,
-            `.claude/agents/`, `docs/reference/`, `.github/ISSUE_TEMPLATE/`, or is
+            `.claude/agents/`, `.github/ISSUE_TEMPLATE/`, or `docs/reference/`, or is
             `.github/setup-labels.sh` or `CLAUDE.md`, apply the full review checklist in
             .claude/agents/workflow-reviewer.md for those files.
             If any changed file is under `custom_components/`, apply the full review checklist

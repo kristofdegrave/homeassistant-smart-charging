@@ -70,12 +70,14 @@ Always read:
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The context-label vocabulary is inherently listed in four places, matching the canonical list
+- The context-label vocabulary is inherently listed in five places, matching the canonical list
   in `CLAUDE.md`'s **Issue conventions** section: `ai-pipeline.yml`'s header comment;
   `_ai-draft.yml`'s `context_labels` variable, its "No context label found" reason string, and
-  its `case` block; and `.github/setup-labels.sh`'s label definitions. A change to one that
-  doesn't update the rest is a Major finding (silent drift in the vocabulary the whole
-  label-driven pipeline trusts).
+  its `case` block; `.github/setup-labels.sh`'s label definitions; and each
+  `.github/ISSUE_TEMPLATE/*.yml`'s `labels:` key (`adr.yml` → `adr`, `requirement.yml` →
+  `requirement`, `use-case.yml` → `uc`), which stamps that label on every issue filed through
+  the form. A change to one that doesn't update the rest is a Major finding (silent drift in
+  the vocabulary the whole label-driven pipeline trusts).
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is one
   of the canonical context labels above (a form advertising a label that doesn't exist yet is a
   Major finding); any process claim the form's body makes (e.g. `adr.yml` pointing at CLAUDE.md's
