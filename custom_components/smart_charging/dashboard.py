@@ -25,7 +25,6 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_CHARGER_CURRENT_ENTITY,
-    CONF_CHARGER_STATUS_ENTITY,
     CONF_EV_SOC_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_SOLAR_AVAILABLE,
@@ -36,6 +35,7 @@ from .const import (
     DEFAULT_SOLAR_AVAILABLE,
     LABEL_SC_RUNTIME,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
+    OWNED_SUFFIX_CHARGER_STATUS,
     OWNED_SUFFIX_MODE,
     OWNED_SUFFIX_PEAK_HEADROOM_A,
     OWNED_SUFFIX_PROFILE,
@@ -54,6 +54,7 @@ _TIME_DOMAIN = "time"
 # them as bare literals) -- consistent with that existing precedent, not a new deviation.
 _ACTIVE_SOC_LIMIT_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_ACTIVE_SOC_LIMIT}"
 _ACTIVE_MODE_ENTITY = "sensor.smart_charging_active_mode"
+_CHARGER_STATUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_CHARGER_STATUS}"
 _EFFECTIVE_PEAK_LIMIT_ENTITY = "sensor.smart_charging_effective_peak_limit"
 _MODE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_MODE}"
 _PEAK_HEADROOM_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_PEAK_HEADROOM_A}"
@@ -67,7 +68,7 @@ def _tile(entity_id: str) -> dict:
 
 
 def _charging_status_cards(entry: ConfigEntry) -> list[dict]:
-    cards = [_tile(entry.data[CONF_CHARGER_STATUS_ENTITY])]
+    cards = [_tile(_CHARGER_STATUS_ENTITY)]
     ev_soc_entity = entry.data.get(CONF_EV_SOC_ENTITY)
     if ev_soc_entity:
         cards.append(_tile(ev_soc_entity))

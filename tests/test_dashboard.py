@@ -94,7 +94,7 @@ def test_charging_status_section_has_the_seven_documented_tiles():
     cards = _cards(build_dashboard_config(entry), "Charging status")
 
     assert [c["entity"] for c in cards] == [
-        "sensor.evse",  # CONF_CHARGER_STATUS_ENTITY, entry_data_base's mapped value
+        "sensor.smart_charging_charger_status",
         "sensor.ev_soc",
         "select.smart_charging_profile",
         "sensor.smart_charging_active_mode",
