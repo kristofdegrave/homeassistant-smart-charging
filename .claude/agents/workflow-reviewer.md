@@ -78,14 +78,10 @@ Always read:
   linked from one is a Minor finding (Major if the duplicate has already drifted).
 - The context-label vocabulary's values are canonical in
   `docs/reference/contribution-workflow.md`'s **Issue conventions**; the CI-side sync
-  obligation — the same vocabulary baked into `ai-pipeline.yml`'s header comment,
-  `_ai-draft.yml`'s `context_labels` variable/case block, `.github/setup-labels.sh`'s label
-  definitions, and each label-bearing form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
-  (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`) — is documented
-  in `docs/reference/ci-pipeline.md`'s **Label vocabulary sync** section. A change to one that
-  doesn't update the rest is a Major finding (silent drift in the vocabulary the whole
-  label-driven pipeline trusts); adding a label doesn't require a new form, but renaming one
-  does require updating any form that stamps it.
+  obligation — every pipeline place that vocabulary is baked into and must move together — is
+  documented in `docs/reference/ci-pipeline.md`'s **Label vocabulary sync** section. A change
+  to one place that doesn't update the rest is a Major finding (silent drift in the vocabulary
+  the whole label-driven pipeline trusts).
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.github/setup-labels.sh` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a

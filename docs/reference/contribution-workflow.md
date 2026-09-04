@@ -61,12 +61,11 @@ also covering commit message conventions).
    (`git ls-tree origin/main <path>`), then remove the task's worktree
    (`git worktree remove <path>`) right away if clean — don't wait for a bulk sweep.
 
-**A merged `specs` issue produces task issues, not code.** Its approved plan
-(`docs/plans/<slice>.md`) doesn't implement itself — file one `development`/`testing` task
-issue per task in the plan's build order (`file-task-issue`, each with the anchored `Plan:`
-line from **Issue conventions** below) so the work actually gets picked up. Append them to the
-epic's checklist if this spec belongs to one — see
-[idea-to-issues.md](idea-to-issues.md) step 4.
+**A merged `specs` issue produces task issues, not code.** Its approved plan doesn't implement
+itself — file the `development`/`testing` task issues per [idea-to-issues.md](idea-to-issues.md)
+step 4 (one per task, each with the anchored `Plan:` line) so the work actually gets picked
+up. Filing them is part of finishing the spec issue; implementing them is separate work that
+still waits for the check-in below.
 
 **Stop and report, interactive session only.** After each artifact/task is committed (step 1
 onward), report status and wait for the human partner before starting the next one — this is a
@@ -109,9 +108,9 @@ separate bot account for the interactive session.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`, `specs`
   (implementation spec: design + TDD plan, `docs/plans/**`), `development`/`testing`
   (implementation tasks against an approved plan), `workflow` (CI/skill/agent-authoring
-  changes), `documentation` (design-doc changes, `docs/design/**` — review only). Adding or
-  renaming a label: see [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must
-  stay in sync.
+  changes), `documentation` (design-doc changes, `docs/design/**` — reviewed, but not yet
+  wired into automated drafting). Adding or renaming a label: see
+  [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must stay in sync.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
@@ -123,8 +122,7 @@ separate bot account for the interactive session.
 - **Task issues** (`development`/`testing` label) filed against an approved
   `docs/plans/<slice>.md` TDD plan must include an exact, anchored `Plan:` line identifying the
   plan file and task id (nothing else on that line) — see [ci-pipeline.md](ci-pipeline.md) for
-  the required format and why it must be anchored. Get it right at filing time; retrofitting
-  after a failed draft run wastes a cycle.
+  the required format and why it must be anchored. Get it right at filing time.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `specs`, `development`, `testing`, `workflow`, `documentation`),

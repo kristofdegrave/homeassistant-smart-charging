@@ -73,8 +73,9 @@ docs/adl/
 
 Every unit of work — a doc, an ADR, a design, or code — follows one universal lifecycle:
 issue → isolated worktree → PR against `main` → review → fix/reply/resolve → loop (capped at
-3 rounds) → `needs-approval` → manual merge → worktree cleanup. Two actors run this lifecycle,
-each with its own reference doc — read whichever matches who's acting:
+3 rounds interactively, 2 in CI) → `needs-approval` → manual merge → worktree cleanup. Two
+actors run this lifecycle, each with its own reference doc — read whichever matches who's
+acting:
 
 - **Interactive Claude session** (this session, doing the work directly): full steps, git
   identity, and issue/branch conventions in
@@ -197,10 +198,10 @@ additions:
 
 ## Issue conventions
 
-Context labels, project-board Size/Estimate fields, the anchored `Plan:` line task issues must
-carry, and branch naming — see
-[docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md). Epic-first
-filing for multi-artifact strands — see
+Context labels, project-board Size/Estimate fields, and branch naming — see
+[docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md), which also
+points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the anchored
+`Plan:` line's exact required format. Epic-first filing for multi-artifact strands — see
 [docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
 
 ---
