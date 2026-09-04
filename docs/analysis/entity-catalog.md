@@ -409,11 +409,6 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
     `charger_status` attribute already carries (both surfaces can never disagree, ADR-0034). Adding
     this row does not remove `charger_status` from `adapter_readings`'s attributes — ADR-0021 is
     extended, not superseded, and the duplication is accepted.
-
-  The dashboard's charging-status tile is now bound to this row instead of the `charger_status`
-  adapter-role row's raw entity (ADR-0034's implementation follow-up): the role's `Read by` column
-  no longer carries a `UC11` reference (see the `adapter_readings` note above), and this row's
-  `Read by` is `UC11`, no longer a `(UC11)` placeholder.
 - **Output adapter roles (`charger_current`, `vehicle_charge_limit`)** satisfy the NF3 requirement
   that every command crosses an adapter role; a start/stop is expressed as a 0 A set-point on the
   `charger_current` role. Both are read/write: `vehicle_charge_limit` is read back by UC09 to
