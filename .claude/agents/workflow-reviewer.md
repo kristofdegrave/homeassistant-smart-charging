@@ -36,8 +36,10 @@ Always read:
   (draft/review/fix are one task each) and the `needs-*` label contract.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.github/setup-labels.sh` and
   `docs/reference/contribution-workflow.md`'s **Issue conventions** section, to check the
-  form's `labels:` value against the canonical vocabulary; and, for `adr.yml`, `CLAUDE.md`'s
-  **Architecture Decision Records** section, since the form points at it.
+  form's `labels:` value against the canonical vocabulary; `docs/reference/ci-pipeline.md`'s
+  **Label vocabulary sync** section, to check the CI-side files stay in sync; and, for
+  `adr.yml`, `CLAUDE.md`'s **Architecture Decision Records** section, since the form points at
+  it.
 
 ## Review checklist
 
@@ -74,15 +76,16 @@ Always read:
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The context-label vocabulary is inherently listed in four places, matching the canonical list
-  in `docs/reference/contribution-workflow.md`'s **Issue conventions** section: `ai-pipeline.yml`'s
-  header comment; `_ai-draft.yml`'s `context_labels` variable, its "No context label found"
-  reason string, and its `case` block; and `.github/setup-labels.sh`'s label definitions. A
-  change to one that doesn't update the rest is a Major finding (silent drift in the vocabulary
-  the whole label-driven pipeline trusts). Three of those labels additionally have an issue
-  form whose `.github/ISSUE_TEMPLATE/*.yml` `labels:` key stamps it (`adr.yml` → `adr`,
-  `requirement.yml` → `requirement`, `use-case.yml` → `uc`) — adding a label doesn't require a
-  new form, but renaming one does require updating any form that stamps it.
+- The context-label vocabulary's values are canonical in
+  `docs/reference/contribution-workflow.md`'s **Issue conventions**; the CI-side sync
+  obligation — the same vocabulary baked into `ai-pipeline.yml`'s header comment,
+  `_ai-draft.yml`'s `context_labels` variable/case block, `.github/setup-labels.sh`'s label
+  definitions, and each label-bearing form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
+  (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`) — is documented
+  in `docs/reference/ci-pipeline.md`'s **Label vocabulary sync** section. A change to one that
+  doesn't update the rest is a Major finding (silent drift in the vocabulary the whole
+  label-driven pipeline trusts); adding a label doesn't require a new form, but renaming one
+  does require updating any form that stamps it.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.github/setup-labels.sh` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a

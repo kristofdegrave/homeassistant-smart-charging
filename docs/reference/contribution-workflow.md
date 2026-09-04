@@ -7,8 +7,7 @@ template/quality-check steps on top of this; they never replace it.
 Two related references cover the phases just outside this lifecycle: what happens *before* an
 issue exists ([idea-to-issues.md](idea-to-issues.md), epic decomposition) and the completion
 bar an author checks *before* step 2 below ([definition-of-done.md](definition-of-done.md),
-also covering commit message conventions). The CI-automated equivalent of this same
-lifecycle, including its label contract, is [ci-pipeline.md](ci-pipeline.md).
+also covering commit message conventions).
 
 0. **Open a GitHub issue first.** Every task gets an issue before work starts — no exception
    for small or typo-level changes. Correct context label + Size/Estimate fields (see
@@ -49,25 +48,30 @@ lifecycle, including its label contract, is [ci-pipeline.md](ci-pipeline.md).
 6. **Loop steps 3–5**, capped at **3 rounds**, until a pass finds no remaining Critical/Major
    findings. Still unresolved at round 3 → stop and escalate to the human partner with the
    disagreement instead of continuing; that usually needs a judgment call the loop can't make.
-7. **Label `needs-approval`** once a review pass (CI or local) comes back clean. Board
-   **Status** stays `In review` — this only signals no automated review/fix work is pending,
-   it doesn't replace manual merge approval.
+7. **Label `needs-approval`** once a review pass comes back clean. Board **Status** stays
+   `In review` — this only signals no review/fix work is pending, it doesn't replace manual
+   merge approval.
 8. **Manual PR comments**, at any point, are handled like step 5: fix, reply, resolve. Don't
    close the linked issue directly (`gh issue close`) even on a fully clean verification-only
    task — closing is left to the `Closes #N` reference from step 2, which fires on merge.
 9. **Merge is always manual** (`CODEOWNERS` + branch protection) — never auto-merged or
-   self-approved, including by CI-drafted PRs. Merging auto-closes the linked issue via step
-   2's `Closes #N` reference (or leaves it open if the PR only used `Part of #N`) — move its
-   board **Status** to `Done` once that happens. Once merged: verify the change landed on
-   `origin/main` (`git ls-tree origin/main <path>`), then remove the task's worktree
+   self-approved. Merging auto-closes the linked issue via step 2's `Closes #N` reference (or
+   leaves it open if the PR only used `Part of #N`) — move its board **Status** to `Done` once
+   that happens. Once merged: verify the change landed on `origin/main`
+   (`git ls-tree origin/main <path>`), then remove the task's worktree
    (`git worktree remove <path>`) right away if clean — don't wait for a bulk sweep.
+
+**A merged `specs` issue produces task issues, not code.** Its approved plan
+(`docs/plans/<slice>.md`) doesn't implement itself — file one `development`/`testing` task
+issue per task in the plan's build order (`file-task-issue`, each with the anchored `Plan:`
+line from **Issue conventions** below) so the work actually gets picked up. Append them to the
+epic's checklist if this spec belongs to one — see
+[idea-to-issues.md](idea-to-issues.md) step 4.
 
 **Stop and report, interactive session only.** After each artifact/task is committed (step 1
 onward), report status and wait for the human partner before starting the next one — this is a
 control on autonomous artifact-chaining, not boilerplate: don't draft/commit a second document
-or task off the back of one that just landed without a check-in. Doesn't apply to the CI
-pipeline ([ci-pipeline.md](ci-pipeline.md)), which runs its labeled steps to completion by
-design.
+or task off the back of one that just landed without a check-in.
 
 ## Commit & push authorization
 
@@ -98,50 +102,29 @@ of the producer's logic.
 ## Git identity
 
 Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
-separate bot account for the interactive session. This applies to the interactive session
-only — [ci-pipeline.md](ci-pipeline.md) commits as `github-actions[bot]`, a separate, unrelated
-identity.
+separate bot account for the interactive session.
 
 ## Issue conventions
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`, `specs`
   (implementation spec: design + TDD plan, `docs/plans/**`), `development`/`testing`
   (implementation tasks against an approved plan), `workflow` (CI/skill/agent-authoring
-  changes — see [ci-pipeline.md](ci-pipeline.md), never auto-drafted), `documentation`
-  (design-doc changes, `docs/design/**` — review only, not yet wired into the CI drafter's
-  label set). A context label alone never triggers CI — only an *action* label (`needs-draft`
-  on an issue; `needs-review`/`needs-work` on a PR) spawns an AI job.
-
-  This vocabulary is listed in four places that must all move together: this doc,
-  `ai-pipeline.yml`'s header comment, `_ai-draft.yml`'s `context_labels` variable/case block,
-  and `.github/setup-labels.sh`'s label definitions — and, for the three labels that have an
-  issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key too (`adr.yml` → `adr`,
-  `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps that label on every
-  issue filed through the form. Adding a label means updating the first four; renaming one
-  additionally means updating any form that stamps it. `file-task-issue/SKILL.md` only points
-  here, it doesn't hold its own copy.
-- **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) — they
-  drive `_ai-draft.yml`'s `max_turns` tier, not labels. Size a sweep/audit-shaped task
-  (cross-file invariant check, full-suite run, cross-check an ADR) up at least one tier from
-  raw effort — it's read-heavy for the CI drafter even when small for a human. **Epics get
-  Size only, never Estimate** — an epic's cost is the sum of its children's estimates.
+  changes), `documentation` (design-doc changes, `docs/design/**` — review only). Adding or
+  renaming a label: see [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must
+  stay in sync.
+- **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
+  filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
+  cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
+  raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
+  its children's estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-issues.md](idea-to-issues.md) for
   the full cycle (when to file the epic, what to file immediately vs. defer). Child issues use
   "Part of #N" for the epic, never "Closes #N" (would auto-close the epic).
 - **Task issues** (`development`/`testing` label) filed against an approved
-  `docs/plans/<slice>.md` TDD plan must include this exact anchored line:
-
-  ```text
-  Plan: docs/plans/<file>.md#T<task-number>
-  ```
-
-  Parsed by `.github/workflows/_ai-draft.yml` as the sole containment mechanism letting the
-  automated drafter act on untrusted issue-body text — the line must be anchored (nothing
-  else on it: no backticks, no trailing `(PR #NNN)`, no surrounding sentence) so it resolves
-  to exactly one plan file and task id. `<task-number>` matches the plan's own numbering
-  (`T3.1`, `T5`). Everything else — rationale, blockers, PR back-refs — goes in surrounding
-  prose. Get it right at filing time; retrofitting after a failed `needs-draft` run wastes a
-  cycle.
+  `docs/plans/<slice>.md` TDD plan must include an exact, anchored `Plan:` line identifying the
+  plan file and task id (nothing else on that line) — see [ci-pipeline.md](ci-pipeline.md) for
+  the required format and why it must be anchored. Get it right at filing time; retrofitting
+  after a failed draft run wastes a cycle.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `specs`, `development`, `testing`, `workflow`, `documentation`),

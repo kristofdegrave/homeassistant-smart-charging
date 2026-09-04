@@ -26,24 +26,45 @@ posted findings. No job does more than the one task its trigger label names — 
 never commits a fix, and a fix run never re-reviews its own output (that's the write/review
 separation `workflow-reviewer`'s non-negotiables checklist enforces).
 
+## Label vocabulary sync
+
+The context-label vocabulary itself (values and meanings) is documented once, in
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. What lives here
+is the CI-side consistency obligation: the same vocabulary is baked into four pipeline files
+that must all move together — `ai-pipeline.yml`'s header comment, `_ai-draft.yml`'s
+`context_labels` variable/case block, and `.github/setup-labels.sh`'s label definitions — and,
+for the three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml`
+`labels:` key too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` →
+`uc`), which stamps that label on every issue filed through the form. Adding a label means
+updating the first four; renaming one additionally means updating any form that stamps it.
+`file-task-issue/SKILL.md` only points here, it doesn't hold its own copy.
+
 ## Pipeline steps
 
-- **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label.
-  `workflow` is never auto-drafted — no safe path containment exists for untrusted issue
-  content outside `docs/**`/`custom_components/**`/`tests/**` — a human authors that draft by
-  hand; only its review step is automated.
+- **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label — a
+  context label alone never triggers anything; only an *action* label (`needs-draft` on an
+  issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` is never
+  auto-drafted — no safe path containment exists for untrusted issue content outside
+  `docs/**`/`custom_components/**`/`tests/**` — a human authors that draft by hand; only its
+  review step is automated.
 - **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
-  scheme, or a label's own override per its **Branch naming** note) from the label;
-  `development`/`testing` additionally require a resolved `Plan:` line. Runs the skill's
-  *content* steps only (draft, self-checks) — never its review/commit/report steps, since the
-  workflow owns those. Opens the PR with `Closes #<issue-number>` and its own, coarser
-  commit-prefix mapping (`_ai-draft.yml`'s `commit_prefix`: `docs` for
-  `uc`/`requirement`/`adr`/`specs`, `feat` for `development`, `test` for `testing`) —
-  deliberately simpler than the [commit message conventions](definition-of-done.md) table,
-  since a single draft commit has no per-UC/per-task number to interpolate yet; that
-  granularity is added by later human/CI commits on the branch, which do follow that table.
-  Then adds `needs-review`.
+  scheme, or a label's own override per its **Branch naming** note) from the label. Its
+  `max_turns` tier is driven by the issue's Size/Estimate fields (set per
+  [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), not the
+  label. `development`/`testing` additionally require a resolved `Plan:` line — the exact,
+  anchored format (`Plan: docs/plans/<file>.md#T<task-number>`, nothing else on that line: no
+  backticks, no trailing `(PR #NNN)`, no surrounding sentence) is the sole containment
+  mechanism letting this job act on untrusted issue-body text, so it must resolve to exactly
+  one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
+  `T5`) or the run fails. Runs the skill's *content* steps only (draft, self-checks) — never
+  its review/commit/report steps, since the workflow owns those. Opens the PR with
+  `Closes #<issue-number>` and its own, coarser commit-prefix mapping (`_ai-draft.yml`'s
+  `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for `development`,
+  `test` for `testing`) — deliberately simpler than the
+  [commit message conventions](definition-of-done.md) table, since a single draft commit has
+  no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI
+  commits on the branch, which do follow that table. Then adds `needs-review`.
 - **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` runs the matching `*-reviewer`
   agent and posts findings via `submit-pr-review`'s CI mode, ending in a `clean`/`remarks`
   verdict marker. Unacknowledged human inline comments (no `ai-fix-ack` reply) count as

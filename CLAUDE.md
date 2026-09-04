@@ -73,17 +73,23 @@ docs/adl/
 
 Every unit of work — a doc, an ADR, a design, or code — follows one universal lifecycle:
 issue → isolated worktree → PR against `main` → review → fix/reply/resolve → loop (capped at
-3 rounds) → `needs-approval` → manual merge → worktree cleanup. Full steps, git identity, and
-issue/branch conventions:
-[docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md). Two
-related references sit just outside that lifecycle: what happens before an issue exists
+3 rounds) → `needs-approval` → manual merge → worktree cleanup. Two actors run this lifecycle,
+each with its own reference doc — read whichever matches who's acting:
+
+- **Interactive Claude session** (this session, doing the work directly): full steps, git
+  identity, and issue/branch conventions in
+  [docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md).
+- **The GitHub Actions AI pipeline** (`_ai-draft.yml`/`_ai-review.yml`/`_ai-fix.yml`, triggered
+  by `needs-draft`/`needs-review`/`needs-work` labels): same lifecycle, `github-actions[bot]`
+  as the actor, in [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). An
+  interactive session never self-applies those trigger labels — see that doc.
+
+Two related references sit just outside this lifecycle: what happens before an issue exists
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md), epic decomposition) and
 the completion bar an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
-commit message conventions). The CI-automated equivalent of this same lifecycle, including its
-label contract, is [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). The
-artifact-specific sections below (analysis docs, ADRs) layer their own template/quality-check
-steps on top of these; they never replace them.
+commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
+their own template/quality-check steps on top of these; they never replace them.
 
 ---
 
