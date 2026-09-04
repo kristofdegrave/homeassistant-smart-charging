@@ -90,11 +90,13 @@ def test_the_mode_entity_is_rendered_by_exactly_the_gated_card_not_the_auto_enti
 
 
 def test_charging_status_section_has_the_seven_documented_tiles():
+    """The first tile binds the owned sensor.smart_charging_charger_status diagnostic sensor,
+    not the raw mapped charger entity (ADR-0034) -- must never regress to sensor.evse."""
     entry = _entry(**{CONF_EV_SOC_ENTITY: "sensor.ev_soc"})
     cards = _cards(build_dashboard_config(entry), "Charging status")
 
     assert [c["entity"] for c in cards] == [
-        "sensor.evse",  # CONF_CHARGER_STATUS_ENTITY, entry_data_base's mapped value
+        "sensor.smart_charging_charger_status",
         "sensor.ev_soc",
         "select.smart_charging_profile",
         "sensor.smart_charging_active_mode",
