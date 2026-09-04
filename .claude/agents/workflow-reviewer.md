@@ -30,7 +30,9 @@ Always read:
   each artifact type (skill / agent / CI worker prompt) and its non-negotiables.
 - `CLAUDE.md`'s "Authoring AI artifacts" section.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
-  guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
+  guards, fork-PR handling, permissions-per-job) for context on how the changed file fits, and
+  `docs/reference/ci-pipeline.md` for each job's stated scope (draft/review/fix are one task
+  each) and the `needs-*` label contract.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.github/setup-labels.sh` and
   `docs/reference/contribution-workflow.md`'s **Issue conventions** section, to check the
   form's `labels:` value against the canonical vocabulary; and, for `adr.yml`, `CLAUDE.md`'s
@@ -92,6 +94,11 @@ Always read:
   (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
   behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
   is a Major finding.
+- If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
+  interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
+  itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive
+  session does review/fix locally instead. Flag as Major (silently hands work to CI the human
+  didn't ask for, and can collide with CI's own loop-cap accounting).
 
 **(5) Non-negotiables unaffected**
 - Write and review still happen in separate sessions/agents (a skill or workflow must never

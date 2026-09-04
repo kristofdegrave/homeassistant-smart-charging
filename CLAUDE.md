@@ -80,8 +80,11 @@ related references sit just outside that lifecycle: what happens before an issue
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md), epic decomposition) and
 the completion bar an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
-commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
-their own template/quality-check steps on top of these; they never replace them.
+commit message conventions). The CI-automated equivalent of this same lifecycle —
+`github-actions[bot]` as the actor, `needs-draft`/`needs-review`/`needs-work` as its CI-only
+trigger labels — is [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). The
+artifact-specific sections below (analysis docs, ADRs) layer their own template/quality-check
+steps on top of these; they never replace them.
 
 ---
 

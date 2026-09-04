@@ -7,7 +7,10 @@ template/quality-check steps on top of this; they never replace it.
 Two related references cover the phases just outside this lifecycle: what happens *before* an
 issue exists ([idea-to-issues.md](idea-to-issues.md), epic decomposition) and the completion
 bar an author checks *before* step 2 below ([definition-of-done.md](definition-of-done.md),
-also covering commit message conventions).
+also covering commit message conventions). The CI-automated equivalent of this same
+lifecycle — same steps, `github-actions[bot]` as the actor — is
+[ci-pipeline.md](ci-pipeline.md); its `needs-draft`/`needs-review`/`needs-work` trigger labels
+are CI-only, never applied by an interactive session.
 
 0. **Open a GitHub issue first.** Every task gets an issue before work starts — no exception
    for small or typo-level changes. Correct context label + Size/Estimate fields (see
@@ -64,8 +67,9 @@ also covering commit message conventions).
 **Stop and report, interactive session only.** After each artifact/task is committed (step 1
 onward), report status and wait for the human partner before starting the next one — this is a
 control on autonomous artifact-chaining, not boilerplate: don't draft/commit a second document
-or task off the back of one that just landed without a check-in. Doesn't apply to the CI flow
-below, which runs its labeled steps to completion by design.
+or task off the back of one that just landed without a check-in. Doesn't apply to the CI
+pipeline ([ci-pipeline.md](ci-pipeline.md)), which runs its labeled steps to completion by
+design.
 
 ## Commit & push authorization
 
@@ -97,17 +101,18 @@ of the producer's logic.
 
 Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
 separate bot account for the interactive session. This applies to the interactive session
-only — the CI flow below commits as `github-actions[bot]`, a separate, unrelated identity.
+only — [ci-pipeline.md](ci-pipeline.md) commits as `github-actions[bot]`, a separate, unrelated
+identity.
 
 ## Issue conventions
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`, `specs`
   (implementation spec: design + TDD plan, `docs/plans/**`), `development`/`testing`
   (implementation tasks against an approved plan), `workflow` (CI/skill/agent-authoring
-  changes — see CI flow below, never auto-drafted), `documentation` (design-doc changes,
-  `docs/design/**` — review only, not yet wired into the CI drafter's label set). A context
-  label alone never triggers CI — only an *action* label (`needs-draft` on an issue;
-  `needs-review`/`needs-work` on a PR) spawns an AI job.
+  changes — see [ci-pipeline.md](ci-pipeline.md), never auto-drafted), `documentation`
+  (design-doc changes, `docs/design/**` — review only, not yet wired into the CI drafter's
+  label set). A context label alone never triggers CI — only an *action* label (`needs-draft`
+  on an issue; `needs-review`/`needs-work` on a PR) spawns an AI job.
 
   This vocabulary is listed in four places that must all move together: this doc,
   `ai-pipeline.yml`'s header comment, `_ai-draft.yml`'s `context_labels` variable/case block,
@@ -149,41 +154,3 @@ PR, suffix a third segment describing the split: `<context-label>/<issue-number>
 A context label's own skill may override the number segment when there's a concrete reason
 to key the branch off the artifact's own identity instead of the issue's — state the
 exception and its reason in that skill, don't leave it implicit here.
-
-## CI flow (`.github/workflows/_ai-*.yml`)
-
-The automated, label-driven equivalent of steps 0–9 above — same lifecycle, different actor.
-Commits here are made as `github-actions[bot]`, not the interactive session's own identity.
-
-- **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label.
-  `workflow` is never auto-drafted — no safe path containment exists for untrusted issue
-  content outside `docs/**`/`custom_components/**`/`tests/**` — a human authors that draft by
-  hand; only its review step is automated.
-- **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
-  (`<context-label>/<issue-number>`, this doc's own scheme, or a label's own override per
-  the **Branch naming** note above) from the label; `development`/`testing` additionally
-  require a resolved `Plan:` line. Runs the skill's *content* steps only
-  (draft, self-checks) — never its review/commit/report steps, since the workflow owns those.
-  Opens the PR with `Closes #<issue-number>` and its own, coarser commit-prefix mapping
-  (`_ai-draft.yml`'s `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for
-  `development`, `test` for `testing`) — deliberately simpler than the
-  [commit message conventions](definition-of-done.md) table, since a single draft commit has
-  no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI
-  commits on the branch, which do follow that table. Then adds `needs-review`.
-- **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` runs the matching `*-reviewer`
-  agent and posts findings via `submit-pr-review`'s CI mode, ending in a `clean`/`remarks`
-  verdict marker. Unacknowledged human inline comments (no `ai-fix-ack` reply) count as
-  remarks too — the CI equivalent of step 8.
-- **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict adds `needs-work`, which runs
-  `address-review-remarks`, commits as `github-actions[bot]` (`docs: address AI review
-  remarks (#<pr>)`), and re-adds `needs-review`.
-- **Loop cap**: **2** automatic fix cycles, tighter than the interactive session's 3-round cap
-  (step 6) — deliberately, since CI runs fully unsupervised with no human watching in real
-  time, unlike an interactive session. A 3rd `remarks` verdict goes straight to
-  `needs-approval` with a comment asking a human to re-add `needs-work` manually for one more
-  cycle.
-- **Clean / cap-out** (≈ step 7): a `clean` verdict or hitting the 2-cycle cap both add
-  `needs-approval` — same label, same meaning as the interactive flow: no automated work
-  pending, human approval to merge still required.
-- **Merge** (step 9, unchanged): always a manual human action regardless of which path
-  drafted or reviewed the PR.
