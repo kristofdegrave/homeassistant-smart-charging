@@ -1,4 +1,4 @@
-# CI pipeline (`.github/workflows/_ai-*.yml`)
+# CI pipeline (`.github/workflows/ai-pipeline.yml` + `_ai-*.yml`)
 
 The automated, label-driven equivalent of
 [contribution-workflow.md](contribution-workflow.md)'s steps 0–9 — same lifecycle, a different
@@ -7,14 +7,17 @@ identity (see that doc's **Git identity** section).
 
 ## Labels are CI-only triggers
 
-`needs-draft`, `needs-review`, and `needs-work` exist to invoke these jobs — nothing else. An
-interactive session (human or Claude) must **never** add one to force a review or fix cycle.
-Interactive review and fix always happen locally, per
-[contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh `*-reviewer` subagent
-posts findings via `submit-pr-review`, then `finalize-pr-review` resolves what got fixed.
-Applying a CI label mid-session hands the job to CI instead of doing it in-session, and can
-collide with the loop-cap accounting below (e.g. forcing an extra automated review pass eats
-into the 2-cycle cap a human never intended to spend).
+`needs-draft`, `needs-review`, and `needs-work` exist to invoke these jobs — nothing else. A
+**Claude session must never self-apply one on its own initiative** to hand its own review/fix
+work to CI instead of doing it in-session; interactive review and fix always happen locally,
+per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh `*-reviewer`
+subagent posts findings via `submit-pr-review`, then `finalize-pr-review` resolves what got
+fixed. This does *not* forbid the pipeline's actual, intended human triggers below — a
+maintainer applying `needs-draft` to start the pipeline, or manually re-adding `needs-work`
+after the loop cap, is the go-signal these labels exist for. What's disallowed is a session
+adding one unprompted as a shortcut, which can also collide with the loop-cap accounting below
+(e.g. forcing an extra automated review pass eats into the 2-cycle cap a human never intended
+to spend).
 
 ## Each job does exactly one task
 
@@ -22,6 +25,8 @@ into the 2-cycle cap a human never intended to spend).
 posted findings. No job does more than the one task its trigger label names — a review run
 never commits a fix, and a fix run never re-reviews its own output (that's the write/review
 separation `workflow-reviewer`'s non-negotiables checklist enforces).
+
+## Pipeline steps
 
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label.
   `workflow` is never auto-drafted — no safe path containment exists for untrusted issue
@@ -45,7 +50,10 @@ separation `workflow-reviewer`'s non-negotiables checklist enforces).
   remarks too — the CI equivalent of step 8.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict adds `needs-work`, which runs
   `address-review-remarks`, commits as `github-actions[bot]` (`docs: address AI review
-  remarks (#<pr>)`), and re-adds `needs-review`.
+  remarks (#<pr>)`), and re-adds `needs-review`. It can only commit under `docs/` (its
+  commit step is `git add docs`-only) — for a `workflow`-labeled PR, findings outside
+  `docs/**` (e.g. in `.github/workflows/`, `.claude/`) still burn a fix cycle but land in the
+  PR body as patches for a human to apply, not as a commit.
 - **Loop cap**: **2** automatic fix cycles, tighter than the interactive session's 3-round cap
   ([contribution-workflow.md](contribution-workflow.md) step 6) — deliberately, since CI runs
   fully unsupervised with no human watching in real time, unlike an interactive session. A 3rd

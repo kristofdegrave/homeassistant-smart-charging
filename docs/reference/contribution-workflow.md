@@ -8,9 +8,7 @@ Two related references cover the phases just outside this lifecycle: what happen
 issue exists ([idea-to-issues.md](idea-to-issues.md), epic decomposition) and the completion
 bar an author checks *before* step 2 below ([definition-of-done.md](definition-of-done.md),
 also covering commit message conventions). The CI-automated equivalent of this same
-lifecycle — same steps, `github-actions[bot]` as the actor — is
-[ci-pipeline.md](ci-pipeline.md); its `needs-draft`/`needs-review`/`needs-work` trigger labels
-are CI-only, never applied by an interactive session.
+lifecycle, including its label contract, is [ci-pipeline.md](ci-pipeline.md).
 
 0. **Open a GitHub issue first.** Every task gets an issue before work starts — no exception
    for small or typo-level changes. Correct context label + Size/Estimate fields (see
