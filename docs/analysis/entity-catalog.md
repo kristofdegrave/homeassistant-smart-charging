@@ -139,7 +139,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `sensor.smart_charging_min_current_a` | state | — | A | mirrors `min_current_a` (config-options); disabled by default (ADR-0031) | [minimum charging current](system-overview.md#ubiquitous-language) (C1) | user | — |
 | `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime), UC12 |
 | `sensor.smart_charging_max_current_a` | state | — | A | mirrors `max_current_a` (config-options); disabled by default (ADR-0031) | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | user | — |
-| `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02, UC11 | — |
+| `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
 | `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity, with a user-supplied state-translation table (NF3) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
 
@@ -389,10 +389,13 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   reference on the role's own row stays reserved for the subset the dashboard's status tiles
   display directly. That subset already carries one: `(UC11)` (a placeholder — UC11 doesn't
   reference them yet) on `ev_soc`/`solar_forecast`, and a current `UC11` reference on
-  `charger_power`/`charger_current`/`net_power`, matching UC11's own text. `charger_status` no
+  `charger_current`/`net_power`, matching UC11's own text. `charger_status` no
   longer carries one: the dashboard's status tile now reads `sensor.smart_charging_charger_status`
   directly instead of this role's raw entity (ADR-0034), so `UC11` moved to that row instead — see
-  the `sensor.smart_charging_charger_status` note below.
+  the `sensor.smart_charging_charger_status` note below. `charger_power` has no dashboard tile of
+  its own (`dashboard.py`'s `_power_flow_cards` renders `charger_current`, `net_power`,
+  `solar_surplus_w`, and `effective_peak_limit` only) — it reaches the dashboard solely as an
+  `adapter_readings` attribute, so its own row does not carry `UC11` either.
   ADR-0021's Consequences ask for this row to describe the entity as "attribute-bearing" rather
   than a plain `state`/`config` row; `state` is the closest fit in this catalog's own Role
   vocabulary (preamble) — the Default/range/source cell carries the attribute-bearing shape ADR-0021
