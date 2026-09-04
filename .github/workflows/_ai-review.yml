@@ -271,8 +271,11 @@ jobs:
           # custom_components/tests/.github/.claude reading is structurally more turn-hungry
           # than a single doc tree, same distinction _ai-draft.yml draws for its own baselines
           # (that set also covers workflow-reviewer's wider read list — CLAUDE.md,
-          # ai-authoring-token-efficiency.md, ai-pipeline.yml — for a .github/.claude change,
-          # including .github/ISSUE_TEMPLATE, which routes to the same reviewer).
+          # ai-authoring-token-efficiency.md, ai-pipeline.yml — for a .github/.claude-shaped
+          # change). .github/ISSUE_TEMPLATE is grouped with that heavier tier for the same
+          # tree-shape reason (a structured form tree, not prose) even though it also routes to
+          # workflow-reviewer; .github/setup-labels.sh and docs/reference/CLAUDE.md route there
+          # too but stay on the lighter doc-prose tier below.
           # A detection failure (git error) must not silently pick the lighter tier, since that's
           # the truncation-prone direction — capture output first and default to the heavier tier
           # with a warning if the command itself failed.
@@ -341,7 +344,7 @@ jobs:
             If any changed file is under `docs/plans/`, apply the full review checklist in
             .claude/agents/impl-spec-reviewer.md for those files.
             If any changed file is under `.github/workflows/`, `.claude/skills/`,
-            `.claude/agents/`, `.github/ISSUE_TEMPLATE/`, or `docs/reference/`, or is
+            `.claude/agents/`, `docs/reference/`, or `.github/ISSUE_TEMPLATE/`, or is
             `.github/setup-labels.sh` or `CLAUDE.md`, apply the full review checklist in
             .claude/agents/workflow-reviewer.md for those files.
             If any changed file is under `custom_components/`, apply the full review checklist

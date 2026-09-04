@@ -33,7 +33,8 @@ Always read:
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.github/setup-labels.sh` and
   `docs/reference/contribution-workflow.md`'s **Issue conventions** section, to check the
-  form's `labels:` value and required fields against the canonical vocabulary/format.
+  form's `labels:` value against the canonical vocabulary; and, for `adr.yml`, `CLAUDE.md`'s
+  **Architecture Decision Records** section, since the form points at it.
 
 ## Review checklist
 
@@ -70,21 +71,20 @@ Always read:
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The context-label vocabulary is inherently listed in five places, matching the canonical list
-  in `CLAUDE.md`'s **Issue conventions** section: `ai-pipeline.yml`'s header comment;
-  `_ai-draft.yml`'s `context_labels` variable, its "No context label found" reason string, and
-  its `case` block; `.github/setup-labels.sh`'s label definitions; and each
-  `.github/ISSUE_TEMPLATE/*.yml`'s `labels:` key (`adr.yml` → `adr`, `requirement.yml` →
-  `requirement`, `use-case.yml` → `uc`), which stamps that label on every issue filed through
-  the form. A change to one that doesn't update the rest is a Major finding (silent drift in
-  the vocabulary the whole label-driven pipeline trusts).
-- If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is one
-  of the canonical context labels above (a form advertising a label that doesn't exist yet is a
-  Major finding); any process claim the form's body makes (e.g. `adr.yml` pointing at CLAUDE.md's
-  ADR section) still matches what that reference currently says; and, for `development`/
-  `testing`-context forms, the fields it requires still line up with what `_ai-draft.yml`
-  actually parses (e.g. the anchored `Plan:` line format from `contribution-workflow.md`'s
-  **Issue conventions**).
+- The context-label vocabulary is inherently listed in four places, matching the canonical list
+  in `docs/reference/contribution-workflow.md`'s **Issue conventions** section: `ai-pipeline.yml`'s
+  header comment; `_ai-draft.yml`'s `context_labels` variable, its "No context label found"
+  reason string, and its `case` block; and `.github/setup-labels.sh`'s label definitions. A
+  change to one that doesn't update the rest is a Major finding (silent drift in the vocabulary
+  the whole label-driven pipeline trusts). Three of those labels additionally have an issue
+  form whose `.github/ISSUE_TEMPLATE/*.yml` `labels:` key stamps it (`adr.yml` → `adr`,
+  `requirement.yml` → `requirement`, `use-case.yml` → `uc`) — adding a label doesn't require a
+  new form, but renaming one does require updating any form that stamps it.
+- If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
+  label `.github/setup-labels.sh` defines — one of the canonical context labels above, or the
+  pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a
+  Major finding); and any process claim the form's body makes (e.g. `adr.yml` pointing at
+  CLAUDE.md's ADR section) still matches what that reference currently says.
 - The issue-to-merge lifecycle is defined in `CLAUDE.md`'s **Contribution workflow** section;
   `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line only point
   to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
