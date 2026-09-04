@@ -174,10 +174,13 @@ merged value is already observable: `sensor.smart_charging_effective_peak_limit`
 value the operand feeds directly and that actually drives the clamp, and the external operand's raw
 reading shows on the adapter-readings sensor (D-4). `sensor.smart_charging_peak_headroom_a` moves
 with it too (`coordinator.py` ~639), though in amps and after folding in voltage and baseline, so it
-corroborates rather than displays the operand. What remains is a
-documentation obligation, and
-`entity-catalog.md` already discharges it — its `effective_peak_limit` row states the merged
-formula in full.
+corroborates rather than displays the operand. `EffectivePeakLimitSensor`'s own docstring
+(`sensor.py` ~198, "resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw, peak_floor_kw,
+urgent)") is a fifth stale-prose site: T3 renames the first argument to `peak_operand_kw`, and
+neither T8 grep pattern (`captar`-paired) would reach a `sensor.py` docstring naming no such word,
+so T3 must rewrite it directly rather than defer to the sweep. What remains beyond that is a
+documentation obligation, and `entity-catalog.md` already discharges it — its `effective_peak_limit`
+row states the merged formula in full.
 
 **D-7 — The reconfigure prefill is a first-class requirement, not a courtesy.** ADR-0033 names the
 silent-drop class explicitly. The repo already carries its named regression test,
@@ -352,12 +355,15 @@ leave that rule untested.
 | `test_uc12_1a_reconfigure_shows_mapping_halves_only` (~1107) | asserts `vehicle` is followed directly by `solar` | inserts the `captar` step, asserting its rendered keys equal `_keys(CAPTAR_MAPPING_SCHEMA)` exactly |
 | `test_uc12_captar_step_is_threshold_only_no_ev_soc` (~903) | **install**-side; asserts rendered keys equal the threshold schema's exactly | renamed off "threshold_only"; asserts the keys equal mapping ∪ threshold, and keeps its `CONF_EV_SOC_ENTITY not in` assertion, which is still true and still worth pinning |
 
-Three comments restate the enumeration in prose and move with them: `_run_reconfigure_flow`'s
+Four comments restate the enumeration in prose and move with them: `_run_reconfigure_flow`'s
 docstring (`tests/test_config_flow.py` ~262-266); the section header above the `power`/`captar`
-cases (~line 888, "The `power`/`captar` steps: threshold-only, gated off in reconfigure"); and an
+cases (~line 888, "The `power`/`captar` steps: threshold-only, gated off in reconfigure"); an
 inline comment at ~1135-1136 ("power/captar have no mapping half -- both skipped entirely in
-reconfigure") that sits inside a test T6 rewrites anyway, so it is carried along in practice — but
-it is counted here rather than left to the T8 sweep to catch.
+reconfigure") that sits inside a test T6 rewrites anyway, so it is carried along in practice; and
+`test_uc12_captar_step_is_threshold_only_no_ev_soc`'s own docstring (~904-905, "CapTar has no
+mapping half at all in the topic-step model"), which T4 renames but must also rewrite — the key
+assertion changing without the docstring changing would leave the false sentence standing under a
+renamed test. All four are counted here rather than left to the T8 sweep to catch.
 
 ## Mapping to `system-design.md` services
 
@@ -414,3 +420,9 @@ existing key changes name, type or bucket. No new HA dependency —
   only, with no `device_class` precedent anywhere. D-1's unit check catches the mismatch that
   matters at read time and fails safe; adding a selector-level filter is a flow-wide convention
   change, not this slice's to make.
+- **The R3-clamp/CapTar divergence D-5 surfaces** — `requirements.md` R3 AC1,
+  `resolution-rules.md`, and `entity-catalog.md` all state the R3 clamp does not run when CapTar
+  is absent; `_apply_peak_clamp` (`coordinator.py` ~917-947) carries no such gate and runs
+  unconditionally. This predates this change and this spec correctly declines to fix it (D-5), but
+  a safety-relevant requirement/code mismatch needs an owner or it rots unnoticed; recorded here so
+  it is not lost between this spec and whichever future work resolves it.

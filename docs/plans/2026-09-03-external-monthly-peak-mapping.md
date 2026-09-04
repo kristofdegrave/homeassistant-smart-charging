@@ -114,6 +114,10 @@ Test boundary: **HA harness** (`tests/test_coordinator.py`).
   then `peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)`. Pass
   `peak_operand_kw` at **both** `resolve_effective_peak_limit` call sites (~422, ~621). No CapTar
   gate on the merge (D-5).
+- Rewrite `EffectivePeakLimitSensor`'s docstring (`sensor.py` ~198). It names the resolver's first
+  argument as `monthly_peak_kw`; this task renames that argument to `peak_operand_kw` at both call
+  sites, so the docstring goes stale in the same commit. Neither of T8's grep patterns names
+  `sensor.py`, so this one is not caught by the sweep and must be fixed here.
 - Green, commit: `feat: merge the external monthly-peak reading into the peak operand (ADR-0032, #922)`.
 
 The feature is now fully functional for any entry whose data carries the key. T4 onward is the only
@@ -136,7 +140,10 @@ orphaned-label check, and updating the roster without the label trips the missin
   task's implementation, since it asserts the install step's rendered keys equal the threshold
   schema's exactly. Rename it off "threshold_only"; assert the keys equal
   `_keys(CAPTAR_MAPPING_SCHEMA) | _keys(_captar_threshold_schema())`, and keep its
-  `CONF_EV_SOC_ENTITY not in` assertion unchanged — still true, still worth pinning.
+  `CONF_EV_SOC_ENTITY not in` assertion unchanged — still true, still worth pinning. Its own
+  docstring (~904-905, "CapTar has no mapping half at all in the topic-step model") goes stale in
+  the same rename and must be rewritten alongside it — the key assertion changing without the
+  docstring changing would leave the false sentence standing under a renamed test.
 - Add `CAPTAR_MAPPING_SCHEMA` to `config_flow.py` (D's "schema fragment" section) and extend it
   with the threshold half in `async_step_captar` for the install render.
 - Rewrite `_captar_threshold_schema`'s own docstring (`config_flow.py` ~454-456). It reads "UC12
@@ -296,3 +303,7 @@ licence to weaken the test.
   complementary rather than rejected.
 - **A dedicated entity for the merged operand** — D-6 decides against it for now, on the grounds
   that `effective_peak_limit` and the adapter-readings sensor already make it observable.
+- **The R3-clamp/CapTar divergence D-5 surfaces** — the analysis docs (R3 AC1,
+  `resolution-rules.md`, `entity-catalog.md`) say the R3 clamp doesn't run without CapTar; the
+  shipped `_apply_peak_clamp` runs unconditionally. Pre-existing, not this plan's to resolve, but
+  needs an owner so it isn't lost.
