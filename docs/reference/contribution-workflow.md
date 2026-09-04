@@ -111,9 +111,12 @@ only — the CI flow below commits as `github-actions[bot]`, a separate, unrelat
 
   This vocabulary is listed in four places that must all move together: this doc,
   `ai-pipeline.yml`'s header comment, `_ai-draft.yml`'s `context_labels` variable/case block,
-  and `.github/setup-labels.sh`'s label definitions. Adding or renaming a label means updating
-  all four, not just one — `file-task-issue/SKILL.md` only points here, it doesn't hold its own
-  copy.
+  and `.github/setup-labels.sh`'s label definitions — and, for the three labels that have an
+  issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key too (`adr.yml` → `adr`,
+  `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps that label on every
+  issue filed through the form. Adding a label means updating the first four; renaming one
+  additionally means updating any form that stamps it. `file-task-issue/SKILL.md` only points
+  here, it doesn't hold its own copy.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) — they
   drive `_ai-draft.yml`'s `max_turns` tier, not labels. Size a sweep/audit-shaped task
   (cross-file invariant check, full-suite run, cross-check an ADR) up at least one tier from
