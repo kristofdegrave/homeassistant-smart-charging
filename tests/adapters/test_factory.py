@@ -8,6 +8,7 @@ from custom_components.smart_charging.adapters.notify import NotifyAdapter
 from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
     NumericReadWriteAdapter,
+    PowerKilowattReadAdapter,
 )
 from custom_components.smart_charging.adapters.presence import PresenceReadAdapter
 from custom_components.smart_charging.adapters.status import StatusReadAdapter
@@ -26,6 +27,7 @@ from custom_components.smart_charging.const import (
     CONF_HOME_DAY_EXTERNAL_ENTITY,
     CONF_LOW_TARIFF_ENTITY,
     CONF_LOW_TARIFF_STATES,
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
@@ -42,12 +44,14 @@ from custom_components.smart_charging.const import (
     ROLE_GRID_VOLTAGE,
     ROLE_HOME_DAY_EXTERNAL,
     ROLE_LOW_TARIFF,
+    ROLE_MONTHLY_PEAK_EXTERNAL,
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
     ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLE_VEHICLE_CHARGE_LIMIT,
+    ROLES_ADAPTER_READINGS_EXCLUDED,
 )
 
 
@@ -222,6 +226,32 @@ async def test_home_day_external_empty_string_treated_as_absent(hass):
     data[CONF_HOME_DAY_EXTERNAL_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_HOME_DAY_EXTERNAL not in adapters
+
+
+async def test_factory_builds_monthly_peak_external_role_when_configured(hass):
+    data = _data()
+    data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] = "sensor.dso_peak"
+    adapters = build_adapters(hass, data)
+    assert isinstance(adapters[ROLE_MONTHLY_PEAK_EXTERNAL], PowerKilowattReadAdapter)
+    assert adapters[ROLE_MONTHLY_PEAK_EXTERNAL]._entity_id == "sensor.dso_peak"
+
+
+async def test_monthly_peak_external_role_absent_when_not_configured(hass):
+    adapters = build_adapters(hass, _data())
+    assert ROLE_MONTHLY_PEAK_EXTERNAL not in adapters
+
+
+async def test_monthly_peak_external_empty_string_treated_as_absent(hass):
+    data = _data()
+    data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] = ""
+    adapters = build_adapters(hass, data)
+    assert ROLE_MONTHLY_PEAK_EXTERNAL not in adapters
+
+
+def test_monthly_peak_external_not_excluded_from_adapter_readings():
+    # ADR-0030 D-4: the role is read by _run_cycle, so it must surface on the ADR-0021
+    # adapter_readings diagnostic sensor by the existing default.
+    assert ROLE_MONTHLY_PEAK_EXTERNAL not in ROLES_ADAPTER_READINGS_EXCLUDED
 
 
 async def test_factory_builds_solar_forecast_role_when_configured(hass):
