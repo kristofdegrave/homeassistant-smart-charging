@@ -21,7 +21,7 @@ class NumericReadAdapter(_ReadOnlyAdapter):
 
 
 class PowerKilowattReadAdapter(_ReadOnlyAdapter):
-    """Reads a power entity's value, normalised to kW (ADR-0030 D-1).
+    """Reads a power entity's value, normalised to kW (ADR-0030; design D-1).
 
     An absent/non-power unit reads as None rather than being assumed kW -- a
     misread W value as kW would widen the billing-protection clamp instead of

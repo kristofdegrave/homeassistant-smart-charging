@@ -67,7 +67,7 @@ async def test_write_calls_number_set_value(hass):
 async def test_power_kilowatt_adapter_normalises_to_kw(hass, state, unit):
     hass.states.async_set("sensor.dso_peak", state, {ATTR_UNIT_OF_MEASUREMENT: unit})
     adapter = PowerKilowattReadAdapter(hass, "sensor.dso_peak")
-    assert await adapter.read() == 4.09
+    assert await adapter.read() == pytest.approx(4.09)
 
 
 async def test_power_kilowatt_adapter_absent_entity_returns_none(hass):
