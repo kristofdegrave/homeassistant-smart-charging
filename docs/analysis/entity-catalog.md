@@ -392,10 +392,10 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `charger_current`/`net_power`, matching UC11's own text. `charger_status` no
   longer carries one: the dashboard's status tile now reads `sensor.smart_charging_charger_status`
   directly instead of this role's raw entity (ADR-0034), so `UC11` moved to that row instead — see
-  the `sensor.smart_charging_charger_status` note below. `charger_power` has no dashboard tile of
-  its own (`dashboard.py`'s `_power_flow_cards` renders `charger_current`, `net_power`,
-  `solar_surplus_w`, and `effective_peak_limit` only) — it reaches the dashboard solely as an
-  `adapter_readings` attribute, so its own row does not carry `UC11` either.
+  the `sensor.smart_charging_charger_status` note below. `charger_power` is not among the values
+  UC11 asks the dashboard to display (charger status, active profile/mode, active SOC limit,
+  charger current, solar surplus, net import — R19) — it reaches the dashboard solely as an
+  `adapter_readings` attribute, so its own row does not carry `UC11`.
   ADR-0021's Consequences ask for this row to describe the entity as "attribute-bearing" rather
   than a plain `state`/`config` row; `state` is the closest fit in this catalog's own Role
   vocabulary (preamble) — the Default/range/source cell carries the attribute-bearing shape ADR-0021
