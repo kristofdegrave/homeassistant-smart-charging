@@ -35,20 +35,24 @@ mode logic — at minimum `managers/notification_manager.py` (plug-in reminder e
 `coordinator.py` (EV SOC read gating, and `_dispatch_mode`'s per-cycle mode-state/has-charged
 reset on any non-chargeable status), `coordinator_cycle.py` (R8 solar step-up gating), and
 `modes/power.py` (0 A vs. the Power-mode target current) — and it is one of
-`sensor.smart_charging_charger_status`'s three `ENUM` options per
-[ADR-0034](0034-dedicated-charger-status-diagnostic-sensor.md), part of R19 AC1's "charger
-status (connected/charging/disconnected)" dashboard requirement.
+`sensor.smart_charging_charger_status`'s three `ENUM` options (`sensor.py`, the sensor
+[ADR-0034](0034-dedicated-charger-status-diagnostic-sensor.md) decided), part of R19 AC1's
+"charger status (connected/charging/disconnected)" dashboard requirement.
 
 ADR-0034's own Consequences already documented the `None`-on-unmatched-state behavior as a
 premise the new sensor had to render as "unknown" — that premise is exactly what this ADR
 revisits.
 
-[ADR-0009](0009-testing-strategy.md)'s Context carries the same expectation in passing, describing
+[ADR-0009](0009-testing-strategy.md)'s Decision carries the same expectation in passing, describing
 an enum role's unmapped raw state as "the same case the error-handling decision … treats as
 equivalent to a missing entity" — also narrowed by this ADR for `charger_status` specifically.
-ADR-0009's Decision and Consequences (adapters are tested against four HA-state cases, including
-unmapped-raw-state for enum roles) are otherwise unaffected: that test case still needs covering,
-only the expected outcome changes.
+The rest of ADR-0009's Decision and its Consequences (adapters are tested against four HA-state
+cases, including unmapped-raw-state for enum roles) are otherwise unaffected: that test case
+still needs covering, only the expected outcome changes for this one role.
+[ADR-0008](0008-reconfigure-reload-behavior.md)'s Context mentions "untranslatable charger
+status" too, but only to name ADR-0007 as the decision that governs it and mark it out of
+scope for ADR-0008 itself — it asserts nothing of its own about that case, so it needs no
+narrowing pointer here.
 
 This ADR covers only what an unmatched raw charger-status state means, for required roles whose
 adapter faults on a missing/unmapped value per ADR-0007's general rule. It does not touch ADR-0007's
@@ -142,10 +146,13 @@ implementation spec (see Consequences) rather than adopted as a design change he
 This narrows [ADR-0003](0003-hardware-abstraction-adapters.md)'s Decision ("a raw state with
 no entry in the translation table … is treated the same as an unavailable entity"),
 [ADR-0007](0007-fault-handling.md)'s Decision ("for charger status specifically, a raw state
-with no translation-table entry — is treated as a fault" — and, as a consequence, ADR-0007's
-next sentence, "Grid voltage is the one documented exception, per NF4," is no longer a
-complete enumeration of ADR-0007's exceptions to the general fault rule), and
-[ADR-0009](0009-testing-strategy.md)'s Context (the same expectation, stated in passing) to the
+with no translation-table entry — is treated as a fault", and its adjacent "No substitute
+value is ever guessed" — for this one role and case, a canonical value the household never
+authored is now substituted precisely because the alternative, faulting on every real
+disconnect, is worse; and, as a further consequence, ADR-0007's next sentence, "Grid voltage
+is the one documented exception, per NF4," is no longer a complete enumeration of ADR-0007's
+exceptions to the general fault rule), and
+[ADR-0009](0009-testing-strategy.md)'s Decision (the same expectation, stated in passing) to the
 case where the entity itself is present and reporting: that case now resolves to
 `STATE_DISCONNECTED`, not `None`/`Fault`. None of the three ADRs is superseded outright — all
 keep `Accepted` status and every other clause intact, per this project's precedent for a
@@ -156,6 +163,13 @@ the missing/unavailable-*entity* branch; ADR-0034's actual decision (a dedicated
 unaffected. A missing or unavailable `charger_status` *entity* (the adapter's `state is None`
 branch) is untouched by this ADR: that case still returns `None` and still faults, per
 ADR-0007's general rule for every required role.
+
+This is captured as an ADR, not a `requirements.md`/glossary-only change, because what it
+narrows is a cross-module fault-signal *contract* three Accepted ADRs already establish
+(ADR-0003, ADR-0007, ADR-0009) — the value an adapter's `None` return means to the
+coordinator's fault path — and only an ADR can narrow another ADR without silently
+contradicting it; the domain-level statement of the resulting rule itself still belongs in the
+glossary, per the documentation-pass Consequence below.
 
 ## Consequences
 
@@ -172,15 +186,28 @@ ADR-0007's general rule for every required role.
   semantics)", which becomes wrong for the unmapped-but-present case). `docs/analysis/
   system-overview.md`'s `charger status` glossary entry is the natural home for stating the
   new default-to-disconnected rule itself, mirroring how its `low-tariff flag` entry already
-  documents that role's analogous "every other raw state" default. ADR-0034's own ADR body
-  (like ADR-0003's, ADR-0007's, and ADR-0009's) is not edited by this documentation pass, per
-  ADR-immutability — only `docs/adl/README.md`'s title cells (above) point at this ADR.
+  documents that role's analogous "every other raw state" default. `docs/analysis/use-cases/
+  UC09-sync-charge-limit-with-car.md` (AC8: on a transition to `disconnected`, the system
+  writes the default SOC limit to the vehicle and a plug-in reminder becomes eligible) needs a
+  note that a false `disconnected` reading from this ADR's accepted regression now triggers
+  that write and reminder too — the most consequential downstream effect of the regression.
+  ADR-0034's own ADR body (like ADR-0003's, ADR-0007's, and ADR-0009's) is not edited by this
+  documentation pass, per ADR-immutability — only `docs/adl/README.md`'s title cells (above)
+  point at this ADR.
 - Implementation (the `adapters/status.py` change; test coverage for "raw state matches
   neither list → disconnected, not fault"; and a decision on whether to log once per distinct
   unmatched raw state, so a household can discover an unanticipated firmware string even
   though it no longer faults) needs its own implementation-spec/TDD-plan follow-up via
   `write-impl-spec`, gated on the documentation pass above landing first, per this project's
-  analysis-first methodology.
+  analysis-first methodology. That follow-up must also rewrite the existing artifacts that
+  assert today's superseded behavior, at minimum: `tests/adapters/test_status.py`'s
+  `test_unmapped_raw_state_returns_none` (name, comment, and assertion all invert);
+  `tests/test_init.py`'s `test_end_to_end_disconnect_forces_zero_and_fault`, which seeds the
+  unmapped raw state `"Unplugged"` and asserts `Fault` (the 0 A guarantee for that case moves
+  from ADR-0007's fault path to `CHARGEABLE_STATES` gating in mode logic instead — a different
+  mechanism, still satisfying C1); `adapters/status.py`'s class docstring, which calls both
+  `None` branches "the ADR-0007 fault signal"; and `tests/adapters/test_tariff.py`'s comment
+  contrasting `low_tariff` with "StatusReadAdapter's unmapped-state case" as a fault.
 - A raw state that should have matched `connected_states` or `charging_states` but doesn't —
   a typo, an unanticipated firmware string, or a charger error/fault state never listed
   anywhere — now resolves to `disconnected` instead of `Fault`, for as long as it persists.
