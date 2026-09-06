@@ -1,7 +1,8 @@
 """Numeric read and read/write adapters (ADR-0003)."""
 
 from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE
-from homeassistant.const import ATTR_ENTITY_ID, Platform
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_UNIT_OF_MEASUREMENT, Platform, UnitOfPower
+from homeassistant.util.unit_conversion import PowerConverter
 
 from ._read_only import _ReadOnlyAdapter
 
@@ -17,6 +18,28 @@ class NumericReadAdapter(_ReadOnlyAdapter):
             return float(state.state)
         except (ValueError, TypeError):
             return None
+
+
+class PowerKilowattReadAdapter(_ReadOnlyAdapter):
+    """Reads a power entity's value, normalised to kW (ADR-0030 D-1).
+
+    An absent/non-power unit reads as None rather than being assumed kW -- a
+    misread W value as kW would widen the billing-protection clamp instead of
+    narrowing it, the asymmetric mistake ADR-0030 chooses against.
+    """
+
+    async def read(self) -> float | None:
+        state = self._live_state()
+        if state is None:
+            return None
+        unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+        if unit not in PowerConverter.VALID_UNITS:
+            return None
+        try:
+            value = float(state.state)
+        except (ValueError, TypeError):
+            return None
+        return PowerConverter.convert(value, unit, UnitOfPower.KILO_WATT)
 
 
 class NumericReadWriteAdapter(NumericReadAdapter):
