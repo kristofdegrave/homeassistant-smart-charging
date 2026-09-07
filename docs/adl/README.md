@@ -12,7 +12,7 @@ template.
 | [0003](0003-hardware-abstraction-adapters.md) | Hardware abstraction via config-flow entity mapping and Python adapters — the unmatched-`charger_status`-raw-state clause narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0004](0004-owned-vs-mapped-entities.md) | Owned control/diagnostic entities vs. mapped hardware entities | Accepted |
 | [0005](0005-config-entry-structure-and-interval.md) | Config entry structure and control interval | Accepted |
-| [0006](0006-coordinator-and-data-flow.md) | Coordinator and data flow | Accepted |
+| [0006](0006-coordinator-and-data-flow.md) | Coordinator and data flow — step 2's smoothed-reading list, and the smoothed-set half of its forward-looking bar, narrowed by [ADR-0036](0036-step-2-smooths-net-power-only.md) | Accepted |
 | [0007](0007-fault-handling.md) | Fault handling for adapter reads, translation failures, and uncaught exceptions — the `charger_status`-specific clause narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0008](0008-reconfigure-reload-behavior.md) | Config-entry reload on reconfigure and options changes | Accepted |
 | [0009](0009-testing-strategy.md) | Testing strategy — the `charger_status` unmapped-raw-state expectation narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
@@ -42,5 +42,6 @@ template.
 | [0033](0033-captar-step-gains-a-mapping-half.md) | External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half | Accepted |
 | [0034](0034-dedicated-charger-status-diagnostic-sensor.md) | Dedicated diagnostic sensor for the `charger_status` role (extends ADR-0021) — its stated `None`-on-unmatched-state premise narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Unmatched `charger_status` raw states default to disconnected, not fault | Accepted |
+| [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
