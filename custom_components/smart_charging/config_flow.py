@@ -867,13 +867,19 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
 
     async def async_step_captar(self, user_input=None):
         """UC12 (topic-step) step 6: the mapping half (CAPTAR_MAPPING_SCHEMA, ADR-0033) plus
-        the threshold half -- gated on CapTar declared this run AND mode is not reconfigure
-        (CONFIG_TABLE's own gate), so this step is unreachable during reconfigure and needs
-        neither `self._mode` branching nor `_maybe_prefill` in its own body yet (T5 adds both
-        once the gate is due to flip)."""
-        schema = CAPTAR_MAPPING_SCHEMA.extend(_captar_threshold_schema().schema)
+        the threshold half, the latter gated on mode is not reconfigure like every other
+        topic step's own threshold half (ADR-0027 point 4). Still unreachable during
+        reconfigure today -- CONFIG_TABLE's own `STEP_CAPTAR` gate is unconditionally False
+        there until T6 flips it -- so `self._mode`/`_maybe_prefill` are exercised for the
+        first time only once that gate changes; this commit itself changes no observable
+        behaviour."""
+        schema = CAPTAR_MAPPING_SCHEMA
+        if self._mode is not FlowMode.RECONFIGURE:
+            schema = schema.extend(_captar_threshold_schema().schema)
         if user_input is None:
-            return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
+            return self.async_show_form(
+                step_id=STEP_CAPTAR, data_schema=self._maybe_prefill(schema)
+            )
 
         self._answers.update(user_input)
         return await self._async_advance(after=STEP_CAPTAR)
@@ -926,9 +932,12 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
     async def _async_finish(self) -> config_entries.ConfigFlowResult:
         """UC12 step 10 (install) / 1a (reconfigure): create or update the entry. Reconfigure
         touches the data bucket only (ADR-0005) and reloads (ADR-0008); it never computes
-        `options` at all -- neither `power` nor `captar` is reachable in this mode
-        (CONFIG_TABLE's own gates), so no threshold answer ever entered `self._answers` to
-        intersect."""
+        `options` at all. `power`'s CONFIG_TABLE gate keeps it out of reconfigure entirely;
+        `captar`'s does too for now (T6 flips it), but even once reachable there it still
+        contributes no `OPTION_KEYS` member, because `async_step_captar`'s own `self._mode`
+        branching (ADR-0033) never renders its threshold half outside install/options. Neither
+        step ever puts a threshold answer into `self._answers` for this method to
+        intersect against."""
         data = _split_data(self._answers)
         if self._mode is FlowMode.RECONFIGURE:
             entry = self._get_reconfigure_entry()
@@ -944,8 +953,11 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         """UC12 1a's reconfigure entry point (ADR-0027 point 5): delegate into the shared
         `core` step, framework-imposed name aside -- the same shared step methods and table
         install uses, with `self._mode` alone selecting each step's mapping-only render
-        (`_maybe_prefill`), the `power`/`captar` rows' skip, and `_async_finish`'s terminal
-        branch. No guard logic of its own: `_car_home_missing_error` is already step-local and
+        (`_maybe_prefill`) and `_async_finish`'s terminal branch. `power`'s row stays skipped
+        entirely here (CONFIG_TABLE's own gate); `captar`'s does too for now, pending T6's
+        gate flip -- once it lands, `self._mode` branching in `async_step_captar` itself
+        (ADR-0033), not a table change here, is what keeps its threshold half out of this
+        mode. No guard logic of its own: `_car_home_missing_error` is already step-local and
         runs unconditionally regardless of `self._mode`."""
         self._mode = FlowMode.RECONFIGURE
         self._answers = {}
