@@ -66,6 +66,11 @@ Given the car is home, disconnected, and below the active SOC limit
 When the next departure time resolves to "no deadline" for both dates the resolution rule considers — today's still-future occurrence and tomorrow's (`resolution-rules.md`, R14)
 Then the System sends no reminder — there is no departure to be ready for.
 
+**An unmapped raw charger-status state satisfies the disconnected precondition (ADR-0035).**
+Given the charger reports a raw connection-state string the household never listed as `connected` or `charging` (a typo, an unanticipated firmware string, or a charger error/fault state) while the car may still be physically plugged in
+When the `charger_status` adapter role resolves that raw state to `disconnected` per its default ([charger status](../system-overview.md#ubiquitous-language) glossary entry), and every other precondition and the trigger hold
+Then the System sends a reminder to plug in a car that may already be plugged in — an accepted regression of ADR-0035, not a defect in this use-case; it clears once the raw state is added to `connected_states`/`charging_states` or the charger reports one it already recognises.
+
 ## Postconditions
 
 - The driver has been notified in time to plug in and let whichever charging use-case is active (UC01–UC05) reach the active SOC limit by the next departure time.

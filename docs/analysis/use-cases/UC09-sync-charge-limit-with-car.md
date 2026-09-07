@@ -65,6 +65,11 @@ Given the `vehicle_charge_limit` adapter role is not mapped for the connected ve
 When the resolved active SOC limit changes, or the vehicle would otherwise be disconnected
 Then the System performs no write; the active SOC limit is still enforced only through charger-current control ([UC01](UC01-charge-from-solar-surplus.md)–[UC05](UC05-guarantee-ready-by-departure.md)), and the vehicle's own charge limit (if it has one) is left untouched.
 
+**An unmapped raw charger-status state resolves to `disconnected` (ADR-0035).**
+Given the charger reports a raw connection-state string the household never listed as `connected` or `charging` (a typo, an unanticipated firmware string, or a charger error/fault state) while the vehicle may still be physically connected
+When the `charger_status` adapter role resolves that raw state to `disconnected` per its default ([charger status](../system-overview.md#ubiquitous-language) glossary entry)
+Then, if a `connected`/`charging` reading immediately preceded it, Trigger 3 fires on that transition edge exactly as it would for a genuine unplug, and the System writes the default SOC limit to the vehicle (main-flow step 8) once; independently of whether the transition edge fired, [UC10](UC10-remind-to-plug-in.md)'s `disconnected` precondition is satisfied for as long as the unmapped state persists — this is an accepted regression of ADR-0035, not a defect in this use-case.
+
 ## Postconditions
 
 - While the car is connected at home, the vehicle's charge-limit setting always mirrors whichever active SOC limit is currently resolved (`resolution-rules.md`); a change to the resolved value is reflected on the vehicle within one control cycle.
