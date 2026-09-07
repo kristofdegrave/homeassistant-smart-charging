@@ -866,10 +866,11 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return await self._async_advance(after=STEP_POWER)
 
     async def async_step_captar(self, user_input=None):
-        """UC12 (topic-step) step 6: threshold-only, no mapping half (design field-to-step
-        table) -- gated on CapTar declared this run AND mode is not reconfigure
+        """UC12 (topic-step) step 6: the mapping half (CAPTAR_MAPPING_SCHEMA, ADR-0033) plus
+        the threshold half -- gated on CapTar declared this run AND mode is not reconfigure
         (CONFIG_TABLE's own gate), so this step is unreachable during reconfigure and needs
-        neither `self._mode` branching nor `_maybe_prefill` in its own body."""
+        neither `self._mode` branching nor `_maybe_prefill` in its own body yet (T5 adds both
+        once the gate is due to flip)."""
         schema = CAPTAR_MAPPING_SCHEMA.extend(_captar_threshold_schema().schema)
         if user_input is None:
             return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)

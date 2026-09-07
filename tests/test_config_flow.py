@@ -927,6 +927,24 @@ async def test_uc12_captar_step_renders_its_mapping_and_threshold_halves_no_ev_s
     assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
 
 
+async def test_monthly_peak_external_entity_is_optional(hass):
+    result = await _run_install_flow(hass, capabilities={CONF_CAPTAR_AVAILABLE: True})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in result["data"]
+
+
+async def test_monthly_peak_external_entity_can_be_mapped(hass):
+    result = await _run_install_flow(
+        hass,
+        capabilities={CONF_CAPTAR_AVAILABLE: True},
+        per_step_input={
+            STEP_CAPTAR: {**CAPTAR_INPUT, CONF_MONTHLY_PEAK_EXTERNAL_ENTITY: "sensor.dso_peak"}
+        },
+    )
+    assert result["data"][CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] == "sensor.dso_peak"
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in result["options"]
+
+
 async def test_uc12_2a_captar_absent_skips_the_captar_step(hass):
     """Solar declared present (so a step exists right after `power` to land on), captar left
     absent (CORE_INPUT's default) -- the captar step must not be the one shown."""
