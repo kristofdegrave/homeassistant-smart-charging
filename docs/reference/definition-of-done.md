@@ -45,4 +45,4 @@ matching current practice (`git log`):
 | anything else (a fix, refactor, chore not tied to a plan task) | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
 
 CI's `_ai-draft.yml` uses its own coarser commit-prefix mapping for the initial draft commit
-only — see [contribution-workflow.md](contribution-workflow.md)'s **CI flow** section.
+only — see [ci-pipeline.md](ci-pipeline.md).
