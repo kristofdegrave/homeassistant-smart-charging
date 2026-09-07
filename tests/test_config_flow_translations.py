@@ -88,7 +88,7 @@ CONFIG_STEP_FIELDS = {
     ),
     cf.STEP_VEHICLE: _keys(cf.VEHICLE_MAPPING_SCHEMA) | _keys(cf._vehicle_threshold_schema()),
     cf.STEP_POWER: _keys(cf._power_threshold_schema()),
-    cf.STEP_CAPTAR: _keys(cf._captar_threshold_schema()),
+    cf.STEP_CAPTAR: _keys(cf.CAPTAR_MAPPING_SCHEMA) | _keys(cf._captar_threshold_schema()),
     cf.STEP_SOLAR: _keys(cf.SOLAR_MAPPING_SCHEMA) | _keys(cf._solar_threshold_schema()),
     cf.STEP_DEADLINE: _keys(cf.DEADLINE_MAPPING_SCHEMA) | _keys(cf._deadline_threshold_schema()),
     cf.STEP_NOTIFICATIONS: (

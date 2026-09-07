@@ -97,8 +97,9 @@
       },
       "captar": {
         "title": "CapTar",
-        "description": "Stel de piekbeperkingsdrempels van CapTar in.",
+        "description": "Koppel optioneel een externe maandpiek-sensor en stel de piekbeperkingsdrempels van CapTar in.",
         "data": {
+          "monthly_peak_external_entity": "Externe maandpiek-sensor (optioneel)",
           "captar_cooldown_min": "Afkoelduur Captar (min)",
           "power_respect_peak": "Vermogen-modus houdt rekening met de piekgrens",
           "safety_margin_w": "CapTar veiligheidsmarge piek (W)",
@@ -107,6 +108,7 @@
           "peak_grace_min": "CapTar respijtperiode piek (min)"
         },
         "data_description": {
+          "monthly_peak_external_entity": "Optionele sensor die de door het energiebedrijf zelf bijgehouden maandelijkse piekvraag rapporteert (bijv. via een DSO/slimme-meter-integratie), samengevoegd met de eigen bijgehouden piek van deze integratie zodat een echte piek die optrad terwijl er niet werd waargenomen niet wordt gemist.",
           "captar_cooldown_min": "Minimale tijd (minuten) die CapTar moet wachten nadat een piekgrensoverschrijding het stoppen afdwingt, voordat het weer mag laden. Standaard 10.",
           "power_respect_peak": "Indien aan, houdt Vermogen-modus ook rekening met de CapTar-piekgrens in plaats van deze te negeren. Standaard aan.",
           "safety_margin_w": "Vermogensmarge (W) die CapTar van de effectieve piekgrens aftrekt als veiligheidsbuffer voordat de grens wordt berekend. Standaard 250.",
