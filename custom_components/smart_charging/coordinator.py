@@ -47,6 +47,7 @@ from .const import (
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
     ROLE_LOW_TARIFF,
+    ROLE_MONTHLY_PEAK_EXTERNAL,
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
     ROLE_SOLAR_POWER,
@@ -71,6 +72,7 @@ from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
     resolve_effective_peak_limit,
+    resolve_monthly_peak_operand,
 )
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
@@ -417,10 +419,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         monthly_peak_kw = self._peak_demand.update(
             net_w, now_dt, window_size=self._config.peak_window_size
         )
+        # ADR-0030/ADR-0032: an optional external monthly-peak reading (DSO/smart-meter),
+        # merged with the internally-tracked value into the clamp's operand. Never gated on
+        # captar_available -- _apply_peak_clamp itself carries no capability gate, so a higher
+        # operand affects every mode, not just Captar. monthly_peak_kw itself keeps meaning
+        # only the internally-tracked peak (D-6): it is never overwritten with the merged
+        # value, so a live spike this integration observes between external-sensor refreshes
+        # is not discarded.
+        external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)
+        peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)
         # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
         # known -- overwritten with the real `urgent` value once required-current resolves.
         effective_peak_limit_kw = resolve_effective_peak_limit(
-            monthly_peak_kw,
+            peak_operand_kw,
             self._config.max_peak_kw,
             self._config.peak_floor_kw,
             urgent=False,
@@ -619,7 +630,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         urgent = deadline_urgency.urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
-            monthly_peak_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
+            peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
         )
         # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
         # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault
