@@ -11,9 +11,9 @@ documents that cover the same ground without restating shared mechanism across n
 | `02-solar-only-flow.md`     | `SolarOnly` mode (R2)                                                  | [UC02](../use-cases/UC02-charge-from-solar-only.md)                                                                      |
 | `03-captar-flow.md`         | `Captar` mode (R4)                                                     | [UC03](../use-cases/UC03-charge-from-grid-within-captar-limit.md)                                                        |
 | `04-power-flow.md`          | `Power` mode, incl. configurable peak-breach option (R17)              | [UC04](../use-cases/UC04-charge-at-a-user-set-current.md)                                                                |
-| `05-soc-management.md`      | Active SOC limit resolution & lifecycle and solar step-up (R6, R7, R8) | Active SOC limit lookup in [`resolution-rules.md`](../resolution-rules.md) (R7); step-up lifecycle in UC06 (planned)     |
-| `06-deadline-override.md`   | Deadline urgency as a cross-cutting override (R5)                      | Departure-deadline lookup in [`resolution-rules.md`](../resolution-rules.md) (R14); urgency escalation in UC05 (planned) |
-| `07-solar-reserve-logic.md` | Solar-reserve overnight cap and the home-day flag (R9, R13)            | Solar-reserve row of the active SOC limit table in [`resolution-rules.md`](../resolution-rules.md); UC07/UC08 (planned)  |
+| `05-soc-management.md`      | Active SOC limit resolution & lifecycle and solar step-up (R6, R7, R8) | Active SOC limit lookup in [`resolution-rules.md`](../resolution-rules.md) (R7); step-up lifecycle in UC06 (committed)   |
+| `06-deadline-override.md`   | Deadline urgency as a cross-cutting override (R5)                      | Departure-deadline lookup in [`resolution-rules.md`](../resolution-rules.md) (R14); urgency escalation in UC05 (committed) |
+| `07-solar-reserve-logic.md` | Solar-reserve overnight cap and the home-day flag (R9, R13)            | Solar-reserve row of the active SOC limit table in [`resolution-rules.md`](../resolution-rules.md); UC07/UC08 (committed) |
 | `08-profile-selection.md`   | Profiles select modes; the `Auto` profile (R16, NF1)                   | Auto mode-selection table in [`resolution-rules.md`](../resolution-rules.md)                                             |
 
 Rationale for the pivot: the per-mode flows (01–04) turned out to be goal-oriented behaviours
