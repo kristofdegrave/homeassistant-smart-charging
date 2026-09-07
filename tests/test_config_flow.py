@@ -1150,6 +1150,149 @@ async def test_uc12_1a_reconfigure_visits_captar_when_present(hass):
     assert STEP_CAPTAR in visited
 
 
+async def test_reconfigure_captar_step_prefills_the_external_monthly_peak_mapping(hass):
+    """D-7 / the silent-drop bug ADR-0033 names: an entry already carrying
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY must render it as the captar step's suggested value on
+    reconfigure, and resubmitting the prefilled form unchanged must not null it out. Modeled on
+    test_reconfigure_grid_step_prefills_low_tariff_states -- rendering a suggestion is not the
+    property that matters; surviving the save is."""
+    data = dict(_RECONFIGURE_ENTRY_DATA)
+    data[CONF_CAPTAR_AVAILABLE] = True
+    data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] = "sensor.dso_peak"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(  # core
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_GRID
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_EV_CHARGER
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_VEHICLE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_CAPTAR
+    suggested = _suggested_values(result)
+    assert suggested[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] == "sensor.dso_peak"
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], suggested)
+    assert result["step_id"] == STEP_NOTIFICATIONS
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] == "sensor.dso_peak"
+
+
+async def test_reconfigure_captar_step_clearing_the_mapping_removes_it(hass):
+    """UC12 6a: leaving the mapping unset or clearing it is equivalent either way -- submit the
+    captar step with the field omitted and assert the key is absent from entry.data afterwards.
+    Scoped to entry.data, which is what the flow owns; the factory's own behaviour on a missing
+    key is covered by T1 (tests/adapters/test_factory.py)."""
+    data = dict(_RECONFIGURE_ENTRY_DATA)
+    data[CONF_CAPTAR_AVAILABLE] = True
+    data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] = "sensor.dso_peak"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(  # core
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_GRID
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_EV_CHARGER
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_VEHICLE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_CAPTAR
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CAPTAR_INPUT)
+    assert result["step_id"] == STEP_NOTIFICATIONS
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in entry.data
+
+
+async def test_reconfigure_captar_withdrawal_clears_mapping_but_leaves_thresholds_dormant(hass):
+    """entity-catalog.md's Captar-dependent-rows note: reconfigure an entry that has the
+    mapping stored, declare captar_available OFF on the core step, finish, and assert (a)
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY is gone from entry.data, and (b) the six options-bucket
+    CapTar values (the four thresholds, power_respect_peak, captar_cooldown_min) are UNCHANGED
+    in entry.options, lying dormant. The asymmetry is the point -- asserting only half of it
+    would pass while the note's claim was broken."""
+    data = dict(_RECONFIGURE_ENTRY_DATA)
+    data[CONF_CAPTAR_AVAILABLE] = True
+    data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] = "sensor.dso_peak"
+    options = entry_options_base(
+        **{
+            CONF_MAX_PEAK_KW: 7.0,
+            CONF_PEAK_FLOOR_KW: 3.0,
+            CONF_PEAK_GRACE_MIN: 5.0,
+            CONF_SAFETY_MARGIN_W: 300.0,
+            CONF_POWER_RESPECT_PEAK: False,
+            CONF_CAPTAR_COOLDOWN_MIN: 15.0,
+        }
+    )
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["step_id"] == STEP_CORE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**_suggested_values(result), CONF_CAPTAR_AVAILABLE: False}
+    )
+    assert result["step_id"] == STEP_GRID
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_EV_CHARGER
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["step_id"] == STEP_VEHICLE
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    # captar_available is False this run -- CONFIG_TABLE's gate skips straight to
+    # notifications, the only other capability _RECONFIGURE_ENTRY_DATA declares present.
+    assert result["step_id"] == STEP_NOTIFICATIONS
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _suggested_values(result)
+    )
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()
+
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in entry.data
+    assert dict(entry.options) == original_options
+
+
 async def test_uc12_1a_reconfigure_shows_mapping_halves_only(hass):
     """UC12 1a: the per-capability steps that DO show in reconfigure are restricted to
     mapping fields only -- never a threshold field mixed in."""
