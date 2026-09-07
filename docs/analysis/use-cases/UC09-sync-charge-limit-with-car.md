@@ -68,7 +68,7 @@ Then the System performs no write; the active SOC limit is still enforced only t
 **An unmapped raw charger-status state resolves to `disconnected` (ADR-0035).**
 Given the charger reports a raw connection-state string the household never listed as `connected` or `charging` (a typo, an unanticipated firmware string, or a charger error/fault state) while the vehicle may still be physically connected
 When the `charger_status` adapter role resolves that raw state to `disconnected` per its default ([charger status](../system-overview.md#ubiquitous-language) glossary entry)
-Then this use-case's disconnect trigger (Trigger 3, step 8) fires exactly as it would for a genuine unplug — writing the default SOC limit to the vehicle and satisfying the plug-in reminder's `disconnected` precondition (`entity-catalog.md`'s `binary_sensor.smart_charging_plug_in_reminder`) — for as long as the unmapped state persists; this is an accepted regression of ADR-0035, not a defect in this use-case.
+Then, if a `connected`/`charging` reading immediately preceded it, Trigger 3 fires on that transition edge exactly as it would for a genuine unplug, and the System writes the default SOC limit to the vehicle (main-flow step 8) once; independently of whether the transition edge fired, [UC10](UC10-remind-to-plug-in.md)'s `disconnected` precondition is satisfied for as long as the unmapped state persists — this is an accepted regression of ADR-0035, not a defect in this use-case.
 
 ## Postconditions
 
