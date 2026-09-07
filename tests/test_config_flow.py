@@ -1237,12 +1237,16 @@ async def test_reconfigure_captar_step_clearing_the_mapping_removes_it(hass):
 
 
 async def test_reconfigure_captar_withdrawal_clears_mapping_but_leaves_thresholds_dormant(hass):
-    """entity-catalog.md's Captar-dependent-rows note: reconfigure an entry that has the
-    mapping stored, declare captar_available OFF on the core step, finish, and assert (a)
-    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY is gone from entry.data, and (b) the six options-bucket
-    CapTar values (the four thresholds, power_respect_peak, captar_cooldown_min) are UNCHANGED
-    in entry.options, lying dormant. The asymmetry is the point -- asserting only half of it
-    would pass while the note's claim was broken."""
+    """entity-catalog.md's Captar-dependent-rows note: withdrawing CapTar on reconfigure drops
+    the data-bucket mapping (CONF_MONTHLY_PEAK_EXTERNAL_ENTITY) exactly as it drops any other
+    withdrawn capability's mapping fields, while the options-bucket values it gates (the four
+    peak-protection thresholds, power_respect_peak, and captar_cooldown_min) lie dormant
+    instead -- the entry keeps whichever value each already holds, untouched, until the
+    capability is declared present again. Asserts both halves together: (a)
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY is gone from entry.data, and (b) entry.options is
+    byte-identical to its pre-run snapshot (stronger than a per-key check -- it also catches
+    e.g. a stray CONF_CONTROL_INTERVAL_S insertion). The asymmetry is the point -- asserting
+    only half of it would pass while the note's claim was broken."""
     data = dict(_RECONFIGURE_ENTRY_DATA)
     data[CONF_CAPTAR_AVAILABLE] = True
     data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] = "sensor.dso_peak"
