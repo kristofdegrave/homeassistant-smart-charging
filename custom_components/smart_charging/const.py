@@ -155,6 +155,8 @@ ACTION_HOMEDAY_NO = "HOMEDAY_NO"
 # RA1-VL + car_home (RA2 role, built early -- M2 is their first consumer).
 ROLE_VEHICLE_CHARGE_LIMIT = "vehicle_charge_limit"
 ROLE_CAR_HOME = "car_home"
+# ADR-0030: external monthly-peak sensor (DSO/smart-meter), optional at the factory level.
+ROLE_MONTHLY_PEAK_EXTERNAL = "monthly_peak_external"
 
 # ADR-0021: adapter_readings mirrors every currently-wired *read* role's most recently read
 # value; a role the coordinator (M1's own _run_cycle) never reads has no value to mirror.
@@ -222,6 +224,8 @@ CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC
 # required when vehicle_charge_limit is mapped, OR when the deadline capability is declared
 # present (UC12 4a, topic-step config-flow design D-3)
 CONF_CAR_HOME_ENTITY = "car_home_entity"
+# optional at the factory level (NF3) -- ADR-0030, the captar-step mapping half (ADR-0033)
+CONF_MONTHLY_PEAK_EXTERNAL_ENTITY = "monthly_peak_external_entity"
 
 # Config-flow error codes (config_flow.py's mapping-step guards). Values must match
 # strings.json/translations/en.json's config.error keys exactly --
