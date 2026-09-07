@@ -4,7 +4,7 @@
 
 **Do not write code until the relevant analysis document exists and is complete.**
 
-The full methodology is documented in [docs/plans/2026-06-24-analysis-approach-design.md](docs/plans/2026-06-24-analysis-approach-design.md).
+The full methodology is documented in [docs/plans/2026-06-24-analysis-approach-design.md](docs/plans/2026-06-24-analysis-approach-design.md) — that plan doc's own Document Structure/Writing Order sections predate the pivot recorded in `docs/analysis/flows/README.md`; this file's own Document structure/Writing order sections below are the current ones.
 
 ---
 
@@ -17,9 +17,11 @@ docs/analysis/
   control-cycle.md      — start here: the coordinator loop (read → smooth → dispatch → clamp → set)
   resolution-rules.md   — shared priority-ordered lookups (active SOC limit, departure deadline,
                            effective peak limit, Auto mode-selection)
-  entity-catalog.md     — every sc_ entity: id, unit, default, Read by / Written by
-  use-cases/            — one goal-oriented UCnn-*.md per behaviour (UC01-UC12)
-  flows/README.md       — historical mapping only; no further flow documents are planned
+  entity-catalog.md     — every owned entity, config key, and adapter role: id/key, unit,
+                           default, Read by / Written by
+  use-cases/            — one goal-oriented UCnn-*.md per behaviour (inventory in
+                           use-cases/README.md); flows/README.md is a historical mapping only —
+                           no further flow documents are planned
 ```
 
 Previous iteration archived at `docs/archive/` — do not use as source of truth.
@@ -30,7 +32,7 @@ docs/design/
   project-plan.md      — implementation task breakdown derived mechanically from system-design.md
 ```
 
-Use cases and flows validate this decomposition — they never drive it. See
+Use-cases and mechanism documents validate this decomposition — they never drive it. See
 `docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale and the
 `write-system-design` / `write-project-design` skills for the cycle.
 
@@ -46,7 +48,8 @@ docs/adl/
 
 1. `system-overview.md`
 2. `requirements.md` (fresh from idea — not from archive)
-3. `control-cycle.md`, then `resolution-rules.md`, then `use-cases/` one at a time
+3. `control-cycle.md`, then `resolution-rules.md`, then `entity-catalog.md`, then `use-cases/`
+   one at a time
 4. Revisit `requirements.md` after use-cases reveal gaps
 5. Once the relevant use-cases are stable, `design/system-design.md` (volatility-based
    decomposition), then `design/project-plan.md` — before opening ADRs for the structural
@@ -105,7 +108,7 @@ their own template/quality-check steps on top of these; they never replace them.
 Two DDD concepts are intentionally adopted:
 
 1. **Ubiquitous Language glossary** — lives in `system-overview.md`. Every domain term used across documents must be defined here first.
-2. **Domain events** — each flow doc lists the events it produces (past tense, PascalCase, e.g. `ChargingStarted`). Shown as named nodes in Mermaid diagrams. Map directly to HA automation triggers.
+2. **Domain events** — each use-case and mechanism document lists the events it produces (past tense, PascalCase, e.g. `ChargingStarted`). Shown as named nodes in Mermaid diagrams. Map directly to HA automation triggers.
 
 Full tactical DDD (Aggregates, Repositories, Value Objects) is out of scope.
 
@@ -204,7 +207,7 @@ points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the
 
 ## Flow document standard
 
-Each flow doc: Purpose → Trigger → **Domain events** → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
+Applies to `control-cycle.md` (the one remaining flow document): Purpose → Trigger → **Domain events** → Mermaid diagram → Steps → Edge cases → Requirements satisfied.
 
 Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.
 
