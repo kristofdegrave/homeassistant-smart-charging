@@ -207,9 +207,11 @@ class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
 
 
 class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
-    """Diagnostic: resolve_effective_peak_limit(monthly_peak_kw, max_peak_kw, peak_floor_kw,
-    urgent), kW (C3). No restore needed -- recomputed from MonthlyPeakSensor's own restored
-    value on the first post-restart cycle."""
+    """Diagnostic: resolve_effective_peak_limit(peak_operand_kw, max_peak_kw, peak_floor_kw,
+    urgent), kW (C3). `peak_operand_kw` is the internally-tracked monthly peak merged with an
+    optional external reading (ADR-0030/ADR-0032) -- not MonthlyPeakSensor's own value, which
+    always shows the internally-tracked figure alone. No restore needed -- recomputed from
+    MonthlyPeakSensor's own restored value on the first post-restart cycle."""
 
     _attr_translation_key = "effective_peak_limit"
     _object_id_suffix = "effective_peak_limit"
