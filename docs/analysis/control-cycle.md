@@ -60,7 +60,7 @@ homed in the rule or use-case that defines its lifecycle.
 ```mermaid
 flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC"]
-    Read --> Smooth["Smooth net_w & solar_w<br/>(rolling mean, N cycles — R10)"]
+    Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
@@ -83,12 +83,14 @@ flowchart TD
    state of charge. These are [raw values](system-overview.md#ubiquitous-language) — the most
    recent, unsmoothed readings (the measured grid voltage is resolved into the
    [supply voltage](system-overview.md#ubiquitous-language) in step 3). Produces `SensorsRead`.
-2. **Smooth the power readings (R10).** The coordinator pushes this cycle's raw `net_w` and
-   `solar_w` into a rolling window of the last *N* samples (configurable, default 4) and
-   recomputes the [smoothed value](system-overview.md#ubiquitous-language) of each. Smoothed
-   values feed charging-rate decisions; the raw values are retained for peak protection. A
-   spike lasting a single cycle does not move the smoothed value; a change sustained across the
-   full window does, within the following cycle.
+2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
+   into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
+   [smoothed value](system-overview.md#ubiquitous-language). The smoothed value feeds
+   charging-rate decisions; the raw value is retained for peak protection. A spike lasting a
+   single cycle does not move the smoothed value; a change sustained across the full window
+   does, within the following cycle. `solar_w` is deliberately not smoothed — no step of this
+   cycle consumes it, since [solar surplus](system-overview.md#ubiquitous-language) is
+   `charger_w − net_w` (R10) — so it stays a raw reading throughout.
 3. **Resolve the supply voltage (NF4).** The coordinator selects the [supply
    voltage](system-overview.md#ubiquitous-language) used for all amperes↔watts conversions this
    cycle: the measured grid voltage when a healthy reading is available, otherwise the

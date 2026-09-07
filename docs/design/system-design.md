@@ -151,7 +151,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 | **Billing-Protection Engine** | V6 | Effective peak limit and the R3 peak clamp (skippable only by `Power`'s R17 opt-out) |
 | **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle |
-| **Signal-Conditioning Engine** | V8 | Smoothed `net_w`/`solar_w` (R10) and resolved supply voltage (NF4) |
+| **Signal-Conditioning Engine** | V8 | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4) |
 | **Cycle-Invariant Engine** | V9 | The final current after R11 cooldown/hold gating and the C1 floor/cap |
 | **Capability-Gate Engine** | V10 | Whether a given mode/behavior is available for the declared capabilities (R18) |
 
@@ -365,8 +365,8 @@ sequenceDiagram
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
-    C->>SC: smooth net/solar (R10) + resolve voltage (NF4)
-    SC-->>C: smoothed readings + supply voltage
+    C->>SC: smooth net_w (R10) + resolve voltage (NF4)
+    SC-->>C: smoothed net_w + supply voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
     C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag below; step-up row uses active profile + prior cycle's active mode, R8)

@@ -144,7 +144,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`charger status`** — The normalised charger connection state exposed via the `charger_status` adapter role, translated from the charger's raw states to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current). A user-supplied state-translation table lists which raw states count as `connected`/`charging`; every other raw state — including the charger's actual disconnected state, which has no field of its own to name — resolves to `disconnected` (ADR-0035). A missing or unavailable mapped entity is still a fault, not `disconnected` (ADR-0007).
 
-**`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w` or `solar_w` — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
+**`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w`, the only reading that is smoothed (R10) — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
 
 **`raw value`** — An unsmoothed, most-recent sensor reading; used by peak protection (R3) so a peak breach cannot persist for up to one smoothing window.
 

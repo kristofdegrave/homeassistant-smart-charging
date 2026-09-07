@@ -163,7 +163,8 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] Net grid power and solar power are each sampled once per control cycle, and the most recent *N* samples (configurable, default 4 — i.e. `N × control interval` in real time) are averaged before being used to set the charging rate.
+- [ ] Net grid power is sampled once per control cycle, and the most recent *N* samples (configurable, default 4 — i.e. `N × control interval` in real time) are averaged before being used to set the charging rate.
+- [ ] Solar power is read raw every control cycle and is never smoothed: no charging-rate decision consumes it. [Solar surplus](system-overview.md#ubiquitous-language) — the operand the solar modes set their rate from — is computed as `charger_w − net_w`, so it inherits its smoothing from net grid power alone. Solar power remains a configured input (NF3) for display and diagnostics only.
 - [ ] A power spike lasting a single control cycle does not change the charger set-point.
 - [ ] A power change sustained across the full smoothing window changes the charger set-point within the following control cycle.
 - [ ] Peak-protection decisions (R3) are exempt and use raw, unsmoothed readings.
