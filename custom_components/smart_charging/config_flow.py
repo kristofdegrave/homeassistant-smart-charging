@@ -42,6 +42,7 @@ from .const import (
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
@@ -450,10 +451,21 @@ def _solar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
     )
 
 
+CAPTAR_MAPPING_SCHEMA = vol.Schema(
+    {
+        # ADR-0030/ADR-0033: the optional external monthly-peak sensor (DSO/smart-meter),
+        # vol.Optional (UC12 6a -- unmapped by default; leaving it unset or clearing it later
+        # are equivalent either way).
+        vol.Optional(CONF_MONTHLY_PEAK_EXTERNAL_ENTITY): _entity("sensor"),
+    }
+)
+
+
 def _captar_threshold_schema(defaults: dict | None = None) -> vol.Schema:
-    """UC12 (topic-step) step 6 threshold half -- CapTar has no mapping half at all (design
-    field-to-step table): every mapping this step used to carry (`ev_soc_entity`) now lives
-    on the always-shown `vehicle` step (R20 AC4's once-only rule)."""
+    """UC12 (topic-step) step 6 threshold half. The step now carries a mapping half of its
+    own too (ADR-0033, CAPTAR_MAPPING_SCHEMA above) -- `ev_soc_entity` is the one mapping
+    this step still doesn't carry: it lives on the always-shown `vehicle` step (R20 AC4's
+    once-only rule)."""
     d = defaults or {}
     return vol.Schema(
         {
@@ -854,11 +866,12 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         return await self._async_advance(after=STEP_POWER)
 
     async def async_step_captar(self, user_input=None):
-        """UC12 (topic-step) step 6: threshold-only, no mapping half (design field-to-step
-        table) -- gated on CapTar declared this run AND mode is not reconfigure
+        """UC12 (topic-step) step 6: the mapping half (CAPTAR_MAPPING_SCHEMA, ADR-0033) plus
+        the threshold half -- gated on CapTar declared this run AND mode is not reconfigure
         (CONFIG_TABLE's own gate), so this step is unreachable during reconfigure and needs
-        neither `self._mode` branching nor `_maybe_prefill` in its own body."""
-        schema = _captar_threshold_schema()
+        neither `self._mode` branching nor `_maybe_prefill` in its own body yet (T5 adds both
+        once the gate is due to flip)."""
+        schema = CAPTAR_MAPPING_SCHEMA.extend(_captar_threshold_schema().schema)
         if user_input is None:
             return self.async_show_form(step_id=STEP_CAPTAR, data_schema=schema)
 
