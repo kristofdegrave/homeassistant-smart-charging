@@ -119,8 +119,9 @@ every other section of the dashboard continues to render normally.
 
 None. This use-case does not itself decide or change charging behaviour — a runtime edit writes
 the same underlying entity a direct edit would, so any domain event that follows (e.g.
-`ActiveModeChanged` under `resolution-rules.md`) is produced by whichever use-case or resolution
-rule reacts to that entity, not by this one.
+`ActiveSocLimitChanged`, produced by `control-cycle.md` step 4 when the edit changes the
+resolved active SOC limit) is produced by whichever mechanism document or use-case reacts to
+that entity, not by this one.
 
 ## Diagram
 
