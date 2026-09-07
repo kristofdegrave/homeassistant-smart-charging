@@ -159,12 +159,12 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R10 — Sensor smoothing
 
 **Priority:** Must
-**What:** The system bases charging-rate decisions on smoothed power readings so that momentary fluctuations do not cause the charging rate to change.
+**What:** The system bases charging-rate decisions on a smoothed net grid power reading so that momentary fluctuations do not cause the charging rate to change. Net grid power is the only reading it smooths: [solar surplus](system-overview.md#ubiquitous-language) — the operand the solar modes set their rate from — is derived from net grid power and charger power, so it inherits its smoothing from net grid power alone, and no charging-rate decision consumes the solar power reading itself.
 
 **Acceptance criteria:**
 
 - [ ] Net grid power is sampled once per control cycle, and the most recent *N* samples (configurable, default 4 — i.e. `N × control interval` in real time) are averaged before being used to set the charging rate.
-- [ ] Solar power is read raw every control cycle and is never smoothed: no charging-rate decision consumes it. [Solar surplus](system-overview.md#ubiquitous-language) — the operand the solar modes set their rate from — is computed as `charger_w − net_w`, so it inherits its smoothing from net grid power alone. Solar power remains a configured input (NF3) for display and diagnostics only.
+- [ ] Solar power is read raw once per control cycle and is never smoothed; it remains a configured input (NF3) surfaced only among the adapter-role readings the system exposes for observability (R19, `entity-catalog.md`).
 - [ ] A power spike lasting a single control cycle does not change the charger set-point.
 - [ ] A power change sustained across the full smoothing window changes the charger set-point within the following control cycle.
 - [ ] Peak-protection decisions (R3) are exempt and use raw, unsmoothed readings.

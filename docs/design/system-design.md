@@ -378,7 +378,7 @@ sequenceDiagram
     Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
-    C->>M: desired current (smoothed readings, SOC limit, config)
+    C->>M: desired current (conditioned readings, SOC limit, config)
     M-->>C: desired current
     C->>B: peak clamp on raw (skip iff Power+R17 off) · effective peak limit (raised iff urgency)
     B-->>C: peak-clamped current
