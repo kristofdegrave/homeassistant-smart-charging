@@ -864,10 +864,10 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
         """UC12 (topic-step) step 6: the mapping half (CAPTAR_MAPPING_SCHEMA, ADR-0033) plus
         the threshold half, the latter gated on mode is not reconfigure like every other
         topic step's own threshold half (ADR-0027 point 4). CONFIG_TABLE's own `STEP_CAPTAR`
-        gate is a separate, independent condition on whether this step is visited at all;
-        this method's own `self._mode` branching governs only which half it renders once
-        visited, and is unreachable in practice for as long as that gate keeps the step out
-        of reconfigure."""
+        gate is a separate, independent condition on whether this step is visited at all
+        (a plain capability check, mode-independent since ADR-0033); this method's own
+        `self._mode` branching is what renders the mapping half alone in reconfigure once
+        visited."""
         schema = CAPTAR_MAPPING_SCHEMA
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_captar_threshold_schema().schema)

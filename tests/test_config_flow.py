@@ -1940,12 +1940,13 @@ async def test_options_flow_edits_peak_protection_thresholds(hass):
 
 async def test_options_captar_step_never_stores_the_mapping(hass):
     """ADR-0033 names the options flow as the one place this decision could plausibly be
-    over-applied. The rendering half (the options `captar` step never presents the mapping
-    field) is already covered structurally by the roster invariant
-    (test_uc12_1b_options_never_presents_a_mapping_or_a_capability_declaration) and by
-    OPTIONS_STEP_FIELDS in test_config_flow_translations.py; this test adds the stored-bucket
-    half those don't reach -- a value already mapped at install must not leak into
-    entry.options after an unrelated options run."""
+    over-applied. Asserts both halves directly: the options `captar` step still renders
+    exactly `_captar_threshold_schema()`'s keys (the rendering half is also covered
+    structurally by the roster invariant, test_uc12_1b_options_never_presents_a_mapping_or_
+    a_capability_declaration, which intersects every rendered options step against
+    _ALL_MAPPING_FRAGMENTS -- now including CAPTAR_MAPPING_SCHEMA); and a value already
+    mapped at install must not leak into entry.options after an unrelated options run (the
+    stored-bucket half neither of those reaches)."""
     entry = await _create_entry(
         hass,
         capabilities={CONF_CAPTAR_AVAILABLE: True},
@@ -1955,7 +1956,11 @@ async def test_options_captar_step_never_stores_the_mapping(hass):
     )
     assert entry.data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] == "sensor.dso_peak"
 
-    result = await _run_options_flow(hass, entry)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    while result["type"] == FlowResultType.FORM:
+        if result["step_id"] == STEP_CAPTAR:
+            assert _keys(result["data_schema"]) == _keys(_captar_threshold_schema())
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in entry.options
@@ -2489,9 +2494,9 @@ class _StubConfigFlow:
 
 def test_adr0027_point3_power_row_is_gated_off_in_reconfigure():
     """UC12 1a: `power` has no mapping half, so it must be absent from the reconfigure walk
-    -- expressed as its own conjoined gate, not as a stop condition. This is now the only
+    -- expressed as its own flow-mode gate, not as a stop condition. This is now the only
     coverage of the flow-mode half of ADR-0027 point 3's rule -- `captar` (below) no longer
-    shares it."""
+    shares it, and no table row carries a conjoined gate any more (ADR-0033)."""
     power_gate = next(row for row in CONFIG_TABLE if row.step_id == STEP_POWER).gate
 
     reconfigure_flow = _StubConfigFlow(answers={}, mode=FlowMode.RECONFIGURE)
