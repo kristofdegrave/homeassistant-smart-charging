@@ -2,17 +2,19 @@
 
 The full two-row effective-peak-limit resolution (`resolution-rules.md`): row 1
 raises to the maximum peak under deadline urgency (R5/C3, fed by the Deadline
-Engine, E4); row 2 is min(max(monthly, floor), max) (R3, #754), reached only
+Engine, E4); row 2 is min(max(operand, floor), max) (R3, #754), reached only
 when `urgent=False` -- the peak floor keeps a low or not-yet-established
 monthly peak (early in a billing month, or right after the monthly reset) from
 resolving the effective peak limit down to near 0 kW and blocking
 Captar/Power charging, while max() is applied before min() so the floor can
-never raise the limit above the maximum peak. Also the R3 peak clamp with its
-grace-period breach tracker (Sec 6.2). The Peak-Demand Tracker is a SEPARATE
-sibling module, `engines/peak_demand_tracker.py` -- ADR-0010's Decision names
-both modules explicitly and states they "stay two sibling modules ... their
-relationship is recorded by project-plan task E5 bundling them, not by a
-directory."
+never raise the limit above the maximum peak. The operand itself is the
+internally-tracked monthly peak merged with an optional external reading
+(ADR-0030/ADR-0032) -- see `resolve_monthly_peak_operand` below. Also the R3
+peak clamp with its grace-period breach tracker (Sec 6.2). The Peak-Demand
+Tracker is a SEPARATE sibling module, `engines/peak_demand_tracker.py` --
+ADR-0010's Decision names both modules explicitly and states they "stay two
+sibling modules ... their relationship is recorded by project-plan task E5
+bundling them, not by a directory."
 """
 
 from __future__ import annotations
