@@ -109,7 +109,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC11 | user, UC11 |
+| `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC06, UC07, UC11 | user, UC11 |
 | `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
 | `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_smoothing_window` | state | — | cycles | mirrors `smoothing_window` (config-options); disabled by default (ADR-0031) | [smoothed value](system-overview.md#ubiquitous-language) (R10) | user | — |
@@ -140,7 +140,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime), UC12 |
 | `sensor.smart_charging_max_current_a` | state | — | A | mirrors `max_current_a` (config-options); disabled by default (ADR-0031) | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | user | — |
 | `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity; a user-supplied state-translation table names which raw states mean `connected`/`charging`, and every other raw state resolves to `disconnected` (NF3, ADR-0035) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
+| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity; a user-supplied state-translation table names which raw states mean `connected`/`charging`, and every other raw state resolves to `disconnected` (NF3, ADR-0035) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC07, UC08, UC09, UC10 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
 
 ### Peak protection
@@ -198,7 +198,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `number.smart_charging_soc_limit_override` | config | runtime | % | 80 (50–100) | [active SOC limit](system-overview.md#ubiquitous-language) default (R6) | resolution-rules, UC09, UC11 | user, UC09 (manual-change adoption), UC11, UC12 (seeds initial value) |
 | `ev_battery_capacity_kwh` | config-options | options | kWh | 75 | EV battery capacity (R15) | resolution-rules, control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_ev_battery_capacity_kwh` | state | — | kWh | mirrors `ev_battery_capacity_kwh` (config-options); disabled by default (ADR-0031) | EV battery capacity (R15) | user | — |
-| `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06, (UC11) | — |
+| `ev_soc` | adapter role | — | % | mapped to the vehicle's state-of-charge sensor (NF3) | state of charge | control-cycle, resolution-rules, UC01, UC02, UC03, UC04, UC05, UC06, UC10, (UC11) | — |
 | `ev_battery_capacity` | adapter role | — | kWh | mapped to the vehicle's capacity sensor, when available (optional, NF3) | EV battery capacity, sensed (R15) | resolution-rules, control-cycle | — |
 | `car_home` | adapter role | — | bool | mapped to a presence / device-tracker entity (NF3) | car-at-home presence (R12) | UC09, UC10 | — |
 | `vehicle_charge_limit` | adapter role (read/write) | — | % | mirrors active SOC limit; mapped to the vehicle's charge-limit entity (NF3) | vehicle charge-limit output role (R6, NF3) | UC09 | UC09 |
