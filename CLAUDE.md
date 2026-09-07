@@ -14,16 +14,12 @@ The full methodology is documented in [docs/plans/2026-06-24-analysis-approach-d
 docs/analysis/
   system-overview.md    — stakeholders, problem, goals, hardware
   requirements.md       — what the system must do (6Cs + SMART + MoSCoW)
-  flows/
-    00-control-cycle.md — start here: coordinator loop
-    01-solar-flow.md
-    02-solar-only-flow.md
-    03-captar-flow.md
-    04-power-flow.md
-    05-soc-management.md
-    06-deadline-override.md
-    07-wfh-logic.md
-    08-flow-selection.md
+  control-cycle.md      — start here: the coordinator loop (read → smooth → dispatch → clamp → set)
+  resolution-rules.md   — shared priority-ordered lookups (active SOC limit, departure deadline,
+                           effective peak limit, Auto mode-selection)
+  entity-catalog.md     — every sc_ entity: id, unit, default, Read by / Written by
+  use-cases/            — one goal-oriented UCnn-*.md per behaviour (UC01-UC12)
+  flows/README.md       — historical mapping only; no further flow documents are planned
 ```
 
 Previous iteration archived at `docs/archive/` — do not use as source of truth.
@@ -50,9 +46,9 @@ docs/adl/
 
 1. `system-overview.md`
 2. `requirements.md` (fresh from idea — not from archive)
-3. `flows/` one at a time, starting with `00-control-cycle.md`
-4. Revisit `requirements.md` after flows reveal gaps
-5. Once the relevant use-cases/flows are stable, `design/system-design.md` (volatility-based
+3. `control-cycle.md`, then `resolution-rules.md`, then `use-cases/` one at a time
+4. Revisit `requirements.md` after use-cases reveal gaps
+5. Once the relevant use-cases are stable, `design/system-design.md` (volatility-based
    decomposition), then `design/project-plan.md` — before opening ADRs for the structural
    decisions the design surfaces
 
