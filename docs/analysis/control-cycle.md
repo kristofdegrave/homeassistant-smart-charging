@@ -14,9 +14,9 @@ Steps → Edge cases → Requirements satisfied**.
 ## Purpose
 
 Run the [coordinator](system-overview.md#ubiquitous-language) once per [control
-interval](system-overview.md#ubiquitous-language): read the sensors, smooth the power readings,
-ask the [active mode](system-overview.md#ubiquitous-language) module for a desired charger
-current, clamp that current with peak protection, and set it. The coordinator executes the
+interval](system-overview.md#ubiquitous-language): read the sensors, smooth the net grid power
+reading, ask the [active mode](system-overview.md#ubiquitous-language) module for a desired
+charger current, clamp that current with peak protection, and set it. The coordinator executes the
 active mode and never chooses it (NF1); mode choice belongs to the [profile](system-overview.md#ubiquitous-language)
 (see `resolution-rules.md`, Auto mode-selection). All inputs and outputs cross an adapter role
 (NF3); see `entity-catalog.md` for their bindings.
@@ -60,11 +60,11 @@ homed in the rule or use-case that defines its lifecycle.
 ```mermaid
 flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC"]
-    Read --> Smooth["Smooth net_w & solar_w<br/>(rolling mean, N cycles — R10)"]
+    Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
-    Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule, smoothed inputs)"]
+    Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule: smoothed net_w,<br/>raw charger_w, supply voltage)"]
     Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped entirely when the CapTar<br/>capability is absent, R18;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
     Peak -->|no| Ceiling
@@ -83,12 +83,15 @@ flowchart TD
    state of charge. These are [raw values](system-overview.md#ubiquitous-language) — the most
    recent, unsmoothed readings (the measured grid voltage is resolved into the
    [supply voltage](system-overview.md#ubiquitous-language) in step 3). Produces `SensorsRead`.
-2. **Smooth the power readings (R10).** The coordinator pushes this cycle's raw `net_w` and
-   `solar_w` into a rolling window of the last *N* samples (configurable, default 4) and
-   recomputes the [smoothed value](system-overview.md#ubiquitous-language) of each. Smoothed
-   values feed charging-rate decisions; the raw values are retained for peak protection. A
-   spike lasting a single cycle does not move the smoothed value; a change sustained across the
-   full window does, within the following cycle.
+2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
+   into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
+   [smoothed value](system-overview.md#ubiquitous-language). The smoothed value feeds
+   charging-rate decisions; the raw value is retained for peak protection. A spike lasting a
+   single cycle does not move the smoothed value; a change sustained across the full window
+   does, within the following cycle. `solar_w` is deliberately not smoothed: no charging-rate step
+   of this cycle consumes it, since [solar surplus](system-overview.md#ubiquitous-language) is
+   `charger_w − net_w` (R10). Step 1 reads it every cycle solely to surface it as an attribute of
+   `sensor.smart_charging_adapter_readings` (ADR-0021), so it stays a raw reading throughout.
 3. **Resolve the supply voltage (NF4).** The coordinator selects the [supply
    voltage](system-overview.md#ubiquitous-language) used for all amperes↔watts conversions this
    cycle: the measured grid voltage when a healthy reading is available, otherwise the
@@ -110,10 +113,11 @@ flowchart TD
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose row 1 compares against this resolved active SOC limit) under
-   `Auto` — calls the matching module, passing the smoothed readings and the resolved voltage, and
-   surfaces the resolved value read-only as `sensor.smart_charging_active_mode`. The module returns
-   a **desired charger current** using its own set-point rule (defined in the mode use-case —
-   UC01–UC04; e.g. the `Off` module returns 0 A). The coordinator contains no logic that chooses
+   `Auto` — calls the matching module, passing the smoothed `net_w` alongside the raw readings and
+   the resolved voltage, and surfaces the resolved value read-only as
+   `sensor.smart_charging_active_mode`. The module returns a **desired charger current** using its
+   own set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
+   0 A). The coordinator contains no logic that chooses
    or changes the mode — this includes deadline urgency (R5): under `Auto`, escalating to `Captar`
    is Auto mode-selection's own decision (`resolution-rules.md`), made before this step reads the
    active mode; under `Manual` the active mode never changes, and this step never adjusts what a
