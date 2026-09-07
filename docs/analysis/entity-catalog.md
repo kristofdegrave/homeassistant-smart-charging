@@ -126,7 +126,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_nominal_voltage_v` | state | — | V | mirrors `nominal_voltage_v` (config-options); disabled by default (ADR-0031) | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | user | — |
 | `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
-| `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) | control-cycle, UC01, UC02, UC11 | — |
+| `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3) | [net import](system-overview.md#ubiquitous-language) — the one reading R10 smooths | control-cycle, UC01, UC02, UC11 | — |
 | `low_tariff` | adapter role | — | bool | mapped to the installation's tariff signal; when the mapped entity does not already report on/off, a user-supplied state-translation table lists which raw states count as low tariff, with every other raw state resolving to not-low-tariff (NF3; optional — treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
 > `Read by` lists only behaviours that read a value **directly**. `net_power` (and `charger_power` below) are read directly by UC01/UC02, whose set-point rule converges the smoothed value toward 0 W. `Captar` (UC03) references net import only through the R3 peak clamp in `control-cycle.md` (already listed), not as a direct read, so UC03 is deliberately absent here.
@@ -221,7 +221,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_solar_cooldown_min` | state | — | min | mirrors `solar_cooldown_min` (config-options); disabled by default (ADR-0031) | [solar-mode cooldown](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | user | — |
 | `solar_restart_debounce_min` | config-options | options | min | 1 | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | UC01, UC02 | user (anytime), UC12 |
 | `sensor.smart_charging_solar_restart_debounce_min` | state | — | min | mirrors `solar_restart_debounce_min` (config-options); disabled by default (ADR-0031) | [restart debounce](system-overview.md#ubiquitous-language) (R11) — shared with `SolarOnly` | user | — |
-| `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading (R10); not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w` | control-cycle | — |
+| `solar_power` | adapter role | — | W | mapped to the installation's solar production sensor (NF3) | solar production reading, read raw and never smoothed (R10); not an operand of [solar surplus](system-overview.md#ubiquitous-language), which is `charger_w − net_w` | control-cycle | — |
 
 ### `SolarOnly` mode
 

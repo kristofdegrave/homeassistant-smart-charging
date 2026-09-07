@@ -258,8 +258,8 @@ per ADR-0009) · **Integration checkpoint** (what proves it is wired to its call
 
 **E7 — Signal-Conditioning Engine** *(stateful)*
 - **Service:** Engine, V8 (cross-cutting). **ADR gate: G-ADR-0010.**
-- **Builds:** smoothed `net_w`/`solar_w` (R10 smoothing window) and resolved supply voltage with the
-  NF4 fallback. State (the smoothing window) is threaded by M1.
+- **Builds:** smoothed `net_w` (R10 smoothing window; `solar_w` is read raw and never smoothed) and
+  resolved supply voltage with the NF4 fallback. State (the smoothing window) is threaded by M1.
 - **Depends on:** ADR-0010; raw readings from RA1 — supplied by M1.
 - **Testable on its own:** plain pytest — window smoothing given a state parameter; NF4 voltage
   fallback (voltage `None` does **not** enter the fault path).

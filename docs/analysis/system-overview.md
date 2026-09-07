@@ -56,7 +56,7 @@ These goals are ordered by preference but bounded by goal 4: cost optimisation n
 
 ## How it fits together
 
-At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing them, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an adapter role (see `adapter role`, NF3), which is what keeps the integration hardware-agnostic.
+At runtime the integration is a single control loop. The **active profile** decides *which mode* is active; the **coordinator** then executes that mode on every control cycle — reading sensors, smoothing net grid power, asking the active mode module for a desired charger current, and finally clamping that current with peak protection before applying it. Every input and output crosses an adapter role (see `adapter role`, NF3), which is what keeps the integration hardware-agnostic.
 
 This is the orientation map; `control-cycle.md` details the loop and the use-cases (`use-cases/`) detail each mode module.
 
@@ -114,9 +114,9 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`CapTar`** — Capacity tariff; the Belgian distribution-grid billing component charged on the highest 15-minute average net import (monthly peak demand) rather than total energy, which is why every avoidable peak directly raises the bill.
 
-**`coordinator`** — The single control loop at the heart of the integration. Each control cycle it reads sensors, smooths them, dispatches to the active mode module for a desired charger current, applies peak protection, and sets the charger current. It executes whichever mode is active and contains no logic for *choosing* the mode (NF1); choosing is the profile's responsibility. Detailed in `control-cycle.md`.
+**`coordinator`** — The single control loop at the heart of the integration. Each control cycle it reads sensors, smooths net grid power, dispatches to the active mode module for a desired charger current, applies peak protection, and sets the charger current. It executes whichever mode is active and contains no logic for *choosing* the mode (NF1); choosing is the profile's responsibility. Detailed in `control-cycle.md`.
 
-**`control cycle`** — One iteration of the coordinator loop: read sensors, smooth, dispatch to the active mode module, apply peak protection, set charger current. Runs every control interval (configurable, default 10 s).
+**`control cycle`** — One iteration of the coordinator loop: read sensors, smooth net grid power, dispatch to the active mode module, apply peak protection, set charger current. Runs every control interval (configurable, default 10 s).
 
 **`control interval`** — The time between consecutive control cycles, configured via `control_interval_s` (default 10 s); every duration expressed as a number of control cycles resolves to `n × control_interval` seconds at runtime.
 
@@ -144,7 +144,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`charger status`** — The normalised charger connection state exposed via the `charger_status` adapter role, translated from the charger's raw states to one of three canonical values: `disconnected` (no vehicle), `connected` (plugged in, not drawing current), `charging` (plugged in and drawing current). A user-supplied state-translation table lists which raw states count as `connected`/`charging`; every other raw state — including the charger's actual disconnected state, which has no field of its own to name — resolves to `disconnected` (ADR-0035). A missing or unavailable mapped entity is still a fault, not `disconnected` (ADR-0007).
 
-**`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w` or `solar_w` — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
+**`smoothed value`** — A sensor reading averaged over the last *N* control cycles (configurable, default 4) — a rolling mean of `net_w`, the only reading R10 smooths — used for charging-current decisions to reject transient spikes; peak protection deliberately bypasses smoothing and uses raw readings to avoid lag.
 
 **`raw value`** — An unsmoothed, most-recent sensor reading; used by peak protection (R3) so a peak breach cannot persist for up to one smoothing window.
 
