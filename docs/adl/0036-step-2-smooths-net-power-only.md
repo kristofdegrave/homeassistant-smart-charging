@@ -7,10 +7,12 @@ Status: Accepted
 
 [ADR-0006](0006-coordinator-and-data-flow.md) fixes the control cycle's implementation shape:
 one `DataUpdateCoordinator` subclass running ten named steps, with the R3 peak-protection
-clamp and the C4 grid-supply-ceiling clamp as two distinct methods. Two places in that record
-state that the cycle smooths two readings. Its second Context force opens "R10 smooths net and
-solar power for the mode's set-point decision", and step 2 of the Decision's ten-step order
-reads "Smooth net power and solar power per R10 (rolling mean over N cycles)."
+clamp and the C4 grid-supply-ceiling clamp as two distinct methods. Three places in that record
+state that the cycle smooths two readings. Its opening Context sentence characterises
+`control-cycle.md` as specifying "read sensors, smooth net and solar power (R10), resolve
+supply voltage (NF4)…"; its second Context force states "R10 smooths net and solar power for
+the mode's set-point decision"; and step 2 of the Decision's ten-step order reads "Smooth net
+power and solar power per R10 (rolling mean over N cycles)."
 
 Nothing consumes a smoothed solar reading, and nothing is designed to. [Solar
 surplus](../analysis/system-overview.md#ubiquitous-language) is `charger_w − net_w`
@@ -18,8 +20,9 @@ surplus](../analysis/system-overview.md#ubiquitous-language) is `charger_w − n
 *not* an operand of it), so the one derived quantity the solar modes set their rate from
 already inherits its smoothing from net grid power alone. No mode module reads the
 `solar_power` role at all today; it is a production reading, surfaced for display. A rolling
-window over it would therefore be a second window's worth of per-cycle state, threaded through
-the cycle by the Coordinator, feeding no charging-rate decision. The shipped implementation
+window over it would therefore be a further window's worth of per-cycle state — a third, since
+the cycle already threads two, both of them over net power — threaded through the cycle by the
+Coordinator and feeding no charging-rate decision. The shipped implementation
 reflects that: `engines/signal_conditioning.py` exposes `smooth_net_power` and nothing else,
 and `const.py`'s `ROLE_SOLAR_POWER` comment records the role as unsmoothed.
 
@@ -85,7 +88,7 @@ Coordinator like the net window, matching step 2 as written.
 - Pro: No record changes at all, ADR-0006 becomes literally accurate, and R10's first
   acceptance criterion is satisfied verbatim for both readings. A future consumer wanting a
   smoothed solar reading would find one already there.
-- Con: It pays real, permanent cost — a second window of cross-cycle state, a second engine
+- Con: It pays real, permanent cost — a further window of cross-cycle state, a second engine
   call, month-rollover and restart handling for it, and test coverage — to produce a value no
   charging-rate decision reads, and none is designed to, since solar surplus already inherits
   net's smoothing. Not one set-point would change. It makes a sentence true by building the
@@ -104,8 +107,8 @@ corrected, and set ADR-0006's Status to `Superseded by ADR-0036`.
   historical a decision the shipped code implements literally, forcing either verbatim
   restatement of nine untouched steps, three considered options and the Option A
   clamp-merging failure mode, or their survival only inside a `Superseded` record.
-  ADR-0012, ADR-0018 and ADR-0023 all build on ADR-0006 as current and cite its step order;
-  each would then point at a retired record.
+  Three later ADRs — ADR-0012, ADR-0018 and ADR-0023 — build directly on ADR-0006's step order
+  as current; each would then point at a retired record.
 
 ### Option D — Narrow the whole raw/smoothed clause out of ADR-0006
 
@@ -150,10 +153,11 @@ Option A's cost is the one thing an ADR set cannot absorb — an `Accepted` reco
 in silence, against its own explicit instruction — and its saving is only the writing of this
 page. Option B removes the contradiction by building the computation nobody asked for: its Pro
 is real but buys nothing, since solar surplus already carries net's smoothing into every solar
-set-point, so the second window would run forever with no reader. Option C is correctly shaped
-in ADR-0001's vocabulary and wrong in proportion; ADR-0006 is current, implemented and depended
-on by three later ADRs, and retiring it whole to fix two words would leave its actual decision
-recorded only as history — the same reasoning [ADR-0033](0033-captar-step-gains-a-mapping-half.md)
+set-point, so that window would run forever with no reader. Option C is correctly shaped in
+ADR-0001's vocabulary and wrong in proportion; ADR-0006 is current, implemented, and built on
+by three later ADRs that take its step order as live (ADR-0012, ADR-0018, ADR-0023) — and cited
+by more still — so retiring it whole to fix two words would leave its actual decision recorded
+only as history — the same reasoning [ADR-0033](0033-captar-step-gains-a-mapping-half.md)
 applied when it narrowed one clause of ADR-0027 instead of replacing it.
 
 Option D is the close call, since its simpler bar is genuinely easier to remember than the
@@ -175,12 +179,15 @@ directly rather than left to inference:
 Concretely: adding a smoothing window for `solar_power` later — should some future mode
 actually need one — would be an R10 change under this decision. Routing a *step* onto the
 smoothed form rather than the raw one, for any reading that has both, would still be an
-ADR-0006 change.
+ADR-0006 change. The two halves do not run together: adding a smoothing window under R10 does
+not by itself route anything into step 6's dispatch, so wiring a newly smoothed reading into the
+mode modules' inputs remains an ADR-0006 change, and until that separate decision is taken the
+new window would have no consumer.
 
-**This narrows ADR-0006's step 2 and one clause of its Consequences; it supersedes neither
-ADR-0006 nor anything else in it.** ADR-0006 keeps Status `Accepted` and its body is not
-edited, per this project's precedent for a narrowing that leaves the rest of a record standing
-(the shape ADR-0033 used against ADR-0027 and
+**This supersedes one clause of ADR-0006 — step 2's smoothed-reading list, the two Context
+statements that echo it, and the smoothed-set half of its Consequences bar — not the record.**
+ADR-0006 keeps Status `Accepted` and its body is not edited, per this project's precedent for a
+narrowing that leaves the rest of a record standing (the shape ADR-0033 used against ADR-0027 and
 [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) used against
 ADR-0003/0007/0009/0034). The rest of ADR-0006's step 2 is untouched: charger power is still
 used raw and is still not an operand of solar surplus via the smoothed channel, and the raw
@@ -189,12 +196,15 @@ smoothing window.
 
 ## Consequences
 
-- **ADR-0006's step 2 and its second Context force are narrowed; everything else in it stands.**
-  ADR-0006 keeps Status `Accepted` and its body is not edited. From here, step 2's "Smooth net
-  power and solar power per R10" reads as "Smooth net power per R10", and the Context force's
-  "R10 smooths net and solar power for the mode's set-point decision" reads the same narrowed
-  way. Step order, the step 7/8 clamp split, the raw-reading plumbing, the pure mode-module
-  rule and every other Consequence of ADR-0006 are unaffected.
+- **ADR-0006's step 2, its second Context force and its opening Context sentence are narrowed;
+  everything else in it stands.** ADR-0006 keeps Status `Accepted` and its body is not edited.
+  From here, step 2's "Smooth net power and solar power per R10" reads as "Smooth net power per
+  R10"; the Context force's "R10 smooths net and solar power for the mode's set-point decision"
+  reads the same narrowed way; and the opening Context sentence's summary of `control-cycle.md`
+  ("smooth net and solar power (R10)") reads as "smooth net power (R10)", so it stays a true
+  characterisation of that document once the analysis layer is corrected. Step order, the step
+  7/8 clamp split, the raw-reading plumbing, the pure mode-module rule and every other
+  Consequence of ADR-0006 are unaffected.
 - **ADR-0006's forward-looking bar keeps its step-order half and its per-step raw/smoothed
   half, and loses only its smoothed-set half.** A change to step order, or to which of raw or
   smoothed an existing step consumes, is still a change to ADR-0006 requiring a superseding
@@ -202,11 +212,12 @@ smoothing window.
   ordinary requirements review and doc pass — no ADR.
 - **`docs/adl/README.md` gains a row for this ADR and annotates the *title* cell of ADR-0006's
   row to point at it**, in this same change, leaving that row's Status cell verbatim
-  `Accepted`. That pointer only reaches a reader who arrives via the index; ADR-0007,
-  ADR-0008, ADR-0012, ADR-0018 and ADR-0023 all link straight to ADR-0006's file and will land
-  on an unmarked step 2. That is an accepted residual cost — none of those five restates the
-  smoothed-reading pairing, each citing ADR-0006 for step order, the coordinator's read phase
-  or the clamp split instead, all of which this decision leaves intact.
+  `Accepted`. That pointer only reaches a reader who arrives via the index; the several later
+  ADRs that cite ADR-0006 — ADR-0007, ADR-0008, ADR-0012, ADR-0018 and ADR-0023 among them, with
+  ADR-0023 linking to its file directly — send a reader to an unmarked step 2. That is an
+  accepted residual cost: none of the citing ADRs restates the composition of the smoothed set,
+  each citing ADR-0006 for step order, the coordinator's read phase or the clamp split instead,
+  all of which this decision leaves intact.
 - **The analysis layer must state net-only smoothing in every place it currently names two
   readings.** R10's "What" and its first acceptance criterion ("Net grid power and solar power
   are each sampled once per control cycle…"); `control-cycle.md`'s step 2 narrative, its
@@ -215,15 +226,17 @@ smoothing window.
   production reading and already records the role as not an operand of solar surplus; it must
   not be readable as implying a smoothing window. R10's peak-protection exemption criterion is
   unchanged — that criterion is the per-step pairing, which stays as it is.
-- **`docs/design/system-design.md` carries the same two-reading claim twice** — its
-  Coordinator/Signal-Conditioning sequence line (`smooth net/solar (R10) + resolve voltage
-  (NF4)`) and the surrounding Signal-Conditioning engine description — and both need the same
-  correction. The engine's classification as *stateful* is unchanged: one window is still
-  cross-cycle state the Coordinator owns and threads in.
+- **`docs/design/system-design.md` carries the same two-reading claim in two places** — the
+  engine-roster row for the Signal-Conditioning Engine ("Smoothed `net_w`/`solar_w` (R10) and
+  resolved supply voltage (NF4)") and the Coordinator→Signal-Conditioning sequence-diagram line
+  (`smooth net/solar (R10) + resolve voltage (NF4)`) — and both need the same correction. The
+  engine's classification as *stateful* is unchanged: the smoothing window is still cross-cycle
+  state the Coordinator owns and threads in.
 - **No product-code change follows from this decision.** `engines/signal_conditioning.py`
-  already implements net-only smoothing and `coordinator.py`/`coordinator_cycle.py` already
-  thread exactly one window. Two comments describe the state as provisional rather than
-  decided and should be re-worded to match: the engine module's docstring, which says
+  already implements net-only smoothing, and the windows `coordinator.py`/`coordinator_cycle.py`
+  thread — the R10 control-path window and `PeakDemandState`'s own, separately sized peak-demand
+  window — already smooth net power only. Two comments describe the state as provisional rather
+  than decided and should be re-worded to match: the engine module's docstring, which says
   `solar_power` smoothing is "deferred to whichever later slice first consumes that role", and
   `const.py`'s `ROLE_SOLAR_POWER` comment, which says the role "is NOT yet smoothed" pending a
   real-consumer decision. Both are now settled, not pending — the role is unsmoothed, and
