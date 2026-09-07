@@ -20,6 +20,7 @@ from custom_components.smart_charging import const
 from custom_components.smart_charging.adapters.factory import build_adapters
 from custom_components.smart_charging.adapters.tariff import LowTariffReadAdapter
 from custom_components.smart_charging.config_flow import (
+    CAPTAR_MAPPING_SCHEMA,
     CONFIG_TABLE,
     CORE_MAPPING_SCHEMA,
     DEADLINE_MAPPING_SCHEMA,
@@ -76,6 +77,7 @@ from custom_components.smart_charging.const import (
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
     CONF_MIN_CURRENT,
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
     CONF_NOTIFICATION_TARGET_ENTITY,
@@ -900,9 +902,10 @@ async def test_uc12_power_step_is_threshold_only(hass):
     assert _keys(result["data_schema"]) == _keys(_power_threshold_schema())
 
 
-async def test_uc12_captar_step_is_threshold_only_no_ev_soc(hass):
-    """CapTar has no mapping half at all in the topic-step model -- unlike the seven-step
-    model, no ev_soc field ever appears on this step (it moved wholly to `vehicle`)."""
+async def test_uc12_captar_step_renders_its_mapping_and_threshold_halves_no_ev_soc(hass):
+    """CapTar's mapping half is the optional external monthly-peak sensor (ADR-0033) -- unlike
+    the seven-step model, no ev_soc field ever appears on this step (it moved wholly to
+    `vehicle`)."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -914,12 +917,32 @@ async def test_uc12_captar_step_is_threshold_only_no_ev_soc(hass):
         )
         result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
     assert result["step_id"] == STEP_CAPTAR
-    assert _keys(result["data_schema"]) == _keys(_captar_threshold_schema())
+    assert _keys(result["data_schema"]) == _keys(CAPTAR_MAPPING_SCHEMA) | _keys(
+        _captar_threshold_schema()
+    )
     assert CONF_EV_SOC_ENTITY not in _keys(result["data_schema"])
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], CAPTAR_INPUT)
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["options"][CONF_CAPTAR_COOLDOWN_MIN] == DEFAULT_CAPTAR_COOLDOWN_MIN
+
+
+async def test_monthly_peak_external_entity_is_optional(hass):
+    result = await _run_install_flow(hass, capabilities={CONF_CAPTAR_AVAILABLE: True})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in result["data"]
+
+
+async def test_monthly_peak_external_entity_can_be_mapped(hass):
+    result = await _run_install_flow(
+        hass,
+        capabilities={CONF_CAPTAR_AVAILABLE: True},
+        per_step_input={
+            STEP_CAPTAR: {**CAPTAR_INPUT, CONF_MONTHLY_PEAK_EXTERNAL_ENTITY: "sensor.dso_peak"}
+        },
+    )
+    assert result["data"][CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] == "sensor.dso_peak"
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in result["options"]
 
 
 async def test_uc12_2a_captar_absent_skips_the_captar_step(hass):
@@ -2093,6 +2116,14 @@ def test_uc12_5b_captar_threshold_fragment_carries_the_peak_protection_fields():
     }
 
 
+def test_uc12_6a_captar_mapping_fragment_has_exactly_the_external_peak_field():
+    # ADR-0033: the external monthly-peak sensor mapping is the whole of CapTar's mapping
+    # half, and it's vol.Optional (UC12 6a -- unmapped by default).
+    assert _keys(CAPTAR_MAPPING_SCHEMA) == {CONF_MONTHLY_PEAK_EXTERNAL_ENTITY}
+    (marker,) = CAPTAR_MAPPING_SCHEMA.schema
+    assert isinstance(marker, vol.Optional)
+
+
 def test_uc12_step7_solar_fragments_have_exactly_uc12s_fields():
     assert _keys(SOLAR_MAPPING_SCHEMA) == {CONF_SOLAR_POWER_ENTITY, CONF_SOLAR_FORECAST_ENTITY}
     assert _keys(_solar_threshold_schema()) == {
@@ -2134,6 +2165,7 @@ _ALL_MAPPING_FRAGMENTS = (
     GRID_MAPPING_SCHEMA,
     EV_CHARGER_MAPPING_SCHEMA,
     VEHICLE_MAPPING_SCHEMA,
+    CAPTAR_MAPPING_SCHEMA,
     SOLAR_MAPPING_SCHEMA,
     DEADLINE_MAPPING_SCHEMA,
     NOTIFICATIONS_MAPPING_SCHEMA,

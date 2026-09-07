@@ -46,6 +46,7 @@ from custom_components.smart_charging.const import (
     ROLE_EV_SOC,
     ROLE_GRID_VOLTAGE,
     ROLE_LOW_TARIFF,
+    ROLE_MONTHLY_PEAK_EXTERNAL,
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
@@ -160,6 +161,8 @@ def _adapters(
     ev_soc=50.0,
     sun_state=None,
     low_tariff=None,
+    monthly_peak_external_role=False,
+    monthly_peak_external=None,
 ):
     adapters = {
         ROLE_CHARGER_CURRENT: _FakeNumeric(0.0),
@@ -176,6 +179,11 @@ def _adapters(
         adapters[ROLE_EV_SOC] = _FakeNumeric(ev_soc)
     if low_tariff is not None:
         adapters[ROLE_LOW_TARIFF] = _FakeNumeric(low_tariff)
+    # Mirrors ev_soc_role/ev_soc above: a bool "is the role mapped at all" plus a separately
+    # nullable reading, so a mapped-but-currently-unavailable reading (monthly_peak_external=None
+    # with the role present) stays expressible, distinct from "unmapped" (role absent entirely).
+    if monthly_peak_external_role or monthly_peak_external is not None:
+        adapters[ROLE_MONTHLY_PEAK_EXTERNAL] = _FakeNumeric(monthly_peak_external)
     return adapters
 
 
@@ -917,6 +925,173 @@ async def test_ev_soc_fault_early_return_also_carries_the_configured_peak_floor(
 
     assert result.fault is True
     assert result.effective_peak_limit_kw == 2.5
+
+
+async def test_external_monthly_peak_above_tracked_raises_the_effective_limit(hass):
+    # ADR-0030/ADR-0032/R3 AC8: a mapped external reading above the internally-tracked peak
+    # raises the operand resolve_effective_peak_limit clamps against.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=4.09
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)  # tracked peak below the external reading
+
+    result = await coord._async_update_data()
+
+    assert result.effective_peak_limit_kw == 4.09
+
+
+async def test_external_monthly_peak_below_tracked_leaves_the_effective_limit_on_tracked(hass):
+    # R3 AC9's converse -- mapped but lower than the tracked peak: the merge never lowers the
+    # operand, so the tracked value alone still governs.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=1.0
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)  # tracked peak above the external reading
+
+    result = await coord._async_update_data()
+
+    assert result.effective_peak_limit_kw == 2.0
+
+
+async def test_unmapped_external_monthly_peak_is_the_pinned_no_op_case(hass):
+    # R3 AC9: no mapping at all -- behaves exactly as before this role existed.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0)
+    assert ROLE_MONTHLY_PEAK_EXTERNAL not in adapters
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)
+
+    result = await coord._async_update_data()
+
+    assert result.effective_peak_limit_kw == 2.0
+
+
+async def test_mapped_but_unavailable_external_monthly_peak_is_not_a_fault(hass):
+    # ADR-0007: a mapped role whose read() currently returns None (unavailable/unknown, or a
+    # transient miss) is the fault signal for a REQUIRED role, but this role is optional --
+    # _read_role returns None the same as "unmapped", and resolve_monthly_peak_operand's own
+    # `is None` guard rests on the internal value alone. Distinct from the unmapped case above:
+    # here the role IS present in `adapters`, only its reading is currently None.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external_role=True
+    )
+    assert ROLE_MONTHLY_PEAK_EXTERNAL in adapters
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)
+
+    result = await coord._async_update_data()
+
+    assert result.fault is False
+    assert result.effective_peak_limit_kw == 2.0
+
+
+async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_higher_external(hass):
+    # D-6: CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
+    # the merged operand -- checked across TWO cycles, since monthly_peak_kw is produced by
+    # self._peak_demand.update(...) before the merge; a refactor that wrote the merged value
+    # back into the tracker would pass a one-cycle check and only surface on the next cycle.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=9.0
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)
+
+    result = await coord._async_update_data()
+    assert result.monthly_peak_kw == 2.0
+    assert result.effective_peak_limit_kw == 9.0
+
+    # Cycle 2: the external reading is gone (role unmapped). If cycle 1 had contaminated the
+    # tracker with the merged 9.0, this cycle's tracked value would still read 9.0 here.
+    coord._adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0)
+    result = await coord._async_update_data()
+    assert result.monthly_peak_kw == 2.0
+    assert result.effective_peak_limit_kw == 2.0
+
+
+async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
+    # D-4: the mapped role's own raw reading surfaces via _read_role's cache write, same as
+    # any other wired read role.
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=4.09
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    assert result.adapter_readings[ROLE_MONTHLY_PEAK_EXTERNAL] == 4.09
+
+
+async def test_external_monthly_peak_merge_ignores_captar_available(hass):
+    # D-5: the merge is not gated on captar_available -- it runs, and moves
+    # effective_peak_limit_kw, even with the capability off (_apply_peak_clamp itself has no
+    # capability gate, so this is pre-existing loosening behavior, not a regression).
+    config = _config()
+    config = dataclasses.replace(
+        config, max_peak_kw=10.0, peak_floor_kw=0.0, captar_available=False
+    )
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=4.09
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)
+
+    result = await coord._async_update_data()
+
+    assert result.effective_peak_limit_kw == 4.09
+
+
+async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak(hass):
+    # D-3: the PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
+    # ev_soc-missing early-fault return) must also reflect the merged operand -- updating only
+    # the final call site would leave this one on the unmerged value undetected.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc_role=True, ev_soc=None, monthly_peak_external=4.09
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    seed_ample_peak_headroom(coord, kw=2.0)
+
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    assert result.effective_peak_limit_kw == 4.09
 
 
 async def test_adapter_readings_contains_every_currently_wired_role(hass):

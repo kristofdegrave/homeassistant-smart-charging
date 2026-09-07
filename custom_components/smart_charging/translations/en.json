@@ -97,8 +97,9 @@
       },
       "captar": {
         "title": "CapTar",
-        "description": "Tune CapTar's peak-shaving thresholds.",
+        "description": "Optionally map an external monthly-peak sensor, and tune CapTar's peak-shaving thresholds.",
         "data": {
+          "monthly_peak_external_entity": "External monthly-peak sensor (optional)",
           "captar_cooldown_min": "Captar cooldown duration (min)",
           "power_respect_peak": "Power mode respects the peak limit",
           "safety_margin_w": "CapTar peak safety margin (W)",
@@ -107,6 +108,7 @@
           "peak_grace_min": "CapTar peak grace period (min)"
         },
         "data_description": {
+          "monthly_peak_external_entity": "Optional sensor reporting the utility's own tracked monthly peak demand (e.g. from a DSO/smart-meter integration), merged with this integration's own tracked peak so a real peak reached while it wasn't observing isn't missed.",
           "captar_cooldown_min": "Minimum time (minutes) CapTar must wait after a peak-limit breach forces it to stop before it may resume charging. Default 10.",
           "power_respect_peak": "When on, Power mode also respects the CapTar peak limit instead of ignoring it. Default on.",
           "safety_margin_w": "Power margin (W) CapTar subtracts from the effective peak limit as a safety buffer before computing the ceiling. Default 250.",
