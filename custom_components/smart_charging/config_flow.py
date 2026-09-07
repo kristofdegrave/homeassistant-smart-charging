@@ -292,23 +292,18 @@ UC12_FIXED_STEP_ORDER = (
 )
 
 # The config flow's own table (ADR-0027 Option C; T4 cut-over -- topic-step plan). Install and
-# reconfigure share this one table (ADR-0027 point 3/5): `power`/`captar` have no mapping half
-# at all, so both are gated off entirely in reconfigure mode (a per-step gate, not a stop
-# condition, because both sit in the *middle* of the fixed order). `solar`/`deadline`/
-# `notifications` are gated on this run's own answer from the `core` step; `grid`/`ev_charger`/
-# `vehicle` are always shown.
+# reconfigure share this one table (ADR-0027 point 3/5, ADR-0033): `power` has no mapping half
+# at all, so it is gated off entirely in reconfigure mode (a per-step gate, not a stop
+# condition, because it sits in the *middle* of the fixed order). `captar` has acquired a
+# mapping half of its own (ADR-0033) and is no longer paired with `power` here -- it is now a
+# plain capability gate, mode-independent, same shape as `solar`/`deadline`/`notifications`
+# below. `grid`/`ev_charger`/`vehicle` are always shown.
 CONFIG_TABLE: tuple[FlowStep, ...] = (
     FlowStep(step_id=STEP_GRID, gate=lambda flow: True),
     FlowStep(step_id=STEP_EV_CHARGER, gate=lambda flow: True),
     FlowStep(step_id=STEP_VEHICLE, gate=lambda flow: True),
     FlowStep(step_id=STEP_POWER, gate=lambda flow: flow._mode is not FlowMode.RECONFIGURE),
-    FlowStep(
-        step_id=STEP_CAPTAR,
-        gate=lambda flow: (
-            bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))
-            and flow._mode is not FlowMode.RECONFIGURE
-        ),
-    ),
+    FlowStep(step_id=STEP_CAPTAR, gate=lambda flow: bool(flow._answers.get(CONF_CAPTAR_AVAILABLE))),
     FlowStep(step_id=STEP_SOLAR, gate=lambda flow: bool(flow._answers.get(CONF_SOLAR_AVAILABLE))),
     FlowStep(
         step_id=STEP_DEADLINE, gate=lambda flow: bool(flow._answers.get(CONF_DEADLINE_AVAILABLE))

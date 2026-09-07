@@ -263,9 +263,10 @@ async def _create_entry(hass, *, capabilities=None, per_step_input=None):
 
 async def _run_reconfigure_flow(hass, entry, *, capabilities=None, per_step_input=None):
     """The reconfigure analogue of `_run_install_flow` (ADR-0027 point 5): entered via
-    SOURCE_RECONFIGURE, otherwise identical -- same shared `_walk_flow` driver. `power`/
-    `captar` are gated off entirely in this mode (UC12 1a), so the walk always ends at
-    ABORT/reconfigure_successful, never CREATE_ENTRY."""
+    SOURCE_RECONFIGURE, otherwise identical -- same shared `_walk_flow` driver. `power` is
+    gated off entirely in this mode (UC12 1a); `captar` is now a plain capability gate and
+    IS visited when CapTar is present (ADR-0033). Either way the walk always ends at
+    ABORT/reconfigure_successful, never CREATE_ENTRY (`_async_finish`'s own mode branch)."""
     init_result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
@@ -887,7 +888,9 @@ async def test_pre_field_entry_reads_vehicle_limit_and_car_home_as_absent(hass):
     assert ROLE_CAR_HOME not in coordinator._adapters
 
 
-# --- The `power`/`captar` steps: threshold-only, gated off in reconfigure. ---
+# --- The `power` step: threshold-only, gated off in reconfigure. `captar` (below) is no
+# longer paired with it here -- it has its own mapping half and is a plain capability gate,
+# mode-independent (ADR-0033). ---
 
 
 async def test_uc12_power_step_is_threshold_only(hass):
@@ -1103,10 +1106,9 @@ _RECONFIGURE_ENTRY_DATA = {
 }
 
 
-async def test_uc12_1a_reconfigure_never_shows_power_or_captar(hass):
-    """ADR-0027 point 3: neither step has a mapping half, so both are absent from the
-    reconfigure walk -- asserted with the CapTar capability PRESENT, so the only reason
-    `captar` is skipped is the conjoined flow-mode half of its gate."""
+async def test_uc12_1a_reconfigure_never_shows_power(hass):
+    """ADR-0027 point 3: `power` has no mapping half, so it is absent from the reconfigure
+    walk -- the flow-mode half of its gate, unconditional on any capability answer."""
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
 
@@ -1124,7 +1126,28 @@ async def test_uc12_1a_reconfigure_never_shows_power_or_captar(hass):
     assert result["type"] == FlowResultType.ABORT
     await hass.async_block_till_done()
     assert STEP_POWER not in visited
-    assert STEP_CAPTAR not in visited
+
+
+async def test_uc12_1a_reconfigure_visits_captar_when_present(hass):
+    """ADR-0033: `captar` acquired a mapping half and is now a plain capability gate -- IS
+    visited on the reconfigure walk when CapTar is present, unlike `power`."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    visited = []
+    overrides = {STEP_CORE: {**CORE_INPUT, CONF_CAPTAR_AVAILABLE: True}}
+    while result["type"] == FlowResultType.FORM:
+        step_id = result["step_id"]
+        visited.append(step_id)
+        submission = {**_INSTALL_STEP_BASES[step_id], **overrides.get(step_id, {})}
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], submission)
+    assert result["type"] == FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert STEP_CAPTAR in visited
 
 
 async def test_uc12_1a_reconfigure_shows_mapping_halves_only(hass):
@@ -1155,8 +1178,15 @@ async def test_uc12_1a_reconfigure_shows_mapping_halves_only(hass):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}
     )
-    # power/captar have no mapping half -- both skipped entirely in reconfigure (proven by
-    # test_uc12_1a_reconfigure_never_shows_power_or_captar), so the walk jumps straight here.
+    # power has no mapping half -- skipped entirely in reconfigure (proven by
+    # test_uc12_1a_reconfigure_never_shows_power), so the walk lands on captar next: it
+    # acquired a mapping half of its own (ADR-0033) and is now visited here, mapping-only --
+    # no threshold key leaking in (proven by test_uc12_1a_reconfigure_visits_captar_when_present
+    # for visitation; the key-set assertion below is this test's own job).
+    assert result["step_id"] == STEP_CAPTAR
+    assert _keys(result["data_schema"]) == _keys(CAPTAR_MAPPING_SCHEMA)
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], CAPTAR_INPUT)
     assert result["step_id"] == STEP_SOLAR
     assert _keys(result["data_schema"]) == _keys(SOLAR_MAPPING_SCHEMA)
 
@@ -1452,9 +1482,11 @@ async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(
     """ADR-0027 Consequences: every capability combination must be shown to traverse exactly
     the steps UC12 prescribes, in order, for EACH of the three flows -- this is the
     reconfigure third (T5 covers install, T7 options). Expected sequence: core, grid,
-    ev_charger, vehicle, then solar/deadline/notifications per the capability answers given
-    on THIS run's own `core` step (reconfigure gates on `self._answers`, not `entry.data` --
-    that's the options flow's rule); never power, never captar."""
+    ev_charger, vehicle, then captar/solar/deadline/notifications per the capability answers
+    given on THIS run's own `core` step (reconfigure gates on `self._answers`, not
+    `entry.data` -- that's the options flow's rule); never power. `captar` (ADR-0033) is no
+    longer paired with `power` here -- it IS visited whenever its own capability is present,
+    same as the other three."""
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
 
@@ -1488,6 +1520,8 @@ async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(
     await hass.async_block_till_done()
 
     expected = [STEP_CORE, STEP_GRID, STEP_EV_CHARGER, STEP_VEHICLE]
+    if captar:
+        expected.append(STEP_CAPTAR)
     if solar:
         expected.append(STEP_SOLAR)
     if deadline:
@@ -1902,6 +1936,29 @@ async def test_options_flow_edits_peak_protection_thresholds(hass):
     await hass.async_block_till_done()
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_MAX_PEAK_KW] == 5.0
+
+
+async def test_options_captar_step_never_stores_the_mapping(hass):
+    """ADR-0033 names the options flow as the one place this decision could plausibly be
+    over-applied. The rendering half (the options `captar` step never presents the mapping
+    field) is already covered structurally by the roster invariant
+    (test_uc12_1b_options_never_presents_a_mapping_or_a_capability_declaration) and by
+    OPTIONS_STEP_FIELDS in test_config_flow_translations.py; this test adds the stored-bucket
+    half those don't reach -- a value already mapped at install must not leak into
+    entry.options after an unrelated options run."""
+    entry = await _create_entry(
+        hass,
+        capabilities={CONF_CAPTAR_AVAILABLE: True},
+        per_step_input={
+            STEP_CAPTAR: {**CAPTAR_INPUT, CONF_MONTHLY_PEAK_EXTERNAL_ENTITY: "sensor.dso_peak"}
+        },
+    )
+    assert entry.data[CONF_MONTHLY_PEAK_EXTERNAL_ENTITY] == "sensor.dso_peak"
+
+    result = await _run_options_flow(hass, entry)
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_MONTHLY_PEAK_EXTERNAL_ENTITY not in entry.options
 
 
 async def test_r20_ac3_captar_absent_options_save_does_not_reintroduce_peak_protection_keys(hass):
@@ -2430,21 +2487,39 @@ class _StubConfigFlow:
         self._mode = mode
 
 
-def test_adr0027_point3_power_and_captar_rows_are_gated_off_in_reconfigure():
-    """UC12 1a: neither has a mapping half, so both must be absent from the reconfigure walk
-    -- expressed as each row's own conjoined gate, not as a stop condition."""
+def test_adr0027_point3_power_row_is_gated_off_in_reconfigure():
+    """UC12 1a: `power` has no mapping half, so it must be absent from the reconfigure walk
+    -- expressed as its own conjoined gate, not as a stop condition. This is now the only
+    coverage of the flow-mode half of ADR-0027 point 3's rule -- `captar` (below) no longer
+    shares it."""
     power_gate = next(row for row in CONFIG_TABLE if row.step_id == STEP_POWER).gate
+
+    reconfigure_flow = _StubConfigFlow(answers={}, mode=FlowMode.RECONFIGURE)
+    assert power_gate(reconfigure_flow) is False
+
+    install_flow = _StubConfigFlow(answers={}, mode=FlowMode.INSTALL)
+    assert power_gate(install_flow) is True
+
+
+def test_adr0033_captar_row_gate_is_mode_independent():
+    """ADR-0033: `captar` acquired a mapping half and is now a plain capability gate, same
+    shape as `solar`/`deadline`/`notifications` -- True in install and reconfigure alike
+    when CapTar is present, False in both when it is not."""
     captar_gate = next(row for row in CONFIG_TABLE if row.step_id == STEP_CAPTAR).gate
 
-    reconfigure_flow = _StubConfigFlow(
+    present_install = _StubConfigFlow(answers={CONF_CAPTAR_AVAILABLE: True}, mode=FlowMode.INSTALL)
+    present_reconfigure = _StubConfigFlow(
         answers={CONF_CAPTAR_AVAILABLE: True}, mode=FlowMode.RECONFIGURE
     )
-    assert power_gate(reconfigure_flow) is False
-    assert captar_gate(reconfigure_flow) is False
+    assert captar_gate(present_install) is True
+    assert captar_gate(present_reconfigure) is True
 
-    install_flow = _StubConfigFlow(answers={CONF_CAPTAR_AVAILABLE: True}, mode=FlowMode.INSTALL)
-    assert power_gate(install_flow) is True
-    assert captar_gate(install_flow) is True
+    absent_install = _StubConfigFlow(answers={CONF_CAPTAR_AVAILABLE: False}, mode=FlowMode.INSTALL)
+    absent_reconfigure = _StubConfigFlow(
+        answers={CONF_CAPTAR_AVAILABLE: False}, mode=FlowMode.RECONFIGURE
+    )
+    assert captar_gate(absent_install) is False
+    assert captar_gate(absent_reconfigure) is False
 
 
 def test_uc12_config_table_solar_deadline_notifications_gates_read_this_runs_own_answers():
