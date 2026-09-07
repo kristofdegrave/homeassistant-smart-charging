@@ -21,6 +21,20 @@ import math
 from dataclasses import dataclass
 
 
+def resolve_monthly_peak_operand(internal_kw: float, external_kw: float | None) -> float:
+    """Merge the internally-tracked monthly peak with an optional external reading
+    (ADR-0030/ADR-0032 D-2): the operand `resolve_effective_peak_limit` clamps against.
+
+    Unmapped (`external_kw is None`) rests on the internal value alone (R3 AC9); mapped, the
+    higher of the two wins (R3 AC8) -- the merge only ever raises the operand, it never lowers
+    it below the internally-tracked peak. `is None`, not truthiness: a genuine `0.0` external
+    reading is a value, not a stand-in for "absent".
+    """
+    if external_kw is None:
+        return internal_kw
+    return max(internal_kw, external_kw)
+
+
 def resolve_effective_peak_limit(
     monthly_peak_kw: float, max_peak_kw: float, peak_floor_kw: float, urgent: bool
 ) -> float:

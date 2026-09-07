@@ -7,6 +7,7 @@ from custom_components.smart_charging.engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
     resolve_effective_peak_limit,
+    resolve_monthly_peak_operand,
 )
 from custom_components.smart_charging.engines.cycle_invariant import apply_floor_cap
 
@@ -114,6 +115,54 @@ def test_urgency_ignores_the_peak_floor_too():
             monthly_peak_kw=0.1, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=True
         )
         == 4.0
+    )
+
+
+def test_unmapped_external_rests_on_the_internal_value_alone():
+    # R3 AC9: no external reading (unmapped role) -- the operand is the internal value as-is.
+    assert resolve_monthly_peak_operand(2.0, None) == 2.0
+
+
+def test_external_above_internal_wins():
+    # R3 AC8: a higher external reading raises the operand above the internally-tracked peak.
+    assert resolve_monthly_peak_operand(2.0, 4.09) == 4.09
+
+
+def test_internal_above_external_wins():
+    # ADR-0032 D-2: the merge only ever raises the operand, never lowers it below the
+    # internally-tracked peak.
+    assert resolve_monthly_peak_operand(5.0, 4.09) == 5.0
+
+
+def test_a_genuine_zero_external_reading_is_a_value_not_an_absence():
+    # A truthiness check (`if external_kw`) would treat 0.0 the same as None -- `is None` is
+    # the only test that tells "genuinely reads zero" apart from "unmapped/absent".
+    assert resolve_monthly_peak_operand(2.0, 0.0) == 2.0
+
+
+def test_merged_operand_still_clamped_to_the_maximum_peak():
+    # Both ends of resolve_effective_peak_limit's existing min(max(operand, floor), max)
+    # nesting stay intact when fed the merged operand -- an external reading above max_peak_kw
+    # still resolves down to max_peak_kw, same as an internal reading would.
+    operand = resolve_monthly_peak_operand(2.0, 9.0)
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=operand, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=False
+        )
+        == 4.0
+    )
+
+
+def test_merged_operand_still_raised_to_the_floor():
+    # An external reading that beats the internal value but still sits below peak_floor_kw
+    # resolves to the floor -- the merge raises the operand, it does not escape the floor half
+    # of the clamp either.
+    operand = resolve_monthly_peak_operand(0.5, 1.0)
+    assert (
+        resolve_effective_peak_limit(
+            monthly_peak_kw=operand, max_peak_kw=4.0, peak_floor_kw=2.5, urgent=False
+        )
+        == 2.5
     )
 
 
