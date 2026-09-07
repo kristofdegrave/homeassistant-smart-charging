@@ -27,18 +27,18 @@ Use-cases plug into two shared mechanism documents rather than restating them:
 
 | UC | Goal | Primary actor | Requirements | Status |
 | --- | --- | --- | --- | --- |
-| [UC01](UC01-charge-from-solar-surplus.md) | Charge from solar surplus (incl. grid fallback) | Household energy manager | R1 | Planned |
-| [UC02](UC02-charge-from-solar-only.md) | Charge from solar only | Household energy manager | R2 | Planned |
-| [UC03](UC03-charge-from-grid-within-captar-limit.md) | Charge from the grid in Captar mode | Household energy manager | R4 | Planned |
-| [UC04](UC04-charge-at-a-user-set-current.md) | Charge at a user-set current | EV driver | R17 | Planned |
-| [UC05](UC05-guarantee-ready-by-departure.md) | Guarantee the car is ready by departure | EV driver | R5 | Planned |
-| [UC06](UC06-store-abundant-solar.md) | Store abundant solar by stepping up the limit | Household energy manager | R8 | Planned |
-| [UC07](UC07-reserve-capacity-for-tomorrow.md) | Reserve capacity for tomorrow's solar | Household energy manager | R9 | Planned |
-| [UC08](UC08-plan-tomorrow-home-day.md) | Plan tomorrow's home day (evening prompt) | EV driver | R13 | Planned |
-| [UC09](UC09-sync-charge-limit-with-car.md) | Keep the charge limit in sync with the car | EV driver | R6 | Planned |
-| [UC10](UC10-remind-to-plug-in.md) | Remind me to plug in | EV driver | R12 | Planned |
-| [UC11](UC11-monitor-and-manage-charging-configuration.md) | Monitor and manage charging configuration (dashboard) | Household energy manager | R19 | Planned |
-| [UC12](UC12-configure-installation-through-guided-flow.md) | Configure the installation through a guided, topic-based flow | Household energy manager | R20 | Planned |
+| [UC01](UC01-charge-from-solar-surplus.md) | Charge from solar surplus (incl. grid fallback) | Household energy manager | R1 | Committed |
+| [UC02](UC02-charge-from-solar-only.md) | Charge from solar only | Household energy manager | R2 | Committed |
+| [UC03](UC03-charge-from-grid-within-captar-limit.md) | Charge from the grid in Captar mode | Household energy manager | R4 | Committed |
+| [UC04](UC04-charge-at-a-user-set-current.md) | Charge at a user-set current | EV driver | R17 | Committed |
+| [UC05](UC05-guarantee-ready-by-departure.md) | Guarantee the car is ready by departure | EV driver | R5 | Committed |
+| [UC06](UC06-store-abundant-solar.md) | Store abundant solar by stepping up the limit | Household energy manager | R8 | Committed |
+| [UC07](UC07-reserve-capacity-for-tomorrow.md) | Reserve capacity for tomorrow's solar | Household energy manager | R9 | Committed |
+| [UC08](UC08-plan-tomorrow-home-day.md) | Plan tomorrow's home day (evening prompt) | EV driver | R13 | Committed |
+| [UC09](UC09-sync-charge-limit-with-car.md) | Keep the charge limit in sync with the car | EV driver | R6 | Committed |
+| [UC10](UC10-remind-to-plug-in.md) | Remind me to plug in | EV driver | R12 | Committed |
+| [UC11](UC11-monitor-and-manage-charging-configuration.md) | Monitor and manage charging configuration (dashboard) | Household energy manager | R19 | Committed |
+| [UC12](UC12-configure-installation-through-guided-flow.md) | Configure the installation through a guided, topic-based flow | Household energy manager | R20 | Committed |
 
 ---
 
