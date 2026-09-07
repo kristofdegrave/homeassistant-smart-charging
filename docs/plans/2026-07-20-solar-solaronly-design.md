@@ -17,10 +17,7 @@ direction, or structural decision, so no new ADR is required.
 Behavior is owned by
 [UC01](../analysis/use-cases/UC01-charge-from-solar-surplus.md) (`Solar`, R1) and
 [UC02](../analysis/use-cases/UC02-charge-from-solar-only.md) (`SolarOnly`, R2); this document cites
-their formulas/thresholds as test anchors and does not restate them as if it owns them. (CLAUDE.md's
-doc-structure section still names the retired `docs/analysis/flows/01-solar-flow.md` /
-`02-solar-only-flow.md` — see `docs/analysis/flows/README.md` for the supersession; fixing CLAUDE.md
-itself is a separate, non-blocking cleanup.)
+their formulas/thresholds as test anchors and does not restate them as if it owns them.
 
 ---
 

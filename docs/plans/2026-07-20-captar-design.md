@@ -18,9 +18,7 @@ Behavior is owned by
 [UC03](../analysis/use-cases/UC03-charge-from-grid-within-captar-limit.md) (`Captar`, R4);
 this document cites its formulas/thresholds, `control-cycle.md`'s R3/C4 clamp steps, and
 `resolution-rules.md`'s effective-peak-limit rule as test anchors and does not restate them as if it
-owns them. (CLAUDE.md's doc-structure section still names the retired
-`docs/analysis/flows/03-captar-flow.md` — see `docs/analysis/flows/README.md` for the supersession;
-fixing CLAUDE.md itself is a separate, non-blocking cleanup.)
+owns them.
 
 ---
 
