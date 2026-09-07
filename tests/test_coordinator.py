@@ -161,6 +161,7 @@ def _adapters(
     ev_soc=50.0,
     sun_state=None,
     low_tariff=None,
+    monthly_peak_external_role=False,
     monthly_peak_external=None,
 ):
     adapters = {
@@ -178,7 +179,10 @@ def _adapters(
         adapters[ROLE_EV_SOC] = _FakeNumeric(ev_soc)
     if low_tariff is not None:
         adapters[ROLE_LOW_TARIFF] = _FakeNumeric(low_tariff)
-    if monthly_peak_external is not None:
+    # Mirrors ev_soc_role/ev_soc above: a bool "is the role mapped at all" plus a separately
+    # nullable reading, so a mapped-but-currently-unavailable reading (monthly_peak_external=None
+    # with the role present) stays expressible, distinct from "unmapped" (role absent entirely).
+    if monthly_peak_external_role or monthly_peak_external is not None:
         adapters[ROLE_MONTHLY_PEAK_EXTERNAL] = _FakeNumeric(monthly_peak_external)
     return adapters
 
@@ -975,6 +979,30 @@ async def test_unmapped_external_monthly_peak_is_the_pinned_no_op_case(hass):
 
     result = await coord._async_update_data()
 
+    assert result.effective_peak_limit_kw == 2.0
+
+
+async def test_mapped_but_unavailable_external_monthly_peak_is_not_a_fault(hass):
+    # ADR-0007: a mapped role whose read() currently returns None (unavailable/unknown, or a
+    # transient miss) is the fault signal for a REQUIRED role, but this role is optional --
+    # _read_role returns None the same as "unmapped", and resolve_monthly_peak_operand's own
+    # `is None` guard rests on the internal value alone. Distinct from the unmapped case above:
+    # here the role IS present in `adapters`, only its reading is currently None.
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=10.0, peak_floor_kw=0.0)
+    adapters = _adapters(
+        status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external_role=True
+    )
+    assert ROLE_MONTHLY_PEAK_EXTERNAL in adapters
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_OFF
+    seed_ample_peak_headroom(coord, kw=2.0)
+
+    result = await coord._async_update_data()
+
+    assert result.fault is False
     assert result.effective_peak_limit_kw == 2.0
 
 
