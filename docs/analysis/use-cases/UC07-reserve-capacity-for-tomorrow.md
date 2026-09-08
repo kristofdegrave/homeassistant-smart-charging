@@ -22,8 +22,6 @@ has no charging mode of its own.
 
 ## Preconditions
 
-- The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is
-  `connected` or `charging`).
 - The active profile provides SOC-limit coordination (this release: the `Auto`
   [profile](../system-overview.md#ubiquitous-language) with the solar capability present, R18 —
   subsequent mentions in this document assume this same, single behaviour without repeating the
@@ -50,7 +48,7 @@ hold — or, if the sun is already down, the moment the last of the precondition
 
 ## Main success scenario
 
-1. **Given** the car is connected at home, the active profile provides SOC-limit coordination, the
+1. **Given** the active profile provides SOC-limit coordination, the
    home-day flag is set for tomorrow, the next-day solar forecast exceeds its threshold, no
    departure deadline is resolved for tomorrow, and no missed-deadline hold is in effect.
 2. **When** the sun is down, **then** the active-SOC-limit rule's row 1 (`resolution-rules.md`,
@@ -211,5 +209,32 @@ home-day flag itself, set by
   [UC02](UC02-charge-from-solar-only.md), or [UC03](UC03-charge-from-grid-within-captar-limit.md) —
   simply charges to whichever active SOC limit is currently resolved (R7); none of them evaluate
   the home-day flag or solar forecast themselves.
+- **Deliberately not conditioned on the car being connected.** The cap is a nightly *resolution*,
+  not a session behaviour: like the other rows of the active-SOC-limit table (`resolution-rules.md`,
+  R7), it answers "what ceiling is in force right now" whether or not a car is plugged in, and the
+  answer simply goes unused until one is. Three reasons the connectedness condition is left out
+  rather than added:
+  - **The two halves of the one `Auto` decision stay gated alike.** The same conditions drive both
+    the cap (R7 row 1) and Auto mode-selection's withholding of overnight top-up (R16 row 4).
+    Mode selection runs every cycle regardless of charger status, so gating only the SOC-limit half
+    on connectedness would split one decision into two differently-gated halves for no behavioural
+    gain.
+  - **It removes flapping rather than causing it.** With connectedness required, an evening
+    plug-in on a reserve night would step the resolved limit from the default down to the cap (and
+    the Auto-selected mode from `Captar` to `Off`) at the moment of plug-in; without it, both hold
+    their reserve values steadily from sundown, and the runtime dashboard
+    ([UC11](UC11-monitor-and-manage-charging-configuration.md)) shows the cap already in force and
+    `Off` already selected before the car arrives, rather than switching to them at plug-in.
+  - **Nothing observable is lost while disconnected, and nothing is lost when the car reconnects
+    either.** The active SOC limit is a ceiling for *charging*, so with no car connected the capped
+    value drives no behaviour by itself. The vehicle-side write is separately gated on the car
+    being connected at home ([UC09](UC09-sync-charge-limit-with-car.md), C2) — but the cap still
+    reaches the vehicle once it reconnects: UC09's own catch-up condition ("resolved active SOC
+    limit changed since last write", UC09's diagram) fires on plug-in precisely because the
+    resolved value differs from what was last written, propagating the cap the same cycle.
+
+  R7's disconnect reset is not a counter-example: what a disconnect resets is the solar step-up
+  (row 2), a flag threaded across cycles for the connected session, after which the limit resolves
+  from the remaining rows — the cap included, if its conditions hold.
 - **Never applies under `Manual`** (1a) — mirrors R16's "no automatic changes under `Manual`": the
   user's own mode choice is not second-guessed by this policy.
