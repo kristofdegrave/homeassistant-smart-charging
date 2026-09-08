@@ -61,13 +61,16 @@ whenever a human looks at or edits the dashboard.
 ## Alternate flows
 
 **4a — A capability is absent** — branches from step 4.
-Given any [capability](../system-overview.md#ubiquitous-language) is off (R18) — currently solar
-(`solar_available`) or deadline management (`deadline_available`)
+Given a [capability](../system-overview.md#ubiquitous-language) that gates a runtime entity is off
+(R18) — today only deadline management (`deadline_available`)
 When the System renders the runtime configuration section
-Then every runtime entity that capability gates is omitted: the solar-dependent entities (e.g. the
-solar-reserve cap default) without the solar capability, and the departure-time rows without the
+Then every runtime entity that capability gates is omitted: the departure-time rows without the
 deadline capability. The dashboard never shows a runtime control for a behaviour the installation
-cannot exercise.
+cannot exercise. The solar capability (`solar_available`) gates no runtime entity of its own — the
+[solar-reserve cap](../system-overview.md#ubiquitous-language) and every other solar value is a
+config-entry setting reached only through the [configuration
+flow](../system-overview.md#ubiquitous-language) (R20), never presented here — so its absence
+omits nothing from this section; it narrows the active-mode selector's option list instead (4b).
 
 **4b — The active-mode selector's own option list is narrower** — branches from step 4, a distinct
 mechanism from 4a's row omission.
@@ -170,7 +173,7 @@ that a runtime edit here ultimately feeds; the capability gating of runtime enti
   computed by `control-cycle.md` and `resolution-rules.md`; a runtime edit it forwards is consumed
   by whichever of UC01–UC10 or `resolution-rules.md` reads that entity. This use-case neither
   computes charging behaviour nor overrides it.
-- Gated by the declared capabilities (R18) for the runtime entities each one gates — solar-dependent
-  entities under the solar capability, the departure-time rows under the deadline capability — the
+- Gated by the declared capabilities (R18) for the runtime entities each one gates — today the
+  departure-time rows under the deadline capability, the only such gating in effect (4a) — the
   same gating `select.smart_charging_mode`'s selector already applies for modes
   (`entity-catalog.md`).

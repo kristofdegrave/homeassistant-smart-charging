@@ -15,9 +15,9 @@ anytime via Configure), and this catalog lists them by their **config key**, not
 Notes). Per [ADR-0031](../adl/0031-config-values-as-disabled-by-default-diagnostic-sensors.md),
 every such row except `control_interval_s` also has a read-only, disabled-by-default sensor mirror
 listed as a sibling row directly beneath it (see Notes) — the config-entry value itself remains the
-sole place to *set* it; the sensor only lets a household *see* it without opening Configure. One
-runtime helper value remains an open question under ADR-0004 and
-keeps the legacy `sc_` `input_*` helper-entity form for now (see Notes). The
+sole place to *set* it; the sensor only lets a household *see* it without opening Configure. Every
+user-set entity in this catalog is an owned native platform entity — no legacy `sc_` `input_*`
+helper entity remains. The
 [glossary](system-overview.md#ubiquitous-language) stays authoritative for each
 term's **meaning**; this catalog is authoritative for each entity's, config key's, or role's
 **binding** — its id/key or role name, unit, default/range, and which behaviour reads or writes
@@ -29,8 +29,7 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 
 **How to read it:**
 
-- **Role** — `config` (a user-set entity — a native owned entity, or the one
-  still-open legacy `sc_` runtime helper, see Notes), `config-data` / `config-options` (a
+- **Role** — `config` (a user-set entity — always a native owned entity), `config-data` / `config-options` (a
   config-entry value per ADR-0005 — a declared capability or an install-time threshold/default —
   with **no entity id at all**), `adapter role` (an internal, code-level role that reads or writes
   one piece of hardware I/O; mapped to the user's real upstream entity during config flow — not an
@@ -55,9 +54,8 @@ every row of that concern regardless of role; the **Role** column distinguishes 
   are either pure system-computed status (e.g. the monthly peak demand) or a config-value mirror
   sourced from the config entry rather than computed (the ADR-0031 sensors above) — neither kind
   carries a runtime/install-time classification.
-- **Id** — for a `config` or `state` row, the real Home Assistant entity id —
-  `smart_charging_`-prefixed for the owned control/diagnostic entities, still legacy `sc_`-prefixed
-  for the one open runtime helper (see Notes); for a `config-data` / `config-options` row, the
+- **Id** — for a `config` or `state` row, the real Home Assistant entity id, always
+  `smart_charging_`-prefixed (the owned control/diagnostic entities); for a `config-data` / `config-options` row, the
   **config key** (no entity id, ADR-0005); for
   an `adapter role` row, the internal role name — it names a code-level role, not an HA entity.
 - **Default / range / source** — for a `config` row, its default and range; for an `adapter role`
@@ -258,7 +256,8 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_solar_reserve_soc` | config | runtime | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07, UC11 (omitted when the solar capability is off) | user, UC11, UC12 (seeds initial value) |
+| `solar_reserve_soc` | config-options | options | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user (anytime), UC12 |
+| `sensor.smart_charging_solar_reserve_soc` | state | — | % | mirrors `solar_reserve_soc` (config-options); disabled by default (ADR-0031) | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | user | — |
 | `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime), UC12 |
 | `sensor.smart_charging_solar_forecast_threshold_kwh` | state | — | kWh | mirrors `solar_forecast_threshold_kwh` (config-options); disabled by default (ADR-0031) | solar-reserve forecast threshold (R9) | user | — |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, (UC11) | — |
@@ -332,11 +331,14 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
 
 - **Runtime target vs. install-time/config-entry bound — judgment calls.** Where a value isn't a
   clear-cut match for either of R19's own entity examples, this catalog draws the line as follows:
-  an SOC **target** the active-SOC-limit resolution can select as the effective limit
-  (`number.smart_charging_soc_limit_override`, `sc_solar_reserve_soc`) is a runtime entity, since
-  the household changes what SOC it currently wants; the latter also remains open under ADR-0004
-  (see below). An SOC **ceiling/bound** on top of a target (`max_solar_soc`, a step-up ceiling, not
-  itself selectable as the active limit) is a config-entry **options** value, alongside other
+  the SOC **target** the household dials in for the current session
+  (`number.smart_charging_soc_limit_override`) is a runtime entity, since the household changes
+  what SOC it currently wants right now. Being selectable by the active-SOC-limit resolution is
+  *not* on its own the test: the `solar_reserve_soc` cap is selectable as the effective limit
+  (`resolution-rules.md` row 1) yet is a config-entry **options** value, because the household sets
+  it once as a policy and `Auto` — not the household — decides when it applies. An SOC
+  **ceiling/bound** on top of a target (`max_solar_soc`, a step-up ceiling, not
+  itself selectable as the active limit) is likewise a config-entry **options** value, alongside other
   bounds (`min_current_a`, `max_current_a`) — same reasoning ADR-0005 applies to thresholds
   generally. Likewise, a behavioural/algorithm choice that is set once and rarely revisited
   (`solar_only_rounding_strategy`, `power_respect_peak`, and the per-notification enable toggles
@@ -546,11 +548,11 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `min_current_a`/`max_current_a`, the `solar_*` thresholds,
   `reminder_lead_h`, `evening_prompt_*`, and the rest of the `config-options` rows above) is
   config-entry **options** — changeable anytime via Configure. Neither bucket has an entity id;
-  this catalog lists them by config key instead. One runtime user-set value remains an **open
-  question under ADR-0004** — ADR-0005's Decision text enumerates only mappings/tables/capabilities
-  (data) and thresholds/defaults/the control interval (options), and assigns it to neither;
-  it stays a user-set runtime-entity question that ADR-0004's own follow-up owns: `sc_solar_reserve_soc`
-  has no owned entity yet and is catalogued under its placeholder legacy id, pending that decision.
-  The Power target current is no longer open: it ships as the owned entity
-  `number.smart_charging_target_current` (*`Power` mode*), under ADR-0004's owned-entity naming
-  convention.
+  this catalog lists them by config key instead. Nothing is left unassigned between the two
+  buckets: the Power target current is an owned entity, `number.smart_charging_target_current`
+  (*`Power` mode*), under ADR-0004's owned-entity naming convention, and the solar-reserve cap
+  (`solar_reserve_soc`) is a config-entry **options** value like the other `solar_*` thresholds —
+  a policy default the household sets in the configuration flow, never a dashboard control (the
+  judgment call is spelled out in the *Runtime target vs. install-time/config-entry bound* note
+  above). Neither is an open ADR-0004 question, and no legacy `sc_`-prefixed helper id remains in
+  this catalog.

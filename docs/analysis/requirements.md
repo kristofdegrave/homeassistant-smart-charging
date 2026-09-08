@@ -319,7 +319,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The dashboard shows current charging status: charger status (connected/charging/disconnected), active profile, active mode, active SOC limit, and current charger current.
 - [ ] The dashboard shows the current solar surplus and net import, so the household can see whether charging is currently drawing from solar or from the grid.
 - [ ] Every entity classified as runtime configuration in `entity-catalog.md` (`config`-role, or a `state`-role entity the user sets directly, e.g. the active mode selector) is both visible and settable from the dashboard.
-- [ ] A runtime entity gated by a capability that is absent (R18) is not shown at all — in particular, the departure-time rows are not shown when the deadline capability is absent, exactly as the solar-dependent runtime entities are not shown when the solar capability is absent.
+- [ ] A runtime entity gated by a capability that is absent (R18) is not shown at all — today the departure-time rows, which are not shown when the deadline capability is absent. The criterion is stated generally so it also holds for any capability that later gates a runtime entity.
 - [ ] No entity classified as install-time configuration is presented on the dashboard; install-time configuration is reachable only through the integration's configuration flow.
 - [ ] Adding a new entity to `entity-catalog.md` and classifying it as runtime requires no dashboard-specific logic change for it to appear.
 
