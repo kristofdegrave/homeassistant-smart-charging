@@ -1,7 +1,7 @@
 # ADR-0028: Registry-level disabling for capability-gated entities
 
 Date: 2026-08-21
-Status: Proposed
+Status: Accepted
 
 ## Context
 
