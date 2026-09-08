@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.components import frontend
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE, Platform
+from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, STATE_UNAVAILABLE, Platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from homeassistant.setup import async_setup_component
@@ -63,6 +63,7 @@ from custom_components.smart_charging.const import (
     OWNED_SUFFIX_DEPARTURE_DOW,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     PROFILE_AUTO,
+    ROLE_MONTHLY_PEAK_EXTERNAL,
     STATE_CHARGING,
     STATE_CONNECTED,
     STATE_DISCONNECTED,
@@ -1190,15 +1191,18 @@ async def test_end_to_end_external_monthly_peak_reflected_in_sensors(hass):
     hass.config_entries.async_setup with the mapping in entry.data, must surface the merged
     operand on the REAL sensor entities (not a hand-built CycleResult): the mapped role's raw
     reading on sensor.smart_charging_adapter_readings (ADR-0021), and the merged, higher
-    operand on sensor.smart_charging_effective_peak_limit (ADR-0030/ADR-0032). deadline_available
-    is turned off so this test isolates the peak-limit merge from unrelated deadline-urgency
-    behaviour (row 1 of resolve_effective_peak_limit, R5) -- not what this checkpoint verifies."""
+    operand on sensor.smart_charging_effective_peak_limit (ADR-0030/ADR-0032) -- while
+    sensor.smart_charging_monthly_peak_kw keeps reporting only the internally-tracked value,
+    never the merged one (D-6). deadline_available is turned off not merely for isolation but
+    because leaving it at its True default would fail Mon-Fri: R14's 06:00 weekday default
+    departure time reads as already-passed against this entry's ev_soc/active_soc_limit gap,
+    forcing `urgent=True` and row 1's max_peak_kw regardless of the merge -- the flag keeps
+    this test deterministic every day of the week, not just isolated in principle."""
     seed_charger_states(hass, status="Charging", net_w=0.0, charger_w=0.0)
-    hass.states.async_set("sensor.dso_peak", "4090", {"unit_of_measurement": "W"})
+    hass.states.async_set("sensor.dso_peak", "4090", {ATTR_UNIT_OF_MEASUREMENT: "W"})
 
     data = entry_data_base(
         **{
-            CONF_CAPTAR_AVAILABLE: True,
             CONF_DEADLINE_AVAILABLE: False,
             CONF_MONTHLY_PEAK_EXTERNAL_ENTITY: "sensor.dso_peak",
             CONF_EV_SOC_ENTITY: "sensor.ev_soc",  # seed_charger_states already seeds it
@@ -1212,8 +1216,12 @@ async def test_end_to_end_external_monthly_peak_reflected_in_sensors(hass):
 
     readings = hass.states.get("sensor.smart_charging_adapter_readings")
     assert readings is not None
-    assert readings.attributes["monthly_peak_external"] == 4.09
+    assert readings.attributes[ROLE_MONTHLY_PEAK_EXTERNAL] == 4.09
 
     limit = hass.states.get("sensor.smart_charging_effective_peak_limit")
     assert limit is not None
     assert float(limit.state) == 4.09  # the external reading, above the near-0 tracked peak
+
+    tracked = hass.states.get("sensor.smart_charging_monthly_peak_kw")
+    assert tracked is not None
+    assert float(tracked.state) == 0.0  # not contaminated by the higher external reading
