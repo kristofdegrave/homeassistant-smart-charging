@@ -15,9 +15,9 @@ anytime via Configure), and this catalog lists them by their **config key**, not
 Notes). Per [ADR-0031](../adl/0031-config-values-as-disabled-by-default-diagnostic-sensors.md),
 every such row except `control_interval_s` also has a read-only, disabled-by-default sensor mirror
 listed as a sibling row directly beneath it (see Notes) — the config-entry value itself remains the
-sole place to *set* it; the sensor only lets a household *see* it without opening Configure. Two
-runtime helper values remain an open question under ADR-0004 and
-keep the legacy `sc_` `input_*` helper-entity form for now (see Notes). The
+sole place to *set* it; the sensor only lets a household *see* it without opening Configure. One
+runtime helper value remains an open question under ADR-0004 and
+keeps the legacy `sc_` `input_*` helper-entity form for now (see Notes). The
 [glossary](system-overview.md#ubiquitous-language) stays authoritative for each
 term's **meaning**; this catalog is authoritative for each entity's, config key's, or role's
 **binding** — its id/key or role name, unit, default/range, and which behaviour reads or writes
@@ -29,8 +29,8 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 
 **How to read it:**
 
-- **Role** — `config` (a user-set entity — a native owned entity, or one of the two
-  still-open legacy `sc_` runtime helpers, see Notes), `config-data` / `config-options` (a
+- **Role** — `config` (a user-set entity — a native owned entity, or the one
+  still-open legacy `sc_` runtime helper, see Notes), `config-data` / `config-options` (a
   config-entry value per ADR-0005 — a declared capability or an install-time threshold/default —
   with **no entity id at all**), `adapter role` (an internal, code-level role that reads or writes
   one piece of hardware I/O; mapped to the user's real upstream entity during config flow — not an
@@ -57,7 +57,7 @@ every row of that concern regardless of role; the **Role** column distinguishes 
   carries a runtime/install-time classification.
 - **Id** — for a `config` or `state` row, the real Home Assistant entity id —
   `smart_charging_`-prefixed for the owned control/diagnostic entities, still legacy `sc_`-prefixed
-  for the two open runtime helpers (see Notes); for a `config-data` / `config-options` row, the
+  for the one open runtime helper (see Notes); for a `config-data` / `config-options` row, the
   **config key** (no entity id, ADR-0005); for
   an `adapter role` row, the internal role name — it names a code-level role, not an HA entity.
 - **Default / range / source** — for a `config` row, its default and range; for an `adapter role`
@@ -140,10 +140,10 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime), UC12 |
 | `sensor.smart_charging_max_current_a` | state | — | A | mirrors `max_current_a` (config-options); disabled by default (ADR-0031) | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | user | — |
 | `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity; a user-supplied state-translation table names which raw states mean `connected`/`charging`, and every other raw state resolves to `disconnected` (NF3, ADR-0035) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC07, UC08, UC09, UC10 | — |
+| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity; a user-supplied state-translation table names which raw states mean `connected`/`charging`, and every other raw state resolves to `disconnected` (NF3, ADR-0035) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
 
-> UC06's own precondition reads only the active mode's own `Charging` state (per UC01/UC02), never `charger_status` directly, so it is deliberately absent from that role's `Read by` above.
+> UC06's own precondition reads only the active mode's own `Charging` state (per UC01/UC02), never `charger_status` directly, so it is deliberately absent from that role's `Read by` above. UC07's solar-reserve cap is likewise deliberately absent: it is a nightly resolution evaluated regardless of connectedness (see UC07's Relationships section), so it never reads this role either.
 
 ### Peak protection
 
@@ -166,7 +166,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `input_number.sc_power_target_current_a` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11, UC12 (seeds initial value) |
+| `number.smart_charging_target_current` | config | runtime | A | 10 (min–max charging current) | [Power target current](system-overview.md#ubiquitous-language) (R17) | UC04, UC11 | user, UC11, UC12 (seeds initial value) |
 | `power_respect_peak` | config-options | options | — | on | `Power` peak-protection option (R17) — see the Captar-dependent-rows note | UC04 | user (anytime), UC12 |
 | `sensor.smart_charging_power_respect_peak` | state | — | — | mirrors `power_respect_peak` (config-options); disabled by default (ADR-0031) | `Power` peak-protection option (R17) | user | — |
 | `power_cooldown_min` | config-options | options | min | 10 | `Power`-mode cooldown (R11) | UC04 | user (anytime), UC12 |
@@ -331,16 +331,16 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   clear-cut match for either of R19's own entity examples, this catalog draws the line as follows:
   an SOC **target** the active-SOC-limit resolution can select as the effective limit
   (`number.smart_charging_soc_limit_override`, `sc_solar_reserve_soc`) is a runtime entity, since
-  the household changes what SOC it currently wants and the two remain open under ADR-0004 (see
-  below). An SOC **ceiling/bound** on top of a target (`max_solar_soc`, a step-up ceiling, not
+  the household changes what SOC it currently wants; the latter also remains open under ADR-0004
+  (see below). An SOC **ceiling/bound** on top of a target (`max_solar_soc`, a step-up ceiling, not
   itself selectable as the active limit) is a config-entry **options** value, alongside other
   bounds (`min_current_a`, `max_current_a`) — same reasoning ADR-0005 applies to thresholds
   generally. Likewise, a behavioural/algorithm choice that is set once and rarely revisited
   (`solar_only_rounding_strategy`, `power_respect_peak`, and the per-notification enable toggles
   `deadline_notice_enabled` / `plug_in_reminder_enabled` / `evening_prompt_enabled`) is a
   config-entry options value, distinct from a value the household dials in for the current session
-  (`sc_power_target_current_a`, still an open runtime-entity question under ADR-0004). For values
-  ADR-0005's own text does not individually enumerate (e.g. `grid_supply_ceiling_a`,
+  (`number.smart_charging_target_current`). For values ADR-0005's own text does not individually
+  enumerate (e.g. `grid_supply_ceiling_a`,
   `grid_safety_offset_a`, `nominal_voltage_v`), the rule this catalog applies is ADR-0005's own
   Consequences test: does changing the value need to re-validate entity/role resolution? If not,
   it is an options value, regardless of whether it also reads as a set-once installation fact.
@@ -454,6 +454,15 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   stay stored but unused — the mirror is a passive readout, so its behaviour follows its source row
   without a separate rule; the mapping has no mirror sensor of its own (adapter roles never do,
   ADR-0031's scope).
+- **`power_cooldown_min` has no effect while the CapTar capability is absent, but is not among
+  the CapTar-gated rows above.** R11's cooldown-entry acceptance criterion ties `Power`'s only own
+  stop condition to the sustained R3 breach, so without the capability `Power` never stops on its
+  own and this value is never consulted — the same dormant-but-stored shape as the six rows above.
+  It is nonetheless **presented regardless of capability**: R18 AC5 names only the four
+  peak-protection thresholds, the peak-protection option, and the `monthly_peak_external` mapping
+  as CapTar-gated fields of the installation flow, and [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)
+  puts `power_cooldown_min` on the ungated `power` step, unlike `power_respect_peak` itself, which
+  sits on the CapTar-gated `captar` step alongside `Captar`-mode's own cooldown.
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When
   `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
@@ -532,10 +541,11 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `min_current_a`/`max_current_a`, the `solar_*` thresholds,
   `reminder_lead_h`, `evening_prompt_*`, and the rest of the `config-options` rows above) is
   config-entry **options** — changeable anytime via Configure. Neither bucket has an entity id;
-  this catalog lists them by config key instead. Two runtime user-set values remain an **open
+  this catalog lists them by config key instead. One runtime user-set value remains an **open
   question under ADR-0004** — ADR-0005's Decision text enumerates only mappings/tables/capabilities
-  (data) and thresholds/defaults/the control interval (options), and assigns neither of these two;
-  they stay a user-set runtime-entity question that ADR-0004's own follow-up owns — and keep the
-  legacy `sc_` helper-entity form for now, pending a decision on whether they join the owned-entity
-  list: `sc_power_target_current_a`,
-  `sc_solar_reserve_soc`.
+  (data) and thresholds/defaults/the control interval (options), and assigns it to neither;
+  it stays a user-set runtime-entity question that ADR-0004's own follow-up owns: `sc_solar_reserve_soc`
+  has no owned entity yet and is catalogued under its placeholder legacy id, pending that decision.
+  The Power target current is no longer open: it ships as the owned entity
+  `number.smart_charging_target_current` (*`Power` mode*), under ADR-0004's owned-entity naming
+  convention.
