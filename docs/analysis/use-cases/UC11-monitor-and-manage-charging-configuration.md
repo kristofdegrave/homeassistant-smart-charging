@@ -44,8 +44,9 @@ whenever a human looks at or edits the dashboard.
    System displays the current charging status: [charger status](../system-overview.md#ubiquitous-language),
    active profile, active mode, [active SOC limit](../system-overview.md#ubiquitous-language), and
    current charger current.
-3. **And** the System displays the current [solar surplus](../system-overview.md#ubiquitous-language)
-   and [net import](../system-overview.md#ubiquitous-language), so the household can see whether
+3. **And** the System displays the current [net import](../system-overview.md#ubiquitous-language)
+   and — while the solar capability is present (R18, 3a) — the current [solar
+   surplus](../system-overview.md#ubiquitous-language), so the household can see whether
    charging is currently drawing from solar or from the grid.
 4. **And** the System displays every entity `entity-catalog.md` classifies as [runtime
    configuration](../system-overview.md#ubiquitous-language) (every `config`-role row marked
@@ -60,6 +61,14 @@ whenever a human looks at or edits the dashboard.
 
 ## Alternate flows
 
+**3a — The solar capability is absent** — branches from step 3.
+Given the solar [capability](../system-overview.md#ubiquitous-language) (`solar_available`) is off
+(R18)
+When the System renders the charging-status section
+Then the [solar surplus](../system-overview.md#ubiquitous-language) reading is omitted — an
+installation without solar produces none — while [net import](../system-overview.md#ubiquitous-language)
+and the rest of the charging-status section render normally (R19).
+
 **4a — A capability is absent** — branches from step 4.
 Given a [capability](../system-overview.md#ubiquitous-language) that gates a [runtime
 configuration](../system-overview.md#ubiquitous-language) entity is off (R18) — today only deadline
@@ -67,12 +76,11 @@ management (`deadline_available`)
 When the System renders the runtime configuration section
 Then every runtime entity that capability gates is omitted: the departure-time rows without the
 deadline capability. The dashboard never shows a runtime control for a behaviour the installation
-cannot exercise. The solar capability (`solar_available`) gates no entity in *this* section: the
+cannot exercise. The solar capability gates no entity in *this* section: the
 [solar-reserve cap](../system-overview.md#ubiquitous-language) and every other solar value is a
 config-entry setting reached only through the [configuration
-flow](../system-overview.md#ubiquitous-language) (R20), never presented here. Its absence instead
-omits the solar surplus reading from the charging-status section (step 3) and narrows the
-active-mode selector's option list (4b).
+flow](../system-overview.md#ubiquitous-language) (R20), never presented here. Its absence reaches
+the charging-status section (3a) and the active-mode selector's option list (4b) instead.
 
 **4b — The active-mode selector's own option list is narrower** — branches from step 4, a distinct
 mechanism from 4a's row omission.
@@ -111,8 +119,8 @@ every other section of the dashboard continues to render normally.
   permit — `Solar`/`SolarOnly` and/or `Captar` absent from its option list precisely when the
   capability declaring them is off, `Power` and `Off` always present (4b, R18).
 - The current charging status (charger status, active profile, active mode, active SOC limit,
-  current charger current) and the current solar surplus and net import are visible on the
-  dashboard whenever it is open.
+  current charger current) and the current net import are visible on the dashboard whenever it is
+  open; the current solar surplus is too, except while the solar capability is absent (3a, R18).
 - A runtime edit made on the dashboard has exactly the same effect as the same edit made directly
   on the underlying entity — this use-case adds no behaviour of its own beyond presenting and
   forwarding.
@@ -133,7 +141,10 @@ that entity, not by this one.
 ```mermaid
 flowchart TD
     Open["User opens dashboard"] --> Catalog["Read entity-catalog.md<br/>Setup classification"]
-    Catalog --> Status["Render charging-status section<br/>(charger status, active profile,<br/>active mode, active SOC limit,<br/>charger current, solar surplus, net import)"]
+    Catalog --> Status["Render charging-status section<br/>(charger status, active profile,<br/>active mode, active SOC limit,<br/>charger current, net import)"]
+    Status --> SolarFilter{"Solar capability<br/>declared? (R18)"}
+    SolarFilter -- yes --> Surplus["Show solar surplus"]
+    SolarFilter -- no --> OmitSurplus["Omit solar surplus (3a)"]
     Catalog --> Runtime["Render every runtime-classified<br/>config / state entity, editable"]
     Runtime --> Filter{"Entity gated by an<br/>absent capability? (R18)"}
     Filter -- yes --> Omit["Omit from dashboard (4a)"]
@@ -147,15 +158,16 @@ flowchart TD
 
 ## Requirements satisfied
 
-- **R19** — Runtime dashboard (all six acceptance criteria: charging-status display; solar
-  surplus/net import display; every runtime entity visible and settable; runtime entities gated by
-  an absent capability omitted; no install-time entity shown; new runtime entities require no
-  dashboard-specific logic change).
+- **R19** — Runtime dashboard (all six acceptance criteria: charging-status display; net-import
+  display plus the solar surplus while the solar capability is present; every runtime entity
+  visible and settable; any entity gated by an absent capability omitted — the departure-time rows
+  (4a) and the solar surplus reading (3a); no install-time entity shown; new runtime entities
+  require no dashboard-specific logic change).
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
 manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered by
 `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent, 4b and
-Postconditions above). This is a distinct mechanism from R19 AC4's runtime-entity omission (4a) —
+Postconditions above). This is a distinct mechanism from R19 AC4's entity omission (3a, 4a) —
 the selector's option list is fixed at entity creation from the declared capabilities (ADR-0028),
 not a per-render decision this use-case makes. `Auto`'s own selection behaviour under the same
 absence remains `resolution-rules.md`'s claim, not this one's.

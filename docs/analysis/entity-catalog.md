@@ -184,7 +184,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_effective_peak_limit` | state | — | kW | `min(max(max(monthly_peak_demand, monthly_peak_external), peak_floor_kw), maximum_peak)`, raised to the maximum peak during urgency (R5); resolved per `resolution-rules.md` | [effective peak limit](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_active_soc_limit` | state | — | % | resolved active SOC limit per `resolution-rules.md` (Active SOC limit table): solar-reserve cap → solar step-up → default; the entity `ActiveSocLimitChanged` fires on (ADR-0011) | [active SOC limit](system-overview.md#ubiquitous-language) — the resolved value in effect | UC09, UC11 | control-cycle |
 | `sensor.smart_charging_status` | state | — | — | `OK` / `Fault` (ADR-0007) | integration health status (ADR-0007) | (UC11) | control-cycle |
-| `sensor.smart_charging_solar_surplus_w` | state | — | W | `charger_power − net_power`, computed fresh each control cycle, never stored | [solar surplus](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
+| `sensor.smart_charging_solar_surplus_w` | state | — | W | `charger_power − net_power`, computed fresh each control cycle, never stored; gated on the solar capability (R18) — registry-disabled while `solar_available` is off (ADR-0028), so the dashboard omits it (R19 AC4, UC11 3a) | [solar surplus](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
 | `sensor.smart_charging_time_to_full` | state | — | min | derived from EV battery capacity (R15), `ev_soc`, the active SOC limit, and the current `charger_current` set-point; unavailable while `charger_current` is 0 A, zero once state of charge is at or above the active SOC limit | [time to full charge](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_peak_headroom_a` | state | — | A | `(effective peak limit − safety margin − net import) ÷ supply voltage`, the same raw-reading target the R3 peak-protection clamp holds; resolved per `control-cycle.md` step 5 (the effective peak limit itself is resolved per `resolution-rules.md`) | [peak headroom](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_adapter_readings` | state | — | timestamp | state is the timestamp of the last successful control-cycle read; its state attributes hold one key per currently-wired *read* adapter role, with no value when that role's own reading is unavailable (ADR-0007 semantics), without the entity itself becoming unavailable; per ADR-0021 | adapter-role readings (ADR-0021) | (UC11) | control-cycle |
@@ -334,8 +334,9 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   the SOC **target** the household dials in for the current session
   (`number.smart_charging_soc_limit_override`) is a runtime entity, since the household changes
   what SOC it currently wants right now. Being selectable by the active-SOC-limit resolution is
-  *not* on its own the test: the `solar_reserve_soc` cap is selectable as the effective limit
-  (`resolution-rules.md` row 1) yet is a config-entry **options** value, because the household sets
+  *not* on its own the test: the `solar_reserve_soc` cap can become the
+  [active SOC limit](system-overview.md#ubiquitous-language) (`resolution-rules.md`'s
+  active-SOC-limit table, *Solar-reserve cap* row) yet is a config-entry **options** value, because the household sets
   it once as a policy and `Auto` — not the household — decides when it applies. An SOC
   **ceiling/bound** on top of a target (`max_solar_soc`, a step-up ceiling, not
   itself selectable as the active limit) is likewise a config-entry **options** value, alongside other
@@ -426,8 +427,13 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   by UC11 to display the currently applied set-point on the dashboard (R19) — neither read-back
   changes the command-only nature of `control-cycle`'s own use of these roles.
 - **Solar-dependent entities are conditional on the solar capability (R18).** When
-  `solar_available` is off, everything under *Solar configuration* plus the solar sensors is not
-  required, and the `Auto` rule skips the solar mode accordingly.
+  `solar_available` is off, everything under *Solar configuration* is not required, and the `Auto`
+  rule skips the solar mode accordingly. This reaches one row filed outside that area:
+  `sensor.smart_charging_solar_surplus_w` (*General → Diagnostic outputs*) is registry-disabled
+  while the capability is off (ADR-0028), which is what removes the solar surplus reading from the
+  runtime dashboard's charging-status section (R19 AC4, UC11 3a). No *Solar configuration* row is a
+  runtime entity, so the solar capability gates nothing in the dashboard's runtime configuration
+  section.
 - **Captar-dependent rows are conditional on the CapTar capability (R18).** When
   `captar_available` is off, `captar_cooldown_min` is not required, and the `Auto` rule skips
   `Captar` accordingly. The *Peak protection* subgroup's thresholds (`safety_margin_w`,
