@@ -223,13 +223,15 @@ home-day flag itself, set by
     plug-in on a reserve night would step the resolved limit from the default down to the cap (and
     the Auto-selected mode from `Captar` to `Off`) at the moment of plug-in; without it, both hold
     their reserve values steadily from sundown, and the runtime dashboard
-    ([UC11](UC11-monitor-and-manage-charging-configuration.md)) explains the night's plan before
-    the car arrives instead of after.
-  - **Nothing observable depends on it.** The active SOC limit is a ceiling for *charging*, so with
-    no car connected the capped value drives no behaviour; the vehicle-side write is separately
-    gated on the car being connected at home
-    ([UC09](UC09-sync-charge-limit-with-car.md), C2), and UC09's own disconnect write is to the
-    default limit unconditionally.
+    ([UC11](UC11-monitor-and-manage-charging-configuration.md)) shows the cap already in force and
+    `Off` already selected before the car arrives, rather than switching to them at plug-in.
+  - **Nothing observable is lost while disconnected, and nothing is lost when the car reconnects
+    either.** The active SOC limit is a ceiling for *charging*, so with no car connected the capped
+    value drives no behaviour by itself. The vehicle-side write is separately gated on the car
+    being connected at home ([UC09](UC09-sync-charge-limit-with-car.md), C2) — but the cap still
+    reaches the vehicle once it reconnects: UC09's own catch-up condition ("resolved active SOC
+    limit changed since last write", UC09's diagram) fires on plug-in precisely because the
+    resolved value differs from what was last written, propagating the cap the same cycle.
 
   R7's disconnect reset is not a counter-example: what a disconnect resets is the solar step-up
   (row 2), a flag threaded across cycles for the connected session, after which the limit resolves
