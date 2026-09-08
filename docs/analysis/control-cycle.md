@@ -152,8 +152,11 @@ flowchart TD
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
    mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion,
    and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
-   before actually cutting to 0 A (the post-surplus hold, R1/R2; `Captar`'s own peak-breach grace
-   period, R3, edge case below). In the solar modes only, once the has-charged flag is set for the
+   before actually cutting to 0 A (the post-surplus hold, R1/R2; the peak-breach grace period, R3,
+   in every mode it can stop — the solar modes at the minimum current during grid fallback/`Hold`,
+   `Captar`, and `Power` while it respects the peak — edge case below). A running cooldown survives
+   a switch of the active mode; only the hold and restart-debounce timers reset on one (edge case
+   below). In the solar modes only, once the has-charged flag is set for the
    connection, a restart from `Idle` additionally waits out the
    [restart debounce](system-overview.md#ubiquitous-language) period once the mode's start
    condition is newly met — but a resume straight from `Cooldown`, where the start condition is

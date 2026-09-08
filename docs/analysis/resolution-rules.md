@@ -43,6 +43,12 @@ charges to this resolved value — it has no opinion on *why* the limit is where
   changes under `Manual`"). The mode `Auto` selects (typically `Captar`, via Auto mode-selection's
   *Overnight top-up* row below) does not
   itself evaluate the home-day flag or forecast; it only ever sees the resolved limit.
+- **Row 1 is deliberately not conditioned on the car being connected**, unlike row 2's step-up
+  (below), which only ever applies while charging. The cap is a nightly resolution — it answers
+  "what ceiling is in force right now" regardless of whether a car is plugged in, the same way
+  every row here does — and the resolved value simply goes unused until one is
+  ([UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)'s Relationships section has the full
+  rationale).
 - **The solar step-up is also an `Auto`-only coordination decision (R8), like the reserve cap
   above.** Under `Manual`, *Solar step-up* never matches regardless of which solar mode is charging or how
   close the SOC is to the active SOC limit — a manually selected solar session simply charges to

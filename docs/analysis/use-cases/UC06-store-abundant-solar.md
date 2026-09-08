@@ -49,13 +49,13 @@ Then the System clears the step-up and the active SOC limit returns to the defau
 **Car disconnects.**
 Given a solar step-up is in effect
 When the car is unplugged
-Then the active SOC limit resets to the default limit and the step-up is cleared, per the shared disconnect rule (R7) — not re-litigated here.
+Then the step-up is cleared per the shared disconnect rule (R7) — not re-litigated here; the active SOC limit then returns to the default limit, since a step-up only ever applies while a solar mode is charging (the sun up), which can never coincide with [UC07](UC07-reserve-capacity-for-tomorrow.md)'s solar-reserve cap (the sun down) — so R7's "remaining rows" always simplify to the default here.
 
 ## Postconditions
 
 - While a step-up is in effect, the active SOC limit equals the default limit plus the applied steps, clamped to `max_solar_soc`.
 - A step-up persists unchanged across a switch between `Solar` and `SolarOnly` (R7).
-- A step-up is cleared, and the active SOC limit returns to the default limit, the moment the active mode is no longer a solar mode, or on disconnect (R7).
+- A step-up is cleared, and the active SOC limit returns to the default limit, the moment the active mode is no longer a solar mode, or on disconnect (R7) — see the disconnect exception flow above for why disconnect always resolves to the default rather than the solar-reserve cap in this use-case's own case.
 - This use-case never changes the charger current itself — it only changes the ceiling that [UC01](UC01-charge-from-solar-surplus.md)/[UC02](UC02-charge-from-solar-only.md)'s own set-point logic charges toward.
 
 ## State model
