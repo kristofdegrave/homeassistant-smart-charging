@@ -121,7 +121,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] At any moment exactly one active SOC limit applies, resolved in priority order: the solar-reserve cap (R9) first, then any solar step-up (R8), otherwise the default SOC limit (R6).
 - [ ] A solar step-up raises the active SOC limit only under the `Auto` profile, while charging in a solar mode (`Solar` or `SolarOnly`, R8); switching between those two preserves an in-effect step-up.
 - [ ] When the active mode is no longer a solar mode, any solar step-up is cleared and the active SOC limit returns to the default limit.
-- [ ] On disconnect, the active SOC limit resets to the default limit (any solar step-up is cleared).
+- [ ] On disconnect, any solar step-up is cleared; the active SOC limit then resolves from the remaining rows in the priority order above — the default limit, unless the solar-reserve cap (R9) still holds, since R9's own conditions never depend on connectedness.
 - [ ] Charging does not resume above the active SOC limit until the limit changes or the car is unplugged and replugged.
 
 ---

@@ -140,10 +140,10 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `max_current_a` | config-options | options | A | 32 | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | control-cycle, UC01, UC02, UC03, UC04, UC05 | user (anytime), UC12 |
 | `sensor.smart_charging_max_current_a` | state | — | A | mirrors `max_current_a` (config-options); disabled by default (ADR-0031) | [maximum charging current](system-overview.md#ubiquitous-language) (C1) | user | — |
 | `charger_power` | adapter role | — | W | mapped to the charger's power sensor (NF3) | charger power (operand of [solar surplus](system-overview.md#ubiquitous-language)) | control-cycle, UC01, UC02 | — |
-| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity; a user-supplied state-translation table names which raw states mean `connected`/`charging`, and every other raw state resolves to `disconnected` (NF3, ADR-0035) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC07, UC08, UC09, UC10 | — |
+| `charger_status` | adapter role | — | enum | mapped to the charger's connection-state entity; a user-supplied state-translation table names which raw states mean `connected`/`charging`, and every other raw state resolves to `disconnected` (NF3, ADR-0035) | [charger status](system-overview.md#ubiquitous-language) (`disconnected`/`connected`/`charging`) | control-cycle, UC01, UC02, UC03, UC04, UC05, UC08, UC09, UC10 | — |
 | `charger_current` | adapter role (read/write) | — | A | 0 or 6–32; mapped to the charger's current set-point entity (NF3) | charger current set-point output (C1, NF3) | UC11 (reads back the current set-point for display) | control-cycle |
 
-> UC06's own precondition reads only the active mode's own `Charging` state (per UC01/UC02), never `charger_status` directly, so it is deliberately absent from that role's `Read by` above.
+> UC06's own precondition reads only the active mode's own `Charging` state (per UC01/UC02), never `charger_status` directly, so it is deliberately absent from that role's `Read by` above. UC07's solar-reserve cap is likewise deliberately absent: it is a nightly resolution evaluated regardless of connectedness (see UC07's Relationships section), so it never reads this role either.
 
 ### Peak protection
 
