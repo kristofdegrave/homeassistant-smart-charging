@@ -34,6 +34,7 @@ from custom_components.smart_charging.const import (
     CONF_EVENING_PROMPT_TIME,
     CONF_MAX_PEAK_KW,
     CONF_MAX_SOLAR_SOC,
+    CONF_MONTHLY_PEAK_EXTERNAL_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
@@ -1179,3 +1180,40 @@ async def test_reload_does_not_double_register_vehicle_limit_listeners(hass):
     await hass.async_block_till_done()
 
     assert len(events) == 1
+
+
+# --- T8 integration checkpoint (#947, external monthly-peak mapping, #922) -----------------
+
+
+async def test_end_to_end_external_monthly_peak_reflected_in_sensors(hass):
+    """T8 (#947): the property no unit test reaches -- a real config entry, set up through
+    hass.config_entries.async_setup with the mapping in entry.data, must surface the merged
+    operand on the REAL sensor entities (not a hand-built CycleResult): the mapped role's raw
+    reading on sensor.smart_charging_adapter_readings (ADR-0021), and the merged, higher
+    operand on sensor.smart_charging_effective_peak_limit (ADR-0030/ADR-0032). deadline_available
+    is turned off so this test isolates the peak-limit merge from unrelated deadline-urgency
+    behaviour (row 1 of resolve_effective_peak_limit, R5) -- not what this checkpoint verifies."""
+    seed_charger_states(hass, status="Charging", net_w=0.0, charger_w=0.0)
+    hass.states.async_set("sensor.dso_peak", "4090", {"unit_of_measurement": "W"})
+
+    data = entry_data_base(
+        **{
+            CONF_CAPTAR_AVAILABLE: True,
+            CONF_DEADLINE_AVAILABLE: False,
+            CONF_MONTHLY_PEAK_EXTERNAL_ENTITY: "sensor.dso_peak",
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",  # seed_charger_states already seeds it
+        }
+    )
+    options = entry_options_base(**{CONF_MAX_PEAK_KW: 10.0, CONF_PEAK_FLOOR_KW: 0.0})
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    readings = hass.states.get("sensor.smart_charging_adapter_readings")
+    assert readings is not None
+    assert readings.attributes["monthly_peak_external"] == 4.09
+
+    limit = hass.states.get("sensor.smart_charging_effective_peak_limit")
+    assert limit is not None
+    assert float(limit.state) == 4.09  # the external reading, above the near-0 tracked peak
