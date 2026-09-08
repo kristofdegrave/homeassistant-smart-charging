@@ -291,7 +291,7 @@ it is wired to its callers).
 - **Testable on its own:** plain pytest — the three-row lookup and R8/R9 transitions, incl. the
   `Manual` negative case (no step-up, no cap regardless of home-day flag or forecast); `SocReached`
   must not resume on sensor noise, only a genuine limit change or reconnect (R7).
-- **Integration checkpoint:** ⎔ called by M1 (cycle) only. M2 (vehicle-limit sync) and M3 (UC10's
+- **Integration checkpoint:** ⎔ M1 (cycle) is its only caller today. M2 (vehicle-limit sync) and M3 (UC10's
   below-limit check) consume its *resolved* output through the materialized
   `sensor.smart_charging_active_soc_limit` the Coordinator publishes, not by calling this engine —
   neither Manager holds the Coordinator-threaded step-up/reserve context the resolution composes
@@ -439,7 +439,8 @@ it is wired to its callers).
 - **Depends on:** RA3 (vehicle_charge_limit adapter — see RA note below), RA1 (`car_home`,
   `charger_status`), RA3 Store (write `number.smart_charging_soc_limit_override`; read the resolved
   active SOC limit from `sensor.smart_charging_active_soc_limit` — the Coordinator's published
-  resolution, not an E3 call, per ADR-0011); its triggers are
+  resolution, not an E3 call, per ADR-0011; the sensor itself is C3, written by M1 — stubbable until
+  C3); its triggers are
   adapter-observed state changes / the `ActiveSocLimitChanged` signal whose event-vs-rederive
   treatment **G-ADR-0011** settled.
 - **ADR gate:** G-ADR-0011 (trigger mechanism) and G-ADR-0015 (package home) — both resolved.
@@ -468,7 +469,8 @@ it is wired to its callers).
 - **Depends on:** RA4 (Notification access), RA1/RA2 (`car_home`, `charger_status`, `solar_forecast`,
   `home_day_external`), RA3 Store (owned config + home-day flag write; read the resolved active SOC
   limit from `sensor.smart_charging_active_soc_limit` for UC10's below-limit check — the
-  Coordinator's published resolution, not an E3 call, per ADR-0011), E4 (Deadline).
+  Coordinator's published resolution, not an E3 call, per ADR-0011; the sensor itself is C3, written
+  by M1 — stubbable until C3), E4 (Deadline).
 - **ADR gate:** G-ADR-0011 (trigger mechanism, refined by ADR-0024) and G-ADR-0015 (package home) —
   both resolved.
 - **Testable on its own:** HA harness — UC10 reminder gating + de-dup; UC08 prompt + response capture;
@@ -647,7 +649,11 @@ from the retired functional sequence.
 - **Build order obeys the static diagram.** Every task depends only on services below it in §4's
   call directions (Resource Access/Engines → Managers → Clients); no task requires a caller of its
   own to exist first. Engines depend on no lower layer (§4 rule 4); Managers depend on no other
-  Manager (§4 rule 5) — reflected in M1/M2/M3 having no mutual ordering edge.
+  Manager (§4 rule 5) — reflected in M1/M2/M3 having no mutual ordering edge. M2 and M3 reading the
+  resolved active SOC limit from `sensor.smart_charging_active_soc_limit` (C3, written by M1) is not
+  an exception: the read is Resource Access through the Store, not a call on M1 or on C3, so the
+  direction still runs Manager → Resource Access. It is a *runtime* rather than a build-order
+  dependency — both are stubbable until C3 exists, as their task lines say.
 - **Every ADR-worthy decision has a task line before its dependent.** G-ADR-0010 (ADR-0010) precedes
   E3–E9; G-ADR-0011 (ADR-0011, refined by ADR-0024) precedes M1's publish step, M2, M3, C6;
   G-ADR-0015 (ADR-0015) precedes M2 and M3; G-ADR-0018/0019 (ADR-0018, ADR-0019) precedes RA3 and

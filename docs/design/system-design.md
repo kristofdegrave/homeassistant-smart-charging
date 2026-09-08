@@ -293,7 +293,6 @@ flowchart TD
     Cfg --> Store
 
     Coord --> SC & SOC & DL & Prof & Mode & Bill & PDT & Grid & Inv & Cap
-    VLM -->|shared edge; not the change signal| SOC
     NM --> DL
 
     Coord --> Adapters
@@ -448,8 +447,11 @@ The Vehicle-Limit Manager takes the resolved [active SOC limit](../analysis/syst
 from the materialized diagnostic entity the `ActiveSocLimitChanged` event fires on, not by
 recomputing it: the resolution is a composition of the pure SOC-Target Engine with the
 step-up/reserve context the Coordinator threads across cycles, and only the Coordinator holds that
-composition (ADR-0011). The `VLM → SOC-Target` edge in [§4](#4-static-architecture) remains a legal
-shared edge — it is simply not the source of the cross-cycle change signal.
+composition (ADR-0011). The Vehicle-Limit Manager therefore makes no SOC-Target call of its own, so
+[§4](#4-static-architecture) draws no `VLM → SOC-Target` edge; the edge nonetheless remains legal —
+ADR-0011 keeps it available as a shared edge, it is simply not the source of the cross-cycle change
+signal. See [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08) for what the static
+diagram's Manager→Engine edges do and do not assert.
 
 ### 5.3 Notification: plug-in reminder (UC10) & evening prompt (UC08)
 
@@ -486,25 +488,29 @@ sequenceDiagram
 UC10's below-limit check compares state of charge against the resolved [active SOC
 limit](../analysis/system-overview.md#ubiquitous-language) (`resolution-rules.md`, R7), so the
 Notification Manager takes that value from the materialized diagnostic entity, exactly as
-[§5.2](#52-vehicle-charge-limit-sync-uc09)'s Vehicle-Limit Manager does. An earlier revision of
-this diagram showed a direct `N → SOC-Target` call instead, on the reading that a point-in-time
-check is a different question from §5.2's change-detection signal. It is a different *question*,
-but it has the same answer, for the reason ADR-0011 gives: the resolved value is a composition of
-the pure SOC-Target Engine with the step-up/reserve context the Coordinator threads across cycles,
-and a consumer holding only its own inputs cannot reconstruct that composition — point-in-time or
-not. A bare Engine call would therefore answer a *different* question (the limit implied by the
-Notification Manager's own inputs) than the one UC10 asks. The Deadline Engine call above is not
-affected: R14's deadline resolution takes no Coordinator-threaded state, so calling it directly
-returns the same answer the Coordinator would get.
+[§5.2](#52-vehicle-charge-limit-sync-uc09)'s Vehicle-Limit Manager does. ADR-0011's reasoning
+reaches a point-in-time read as much as a change signal, because it turns on the *input
+composition*, not on change-detection: the resolved value composes the pure SOC-Target Engine with
+the step-up/reserve context the Coordinator threads across cycles, and a consumer holding only its
+own inputs cannot reconstruct that. A bare `N → SOC-Target` call would therefore answer a
+*different* question — the limit implied by the Notification Manager's own inputs — than the one
+UC10 asks. The Deadline Engine call above is unaffected: R14's deadline resolution takes no
+Coordinator-threaded state, so calling it directly returns the answer the Coordinator would get.
 
-The static diagram in [§4](#4-static-architecture) consequently draws no `NM → SOC-Target` edge —
-the Notification Manager has no remaining use for one. That is the absence of a use, not a
-prohibition: rule 2 still permits any Manager to call any Engine, and the SOC-Target Engine remains
-a shared edge (§5.2's `VLM → SOC-Target`).
+The read is unsolicited, unlike §5.2's — nothing guarantees the entity is populated when the
+reminder tick fires. Before the Coordinator's first cycle, or while the diagnostic entity is
+unavailable, UC10's below-limit precondition is simply not established and no reminder is due; once
+populated, the value carries the same one-cycle latency [§3](#3-service-catalog) already accepts for
+every Store read. UC10 records no exception flow for the unpopulated case, which its own document
+should pick up.
 
-This is the design catching up with a decision ADR-0011 already made — the same correction §5.2
-received — not a new one; ADR-0011's own materialized-entity rationale is what settles it, and no
-ADR is superseded.
+**What the static diagram draws.** [§4](#4-static-architecture)'s Manager→Engine edges are the calls
+the design actually realizes, not the calls rule 2 permits — rule 2 permits any Manager to call any
+Engine, so an absent edge records an absent *use*, never a prohibition. Neither the Notification
+Manager (this section) nor the Vehicle-Limit Manager ([§5.2](#52-vehicle-charge-limit-sync-uc09))
+calls the SOC-Target Engine any more, so neither edge is drawn; ADR-0011's note that the shared
+`VLM → SOC-Target` edge "remains available" is preserved in §5.2's prose and [§6](#6-use-case-validation)'s
+smell note, which is where a legal-but-unused edge belongs.
 
 ---
 
