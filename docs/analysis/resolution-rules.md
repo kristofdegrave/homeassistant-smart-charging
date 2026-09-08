@@ -8,8 +8,10 @@ satisfies. These are **lookups, not mechanism** — the order of operations with
 cycle lives in `control-cycle.md`; entity bindings live in `entity-catalog.md`.
 
 Most rules below are decision tables evaluated top-to-bottom: **the first row whose condition
-holds wins.** The required-current rule is a shared formula instead, since it has no priority
-order to evaluate. Every rule is re-evaluated every control cycle, so a change in conditions
+holds wins.** Every row carries a **name** as well as a priority number, and that name is how the
+row is cited — here and in every other document — so that re-ordering a table never silently
+changes what a citation elsewhere refers to. The required-current rule is a shared formula
+instead, since it has no priority order to evaluate. Every rule is re-evaluated every control cycle, so a change in conditions
 changes the result on the next cycle. Two of the inputs these rules read are not values observable
 *this* cycle but flags the coordinator threads across cycles for the current connected session:
 whether a [solar step-up](system-overview.md#ubiquitous-language) is in effect (R7/R8) and whether a
@@ -25,30 +27,32 @@ moment. Priority order: [solar-reserve cap](system-overview.md#ubiquitous-langua
 [solar step-up](system-overview.md#ubiquitous-language) → default. Whichever mode is active simply
 charges to this resolved value — it has no opinion on *why* the limit is where it is.
 
-| Priority | Condition | Active SOC limit |
-| --- | --- | --- |
-| 1 | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh), the departure-deadline rule below, evaluated one day ahead, resolves to "no deadline" for tomorrow, and no [missed-deadline hold](system-overview.md#ubiquitous-language) is in effect (R5, below) | The solar-reserve cap (default 60 %) |
-| 2 | A solar step-up is in effect (a step has been applied while the `Auto` profile is active and charging in a solar mode, R8) | The stepped-up value, clamped to `max_solar_soc` (default 100 %) |
-| 3 | Otherwise | The default `number.smart_charging_soc_limit_override` (default 80 %) |
+| Priority | Row | Condition | Active SOC limit |
+| --- | --- | --- | --- |
+| 1 | *Solar-reserve cap* | The `Auto` profile is active, the [home-day flag](system-overview.md#ubiquitous-language) is set, the [sun is down](system-overview.md#ubiquitous-language), the next-day [solar forecast](system-overview.md#ubiquitous-language) exceeds its threshold (default 12 kWh), the departure-deadline rule below, evaluated one day ahead, resolves to "no deadline" for tomorrow, and no [missed-deadline hold](system-overview.md#ubiquitous-language) is in effect (R5, below) | The solar-reserve cap (default 60 %) |
+| 2 | *Solar step-up* | A solar step-up is in effect (a step has been applied while the `Auto` profile is active and charging in a solar mode, R8) | The stepped-up value, clamped to `max_solar_soc` (default 100 %) |
+| 3 | *Default limit* | Otherwise | The default `number.smart_charging_soc_limit_override` (default 80 %) |
 
 - **The solar-reserve cap is an `Auto`-only coordination decision (R9).** Reserving overnight
   capacity for tomorrow's solar is `Auto` weighing tonight's grid top-up against tomorrow's solar
   yield — an optimisation, not a hard constraint — so it applies only while `Auto` is the active
-  profile. Under `Manual`, row 1 never matches regardless of the home-day flag or forecast: the
+  profile. Under `Manual`, *Solar-reserve cap* never matches regardless of the home-day flag or forecast: the
   user's own mode choice is not second-guessed by this policy (mirrors R16's "no automatic
-  changes under `Manual`"). The mode `Auto` selects (typically `Captar`, row 4 below) does not
+  changes under `Manual`"). The mode `Auto` selects (typically `Captar`, via Auto mode-selection's
+  *Overnight top-up* row below) does not
   itself evaluate the home-day flag or forecast; it only ever sees the resolved limit.
 - **The solar step-up is also an `Auto`-only coordination decision (R8), like the reserve cap
-  above.** Under `Manual`, row 2 never matches regardless of which solar mode is charging or how
+  above.** Under `Manual`, *Solar step-up* never matches regardless of which solar mode is charging or how
   close the SOC is to the active SOC limit — a manually selected solar session simply charges to
-  whichever limit row 3 resolves, with no automatic raise.
+  whichever limit *Default limit* resolves, with no automatic raise.
 - **Lifecycle and reset are governed by R7** (and applied by UC06): a step-up survives a switch
   between `Solar` and `SolarOnly`, is cleared when the active mode is no longer a solar mode,
   and resets to the default on disconnect. This table resolves the *current* value only.
 - Deadline urgency's own levers (R5 — the peak-limit raise and `Auto`'s mode escalation) never raise
-  the active SOC limit; they only accelerate toward whichever limit this table returns. **Row 1 has
-  two deadline preconditions, and the cap is mutually exclusive with each (R9):**
-  - *A departure deadline resolved for tomorrow* — the deadline takes priority, so row 1 never
+  the active SOC limit; they only accelerate toward whichever limit this table returns. **The
+  *Solar-reserve cap* row has two deadline preconditions, and the cap is mutually exclusive with
+  each (R9):**
+  - *A departure deadline resolved for tomorrow* — the deadline takes priority, so that row never
     matches while one is resolved for tomorrow, which is what the cap exists to protect: the cap's
     purpose is to leave room overnight for the following day.
   - *A missed-deadline hold in effect* (R5, below) — that first precondition is about tomorrow's date
@@ -65,7 +69,8 @@ charges to this resolved value — it has no opinion on *why* the limit is where
   cycle and the active SOC limit resolves without it — R9's own priority rule, not urgency reaching
   into R7. Without the deadline capability (R18) no deadline is ever resolved and no hold can arise,
   so both preconditions are always satisfied and the cap turns on its remaining conditions alone.
-- Without the solar capability (R18), rows 1–2 are inert: no solar mode ever runs (so no
+- Without the solar capability (R18), the *Solar-reserve cap* and *Solar step-up* rows are inert:
+  no solar mode ever runs (so no
   step-up), and the solar-reserve inputs are not configured, so the table returns the default.
 
 **Satisfies:** R7 · **Consumed by:** UC01, UC02, UC03, UC04, UC05, UC06, UC07, UC09, UC10.
@@ -85,18 +90,18 @@ no deadline of its own.
 is present (R18).** When it is absent none of the inputs below is configured at all, the rule does
 not run, and no deadline is ever resolved — for today or for any day ahead. Every consumer then
 behaves exactly as it does under "no deadline": the required-current rule computes nothing, so
-deadline urgency never engages and the effective-peak-limit rule never takes its urgency row (R5);
-Auto mode-selection row 2 never matches (R16); the plug-in reminder never fires (R12); and the
+deadline urgency never engages and the effective-peak-limit rule never takes its *Urgency raise* row (R5);
+Auto mode-selection's *Deadline urgency* row never matches (R16); the plug-in reminder never fires (R12); and the
 solar-reserve cap's one-day-ahead "no deadline" precondition is always satisfied (R9).
 
-| Priority | Condition (evaluated for the date being resolved) | Departure time for that date |
-| --- | --- | --- |
-| 1 | An external departure-time sensor is configured (NF3) | The sensor's current value, read as a time-of-day and applied to the date being resolved (may be "no deadline") |
-| 2 | That date is a recognised public holiday (from a configured holiday source, NF3) | The public-holiday override (default no deadline) |
-| 3 | The home-day flag applies to that date | The home-day override (default no deadline) |
-| 4 | Otherwise | That date's day-of-week default (defaults: 06:00 Mon–Fri; no deadline Sat–Sun) |
+| Priority | Row | Condition (evaluated for the date being resolved) | Departure time for that date |
+| --- | --- | --- | --- |
+| 1 | *External sensor* | An external departure-time sensor is configured (NF3) | The sensor's current value, read as a time-of-day and applied to the date being resolved (may be "no deadline") |
+| 2 | *Public holiday* | That date is a recognised public holiday (from a configured holiday source, NF3) | The public-holiday override (default no deadline) |
+| 3 | *Home day* | The home-day flag applies to that date | The home-day override (default no deadline) |
+| 4 | *Day-of-week default* | Otherwise | That date's day-of-week default (defaults: 06:00 Mon–Fri; no deadline Sat–Sun) |
 
-- If a date is **both** a public holiday and a home day, row 2 wins (public-holiday precedence).
+- If a date is **both** a public holiday and a home day, *Public holiday* wins (public-holiday precedence).
 
 **Next occurrence.** The departure deadline in force is:
 
@@ -157,12 +162,13 @@ urgency comes to be in effect.
   all (R18) — no required current is computed and deadline urgency never applies.
 - **[Required current](system-overview.md#ubiquitous-language)** = energy needed ÷ time
   remaining, converted to amperes via the resolved supply voltage (NF4).
-- Deadline urgency is in effect for as long as the required current exceeds the desired current
-  of the **baseline mode** — the mode that would run absent any deadline-driven mode escalation:
-  under `Manual`, the manually selected mode's own desired current (`Manual` never escalates the
-  mode, so this is simply the active mode itself); under `Auto`, whichever mode Auto
-  mode-selection's rows 3–5 (below) would select on their own. The baseline is evaluated fresh
-  every cycle from rows 3–5 alone, so the comparison is unaffected by `Captar` already being
+- Deadline urgency is in effect for as long as the required current exceeds the
+  [desired charger current](system-overview.md#ubiquitous-language) of the [baseline
+  mode](system-overview.md#ubiquitous-language): under `Manual`, the manually selected mode's own
+  desired current (`Manual` never escalates the mode, so this is simply the active mode itself);
+  under `Auto`, whichever mode Auto
+  mode-selection's baseline rows (below) would select on their own. The baseline is evaluated fresh
+  every cycle from those rows alone, so the comparison is unaffected by `Captar` already being
   dispatched from a prior escalation — comparing against `Captar`'s own (always-maximum) desired
   current instead would make urgency look satisfied the instant it engages, reverting and
   re-escalating every cycle.
@@ -185,7 +191,8 @@ moment the resolved departure deadline elapses while, on that same cycle:
 
 While it holds, the deadline is **unreachable by definition** — time has run out on it — so urgency
 is in effect and the System is pinned to `Unreachable`, with exactly that state's own behaviour: the
-effective-peak-limit rule takes its urgency row, `Auto` mode-selection takes row 2, and delivery is
+effective-peak-limit rule takes its *Urgency raise* row, `Auto` mode-selection takes its *Deadline
+urgency* row, and delivery is
 whatever those levers yield, bounded above by the [maximum permitted
 rate](system-overview.md#ubiquitous-language). **No required current is computed while the hold is in
 effect**, and the comparison against the baseline mode does not run, so the following occurrence's
@@ -201,7 +208,7 @@ time. From the cycle after it clears, the required current above governs normall
 - **Evaluation order, so the hold and the cap above are not circular.** The hold is updated once per
   cycle, *after* the active SOC limit has been resolved for that cycle (so condition 1 reads the
   resolved value) and *before* the mode and peak decisions that consume urgency
-  (`control-cycle.md`, step 4). Row 1 of the active-SOC-limit table therefore reads the hold as it
+  (`control-cycle.md`, step 4). The active-SOC-limit table's *Solar-reserve cap* row therefore reads the hold as it
   stood entering the cycle: on the very cycle a hold engages the cap may still have been in force,
   and it lifts from the next cycle onward — the same one-cycle settling any other precondition
   lapsing has ([UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)).
@@ -209,7 +216,7 @@ time. From the cycle after it clears, the required current above governs normall
   — urgency never engaged for that occurrence — so a session begun at, say, 08:00 with a 06:00
   deadline behind it resolves forward to tomorrow's occurrence by the ordinary rule (R14) and starts
   from `Normal`, exactly as before.
-- **The hold excludes the solar-reserve cap** (row 1 of the active-SOC-limit table above, R9): the
+- **The hold excludes the solar-reserve cap** (the active-SOC-limit table's *Solar-reserve cap* row above, R9): the
   cap would otherwise lower the active SOC limit out from under a session the driver is waiting on.
   The mirror-image consequence is deliberate and worth naming: if the cap *was* in force when the
   hold engages, the active SOC limit rises back to what it resolves to without the cap, extending the
@@ -228,7 +235,7 @@ time. From the cycle after it clears, the required current above governs normall
   Deliberate: no analysis-layer state survives a restart (`entity-catalog.md`).
 
 **Satisfies:** R5, R15 · **Consumed by:** the effective-peak-limit rule below, Auto mode-selection
-below, the active-SOC-limit rule above (the cap's row-1 precondition), UC05, UC07.
+below, the active-SOC-limit rule above (the *Solar-reserve cap* row's own preconditions), UC05, UC07.
 
 ---
 
@@ -239,12 +246,12 @@ net import that charging must stay below. Priority order: deadline urgency raise
 otherwise it is the lesser of the configured maximum and the billed peak — itself raised to the
 [external monthly-peak reading](system-overview.md#ubiquitous-language) when one is mapped and
 higher — floored so a low or not-yet-established billed peak can't push the limit down too far
-(row 2).
+(the *Normal* row).
 
-| Priority | Condition | Effective peak limit |
-| --- | --- | --- |
-| 1 | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5 — possible only while the [deadline capability](system-overview.md#ubiquitous-language) is present, R18) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
-| 2 | Otherwise (normal operation) | `min(max(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[external monthly-peak reading](system-overview.md#ubiquitous-language)`), `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
+| Priority | Row | Condition | Effective peak limit |
+| --- | --- | --- | --- |
+| 1 | *Urgency raise* | Deadline [urgency](system-overview.md#ubiquitous-language) is in effect (R5 — possible only while the [deadline capability](system-overview.md#ubiquitous-language) is present, R18) | The [maximum peak](system-overview.md#ubiquitous-language) (default 4 kW) |
+| 2 | *Normal* | Otherwise (normal operation) | `min(max(max(`[monthly peak demand](system-overview.md#ubiquitous-language)`, `[external monthly-peak reading](system-overview.md#ubiquitous-language)`), `[peak floor](system-overview.md#ubiquitous-language)`), maximum peak)` |
 
 - This rule resolves the **ceiling** only, and is the *entire* deadline-urgency response under
   `Manual` (except when the CapTar capability is absent, where it is a no-op — see below):
@@ -256,16 +263,16 @@ higher — floored so a low or not-yet-established billed peak can't push the li
   under `Manual` depends entirely on the active mode's own appetite for current, not on this
   rule alone. Under `Auto`, this same ceiling raise combines with a second lever — Auto
   mode-selection escalating to `Captar` when the CapTar capability is present, or to `Power` when
-  it is absent (row 2, below, R18) — so `Auto` meets far more deadlines than `Manual` can.
+  it is absent (its *Deadline urgency* row, below, R18) — so `Auto` meets far more deadlines than `Manual` can.
   `Captar` always requests the maximum charging current, a guarantee; `Power` requests only its
   configured target current, a best-effort substitute when `Captar` is unavailable.
 - Charging always targets the [safety margin](system-overview.md#ubiquitous-language) *below*
   this limit (`effective peak limit − safety margin`); the margin is applied by the peak clamp
   in `control-cycle.md`, not by this rule.
-- The [peak floor](system-overview.md#ubiquitous-language) (row 2) is applied with `max()`
+- The [peak floor](system-overview.md#ubiquitous-language) (*Normal* row) is applied with `max()`
   before the `min()` with the maximum peak, so it can raise but never push the effective peak
   limit above the maximum peak — see the glossary term for why the floor exists.
-- The [external monthly-peak reading](system-overview.md#ubiquitous-language) (row 2), when
+- The [external monthly-peak reading](system-overview.md#ubiquitous-language) (*Normal* row), when
   mapped and available, is merged with `max()` against the internally-tracked monthly peak
   demand before the peak-floor `max()` and the maximum-peak `min()` are applied — so it too can
   raise but never push the effective peak limit above the maximum peak (R3). The merge is
@@ -277,9 +284,9 @@ higher — floored so a low or not-yet-established billed peak can't push the li
 - **When the CapTar [capability](system-overview.md#ubiquitous-language) is absent (R18), nothing
   consults this rule's result.** The peak clamp is the sole control-decision consumer of the
   effective peak limit, and it does not run at all on such an installation (R3, `control-cycle.md`
-  step 5); the value still resolves by row 2 and is still surfaced read-only for observability, but
+  step 5); the value still resolves by the *Normal* row and is still surfaced read-only for observability, but
   no charging decision turns on it. This rule therefore needs no capability branch of its own — it
-  degrades by simply not being reached. The consequence for R5 is that the ceiling raise (row 1)
+  degrades by simply not being reached. The consequence for R5 is that the ceiling raise (*Urgency raise*)
   becomes a no-op there, leaving `Manual` with no working deadline lever at all and `Auto` with only
   its escalation to `Power` (Auto mode-selection, below).
 - When the required current exceeds the maximum permitted rate even so — regardless of
@@ -298,67 +305,70 @@ higher — floored so a low or not-yet-established billed peak can't push the li
 Under the [`Auto` profile](system-overview.md#ubiquitous-language), resolves which
 [mode](system-overview.md#ubiquitous-language) is active from observable conditions. Priority
 order below; the first matching row wins and is re-evaluated every control cycle, which is how
-escalation and revert happen automatically.
+escalation and revert happen automatically. The *Solar session*, *Overnight top-up*, and
+*Fallback* rows are collectively the **baseline rows** — the ones that select a mode absent any
+deadline escalation; the mode they resolve is the [baseline
+mode](system-overview.md#ubiquitous-language) the *Deadline urgency* row compares against.
 
-| Priority | Condition | Active mode |
-| --- | --- | --- |
-| 1 | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
-| 2 | Deadline urgency is in effect (required current, above, exceeds the desired current of whichever mode rows 3–5 below would otherwise select — or a [missed-deadline hold](system-overview.md#ubiquitous-language) is in effect, which pins urgency on regardless, R5) | `Captar` (`Auto`'s second urgency lever, alongside the effective-peak-limit raise, above — high tariff and `Captar`'s own maximum-current request); `Power` instead when the CapTar capability is absent (R18, see below) |
-| 3 | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
-| 4 | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set, next-day forecast above threshold, no departure deadline resolved for tomorrow, and no missed-deadline hold in effect) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
-| 5 | Otherwise | `Off` |
+| Priority | Row | Condition | Active mode |
+| --- | --- | --- | --- |
+| 1 | *Target met* | State of charge is at or above the active SOC limit (nothing to charge) | `Off` |
+| 2 | *Deadline urgency* | Deadline urgency is in effect (required current, above, exceeds the desired current of the [baseline mode](system-overview.md#ubiquitous-language) — whichever mode the baseline rows below would otherwise select — or a [missed-deadline hold](system-overview.md#ubiquitous-language) is in effect, which pins urgency on regardless, R5) | `Captar` (`Auto`'s second urgency lever, alongside the effective-peak-limit raise, above — high tariff and `Captar`'s own maximum-current request); `Power` instead when the CapTar capability is absent (R18, see below) |
+| 3 | *Solar session* | The solar capability is present (R18), the sun is up, and solar surplus is sufficient to start a solar session (per UC01) | `Solar` (solar-first, grid fallback allowed) |
+| 4 | *Overnight top-up* | The sun is down, the low-tariff flag is active (always the case on a single-tariff installation — see the glossary), and `Auto`'s own solar-reserve conditions (R9: home-day flag set, next-day forecast above threshold, no departure deadline resolved for tomorrow, and no missed-deadline hold in effect) do not hold | `Captar` (cost-efficient overnight grid top-up — the tariff preference and the reserve decision both belong to this selection, not to `Captar` mode itself, R4) |
+| 5 | *Fallback* | Otherwise | `Off` |
 
-- **Row 3's "sufficient to start" is the raw eligibility condition, not UC01's internal timing.**
-  It means smoothed solar surplus is at or above the solar start threshold — the same condition
+- **The *Solar session* row's "sufficient to start" is the raw eligibility condition, not
+  UC01's internal timing.** It means smoothed solar surplus is at or above the solar start threshold — the same condition
   that gates `Idle → Charging` in UC01/UC02 — regardless of whether UC01/UC02's own restart
   debounce (R11) is currently being waited out inside that mode. `Auto` does not deselect `Solar`
   merely because its internal debounce is pending; deselecting on every debounce would reset the
   mode-switch timers (`control-cycle.md`) and could prevent the debounce from ever completing.
-- **Row 1 compares against the *resolved* active SOC limit.** During a solar session the solar
-  step-up (R8) keeps the limit ahead of the rising state of charge, so row 1 does not prematurely
-  stop solar storage. When the target is already met with no step-up in effect, row 1 resolves to
+- **The *Target met* row compares against the *resolved* active SOC limit.** During a solar session the solar
+  step-up (R8) keeps the limit ahead of the rising state of charge, so that row does not prematurely
+  stop solar storage. When the target is already met with no step-up in effect, it resolves to
   `Off` by design: a step-up extends an active solar session, it does not restart a completed one
   (R7/R8).
-- **Escalation (Solar→Captar):** when row 2 begins to hold during a solar session, Auto
+- **Escalation (Solar→Captar):** when *Deadline urgency* begins to hold during a solar session, Auto
   switches to `Captar` so the deadline can be met from the grid — emits
   `DeadlineUrgencyEngaged` (see UC05).
-- **Revert:** when row 2 stops holding — i.e. the rows-3–5 baseline mode alone would now meet
-  the deadline — the next cycle falls through to row 3 or 4, returning to a solar mode (or
-  `Off`) once grid charging for the deadline is no longer required (R16), and emits
-  `DeadlineUrgencyReverted` (see UC05). Because row 2 always compares the required current
+- **Revert:** when *Deadline urgency* stops holding — i.e. the baseline mode alone would now meet
+  the deadline — the next cycle falls through to *Solar session* or *Overnight top-up*, returning
+  to a solar mode (or `Off`) once grid charging for the deadline is no longer required (R16), and
+  emits `DeadlineUrgencyReverted` (see UC05). Because *Deadline urgency* always compares the required current
   against that non-escalated baseline rather than `Captar`'s own (already-maximum) desired
   current, the decision is stable while genuinely needed rather than reverting the cycle after
   it engages.
 - **Reserve:** while `Auto`'s own solar-reserve conditions hold (R9), `Auto` both lowers the
-  active SOC limit (R7 row 1) *and* declines to match row 4, so it does not start baseline grid
+  active SOC limit (R7's *Solar-reserve cap* row) *and* declines to match *Overnight top-up*, so it does not start baseline grid
   charging overnight either — two separate effects of the same `Auto` decision, not a rule that
   `Captar` itself enforces. Because two of those conditions are "no departure deadline resolved for
   tomorrow" and "no missed-deadline hold in effect," the reserve decision is mutually exclusive both
-  with a deadline resolved for tomorrow and with one already missed today (R9, see UC05), so row 2
-  never holds on either account while the cap is in force. A deadline resolved for *today* and still
+  with a deadline resolved for tomorrow and with one already missed today (R9, see UC05), so
+  *Deadline urgency* never holds on either account while the cap is in force. A deadline resolved for *today* and still
   ahead of now is the one remaining case, which neither precondition speaks to.
-- **Unavailable modes are skipped (R18).** When the solar capability is absent, row 3 never
+- **Unavailable modes are skipped (R18).** When the solar capability is absent, *Solar session* never
   matches, so Auto falls through to `Captar`/`Off`. `Power` and `Off` are always available
   regardless of capabilities; `Captar` additionally requires the CapTar capability. When it is
-  absent, row 4 (overnight top-up) never matches — there is no deadline forcing a grid session,
-  so Auto simply forgoes the opportunistic top-up and falls through to row 5 (`Off`), same as
-  when the low-tariff flag itself does not hold. Row 2 (deadline urgency) is the one exception:
+  absent, *Overnight top-up* never matches — there is no deadline forcing a grid session,
+  so Auto simply forgoes the opportunistic top-up and falls through to *Fallback* (`Off`), same as
+  when the low-tariff flag itself does not hold. *Deadline urgency* is the one exception:
   see the `Power` carve-out below.
 - **Deadline-urgency carve-out: `Auto` selects `Power` when `Captar` is unavailable (R5, R16,
   R18).** `SolarOnly` and `Power` are otherwise never Auto-selected — they are deliberate user
   intents (near-zero-grid and charge-now) that conflict with `Auto`'s cost/deadline balancing, so
-  they are normally reachable only under the `Manual` profile. Row 2 is the sole exception: when
+  they are normally reachable only under the `Manual` profile. *Deadline urgency* is the sole exception: when
   deadline urgency holds and the CapTar capability is absent, `Auto` has no grid mode left that
   can request more than its baseline desired current, so it selects `Power` instead of falling
   through to `Off` — requesting the configured [Power target current](system-overview.md#ubiquitous-language)
   is a best-effort measure, not a guarantee: unlike `Captar`'s maximum-current request, it does
   not adapt to how urgent the deadline is and may still leave it unmet, in which case R5's
-  unreachable-deadline notification still applies. Reverts the same way row 2 always does, once
+  unreachable-deadline notification still applies. Reverts the same way *Deadline urgency* always does, once
   urgency no longer holds.
-- **Without the deadline capability, row 2 never matches (R18).** No deadline is ever resolved, so
+- **Without the deadline capability, *Deadline urgency* never matches (R18).** No deadline is ever resolved, so
   no required current is computed and no missed-deadline hold can be in effect (it clears the moment
   the capability goes absent), and urgency cannot arise; Auto selection falls straight through
-  to rows 3–5, and the `Power` carve-out above — which exists only for row 2 — is unreachable. This
+  to the baseline rows, and the `Power` carve-out above — which exists only for that row — is unreachable. This
   is independent of the CapTar capability: `Auto` simply never has a deadline to escalate for.
 - **`Manual` needs no table:** under `Manual` the active mode is whatever the user or an
   external source sets directly (R16, NF1); this rule does not apply.
@@ -372,8 +382,8 @@ escalation and revert happen automatically.
 - **R5** — Departure deadline guarantee (the required-current computation above; the missed-deadline
   hold; the effective-peak-limit raise, `Auto`'s and `Manual`'s shared lever — a no-op when the
   CapTar capability is absent, leaving `Manual` with none, as the effective-peak-limit rule above
-  records; Auto mode-selection
-  row 2, `Auto`'s second lever; the deadline-unreachable notification). R15 (EV battery capacity) feeds
+  records; Auto mode-selection's
+  *Deadline urgency* row, `Auto`'s second lever; the deadline-unreachable notification). R15 (EV battery capacity) feeds
   the required-current computation as a configuration parameter, not a behaviour of its own — R18
   AC8's R15 clause follows directly: absent the deadline capability there is no required-current
   computation for it to feed, so it has no remaining effect.
@@ -382,10 +392,10 @@ escalation and revert happen automatically.
 - **R16** — `Auto` profile mode-selection.
 
 Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
-`Auto`-selection half of AC2 (row 3 never matches while the solar capability is absent, so `Auto`
-falls through to `Captar`/`Off`) and of AC5 (row 4's opportunistic top-up never matches while the
-CapTar capability is absent, and row 2's escalation selects `Power` instead of `Captar`); and the
-mode-selection portion of AC7 (no deadline is ever resolved and row 2 never matches while the
+`Auto`-selection half of AC2 (*Solar session* never matches while the solar capability is absent, so `Auto`
+falls through to `Captar`/`Off`) and of AC5 (*Overnight top-up*'s opportunistic top-up never matches while the
+CapTar capability is absent, and *Deadline urgency*'s escalation selects `Power` instead of `Captar`); and the
+mode-selection portion of AC7 (no deadline is ever resolved and *Deadline urgency* never matches while the
 deadline capability is absent, which is why the `Power` carve-out is unreachable) — the
 input-suppression portion of AC7 is R14/[UC12](use-cases/UC12-configure-installation-through-guided-flow.md)'s,
 and the notification-suppression portion is

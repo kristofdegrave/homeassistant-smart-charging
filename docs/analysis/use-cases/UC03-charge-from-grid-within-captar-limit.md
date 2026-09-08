@@ -59,7 +59,8 @@ maximum charging current whenever its connection, SOC, and cooldown conditions h
 reads the [low-tariff flag](../system-overview.md#ubiquitous-language), the home-day flag, or the
 solar forecast. Timing grid charging to
 low-tariff periods, and reserving capacity for tomorrow's solar, are entirely the `Auto` profile's
-job (R16, Auto mode-selection row 4 and the active-SOC-limit resolution in `resolution-rules.md`):
+job (R16, Auto mode-selection's *Overnight top-up* row and the active-SOC-limit resolution in
+`resolution-rules.md`):
 `Auto` chooses *when* to select `Captar` and, independently, what the active SOC limit currently
 is; `Captar` itself, once selected — whether by `Auto` or manually — always charges the same way
 to whichever limit it is given.
@@ -123,5 +124,5 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 ## Relationships
 
-- **Timed and bounded by the `Auto` profile**: `Auto` selects `Captar` for cost-efficient overnight top-up only while the low-tariff flag is active and its own solar-reserve conditions (R9, UC07) do not hold (Auto mode-selection row 4, `resolution-rules.md`), and as the escalation target for deadline urgency (row 2); `Auto` also independently lowers the active SOC limit via the solar-reserve cap when those conditions do hold (R7). Both the timing preference and the reserve coordination live in `Auto`, not in this use-case — once selected, `Captar` charges the same way regardless of who or what selected it, and regardless of why the active SOC limit is set where it is.
+- **Timed and bounded by the `Auto` profile**: `Auto` selects `Captar` for cost-efficient overnight top-up only while the low-tariff flag is active and its own solar-reserve conditions (R9, UC07) do not hold (Auto mode-selection's *Overnight top-up* row, `resolution-rules.md`), and as the escalation target for deadline urgency (its *Deadline urgency* row); `Auto` also independently lowers the active SOC limit via the solar-reserve cap when those conditions do hold (R7). Both the timing preference and the reserve coordination live in `Auto`, not in this use-case — once selected, `Captar` charges the same way regardless of who or what selected it, and regardless of why the active SOC limit is set where it is.
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit and effective-peak-limit rules in `resolution-rules.md`.
