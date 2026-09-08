@@ -86,7 +86,9 @@ flowchart TD
    net grid import, solar power, charger power, the measured grid voltage, charger status, and
    state of charge. These are [raw values](system-overview.md#ubiquitous-language) — the most
    recent, unsmoothed readings (the measured grid voltage is resolved into the
-   [supply voltage](system-overview.md#ubiquitous-language) in step 3). Produces `SensorsRead`.
+   [supply voltage](system-overview.md#ubiquitous-language) in step 3). This cycle's raw net
+   import also feeds the bookkeeping side-branch in *Monthly peak demand tracking* below.
+   Produces `SensorsRead`.
 2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
    into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
    [smoothed value](system-overview.md#ubiquitous-language). The smoothed value feeds
