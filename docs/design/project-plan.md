@@ -291,7 +291,11 @@ it is wired to its callers).
 - **Testable on its own:** plain pytest — the three-row lookup and R8/R9 transitions, incl. the
   `Manual` negative case (no step-up, no cap regardless of home-day flag or forecast); `SocReached`
   must not resume on sensor noise, only a genuine limit change or reconnect (R7).
-- **Integration checkpoint:** ⎔ consumed by M1 (cycle), M2 (vehicle-limit sync), M3 (below-limit check).
+- **Integration checkpoint:** ⎔ called by M1 (cycle) only. M2 (vehicle-limit sync) and M3 (UC10's
+  below-limit check) consume its *resolved* output through the materialized
+  `sensor.smart_charging_active_soc_limit` the Coordinator publishes, not by calling this engine —
+  neither Manager holds the Coordinator-threaded step-up/reserve context the resolution composes
+  (ADR-0011; system-design §5.2/§5.3).
 
 **E4 — Deadline Engine**
 - **Service:** Engine, V5 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
@@ -433,7 +437,9 @@ it is wired to its callers).
   SOC-limit change, adopt manual (vehicle-side) changes with an echo guard, reset to default on
   disconnect (R6/C2). Realizes UC09.
 - **Depends on:** RA3 (vehicle_charge_limit adapter — see RA note below), RA1 (`car_home`,
-  `charger_status`), RA3 Store (write `number.smart_charging_soc_limit_override`), E3 (SOC-Target); its triggers are
+  `charger_status`), RA3 Store (write `number.smart_charging_soc_limit_override`; read the resolved
+  active SOC limit from `sensor.smart_charging_active_soc_limit` — the Coordinator's published
+  resolution, not an E3 call, per ADR-0011); its triggers are
   adapter-observed state changes / the `ActiveSocLimitChanged` signal whose event-vs-rederive
   treatment **G-ADR-0011** settled.
 - **ADR gate:** G-ADR-0011 (trigger mechanism) and G-ADR-0015 (package home) — both resolved.
@@ -460,7 +466,9 @@ it is wired to its callers).
   `DeadlineUnreachableNotified`, and re-arming its once-per-occasion latch on the paired
   `DeadlineUnreachableCleared` per ADR-0024). Realizes UC08, UC10.
 - **Depends on:** RA4 (Notification access), RA1/RA2 (`car_home`, `charger_status`, `solar_forecast`,
-  `home_day_external`), RA3 Store (owned config + home-day flag write), E4 (Deadline), E3 (SOC-Target).
+  `home_day_external`), RA3 Store (owned config + home-day flag write; read the resolved active SOC
+  limit from `sensor.smart_charging_active_soc_limit` for UC10's below-limit check — the
+  Coordinator's published resolution, not an E3 call, per ADR-0011), E4 (Deadline).
 - **ADR gate:** G-ADR-0011 (trigger mechanism, refined by ADR-0024) and G-ADR-0015 (package home) —
   both resolved.
 - **Testable on its own:** HA harness — UC10 reminder gating + de-dup; UC08 prompt + response capture;
