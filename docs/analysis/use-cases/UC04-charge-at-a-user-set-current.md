@@ -21,14 +21,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Powe
 
 ## Main success scenario
 
-1. **Given** `Power` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no `Power`-mode cooldown is in effect.
+1. **Given** `Power` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a `Power` stop or carried in from a stop in another mode).
 2. **When** a control cycle runs, **then** the System starts charging within one control cycle.
 3. **And** the System requests the configured [Power target current](../system-overview.md#ubiquitous-language) (default 10 A) — ignoring [solar surplus](../system-overview.md#ubiquitous-language) and the [low-tariff flag](../system-overview.md#ubiquitous-language) entirely. When the peak-protection option (`power_respect_peak`) is enabled (default), the R3 peak clamp (`control-cycle.md`) fits this request on raw readings to the available [peak headroom](../system-overview.md#ubiquitous-language), so [net import](../system-overview.md#ubiquitous-language) stays at or below the [effective peak limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`) minus the [safety margin](../system-overview.md#ubiquitous-language). In every case — with or without the R3 clamp — the grid-supply-ceiling clamp (C4), which `Power` mode can never disable, then fits whatever current remains on raw readings so net import stays below the [grid supply ceiling](../system-overview.md#ubiquitous-language) minus the [grid safety offset](../system-overview.md#ubiquitous-language). This is the same continuous, every-cycle relationship the R3 clamp has to `Captar`'s (UC03) request — not a reactive override for an unusual case — so the current the charger actually draws tracks available grid capacity cycle by cycle, shrinking as other household load rises and recovering as that load falls. Either clamp can only reduce the request, never raise it above the configured target, and the request is always bounded by the minimum and maximum charging current (C1). Everything this use-case says about the R3 clamp presupposes the CapTar [capability](../system-overview.md#ubiquitous-language) is present: when it is absent, R3 does not run at all (R18) and `Power` behaves exactly as in 3a below whatever `power_respect_peak` holds, bounded by C1 and C4 alone.
 
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a `Power`-mode cooldown is still running after a previous stop (R11)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Power`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -104,6 +104,13 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | Charging | configured Power target current requested; if the CapTar capability is present *and* `power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; without the capability the R3 clamp does not run whatever the option holds (3a′); either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while the CapTar capability is present and respecting peak — inapplicable without the capability, where R3 never runs (3a′) (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Power`-mode cooldown elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
+
+**A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
+entry point: `Power` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as the
+carried-in cooldown has left to run (the duration and elapsed time fixed when the other mode
+stopped) — the existing `Cooldown → Charging` / `Cooldown → Idle` transition above already covers
+it without a new state or edge. `Power` has no restart debounce (R11) either way, so no exemption
+question arises here the way it does for the solar modes.
 
 ## Domain events produced
 

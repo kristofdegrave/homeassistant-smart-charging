@@ -190,9 +190,8 @@ flowchart TD
   action involved. The accepted cost is the mirror image: an urgency escalation can be held off for
   the remainder of a running cooldown (at most `Captar`'s 10 minutes), a bounded delay to R5's
   best-effort guarantee rather than a breach of R11's Must-priority hardware protection. This
-  matches how R3's own peak-breach grace period behaves — it too is a charger-level churn guard
-  that a mode switch does not clear. The has-charged flag is likewise unaffected by a mode switch —
-  it is scoped to the connection, not the active mode, so switching between `Solar` and `SolarOnly`
+  matches the has-charged flag, the other piece of state a mode switch leaves untouched: it is
+  scoped to the connection, not the active mode, so switching between `Solar` and `SolarOnly`
   does not grant a fresh, undebounced first start; only its debounce *timer* resets.
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.

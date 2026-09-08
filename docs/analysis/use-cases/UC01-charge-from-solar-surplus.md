@@ -115,6 +115,13 @@ is met the moment cooldown elapses, without ever passing through `Idle`.
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) |
 | SocReached | 0 A | active SOC limit changes → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) · car unplugged/replugged → Idle (disconnect clears the has-charged flag) |
 
+**A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
+entry point: `Solar` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as the
+carried-in cooldown has left to run (the duration and elapsed time fixed when the other mode
+stopped). The existing `Cooldown → Charging` / `Cooldown → Idle` transitions above already cover
+it without a new state or edge — including their no-debounce exemption, which applies here for the
+same reason it already does: this dispatch never passed through `Idle`.
+
 ## Domain events produced
 
 - `SolarChargingStarted` — the System began charging from solar surplus (Idle/Cooldown → Charging).

@@ -89,6 +89,13 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | Cooldown | 0 A | `Captar` cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
+**A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
+entry point: `Captar` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as
+the carried-in cooldown has left to run (the duration and elapsed time fixed when the other mode
+stopped) — the existing `Cooldown → Charging` / `Cooldown → Idle` transition above already covers
+it without a new state or edge. `Captar` has no restart debounce (R11) either way, so no exemption
+question arises here the way it does for the solar modes.
+
 ## Domain events produced
 
 - `CaptarChargingStarted` — the System began grid charging in `Captar` mode (Idle/Cooldown → Charging).
