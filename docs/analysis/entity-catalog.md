@@ -535,8 +535,8 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   this catalog lists them by config key instead. One runtime user-set value remains an **open
   question under ADR-0004** — ADR-0005's Decision text enumerates only mappings/tables/capabilities
   (data) and thresholds/defaults/the control interval (options), and assigns it to neither;
-  it stays a user-set runtime-entity question that ADR-0004's own follow-up owns — and keeps the
-  legacy `sc_` helper-entity form for now, pending a decision on whether it joins the owned-entity
-  list: `sc_solar_reserve_soc`. The Power target current, once listed here alongside it, has since
-  been settled the other way: it ships as the owned entity
-  `number.smart_charging_target_current` (*`Power` mode*).
+  it stays a user-set runtime-entity question that ADR-0004's own follow-up owns: `sc_solar_reserve_soc`
+  has no owned entity yet and is catalogued under its placeholder legacy id, pending that decision.
+  The Power target current is no longer open: it ships as the owned entity
+  `number.smart_charging_target_current` (*`Power` mode*), under ADR-0004's owned-entity naming
+  convention.
