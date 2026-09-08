@@ -54,7 +54,7 @@ Use-cases plug into two shared mechanism documents rather than restating them:
   or `Power` with that option off) draws no differently. Under `Auto`, a second lever adds:
   mode-selection escalates to `Captar` when the CapTar capability is present, or to `Power`
   (a best-effort exception to `Power` otherwise never being Auto-selected) when it is absent
-  (`resolution-rules.md`, Auto mode-selection row 2, R18) — so `Auto` meets far more deadlines
+  (`resolution-rules.md`, Auto mode-selection's *Deadline urgency* row, R18) — so `Auto` meets far more deadlines
   than `Manual` can, since `Manual` never gets that second lever.
 - **UC05 and UC10 apply only while the deadline capability is present (R18).** Both hang off the
   departure-deadline resolution, which is not evaluated at all when that capability is absent

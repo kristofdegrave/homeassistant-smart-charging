@@ -112,10 +112,11 @@ flowchart TD
    before the mode and peak decisions below, which consume whether deadline urgency is in effect.
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
-   (`resolution-rules.md`, whose row 1 compares against this resolved active SOC limit) under
+   (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under
    `Auto` — calls the matching module, passing the smoothed `net_w` alongside the raw readings and
    the resolved voltage, and surfaces the resolved value read-only as
-   `sensor.smart_charging_active_mode`. The module returns a **desired charger current** using its
+   `sensor.smart_charging_active_mode`. The module returns a [desired charger
+   current](system-overview.md#ubiquitous-language) using its
    own set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
    0 A). The coordinator contains no logic that chooses
    or changes the mode — this includes deadline urgency (R5): under `Auto`, escalating to `Captar`
