@@ -29,18 +29,19 @@ priority-ordered lookups, and `entity-catalog.md` for entity/role bindings. Wher
 describe a *mechanism*, this document places that mechanism in a service and fixes who may call it.
 
 **ADR reconciliation (the inverted order).** CLAUDE.md's prescribed order is *system design first,
-then ADRs for the structural decisions it surfaces.* Here that order is inverted: ADRs 0001–0009
-were written before this design existed. This document therefore doubles as a **validation pass**
-over those nine ADRs against the Method. The reconciliation is in [§8](#8-adr-reconciliation);
-in summary, every existing ADR's structural boundary **aligns** with this decomposition (each
-names a boundary this design derives independently), and this design opens **no** superseding ADR.
-The entity-naming question ADR-0004 once left open is now **resolved**: `entity-catalog.md` conforms
-to ADR-0004's native-entity naming (the "keep native naming" path), so ADR-0004 stands and none is
-superseded. Two structural
-decisions this design makes explicit for the first time — treating the profile as a pure
-mode-selection Engine invoked by the Coordinator, and modeling cross-Manager coordination as
-domain-event publish/subscribe rather than direct calls — are candidates for their own ADRs
-(0010, 0011) and are flagged as such, not decided here.
+then ADRs for the structural decisions it surfaces.* Here that order is inverted for the first nine:
+ADRs 0001–0009 were written before this design existed. This document therefore doubles as a
+**validation pass** over those nine ADRs against the Method. The reconciliation is in
+[§8](#8-adr-reconciliation); in summary, every one of those ADRs' structural boundaries **aligns**
+with this decomposition (each names a boundary this design derives independently), and this design
+opens **no** superseding ADR. The entity-naming question ADR-0004 once left open is now
+**resolved**: `entity-catalog.md` conforms to ADR-0004's native-entity naming (the "keep native
+naming" path), so ADR-0004 stands and none is superseded. Two structural decisions this design made
+explicit for the first time — the package home for the cross-cutting Engines, and modeling
+cross-Manager coordination as domain-event publish/subscribe rather than direct calls — were
+surfaced here as follow-ups and have since been **decided** by ADR-0010 and ADR-0011 respectively;
+[§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles those and the later ADRs
+(0010–0019) that refine this design's mechanisms.
 
 ---
 
@@ -64,7 +65,7 @@ one service that encapsulates it. Services are catalogued in [§3](#3-service-ca
 | **V10** | **Capability gating** — which modes/behaviors exist for this installation | Capabilities declared per install (solar now, home battery later) must gate modes/behaviors without altering existing modes (R18, NF2) | Capability-Gate Engine |
 | **V11** | **User notification & prompting** — when/what the user is told and how a response is captured | Reminder (R12), evening prompt (R13/UC08), deadline-unreachable (R5) policies and the delivery channel evolve | Notification Manager + Notification Resource Access |
 | **V12** | **Vehicle charge-limit ownership** — keeping the car's own limit in sync bidirectionally | Write policy (C2 home-only), manual-adoption + feedback-loop guard, disconnect reset (R6) — a concern distinct from charger-current control | Vehicle-Limit Manager + `vehicle_charge_limit` Resource Access |
-| **V13** | **Persistence / config placement** — where setup vs tuning vs user-state live | data (reconfigure-only) vs options (anytime) vs owned entity, and reload-on-change (ADR-0004/0005/0008) | Config/State Store (Resource) |
+| **V13** | **Persistence / config placement** — where setup vs tuning vs user-state live | data (reconfigure-only) vs options (anytime) vs owned entity, and reload-on-change (ADR-0004/0005/0008) | Config/State Store Resource Access (the "Store") |
 | **V14** | **Configuration & presentation surface** — install-time flow, options flow, runtime dashboard | Which entity is set where and how it is shown (R19); setup-once vs day-to-day | Clients (config flow, dashboard) |
 
 Two notes on the cut:
@@ -94,7 +95,7 @@ pair (V6, V11, V12). Every service is classified as one of the five Method roles
 | **Owned control entities** | The user sets [active profile](../analysis/system-overview.md#ubiquitous-language)/[mode](../analysis/system-overview.md#ubiquitous-language), default SOC limit, [Power target current](../analysis/system-overview.md#ubiquitous-language), departure times, [home-day flag](../analysis/system-overview.md#ubiquitous-language) (ADR-0004), through the Store like the dashboard and config flow below | R16, R6, R17, R14, R13 |
 | **Runtime dashboard** | Observes charging status + every runtime-classified entity and edits them in place — **UC11** | R19 |
 | **Install-time config flow / options flow** | Maps adapter roles, declares capabilities, sets install-time thresholds (data); tunes options anytime | R18, R19, R20, ADR-0003/0005 |
-| **External event sources** | Charger connect/disconnect transitions; a user-made vehicle charge-limit change; a mobile-app notification action | UC08, UC09, UC10 |
+| **External event sources** | Charger connect/disconnect transitions; a user-made vehicle charge-limit change; a mobile-app notification action. The first two are external states the consuming Manager observes through the `charger_status`/`vehicle_charge_limit` adapter roles, never a minted domain event (ADR-0011) | UC08, UC09, UC10 |
 
 The owned control entities, the config flow, and the dashboard are all Clients, not Managers: they
 read/write owned/runtime entities and config-entry buckets through the Store, but hold no
@@ -111,8 +112,10 @@ cycle), not off a push notification, so no use-case loses anything by reading on
 instead of being pushed to immediately.
 
 The integration also owns **diagnostic output entities** the Coordinator *writes* (never the
-user): `sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor (ADR-0007), and any
-resolved-value read-outs the dashboard surfaces (e.g. active mode, effective peak limit). These are
+user): `sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor (ADR-0007), and the
+resolved-value read-outs the dashboard surfaces (active mode,
+`sensor.smart_charging_effective_peak_limit`, `sensor.smart_charging_active_soc_limit` — the last
+being the entity `ActiveSocLimitChanged` fires on, per ADR-0011). These are
 written through the Store exactly like the control entities above — the only difference is which
 end writes and which end reads, not whether the Store mediates. The dashboard consumes diagnostic
 entities read-only through the Store; it can both read and write the control entities above.
@@ -122,7 +125,7 @@ entities read-only through the Store; it can both read and write the control ent
 | Manager | Workflow it orchestrates | Volatilities it composes | Use cases realized |
 | --- | --- | --- | --- |
 | **Charging Coordinator** | The control cycle (`control-cycle.md`): read → condition → resolve targets → select mode → compute set-point → clamp → enforce invariants → write | V1, V8, V4, V5, V10, V3, V2, V6, V7, V9 | UC01, UC02, UC03, UC04, **UC05, UC06, UC07** |
-| **Vehicle-Limit Manager** | Bidirectional [vehicle charge-limit](../analysis/system-overview.md#ubiquitous-language) sync: write on limit change, adopt manual changes, reset on disconnect (C2) | V12, V1 (`vehicle_charge_limit`, `car_home`, `charger_status`), V4 | UC09 |
+| **Vehicle-Limit Manager** | Bidirectional [vehicle charge-limit](../analysis/system-overview.md#ubiquitous-language) sync: write on limit change, adopt manual changes, reset on disconnect (C2) | V12, V1 (`vehicle_charge_limit`, `car_home`, `charger_status`), V13, V4 (consumed as the Coordinator's published resolution, [§5.2](#52-vehicle-charge-limit-sync-uc09)) | UC09 |
 | **Notification Manager** | Evaluate a time/condition trigger → deliver a message → (for the prompt) capture the response | V11, V1, V5, V4 | UC08, UC10, and delivery of R5's deadline-unreachable notice |
 
 Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisive validation of the
@@ -213,10 +216,13 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
   writes** owned-entity state via HA's entity registry (ADR-0004/0005): the owned control entities
   and the dashboard/config-flow Clients edit runtime entities through it, the Coordinator reads
   every owned control entity's current value through it once per cycle and writes diagnostic
-  outputs (`sensor.smart_charging_monthly_peak_kw`, the Fault/OK status sensor per ADR-0007)
+  outputs (`sensor.smart_charging_monthly_peak_kw`, `sensor.smart_charging_effective_peak_limit`,
+  `sensor.smart_charging_active_soc_limit`, the Fault/OK status sensor per ADR-0007)
   through it, and the Vehicle-Limit and Notification Managers write owned entities
   (`number.smart_charging_soc_limit_override`, the home-day flag)
   through it. No custom persistence layer — HA's restore-state carries owned-entity values.
+  Both halves — the Coordinator's per-cycle read and a Manager's write on the user's behalf — are
+  fixed by ADR-0018; ADR-0019 places the Store class in the same package as the hardware adapters.
 
 ### Resources — the external things reached
 
@@ -279,7 +285,7 @@ flowchart TD
     Cfg --> Store
 
     Coord --> SC & SOC & DL & Prof & Mode & Bill & PDT & Grid & Inv & Cap
-    VLM --> SOC
+    VLM -->|shared edge; not the change signal| SOC
     NM --> DL & SOC
 
     Coord --> Adapters
@@ -291,8 +297,8 @@ flowchart TD
     NotifyRA --> NotifySvc
     Store --> Persist
 
-    Coord -. domain events .-> NM
-    Coord -. domain events .-> VLM
+    Coord -. DeadlineUnreachableNotified .-> NM
+    Coord -. ActiveSocLimitChanged .-> VLM
 ```
 
 **Allowed call directions (one-way only):**
@@ -317,17 +323,25 @@ flowchart TD
    as an input, so the Profile stays a pure function of its inputs. No Engine performs I/O.
 5. **Managers do not call each other.** Cross-Manager coordination is **publish/subscribe on
    domain events** (dashed edges), which maps one-to-one onto Home Assistant automation triggers
-   (the DDD domain-event convention in CLAUDE.md). Today only one such edge rests on an
-   **already-defined** event: the Coordinator (via the Deadline Engine's determination) publishes
-   `DeadlineUnreachableNotified` (UC05), and the Notification Manager subscribes to deliver R5's
-   notice. The Vehicle-Limit and Notification Managers' *other* triggers are **not yet published
-   domain events**: they are either HA state changes the Manager observes through an adapter (a
-   charger connect/disconnect transition on `charger_status`; a vehicle-side change on
-   `vehicle_charge_limit`) or a "resolved active SOC limit changed" signal the analysis docs do not
-   yet define as an event. Choosing, for each such trigger, between publishing a new domain event
-   and re-deriving the condition per cycle is exactly the structural decision **candidate ADR-0011**
-   must settle — this design fixes the *pattern* (no direct Manager→Manager calls; events where
-   they exist) but does not invent the missing events.
+   (the DDD domain-event convention in CLAUDE.md). ADR-0011 settled the vocabulary this design left
+   open, by a criterion: **publish a domain event iff the trigger is an integration-computed domain
+   transition the consumer could not observe without duplicating the producer's computation;
+   re-derive it by observing the adapter iff the trigger is an external HA state the consumer
+   already reaches through Resource Access.** That leaves exactly **two** genuine Manager→Manager
+   edges, both event-based:
+   - `DeadlineUnreachableNotified` (UC05) — the Coordinator (via the Deadline Engine's
+     determination) publishes it; the Notification Manager subscribes to deliver R5's notice.
+   - `ActiveSocLimitChanged` (UC09) — the Coordinator publishes it when the resolved [active SOC
+     limit](../analysis/system-overview.md#ubiquitous-language) changes between cycles; the
+     Vehicle-Limit Manager subscribes to write the new value to the vehicle. It fires on the owned
+     diagnostic entity `sensor.smart_charging_active_soc_limit`, which the Coordinator materializes
+     through the Store, so the event maps to an HA state-change trigger. It subsumes the
+     cause-specific step-up/reserve-cap transitions into one consumer contract.
+
+   The two remaining Manager triggers are **not** cross-Manager events at all: a charger
+   connect/disconnect transition on `charger_status` and a vehicle-side change on
+   `vehicle_charge_limit` are external states whose producer is the hardware, reached through their
+   adapter (NF3) and already broadcast by HA — each Manager observes them through its own read.
 
 **What each layer must not hold:** an Engine holding a multi-step orchestration, or a Resource
 Access holding a business rule, is a boundary violation. The charger-status adapter, for instance,
@@ -371,6 +385,7 @@ sequenceDiagram
     DL-->>C: resolved deadlines
     C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag below; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
+    C->>S: materialize sensor.smart_charging_active_soc_limit (publish ActiveSocLimitChanged if it differs from the prior cycle)
     C->>DL: required current & urgency? (R5/R15, using active SOC limit)
     DL-->>C: urgency flag + required current
     C->>Cap: available modes for declared capabilities (R18)
@@ -387,7 +402,7 @@ sequenceDiagram
     C->>I: R11 cooldown/hold gating + C1 floor/cap
     I-->>C: final current
     C->>A: write charger_current (skip if unchanged)
-    Note over C: publish ChargerCurrentSet / ActiveSocLimitReached /<br/>DeadlineUnreachableNotified as applicable
+    Note over C: publish ChargerCurrentSet / ActiveSocLimitReached /<br/>DeadlineUnreachableNotified as applicable<br/>(ActiveSocLimitChanged already published above, at the resolution step)
 ```
 
 The same sequence realizes every charging mode — only the Profile's answer (step: which mode) and
@@ -401,18 +416,17 @@ capped limit; no other step changes.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Ev as Trigger (adapter-observed · SOC-limit change)
+    participant Ev as Trigger (ActiveSocLimitChanged · adapter-observed)
     participant V as Vehicle-Limit Manager
-    participant SOC as SOC-Target
     participant A as Adapter roles
     participant S as Config/state store
 
-    Ev->>V: resolved SOC-limit change · vehicle-limit changed (adapter) · disconnected (adapter)
+    Ev->>V: ActiveSocLimitChanged (Coordinator, §4 rule 5) · vehicle-limit changed (adapter) · disconnected (adapter)
     V->>A: read car_home, charger_status
     A-->>V: presence + status
     alt connected & at home & System-initiated limit change (C2)
-        V->>SOC: resolved active SOC limit
-        SOC-->>V: limit
+        V->>S: read sensor.smart_charging_active_soc_limit (the Coordinator's published resolution)
+        S-->>V: active SOC limit
         V->>A: write vehicle_charge_limit (guarded against own echo)
     else vehicle-side change not attributable to own write
         V->>S: adopt as default SOC limit (write number.smart_charging_soc_limit_override — owned entity)
@@ -420,6 +434,13 @@ sequenceDiagram
         V->>A: write default SOC limit to vehicle (R7 reset)
     end
 ```
+
+The Vehicle-Limit Manager takes the resolved [active SOC limit](../analysis/system-overview.md#ubiquitous-language)
+from the materialized diagnostic entity the `ActiveSocLimitChanged` event fires on, not by
+recomputing it: the resolution is a composition of the pure SOC-Target Engine with the
+step-up/reserve context the Coordinator threads across cycles, and only the Coordinator holds that
+composition (ADR-0011). The `VLM → SOC-Target` edge in [§4](#4-static-architecture) remains a legal
+shared edge — it is simply not the source of the cross-cycle change signal.
 
 ### 5.3 Notification: plug-in reminder (UC10) & evening prompt (UC08)
 
@@ -471,15 +492,16 @@ allowed call directions. A use case crossing several services is the expected, h
 | **UC06** Solar step-up | SOC-Target Engine, within cycle | Coordinator→SOC-Target (writes step-up row); Mode Engines read the resolved limit. ✅ owns no service |
 | **UC07** Solar reserve | SOC-Target + Profile, within cycle | Coordinator→SOC-Target (cap row) + `Auto` Profile (declines overnight top-up) gated by Deadline Engine (tomorrow) + Capability-Gate. ✅ owns no service |
 | **UC08** Evening prompt | Notification Manager | Trigger→NM→{Adapters, Deadline, Notification access}→writes home-day flag through Store. ✅ |
-| **UC09** Charge-limit sync | Vehicle-Limit Manager | event→VLM→{Adapters(`vehicle_charge_limit`, `car_home`, status), SOC-Target}. ✅ |
+| **UC09** Charge-limit sync | Vehicle-Limit Manager | `ActiveSocLimitChanged` (or an adapter-observed vehicle-limit/disconnect change)→VLM→{Store(resolved active SOC limit, default-limit write), Adapters(`vehicle_charge_limit`, `car_home`, status)}. ✅ |
 | **UC10** Plug-in reminder | Notification Manager | Trigger→NM→{Adapters, Deadline, SOC-Target, Notification access}. ✅ |
 | **UC11** Dashboard | Client (no service) | Dashboard→Store (owned/runtime entities) + Adapter read-backs; edits flow to the same entities other UCs consume. ✅ correctly owns no Manager/Engine |
 
 No use case maps one-to-one onto a single **Engine**. The three that own no service (UC05–UC07) and
 the one that is a pure Client (UC11) confirm the decomposition is volatility-driven, not functional.
 The one mapping to watch is **UC09 ↔ Vehicle-Limit Manager**: UC09 is the only use case realized by
-a single Manager whose orchestration is essentially that one use case (it reuses the shared
-SOC-Target Engine and adapters but adds no second consumer). This is an accepted, deliberate case,
+a single Manager whose orchestration is essentially that one use case (it reuses the shared Store
+and adapters — and the SOC-Target edge remains available to it — but adds no second consumer).
+This is an accepted, deliberate case,
 not a functional-decomposition slip — V12 (bidirectional charge-limit ownership: the C2 home-only
 write policy, the manual-adoption/echo guard, the disconnect reset) is a genuine volatility distinct
 from charger-current control, and folding it into the Coordinator would blur NF-level boundaries.
@@ -515,16 +537,23 @@ Every requirement is reachable from at least one service:
 
 ## 8. ADR reconciliation
 
+[§8.1](#81-adrs-that-predate-this-design-0001-0009) reconciles the nine ADRs written *before* this
+design (the inverted order [§1](#1-relationship-to-the-analysis-docs-and-to-the-adrs) describes);
+[§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles the ten written *after* it, which
+refine this design's mechanisms in the order CLAUDE.md prescribes.
+
+### 8.1 ADRs that predate this design (0001-0009)
+
 This design was derived independently of ADRs 0001–0009 and then checked against them. Result:
 every ADR's *structural boundary* aligns with a boundary this decomposition arrives at on its own,
 and **none is superseded**. The entity-naming question ADR-0004 once left open is now **resolved**:
 `entity-catalog.md` conforms to ADR-0004's native-entity naming (see its row below), so ADR-0004
-stands unchanged. Two decisions this design makes explicit are candidates for *new* ADRs.
+stands unchanged.
 
 | ADR | Subject | Verdict | Mapping to this design |
 | --- | --- | --- | --- |
 | 0001 | Use ADRs | Aligns | Process, not structure. |
-| 0002 | Package layout (`adapters/`, `modes/`, `profiles/`, `entity.py`, `coordinator.py`) | **Aligns** | `adapters/` = Resource-Access (V1); `modes/` = Charging-Mode Engines (V2); `profiles/` = Profile Engines (V3); `coordinator.py` = the Charging Coordinator Manager; `entity.py` = owned-entity Clients. The remaining Engines (SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker) need a home — see follow-up below. |
+| 0002 | Package layout (`adapters/`, `modes/`, `profiles/`, `entity.py`, `coordinator.py`) | **Aligns** | `adapters/` = Resource-Access (V1); `modes/` = Charging-Mode Engines (V2); `profiles/` = Profile Engines (V3); `coordinator.py` = the Charging Coordinator Manager; `entity.py` = owned-entity Clients. The remaining Engines (SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant, Capability-Gate, Peak-Demand Tracker) needed a home, which ADR-0010 has since given them (`engines/`, §8.2). |
 | 0003 | Config-flow entity mapping + Python adapters | **Aligns** | Exactly the Resource-Access layer for V1; one class per role, `Adapter` protocol, translation table = access mechanics with no policy. |
 | 0004 | Owned vs mapped entities | **Aligns; naming resolved** | Structurally exact: mapped = Resources reached via adapters; owned = Client control entities + coordinator-written diagnostic sensors over the Store (V13/V14). ADR-0004 decided owned entities are *native platform entities* under the `smart_charging_` prefix (e.g. `select.smart_charging_profile`, `number.smart_charging_soc_limit_override`, `select.smart_charging_mode`, `sensor.smart_charging_monthly_peak_kw`), and `entity-catalog.md` now conforms to that naming — so this design cites the **native** names throughout and there is no remaining conflict to resolve. (The install-time/tuning `sc_`-prefixed *helper* rows are a separate concern, deferred to a future catalog reconciliation; they are not owned control/diagnostic entities and are untouched here.) |
 | 0005 | Config-entry data vs options; interval placement | **Aligns** | The Store's two buckets (V13); the control interval configures the Timer Client, not an Engine. |
@@ -533,29 +562,33 @@ stands unchanged. Two decisions this design makes explicit are candidates for *n
 | 0008 | Reload on reconfigure/options change | **Aligns** | A Store change reloads the entry, recreating the Coordinator + Engines from a clean state; no cross-reload timer preservation. |
 | 0009 | Testing strategy | **Aligns** | Pure Engines → plain pytest; Managers + Resource Access → HA harness. This design's Engine-purity rule is what makes the split hold. |
 
-**Follow-up (not decided here):**
+The two structural decisions this design surfaced but did not itself decide — a package home for
+the cross-cutting Engines, and the cross-Manager domain-event vocabulary — were opened as ADR-0010
+and ADR-0011, and are reconciled below together with the eight ADRs that followed them.
 
-- **Candidate ADR-0010 — home for the non-mode/profile Engines.** ADR-0002's layout has
-  `adapters/`, `modes/`, `profiles/` but no package for the eight cross-cutting Engines
-  (SOC-Target, Deadline, Billing-Protection, Grid-Safety, Signal-Conditioning, Cycle-Invariant,
-  Capability-Gate, Peak-Demand Tracker). Whether they live in an `engines/` subpackage (mirroring
-  the split) or as top-level modules is a structural choice this design surfaces but leaves to its
-  own ADR, since it extends ADR-0002's layout.
-- **Candidate ADR-0011 — cross-Manager coordination via domain events.** The publish/subscribe
-  rule in [§4](#4-static-architecture) (rule 5) is a structural decision (no direct Manager→Manager
-  calls; events map to HA automation triggers). It deserves its own ADR before the Notification and
-  Vehicle-Limit Managers are built.
+### 8.2 ADRs written after this design (0010-0019)
 
-Both are recorded as follow-ups per the write-adr cycle; this design does not open them. (This
-table covers only ADRs 0001–0009, written before this design existed — see [§1](#1-relationship-to-the-analysis-docs-and-to-the-adrs).
-ADRs 0010 and later were written after and are not reconciled here.)
+These ten were written *after* this design, in CLAUDE.md's prescribed order: the design surfaced
+the structural question, the ADR decided it. The verdict column therefore reads differently from
+[§8.1](#81-adrs-that-predate-this-design-0001-0009)'s — the question is not "does a pre-existing
+boundary align?" but "does the decision hold this design's boundary, narrow it, or extend it?" No
+ADR in this range contradicts the decomposition; the two that changed a mechanism this document
+described (ADR-0011, ADR-0018) are reflected in the text above rather than left as divergences.
 
-**Known divergence surfaced by this revision, not resolved here:** ADR-0016 (entity-to-coordinator
-writes via HA events) decided the owned control entities push an inward event the Coordinator
-subscribes to — the opposite of [§4](#4-static-architecture) rule 1 as revised, which now reserves
-`Client → Manager` for genuine trigger sources and routes the owned control entities' state through
-the Store only. ADR-0016 needs its own superseding ADR to reconcile with this design; this document
-does not open or decide that ADR.
+| ADR | Subject | Verdict | Mapping to this design |
+| --- | --- | --- | --- |
+| 0010 | Package home for the cross-cutting Engines (`engines/`) | **Decides a §8.1 follow-up; extends ADR-0002** | The eight Engines [§3](#3-service-catalog) names beyond `modes/`/`profiles/` get one module each under `engines/`, mirrored by `tests/engines/`. The directory boundary *is* this design's Engine-purity rule ([§4](#4-static-architecture) rule 4) made structural, and the stateful Engines need no special home because their state is a Manager-threaded parameter — exactly [§3](#3-service-catalog)'s two-kind split. No service, edge, or volatility changes. |
+| 0011 | Cross-Manager coordination via domain events | **Decides a §8.1 follow-up; narrows rule 5** | Keeps the *pattern* this design fixed (no direct Manager→Manager calls) and supplies the vocabulary it declined to invent: publish an event iff the trigger is an integration-computed transition, re-derive it through the adapter iff it is external state. Result: two event edges (`DeadlineUnreachableNotified`, the new `ActiveSocLimitChanged`), and `charger_status`/`vehicle_charge_limit` reclassified as adapter observations, not cross-Manager edges. [§4](#4-static-architecture) rule 5, the static diagram's dashed edges, and [§5.2](#52-vehicle-charge-limit-sync-uc09) are updated to match — the Vehicle-Limit Manager now takes the resolved active SOC limit from the materialized diagnostic entity rather than recomposing the Coordinator's threaded inputs. |
+| 0012 | Coordinator internal decomposition (`CycleContext`, `ModeHandler`, `PeakDemandState`, `SocGateResolver`) | **Below this design's altitude; consistent** | Organizes code *inside* the Charging Coordinator Manager; it adds no service, moves no boundary, and preserves ADR-0006's ten-step order — the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence is unchanged. Its extracted units are pure and HA-free, and firing `ActiveSocLimitChanged` stays on the Coordinator side, both of which restate this design's Manager-does-the-I/O rule. |
+| 0013 | Stable, locale-independent `object_id`s for owned entities | **Reinforces ADR-0004's row** | Pins each owned entity's `entity_id` to its `entity-catalog.md` suffix rather than a translated display name, so the literal ids this document cites throughout (`number.smart_charging_soc_limit_override`, `sensor.smart_charging_monthly_peak_kw`, `sensor.smart_charging_active_soc_limit`, …) hold in every HA locale. A naming decision inside V13/V14, not a boundary change. |
+| 0014 | Setter-method encapsulation for the coordinator's writable fields | **Superseded (by ADR-0016, then ADR-0018)** | Recorded for completeness only. Its held-reference-plus-setter shape is not this design's Client→Store routing; the resolution is ADR-0018's row below. |
+| 0015 | Package home for the Managers beyond the Coordinator (`managers/`) | **Extends ADR-0002; consistent** | Gives this design's three-Manager layer a file mapping: `managers/vehicle_limit.py` (M2) and `managers/notification_manager.py` (M3), with `coordinator.py`/`coordinator_cycle.py` (M1) grandfathered at the package root. The package exists precisely to make [§4](#4-static-architecture) rule 5's no-Manager→Manager rule checkable; unlike `engines/` it carries no purity guarantee, which matches this design's Managers-do-the-I/O rule. No Manager is added or removed. |
+| 0016 | Entity-to-coordinator writes via HA events | **Superseded (by ADR-0018); the divergence it created is closed** | It decided owned control entities push an inward event to the Coordinator — the opposite of [§4](#4-static-architecture) rule 1, which reserves `Client → Manager` for genuine trigger sources and routes owned control entities through the Store only. ADR-0018 supersedes it in full on exactly that ground, so no divergence from this design remains. |
+| 0017 | Mode-selection policy Protocol and registry for `profiles/` | **Confirms V2/V3 and the §3 split; consistent** | Structures `Manual`/`Auto` as registry-keyed `ModeSelectionPolicy` instances inside `profiles/`. It decides only what [§3](#3-service-catalog) already assigns to the Profile Engines — mode selection — and explicitly leaves R8's step-up and R9's cap-lowering inside the SOC-Target Engine, gated by the plain input flags this design describes. It adds no Profile→Engine edge, so rule 4 is untouched. |
+| 0018 | Entity-to-coordinator access via RA3's Store (pull read, Manager-initiated write) | **Formalizes this design's own mechanism; supersedes 0016/0014** | Adopts exactly what the static diagram (`Owned --> Store`), rule 1, and the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence already show: the Coordinator reads all eight owned control-entity values through the Store each cycle, and a Manager writing an owned entity on the user's behalf writes through the same Store. It accepts the one-cycle-latency consequence this design already accepted, leaves ADR-0006's step order intact (the read step gains a source), and confirms M2/M3 Store writes are Resource Access, not cross-Manager coordination under rule 5. |
+| 0019 | Package home for the RA3 Store (`adapters/store.py`) | **Extends ADR-0002/0010/0015; consistent** | Cites this document's own V1/V11/V13 grouping as decisive: the Store is Resource Access, so it joins the hardware roles and `adapters/notify.py` in `adapters/`. It relaxes ADR-0002/0003's "one class per role sharing the `Adapter` protocol" wording if the Store's method surface differs — a fact about one class, not about the layer this design draws. |
+
+ADRs 0020 and later post-date this reconciliation and are not covered here.
 
 ---
 
@@ -573,9 +606,13 @@ does not open or decide that ADR.
   acknowledged and justified, not hidden.
 - **Glossary.** No new *domain* term is introduced; all domain terms link to
   `system-overview.md`. Method terms are design vocabulary, defined in the preamble.
-- **ADRs.** All nine structurally align; none superseded; ADR-0004's entity-naming question is now
-  resolved (`entity-catalog.md` conforms to its native naming); two follow-up ADRs flagged, not
-  decided ([§8](#8-adr-reconciliation)).
+- **ADRs.** All nine pre-existing ADRs structurally align and none is superseded by this design;
+  ADR-0004's entity-naming question is resolved (`entity-catalog.md` conforms to its native
+  naming). The two follow-ups this design surfaced were decided by ADR-0010 and ADR-0011, and
+  ADRs 0010–0019 are reconciled in [§8.2](#82-adrs-written-after-this-design-0010-0019) — none
+  contradicts the decomposition, and the two that changed a described mechanism (ADR-0011's event
+  vocabulary, ADR-0018's Store) are reflected in [§4](#4-static-architecture) and
+  [§5](#5-dynamic-architecture) above.
 
 Once approved, `write-project-design` consumes this document to produce the implementation task
 breakdown (`docs/design/project-plan.md`), and the pre-existing scaffolding plan
