@@ -228,7 +228,10 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
   their *conceptual* home in the Store's owned-entity bucket, not this literal write mechanism.
   The Vehicle-Limit and Notification Managers write owned entities
   (`number.smart_charging_soc_limit_override`, the home-day flag) through the Store on the user's
-  behalf, the same ADR-0018 write path as the Coordinator's own reads. No custom persistence
+  behalf, the same ADR-0018 write path as the Coordinator's own reads. Both also **read** one
+  diagnostic entity back through it — `sensor.smart_charging_active_soc_limit`, the Coordinator's
+  published active-SOC-limit resolution (§5.2's vehicle write, §5.3's UC10 below-limit check) —
+  which is a Store read like any other regardless of how the Coordinator surfaces the value. No custom persistence
   layer — HA's restore-state carries owned-entity values. ADR-0019 places the Store class in the
   same package as the hardware adapters.
 
@@ -321,7 +324,11 @@ flowchart TD
    Coordinator (a Manager) reaches the owned control entities' current values itself, through the
    Store (rule 2/3 below) — never the reverse.
 2. `Manager → {Engine, Resource Access}` — Managers orchestrate. They read inputs through Resource
-   Access, feed them to pure Engines, and write results through Resource Access.
+   Access, feed them to pure Engines, and write results through Resource Access. The rule permits
+   *any* Manager→Engine call; the solid edges above draw only the ones this design realizes, so an
+   absent one is an absent use and not a prohibition — see
+   [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)'s "What the static diagram
+   draws".
 3. `Resource Access → Resource` — adapters/notification/store access reach the external thing.
 4. **Engines call nothing below them.** They receive data and return a decision. They do **not**
    call Resource Access (the Manager supplies their inputs) and do **not** call each other — with
@@ -501,12 +508,15 @@ The read is unsolicited, unlike §5.2's — nothing guarantees the entity is pop
 reminder tick fires. Before the Coordinator's first cycle, or while the diagnostic entity is
 unavailable, UC10's below-limit precondition is simply not established and no reminder is due; once
 populated, the value carries the same one-cycle latency [§3](#3-service-catalog) already accepts for
-every Store read. UC10 records no exception flow for the unpopulated case, which its own document
-should pick up.
+every Store read. UC10 records no exception flow for the unpopulated case.
 
-**What the static diagram draws.** [§4](#4-static-architecture)'s Manager→Engine edges are the calls
-the design actually realizes, not the calls rule 2 permits — rule 2 permits any Manager to call any
-Engine, so an absent edge records an absent *use*, never a prohibition. Neither the Notification
+**What the static diagram draws.** [§4](#4-static-architecture)'s solid Manager→Engine edges are the
+calls this design realizes somewhere — in a §5 sequence, or in [§3](#3-service-catalog)'s and §4's
+own prose — not the calls rule 2 permits. Rule 2 permits any Manager to call any Engine, so an
+absent Manager→Engine edge records an absent *use*, never a prohibition. (This reading is specific
+to that layer: an absent `Client → Manager` edge **is** deliberate, since rule 1 reserves that
+direction for genuine trigger sources; and the dashed cross-Manager edges are enumerated by rule 5,
+not by this paragraph.) Neither the Notification
 Manager (this section) nor the Vehicle-Limit Manager ([§5.2](#52-vehicle-charge-limit-sync-uc09))
 calls the SOC-Target Engine any more, so neither edge is drawn; ADR-0011's note that the shared
 `VLM → SOC-Target` edge "remains available" is preserved in §5.2's prose and [§6](#6-use-case-validation)'s
