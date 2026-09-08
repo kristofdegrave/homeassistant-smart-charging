@@ -281,8 +281,9 @@ higher — floored so a low or not-yet-established billed peak can't push the li
   before the `min()` with the maximum peak, so it can raise but never push the effective peak
   limit above the maximum peak — see the glossary term for why the floor exists.
 - The [external monthly-peak reading](system-overview.md#ubiquitous-language) (*Normal* row), when
-  mapped and available, is merged with `max()` against the internally-tracked monthly peak
-  demand before the peak-floor `max()` and the maximum-peak `min()` are applied — so it too can
+  mapped and available, is merged with `max()` against the internally-tracked
+  [monthly peak demand](system-overview.md#ubiquitous-language) (tracked per R21) before the
+  peak-floor `max()` and the maximum-peak `min()` are applied — so it too can
   raise but never push the effective peak limit above the maximum peak (R3). The merge is
   recomputed fresh every control cycle from both sources; it never overwrites the
   internally-tracked monthly peak demand, so a live spike this integration observes between

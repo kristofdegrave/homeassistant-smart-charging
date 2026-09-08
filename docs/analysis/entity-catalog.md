@@ -81,7 +81,10 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 
 Internal bookkeeping that is pure implementation — cooldown/hold timers, the smoothing ring
 buffer, reminder/prompt "already-sent" flags, restart-after-power-loss persistence — is **not**
-catalogued (it is "how", per the design doc). The catalog covers the configurable parameters, the
+catalogued (it is "how", per the design doc), with one deliberate exception: the monthly peak
+demand row below states its own restart survival as a "what", since a value that restarted at
+0 kW would misstate the month's billed peak (R21) — see `control-cycle.md`'s *Coordinator
+restart* edge case for the reasoning. The catalog covers the configurable parameters, the
 device-I/O adapter roles, and the domain-level state and outputs the use-cases reference by name.
 
 ---
@@ -157,7 +160,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `sensor.smart_charging_peak_floor_kw` | state | — | kW | mirrors `peak_floor_kw` (config-options); disabled by default (ADR-0031) | [peak floor](system-overview.md#ubiquitous-language) | user | — |
 | `peak_grace_min` | config-options | options | min | 2 | R3 peak-breach grace period — see the Captar-dependent-rows note | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_peak_grace_min` | state | — | min | mirrors `peak_grace_min` (config-options); disabled by default (ADR-0031) | R3 peak-breach grace period | user | — |
-| `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role over the month | [monthly peak demand](system-overview.md#ubiquitous-language) | resolution-rules | — |
+| `sensor.smart_charging_monthly_peak_kw` | state | — | kW | derived from the `net_power` adapter role: the highest 15-minute average net import so far this calendar month, started afresh each month and preserved across a restart (R21); always the self-tracked figure alone, never merged with `monthly_peak_external` | [monthly peak demand](system-overview.md#ubiquitous-language) (R21) | resolution-rules | control-cycle |
 | `monthly_peak_external` | adapter role | — | kW | mapped to a smart-meter/DSO capacity-tariff peak sensor (NF3; optional — treated as absent, no effect on the resolved monthly-peak-demand operand, when not configured) | [external monthly-peak reading](system-overview.md#ubiquitous-language) (R3) — see the Captar-dependent-rows note | resolution-rules | — |
 | `captar_cooldown_min` | config-options | options | min | 10 | `Captar`-mode cooldown (R11) | UC03 | user (anytime), UC12 |
 | `sensor.smart_charging_captar_cooldown_min` | state | — | min | mirrors `captar_cooldown_min` (config-options); disabled by default (ADR-0031) | `Captar`-mode cooldown (R11) | user | — |
@@ -519,9 +522,11 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   row directly beneath it in the same table: `sensor.smart_charging_<key>`, a read-only,
   disabled-by-default mirror of that same value, so a household can see it without opening Configure.
   Unlike this catalog's *Diagnostic outputs* section, these mirrors are sourced from the config entry,
-  not recomputed each cycle, so their `Written by` column reads `—` rather than `control-cycle`; for
-  the same reason they are listed inline beside their source row instead of in *Diagnostic outputs*,
-  following the `sensor.smart_charging_monthly_peak_kw` precedent already inline in *Peak protection*.
+  not recomputed each cycle, so their `Written by` column reads `—` rather than `control-cycle`. They
+  are listed inline beside their source row instead of in *Diagnostic outputs* for placement, not
+  `Written by`, following the `sensor.smart_charging_monthly_peak_kw` row's own inline placement in
+  *Peak protection* (that row's `Written by` is `control-cycle`, since unlike these mirrors it is
+  recomputed every cycle rather than sourced from the config entry).
   They are never presented on the runtime dashboard — an ADR-0031/[ADR-0022](../adl/0022-runtime-dashboard-delivery-mechanism.md)
   design choice for this new sensor family, not an R19 acceptance criterion, since R19 only governs
   entities classified runtime or install-time configuration, neither of which applies to a `state`

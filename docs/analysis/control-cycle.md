@@ -16,7 +16,9 @@ Steps → Edge cases → Requirements satisfied**.
 Run the [coordinator](system-overview.md#ubiquitous-language) once per [control
 interval](system-overview.md#ubiquitous-language): read the sensors, smooth the net grid power
 reading, ask the [active mode](system-overview.md#ubiquitous-language) module for a desired
-charger current, clamp that current with peak protection, and set it. The coordinator executes the
+charger current, clamp that current with peak protection, and set it — while, alongside those
+steps, keeping the [monthly peak demand](system-overview.md#ubiquitous-language) up to date
+(R21). The coordinator executes the
 active mode and never chooses it (NF1); mode choice belongs to the [profile](system-overview.md#ubiquitous-language)
 (see `resolution-rules.md`, Auto mode-selection). All inputs and outputs cross an adapter role
 (NF3); see `entity-catalog.md` for their bindings.
@@ -25,7 +27,8 @@ active mode and never chooses it (NF1); mode choice belongs to the [profile](sys
 
 A timer firing every control interval (configurable via `control_interval_s`,
 default 10 s). The cycle carries no decision state between firings; a handful of named flags and
-accumulators do persist across cycles — e.g. the rolling smoothing window, the rapid-cycling
+accumulators do persist across cycles — e.g. the rolling smoothing window, the monthly peak
+demand together with its own separate 15-minute window (R21), the rapid-cycling
 timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
 threaded in step 4, and the
 [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
@@ -61,6 +64,7 @@ homed in the rule or use-case that defines its lifecycle.
 flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC"]
     Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
+    Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
@@ -82,7 +86,9 @@ flowchart TD
    net grid import, solar power, charger power, the measured grid voltage, charger status, and
    state of charge. These are [raw values](system-overview.md#ubiquitous-language) — the most
    recent, unsmoothed readings (the measured grid voltage is resolved into the
-   [supply voltage](system-overview.md#ubiquitous-language) in step 3). Produces `SensorsRead`.
+   [supply voltage](system-overview.md#ubiquitous-language) in step 3). This cycle's raw net
+   import also feeds the bookkeeping side-branch in *Monthly peak demand tracking* below.
+   Produces `SensorsRead`.
 2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
    into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
    [smoothed value](system-overview.md#ubiquitous-language). The smoothed value feeds
@@ -168,6 +174,30 @@ flowchart TD
    through its adapter role (NF3) and emits `ChargerCurrentSet`, then waits for the next
    interval.
 
+## Monthly peak demand tracking (R21)
+
+Alongside the numbered steps, every cycle updates the [monthly peak
+demand](system-overview.md#ubiquitous-language) from the same raw net-import reading step 1
+took. This is deliberately **not** one of the numbered steps: it is bookkeeping, not a
+control decision — nothing in the cycle's set-point or clamp path reads its result, which is
+consumed only later, and indirectly, when `resolution-rules.md` resolves the effective peak
+limit for step 5.
+
+- It maintains its **own** rolling 15-minute average of net import, separate from and longer
+  than step 2's R10 smoothing window. The two never substitute for each other: step 2's value
+  drives the charging rate, this one drives nothing but the billing figure.
+- The value it keeps is the highest such 15-minute average seen so far in the current calendar
+  month. At a month boundary the tracking starts afresh on the new month's own readings, with
+  its window emptied so no previous-month sample carries over (R21).
+- It runs on every cycle whatever the active mode, and whatever the declared
+  [capabilities](system-overview.md#ubiquitous-language) — including when the CapTar capability
+  is absent and step 5 is skipped entirely, in which case the value is still tracked and
+  surfaced (`sensor.smart_charging_monthly_peak_kw`) but no charging decision consults it.
+- It always holds this self-tracked figure alone. The optional [external monthly-peak
+  reading](system-overview.md#ubiquitous-language) is a separate input that never overwrites it;
+  the two are merged only where the effective peak limit's monthly-peak-demand operand is
+  resolved (R3, `resolution-rules.md`).
+
 ## Edge cases
 
 - **No healthy supply-voltage reading.** Conversions fall back to the configurable nominal
@@ -205,7 +235,11 @@ flowchart TD
   deliberately not required to survive one, consistent with `resolution-rules.md`'s
   missed-deadline hold making the same choice. A connected car is therefore treated as a fresh
   first start after a restart, with no restart debounce, even if it had charged before the
-  restart.
+  restart. The [monthly peak demand](system-overview.md#ubiquitous-language) is the one
+  deliberate exception, and a "what" rather than a "how": the peak already recorded for the
+  month in progress must survive a restart, because a value that began again from 0 kW would
+  misstate what CapTar bills for that month (R21). Its own 15-minute window is not preserved and
+  rebuilds after a restart, exactly as the smoothing-window edge case above describes.
 - **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
@@ -219,6 +253,8 @@ flowchart TD
   entirely while the CapTar capability is absent, R18).
 - **R10** — Sensor smoothing (the rolling mean in step 2; peak protection exempt, step 5).
 - **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop/restart-debounce invariant in step 7).
+- **R21** — Monthly peak demand tracking (the per-cycle bookkeeping in *Monthly peak demand
+  tracking* above; runs whatever the declared capabilities, unlike step 5's clamp).
 - **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
