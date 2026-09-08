@@ -61,8 +61,9 @@ whenever a human looks at or edits the dashboard.
 ## Alternate flows
 
 **4a — A capability is absent** — branches from step 4.
-Given a [capability](../system-overview.md#ubiquitous-language) that gates a runtime entity is off
-(R18) — today only deadline management (`deadline_available`)
+Given a [capability](../system-overview.md#ubiquitous-language) that gates a [runtime
+configuration](../system-overview.md#ubiquitous-language) entity is off (R18) — today only deadline
+management (`deadline_available`)
 When the System renders the runtime configuration section
 Then every runtime entity that capability gates is omitted: the departure-time rows without the
 deadline capability. The dashboard never shows a runtime control for a behaviour the installation
