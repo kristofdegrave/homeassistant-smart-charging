@@ -41,7 +41,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R3 — CapTar peak protection
 
 **Priority:** Must
-**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it. The effective peak limit's monthly-peak-demand operand resolves to the higher of the system's own self-tracked value and an optional external monthly-peak sensor's reading. Applies only while the CapTar capability is present (R18).
+**What:** The system limits charging so that charging never raises the monthly grid peak above the effective peak limit, keeping a configurable safety margin (default 250 W) below it. The effective peak limit's monthly-peak-demand operand resolves to the higher of the system's own self-tracked value (R21) and an optional external monthly-peak sensor's reading. Applies only while the CapTar capability is present (R18).
 
 **Acceptance criteria:**
 
@@ -168,6 +168,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] A power spike lasting a single control cycle does not change the charger set-point.
 - [ ] A power change sustained across the full smoothing window changes the charger set-point within the following control cycle.
 - [ ] Peak-protection decisions (R3) are exempt and use raw, unsmoothed readings.
+- [ ] This requirement governs the smoothing of the charging-rate path only. The separate, longer 15-minute average that monthly peak demand is tracked over (R21) is not this window and is never substituted for it, in either direction — it feeds no charging-rate decision, and changing this window's size does not change it.
 
 ---
 
@@ -340,6 +341,23 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The user can amend an existing installation's mappings and capability declarations without re-entering its thresholds and defaults, and amend its thresholds and defaults without re-entering its mappings; each path presents its own fields prefilled from the current configuration and leaves every value belonging to the *other* path unchanged. Within a path, a submitted answer may still change a value it did not itself present — in particular, declaring a previously present capability absent drops that capability's own mapping fields — but no value of the other path is ever touched.
 - [ ] Abandoning the flow before its final step leaves the installation exactly as it was: nothing is created on first setup, and nothing is amended afterwards.
 - [ ] A capability added in a later release (R18's extensibility clause) adds exactly one step of its own — appended after the existing capability-gated steps — without changing the fields or order of any existing step.
+
+---
+
+### R21 — Monthly peak demand tracking
+
+**Priority:** Must
+**What:** The system tracks the [monthly peak demand](system-overview.md#ubiquitous-language) — the highest 15-minute average net import it has observed so far in the current calendar month — and starts it afresh at the start of each calendar month, so that the quantity CapTar bills against is known for the month in progress. This requirement owns how that self-tracked value is arrived at; what it is then used for is R3's (peak protection) and the effective-peak-limit rule's (`resolution-rules.md`).
+
+**Acceptance criteria:**
+
+- [ ] Net grid import is sampled once per control cycle and averaged over a rolling 15-minute window; that 15-minute average, not the per-cycle reading, is the quantity the monthly peak is taken over. This window is separate from, and longer than, the charging-rate smoothing window (R10, default 4 samples): the two are maintained independently and neither's value is substituted for the other's.
+- [ ] The tracked value is the highest such 15-minute average observed so far in the current calendar month: it never decreases within a month, and a new highest average is reflected in it within one control cycle.
+- [ ] At the start of each calendar month the tracked value starts afresh from the new month's own readings, and the 15-minute window restarts empty so that no sample taken in the previous month contributes to any average attributed to the new one. It is not reset to a fixed 0 kW that the household's actual draw must then climb back from — the first average the new month produces is the month's peak so far.
+- [ ] The tracked value is expressed in kilowatts and survives a restart of the system: the peak already recorded for the month in progress is not lost and does not begin again from 0 kW. The 15-minute window itself is not preserved and rebuilds from the readings that follow the restart, so the first averages after one reflect only post-restart samples.
+- [ ] A month in which the household is a net exporter throughout yields a tracked value at or below 0 kW, faithfully reported rather than clamped upward; keeping the effective peak limit usable in that case is the [peak floor](system-overview.md#ubiquitous-language)'s job (R3), not this requirement's.
+- [ ] The tracked value is surfaced read-only for observability (`entity-catalog.md`) and always reports this self-tracked figure alone. It is never overwritten by, or merged with, the optional [external monthly-peak reading](system-overview.md#ubiquitous-language) — that reading is a *second, independent* source of the effective peak limit's monthly-peak-demand operand, merged with this one only at the point that operand is resolved (R3, `resolution-rules.md`).
+- [ ] Tracking runs on every control cycle regardless of the active mode and regardless of which [capabilities](system-overview.md#ubiquitous-language) are declared (R18). When the CapTar capability is absent the value is still tracked and surfaced, but no charging decision consults it, since the peak-protection clamp does not run at all in that case (R3, C3).
 
 ---
 

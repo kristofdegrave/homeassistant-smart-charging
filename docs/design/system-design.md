@@ -494,7 +494,7 @@ Every requirement is reachable from at least one service:
 - **R1/R2/R4/R17** → the corresponding Charging-Mode Engine. **NF2** → the Mode + Profile Engine
   families (one unit each). **NF1** → Profile Engine holds selection; Coordinator holds none.
 - **R3/C3** → Billing-Protection Engine; **C4** → Grid-Safety Engine (separate, un-waivable);
-  monthly peak → Peak-Demand Tracker.
+  **R21** (the self-tracked monthly peak demand) → Peak-Demand Tracker.
 - **R5/R15** → Deadline Engine (+ Billing-Protection ceiling raise + `Auto` Profile escalation +
   Notification for unreachable). **R14** → Deadline Engine's deadline resolution.
 - **R6/C2** → Vehicle-Limit Manager. **R7/R8** → SOC-Target Engine (R8's `Auto`-only gate is plain
