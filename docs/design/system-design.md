@@ -163,13 +163,16 @@ I/O and no Engine calls another Engine.** Cross-engine composition and all I/O a
 job (it reads once, then feeds each engine) — see the call rules in [§4](#4-static-architecture).
 
 - **Pure/leaf Engines** hold no cross-cycle state: the Charging-Mode Engines, the Profile Engines,
-  the Deadline, Billing-Protection, Grid-Safety, and Capability-Gate Engines. Data in, decision out.
+  the Deadline, Billing-Protection, Grid-Safety, Capability-Gate, and **SOC-Target** Engines. Data
+  in, decision out — SOC-Target's R8 step-up progression (whether a step has already been applied)
+  is a plain input flag the Coordinator threads in alongside the profile/mode flags, the same
+  shape as any other conditional input, not the cross-cycle *accumulation* (a window, a timer, a
+  running total) the three stateful Engines below hold.
 - **Stateful Engines** operate over cross-cycle state that the **Manager owns and threads in and
   out** — the state is a parameter, never HA-held inside the engine, so the engine stays testable
-  in isolation. Four engines are stateful: **SOC-Target** (the R8 step-up's own progression —
-  whether a step has already been applied — threaded by the Coordinator alongside the plain
-  profile/mode input flags below), **Signal-Conditioning** (the R10 smoothing window),
-  **Cycle-Invariant** (the R11 cooldown/hold timers), and the **Peak-Demand Tracker** (the running
+  in isolation. Three engines are stateful, per ADR-0010: **Signal-Conditioning** (the R10
+  smoothing window), **Cycle-Invariant** (the R11 cooldown/hold timers), and the **Peak-Demand
+  Tracker** (the running
   [monthly peak demand](../analysis/system-overview.md#ubiquitous-language)). The Tracker's result
   is surfaced as the owned `sensor.smart_charging_monthly_peak_kw`, but that *write* is the Coordinator's, via
   the Store — the engine only computes the new value.
@@ -214,15 +217,20 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
 - **Config/State Store access (V13)** — reads config-entry **data** (role mappings, translation
   tables, capabilities) and **options** (tunable thresholds, control interval), and reads **and
   writes** owned-entity state via HA's entity registry (ADR-0004/0005): the owned control entities
-  and the dashboard/config-flow Clients edit runtime entities through it, the Coordinator reads
-  every owned control entity's current value through it once per cycle and writes diagnostic
-  outputs (`sensor.smart_charging_monthly_peak_kw`, `sensor.smart_charging_effective_peak_limit`,
-  `sensor.smart_charging_active_soc_limit`, the Fault/OK status sensor per ADR-0007)
-  through it, and the Vehicle-Limit and Notification Managers write owned entities
-  (`number.smart_charging_soc_limit_override`, the home-day flag)
-  through it. No custom persistence layer — HA's restore-state carries owned-entity values.
-  Both halves — the Coordinator's per-cycle read and a Manager's write on the user's behalf — are
-  fixed by ADR-0018; ADR-0019 places the Store class in the same package as the hardware adapters.
+  and the dashboard/config-flow Clients edit runtime entities through it, and the Coordinator reads
+  every owned control entity's current value through it once per cycle (ADR-0018) — the read/write
+  direction this section is authoritative for. The diagnostic outputs
+  (`sensor.smart_charging_monthly_peak_kw`, `sensor.smart_charging_effective_peak_limit`,
+  `sensor.smart_charging_active_soc_limit`, the Fault/OK status sensor per ADR-0007) go the other
+  way: they are `CoordinatorEntity` subclasses that pull their state directly from the Coordinator's
+  own per-cycle result (ADR-0016's Context, left out of that ADR's scope and unchanged since), not
+  values the Coordinator pushes through the Store — "surfaced through the Store" above described
+  their *conceptual* home in the Store's owned-entity bucket, not this literal write mechanism.
+  The Vehicle-Limit and Notification Managers write owned entities
+  (`number.smart_charging_soc_limit_override`, the home-day flag) through the Store on the user's
+  behalf, the same ADR-0018 write path as the Coordinator's own reads. No custom persistence
+  layer — HA's restore-state carries owned-entity values. ADR-0019 places the Store class in the
+  same package as the hardware adapters.
 
 ### Resources — the external things reached
 
@@ -328,7 +336,8 @@ flowchart TD
    transition the consumer could not observe without duplicating the producer's computation;
    re-derive it by observing the adapter iff the trigger is an external HA state the consumer
    already reaches through Resource Access.** That leaves exactly **two** genuine Manager→Manager
-   edges, both event-based:
+   edges as of ADRs 0001–0019 (see [§8.2](#82-adrs-written-after-this-design-0010-0019)'s scope
+   note; ADR-0024 later adds a third, paired with the first below), both event-based:
    - `DeadlineUnreachableNotified` (UC05) — the Coordinator (via the Deadline Engine's
      determination) publishes it; the Notification Manager subscribes to deliver R5's notice.
    - `ActiveSocLimitChanged` (UC09) — the Coordinator publishes it when the resolved [active SOC
@@ -474,6 +483,12 @@ sequenceDiagram
         N->>R: send deadline-unreachable notice
     end
 ```
+
+The `N → SOC` edge above is a direct read for a point-in-time below-limit check, not a
+change-detection signal — a different question from the one ADR-0011 settled for
+[§5.2](#52-vehicle-charge-limit-sync-uc09)'s `VLM → SOC-Target` edge, and not reconciled against
+the Coordinator-owned step-up/reserve composition question here — a §5.3 accuracy question, not a
+§8.2 ADR gap, and out of scope for this reconciliation pass.
 
 ---
 
