@@ -97,7 +97,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | Phase | Services (system-design §3) | Gate | Tasks | Status |
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
-| **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019 resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
+| **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
 | **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`) |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`) |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
@@ -237,9 +237,12 @@ it is wired to its callers).
 - **Status:** shipped — `modes/solar.py`, `modes/solar_only.py`, `modes/captar.py`,
   `modes/power.py` (plus the shared `_amp_step.py`/`_phase.py`/`_mode_state.py` helpers); tests
   under `tests/modes/`. **`Off` has no module of its own:** it computes nothing — it is a stop
-  branch the Coordinator takes directly, with a trivial `_OffModeHandler` in `coordinator_cycle.py`
-  standing in for it in ADR-0012's registry so the dispatch lookup has no special case. The
-  four modes that *do* compute a current are the four modules.
+  branch the Coordinator takes directly (`coordinator.py`'s dispatch checks for `MODE_OFF` before
+  ever reaching the registry, so `_OffModeHandler`'s `desired_current` is never called on that
+  path); the trivial `_OffModeHandler` in `coordinator_cycle.py` exists so `MODE_OFF` is still a
+  registered member of ADR-0012's `ModeHandler` registry, which is what lets the dispatch guard
+  accept it and lets its `is_soc_gated`/`is_solar_mode` flags participate in the same lookups the
+  four computing modes use. The four modes that *do* compute a current are the four modules.
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per computing mode (NF2); `Off` → 0 A via the Coordinator's stop branch.
   `Solar`/`SolarOnly` surplus is
@@ -392,9 +395,13 @@ it is wired to its callers).
   call sites: **ADR-0012** replaced the per-mode `if`/`elif` dispatch with a `ModeHandler` Protocol
   and registry, threaded per-cycle values through a `CycleContext` instead of loose locals, and
   extracted `PeakDemandState` and `SocGateResolver` into `coordinator_cycle.py`; **ADR-0023** then
-  decomposed `_run_cycle` into named `_step_*` methods (I/O-bound orchestration, coordinator-side)
-  plus further small pure units in `coordinator_cycle.py`. Both are internal decomposition — the
-  cycle still reads top-to-bottom as ADR-0006's ordered sequence.
+  split the coordinator-side orchestration into differently-named methods (`_read_cycle_inputs`,
+  `_resolve_deadline_and_reserve`, `_read_deadline_urgency_inputs`, `_dispatch_mode`,
+  `_apply_peak_clamp`, `_apply_grid_ceiling_clamp`) plus further small pure units in
+  `coordinator_cycle.py` (`SolarStepUpGate`, `resolve_solar_reserve_gate`). `_run_cycle` itself
+  is still one large method calling them in order — ADR-0023's own goal of a short, literal
+  sequence of named calls is only partly realized. Both ADRs are internal decomposition either
+  way — the cycle still reads top-to-bottom as ADR-0006's ordered sequence.
 - **Builds:** the ordered cycle from [system-design §5.1](system-design.md#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing):
   read (RA1 hardware **and** RA3's owned control entities, ADR-0018) → condition (E7) → resolve
   deadline (E4) → resolve SOC (E3) → required current/urgency (E4) → available modes (E9) → select
