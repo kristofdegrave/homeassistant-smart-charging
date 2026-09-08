@@ -21,14 +21,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Capt
 
 ## Main success scenario
 
-1. **Given** `Captar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no `Captar` cooldown is in effect.
+1. **Given** `Captar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a `Captar` stop or carried in from a stop in another mode).
 2. **When** a control cycle runs, **then** the System starts grid charging within one control cycle.
 3. **And** the System requests the [maximum charging current](../system-overview.md#ubiquitous-language) — charging as fast as the grid allows — which the R3 peak clamp (`control-cycle.md`) fits on raw readings to the available [peak headroom](../system-overview.md#ubiquitous-language), so [net import](../system-overview.md#ubiquitous-language) stays at or below the [effective peak limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`) minus the [safety margin](../system-overview.md#ubiquitous-language), bounded by the minimum and maximum charging current (C1). Any [solar surplus](../system-overview.md#ubiquitous-language) reduces net import and is self-consumed first, so the grid supplies only the remainder.
 
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a `Captar`-mode cooldown is still running after a previous stop (R11, default 10 minutes)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Captar`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`); this is what can delay a deadline-urgency escalation into `Captar` for the remainder of a solar-mode cooldown (`../resolution-rules.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -59,7 +59,8 @@ maximum charging current whenever its connection, SOC, and cooldown conditions h
 reads the [low-tariff flag](../system-overview.md#ubiquitous-language), the home-day flag, or the
 solar forecast. Timing grid charging to
 low-tariff periods, and reserving capacity for tomorrow's solar, are entirely the `Auto` profile's
-job (R16, Auto mode-selection row 4 and the active-SOC-limit resolution in `resolution-rules.md`):
+job (R16, Auto mode-selection's *Overnight top-up* row and the active-SOC-limit resolution in
+`resolution-rules.md`):
 `Auto` chooses *when* to select `Captar` and, independently, what the active SOC limit currently
 is; `Captar` itself, once selected — whether by `Auto` or manually — always charges the same way
 to whichever limit it is given.
@@ -88,6 +89,13 @@ resets to the default (R7), which is why the diagram does not draw a disconnect 
 | Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | sustained R3 breach at the minimum charging current (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Captar` cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
+
+**A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
+entry point: `Captar` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as
+the carried-in cooldown has left to run (the duration and elapsed time fixed when the other mode
+stopped) — the existing `Cooldown → Charging` / `Cooldown → Idle` transition above already covers
+it without a new state or edge. `Captar` has no restart debounce (R11) either way, so no exemption
+question arises here the way it does for the solar modes.
 
 ## Domain events produced
 
@@ -123,5 +131,5 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 
 ## Relationships
 
-- **Timed and bounded by the `Auto` profile**: `Auto` selects `Captar` for cost-efficient overnight top-up only while the low-tariff flag is active and its own solar-reserve conditions (R9, UC07) do not hold (Auto mode-selection row 4, `resolution-rules.md`), and as the escalation target for deadline urgency (row 2); `Auto` also independently lowers the active SOC limit via the solar-reserve cap when those conditions do hold (R7). Both the timing preference and the reserve coordination live in `Auto`, not in this use-case — once selected, `Captar` charges the same way regardless of who or what selected it, and regardless of why the active SOC limit is set where it is.
+- **Timed and bounded by the `Auto` profile**: `Auto` selects `Captar` for cost-efficient overnight top-up only while the low-tariff flag is active and its own solar-reserve conditions (R9, UC07) do not hold (Auto mode-selection's *Overnight top-up* row, `resolution-rules.md`), and as the escalation target for deadline urgency (its *Deadline urgency* row); `Auto` also independently lowers the active SOC limit via the solar-reserve cap when those conditions do hold (R7). Both the timing preference and the reserve coordination live in `Auto`, not in this use-case — once selected, `Captar` charges the same way regardless of who or what selected it, and regardless of why the active SOC limit is set where it is.
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit and effective-peak-limit rules in `resolution-rules.md`.

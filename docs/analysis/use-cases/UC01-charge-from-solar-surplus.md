@@ -22,14 +22,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that smoot
 
 ## Main success scenario
 
-1. **Given** `Solar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no solar-mode cooldown is in effect.
+1. **Given** `Solar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a solar stop or carried in from a stop in another mode).
 2. **When** smoothed solar surplus reaches at least the solar start threshold (default 150 W), **then** the System starts charging within one control cycle — immediately, whether this is the connection's first start or the threshold is already met the moment `Idle` is entered (2b covers a threshold crossing while already waiting in `Idle`, once the has-charged flag is set).
 3. **And** the System sets the charger current by rounding up to the next whole ampere ([amp-step rounding](../system-overview.md#ubiquitous-language), round up — fixed for `Solar`, not configurable), so all available solar surplus is used and a bounded net grid import (less than one amp-step) fills the gap, recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
 
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a [solar-mode cooldown](../system-overview.md#ubiquitous-language) is still running after a previous stop (R11)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the [solar-mode cooldown](../system-overview.md#ubiquitous-language) this mode's own stop starts, or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
 When smoothed solar surplus reaches the start threshold
 Then the System does not start charging until the cooldown has fully elapsed, then proceeds to step 2 or 2b depending on whether surplus is still at or above the start threshold once it does.
 
@@ -115,6 +115,13 @@ is met the moment cooldown elapses, without ever passing through `Idle`.
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) |
 | SocReached | 0 A | active SOC limit changes → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) · car unplugged/replugged → Idle (disconnect clears the has-charged flag) |
 
+**A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
+entry point: `Solar` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as the
+carried-in cooldown has left to run (the duration and elapsed time fixed when the other mode
+stopped). The existing `Cooldown → Charging` / `Cooldown → Idle` transitions above already cover
+it without a new state or edge — including their no-debounce exemption, which applies here for the
+same reason it already does: this dispatch never passed through `Idle`.
+
 ## Domain events produced
 
 - `SolarChargingStarted` — the System began charging from solar surplus (Idle/Cooldown → Charging).
@@ -159,5 +166,5 @@ Inherited from the shared mechanism (referenced, not restated): the active-SOC-l
 ## Relationships
 
 - **Sibling [UC02](UC02-charge-from-solar-only.md)** (`SolarOnly`) — both use amp-step rounding, but `Solar` always rounds up (fixed), whereas `SolarOnly`'s strategy is configurable (default round down); both hold at the minimum charging current on a post-surplus hold before stopping, but `SolarOnly`'s hold is shorter (default 1 minute vs. 5) and is the one bounded exception to its zero-grid-import guarantee, whereas `SolarOnly` has no ongoing grid fallback the way `Solar` does; both also share the same restart-debounce mechanism (R11) and, separately, a solar step-up in effect is preserved when switching between the two (R7) — the has-charged flag likewise survives that switch, but for its own reason (it is scoped to the connection, not the active mode), not because it follows the step-up's rule.
-- **Peer [UC06](UC06-store-abundant-solar.md)**, not an extension — while charging in a solar mode, UC06 may write a higher active SOC limit into the shared `resolution-rules.md` lookup (R7 priority row 2) to store abundant surplus (R8); this use-case's own set-point logic just reads whatever value is currently resolved there, unaware of who set it.
+- **Peer [UC06](UC06-store-abundant-solar.md)**, not an extension — while charging in a solar mode, UC06 may write a higher active SOC limit into the shared `resolution-rules.md` lookup (R7's *Solar step-up* row) to store abundant surplus (R8); this use-case's own set-point logic just reads whatever value is currently resolved there, unaware of who set it.
 - Runs on the `control-cycle.md` coordinator spine and consumes the active-SOC-limit rule in `resolution-rules.md`.

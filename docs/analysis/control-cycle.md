@@ -118,10 +118,11 @@ flowchart TD
    before the mode and peak decisions below, which consume whether deadline urgency is in effect.
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
-   (`resolution-rules.md`, whose row 1 compares against this resolved active SOC limit) under
+   (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under
    `Auto` — calls the matching module, passing the smoothed `net_w` alongside the raw readings and
    the resolved voltage, and surfaces the resolved value read-only as
-   `sensor.smart_charging_active_mode`. The module returns a **desired charger current** using its
+   `sensor.smart_charging_active_mode`. The module returns a [desired charger
+   current](system-overview.md#ubiquitous-language) using its
    own set-point rule (defined in the mode use-case — UC01–UC04; e.g. the `Off` module returns
    0 A). The coordinator contains no logic that chooses
    or changes the mode — this includes deadline urgency (R5): under `Auto`, escalating to `Captar`
@@ -155,7 +156,8 @@ flowchart TD
 7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
-   mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion,
+   mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion —
+   across a switch of the active mode included (edge case below),
    and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
    before actually cutting to 0 A (the post-surplus hold, R1/R2; the peak-breach grace period, R3,
    in every mode it can stop — the solar modes at the minimum current during grid fallback/`Hold`,
@@ -204,12 +206,27 @@ limit for step 5.
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
   rapid-cycling cooldown then governs any restart (R11).
-- **Mode switched mid-operation.** Switching the active mode resets all hold, cooldown, and
-  restart-debounce timers so the incoming mode starts fresh (R11) — a debounce already under way
-  in `Solar` does not carry over into `SolarOnly`'s different start threshold, or vice versa; the
-  next cycle dispatches to the new module. The has-charged flag itself is unaffected by a mode
-  switch — it is scoped to the connection, not the active mode, so switching between `Solar` and
-  `SolarOnly` does not grant a fresh, undebounced first start; only its debounce *timer* resets.
+- **Mode switched mid-operation.** Switching the active mode resets the hold and restart-debounce
+  timers so the incoming mode starts fresh (R11) — a debounce already under way in `Solar` does not
+  carry over into `SolarOnly`'s different start threshold, or vice versa; the next cycle dispatches
+  to the new module. A **cooldown already running is not reset**: it runs to completion for the
+  duration fixed when charging stopped, and blocks the incoming mode from starting until it
+  elapses. The asymmetry is deliberate and follows from what each timer gates. A hold is a period
+  spent *charging* at the minimum current and a debounce only postpones a start, so resetting
+  either can never bring a start forward — neither can produce the start/stop churn R11 exists to
+  prevent. A cooldown is the one timer that stands between a stop and the next start, and the car's
+  charging-error protection is a property of the charger, not of which mode the system has selected:
+  restarting one cycle after a stop is equally hard on the car whether `Solar` or `Captar` asks for
+  it. Resetting on a mode switch would therefore defeat the guarantee precisely where mode switches
+  are routine and system-initiated — under `Auto`, whose deadline-urgency escalation and revert
+  (`resolution-rules.md`) re-evaluate every cycle, so a household hovering near the urgency
+  threshold could bounce `Solar`↔`Captar` and restart immediately after every stop, with no user
+  action involved. The accepted cost is the mirror image: an urgency escalation can be held off for
+  the remainder of a running cooldown (at most `Captar`'s 10 minutes), a bounded delay to R5's
+  best-effort guarantee rather than a breach of R11's Must-priority hardware protection. This
+  matches the has-charged flag, the other piece of state a mode switch leaves untouched: it is
+  scoped to the connection, not the active mode, so switching between `Solar` and `SolarOnly`
+  does not grant a fresh, undebounced first start; only its debounce *timer* resets.
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.
 - **Coordinator restart.** Restart-after-power-loss persistence of internal bookkeeping is not
