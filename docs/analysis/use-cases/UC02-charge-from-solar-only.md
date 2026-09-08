@@ -22,14 +22,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that smoot
 
 ## Main success scenario
 
-1. **Given** `SolarOnly` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no solar-mode cooldown is in effect.
+1. **Given** `SolarOnly` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a solar stop or carried in from a stop in another mode).
 2. **When** smoothed solar surplus reaches at least the solar start threshold (default 1300 W), **then** the System starts charging within one control cycle — immediately, whether this is the connection's first start or the threshold is already met the moment `Idle` is entered (2b covers a threshold crossing while already waiting in `Idle`, once the has-charged flag is set).
 3. **And** the System converts the smoothed solar surplus into a whole-ampere set-point using the configured [amp-step rounding](../system-overview.md#ubiquitous-language) strategy — default `round down` (the highest whole ampere that keeps smoothed net grid import at or below 0 W, solar-only, never importing) — recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
 
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a [solar-mode cooldown](../system-overview.md#ubiquitous-language) is still running after a previous stop (R11)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the [solar-mode cooldown](../system-overview.md#ubiquitous-language) this mode's own stop starts, or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
 When smoothed solar surplus reaches the start threshold
 Then the System does not start charging until the cooldown has fully elapsed, then proceeds to step 2 or 2b depending on whether surplus is still at or above the start threshold once it does.
 

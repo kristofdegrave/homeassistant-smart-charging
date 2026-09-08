@@ -321,7 +321,10 @@ escalation and revert happen automatically.
   (R7/R8).
 - **Escalation (Solar→Captar):** when row 2 begins to hold during a solar session, Auto
   switches to `Captar` so the deadline can be met from the grid — emits
-  `DeadlineUrgencyEngaged` (see UC05).
+  `DeadlineUrgencyEngaged` (see UC05). The switch selects the mode; it does not clear a
+  rapid-cycling cooldown already running from an earlier stop, which keeps blocking the restart
+  until it elapses (R11, `control-cycle.md`) — a bounded delay to this lever, accepted so that a
+  routine, system-initiated mode switch can never be a way around R11.
 - **Revert:** when row 2 stops holding — i.e. the rows-3–5 baseline mode alone would now meet
   the deadline — the next cycle falls through to row 3 or 4, returning to a solar mode (or
   `Off`) once grid charging for the deadline is no longer required (R16), and emits

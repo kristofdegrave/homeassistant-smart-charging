@@ -21,14 +21,14 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Capt
 
 ## Main success scenario
 
-1. **Given** `Captar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no `Captar` cooldown is in effect.
+1. **Given** `Captar` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a `Captar` stop or carried in from a stop in another mode).
 2. **When** a control cycle runs, **then** the System starts grid charging within one control cycle.
 3. **And** the System requests the [maximum charging current](../system-overview.md#ubiquitous-language) — charging as fast as the grid allows — which the R3 peak clamp (`control-cycle.md`) fits on raw readings to the available [peak headroom](../system-overview.md#ubiquitous-language), so [net import](../system-overview.md#ubiquitous-language) stays at or below the [effective peak limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`) minus the [safety margin](../system-overview.md#ubiquitous-language), bounded by the minimum and maximum charging current (C1). Any [solar surplus](../system-overview.md#ubiquitous-language) reduces net import and is self-consumed first, so the grid supplies only the remainder.
 
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a `Captar`-mode cooldown is still running after a previous stop (R11, default 10 minutes)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Captar`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`); this is what can delay a deadline-urgency escalation into `Captar` for the remainder of a solar-mode cooldown (`../resolution-rules.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
