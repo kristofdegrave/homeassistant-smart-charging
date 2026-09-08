@@ -9,8 +9,10 @@ cycle lives in `control-cycle.md`; entity bindings live in `entity-catalog.md`.
 
 Most rules below are decision tables evaluated top-to-bottom: **the first row whose condition
 holds wins.** Every row carries a **name** as well as a priority number, and that name is how the
-row is cited — here and in every other document — so that re-ordering a table never silently
-changes what a citation elsewhere refers to. The required-current rule is a shared formula
+row is cited — here and throughout `docs/analysis/` — so that re-ordering a table never silently
+changes what a citation elsewhere refers to. (`docs/design/` and `docs/adl/` still cite some rows
+by ordinal as of this writing; ADR bodies are immutable and cannot be updated retroactively, and
+the design docs are a separate reconciliation pass.) The required-current rule is a shared formula
 instead, since it has no priority order to evaluate. Every rule is re-evaluated every control cycle, so a change in conditions
 changes the result on the next cycle. Two of the inputs these rules read are not values observable
 *this* cycle but flags the coordinator threads across cycles for the current connected session:

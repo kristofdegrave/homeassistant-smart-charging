@@ -64,7 +64,7 @@ A light state model (two states): whether a solar step-up is currently in effect
 
 | State | Active SOC limit | Leaves when |
 | --- | --- | --- |
-| Baseline | The default limit (or the solar-reserve cap, R9, if that applies — R7 priority 1) | A solar mode is charging, SOC comes within the step threshold of the limit, and the limit is below `max_solar_soc` → SteppedUp |
+| Baseline | The default limit (or the solar-reserve cap, R9, if that applies — the active-SOC-limit table's *Solar-reserve cap* row) | A solar mode is charging, SOC comes within the step threshold of the limit, and the limit is below `max_solar_soc` → SteppedUp |
 | SteppedUp | Default limit + applied steps, clamped to `max_solar_soc` | Another step applies (self-loop, gated by the maximum clamp) · active mode is no longer a solar mode → Baseline · disconnect → Baseline |
 
 A disconnect or a mode change away from a solar mode returns the System to Baseline from SteppedUp at any step count; switching between `Solar` and `SolarOnly` is a self-loop in SteppedUp, not an exit (R7).
