@@ -454,6 +454,15 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   stay stored but unused — the mirror is a passive readout, so its behaviour follows its source row
   without a separate rule; the mapping has no mirror sensor of its own (adapter roles never do,
   ADR-0031's scope).
+- **`power_cooldown_min` has no effect while the CapTar capability is absent, but is not among
+  the CapTar-gated rows above.** R11's cooldown-entry acceptance criterion ties `Power`'s only own
+  stop condition to the sustained R3 breach, so without the capability `Power` never stops on its
+  own and this value is never consulted — the same dormant-but-stored shape as the six rows above.
+  It is nonetheless **presented regardless of capability**: R18 AC5 names only the four
+  peak-protection thresholds, the peak-protection option, and the `monthly_peak_external` mapping
+  as CapTar-gated fields of the installation flow, and [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)
+  puts `power_cooldown_min` on the ungated `power` step, unlike `power_respect_peak` itself, which
+  sits on the CapTar-gated `captar` step alongside `Captar`-mode's own cooldown.
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When
   `deadline_available` is off, the *Departure times* subgroup and `reminder_lead_h` are not
   required and `binary_sensor.smart_charging_plug_in_reminder` never turns on (R18 is authoritative
