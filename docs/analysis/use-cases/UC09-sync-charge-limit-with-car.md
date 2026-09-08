@@ -39,7 +39,7 @@ Any of:
 **On disconnect: reset to the default**
 
 7. **Given** the car is connected at home.
-8. **When** charger status transitions to `disconnected`, **then** the System writes the default SOC limit (`number.smart_charging_soc_limit_override`, default 80%) to the vehicle through `vehicle_charge_limit` — mirroring the active-SOC-limit reset the disconnect already triggers (R7).
+8. **When** charger status transitions to `disconnected`, **then** the System writes the default SOC limit (`number.smart_charging_soc_limit_override`, default 80%) to the vehicle through `vehicle_charge_limit` — unconditionally on disconnect, independently of whatever the *resolved* active SOC limit does (R7): a disconnect always clears any solar step-up, but [UC07](UC07-reserve-capacity-for-tomorrow.md)'s solar-reserve cap does not depend on connectedness and may still hold, so the resolved value and the vehicle's own limit can legitimately differ while disconnected.
 
 ## Alternate flows
 
