@@ -458,23 +458,28 @@ it is wired to its callers).
 
 **M3 — Notification Manager**
 - **Service:** Manager (notification & prompting, V11). Home: `managers/` (ADR-0015).
-- **Status:** shipped — `managers/notification_manager.py` (plus `notification_state.py` for the
-  persisted de-dup/latch state); tests in `tests/managers/test_notification_manager.py`,
-  `tests/test_notification_state.py`, and `tests/test_notifications_end_to_end.py`.
+- **Status:** partially shipped — `managers/notification_manager.py` (plus `notification_state.py`
+  for the persisted de-dup/latch state) builds UC08's evening home-day prompt and R5's
+  deadline-unreachable delivery; tests in `tests/managers/test_notification_manager.py`,
+  `tests/test_notification_state.py`, and `tests/test_notifications_end_to_end.py` cover only
+  those two. UC10's plug-in reminder is designed (system-design §5.3) but not yet built: no
+  `binary_sensor.py` exists for its reminder-due readout, `const.py`'s `CONF_REMINDER_LEAD_H` is
+  contract-first with no reader, and no test exercises it.
 - **Builds:** [system-design §5.3](system-design.md#53-notification-plug-in-reminder-uc10--evening-prompt-uc08) —
-  UC10 plug-in reminder (de-dup on departure window), UC08 evening home-day prompt (writes the
-  home-day flag on "yes"), and delivery of R5's deadline-unreachable notice (subscribing to M1's
-  `DeadlineUnreachableNotified`, and re-arming its once-per-occasion latch on the paired
-  `DeadlineUnreachableCleared` per ADR-0024). Realizes UC08, UC10.
+  UC08 evening home-day prompt (writes the home-day flag on "yes"), delivery of R5's
+  deadline-unreachable notice (subscribing to M1's `DeadlineUnreachableNotified`, and re-arming
+  its once-per-occasion latch on the paired `DeadlineUnreachableCleared` per ADR-0024), and — not
+  yet built — UC10's plug-in reminder (de-dup on departure window). Realizes UC08; UC10 remains
+  designed-not-built.
 - **Depends on:** RA4 (Notification access), RA1/RA2 (`car_home`, `charger_status`, `solar_forecast`,
-  `home_day_external`), RA3 Store (owned config + home-day flag write; read the resolved active SOC
-  limit from `sensor.smart_charging_active_soc_limit` for UC10's below-limit check — the
-  Coordinator's published resolution, not an E3 call, per ADR-0011; the sensor itself is C3, written
-  by M1 — stubbable until C3), E4 (Deadline).
+  `home_day_external`), RA3 Store (owned config + home-day flag write; UC10, once built, would read
+  the resolved active SOC limit from `sensor.smart_charging_active_soc_limit` for its below-limit
+  check — the Coordinator's published resolution, not an E3 call, per ADR-0011; the sensor itself
+  is C3, written by M1 — stubbable until C3), E4 (Deadline).
 - **ADR gate:** G-ADR-0011 (trigger mechanism, refined by ADR-0024) and G-ADR-0015 (package home) —
   both resolved.
-- **Testable on its own:** HA harness — UC10 reminder gating + de-dup; UC08 prompt + response capture;
-  R5 delivery on the subscribed event.
+- **Testable on its own:** HA harness — UC08 prompt + response capture; R5 delivery on the
+  subscribed event; UC10 reminder gating + de-dup once built.
 - **Integration checkpoint:** ⎔ delivers via RA4, writes the home-day flag via Store, receives M1's
   event; no direct M1↔M3 call.
 
