@@ -99,7 +99,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
 | **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`) |
-| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`) |
+| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
@@ -291,10 +291,11 @@ it is wired to its callers).
 - **Testable on its own:** plain pytest — the three-row lookup and R8/R9 transitions, incl. the
   `Manual` negative case (no step-up, no cap regardless of home-day flag or forecast); `SocReached`
   must not resume on sensor noise, only a genuine limit change or reconnect (R7).
-- **Integration checkpoint:** ⎔ M1 (cycle) is its only caller today. M2 (vehicle-limit sync) and M3 (UC10's
-  below-limit check) consume its *resolved* output through the materialized
-  `sensor.smart_charging_active_soc_limit` the Coordinator publishes, not by calling this engine —
-  neither Manager holds the Coordinator-threaded step-up/reserve context the resolution composes
+- **Integration checkpoint:** ⎔ M1 (cycle) is its only caller today. M2 (vehicle-limit sync)
+  consumes its *resolved* output through the materialized `sensor.smart_charging_active_soc_limit`
+  the Coordinator publishes, not by calling this engine; M3 would consume it the same way for
+  UC10's below-limit check once that reminder is built (project-plan §M3) — neither Manager holds
+  the Coordinator-threaded step-up/reserve context the resolution composes
   (ADR-0011; system-design §5.2/§5.3).
 
 **E4 — Deadline Engine**
@@ -680,9 +681,12 @@ from the retired functional sequence.
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
   `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks, all nine Engine
-  tasks, all three Manager tasks, and all six Client tasks have shipped. Two checkpoints are only
-  partially met and are marked as such: the Phase 3 no-cross-Manager-call assertion (no executable
-  guard) and the Phase 4 UC01–UC11 end-to-end validation (per-slice, not one suite).
+  tasks, and all six Client tasks have shipped. Of the three Manager tasks, M1 and M2 have shipped;
+  M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
+  designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
+  gaps). Two checkpoints are only partially met and are marked as such: the Phase 3
+  no-cross-Manager-call assertion (no executable guard) and the Phase 4 UC01–UC11 end-to-end
+  validation (per-slice, not one suite).
 - **Independently testable.** Each task names its unit boundary per ADR-0009 (pure Engines → plain
   pytest; Resource Access + Managers + Clients → HA harness) and an integration checkpoint proving
   it is wired to its callers before the next task depends on it.
