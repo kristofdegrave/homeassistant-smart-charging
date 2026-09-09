@@ -13,8 +13,9 @@ This is a manual/interactive skill, not a CI-wired one: brainstorming is a genui
 so it stays a session task for now rather than a non-interactive drafter.
 
 The single-vs-multi-artifact filing decision, epic mechanics, and deferral rules are defined
-once in `CLAUDE.md`'s **Issue conventions** section — read that first. This skill adds only the
-brainstorming gate that has to happen before any of that filing.
+once in [docs/reference/idea-to-issues.md](../../../docs/reference/idea-to-issues.md) — read
+that first. This skill adds only the brainstorming gate that has to happen before any of that
+filing.
 
 ## The cycle
 
@@ -24,11 +25,11 @@ brainstorming gate that has to happen before any of that filing.
    split," not at "the work is designed in detail" — that detail belongs to each child issue's
    own downstream skill (`write-use-case`, `write-adr`, `write-requirement`, `write-impl-spec`,
    `develop-task`, `write-tests`, or whatever `workflow` resolves to).
-3. **Decompose**, following the epic-decomposition cycle in `CLAUDE.md`'s **Issue conventions**
-   section (single-artifact vs. multi-artifact epic filing, what to file now vs. defer). A part
-   that's
-   still too fuzzy to scope keeps the `idea` label itself and gets worked later — recursion is
-   expected, not an error.
+3. **Decompose**, following the epic-decomposition cycle in
+   [docs/reference/idea-to-issues.md](../../../docs/reference/idea-to-issues.md) (single-artifact
+   vs. multi-artifact epic filing, what to file now vs. defer). A part that's still too fuzzy to
+   scope keeps the `idea` label itself and gets worked later — recursion is expected, not an
+   error.
 4. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea
    issue gets one comment listing everything it was split into.
 5. **Close the idea issue** once it's fully captured — either directly in child issues (single-
@@ -43,8 +44,8 @@ brainstorming gate that has to happen before any of that filing.
 
 - One context label per child issue — the pipeline's draft job (`_ai-draft.yml`) already
   refuses to draft an issue with zero or multiple context labels; don't hand it one.
-- Don't skip the brainstorming dialogue to save a round-trip — an idea decomposed without
-  the user's buy-in just relocates the ambiguity into the child issues.
+- Don't skip the `grilling` step to save a round-trip — an idea decomposed without the user's
+  buy-in just relocates the ambiguity into the child issues.
 - Don't draft content for a child issue beyond what's needed to scope it (a clear title and a
   body stating the problem/intent) — the artifact itself is the downstream skill's job.
 

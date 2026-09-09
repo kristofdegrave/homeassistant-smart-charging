@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: A relentless interview to sharpen a plan or design.
+description: Use when you want to be relentlessly interviewed about a plan or design to sharpen it.
 disable-model-invocation: true
 ---
 

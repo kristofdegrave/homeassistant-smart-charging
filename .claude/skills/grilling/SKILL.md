@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+description: Use when the user, in an interactive session, explicitly asks to be "grilled" or "grill me" on a plan, decision, or idea, or asks to stress-test their thinking on one. Requires a human respondent — never self-invoke this in a non-interactive context (e.g. a CI drafter/reviewer run) since it blocks on answers nothing will provide.
 ---
 
 # Grilling
@@ -16,15 +16,15 @@ wait for the user's answers before the next round.
 Format a round like so:
 
 ```
-❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
+**Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
 
-➡️ <your recommended answer>
+Recommendation: <your recommended answer>
 
 ---
 
-❓ **Q2** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
+**Q2** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
 
-➡️ <your recommended answer>
+Recommendation: <your recommended answer>
 ```
 
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and
@@ -33,12 +33,21 @@ question whose answer depends on another question still open in this round belon
 round, not this one.
 
 Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the
-environment (filesystem, tools, prior docs), dispatch an `Agent` (per the
-`dispatching-parallel-agents` skill when several are independent) to find it; don't ask the user
-for anything you could look up yourself. Don't block on it: a running exploration is an
-unsettled prerequisite, so only the questions downstream of it wait for the agent to report; ask
-the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
+environment (filesystem, tools, prior docs), dispatch a subagent (in parallel, if several are
+independent) to find it; don't ask the user for anything you could look up yourself. Don't block
+on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it
+wait for the subagent to report; ask the rest of the frontier now. The _decisions_ are the
+user's: put each to them and wait.
 
 The session is done when the frontier is empty: every branch of the design tree visited, nothing
 left silently assumed. Do not act on it until the user confirms you have reached a shared
 understanding.
+
+This technique targets large, branch-heavy decisions — e.g. `work-idea`'s brainstorming gate.
+For a single, narrowly-scoped question, the built-in `brainstorming` skill's one-question dialogue
+(used, for example, by `write-impl-spec`'s own scoping step) is a lighter fit; use whichever the
+referencing skill names.
+
+This is interactive-only: if you find yourself invoked with no human able to answer (e.g. inside
+a non-interactive CI run), do not block — make the recommended answer the default for every open
+question, record them as open questions in your output, and proceed.
