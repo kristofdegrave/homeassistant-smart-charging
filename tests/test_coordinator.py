@@ -1645,12 +1645,13 @@ async def test_solar_cooldown_survives_mode_switch(hass):
     coord.active_mode = MODE_SOLAR
     result = await coord._async_update_data()
 
-    # No wall-clock time has passed -- the 2-minute cooldown is still running, so the switch
-    # back to Solar must NOT charge immediately, even though its own per-mode state was reset.
-    # This connection has already charged once (the very first cycle above), so the reset
-    # lands in Debouncing rather than plain Idle (R11/issue #757) -- either way, R11's
-    # cooldown is what actually blocks the restart here, not the debounce itself (no
-    # wall-clock time has passed for the debounce to be waiting out on its own).
+    # This connection has already charged once (the very first cycle above), so the mode-switch
+    # reset lands in Debouncing rather than plain Idle (R11/issue #757) -- it is this cycle's
+    # own restart debounce, not the cooldown, that reports 0 A here (Debouncing is not
+    # Phase.CHARGING, so `_cooldown_blocks` never even fires this cycle). The cooldown's own
+    # survival across the switch is what `coord._active_cooldown.duration_s` above already
+    # pinned, and is separately load-bearing (past the debounce window) in
+    # `test_solar_cooldown_delays_deadline_urgency_escalation_into_captar` below.
     assert result.commanded_current == 0.0
     assert coord._mode_state[MODE_SOLAR].phase == Phase.DEBOUNCING
 
@@ -2842,6 +2843,16 @@ async def test_baseline_dry_run_respects_active_cooldown(hass):
     # Once elapsed, the baseline reports its true capacity again.
     coord._active_cooldown = ActiveCooldown(now, 0.0)
     assert coord._mode_desired_current(MODE_SOLAR, **kwargs) == 12.0
+
+    # Power carries no `Phase` of its own (`new_state` is always `None`) -- confirm the same
+    # gate applies to it too, reachable via `Manual` + `Power` with a cooldown still running
+    # from an earlier mode's forced stop (`coordinator_cycle.py`'s `baseline_mode =
+    # inputs.active_mode` path feeds exactly this call for that combination).
+    coord.target_current = 10.0
+    coord._active_cooldown = None
+    assert coord._mode_desired_current(MODE_POWER, **kwargs) == 10.0
+    coord._active_cooldown = ActiveCooldown(now, 120.0)
+    assert coord._mode_desired_current(MODE_POWER, **kwargs) == 0.0
 
 
 async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_urgency(

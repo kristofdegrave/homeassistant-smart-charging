@@ -1189,13 +1189,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         # R11/issue #974: mirrors `_dispatch_mode`'s own cooldown block (`_cooldown_blocks`) --
         # a mode still blocked by a running coordinator-scoped cooldown cannot actually deliver
-        # `current` this cycle, so the baseline dry run must not report otherwise. Read-only:
-        # unlike `_dispatch_mode`, there is no `_mode_state`/`_active_cooldown` write here, this
-        # dry run mutates no persisted state either way. `new_state` is `None` for Off/Power
-        # (neither carries a `.phase`, neither is ever stored in `_mode_state`) -- guarded here
-        # rather than in `_cooldown_blocks` itself, so that shared helper's signature stays a
-        # plain `Phase`, not `Phase | None`.
-        if new_state is not None and self._cooldown_blocks(new_state.phase, now):
+        # `current` this cycle, so the baseline dry run must not report otherwise, or R5's
+        # required-current comparison would judge a cooldown-blocked mode more capable than a
+        # real dispatch could ever deliver. Read-only: unlike `_dispatch_mode`, there is no
+        # `_mode_state`/`_active_cooldown` write here, this dry run mutates no persisted state
+        # either way. `new_state` is `None` for Off/Power (neither carries a `.phase`, neither
+        # is ever stored in `_mode_state`) -- Off needs no check (it always returns 0.0 anyway),
+        # but Power does: like `_dispatch_mode`'s own Power branch, `Phase.CHARGING` stands in
+        # for the one "charging" state Power has, since being active and commanding
+        # `target_current` is Power's only state. Reachable under `Manual` + `Power` with a
+        # cooldown still running from an earlier mode's forced stop (`coordinator_cycle.py`'s
+        # `baseline_mode = inputs.active_mode` path) -- not just a defensive check.
+        if new_state is not None:
+            if self._cooldown_blocks(new_state.phase, now):
+                return 0.0
+        elif mode == MODE_POWER and self._cooldown_blocks(Phase.CHARGING, now):
             return 0.0
         return current
 
