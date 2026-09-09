@@ -308,8 +308,9 @@ it is wired to its callers).
 - **Depends on:** ADR-0010; adapter-read deadline sources (RA2) — as data.
 - **Testable on its own:** plain pytest — deadline resolution across sources; urgency threshold;
   R5 unreachable determination.
-- **Integration checkpoint:** ⎔ M1 (urgency + required current), M3 (lead-time window); the
-  `DeadlineUnreachableNotified` publish is M1's, subscribed by M3 (ADR-0011).
+- **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
+  publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
+  lead-time window once that reminder is built (project-plan §M3).
 
 **E5 — Billing-Protection Engine + Peak-Demand Tracker**
 - **Service:** Engine, V6 — a pure Engine (Billing-Protection) plus a **stateful** Engine (Peak-Demand
