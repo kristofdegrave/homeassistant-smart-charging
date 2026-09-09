@@ -19,12 +19,11 @@ brainstorming gate that has to happen before any of that filing.
 ## The cycle
 
 1. **Read the idea issue** — title, body, and anything it links to (docs, related issues).
-2. **Brainstorm it** — follow the `brainstorming` skill's dialogue style: one question at a
-   time, propose 2-3 approaches with a recommendation, get explicit buy-in on the resulting
-   shape before decomposing. Stop at "the idea is scoped enough to split," not at "the work
-   is designed in detail" — that detail belongs to each child issue's own downstream skill
-   (`write-use-case`, `write-adr`, `write-requirement`, `write-impl-spec`, `develop-task`,
-   `write-tests`, or whatever `workflow` resolves to).
+2. **Brainstorm it** — use the `grilling` skill's batched-frontier technique to get explicit
+   buy-in on the resulting shape before decomposing. Stop at "the idea is scoped enough to
+   split," not at "the work is designed in detail" — that detail belongs to each child issue's
+   own downstream skill (`write-use-case`, `write-adr`, `write-requirement`, `write-impl-spec`,
+   `develop-task`, `write-tests`, or whatever `workflow` resolves to).
 3. **Decompose**, following the epic-decomposition cycle in `CLAUDE.md`'s **Issue conventions**
    section (single-artifact vs. multi-artifact epic filing, what to file now vs. defer). A part
    that's
