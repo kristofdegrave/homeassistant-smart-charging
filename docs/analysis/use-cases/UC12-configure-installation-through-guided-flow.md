@@ -134,8 +134,8 @@ variants.
    presents the solar-production and solar-forecast mappings and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
    `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown duration, the
-   restart debounce duration, the solar step-up size, trigger gap, and ceiling, and the value the
-   [solar-reserve cap](../system-overview.md#ubiquitous-language) is seeded with (4b) together with
+   restart debounce duration, the solar step-up size, trigger gap, and ceiling, and the
+   [solar-reserve cap](../system-overview.md#ubiquitous-language) (4b) together with
    its forecast threshold.
 8. **Given** the household wants departure deadlines managed, **when** the System shows the
    `deadline` step, **then** it presents the optional external departure-time mapping, the external
@@ -229,14 +229,15 @@ one cross-step requiredness this model keeps; it is still reported on the `vehic
 never as an end-of-flow error.
 
 **4b — Seed-value fields set a runtime entity's starting value, not a threshold** — branches from
-step 4, and the rule it states applies equally to the seed-value fields on steps 5 and 7.
-Given the SOC-limit seed value (step 4), the `Power` target-current seed value (step 5), and the
-solar-reserve cap seed value (step 7)
-When the user later changes any of the three from the runtime dashboard
+step 4, and the rule it states applies equally to the seed-value field on step 5.
+Given the SOC-limit seed value (step 4) and the `Power` target-current seed value (step 5)
+When the user later changes either from the runtime dashboard
 Then that change updates the corresponding owned runtime entity directly
 ([UC11](UC11-monitor-and-manage-charging-configuration.md)) — this use-case's own field only sets
 each entity's *starting* value at whichever moment its step runs, distinct from an installation
-threshold that keeps applying until it is changed again through this flow.
+threshold that keeps applying until it is changed again through this flow. The
+[solar-reserve cap](../system-overview.md#ubiquitous-language) (step 7) is such a threshold, not a
+seed: it has no runtime entity, so it is changed only by returning to this flow.
 
 **5a — A capability is absent** — branches from step 5.
 Given the user declared the CapTar, solar, or deadline capability absent on the `core` step, or
