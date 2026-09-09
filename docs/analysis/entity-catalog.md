@@ -257,7 +257,6 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `solar_reserve_soc` | config-options | options | % | 60 | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | resolution-rules, UC07 | user (anytime), UC12 |
-| `sensor.smart_charging_solar_reserve_soc` | state | — | % | mirrors `solar_reserve_soc` (config-options); disabled by default (ADR-0031) | [solar-reserve cap](system-overview.md#ubiquitous-language) (R9) | user | — |
 | `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime), UC12 |
 | `sensor.smart_charging_solar_forecast_threshold_kwh` | state | — | kWh | mirrors `solar_forecast_threshold_kwh` (config-options); disabled by default (ADR-0031) | solar-reserve forecast threshold (R9) | user | — |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, (UC11) | — |
@@ -534,7 +533,11 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   are listed inline beside their source row instead of in *Diagnostic outputs* for placement, not
   `Written by`, following the `sensor.smart_charging_monthly_peak_kw` row's own inline placement in
   *Peak protection* (that row's `Written by` is `control-cycle`, since unlike these mirrors it is
-  recomputed every cycle rather than sourced from the config entry).
+  recomputed every cycle rather than sourced from the config entry). One exception: `solar_reserve_soc`
+  (*Solar-reserve cap* above) has no mirror row — it was excluded from ADR-0031's implementation because
+  this catalog misclassified it as a runtime `input_number` rather than a `config-options` value at the
+  time; now that the misclassification is corrected (R9), it is missing this mirror purely because the
+  mirror was never built for it, not because it is meant to be excluded like `control_interval_s`.
   They are never presented on the runtime dashboard — an ADR-0031/[ADR-0022](../adl/0022-runtime-dashboard-delivery-mechanism.md)
   design choice for this new sensor family, not an R19 acceptance criterion, since R19 only governs
   entities classified runtime or install-time configuration, neither of which applies to a `state`
