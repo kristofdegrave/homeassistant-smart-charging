@@ -916,6 +916,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # one -- i.e. _PowerModeHandler.is_soc_gated must stay False (design doc Sec 3.4).
             # Its returned state is discarded, never written to _mode_state. Unchanged
             # behavior: no SOC gate.
+            # R11/issue #974: Power has no Phase of its own -- being active and commanding
+            # `target_current` is its only "charging" state, so a running coordinator-scoped
+            # cooldown must block it the same way it blocks any other mode's Idle -> Charging
+            # transition (`_cooldown_blocks` with `Phase.CHARGING` standing in for that one
+            # state). Without this, switching into Power (e.g. Auto's own carve-out escalating
+            # to Power when CapTar is unavailable, R5/R18) would be exactly the mode-switch
+            # escape R11 forbids.
+            if self._cooldown_blocks(Phase.CHARGING, ctx.now):
+                return 0.0
             desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
             return desired
         handler = self._mode_handlers[self.active_mode]
@@ -959,9 +968,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # A fresh stop-on-a-mode's-own-condition (R1/R2's hold elapsing without recovery,
             # for Solar/SolarOnly) -- start the coordinator-scoped cooldown, fixing its
             # duration at this instant per `handler.cooldown_minutes` (R11: "not shortened by
-            # a change in conditions"). Captar never reaches this branch on its own -- its
-            # only stop condition (a sustained R3 breach) is forced by `_apply_peak_clamp`
-            # below, which starts its own `_active_cooldown` directly at that call site.
+            # a change in conditions"). Captar's only own stop condition (a sustained R3
+            # breach) never reaches this branch -- it is forced by `_apply_peak_clamp` below,
+            # which starts its own `_active_cooldown` directly at that call site instead. (A
+            # sustained R3 breach while Solar/SolarOnly holds at the minimum current, R1/R2's
+            # own grace-period stop, is a separate, pre-existing gap this issue does not
+            # cover: `_apply_peak_clamp`'s force-stop is gated on Captar alone.)
             self._active_cooldown = ActiveCooldown(ctx.now, handler.cooldown_minutes * 60)
         self._mode_state[self.active_mode] = new_state
         # R11/issue #757: flips the has-charged flag the first time a solar mode's own step()

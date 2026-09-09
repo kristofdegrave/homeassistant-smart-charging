@@ -22,6 +22,7 @@ from custom_components.smart_charging.const import (
     MODE_CAPTAR,
     STATUS_OK,
 )
+from custom_components.smart_charging.coordinator_cycle import ActiveCooldown
 from custom_components.smart_charging.modes._phase import Phase
 from tests.helpers import (
     capture_charger_current_writes,
@@ -155,10 +156,12 @@ async def test_uc03_2a_cooldown_blocks_restart_until_it_elapses(hass):
     # `replace_coordinator_config` alone no longer suffices: R11's rapid-cycling cooldown is
     # now also tracked coordinator-scoped (`_active_cooldown`), with its duration fixed at
     # the moment charging stopped precisely so a later config change can't shorten it
-    # (requirements.md R11's "not shortened by a change in conditions") -- clear it directly
-    # here too, alongside the per-mode config override, to simulate the same elapsed cooldown.
+    # (requirements.md R11's "not shortened by a change in conditions"). Simulate elapse via
+    # `ActiveCooldown.elapsed()` itself -- zero its duration rather than discarding the object
+    # (discarding it would exercise disconnect semantics, not elapse semantics, and would
+    # never catch a broken `elapsed()` comparison).
     replace_coordinator_config(coordinator, captar_cooldown_min=0.0)
-    coordinator._active_cooldown = None
+    coordinator._active_cooldown = ActiveCooldown(coordinator._active_cooldown.stop_at, 0.0)
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     assert calls[-1]["value"] == 16.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING

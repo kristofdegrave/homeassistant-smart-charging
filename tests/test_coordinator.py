@@ -1586,6 +1586,9 @@ async def test_captar_cooldown_survives_mode_switch(hass):
     seed_ample_peak_headroom(coord, kw=1.0)
     await coord._async_update_data()
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
+    # R11: "the stopping mode's own cooldown period, not the incoming mode's" -- fixed at
+    # Captar's own `captar_cooldown_min` (`_config()`'s 5-minute baseline), not Off's/Solar's.
+    assert coord._active_cooldown.duration_s == config.captar_cooldown_min * 60
 
     # Switch away and back -- both transitions still rebuild `_mode_state` (R11's hold/
     # restart-debounce reset), but the cooldown itself must survive both. Also restore ample
@@ -1604,6 +1607,84 @@ async def test_captar_cooldown_survives_mode_switch(hass):
     # charge immediately, even though its own per-mode state was reset to idle().
     assert result.commanded_current == 0.0
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.IDLE
+    # Unchanged by the intervening Off cycle -- a mode switch never re-fixes the duration.
+    assert coord._active_cooldown.duration_s == config.captar_cooldown_min * 60
+
+
+async def test_solar_cooldown_survives_mode_switch(hass):
+    """R11/issue #974: mirrors the Captar test above, but through Solar's own cooldown-start
+    site inside `_dispatch_mode`'s generic "fresh `Phase.COOLDOWN` transition" detection --
+    Captar's start is forced by `_apply_peak_clamp` instead, so that site alone does not prove
+    this one is wired correctly. Deleting the `_active_cooldown = ActiveCooldown(...)` line at
+    that generic detection site would not fail the Captar test, only this one."""
+    config = _config(solar_hold_min=0.0, solar_cooldown_min=2.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+
+    # Surplus drops below the start threshold -> Hold (minimum current, R1).
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.HOLD
+
+    # Hold period is 0 min -> elapses on the very next cycle -> Cooldown, starting the
+    # coordinator-scoped `_active_cooldown` for the first time this test.
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+    assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
+
+    # Switch away and back -- restore ample surplus so only the cooldown is under test.
+    coord._adapters = charging
+    coord.active_mode = MODE_OFF
+    await coord._async_update_data()
+    coord.active_mode = MODE_SOLAR
+    result = await coord._async_update_data()
+
+    # No wall-clock time has passed -- the 2-minute cooldown is still running, so the switch
+    # back to Solar must NOT charge immediately, even though its own per-mode state was reset.
+    # This connection has already charged once (the very first cycle above), so the reset
+    # lands in Debouncing rather than plain Idle (R11/issue #757) -- either way, R11's
+    # cooldown is what actually blocks the restart here, not the debounce itself (no
+    # wall-clock time has passed for the debounce to be waiting out on its own).
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.DEBOUNCING
+
+
+async def test_running_cooldown_blocks_switch_to_power(hass):
+    """R11/issue #974: `Power` carries no `Phase` of its own, so it is not covered by
+    `_dispatch_mode`'s generic cooldown check on `new_state.phase` -- it needs its own
+    explicit block. Without it, escalating to `Power` (e.g. Auto's own carve-out when the
+    CapTar capability is absent, R5/R18) would be exactly the mode-switch escape R11 forbids,
+    the same class of bug this whole fix closes for the other three modes."""
+    config = _config()
+    breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass,
+        adapters=breaching,
+        config=dataclasses.replace(config, max_peak_kw=1.0, peak_grace_min=0.0),
+        interval_s=30,
+        store=_FakeStore({}),
+    )
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    seed_ample_peak_headroom(coord, kw=1.0)
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
+
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord._config = dataclasses.replace(config, max_peak_kw=AMPLE_PEAK_HEADROOM_KW)
+    coord._peak_demand.tracked_kw = AMPLE_PEAK_HEADROOM_KW
+    coord.target_current = 10.0
+    coord.active_mode = MODE_POWER
+    result = await coord._async_update_data()
+
+    # Without the Power-specific block, this would command target_current (10 A) immediately.
+    assert result.commanded_current == 0.0
 
 
 async def test_captar_resets_on_disconnect(hass):
@@ -1621,6 +1702,38 @@ async def test_captar_resets_on_disconnect(hass):
 
     assert result.commanded_current == 0.0
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.IDLE
+
+
+async def test_disconnect_clears_active_cooldown(hass):
+    """R11/issue #974: a disconnect (resume condition 2, unplug/replug) clears the
+    coordinator-scoped cooldown too, same as `_mode_state`/`_has_charged` -- a cooldown from
+    one connection must not carry over and block the very first start of the next one."""
+    config = _config()
+    breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass,
+        adapters=breaching,
+        config=dataclasses.replace(config, max_peak_kw=1.0, peak_grace_min=0.0),
+        interval_s=30,
+        store=_FakeStore({}),
+    )
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    seed_ample_peak_headroom(coord, kw=1.0)
+    await coord._async_update_data()
+    assert coord._active_cooldown is not None
+
+    coord._adapters = _adapters(status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    await coord._async_update_data()
+    assert coord._active_cooldown is None
+
+    # Replug -- ample headroom, no wall-clock elapsed -- must start immediately: the prior
+    # connection's cooldown must not carry over into this one (R7 resume condition 2).
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord._config = dataclasses.replace(config, max_peak_kw=AMPLE_PEAK_HEADROOM_KW)
+    coord._peak_demand.tracked_kw = AMPLE_PEAK_HEADROOM_KW
+    result = await coord._async_update_data()
+    assert result.commanded_current == 16.0
 
 
 async def test_power_respects_peak_by_default(hass):
@@ -2693,6 +2806,42 @@ async def test_solar_cooldown_delays_deadline_urgency_escalation_into_captar(has
     assert result.active_mode == MODE_CAPTAR  # Auto did escalate, per R5/urgency
     assert result.commanded_current == 0.0  # ...but R11's cooldown still blocks the restart
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.IDLE  # frozen, not charging
+
+
+async def test_baseline_dry_run_respects_active_cooldown(hass):
+    """R11/issue #974: `_mode_desired_current` (the Auto baseline dry run) must report 0 A --
+    not the mode's true capacity -- while a coordinator-scoped cooldown is still running, or
+    R5's required-current comparison would judge a cooldown-blocked mode more capable than a
+    real dispatch could ever deliver. Exercises the gate directly with ample surplus so the
+    non-blocked and blocked cases are actually distinguishable (neither
+    `test_captar_cooldown_blocks_auto_revert_to_solar` nor
+    `test_solar_cooldown_delays_deadline_urgency_escalation_into_captar` above can tell: their
+    own baselines are 0 A/urgency is unconditional either way)."""
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.soc_limit_override = 80.0
+    now = hass.loop.time()
+    kwargs = dict(
+        status=STATE_CHARGING,
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        surplus_w=2760.0,  # ample -- 12A ideal, round up (R1)
+        voltage=230.0,
+        now=now,
+    )
+
+    # No cooldown running: Solar's baseline reports its true capacity.
+    assert coord._mode_desired_current(MODE_SOLAR, **kwargs) == 12.0
+
+    # A cooldown from an earlier stop is still running -- the same surplus must now report 0 A.
+    coord._active_cooldown = ActiveCooldown(now, 120.0)
+    assert coord._mode_desired_current(MODE_SOLAR, **kwargs) == 0.0
+
+    # Once elapsed, the baseline reports its true capacity again.
+    coord._active_cooldown = ActiveCooldown(now, 0.0)
+    assert coord._mode_desired_current(MODE_SOLAR, **kwargs) == 12.0
 
 
 async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_urgency(
