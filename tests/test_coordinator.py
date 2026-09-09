@@ -59,6 +59,7 @@ from custom_components.smart_charging.const import (
     STATE_DISCONNECTED,
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
+from custom_components.smart_charging.coordinator_cycle import ActiveCooldown
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
@@ -1564,8 +1565,15 @@ async def test_sustained_peak_breach_at_minimum_stops_captar_and_starts_cooldown
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
 
 
-async def test_captar_cooldown_resets_on_mode_switch(hass):
-    """Switching away from Captar and back clears its cooldown state (R11)."""
+async def test_captar_cooldown_survives_mode_switch(hass):
+    """R11/issue #974: unlike the hold and restart-debounce timers, a running rapid-cycling
+    cooldown is NOT reset by a mode switch -- requirements.md's R11 and control-cycle.md's
+    "Mode switched mid-operation" edge case both require it to keep blocking a restart in
+    whichever mode is active when the restart would otherwise happen, for the duration fixed
+    when charging stopped. The mode-switch reset still clears Captar's own per-mode
+    `Phase.COOLDOWN` bookkeeping in `_mode_state` (as before) -- it is the coordinator-scoped
+    `_active_cooldown` (hoisted out for exactly this reason, same structural precedent as
+    `_has_charged`) that now survives the switch and still blocks the restart."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=1.0)
     config = dataclasses.replace(config, peak_grace_min=0.0)
@@ -1579,8 +1587,9 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     await coord._async_update_data()
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
 
-    # Switch away and back -- both transitions reset _mode_state (R11), same as Solar's.
-    # Also restore ample peak headroom so only the cooldown reset is under test here.
+    # Switch away and back -- both transitions still rebuild `_mode_state` (R11's hold/
+    # restart-debounce reset), but the cooldown itself must survive both. Also restore ample
+    # peak headroom so only the cooldown is under test here.
     ample = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord._adapters = ample
     coord._config = dataclasses.replace(config, max_peak_kw=AMPLE_PEAK_HEADROOM_KW)
@@ -1590,8 +1599,11 @@ async def test_captar_cooldown_resets_on_mode_switch(hass):
     coord.active_mode = MODE_CAPTAR
     result = await coord._async_update_data()
 
-    assert result.commanded_current == 16.0  # fresh idle -> charges immediately, no cooldown wait
-    assert coord._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
+    # Essentially no wall-clock time has passed -- the 5-minute cooldown (`_config()`'s own
+    # captar_cooldown_min baseline) is still running, so the switch back to Captar must NOT
+    # charge immediately, even though its own per-mode state was reset to idle().
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.IDLE
 
 
 async def test_captar_resets_on_disconnect(hass):
@@ -2604,6 +2616,83 @@ async def test_auto_escalation_resets_captar_state_the_same_cycle(hass, freezer)
 
     assert result.active_mode == MODE_CAPTAR
     assert result.commanded_current == 16.0  # CONF_MAX_CURRENT -- fresh idle state, not cooldown
+
+
+async def test_captar_cooldown_blocks_auto_revert_to_solar(hass):
+    """R11/issue #974: a still-running Captar cooldown (from a real sustained-peak-breach
+    stop, R11 AC3) must survive Auto reverting to Solar once urgency clears -- Solar's own
+    per-mode state is freshly reset to Idle by the mode switch (as before), but the
+    coordinator-scoped `_active_cooldown` (fixed at Captar's own 5-minute duration when it
+    stopped) still blocks Solar's Idle -> Charging transition. Without this fix, the
+    mode-switch reset would let Solar start immediately, defeating R11's guarantee exactly
+    where control-cycle.md's edge case warns it matters most -- a household near the urgency
+    threshold bouncing Solar<->Captar."""
+    adapters = _adapters(
+        status=STATE_CHARGING,
+        ev_soc=50.0,
+        net_w=0.0,
+        charger_w=2760.0,  # ample solar surplus, well above the 100W start threshold
+        sun_state=SUN_STATE_ABOVE_HORIZON,
+    )
+    config = _config()
+    config = dataclasses.replace(config, solar_available=True)
+    config = dataclasses.replace(config, captar_available=True)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    # A real Captar stop moments ago -- no deadline is seeded, so this cycle's urgency clears
+    # and Auto's baseline row 3 (solar available, sun up, ample surplus) would otherwise
+    # revert straight to Solar.
+    coord._mode_state[MODE_CAPTAR] = CaptarState(Phase.COOLDOWN, hass.loop.time())
+    coord._active_cooldown = ActiveCooldown(hass.loop.time(), config.captar_cooldown_min * 60)
+    coord._last_active_mode = MODE_CAPTAR
+
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_SOLAR  # Auto did revert, per resolution-rules.md row 3
+    assert result.commanded_current == 0.0  # ...but R11's cooldown still blocks the restart
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE  # frozen, not charging
+
+
+async def test_solar_cooldown_delays_deadline_urgency_escalation_into_captar(hass, freezer):
+    """R11/issue #974: a still-running Solar cooldown must survive Auto's escalation into
+    Captar under deadline urgency (R5) -- Captar's own per-mode state is freshly reset to
+    Idle by the mode switch (as before), but the coordinator-scoped `_active_cooldown` (fixed
+    at Solar's own duration when it stopped) still blocks Captar's Idle -> Charging
+    transition. This is control-cycle.md's own accepted trade-off: "an urgency escalation
+    (R5) may have to wait out the remainder of a running cooldown ... rather than this
+    Must-priority hardware protection being defeated"."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    config = dataclasses.replace(config, solar_available=True)
+    config = dataclasses.replace(config, captar_available=True)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    # A real Solar stop moments ago -- its own per-mode Cooldown state AND the
+    # coordinator-scoped cooldown that must survive the coming Auto escalation into Captar.
+    coord._mode_state[MODE_SOLAR] = SolarState(Phase.COOLDOWN, hass.loop.time())
+    coord._active_cooldown = ActiveCooldown(hass.loop.time(), config.solar_cooldown_min * 60)
+    coord._last_active_mode = MODE_SOLAR
+
+    # A tight deadline the currently-cooling-down baseline (0 A) can't meet -> urgent -> Auto
+    # escalates to Captar (row 2), same shape as
+    # test_auto_profile_escalates_to_captar_under_urgency above.
+    _seed_today_deadline(coord, hours_from_now=1)
+    result = await coord._async_update_data()
+
+    assert result.active_mode == MODE_CAPTAR  # Auto did escalate, per R5/urgency
+    assert result.commanded_current == 0.0  # ...but R11's cooldown still blocks the restart
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.IDLE  # frozen, not charging
 
 
 async def test_auto_profile_falls_back_to_power_when_captar_unavailable_under_urgency(

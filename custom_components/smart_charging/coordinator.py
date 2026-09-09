@@ -57,6 +57,7 @@ from .const import (
     SOC_LIMIT_OVERRIDE_MIN,
 )
 from .coordinator_cycle import (
+    ActiveCooldown,
     CycleContext,
     DeadlineUnreachableEdge,
     DeadlineUrgencyInputs,
@@ -171,6 +172,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # coordinator instance (a restart) already starts at False for free, so there is
         # nothing to persist/restore for that case (R11's third clearing condition).
         self._has_charged: bool = False
+        # R11's rapid-cycling cooldown (issue #974), owned outside `_mode_state` for the exact
+        # same structural reason as `_has_charged`/`_step_up_gate` above:
+        # `_reset_mode_state_if_changed`/`_fresh_mode_state` rebuild EVERY SOC-gated mode's
+        # state on any mode switch, including the mode that started a still-running cooldown --
+        # but requirements.md's R11 (and control-cycle.md's "Mode switched mid-operation" edge
+        # case) requires a running cooldown to survive exactly that switch, blocking a restart
+        # in whichever mode is active when it would otherwise happen, for the duration fixed at
+        # the moment charging stopped. `None` means no cooldown is running. Set in
+        # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`
+        # (and in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry, R3);
+        # cleared to `None` only on disconnect (`_dispatch_mode`'s own early branch) -- same
+        # reset trigger as `_mode_state`/`_has_charged` there, per R7's "unplug/replug" resume
+        # condition. Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the
+        # entire point (issue #974).
+        self._active_cooldown: ActiveCooldown | None = None
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
@@ -854,6 +870,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         `set_home_day_flag`."""
         self.departure_home_day_override = value
 
+    def _cooldown_blocks(self, proposed_phase: Phase, now: float) -> bool:
+        """R11/issue #974: True when a still-running coordinator-scoped cooldown must block a
+        transition into `proposed_phase`. Only Charging is ever gated -- Cooldown/Hold/Idle/
+        Debouncing transitions are a mode's own timers settling, never the restart R11's
+        cooldown exists to delay. Shared by `_dispatch_mode` (the real dispatch, which also
+        freezes state on a block) and `_mode_desired_current` (the Auto baseline dry run,
+        read-only) so the two can never drift out of lockstep -- the dry run must report the
+        same 0 A a blocked real dispatch would actually deliver, or R5's required-current
+        comparison would judge the baseline mode more capable than it truly is."""
+        return (
+            self._active_cooldown is not None
+            and proposed_phase == Phase.CHARGING
+            and not self._active_cooldown.elapsed(now)
+        )
+
     def _dispatch_mode(self, ctx: CycleContext) -> float:
         """The disconnect/Off/Power/SOC-gated-stop guards around the ModeHandler registry lookup
         (ADR-0012's lookup itself is untouched -- this method only names the surrounding branches
@@ -871,6 +902,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # first start. Deliberately NOT touched by `_reset_mode_state_if_changed` (the
             # mode-switch reset) -- see this coordinator's own `_has_charged` field docstring.
             self._has_charged = False
+            # R11/issue #974: a disconnect (resume condition 2, unplug/replug) also clears any
+            # running rapid-cycling cooldown -- unlike a mode switch, which must NOT clear it
+            # (see `_active_cooldown`'s own field docstring). The next connection starts with
+            # no cooldown pending, same as `_mode_state`/`_has_charged` above.
+            self._active_cooldown = None
             return 0.0
         if self.active_mode == MODE_OFF:
             return 0.0
@@ -905,7 +941,28 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # branch, since MODE_OFF/MODE_POWER/the SOC-gated-stop guard above all handle their own
         # case first). Each handler wraps its modes/*.py step()/desired_current() unchanged;
         # only the lookup mechanism changed.
-        desired, new_state = handler.desired_current(ctx, self._mode_state.get(self.active_mode))
+        prior_state = self._mode_state.get(self.active_mode)
+        desired, new_state = handler.desired_current(ctx, prior_state)
+        # R11/issue #974: a running coordinator-scoped cooldown blocks ANY mode's Idle/
+        # Debouncing/Cooldown -> Charging transition, regardless of which mode's own per-mode
+        # state (possibly just rebuilt by `_reset_mode_state_if_changed`) is proposing it --
+        # see `self._cooldown_blocks` and `_active_cooldown`'s own field docstring. Overriding
+        # back to `prior_state` (rather than the handler's own `new_state`) freezes that mode's
+        # own timer exactly where it was -- e.g. a Debouncing phase already past its own
+        # debounce period simply re-proposes the same Charging transition next cycle, which
+        # this check keeps blocking until `_active_cooldown` itself elapses.
+        if self._cooldown_blocks(new_state.phase, ctx.now):
+            desired, new_state = 0.0, prior_state
+        elif new_state.phase == Phase.COOLDOWN and (
+            prior_state is None or prior_state.phase != Phase.COOLDOWN
+        ):
+            # A fresh stop-on-a-mode's-own-condition (R1/R2's hold elapsing without recovery,
+            # for Solar/SolarOnly) -- start the coordinator-scoped cooldown, fixing its
+            # duration at this instant per `handler.cooldown_minutes` (R11: "not shortened by
+            # a change in conditions"). Captar never reaches this branch on its own -- its
+            # only stop condition (a sustained R3 breach) is forced by `_apply_peak_clamp`
+            # below, which starts its own `_active_cooldown` directly at that call site.
+            self._active_cooldown = ActiveCooldown(ctx.now, handler.cooldown_minutes * 60)
         self._mode_state[self.active_mode] = new_state
         # R11/issue #757: flips the has-charged flag the first time a solar mode's own step()
         # actually transitions into Phase.CHARGING while it was still False -- step() itself
@@ -955,6 +1012,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if force_stop and self.active_mode == MODE_CAPTAR:
             desired = 0.0
             self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, ctx.now)
+            # R11/issue #974: Captar's only own stop condition (a sustained R3 breach) is
+            # forced here rather than decided by captar.step() itself (that module's own
+            # docstring) -- so this is the one cooldown-start site `_dispatch_mode`'s generic
+            # "fresh Phase.COOLDOWN transition" detection can never see. Started directly with
+            # the same coordinator-scoped `_active_cooldown` every other cooldown start uses,
+            # fixing its duration at this instant (R11: "not shortened by a change in
+            # conditions") via Captar's own `cooldown_minutes`.
+            self._active_cooldown = ActiveCooldown(
+                ctx.now, self._mode_handlers[MODE_CAPTAR].cooldown_minutes * 60
+            )
         return desired
 
     def _apply_grid_ceiling_clamp(self, ctx: CycleContext, desired: float) -> float:
@@ -984,16 +1051,25 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         }
 
     def _reset_mode_state_if_changed(self) -> None:
-        """R11: switching mode resets timers -- fresh state for every mode with one, whether
-        or not the incoming mode is one of them (a state nobody is dispatching to is inert
-        either way). Idempotent -- a no-op once `_last_active_mode` catches up, so calling
-        this twice in the same cycle (Manual's change is already final at the top of the
-        cycle; Auto's own mode isn't resolved until later) never double-resets.
+        """R11: switching mode resets the hold and restart-debounce timers -- fresh state for
+        every mode with one, whether or not the incoming mode is one of them (a state nobody
+        is dispatching to is inert either way). Idempotent -- a no-op once `_last_active_mode`
+        catches up, so calling this twice in the same cycle (Manual's change is already final
+        at the top of the cycle; Auto's own mode isn't resolved until later) never
+        double-resets.
 
         Deliberately leaves `self._has_charged` untouched (issue #757) -- unlike every timer
         in `_mode_state`, the has-charged flag is scoped to the connection, not the active
         mode (R11), so a Solar<->SolarOnly switch must not reset it. See `_has_charged`'s own
-        field docstring for where it IS reset (disconnect, `_dispatch_mode`)."""
+        field docstring for where it IS reset (disconnect, `_dispatch_mode`).
+
+        Also deliberately leaves `self._active_cooldown` untouched (issue #974) -- rebuilding
+        `_mode_state` here DOES clear whichever per-mode `Phase.COOLDOWN` entry was tracking a
+        running cooldown internally, but the coordinator-scoped `_active_cooldown` survives
+        this rebuild by construction (it isn't part of `_mode_state`) and keeps blocking a
+        restart in the newly-active mode for the remainder of its fixed duration -- the whole
+        point of hoisting it out here, per R11's "a running cooldown survives a switch of the
+        active mode" acceptance criterion. See `_active_cooldown`'s own field docstring."""
         if self.active_mode != self._last_active_mode:
             self._mode_state = self._fresh_mode_state()
             self._last_active_mode = self.active_mode
@@ -1096,7 +1172,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # the full deadlock scenario this avoids.
             has_charged=False,
         )
-        current, _ = self._mode_handlers[mode].desired_current(ctx, self._mode_state.get(mode))
+        current, new_state = self._mode_handlers[mode].desired_current(
+            ctx, self._mode_state.get(mode)
+        )
+        # R11/issue #974: mirrors `_dispatch_mode`'s own cooldown block (`_cooldown_blocks`) --
+        # a mode still blocked by a running coordinator-scoped cooldown cannot actually deliver
+        # `current` this cycle, so the baseline dry run must not report otherwise. Read-only:
+        # unlike `_dispatch_mode`, there is no `_mode_state`/`_active_cooldown` write here, this
+        # dry run mutates no persisted state either way. `new_state` is `None` for Off/Power
+        # (neither carries a `.phase`, neither is ever stored in `_mode_state`) -- guarded here
+        # rather than in `_cooldown_blocks` itself, so that shared helper's signature stays a
+        # plain `Phase`, not `Phase | None`.
+        if new_state is not None and self._cooldown_blocks(new_state.phase, now):
+            return 0.0
         return current
 
     async def _write(self, value: float) -> None:

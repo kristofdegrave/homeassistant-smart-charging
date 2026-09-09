@@ -175,8 +175,14 @@ async def test_uc01_2a_cooldown_blocks_start_until_it_elapses(hass):
     assert coordinator._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
 
     # Simulate the cooldown having fully elapsed (avoiding a real 2-minute wall-clock wait)
-    # and confirm the System starts on the next qualifying cycle.
+    # and confirm the System starts on the next qualifying cycle. Since issue #974,
+    # `replace_coordinator_config` alone no longer suffices: R11's rapid-cycling cooldown is
+    # now also tracked coordinator-scoped (`_active_cooldown`), with its duration fixed at
+    # the moment charging stopped precisely so a later config change can't shorten it
+    # (requirements.md R11's "not shortened by a change in conditions") -- clear it directly
+    # here too, alongside the per-mode config override, to simulate the same elapsed cooldown.
     replace_coordinator_config(coordinator, solar_cooldown_min=0.0)
+    coordinator._active_cooldown = None
     await _cycle(hass, coordinator, charger_w=2760.0)
     assert calls[-1]["value"] == 12.0
     assert coordinator._mode_state[MODE_SOLAR].phase == Phase.CHARGING

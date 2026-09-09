@@ -42,7 +42,16 @@ class ModeState:
         without either mode needing an opinion on SOC (`solar.py`'s own module docstring) or a
         `SocReached` phase of its own. Behaviorally identical to `idle()` for `Captar` (whose
         `step()` treats `Idle`/`Cooldown` identically) and unused by `Off`/`Power` (neither is
-        ever stored in `_mode_state`)."""
+        ever stored in `_mode_state`).
+
+        Composes correctly with the coordinator-scoped R11 cooldown (issue #974,
+        `coordinator.py`'s `_active_cooldown`) with no change needed here: this always-elapsed
+        Cooldown only ever exempts a resume from THIS mode's own per-mode cooldown/debounce
+        check inside `step()`. If a genuine rapid-cycling cooldown from an earlier stop is
+        still running when the SOC gate releases, the coordinator's own cooldown-blocking
+        check -- applied to whatever phase `step()` computes from this state -- still blocks
+        the Charging transition it would otherwise allow here, exactly as for any other
+        state."""
         return cls(phase=Phase.COOLDOWN, phase_started_at=float("-inf"))
 
 
