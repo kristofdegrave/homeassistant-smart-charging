@@ -867,6 +867,68 @@ async def test_solar_surplus_w_defaults_to_zero_on_required_role_fault(hass):
     assert result.solar_surplus_w == 0.0
 
 
+async def test_peak_headroom_a_does_not_spike_from_a_transient_stale_charger_power_reading(hass):
+    """Issue #990: right after a charger current step-down, the fast net-meter reading can
+    reflect the drop before the slower-polled charger_power sensor does, for one extra
+    coordinator cycle -- swinging baseline_w (net_w - charger_w) artificially negative,
+    inflating peak_headroom_a and producing a phantom positive solar_surplus_w. Both must hold
+    at the prior, safety-conservative reading until the improved reading has held for
+    BASELINE_DEBOUNCE_CYCLES."""
+    config = _config()
+    adapters = _adapters(status=STATE_CHARGING, net_w=3500.0, charger_w=3000.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0
+    _seed_ample_peak_headroom(coord)  # 100 kW -> target 99,750 W
+
+    cycle1 = await coord._async_update_data()
+    # baseline = 3500 - 3000 = 500 -> headroom = floor((99750 - 500) / 230) = 431
+    assert cycle1.peak_headroom_a == 431.0
+    assert cycle1.solar_surplus_w == 0.0
+
+    # Step-down: net_w already reflects the drop; charger_w still reports the prior value.
+    adapters[ROLE_NET_POWER] = _FakeNumeric(1500.0)
+    cycle2 = await coord._async_update_data()
+    # Undebounced, raw baseline = 1500 - 3000 = -1500 would inflate headroom to 440 and spike
+    # solar_surplus_w to a phantom 1500 -- both must stay at cycle1's values instead.
+    assert cycle2.peak_headroom_a == 431.0
+    assert cycle2.solar_surplus_w == 0.0
+
+    # charger_power catches up to the true, lower value -- the recovered (not lower) baseline
+    # applies immediately, same as before the step-down.
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(1000.0)
+    cycle3 = await coord._async_update_data()
+    assert cycle3.peak_headroom_a == 431.0
+    assert cycle3.solar_surplus_w == 0.0
+
+
+async def test_peak_headroom_a_accepts_a_sustained_lower_baseline_after_the_debounce_window(hass):
+    """A genuinely sustained drop in baseline_w (e.g. real solar surplus, not a one-cycle
+    sensor lag) must still be reflected once it holds for BASELINE_DEBOUNCE_CYCLES -- the
+    debounce delays an improved reading, it doesn't suppress it forever."""
+    config = _config()
+    adapters = _adapters(status=STATE_CHARGING, net_w=3500.0, charger_w=3000.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 8.0
+    _seed_ample_peak_headroom(coord)
+
+    await coord._async_update_data()  # cycle 1: baseline 500, accepted (first reading)
+
+    adapters[ROLE_NET_POWER] = _FakeNumeric(1500.0)
+    cycle2 = await coord._async_update_data()  # raw baseline -1500, 1st consecutive cycle
+    assert cycle2.peak_headroom_a == 431.0  # still held
+
+    cycle3 = await coord._async_update_data()  # raw baseline -1500 again, 2nd consecutive cycle
+    # BASELINE_DEBOUNCE_CYCLES == 2 -> now accepted: floor((99750 - (-1500)) / 230) = 440
+    assert cycle3.peak_headroom_a == 440.0
+    assert cycle3.solar_surplus_w == 1500.0
+
+
 async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(hass):
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=4.0)

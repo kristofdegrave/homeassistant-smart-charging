@@ -60,6 +60,11 @@ class CycleContext:
     charger_w: float  # read by coordinator.py's two clamps, off this same ctx (issue #719)
     voltage: float
     now: float
+    # Issue #990: net_w - charger_w, debounced (debounce_baseline_w) before this ctx is built --
+    # `_apply_peak_clamp` (R3) reads this instead of re-deriving net_w/charger_w itself, so it
+    # can never see the transient, undebounced reading. `_apply_grid_ceiling_clamp` (C4) keeps
+    # reading the raw ctx.net_w/ctx.charger_w above -- a separate clamp, out of this issue's scope.
+    baseline_w: float = 0.0
     ev_soc: float | None = None
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
     # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)

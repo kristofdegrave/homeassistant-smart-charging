@@ -181,6 +181,11 @@ DEFAULT_CONTROL_INTERVAL_S = 10
 # E5 15-minute averaging window (design doc Sec 6.4) -- __init__.py's setup-time
 # `peak_window_size` derivation (SmartChargingConfig, issue #570) is this constant's only reader.
 PEAK_WINDOW_SECONDS = 900
+# Issue #990: how many consecutive cycles a lower (more permissive) baseline_w reading must
+# hold before `debounce_baseline_w` accepts it -- covers the charger_power adapter's own
+# slow Modbus poll lagging one extra cycle behind the fast net-meter reading after a charger
+# current step-down. Not user-configurable -- an internal tuning constant, not a config value.
+BASELINE_DEBOUNCE_CYCLES = 2
 
 # --- Config entry DATA — entity-role mappings + state-translation only.
 #     Changed only via the reconfigure flow, because remapping which entity plays
