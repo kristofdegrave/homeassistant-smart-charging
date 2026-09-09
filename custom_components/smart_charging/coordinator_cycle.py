@@ -140,6 +140,31 @@ class PeakDemandState:
         return f"{self.tracked_month[0]:04d}-{self.tracked_month[1]:02d}"
 
 
+@dataclass(frozen=True)
+class ActiveCooldown:
+    """R11's rapid-cycling cooldown, hoisted to coordinator scope (issue #974) so a mode
+    switch can never clear it -- the same structural reason `_has_charged` already lives
+    outside `_mode_state` (coordinator.py's own field docstring). `_reset_mode_state_if_changed`
+    rebuilds EVERY SOC-gated mode's per-mode state dict on a switch, including the mode that
+    is actually cooling down; requirements.md's R11 (and control-cycle.md's "Mode switched
+    mid-operation" edge case) instead require a running cooldown to survive that switch and
+    keep blocking a restart in whichever mode is active when it would otherwise happen, for
+    the duration fixed at the moment charging stopped -- not the incoming mode's own duration.
+
+    `stop_at` (monotonic seconds, `ctx.now`) and `duration_s` are captured once, at the
+    instant a mode's own stop condition transitions it into `Phase.COOLDOWN` -- `duration_s`
+    is deliberately a plain float copied out of the stopping mode's own `cooldown_minutes` at
+    that instant, not re-read from config later, so a live config change mid-cooldown can
+    never shorten (or lengthen) a cooldown already running, mirroring R11's "not shortened by
+    a change in conditions" acceptance criterion."""
+
+    stop_at: float
+    duration_s: float
+
+    def elapsed(self, now: float) -> bool:
+        return now - self.stop_at >= self.duration_s
+
+
 class ModeHandler(Protocol):
     """One thin adapter per mode module, wrapping its existing pure step()/desired_current()
     unchanged (ADR-0012) -- this decision only changes how the coordinator looks one up, not
@@ -157,6 +182,14 @@ class ModeHandler(Protocol):
     is_solar_mode: bool
     """R8/R9: whether this mode counts as "charging on solar" for the step-up/reserve-cap
     Auto-only preconditions. True only for Solar/SolarOnly."""
+
+    cooldown_minutes: float
+    """R11/issue #974: this mode's own rapid-cycling cooldown duration -- read by the
+    coordinator only at the instant it detects a fresh transition into `Phase.COOLDOWN`, to
+    fix `ActiveCooldown.duration_s` for the coordinator-scoped cooldown (see coordinator.py's
+    `_active_cooldown` field). 0.0 and never read for Off/Power, neither of which is ever
+    stored in `_mode_state` or transitions through this module's shared cooldown-detection
+    code in `_dispatch_mode`."""
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         """Return (desired_current_a, new_state); does not mutate ctx or state in place."""
@@ -185,6 +218,8 @@ class _OffModeHandler:
 
     is_soc_gated = False
     is_solar_mode = False
+    cooldown_minutes = 0.0  # never read -- Off is never stored in `_mode_state` (design doc
+    # Sec 3.4)
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return 0.0, state
@@ -204,6 +239,8 @@ class _PowerModeHandler:
 
     is_soc_gated = False
     is_solar_mode = False
+    cooldown_minutes = 0.0  # never read -- Power is never stored in `_mode_state` either (R11
+    # AC3's own Power cooldown is not yet implemented; tracked separately from issue #974)
 
     def __init__(self, target_current_getter: Callable[[], float]) -> None:
         self._target_current_getter = target_current_getter
@@ -226,6 +263,10 @@ class _SolarModeHandler:
 
     def __init__(self, config: SmartChargingConfig) -> None:
         self._config = config
+
+    @property
+    def cooldown_minutes(self) -> float:
+        return self._config.solar_cooldown_min
 
     def desired_current(
         self, ctx: CycleContext, state: solar.SolarState
@@ -258,6 +299,10 @@ class _SolarOnlyModeHandler:
 
     def __init__(self, config: SmartChargingConfig) -> None:
         self._config = config
+
+    @property
+    def cooldown_minutes(self) -> float:
+        return self._config.solar_cooldown_min
 
     def desired_current(
         self, ctx: CycleContext, state: solar_only.SolarOnlyState
@@ -292,6 +337,10 @@ class _CaptarModeHandler:
 
     def __init__(self, config: SmartChargingConfig) -> None:
         self._config = config
+
+    @property
+    def cooldown_minutes(self) -> float:
+        return self._config.captar_cooldown_min
 
     def desired_current(
         self, ctx: CycleContext, state: captar.CaptarState
