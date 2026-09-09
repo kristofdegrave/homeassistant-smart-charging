@@ -185,6 +185,8 @@ PEAK_WINDOW_SECONDS = 900
 # hold before `debounce_baseline_w` accepts it -- covers the charger_power adapter's own
 # slow Modbus poll lagging one extra cycle behind the fast net-meter reading after a charger
 # current step-down. Not user-configurable -- an internal tuning constant, not a config value.
+# Must be >= 2: `debounce_baseline_w`'s own pending-cycle count starts at 1 on the very first
+# below-accepted reading, so 1 (or 0) would make the debounce a silent no-op.
 BASELINE_DEBOUNCE_CYCLES = 2
 
 # --- Config entry DATA — entity-role mappings + state-translation only.

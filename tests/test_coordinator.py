@@ -843,7 +843,11 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
 
 async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
-    smoothed control-path `surplus_w` (#602 T1)."""
+    smoothed control-path `surplus_w` (#602 T1). Cycle 2's baseline (net_w - charger_w =
+    2000 - 3000 = -1000) happens to sit ABOVE cycle 1's (1000 - 3000 = -2000), so issue #990's
+    debounce (which only delays a LOWER baseline) never engages here -- if a future edit
+    reverses that ordering, a failure here would be about the debounce, not this test's own
+    smoothing claim."""
     config = _config()
     config = dataclasses.replace(config, smoothing_window=2)
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=3000.0, ev_soc=50.0)
@@ -927,6 +931,38 @@ async def test_peak_headroom_a_accepts_a_sustained_lower_baseline_after_the_debo
     # BASELINE_DEBOUNCE_CYCLES == 2 -> now accepted: floor((99750 - (-1500)) / 230) = 440
     assert cycle3.peak_headroom_a == 440.0
     assert cycle3.solar_surplus_w == 1500.0
+
+
+async def test_r3_clamp_does_not_grant_extra_current_from_a_transient_stale_reading(hass):
+    """The safety-relevant half of issue #990: with a TIGHT peak budget (unlike the two tests
+    above, which use ample headroom and never exercise apply_peak_clamp itself), a transient
+    stale charger_power reading must not let the R3 clamp grant more current than the true,
+    debounced baseline allows."""
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=3.56)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    # target(16 A) sits above the true headroom (10 A) but below the transient's inflated one
+    # (27 A) -- discriminates a still-clamped cycle from an unclamped one.
+    coord.target_current = 16.0
+    _seed_ample_peak_headroom(coord, kw=3.56)
+
+    # headroom = floor((3560 - 250 - (1000 - 0)) / 230) = floor(2310 / 230) = 10
+    cycle1 = await coord._async_update_data()
+    assert cycle1.commanded_current == 10.0
+
+    # A charger current step-down: net_w already reflects the drop, charger_w still reports a
+    # much higher prior value for one extra cycle -- raw baseline swings to 0 - 3000 = -3000,
+    # which would inflate headroom to floor((3310 + 3000) / 230) = 27 (>= the 16 A request,
+    # i.e. an UNCLAMPED cycle) without the fix.
+    adapters[ROLE_NET_POWER] = _FakeNumeric(0.0)
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(3000.0)
+    cycle2 = await coord._async_update_data()
+    assert cycle2.commanded_current == 10.0  # still clamped to the true, debounced headroom
 
 
 async def test_effective_peak_limit_resolves_to_the_lesser_of_tracked_and_max(hass):

@@ -74,11 +74,18 @@ def debounce_baseline_w(
     prior, higher value for one extra coordinator cycle after a current step-down, while the
     net meter (fast) already reflects the drop -- transiently swinging `baseline_w` (and, via
     it, `peak_headroom_a`/`solar_surplus_w`) artificially low. A lower `raw_baseline_w` than
-    the last accepted reading INCREASES headroom (more permissive) and is only accepted once
-    it has held for `debounce_cycles` consecutive calls; a `raw_baseline_w` at or above the
-    last accepted reading DECREASES (or holds) headroom -- the safety-conservative direction
-    -- and always applies immediately, same as the very first call (`tracker.accepted_w is
-    None`, nothing to debounce against yet).
+    the last accepted reading INCREASES headroom (more permissive) and is only accepted once a
+    below-accepted reading has been seen on `debounce_cycles` consecutive calls -- not
+    necessarily the same value each time; the newest raw reading at that point is what gets
+    committed (e.g. 500 -> -1500 (1st pending call) -> -4000 (2nd) commits -4000, not -1500). A
+    `raw_baseline_w` at or above the last accepted reading DECREASES (or holds) headroom -- the
+    safety-conservative direction -- and always applies immediately, same as the very first
+    call (`tracker.accepted_w is None`, nothing to debounce against yet). The mirror-image
+    transient (a current step-UP: net_w rises immediately, charger_w stale-low, baseline
+    transiently too HIGH) is accepted immediately by the same "at or above" rule and becomes
+    the new `accepted_w` -- an accepted trade-off: it costs one extra cycle of understated
+    headroom/`solar_surplus_w` once the true, lower baseline reasserts itself, but never an
+    unsafe one.
     """
     if tracker.accepted_w is None or raw_baseline_w >= tracker.accepted_w:
         return raw_baseline_w, BaselineDebouncer(accepted_w=raw_baseline_w, pending_cycles=0)

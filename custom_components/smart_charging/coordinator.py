@@ -237,7 +237,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Issue #990: debounces peak_headroom_a/solar_surplus_w/apply_peak_clamp's own
         # baseline_w against a transient headroom-inflating reading (a charger current
         # step-down outrunning the charger_power adapter's slower poll cadence for one
-        # extra cycle) -- see debounce_baseline_w's own docstring.
+        # extra cycle) -- see debounce_baseline_w's own docstring. Deliberately never reset
+        # (disconnect, fault, a long adapter outage) -- same lifecycle as `_peak_tracker`
+        # just above, which isn't reset either. Worst case, recovery to a genuinely lower
+        # baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
+        # safety-conservative direction the debounce itself always takes.
         self._baseline_debouncer = BaselineDebouncer()
         # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
         # cycles (never reset), holding each read role's most recently read value so a role not
@@ -521,7 +525,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             net_w, self._net_window, size=self._config.smoothing_window
         )
         surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
-        # the baseline-mode dry-run
+        # the baseline-mode dry-run. Reads the same stale charger_w a step-down can leave
+        # behind for one cycle (issue #990) -- deliberately not debounced here, unlike
+        # solar_surplus_w/peak_headroom_a/apply_peak_clamp above: `smooth_net_power` already
+        # runs `net_w` through R10's own multi-cycle smoothing window, which dampens (though
+        # does not eliminate) a one-cycle stale-charger_w spike the same way it dampens any
+        # other transient. Revisit if a real-world report ties a Solar/SolarOnly misstep to
+        # this specific staleness rather than #990's already-fixed R3/display paths.
         now = self.hass.loop.time()  # injected, not read inside modes/engines
         # ADR-0012: carries this cycle's readings/derived values into the ModeHandler registry
         # lookup below, replacing the loose local variables the old dispatch chain threaded by
@@ -1178,12 +1188,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         state -- the baseline-mode comparison needs a candidate mode's request
         without actually charging on it.
 
-        `net_w`/`charger_w` are deliberately 0.0/0.0 here, not threaded from the caller: none of
-        the five `ModeHandler.desired_current` implementations reads `ctx.net_w`/`ctx.charger_w`
-        (only `ctx.surplus_w`/`ctx.voltage`/`ctx.now`/`ctx.status`), and this dry-run ctx is never
-        passed to `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue
-        #719) -- only the real `_run_cycle`-constructed ctx is. If a future ModeHandler needs
-        either, thread the real values from `_run_cycle` at that point, not before."""
+        `net_w`/`charger_w`/`baseline_w` are deliberately 0.0/0.0/0.0 here, not threaded from
+        the caller: none of the five `ModeHandler.desired_current` implementations reads
+        `ctx.net_w`/`ctx.charger_w`/`ctx.baseline_w` (only `ctx.surplus_w`/`ctx.voltage`/
+        `ctx.now`/`ctx.status`), and this dry-run ctx is never passed to
+        `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue #719) --
+        only the real `_run_cycle`-constructed ctx is. `baseline_w=0.0` here is otherwise the
+        exact placeholder issue #990's own `CycleContext.baseline_w` field docstring warns
+        against -- safe ONLY because of the "never reaches `_apply_peak_clamp`" guarantee above;
+        if a future ModeHandler needs any of the three, thread the real values from `_run_cycle`
+        at that point, not before."""
         if status not in CHARGEABLE_STATES:
             return 0.0
         if self._mode_handlers[mode].is_soc_gated and ev_soc >= active_soc_limit:
@@ -1194,6 +1208,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             charger_w=0.0,
             voltage=voltage,
             now=now,
+            baseline_w=0.0,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             active_soc_limit=active_soc_limit,

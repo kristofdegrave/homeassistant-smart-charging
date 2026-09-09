@@ -391,3 +391,14 @@ def test_debounce_a_worsening_reading_mid_pending_resets_the_pending_count():
     baseline_w, tracker = debounce_baseline_w(500.0, tracker, debounce_cycles=2)
     assert baseline_w == 500.0
     assert tracker.pending_cycles == 0
+
+
+def test_debounce_commits_the_newest_pending_value_not_the_one_that_started_the_count():
+    # The count is "how many consecutive cycles has a below-accepted reading been seen", not
+    # "has this exact value been stable" -- a still-dropping reading commits at whatever value
+    # it has reached once the window elapses, not the first below-accepted value observed.
+    tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)  # pending since -1500.0
+    baseline_w, tracker = debounce_baseline_w(-4000.0, tracker, debounce_cycles=2)
+    assert baseline_w == -4000.0
+    assert tracker.accepted_w == -4000.0
+    assert tracker.pending_cycles == 0

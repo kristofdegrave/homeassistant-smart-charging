@@ -62,9 +62,14 @@ class CycleContext:
     now: float
     # Issue #990: net_w - charger_w, debounced (debounce_baseline_w) before this ctx is built --
     # `_apply_peak_clamp` (R3) reads this instead of re-deriving net_w/charger_w itself, so it
-    # can never see the transient, undebounced reading. `_apply_grid_ceiling_clamp` (C4) keeps
-    # reading the raw ctx.net_w/ctx.charger_w above -- a separate clamp, out of this issue's scope.
-    baseline_w: float = 0.0
+    # can never see the transient, undebounced reading. Required, not defaulted to 0.0 (issue
+    # #564's own rationale a few lines below): it's fully resolved before `ctx` exists, same as
+    # net_w/charger_w/voltage/now above, and 0.0 happens to be the most PERMISSIVE possible
+    # baseline (maximum headroom) -- a future construction site that forgot to pass it would
+    # fail open silently instead of raising. `_apply_grid_ceiling_clamp` (C4) keeps reading the
+    # raw ctx.net_w/ctx.charger_w above -- a separate clamp, with the same staleness exposure
+    # tracked separately (issue #992), out of #990's own scope.
+    baseline_w: float
     ev_soc: float | None = None
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
     # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)
