@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.2](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.1...v0.4.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* hoist R11's rapid-cycling cooldown outside per-mode state ([#987](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/987)) ([f06f087](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/f06f0870cf80f91f422f0a22e24b8b8ed92a12d9))
+* reconfigure prefills the ev_charger step's connected/charging states ([#868](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/868)) ([2fd3a81](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/2fd3a81e1b6441f14797a3c15d3fb0c3628f96e7))
+* wire the solar_power adapter role for reading ([#913](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/913)) ([1267eb7](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/1267eb75aa260d8a4b3c612bc598f8826b64714b))
+
 ## [0.4.1](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.0...v0.4.1) (2026-08-29)
 
 
