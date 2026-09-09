@@ -126,7 +126,7 @@ entities read-only through the Store; it can both read and write the control ent
 | --- | --- | --- | --- |
 | **Charging Coordinator** | The control cycle (`control-cycle.md`): read → condition → resolve targets → select mode → compute set-point → clamp → enforce invariants → write | V1, V8, V4, V5, V10, V3, V2, V6, V7, V9 | UC01, UC02, UC03, UC04, **UC05, UC06, UC07** |
 | **Vehicle-Limit Manager** | Bidirectional [vehicle charge-limit](../analysis/system-overview.md#ubiquitous-language) sync: write on limit change, adopt manual changes, reset on disconnect (C2) | V12, V1 (`vehicle_charge_limit`, `car_home`, `charger_status`), V13, V4 (consumed as the Coordinator's published resolution, [§5.2](#52-vehicle-charge-limit-sync-uc09)) | UC09 |
-| **Notification Manager** | Evaluate a time/condition trigger → deliver a message → (for the prompt) capture the response | V11, V1, V5, V4 | UC08, UC10, and delivery of R5's deadline-unreachable notice |
+| **Notification Manager** | Evaluate a time/condition trigger → deliver a message → (for the prompt) capture the response | V11, V1, V5, V13, V4 (consumed as the Coordinator's published resolution, [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)) | UC08, UC10, and delivery of R5's deadline-unreachable notice |
 
 Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisive validation of the
 cut: none is a service. Deadline urgency (UC05) is the Deadline Engine plus the Billing-Protection
@@ -228,7 +228,10 @@ capability facts drive both; the entity-definition path avoids a forbidden Clien
   their *conceptual* home in the Store's owned-entity bucket, not this literal write mechanism.
   The Vehicle-Limit and Notification Managers write owned entities
   (`number.smart_charging_soc_limit_override`, the home-day flag) through the Store on the user's
-  behalf, the same ADR-0018 write path as the Coordinator's own reads. No custom persistence
+  behalf, the same ADR-0018 write path as the Coordinator's own reads. Both also **read** one
+  diagnostic entity back through it — `sensor.smart_charging_active_soc_limit`, the Coordinator's
+  published active-SOC-limit resolution (§5.2's vehicle write, §5.3's UC10 below-limit check) —
+  which is a Store read like any other regardless of how the Coordinator surfaces the value. No custom persistence
   layer — HA's restore-state carries owned-entity values. ADR-0019 places the Store class in the
   same package as the hardware adapters.
 
@@ -293,8 +296,7 @@ flowchart TD
     Cfg --> Store
 
     Coord --> SC & SOC & DL & Prof & Mode & Bill & PDT & Grid & Inv & Cap
-    VLM -->|shared edge; not the change signal| SOC
-    NM --> DL & SOC
+    NM --> DL
 
     Coord --> Adapters
     VLM --> Adapters & Store
@@ -322,7 +324,11 @@ flowchart TD
    Coordinator (a Manager) reaches the owned control entities' current values itself, through the
    Store (rule 2/3 below) — never the reverse.
 2. `Manager → {Engine, Resource Access}` — Managers orchestrate. They read inputs through Resource
-   Access, feed them to pure Engines, and write results through Resource Access.
+   Access, feed them to pure Engines, and write results through Resource Access. The rule permits
+   *any* Manager→Engine call; the solid edges above draw only the ones this design realizes, so an
+   absent one is an absent use and not a prohibition — see
+   [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)'s "What the static diagram
+   draws".
 3. `Resource Access → Resource` — adapters/notification/store access reach the external thing.
 4. **Engines call nothing below them.** They receive data and return a decision. They do **not**
    call Resource Access (the Manager supplies their inputs) and do **not** call each other — with
@@ -448,8 +454,11 @@ The Vehicle-Limit Manager takes the resolved [active SOC limit](../analysis/syst
 from the materialized diagnostic entity the `ActiveSocLimitChanged` event fires on, not by
 recomputing it: the resolution is a composition of the pure SOC-Target Engine with the
 step-up/reserve context the Coordinator threads across cycles, and only the Coordinator holds that
-composition (ADR-0011). The `VLM → SOC-Target` edge in [§4](#4-static-architecture) remains a legal
-shared edge — it is simply not the source of the cross-cycle change signal.
+composition (ADR-0011). The Vehicle-Limit Manager therefore makes no SOC-Target call of its own, so
+[§4](#4-static-architecture) draws no `VLM → SOC-Target` edge; the edge nonetheless remains legal —
+ADR-0011 keeps it available as a shared edge, it is simply not the source of the cross-cycle change
+signal. See [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08) for what the static
+diagram's Manager→Engine edges do and do not assert.
 
 ### 5.3 Notification: plug-in reminder (UC10) & evening prompt (UC08)
 
@@ -460,7 +469,6 @@ sequenceDiagram
     participant N as Notification Manager
     participant A as Adapter roles
     participant DL as Deadline
-    participant SOC as SOC-Target
     participant S as Config/state store
     participant R as Notification access
 
@@ -471,8 +479,8 @@ sequenceDiagram
     A-->>N: readings
     N->>DL: next departure / lead-time window (R14)
     DL-->>N: resolved deadline
-    N->>SOC: active SOC limit (below-limit check)
-    SOC-->>N: limit
+    N->>S: read sensor.smart_charging_active_soc_limit (the Coordinator's published resolution)
+    S-->>N: active SOC limit (below-limit check)
     alt UC10: home & disconnected & below limit & within lead time & deadline resolved & window not already reminded
         N->>R: send plug-in reminder (de-dup on departure window)
     else UC08: prompt enabled & forecast > threshold & connected at prompt time & flag not externally set
@@ -484,11 +492,36 @@ sequenceDiagram
     end
 ```
 
-The `N → SOC` edge above is a direct read for a point-in-time below-limit check, not a
-change-detection signal — a different question from the one ADR-0011 settled for
-[§5.2](#52-vehicle-charge-limit-sync-uc09)'s `VLM → SOC-Target` edge, and not reconciled against
-the Coordinator-owned step-up/reserve composition question here — a §5.3 accuracy question, not a
-§8.2 ADR gap, and out of scope for this reconciliation pass.
+UC10's below-limit check compares state of charge against the resolved [active SOC
+limit](../analysis/system-overview.md#ubiquitous-language) (`resolution-rules.md`, R7), so the
+Notification Manager takes that value from the materialized diagnostic entity, exactly as
+[§5.2](#52-vehicle-charge-limit-sync-uc09)'s Vehicle-Limit Manager does. ADR-0011's reasoning
+reaches a point-in-time read as much as a change signal, because it turns on the *input
+composition*, not on change-detection: the resolved value composes the pure SOC-Target Engine with
+the step-up/reserve context the Coordinator threads across cycles, and a consumer holding only its
+own inputs cannot reconstruct that. A bare `N → SOC-Target` call would therefore answer a
+*different* question — the limit implied by the Notification Manager's own inputs — than the one
+UC10 asks. The Deadline Engine call above is unaffected: R14's deadline resolution takes no
+Coordinator-threaded state, so calling it directly returns the answer the Coordinator would get.
+
+The read is unsolicited, unlike §5.2's — nothing guarantees the entity is populated when the
+reminder tick fires. Before the Coordinator's first cycle, or while the diagnostic entity is
+unavailable, UC10's below-limit precondition is simply not established and no reminder is due; once
+populated, the value carries the one-cycle latency [§8.2](#82-adrs-written-after-this-design-0010-0019)
+already accepts for a Coordinator-published Store read (ADR-0018). UC10 records no exception flow
+for the unpopulated case.
+
+**What the static diagram draws.** [§4](#4-static-architecture)'s solid Manager→Engine edges are the
+calls this design realizes somewhere — in a §5 sequence, or in [§3](#3-service-catalog)'s and §4's
+own prose — not the calls rule 2 permits. Rule 2 permits any Manager to call any Engine, so an
+absent Manager→Engine edge records an absent *use*, never a prohibition. (This reading is specific
+to that layer: an absent `Client → Manager` edge **is** deliberate, since rule 1 reserves that
+direction for genuine trigger sources; and the dashed cross-Manager edges are enumerated by rule 5,
+not by this paragraph.) Neither the Notification
+Manager (this section) nor the Vehicle-Limit Manager ([§5.2](#52-vehicle-charge-limit-sync-uc09))
+calls the SOC-Target Engine any more, so neither edge is drawn; ADR-0011's note that the shared
+`VLM → SOC-Target` edge "remains available" is preserved in §5.2's prose and [§6](#6-use-case-validation)'s
+smell note, which is where a legal-but-unused edge belongs.
 
 ---
 
@@ -508,7 +541,7 @@ allowed call directions. A use case crossing several services is the expected, h
 | **UC07** Solar reserve | SOC-Target + Profile, within cycle | Coordinator→SOC-Target (cap row) + `Auto` Profile (declines overnight top-up) gated by Deadline Engine (tomorrow) + Capability-Gate. ✅ owns no service |
 | **UC08** Evening prompt | Notification Manager | Trigger→NM→{Adapters, Deadline, Notification access}→writes home-day flag through Store. ✅ |
 | **UC09** Charge-limit sync | Vehicle-Limit Manager | `ActiveSocLimitChanged` (or an adapter-observed vehicle-limit/disconnect change)→VLM→{Store(resolved active SOC limit, default-limit write), Adapters(`vehicle_charge_limit`, `car_home`, status)}. ✅ |
-| **UC10** Plug-in reminder | Notification Manager | Trigger→NM→{Adapters, Deadline, SOC-Target, Notification access}. ✅ |
+| **UC10** Plug-in reminder | Notification Manager | Trigger→NM→{Adapters, Deadline, Store(owned config + resolved active SOC limit), Notification access}. ✅ |
 | **UC11** Dashboard | Client (no service) | Dashboard→Store (owned/runtime entities) + Adapter read-backs; edits flow to the same entities other UCs consume. ✅ correctly owns no Manager/Engine |
 
 No use case maps one-to-one onto a single **Engine**. The three that own no service (UC05–UC07) and
@@ -593,7 +626,7 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 | ADR | Subject | Verdict | Mapping to this design |
 | --- | --- | --- | --- |
 | 0010 | Package home for the cross-cutting Engines (`engines/`) | **Decides a §8.1 follow-up; extends ADR-0002** | The eight Engines [§3](#3-service-catalog) names beyond `modes/`/`profiles/` get one module each under `engines/`, mirrored by `tests/engines/`. The directory boundary *is* this design's Engine-purity rule ([§4](#4-static-architecture) rule 4) made structural, and the stateful Engines need no special home because their state is a Manager-threaded parameter — exactly [§3](#3-service-catalog)'s two-kind split. No service, edge, or volatility changes. |
-| 0011 | Cross-Manager coordination via domain events | **Decides a §8.1 follow-up; narrows rule 5** | Keeps the *pattern* this design fixed (no direct Manager→Manager calls) and supplies the vocabulary it declined to invent: publish an event iff the trigger is an integration-computed transition, re-derive it through the adapter iff it is external state. Result: two event edges (`DeadlineUnreachableNotified`, the new `ActiveSocLimitChanged`), and `charger_status`/`vehicle_charge_limit` reclassified as adapter observations, not cross-Manager edges. [§4](#4-static-architecture) rule 5, the static diagram's dashed edges, and [§5.2](#52-vehicle-charge-limit-sync-uc09) are updated to match — the Vehicle-Limit Manager now takes the resolved active SOC limit from the materialized diagnostic entity rather than recomposing the Coordinator's threaded inputs. |
+| 0011 | Cross-Manager coordination via domain events | **Decides a §8.1 follow-up; narrows rule 5** | Keeps the *pattern* this design fixed (no direct Manager→Manager calls) and supplies the vocabulary it declined to invent: publish an event iff the trigger is an integration-computed transition, re-derive it through the adapter iff it is external state. Result: two event edges (`DeadlineUnreachableNotified`, the new `ActiveSocLimitChanged`), and `charger_status`/`vehicle_charge_limit` reclassified as adapter observations, not cross-Manager edges. [§4](#4-static-architecture) rule 5, the static diagram's dashed edges, [§5.2](#52-vehicle-charge-limit-sync-uc09) and [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08) are updated to match — the Vehicle-Limit Manager (§5.2) and, for UC10's below-limit check, the Notification Manager (§5.3) both take the resolved active SOC limit from the materialized diagnostic entity rather than recomposing the Coordinator's threaded inputs; the ADR's rationale turns on the Coordinator-owned composition, so it binds a point-in-time read as much as a change signal. |
 | 0012 | Coordinator internal decomposition (`CycleContext`, `ModeHandler`, `PeakDemandState`, `SocGateResolver`) | **Below this design's altitude; consistent** | Organizes code *inside* the Charging Coordinator Manager; it adds no service, moves no boundary, and preserves ADR-0006's ten-step order — the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence is unchanged. Its extracted units are pure and HA-free, and firing `ActiveSocLimitChanged` stays on the Coordinator side, both of which restate this design's Manager-does-the-I/O rule. |
 | 0013 | Stable, locale-independent `object_id`s for owned entities | **Reinforces ADR-0004's row** | Pins each owned entity's `entity_id` to its `entity-catalog.md` suffix rather than a translated display name, so the literal ids this document cites throughout (`number.smart_charging_soc_limit_override`, `sensor.smart_charging_monthly_peak_kw`, `sensor.smart_charging_active_soc_limit`, …) hold in every HA locale. A naming decision inside V13/V14, not a boundary change. |
 | 0014 | Setter-method encapsulation for the coordinator's writable fields | **Superseded (by ADR-0016, then ADR-0018)** | Recorded for completeness only. Its held-reference-plus-setter shape is not this design's Client→Store routing; the resolution is ADR-0018's row below. |

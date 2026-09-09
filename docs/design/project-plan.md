@@ -99,7 +99,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
 | **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`) |
-| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`) |
+| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
@@ -291,7 +291,12 @@ it is wired to its callers).
 - **Testable on its own:** plain pytest — the three-row lookup and R8/R9 transitions, incl. the
   `Manual` negative case (no step-up, no cap regardless of home-day flag or forecast); `SocReached`
   must not resume on sensor noise, only a genuine limit change or reconnect (R7).
-- **Integration checkpoint:** ⎔ consumed by M1 (cycle), M2 (vehicle-limit sync), M3 (below-limit check).
+- **Integration checkpoint:** ⎔ M1 (cycle) is its only caller today. M2 (vehicle-limit sync)
+  consumes its *resolved* output through the materialized `sensor.smart_charging_active_soc_limit`
+  the Coordinator publishes, not by calling this engine; M3 would consume it the same way for
+  UC10's below-limit check once that reminder is built (project-plan §M3) — neither Manager holds
+  the Coordinator-threaded step-up/reserve context the resolution composes
+  (ADR-0011; system-design §5.2/§5.3).
 
 **E4 — Deadline Engine**
 - **Service:** Engine, V5 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
@@ -303,8 +308,9 @@ it is wired to its callers).
 - **Depends on:** ADR-0010; adapter-read deadline sources (RA2) — as data.
 - **Testable on its own:** plain pytest — deadline resolution across sources; urgency threshold;
   R5 unreachable determination.
-- **Integration checkpoint:** ⎔ M1 (urgency + required current), M3 (lead-time window); the
-  `DeadlineUnreachableNotified` publish is M1's, subscribed by M3 (ADR-0011).
+- **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
+  publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
+  lead-time window once that reminder is built (project-plan §M3).
 
 **E5 — Billing-Protection Engine + Peak-Demand Tracker**
 - **Service:** Engine, V6 — a pure Engine (Billing-Protection) plus a **stateful** Engine (Peak-Demand
@@ -433,7 +439,10 @@ it is wired to its callers).
   SOC-limit change, adopt manual (vehicle-side) changes with an echo guard, reset to default on
   disconnect (R6/C2). Realizes UC09.
 - **Depends on:** RA3 (vehicle_charge_limit adapter — see RA note below), RA1 (`car_home`,
-  `charger_status`), RA3 Store (write `number.smart_charging_soc_limit_override`), E3 (SOC-Target); its triggers are
+  `charger_status`), RA3 Store (write `number.smart_charging_soc_limit_override`; read the resolved
+  active SOC limit from `sensor.smart_charging_active_soc_limit` — the Coordinator's published
+  resolution, not an E3 call, per ADR-0011; the sensor itself is C3, written by M1 — stubbable until
+  C3); its triggers are
   adapter-observed state changes / the `ActiveSocLimitChanged` signal whose event-vs-rederive
   treatment **G-ADR-0011** settled.
 - **ADR gate:** G-ADR-0011 (trigger mechanism) and G-ADR-0015 (package home) — both resolved.
@@ -451,20 +460,28 @@ it is wired to its callers).
 
 **M3 — Notification Manager**
 - **Service:** Manager (notification & prompting, V11). Home: `managers/` (ADR-0015).
-- **Status:** shipped — `managers/notification_manager.py` (plus `notification_state.py` for the
-  persisted de-dup/latch state); tests in `tests/managers/test_notification_manager.py`,
-  `tests/test_notification_state.py`, and `tests/test_notifications_end_to_end.py`.
+- **Status:** partially shipped — `managers/notification_manager.py` (plus `notification_state.py`
+  for the persisted de-dup/latch state) builds UC08's evening home-day prompt and R5's
+  deadline-unreachable delivery; tests in `tests/managers/test_notification_manager.py`,
+  `tests/test_notification_state.py`, and `tests/test_notifications_end_to_end.py` cover only
+  those two. UC10's plug-in reminder is designed (system-design §5.3) but not yet built: no
+  `binary_sensor.py` exists for its reminder-due readout, `const.py`'s `CONF_REMINDER_LEAD_H` is
+  contract-first with no reader, and no test exercises it.
 - **Builds:** [system-design §5.3](system-design.md#53-notification-plug-in-reminder-uc10--evening-prompt-uc08) —
-  UC10 plug-in reminder (de-dup on departure window), UC08 evening home-day prompt (writes the
-  home-day flag on "yes"), and delivery of R5's deadline-unreachable notice (subscribing to M1's
-  `DeadlineUnreachableNotified`, and re-arming its once-per-occasion latch on the paired
-  `DeadlineUnreachableCleared` per ADR-0024). Realizes UC08, UC10.
+  UC08 evening home-day prompt (writes the home-day flag on "yes"), delivery of R5's
+  deadline-unreachable notice (subscribing to M1's `DeadlineUnreachableNotified`, and re-arming
+  its once-per-occasion latch on the paired `DeadlineUnreachableCleared` per ADR-0024), and — not
+  yet built — UC10's plug-in reminder (de-dup on departure window). Realizes UC08; UC10 remains
+  designed-not-built.
 - **Depends on:** RA4 (Notification access), RA1/RA2 (`car_home`, `charger_status`, `solar_forecast`,
-  `home_day_external`), RA3 Store (owned config + home-day flag write), E4 (Deadline), E3 (SOC-Target).
+  `home_day_external`), RA3 Store (owned config + home-day flag write; UC10, once built, would read
+  the resolved active SOC limit from `sensor.smart_charging_active_soc_limit` for its below-limit
+  check — the Coordinator's published resolution, not an E3 call, per ADR-0011; the sensor itself
+  is C3, written by M1 — stubbable until C3), E4 (Deadline).
 - **ADR gate:** G-ADR-0011 (trigger mechanism, refined by ADR-0024) and G-ADR-0015 (package home) —
   both resolved.
-- **Testable on its own:** HA harness — UC10 reminder gating + de-dup; UC08 prompt + response capture;
-  R5 delivery on the subscribed event.
+- **Testable on its own:** HA harness — UC08 prompt + response capture; R5 delivery on the
+  subscribed event; UC10 reminder gating + de-dup once built.
 - **Integration checkpoint:** ⎔ delivers via RA4, writes the home-day flag via Store, receives M1's
   event; no direct M1↔M3 call.
 
@@ -639,7 +656,11 @@ from the retired functional sequence.
 - **Build order obeys the static diagram.** Every task depends only on services below it in §4's
   call directions (Resource Access/Engines → Managers → Clients); no task requires a caller of its
   own to exist first. Engines depend on no lower layer (§4 rule 4); Managers depend on no other
-  Manager (§4 rule 5) — reflected in M1/M2/M3 having no mutual ordering edge.
+  Manager (§4 rule 5) — reflected in M1/M2/M3 having no mutual ordering edge. M2 and M3 reading the
+  resolved active SOC limit from `sensor.smart_charging_active_soc_limit` (C3, written by M1) is not
+  an exception: the read is Resource Access through the Store, not a call on M1 or on C3, so the
+  direction still runs Manager → Resource Access. It is a *runtime* rather than a build-order
+  dependency — both are stubbable until C3 exists, as their task lines say.
 - **Every ADR-worthy decision has a task line before its dependent.** G-ADR-0010 (ADR-0010) precedes
   E3–E9; G-ADR-0011 (ADR-0011, refined by ADR-0024) precedes M1's publish step, M2, M3, C6;
   G-ADR-0015 (ADR-0015) precedes M2 and M3; G-ADR-0018/0019 (ADR-0018, ADR-0019) precedes RA3 and
@@ -661,9 +682,12 @@ from the retired functional sequence.
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
   `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks, all nine Engine
-  tasks, all three Manager tasks, and all six Client tasks have shipped. Two checkpoints are only
-  partially met and are marked as such: the Phase 3 no-cross-Manager-call assertion (no executable
-  guard) and the Phase 4 UC01–UC11 end-to-end validation (per-slice, not one suite).
+  tasks, and all six Client tasks have shipped. Of the three Manager tasks, M1 and M2 have shipped;
+  M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
+  designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
+  gaps). Two checkpoints are only partially met and are marked as such: the Phase 3
+  no-cross-Manager-call assertion (no executable guard) and the Phase 4 UC01–UC11 end-to-end
+  validation (per-slice, not one suite).
 - **Independently testable.** Each task names its unit boundary per ADR-0009 (pure Engines → plain
   pytest; Resource Access + Managers + Clients → HA harness) and an integration checkpoint proving
   it is wired to its callers before the next task depends on it.
