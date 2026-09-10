@@ -153,9 +153,8 @@ doubt, ask whether a future contributor would benefit from knowing *why*, not ju
 *what*.
 
 For a borderline case, a calibration test: would reversing or swapping this choice touch
-more than one module, or a contract other code depends on? A convention that binds where
-future work goes is such a contract even when nothing imports it (first carve-out below).
-It supplements, not overrides, the categories above — a *product-code* choice there (e.g. a library the
+more than one module, or a contract other code depends on? It supplements, not
+overrides, the categories above — a *product-code* choice there (e.g. a library the
 shipped integration depends on, a config-entry schema shape) stays architectural even
 when well encapsulated; the two carve-outs below narrow that for their own categories.
 Serious deliberation alone isn't proof either way — weigh it against the reach test and
@@ -166,12 +165,13 @@ the *why*-a-future-contributor-benefits question. Two recurring categories:
   dependency on them — a library used only inside `tests/` belongs in a PR description,
   not an ADR. What this carve-out excludes is **which tool or library a script happens to
   call**. It does not extend to the *structure* of the test and automation apparatus
-  itself, which stays ADR-worthy even though no product code depends on it:
+  itself, which stays ADR-worthy even though no product code depends on it. Exactly two
+  things sit on that side, and nothing else does:
   - the **CI/automation pipeline's own structure** — trust boundaries, job topology,
     review-loop caps;
   - the **test-tier taxonomy** — which tier a test belongs in, what a passing suite is
-    allowed to mean, and where a contributor is expected to put a new test (ADR-0009
-    established the tiers; ADR-0037 added a third).
+    allowed to mean, and where a contributor is expected to put a new test (see ADR-0009
+    and ADR-0037).
 
   The line between the two halves is **who is bound by the choice**, not which directory
   the code implementing it sits in: a taxonomy binds every future test and every future
