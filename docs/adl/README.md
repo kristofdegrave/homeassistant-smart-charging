@@ -43,6 +43,6 @@ template.
 | [0034](0034-dedicated-charger-status-diagnostic-sensor.md) | Dedicated diagnostic sensor for the `charger_status` role (extends ADR-0021) — its stated `None`-on-unmatched-state premise narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Unmatched `charger_status` raw states default to disconnected, not fault | Accepted |
 | [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter | Accepted |
-| [0037](0037-scenario-timeline-test-tier.md) | Scenario/timeline test tier — a third harness alongside ADR-0009's two (extends ADR-0009) | Proposed |
+| [0037](0037-scenario-timeline-test-tier.md) | Scenario/timeline test tier — a third tier alongside ADR-0009's two (extends ADR-0009) | Proposed |
 
 Add a row here in the same commit as every new or superseded ADR.
