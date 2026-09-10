@@ -163,9 +163,21 @@ the *why*-a-future-contributor-benefits question. Two recurring categories:
 - **Test, CI, or dev-tooling choices** (a benchmarking library, a measurement helper, a
   lint tool) are not architectural unless the *product* code itself takes a structural
   dependency on them — a library used only inside `tests/` belongs in a PR description,
-  not an ADR. This doesn't extend to the CI/automation pipeline's own structure (trust
-  boundaries, job topology, review-loop caps), which stays ADR-worthy — only to which
-  tool/library a script happens to call.
+  not an ADR. What this carve-out excludes is **which tool or library a script happens to
+  call**. It does not extend to the *structure* of the test and automation apparatus
+  itself, which stays ADR-worthy even though no product code depends on it. Exactly two
+  things sit on that side, and nothing else does:
+  - the **CI/automation pipeline's own structure** — trust boundaries, job topology,
+    review-loop caps;
+  - the **test-tier taxonomy** — which tier a test belongs in, what a passing suite is
+    allowed to mean, and where a contributor is expected to put a new test (see ADR-0009
+    and ADR-0037).
+
+  The line between the two halves is **who is bound by the choice**, not which directory
+  the code implementing it sits in: a taxonomy binds every future test and every future
+  reviewer, while a measurement library binds nothing beyond the files that import it.
+  So a test-only fixture or simulator's *internals* fall on the library side of that line
+  however elaborate they get, while the tier it belongs to falls on the taxonomy side.
 - **Domain/business rules** (a formula, a precedence order, which values are surfaced) —
   even when seriously debated — are not architectural; they belong in
   `docs/analysis/requirements.md` or `docs/analysis/resolution-rules.md`, not an ADR.
