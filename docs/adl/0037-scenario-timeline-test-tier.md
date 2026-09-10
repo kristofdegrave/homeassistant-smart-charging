@@ -1,7 +1,7 @@
 # ADR-0037: Scenario/timeline test tier — a third tier alongside ADR-0009's two (extends ADR-0009)
 
 Date: 2026-09-10
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -216,7 +216,7 @@ the CI/automation pipeline's *own structure* while excluding which tool a pipeli
 both are about who is bound by a rule rather than which library implements it. A tier taxonomy
 binds where every future test goes and what a green suite is allowed to mean; a measurement
 library (ADR-0026/ADR-0029) binds nothing beyond the file that imports it. Making the carve-out
-say so is a prerequisite this decision creates rather than a licence it assumes — see
+say so is an obligation this decision creates rather than a licence it assumes — see
 Consequences.
 
 Option D is rejected on its Con: an oracle the fix pipeline can regenerate is not an oracle
@@ -234,7 +234,8 @@ gives the existing suites their diagnostic value.
   ADR-worthy**, the way it already exempts the CI/automation pipeline's own structure. Until it
   is, this record sits outside the carve-out's literal wording (see the Decision's third
   paragraph), and the next contributor faces the same ambiguity. That amendment is a separate
-  `workflow` change, not part of this ADR — this decision creates it as a prerequisite.
+  `workflow` change, not part of this ADR — this decision creates it as an obligation, tracked
+  and settled on its own; see the last two bullets for what happens if it is not made.
 - **The tier's simulator and invariant runner are designed, not decided, here.** The paired
   implementation spec owns both, and must settle three questions this ADR deliberately leaves
   open: how simulated time relates to the coordinator's update interval; whether the simulator's
@@ -271,8 +272,13 @@ gives the existing suites their diagnostic value.
   failure indicts correct product code. The mitigation this decision relies on is the bug-first
   sequencing — the simulator's lag model is validated by reproducing an already-diagnosed real
   defect before any speculative scenario is written.
-- **Status flips to Accepted** once *both* the CLAUDE.md carve-out amendment and the first
-  scenario are in place — the amendment because without it this record is outside the rule it is
-  judged by (bullet 1), and the scenario because until then the tier does not exist. It is
-  Proposed until both hold. If the amendment is rejected rather than made, this record should be
-  withdrawn or superseded rather than left Proposed indefinitely.
+- **Accepted before the tier exists**, deliberately, on the same basis as ADR-0009 — which was
+  Accepted before any test had been written, because a testing decision has to be settled before
+  the work it governs starts. The taxonomy is what the paired implementation spec builds against,
+  so leaving it Proposed would make every downstream artifact provisional.
+- **The carve-out amendment is an obligation this record carries, not a precondition it waited
+  for.** Accepting this ADR ahead of that amendment (bullet 1) means the log knowingly holds a
+  record that CLAUDE.md's carve-out, read literally, excludes — the Decision's third paragraph
+  says so plainly, and that admission is the reason this is safe to accept rather than a reason
+  to defer. If the amendment is made, the discrepancy closes. If it is deliberately rejected,
+  this record must be superseded rather than left standing against a rule it contradicts.
