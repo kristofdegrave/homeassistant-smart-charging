@@ -17,22 +17,22 @@ The suite has since grown three end-to-end suites that drive real control cycles
 `hass.config_entries.async_setup` plus `coordinator.async_refresh()`, not a mode's `step`
 function: `tests/test_solar_end_to_end.py` (UC01/UC02), `tests/test_captar_end_to_end.py`, and
 `tests/test_deadline_soc_management_end_to_end.py`, 1108 lines in total. (A fourth suite,
-`tests/test_notifications_end_to_end.py`, also drives the full stack but runs no control cycles
-at all — it advances the real `async_track_time_interval` tick with `freezer` and
-`async_fire_time_changed` to exercise M3's dispatch, so none of what follows describes it.)
-The three cycle-driving suites live in ADR-0009's HA-harness tier and they do their job. But
-three properties are common to all three, and each is deliberate rather than an oversight:
+`tests/test_notifications_end_to_end.py`, also drives the full stack but drives no control
+cycles of its own and asserts nothing about the control path — it advances the real
+`async_track_time_interval` tick with `freezer` and `async_fire_time_changed` to exercise M3's
+dispatch, so none of what follows describes it.) The three cycle-driving suites live in
+ADR-0009's HA-harness tier and they do their job. But three properties are common to all three,
+and each is deliberate rather than an oversight:
 
-- **One engine at a time.** All three call `seed_ample_peak_headroom(coordinator)` to pre-seed a
-  large tracked monthly peak, which keeps R3's peak clamp out of the way — the clamp still runs
-  every cycle, but its headroom is non-binding, so the mode under test is the only thing shaping
-  the commanded current. That isolation is what makes a failure in
+- **One engine at a time.** All three pre-seed the tracked monthly peak
+  (`seed_ample_peak_headroom`) so R3's headroom is non-binding on the commanded current — the
+  clamp still runs every cycle, it just never bites, so the mode under test is the only thing
+  shaping the result. That single-engine focus is what makes a failure in
   `test_solar_end_to_end.py` name Solar rather than name the system.
 - **A handful of cycles, not a timeline.** No single test in any of the three exceeds six
-  cycles: the deepest are `test_solar_end_to_end.py`'s
-  `test_uc01_2b_restart_debounce_gates_a_later_idle_crossing` at 6, then 5 apiece for its
-  cooldown and post-surplus-hold tests, and a maximum of 4 in each of the CapTar and
-  deadline/SOC suites.
+  cycles: the deepest is `test_solar_end_to_end.py`'s
+  `test_uc01_2b_restart_debounce_gates_a_later_idle_crossing` at 6, with three further solar
+  tests at 5, and a maximum of 4 in each of the CapTar and deadline/SOC suites.
 - **Instantaneously self-consistent readings.** Each cycle seeds `net_w` and `charger_w`
   together, at values that already agree. `test_solar_end_to_end.py::_cycle_from_feedback`
   hand-rolls the one exception — `charger_w = last_commanded * voltage`,
@@ -57,9 +57,8 @@ modes, or use-cases for the same class once it is known.
 
 **Where a contributor would put such a test today.** A test that needs every engine live over
 many consecutive cycles against readings that lag has no home in the taxonomy. It lands in
-whichever existing suite is nearest, where it either breaks that suite's single-engine
-isolation or gets its lag model hand-rolled locally — `_cycle_from_feedback` again, once per
-suite.
+whichever existing suite is nearest, where it either breaks that suite's single-engine focus or
+gets its lag model hand-rolled locally — `_cycle_from_feedback` again, once per suite.
 
 **Any oracle for such a test has to be more than a re-run of the code under test.**
 `engines/cycle_invariant.py` (E8, `apply_floor_cap`) is a production clamp applied on the write
@@ -90,20 +89,20 @@ per-scenario intent assertions.
   bug exists.
 - Con: ADR-0009's own accepted Con — a contributor must know which idiom applies to a given
   module — gets strictly worse: three answers instead of two, and the boundary is genuinely
-  fuzzy exactly where the three existing cycle-driving end-to-end suites sit. A test-only
-  simulator is itself code that can be wrong, and a wrong simulator produces confident failures
-  against correct product code (or, worse, confident passes), which costs more triage than
-  having no test.
-  Runtime grows multiplicatively — many cycles × all engines live × eventually one scenario per
-  use-case — so the suite may need its own marker or CI job rather than riding along.
+  fuzzy exactly where the three existing cycle-driving end-to-end suites sit.
+- Con: a test-only simulator is itself code that can be wrong, and a wrong simulator produces
+  confident failures against correct product code (or, worse, confident passes), which costs
+  more triage than having no test.
+- Con: runtime grows multiplicatively — many cycles × all engines live × eventually one scenario
+  per use-case — so the suite may need its own marker or CI job rather than riding along.
 
 ### Option B — Grow the existing HA-harness end-to-end suites; no new tier
 
 Extend the three cycle-driving `test_*_end_to_end.py` suites to run longer, keep every engine
 live, and model lag inline, leaving ADR-0009's two-tier taxonomy untouched.
 
-- Pro: nothing new for a contributor to learn — no third placement rule, no new taxonomy, no
-  new harness. The mechanism is demonstrably expressible in the current harness already:
+- Pro: nothing new for a contributor to learn — no third placement rule, no new taxonomy. The
+  mechanism is demonstrably expressible in the current harness already:
   `_cycle_from_feedback` closes the commanded-current → `charger_w` → `net_w` → surplus loop
   today. And this option is not merely adequate on paper: R3's `baseline_w` defect was diagnosed
   and its fix regression-tested entirely within these two tiers, so the status quo plus
@@ -236,11 +235,16 @@ gives the existing suites their diagnostic value.
   is, this record sits outside the carve-out's literal wording (see the Decision's third
   paragraph), and the next contributor faces the same ambiguity. That amendment is a separate
   `workflow` change, not part of this ADR — this decision creates it as a prerequisite.
-- **The tier's harness is designed, not decided, here.** The paired implementation spec owns
-  the simulator and invariant-runner design, and must settle two questions this ADR
-  deliberately leaves open: how simulated time relates to the coordinator's update interval,
-  and whether the simulator's outputs reach HA state through `tests/helpers.py`'s existing
-  `seed_charger_states` path or replace it.
+- **The tier's simulator and invariant runner are designed, not decided, here.** The paired
+  implementation spec owns both, and must settle three questions this ADR deliberately leaves
+  open: how simulated time relates to the coordinator's update interval; whether the simulator's
+  outputs reach HA state through `tests/helpers.py`'s existing `seed_charger_states` path or
+  replace it; and where a scenario file physically lives. That last one needs an answer because
+  ADR-0002's `tests/`-mirrors-the-package layout — restated as a live rule in ADR-0010, ADR-0015
+  and ADR-0019 — has no slot for a tier that mirrors no package. It is not a contradiction (the
+  existing `test_*_end_to_end.py` suites already sit outside the mirror), but a placement rule
+  whose whole purpose is answering "where does this test go" should not leave the literal
+  directory unstated.
 - **Two contributor-facing documents become stale the moment the tier lands** and need updating
   in the same strand: `.claude/skills/write-tests/SKILL.md` (its frontmatter description and its
   "Choose the harness first (ADR-0009)" section both state the split as two-way) and
@@ -266,5 +270,8 @@ gives the existing suites their diagnostic value.
   failure indicts correct product code. The mitigation this decision relies on is the bug-first
   sequencing — the simulator's lag model is validated by reproducing an already-diagnosed real
   defect before any speculative scenario is written.
-- **Status flips to Accepted** once the harness and first scenario land; it is Proposed while
-  the tier does not yet exist.
+- **Status flips to Accepted** once *both* the CLAUDE.md carve-out amendment and the first
+  scenario have landed — the amendment because until it does this record is outside the rule it
+  is judged by (bullet 1), and the scenario because until then the tier does not exist. It is
+  Proposed until both hold. If the amendment is rejected rather than made, this record should be
+  withdrawn or superseded rather than left Proposed indefinitely.
