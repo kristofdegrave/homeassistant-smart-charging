@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.2...v0.4.3) (2026-09-10)
+
+
+### Bug Fixes
+
+* debounce baseline_w against a stale charger_power reading ([#990](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/990)) ([#991](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/991)) ([6babbfb](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/6babbfb67960c796b90992940835f24f124ebbbe))
+
 ## [0.4.2](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.1...v0.4.2) (2026-09-09)
 
 
