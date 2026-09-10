@@ -20,6 +20,7 @@ from .config import SmartChargingConfig
 from .const import (
     ATTR_ACTIVE_SOC_LIMIT,
     ATTR_REQUIRED_CURRENT_A,
+    BASELINE_DEBOUNCE_CYCLES,
     CHARGEABLE_STATES,
     DEFAULT_SOC_LIMIT,
     DOMAIN,
@@ -70,8 +71,10 @@ from .coordinator_cycle import (
     resolve_solar_reserve_gate,
 )
 from .engines.billing_protection import (
+    BaselineDebouncer,
     PeakBreachTracker,
     apply_peak_clamp,
+    debounce_baseline_w,
     resolve_effective_peak_limit,
     resolve_monthly_peak_operand,
 )
@@ -231,6 +234,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # doc Sec 6.4), so it always starts empty here. Owned by PeakDemandState (ADR-0012).
         self._peak_demand = PeakDemandState()
         self._peak_tracker = PeakBreachTracker()
+        # Issue #990: debounces peak_headroom_a/solar_surplus_w/apply_peak_clamp's own
+        # baseline_w against a transient headroom-inflating reading (a charger current
+        # step-down outrunning the charger_power adapter's slower poll cadence for one
+        # extra cycle) -- see debounce_baseline_w's own docstring. Deliberately never reset
+        # (disconnect, fault, a long adapter outage) -- same lifecycle as `_peak_tracker`
+        # just above, which isn't reset either. Worst case, recovery to a genuinely lower
+        # baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
+        # safety-conservative direction the debounce itself always takes.
+        self._baseline_debouncer = BaselineDebouncer()
         # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
         # cycles (never reset), holding each read role's most recently read value so a role not
         # read on a given cycle (e.g. `ev_soc` while disconnected) still reports its last known
@@ -424,9 +436,20 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             )
         status, net_w, charger_w, voltage = inputs
 
+        # Issue #990: debounce the raw (net_w - charger_w) baseline once here, before it feeds
+        # solar_surplus_w/peak_headroom_a/apply_peak_clamp below -- a single source of truth so
+        # all three stay in lockstep and none can transiently see the inflated (undebounced)
+        # reading the others already reject. See debounce_baseline_w's own docstring.
+        baseline_w, self._baseline_debouncer = debounce_baseline_w(
+            net_w - charger_w, self._baseline_debouncer, debounce_cycles=BASELINE_DEBOUNCE_CYCLES
+        )
+
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
-        # below (R10's smoothed control-path value).
-        solar_surplus_w = charger_w - net_w
+        # below (R10's smoothed control-path value). Floored at 0: a negative reading here
+        # would mean the household is drawing more than the charger, never actual solar
+        # surplus (glossary) -- max(), not the debounce above, is the boundary for that (issue
+        # #990's Direction section: the two are separate concerns).
+        solar_surplus_w = max(-baseline_w, 0.0)
 
         # Peak-Demand Tracker (E5) + effective-peak-limit resolution (E5) --
         # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
@@ -502,7 +525,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             net_w, self._net_window, size=self._config.smoothing_window
         )
         surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
-        # the baseline-mode dry-run
+        # the baseline-mode dry-run. Reads the same stale charger_w a step-down can leave
+        # behind for one cycle (issue #990) -- deliberately not debounced here, unlike
+        # solar_surplus_w/peak_headroom_a/apply_peak_clamp above: `smooth_net_power` already
+        # runs `net_w` through R10's own multi-cycle smoothing window, which dampens (though
+        # does not eliminate) a one-cycle stale-charger_w spike the same way it dampens any
+        # other transient. Revisit if a real-world report ties a Solar/SolarOnly misstep to
+        # this specific staleness rather than #990's already-fixed R3/display paths.
         now = self.hass.loop.time()  # injected, not read inside modes/engines
         # ADR-0012: carries this cycle's readings/derived values into the ModeHandler registry
         # lookup below, replacing the loose local variables the old dispatch chain threaded by
@@ -514,6 +543,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             charger_w=charger_w,
             voltage=voltage,
             now=now,
+            baseline_w=baseline_w,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             # R11/issue #757: mirrors this cycle's has-charged flag onto ctx so
@@ -656,14 +686,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # kwarg (issue #719) -- there is no second copy for the two to drift out of lockstep.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
-        # entity-catalog.md:153/control-cycle.md step 5 -- the same raw-reading target the R3
-        # clamp itself holds (apply_peak_clamp's own headroom_a). Both the `safety_margin_w`
-        # read and the resulting computation are duplicated here rather than returned from
-        # _apply_peak_clamp, to avoid changing its control-path signature for a display-only
-        # need -- keep the two lookups in lockstep if either side changes.
+        # entity-catalog.md:153/control-cycle.md step 5 -- the same target and (issue #990:
+        # debounced) baseline the R3 clamp itself holds (apply_peak_clamp's own headroom_a).
+        # The `safety_margin_w` read and the resulting computation are duplicated here rather
+        # than returned from _apply_peak_clamp, to avoid changing its control-path signature
+        # for a display-only need -- keep the two lookups in lockstep if either side changes.
         peak_target_w = effective_peak_limit_kw * 1000.0 - self._config.safety_margin_w
-        peak_baseline_w = net_w - charger_w
-        peak_headroom_a = math.floor((peak_target_w - peak_baseline_w) / voltage)
+        peak_headroom_a = math.floor((peak_target_w - ctx.baseline_w) / voltage)
         if auto_dispatchable and deadline_urgency.resolved_mode is not None:
             # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
             # never changes here while Manual, even under urgency) -- only Auto resolves its
@@ -1003,16 +1032,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         below, per ADR-0006's requirement that the two never merge into one routine -- merging
         them would let the R17 opt-out silently reach C4 too. Mutates self._peak_tracker and, on a
         force-stop while Captar is active, self._mode_state[MODE_CAPTAR] -- both exactly as
-        before this extraction (ADR-0023). Reads net_w/charger_w/voltage/effective_peak_limit_kw/
-        now off `ctx` (issue #719) rather than as separately-passed kwargs -- `_run_cycle`
+        before this extraction (ADR-0023). Reads baseline_w/voltage/effective_peak_limit_kw/now
+        off `ctx` (issue #719, and #990 for baseline_w specifically -- already debounced by the
+        time `_run_cycle` builds ctx) rather than as separately-passed kwargs -- `_run_cycle`
         already has exactly one of each by the time this is called, so there is no second copy
         for the two to drift out of lockstep."""
         if self.active_mode == MODE_POWER and not self._config.power_respect_peak:
             return desired
         desired, self._peak_tracker, force_stop = apply_peak_clamp(
             desired,
-            net_w=ctx.net_w,
-            charger_w=ctx.charger_w,
+            baseline_w=ctx.baseline_w,
             voltage=ctx.voltage,
             effective_peak_limit_kw=ctx.effective_peak_limit_kw,
             safety_margin_w=self._config.safety_margin_w,
@@ -1159,12 +1188,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         state -- the baseline-mode comparison needs a candidate mode's request
         without actually charging on it.
 
-        `net_w`/`charger_w` are deliberately 0.0/0.0 here, not threaded from the caller: none of
-        the five `ModeHandler.desired_current` implementations reads `ctx.net_w`/`ctx.charger_w`
-        (only `ctx.surplus_w`/`ctx.voltage`/`ctx.now`/`ctx.status`), and this dry-run ctx is never
-        passed to `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue
-        #719) -- only the real `_run_cycle`-constructed ctx is. If a future ModeHandler needs
-        either, thread the real values from `_run_cycle` at that point, not before."""
+        `net_w`/`charger_w`/`baseline_w` are deliberately 0.0/0.0/0.0 here, not threaded from
+        the caller: none of the five `ModeHandler.desired_current` implementations reads
+        `ctx.net_w`/`ctx.charger_w`/`ctx.baseline_w` (only `ctx.surplus_w`/`ctx.voltage`/
+        `ctx.now`/`ctx.status`), and this dry-run ctx is never passed to
+        `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue #719) --
+        only the real `_run_cycle`-constructed ctx is. `baseline_w=0.0` here is otherwise the
+        exact placeholder issue #990's own `CycleContext.baseline_w` field docstring warns
+        against -- safe ONLY because of the "never reaches `_apply_peak_clamp`" guarantee above;
+        if a future ModeHandler needs any of the three, thread the real values from `_run_cycle`
+        at that point, not before."""
         if status not in CHARGEABLE_STATES:
             return 0.0
         if self._mode_handlers[mode].is_soc_gated and ev_soc >= active_soc_limit:
@@ -1175,6 +1208,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             charger_w=0.0,
             voltage=voltage,
             now=now,
+            baseline_w=0.0,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             active_soc_limit=active_soc_limit,

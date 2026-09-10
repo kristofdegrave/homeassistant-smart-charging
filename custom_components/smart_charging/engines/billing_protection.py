@@ -55,10 +55,52 @@ class PeakBreachTracker:
     breached_since: float | None = None
 
 
+@dataclass(frozen=True)
+class BaselineDebouncer:
+    """Issue #990's headroom-increase debounce state: the last accepted `baseline_w`
+    (`net_w - charger_w`) and how many consecutive cycles a lower (more headroom) raw
+    reading has now held without yet being accepted."""
+
+    accepted_w: float | None = None
+    pending_cycles: int = 0
+
+
+def debounce_baseline_w(
+    raw_baseline_w: float,
+    tracker: BaselineDebouncer,
+    debounce_cycles: int,
+) -> tuple[float, BaselineDebouncer]:
+    """Issue #990: the charger's own power sensor (slow Modbus poll) can still report the
+    prior, higher value for one extra coordinator cycle after a current step-down, while the
+    net meter (fast) already reflects the drop -- transiently swinging `baseline_w` (and, via
+    it, `peak_headroom_a`/`solar_surplus_w`) artificially low. A lower `raw_baseline_w` than
+    the last accepted reading INCREASES headroom (more permissive) and is only accepted once a
+    below-accepted reading has been seen on `debounce_cycles` consecutive calls -- not
+    necessarily the same value each time; the newest raw reading at that point is what gets
+    committed (e.g. 500 -> -1500 (1st pending call) -> -4000 (2nd) commits -4000, not -1500). A
+    `raw_baseline_w` at or above the last accepted reading DECREASES (or holds) headroom -- the
+    safety-conservative direction -- and always applies immediately, same as the very first
+    call (`tracker.accepted_w is None`, nothing to debounce against yet). The mirror-image
+    transient (a current step-UP: net_w rises immediately, charger_w stale-low, baseline
+    transiently too HIGH) is accepted immediately by the same "at or above" rule and becomes
+    the new `accepted_w` -- an accepted trade-off: it costs one extra cycle of understated
+    headroom/`solar_surplus_w` once the true, lower baseline reasserts itself, but never an
+    unsafe one.
+    """
+    if tracker.accepted_w is None or raw_baseline_w >= tracker.accepted_w:
+        return raw_baseline_w, BaselineDebouncer(accepted_w=raw_baseline_w, pending_cycles=0)
+
+    pending_cycles = tracker.pending_cycles + 1
+    if pending_cycles >= debounce_cycles:
+        return raw_baseline_w, BaselineDebouncer(accepted_w=raw_baseline_w, pending_cycles=0)
+    return tracker.accepted_w, BaselineDebouncer(
+        accepted_w=tracker.accepted_w, pending_cycles=pending_cycles
+    )
+
+
 def apply_peak_clamp(
     desired_current: float,
-    net_w: float,
-    charger_w: float,
+    baseline_w: float,
     voltage: float,
     effective_peak_limit_kw: float,
     safety_margin_w: float,
@@ -69,9 +111,10 @@ def apply_peak_clamp(
 ) -> tuple[float, PeakBreachTracker, bool]:
     """Return (clamped_current, new_tracker, force_stop) -- the R3 peak clamp.
 
-    Solves from the baseline actually flowing (`net_w - charger_w`), the same
-    raw-reading approach E6's grid-safety clamp uses, so a breach cannot hide
-    behind the request. The breach timer is gated on the REQUEST, not the
+    Solves from the baseline actually flowing (`net_w - charger_w`, resolved by the caller --
+    issue #990: after `debounce_baseline_w`, so a transient stale-sensor reading cannot inflate
+    headroom for even one cycle), the same raw-reading approach E6's grid-safety clamp uses, so
+    a breach cannot hide behind the request. The breach timer is gated on the REQUEST, not the
     clamped result: only when the mode is actually asking for at least `min_a`
     (it wants to charge) AND the available headroom is below `min_a` does a
     breach start/continue. A request already below `min_a` (Off, an
@@ -87,7 +130,6 @@ def apply_peak_clamp(
     never have a chance to elapse (R3: "a momentary breach does not stop
     charging").
     """
-    baseline_w = net_w - charger_w
     target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
     headroom_a = math.floor((target_w - baseline_w) / voltage)
     clamped = min(desired_current, float(headroom_a))

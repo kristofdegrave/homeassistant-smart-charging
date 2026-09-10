@@ -5,8 +5,10 @@ Row 1 (deadline urgency) is added by this suite -- row 2 (min(max(operand, floor
 ADR-0032) is covered separately, both alone and run through the row-2 clamp."""
 
 from custom_components.smart_charging.engines.billing_protection import (
+    BaselineDebouncer,
     PeakBreachTracker,
     apply_peak_clamp,
+    debounce_baseline_w,
     resolve_effective_peak_limit,
     resolve_monthly_peak_operand,
 )
@@ -173,8 +175,7 @@ def test_clamp_reduces_to_available_headroom():
     # Headroom = (2750 - 1000) / 230 = 7.6 A -> floor 7 A.
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=32.0,
-        net_w=1000.0 + 32.0 * 230.0,  # baseline 1000 W + a charging draw already flowing
-        charger_w=32.0 * 230.0,
+        baseline_w=1000.0,  # baseline 1000 W + a charging draw already flowing on both sides
         effective_peak_limit_kw=3.0,
         tracker=PeakBreachTracker(breached_since=None),
         now=0.0,
@@ -194,8 +195,7 @@ def test_momentary_breach_at_minimum_does_not_stop():
     tracker = PeakBreachTracker(breached_since=None)
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=32.0,
-        net_w=2900.0,
-        charger_w=0.0,
+        baseline_w=2900.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=0.0,
@@ -214,8 +214,7 @@ def test_headroom_exactly_at_minimum_is_not_a_breach():
     tracker = PeakBreachTracker(breached_since=None)
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=32.0,
-        net_w=1370.0,
-        charger_w=0.0,
+        baseline_w=1370.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=0.0,
@@ -230,8 +229,7 @@ def test_breach_just_short_of_grace_period_does_not_fire():
     tracker = PeakBreachTracker(breached_since=0.0)
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=32.0,
-        net_w=2900.0,
-        charger_w=0.0,
+        baseline_w=2900.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=119.0,
@@ -246,8 +244,7 @@ def test_continuing_breach_preserves_the_original_start_time():
     tracker = PeakBreachTracker(breached_since=0.0)
     _, tracker, _ = apply_peak_clamp(
         desired_current=32.0,
-        net_w=2900.0,
-        charger_w=0.0,
+        baseline_w=2900.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=60.0,
@@ -266,8 +263,7 @@ def test_a_zero_request_never_starts_the_breach_timer_even_with_no_headroom():
     tracker = PeakBreachTracker(breached_since=None)
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=0.0,
-        net_w=2900.0,
-        charger_w=0.0,
+        baseline_w=2900.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=0.0,
@@ -285,8 +281,7 @@ def test_a_zero_request_clears_an_in_progress_breach_timer():
     tracker = PeakBreachTracker(breached_since=0.0)
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=0.0,
-        net_w=2900.0,
-        charger_w=0.0,
+        baseline_w=2900.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=60.0,
@@ -300,8 +295,7 @@ def test_sustained_breach_at_minimum_forces_stop_after_grace_period():
     tracker = PeakBreachTracker(breached_since=0.0)  # breach already timing since t=0
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=32.0,
-        net_w=2900.0,
-        charger_w=0.0,
+        baseline_w=2900.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=120.0,
@@ -317,8 +311,7 @@ def test_breach_clearing_before_grace_period_resets_tracker():
     # Headroom recovers (baseline drops) before the grace period elapses.
     desired, tracker, force_stop = apply_peak_clamp(
         desired_current=10.0,
-        net_w=500.0,
-        charger_w=0.0,
+        baseline_w=500.0,
         effective_peak_limit_kw=3.0,
         tracker=tracker,
         now=60.0,
@@ -333,11 +326,79 @@ def test_clamp_never_returns_more_than_requested():
     tracker = PeakBreachTracker(breached_since=None)
     desired, _, _ = apply_peak_clamp(
         desired_current=6.0,
-        net_w=0.0,
-        charger_w=0.0,
+        baseline_w=0.0,
         effective_peak_limit_kw=4.0,
         tracker=tracker,
         now=0.0,
         **DEFAULTS,
     )
     assert desired == 6.0  # ample headroom -- clamp never raises the request
+
+
+def test_debounce_first_reading_ever_applies_immediately():
+    # No accepted baseline yet -- nothing to debounce against (issue #990).
+    baseline_w, tracker = debounce_baseline_w(500.0, BaselineDebouncer(), debounce_cycles=2)
+    assert baseline_w == 500.0
+    assert tracker.accepted_w == 500.0
+    assert tracker.pending_cycles == 0
+
+
+def test_debounce_a_higher_baseline_reading_applies_immediately():
+    # Higher baseline_w -> less headroom -- the safety-conservative direction always applies
+    # immediately, same cycle it's read.
+    tracker = BaselineDebouncer(accepted_w=500.0)
+    baseline_w, tracker = debounce_baseline_w(800.0, tracker, debounce_cycles=2)
+    assert baseline_w == 800.0
+    assert tracker.accepted_w == 800.0
+    assert tracker.pending_cycles == 0
+
+
+def test_debounce_an_equal_baseline_reading_applies_immediately():
+    tracker = BaselineDebouncer(accepted_w=500.0)
+    baseline_w, tracker = debounce_baseline_w(500.0, tracker, debounce_cycles=2)
+    assert baseline_w == 500.0
+    assert tracker.pending_cycles == 0
+
+
+def test_debounce_holds_a_lower_baseline_reading_until_it_persists():
+    # Issue #990's actual failure scenario: a charger current step-down where the fast net
+    # meter already reflects the drop but the slow-polled charger_power sensor still reports
+    # the prior, higher value for one extra cycle -- baseline_w plunges (net_w - charger_w)
+    # for that one cycle, inflating peak_headroom_a/solar_surplus_w. The clamp must not grant
+    # that headroom increase on the very first low reading.
+    tracker = BaselineDebouncer(accepted_w=500.0)
+    baseline_w, tracker = debounce_baseline_w(-1500.0, tracker, debounce_cycles=2)
+    assert baseline_w == 500.0  # holds the prior, safety-conservative value
+    assert tracker.accepted_w == 500.0
+    assert tracker.pending_cycles == 1
+
+
+def test_debounce_accepts_a_lower_baseline_once_it_holds_for_the_debounce_window():
+    # A genuine, sustained drop (e.g. real solar surplus) is accepted once it has held for
+    # `debounce_cycles` consecutive readings -- not suppressed forever.
+    tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)
+    baseline_w, tracker = debounce_baseline_w(-1500.0, tracker, debounce_cycles=2)
+    assert baseline_w == -1500.0
+    assert tracker.accepted_w == -1500.0
+    assert tracker.pending_cycles == 0
+
+
+def test_debounce_a_worsening_reading_mid_pending_resets_the_pending_count():
+    # The lower reading doesn't hold -- baseline_w recovers (or worsens further) before the
+    # debounce window elapses. The stale pending count must not carry over once a
+    # not-lower reading is accepted immediately.
+    tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)
+    baseline_w, tracker = debounce_baseline_w(500.0, tracker, debounce_cycles=2)
+    assert baseline_w == 500.0
+    assert tracker.pending_cycles == 0
+
+
+def test_debounce_commits_the_newest_pending_value_not_the_one_that_started_the_count():
+    # The count is "how many consecutive cycles has a below-accepted reading been seen", not
+    # "has this exact value been stable" -- a still-dropping reading commits at whatever value
+    # it has reached once the window elapses, not the first below-accepted value observed.
+    tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)  # pending since -1500.0
+    baseline_w, tracker = debounce_baseline_w(-4000.0, tracker, debounce_cycles=2)
+    assert baseline_w == -4000.0
+    assert tracker.accepted_w == -4000.0
+    assert tracker.pending_cycles == 0
