@@ -105,8 +105,8 @@ live, and model lag inline, leaving ADR-0009's two-tier taxonomy untouched.
   mechanism is demonstrably expressible in the current harness already:
   `_cycle_from_feedback` closes the commanded-current → `charger_w` → `net_w` → surplus loop
   today. And this option is not merely adequate on paper: R3's `baseline_w` defect was diagnosed
-  and its fix regression-tested entirely within these two tiers, so the status quo plus
-  incremental growth has a real track record. Cheapest option by a wide margin.
+  and its fix regression-tested entirely within ADR-0009's two tiers, so the status quo plus
+  incremental growth has a real track record. Cheapest of the options that change anything.
 - Con: the three properties above are constitutive of what those suites are *for*, not
   accidental limits. Each is scoped to one use-case and keeps the other engines non-binding
   deliberately so that a failure names one mode; taking that away makes every failure in them
@@ -240,8 +240,9 @@ gives the existing suites their diagnostic value.
   open: how simulated time relates to the coordinator's update interval; whether the simulator's
   outputs reach HA state through `tests/helpers.py`'s existing `seed_charger_states` path or
   replace it; and where a scenario file physically lives. That last one needs an answer because
-  ADR-0002's `tests/`-mirrors-the-package layout — restated as a live rule in ADR-0010, ADR-0015
-  and ADR-0019 — has no slot for a tier that mirrors no package. It is not a contradiction (the
+  ADR-0002's `tests/`-mirrors-the-package layout — restated as a live rule in ADR-0009's own
+  Consequences and again in ADR-0010, ADR-0015 and ADR-0019 — has no slot for a tier that mirrors
+  no package. It is not a contradiction (the
   existing `test_*_end_to_end.py` suites already sit outside the mirror), but a placement rule
   whose whole purpose is answering "where does this test go" should not leave the literal
   directory unstated.
@@ -254,8 +255,8 @@ gives the existing suites their diagnostic value.
   `baseline_w` (`debounce_baseline_w`, threaded through `CycleContext.baseline_w`) while C4's
   `clamp_to_ceiling` still re-derives its own, so the first scenario's value is the *invariant*
   that holds across both clamp call sites — and that would fail for a third if one appears —
-  rather than a reproduction of the instance R3 already handles. This narrows the epic's
-  bug-first framing, which assumed the harness would exist before either clamp was fixed.
+  rather than a reproduction of the instance R3 already handles. This narrows the earlier
+  bug-first framing, which assumed the tier would exist before either clamp was fixed.
 - **Snapshot/approval testing is foreclosed for this tier.** Introducing one later contradicts
   this record and needs a superseding ADR, not an addition.
 - **The ADL index carries a back-pointer on ADR-0009's row.** Extending ADRs have not done this
@@ -271,7 +272,7 @@ gives the existing suites their diagnostic value.
   sequencing — the simulator's lag model is validated by reproducing an already-diagnosed real
   defect before any speculative scenario is written.
 - **Status flips to Accepted** once *both* the CLAUDE.md carve-out amendment and the first
-  scenario have landed — the amendment because until it does this record is outside the rule it
-  is judged by (bullet 1), and the scenario because until then the tier does not exist. It is
+  scenario are in place — the amendment because without it this record is outside the rule it is
+  judged by (bullet 1), and the scenario because until then the tier does not exist. It is
   Proposed until both hold. If the amendment is rejected rather than made, this record should be
   withdrawn or superseded rather than left Proposed indefinitely.
