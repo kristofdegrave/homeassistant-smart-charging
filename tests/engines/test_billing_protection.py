@@ -4,6 +4,8 @@ Row 1 (deadline urgency) is added by this suite -- row 2 (min(max(operand, floor
 #754/R3) is only reached when urgent=False. The operand merge (resolve_monthly_peak_operand,
 ADR-0032) is covered separately, both alone and run through the row-2 clamp."""
 
+from collections.abc import Callable
+
 from custom_components.smart_charging.engines.billing_protection import (
     BaselineDebouncer,
     PeakBreachTracker,
@@ -402,3 +404,136 @@ def test_debounce_commits_the_newest_pending_value_not_the_one_that_started_the_
     assert baseline_w == -4000.0
     assert tracker.accepted_w == -4000.0
     assert tracker.pending_cycles == 0
+
+
+def test_debounce_discards_a_higher_reading_taken_on_the_commands_own_step():
+    # ADR-0039: the step-UP transient. A current step-up makes net_w rise on the cycle it
+    # happens while charger_w still reports the previous draw, so the baseline reads high for
+    # reasons that have nothing to do with the household. Without the gate this was committed
+    # immediately by the "at or above" rule and then actuated.
+    tracker = BaselineDebouncer(accepted_w=986.0)
+    baseline_w, tracker = debounce_baseline_w(
+        2310.0, tracker, debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 986.0
+    assert tracker.accepted_w == 986.0
+
+
+def test_debounce_discards_a_lower_reading_taken_on_the_commands_own_step():
+    # The gate is direction-blind (ADR-0039): the step-DOWN transient is discarded by the same
+    # rule rather than merely counted towards the pending window.
+    tracker = BaselineDebouncer(accepted_w=986.0)
+    baseline_w, tracker = debounce_baseline_w(
+        -339.0, tracker, debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 986.0
+    assert tracker.pending_cycles == 0  # not advanced -- a discarded reading is a non-observation
+
+
+def test_debounce_carries_a_pending_count_through_a_discarded_cycle():
+    # A genuine sustained drop that straddles a step still needs `debounce_cycles` readings
+    # taken while the command held steady -- the discarded cycle neither advances nor resets it.
+    tracker = BaselineDebouncer(accepted_w=986.0, pending_cycles=1)
+    baseline_w, tracker = debounce_baseline_w(
+        -1500.0, tracker, debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 986.0
+    assert tracker.pending_cycles == 1
+    baseline_w, tracker = debounce_baseline_w(
+        -1500.0, tracker, debounce_cycles=2, command_changed=False
+    )
+    assert baseline_w == -1500.0  # the steady-command reading completes the window
+
+
+def test_debounce_accepts_the_first_ever_reading_even_on_a_step():
+    # Nothing to fall back on -- the gate must not strand the tracker with no accepted value.
+    baseline_w, tracker = debounce_baseline_w(
+        986.0, BaselineDebouncer(), debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 986.0
+    assert tracker.accepted_w == 986.0
+
+
+# --- Closed-loop stability (issue #1034) -------------------------------------------------
+# The tests above exercise debounce_baseline_w one call at a time, against a baseline_w the
+# test supplies. These drive it in the feedback loop it actually sits in: the clamp's own
+# output becomes the charger's draw, which becomes the next cycle's readings. That is the
+# only arrangement in which the step-UP transient debounce_baseline_w's docstring accepts as
+# "one extra cycle of understated headroom" can be observed for what it is -- the transient is
+# itself actuated, so it manufactures the next one.
+
+_LOOP_VOLTAGE = 220.82  # measured, from the live install in #1034
+_LOOP_HOUSE_W = 986.0  # steady household baseline, the term the clamp is meant to solve around
+_LOOP_LIMIT_KW = 4.0
+_LOOP_MAX_A = 32.0
+
+
+def _closed_loop(
+    cycles: int, house_w: Callable[[int], float], *, debounce_cycles: int = 2
+) -> list[tuple[float, float]]:
+    """(commanded_a, net_w) per cycle, with Captar's own always-max_a request as the input.
+
+    Models two properties of the real install and nothing else: the net meter reflects a change
+    in charger draw on the cycle it happens, while the charger's own power sensor (slow Modbus
+    poll) still reports the previous cycle's value. `house_w` scripts the only exogenous term,
+    so any movement the script does not explain originates inside the clamp.
+
+    `command_changed` is derived here the same way the coordinator derives it -- this cycle's
+    commanded current differs from the one the lagging sensor is still reporting.
+    """
+    commanded = 6.0
+    previous = commanded
+    debouncer = BaselineDebouncer()
+    breach = PeakBreachTracker()
+    history: list[tuple[float, float]] = []
+    for cycle in range(cycles):
+        net_w = house_w(cycle) + commanded * _LOOP_VOLTAGE
+        charger_w = previous * _LOOP_VOLTAGE  # one cycle behind the true draw
+        baseline_w, debouncer = debounce_baseline_w(
+            net_w - charger_w,
+            debouncer,
+            debounce_cycles=debounce_cycles,
+            command_changed=commanded != previous,
+        )
+        desired, breach, _ = apply_peak_clamp(
+            _LOOP_MAX_A,
+            baseline_w,
+            _LOOP_VOLTAGE,
+            _LOOP_LIMIT_KW,
+            250.0,
+            6.0,
+            120.0,
+            breach,
+            float(cycle * 10),
+        )
+        previous = commanded
+        commanded = apply_floor_cap(desired, min_a=6.0, max_a=_LOOP_MAX_A)
+        history.append((commanded, net_w))
+    return history
+
+
+def test_closed_loop_settles_when_the_charger_power_reading_lags_a_step():
+    # Issue #1034: with a steady household baseline and a steady peak limit, the commanded
+    # current must reach a value and stay there. Nothing in the simulated world moves, so a
+    # current that keeps changing is the clamp oscillating against its own actuation. Before
+    # ADR-0039 this ran [12, 6, 6, 12, 6, 6, ...] indefinitely -- a 3-cycle limit cycle.
+    currents = [a for a, _ in _closed_loop(12, lambda _cycle: _LOOP_HOUSE_W)]
+    assert currents[-4:] == [currents[-1]] * 4, f"did not settle: {currents}"
+
+
+def test_closed_loop_still_reacts_to_a_real_household_step_on_the_cycle_it_happens():
+    # ADR-0039's reason for discarding on the command's own step rather than debouncing both
+    # directions (Option B): a household load arriving while the command is steady is a
+    # trustworthy reading, so the clamp must still act on it in the same cycle rather than one
+    # later. `target_w` is 4.0 kW - 250 W = 3750 W.
+    step_cycle = 6
+    history = _closed_loop(12, lambda cycle: _LOOP_HOUSE_W if cycle < step_cycle else 2200.0)
+    before = history[step_cycle - 1][0]
+    assert history[step_cycle][0] < before, f"did not react on the step cycle: {history}"
+    # `net_w` on the step cycle itself is unavoidably household + whatever the charger was
+    # already drawing -- the clamp commands the charger, not the house, so the reading it
+    # reacts to is the one that already exceeded. What it owes is that the reaction lands
+    # within that same cycle, so every LATER cycle is back under target.
+    assert all(net <= 3750.0 for _a, net in history[step_cycle + 1 :]), f"stayed over: {history}"
+    settled = [a for a, _ in history[-4:]]
+    assert settled == [settled[0]] * 4, f"did not re-settle after the step: {history}"

@@ -141,6 +141,9 @@ async def test_uc03_2a_cooldown_blocks_restart_until_it_elapses(hass):
     # (0-minute grace period) forces a stop into cooldown.
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     assert calls[-1]["value"] == 16.0
+    # A steady cycle first, so the breach lands on a reading R3 trusts rather than on one
+    # deferred by R3 case (a) after the 0 A -> 16 A step above.
+    await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     await _cycle(hass, coordinator, net_w=3600.0, charger_w=0.0)
     assert calls[-1]["value"] == 0.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
@@ -162,6 +165,14 @@ async def test_uc03_2a_cooldown_blocks_restart_until_it_elapses(hass):
     # never catch a broken `elapsed()` comparison).
     replace_coordinator_config(coordinator, captar_cooldown_min=0.0)
     coordinator._active_cooldown = ActiveCooldown(coordinator._active_cooldown.stop_at, 0.0)
+    # Two qualifying cycles, not one, and R3's own criteria say why: the drop from the 3600 W
+    # breach back to 0 W increases headroom, so case (b) defers it until a second consecutive
+    # observation confirms it -- and the cycle right after the forced stop to 0 A is a case-(a)
+    # deferral, which is not an observation and so does not count towards case (b)'s window.
+    # R3's accepted baseline is still the breach value until then, which is what holds the
+    # set-point at 0 A here rather than the cooldown, which has already been elapsed above.
+    await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
+    assert calls[-1]["value"] == 0.0
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     assert calls[-1]["value"] == 16.0
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
@@ -182,6 +193,12 @@ async def test_uc03_peak_clamp_reduces_set_point_within_headroom(hass):
 
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     assert calls[-1]["value"] == 16.0
+    # R3 case (a): that cycle stepped the set-point 0 A -> 16 A, so the NEXT cycle's
+    # household-baseline reading is deferred. One steady cycle settles it, as a real install
+    # settles between two set-point changes. The deferral has its own test below; asserting
+    # the same-cycle reduction needs a reading R3 is allowed to trust.
+    await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
+    assert calls[-1]["value"] == 16.0
 
     # target_w = 4000 - 250 = 3750 W; baseline_w = 2000 W (household load) -> headroom_a =
     # floor(1750 / 230) = 7 A -- between the 6 A minimum and the 16 A maximum, so the clamp
@@ -191,6 +208,46 @@ async def test_uc03_peak_clamp_reduces_set_point_within_headroom(hass):
     assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
 
 
+async def test_uc03_peak_clamp_defers_a_reading_that_follows_its_own_step_by_one_cycle(hass):
+    """R3 case (a) (ADR-0039): a household-baseline reading taken after the System changed the
+    charger current partly measures that change rather than the household, so it is deferred and
+    the previously accepted reading stands -- for exactly one control cycle, never two. This is
+    the bounded exception to the same-cycle reduction the test above asserts."""
+    coordinator, calls = await _setup(hass, **{CONF_MAX_PEAK_KW: 4.0, CONF_SAFETY_MARGIN_W: 250.0})
+
+    await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
+    assert calls[-1]["value"] == 16.0  # steps 0 A -> 16 A, so the next reading is deferred
+
+    # 2000 W of household load arrives on the very next cycle. R3 does not act on it -- the
+    # accepted baseline is still 0 W, so R3's own headroom is unchanged at the 16 A maximum --
+    # and the set-point is therefore NOT R3's 7 A this cycle.
+    await _cycle(hass, coordinator, net_w=2000.0, charger_w=0.0)
+    assert calls[-1]["value"] != 7.0
+
+    # One cycle later the same load is read again with no intervening step, so R3 accepts it
+    # and the reduction lands. The deferral is one cycle, never two (R3 case (a)).
+    await _cycle(hass, coordinator, net_w=2000.0, charger_w=0.0)
+    assert calls[-1]["value"] == 7.0
+    assert coordinator._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
+
+
+async def test_uc03_c4_still_clamps_on_the_cycle_r3_defers(hass):
+    """R3's deferral is safe rather than merely tolerable because C4 never defers (R3's own
+    criterion, and C3/C4's division): on the one cycle R3 holds its previous baseline, the
+    grid-supply-ceiling clamp still reads raw and still bounds the set-point."""
+    coordinator, calls = await _setup(hass, **{CONF_MAX_PEAK_KW: 4.0, CONF_SAFETY_MARGIN_W: 250.0})
+
+    await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
+    assert calls[-1]["value"] == 16.0
+
+    # The step above defers R3's reading on this cycle, so R3's own headroom is still the one
+    # it accepted at 0 W of household load -- the 16 A maximum, no reduction at all. C4 reads
+    # raw regardless: floor((25 - 2) - 3600/230) = floor(23 - 15.65) = 7 A. So the 7 A written
+    # here is C4's bound alone, on a cycle R3 contributed nothing.
+    await _cycle(hass, coordinator, net_w=3600.0, charger_w=0.0)
+    assert calls[-1]["value"] == 7.0, "C4 must clamp on the cycle R3 defers"
+
+
 async def test_uc03_sustained_r3_breach_stops_and_starts_cooldown(hass):
     """UC03 exception flow: a momentary breach at the minimum charging current holds at
     the minimum rather than stopping (R3: "a momentary breach does not stop charging"),
@@ -198,6 +255,10 @@ async def test_uc03_sustained_r3_breach_stops_and_starts_cooldown(hass):
     stops (0 A) and starts the Captar cooldown (R11)."""
     coordinator, calls = await _setup(hass, **{CONF_MAX_PEAK_KW: 4.0})
 
+    await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
+    assert calls[-1]["value"] == 16.0
+    # A steady cycle, so the breach below lands on a reading R3 is allowed to trust rather than
+    # on one deferred by R3 case (a) after the 0 A -> 16 A step above.
     await _cycle(hass, coordinator, net_w=0.0, charger_w=0.0)
     assert calls[-1]["value"] == 16.0
 

@@ -243,6 +243,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
         # safety-conservative direction the debounce itself always takes.
         self._baseline_debouncer = BaselineDebouncer()
+        # ADR-0039: the two fields `debounce_baseline_w`'s `command_changed` is derived from.
+        # `_last_commanded_a` is the value `_write` last sent; `_command_stepped` is whether that
+        # write changed it. Both are maintained in `_write` -- the single write site -- so the
+        # fault paths' own `_write(0.0)` counts as a step exactly like a control-path write does,
+        # which is correct: a fault-path drop to 0 A leaves the charger_power adapter just as
+        # stale as any other step. Read once per cycle by `_run_cycle`, where `_command_stepped`
+        # describes the write at the END of the PREVIOUS cycle -- which is what this cycle's
+        # `charger_w` reading may not have caught up with yet. Never reset for the same reason
+        # `_baseline_debouncer` above isn't: a stale `_last_commanded_a` after a long gap only
+        # ever costs one extra discarded reading.
+        self._last_commanded_a: float | None = None
+        self._command_stepped = False
         # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
         # cycles (never reset), holding each read role's most recently read value so a role not
         # read on a given cycle (e.g. `ev_soc` while disconnected) still reports its last known
@@ -445,8 +457,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # solar_surplus_w/peak_headroom_a/apply_peak_clamp below -- a single source of truth so
         # all three stay in lockstep and none can transiently see the inflated (undebounced)
         # reading the others already reject. See debounce_baseline_w's own docstring.
+        # ADR-0039: `command_changed` describes the write at the end of the PREVIOUS cycle -- the
+        # one this cycle's `charger_w` may not have caught up with -- so it is read here, before
+        # this cycle's own `_write` overwrites it.
         baseline_w, self._baseline_debouncer = debounce_baseline_w(
-            net_w - charger_w, self._baseline_debouncer, debounce_cycles=BASELINE_DEBOUNCE_CYCLES
+            net_w - charger_w,
+            self._baseline_debouncer,
+            debounce_cycles=BASELINE_DEBOUNCE_CYCLES,
+            command_changed=self._command_stepped,
         )
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
@@ -1258,7 +1276,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return current
 
     async def _write(self, value: float) -> None:
+        """The single write site (ADR-0039's `_command_stepped`/`_last_commanded_a` are
+        maintained here for exactly that reason). The step flag is recorded only after the
+        adapter write actually returns: a write that raises never reached the charger, so the
+        current did not change and the next cycle's `charger_w` is not stale on its account."""
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)
+        self._command_stepped = (
+            self._last_commanded_a is not None and value != self._last_commanded_a
+        )
+        self._last_commanded_a = value
 
     async def _safe_write_zero(self) -> None:
         try:
