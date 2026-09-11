@@ -18,10 +18,14 @@ Two multipliers dominate cost in this repo, and neither is "a subagent was spawn
    and every review and every fix is a *fresh container* with no cross-run prompt-cache reuse.
    The per-cycle cost (a review pass plus a fix pass) is paid again from cold each cycle, so
    the cycle count is the biggest single lever.
-2. **Fixed context re-read on every cold session.** `claude-code-action` auto-loads
-   `CLAUDE.md`, all of `.claude/skills/`, and all of `.claude/agents/` on every run,
-   whether or not a given file is relevant to the task. That overhead is multiplied by the
-   number of sessions in the loop above.
+2. **Fixed context re-read on every cold session.** `claude-code-action` loads `CLAUDE.md`
+   in full on every run, plus the frontmatter `name` and `description` of each file under
+   `.claude/skills/` (and of `.claude/agents/` wherever subagent dispatch is available). A
+   skill or agent **body** is not loaded until the skill is invoked or the file is read — the
+   CI prompts point the worker at a path and grant `Read` precisely because of this. So the
+   fixed overhead is `CLAUDE.md` plus a description index, multiplied by the number of
+   sessions in the loop above; the bodies are a per-use cost, paid only by the run that
+   needs them.
 
 Everything below targets one of these two.
 
@@ -37,8 +41,12 @@ Everything below targets one of these two.
   across the whole `docs/` tree. The review worker already does this — it selects one
   checklist per changed path rather than loading all six.
 - **Keep stable files stable.** Prompt caching only pays off when the cached prefix does
-  not change. Churn in `CLAUDE.md`, a skill, or an agent def invalidates the cache for
-  every run that follows. Batch edits; avoid cosmetic churn.
+  not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
+  `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill
+  **body** does not, since the body was never in the prefix. Batch edits; avoid cosmetic
+  churn. Note this lever is weaker in CI than it looks: each worker is a fresh container with
+  no cross-run cache reuse (see *Cold sessions* above), so the prefix is paid from cold every
+  run regardless.
 - **Bound the loop, not the turn.** Prefer capping *how many times* a run repeats
   (cycles, retries) over shrinking a single run's turn ceiling. A too-low turn ceiling
   causes truncation and a re-run, which costs more than it saved — this is why the fix pass's

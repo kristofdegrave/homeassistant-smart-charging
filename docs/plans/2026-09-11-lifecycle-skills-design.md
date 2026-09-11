@@ -133,7 +133,12 @@ omission is easy to fill in wrongly:
 
 - **Local-interactive only, said in the frontmatter `description`.** Every skill's
   frontmatter `description` is listed to the worker in every CI run (see *What the saving
-  actually is* below), and CI's fix worker has an unrestricted `Write,Edit` grant.
+  actually is* below), and CI's fix worker has an unrestricted `Write,Edit` grant. The
+  concrete risk is narrower than "CI invokes the skill": `_ai-fix.yml` grants no
+  skill-invocation or `Task` tool, so what the listing buys is a worker *tempted by a
+  description into reading and following a file it was not pointed at*. Whether the listing
+  reaches a worker at all under a restrictive `--allowed-tools` is not verifiable from this
+  repo — which is why this design takes the conservative branch regardless.
   A type-agnostic `fix` that CI could select by description matching would widen CI's blast
   radius with no CI file touched — the same argument that keeps `address-review-remarks`
   untouched in this phase. So `implement`, `review` and `fix` each say in their description
@@ -233,26 +238,32 @@ and it trims what every run carries before it reads anything: fifteen per-type f
 
 ### What the saving actually is
 
-A skill or agent file contributes its frontmatter `name` and `description` to the always-on
-listing each run starts with; the **body** loads only when the skill is invoked or the file is
+A skill file contributes its frontmatter `name` and `description` to the always-on listing
+each run starts with; an agent file does the same wherever subagent dispatch is available,
+which `_ai-review.yml`'s runner explicitly is not ("this runner has no `Task` tool to actually
+launch one"). Either way the **body** loads only when the skill is invoked or the file is
 read. The action runs the Claude Code CLI — a worker's init record reads `Claude Code
 initialized` — and both CI prompts are written for exactly that mechanism: `_ai-draft.yml`
 points at a path ("following the `develop-task` skill in .claude/skills/"), `_ai-review.yml`
 points at one per tree ("apply the full review checklist in `.claude/agents/adr-reviewer.md`
 … Read and self-apply it"), and both grant `Read`.
 
-So per-type content is already read on demand today. The phase-2 saving is fifteen
-descriptions collapsing to four, not fifteen files ceasing to load; phase 1's added cost is
-four descriptions, not four skill bodies. Two consequences, stated plainly because an earlier
+So per-type content is already read on demand today. The phase-2 saving is at most fifteen
+descriptions (8 work skills + 7 reviewer agents) collapsing to four (3 generic skills + 1
+generic agent) — not fifteen files ceasing to load — and an upper bound rather than a figure,
+since a runner without subagent dispatch never carries the agent half at all. Phase 1's added
+cost is four descriptions (the four new skills, a different four), not four skill bodies. Two consequences, stated plainly because an earlier
 draft of this document had them wrong:
 
 - **The phase-1 mitigation is not "keep the skills thin".** Body length never reaches the
   cached prefix — only a frontmatter edit does. Thin skills remain right for readability and
   for the `engineering/implement` shape, just not for this reason. What belongs in the
   mitigation is batching *frontmatter* edits.
-- **Phase 2 costs slightly more per run, not less.** A review run then reads two files
-  (generic `reviewer.md` plus `work-types/<label>/review.md`) where it reads one today. The
-  saving is in the always-on listing; the per-run reads go up by one.
+- **Phase 2 may cost more per run, not less.** A review run then reads up to two files
+  (generic `reviewer.md` plus `work-types/<label>/review.md`) where it reads one today, and
+  the implement side gains the same; CI could avoid it by pointing its prompt straight at the
+  per-label file, as it already points straight at the checklist. The saving is in the
+  always-on listing, not in the per-run reads.
 
 The structural case for phase 2 — one generic reviewer instead of seven near-identical
 frontmatters, a tree mirroring CI's own "checklist in file X" shape, a table that shrinks to
@@ -288,16 +299,18 @@ remove. The table's file columns are written so the migration only re-points the
   otherwise.
 - `address-review-remarks` untouched, including its section 4.
 
-**How much the pipeline actually runs.** Measured 2026-09-11, across 873 `ai-pipeline.yml`
-runs: 16 successes, 5 failures, and the rest the router skipping because no trigger label was
-applied. The successes cluster in a four-day window in early August 2026 and stop there. Every
-sampled success was a `review` job; the `draft` worker ran four times and failed all four (one
-on `error_max_turns` at its 15-turn ceiling); no sampled run executed `fix` at all. Job-level
-detail was sampled from three successful and four failed runs, not all 21 non-skipped ones.
+**How much the pipeline actually runs.** Measured 2026-09-11 by enumerating every one of the
+873 `ai-pipeline.yml` runs and reading the jobs of all 22 that were not skipped: `draft` 11
+runs (7 success, 4 failure), `review` 8 (6, 2), `fix` 3 (3, 0), spanning 2026-07-17 to
+2026-09-04. One draft failure was `error_max_turns` at its 15-turn ceiling. The ~851 skipped
+runs are the router declining to dispatch; run conclusions alone don't separate "the labeled
+event carried a label other than the three triggers" from the sender allow-list or the fork
+exclusion on `fix`.
 
-So the per-run CI cost phase 2 optimises for is paid almost never today. That is not an
-argument against phase 2 — its case stands on maintainability, above — but it is a reason to
-rank phase 2 below the local skills rather than treat it as this design's payoff.
+All three workers therefore work and are in occasional real use — roughly 22 worker runs over
+seven weeks, the most recent a week before this measurement. That is a modest but real per-run
+cost for phase 2 to act on, and it is the number to re-measure before phase 2 is scoped rather
+than a reason to defer it.
 
 **Phase 2 — CI follows, and the layout moves (one coordinated strand):**
 
@@ -306,7 +319,7 @@ rank phase 2 below the local skills rather than treat it as this design's payoff
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
   solely by `address-review-remarks`' docs-only scope. Widening that skill in phase 1 would
   widen CI's blast radius with no CI file touched, because the worker follows the skill by
-  name and every skill's description is listed to it. That is why phase 1 adds `fix` as a separate
+  name and every skill's description is listed to it (*What the saving actually is*, above). That is why phase 1 adds `fix` as a separate
   skill instead. Once the allow-list exists, `address-review-remarks` is folded into `fix`
   (its sections 1, 2, 5 and 6 move there — section 6 keeping both its halves, since "in CI:
   do not commit" is load-bearing the moment CI runs `fix`; section 3 is superseded by table
