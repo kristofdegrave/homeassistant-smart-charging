@@ -53,7 +53,14 @@ class _PowerReadAdapter(_ReadOnlyAdapter):
     to ignore exactly the signal this contract exists to provide. Keying on the observed unit
     rather than the adapter's lifetime means an entity that starts reporting a *different*
     wrong unit still says so -- that is a new fact, not a repeat. The cost of that choice is a
-    flapping unit, which `_MAX_WARNED_UNITS` bounds.
+    flapping unit, which `_MAX_WARNED_UNITS` bounds -- announcing that it has done so, since a
+    log going quiet otherwise reads the same as a mapping that got fixed.
+
+    Note this is once per (entity, unit) rather than ADR-0038's literal "once per entity per
+    config-entry load". It satisfies that rule's stated purpose -- no per-read spam -- while
+    keeping a genuinely changed unit audible. The divergence from the record's letter is
+    deliberate and filed for decision -- either that record is superseded, or the cadence is
+    judged not to be ADR-level and lives with the rest of this contract in entity-catalog.md.
     """
 
     _target_unit: str
@@ -62,16 +69,31 @@ class _PowerReadAdapter(_ReadOnlyAdapter):
     def __init__(self, hass: HomeAssistant, entity_id: str) -> None:
         super().__init__(hass, entity_id)
         self._warned_units: set[str | None] = set()
+        self._capped = False
 
     def _warn_once(self, unit: str | None, message: str, *args: object) -> None:
         if unit in self._warned_units:
             return
         # Bounded: a template entity whose `unit_of_measurement` is itself templated can flap,
         # and keying on the unit would otherwise both grow this set without limit and warn
-        # afresh each time. Past the cap the adapter stays silent rather than becoming the spam
+        # afresh each time. Past the cap the adapter stays quiet rather than becoming the spam
         # the cadence rule exists to prevent -- by then the user has had several distinct
         # warnings naming this entity.
-        if len(self._warned_units) >= _MAX_WARNED_UNITS:
+        #
+        # `unit is None` is exempt. The growth hazard is unbounded *strings*, and the absent-unit
+        # warning is the one this contract least tolerates losing: an entity that flaps through
+        # the cap and then settles on reporting no unit at all would otherwise be assumed
+        # silently forever, which is precisely the silence ADR-0038 exists to end.
+        if unit is not None and len(self._warned_units) >= _MAX_WARNED_UNITS:
+            if not self._capped:
+                self._capped = True
+                _LOGGER.warning(
+                    "%s has reported %d different unusable units; further unit changes on it"
+                    " will not be warned about. A log that goes quiet should not be mistaken"
+                    " for a mapping that got fixed.",
+                    self._entity_id,
+                    _MAX_WARNED_UNITS,
+                )
             return
         self._warned_units.add(unit)
         _LOGGER.warning(message, *args)

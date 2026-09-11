@@ -384,13 +384,13 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   had `UC11` in their own `Read by` column before this revision (the dashboard's status tiles read
   them back directly), so neither needed a change here.
 - **`sensor.smart_charging_adapter_readings`** (ADR-0021, R19) mirrors every currently-wired
-  *read* adapter role's current value as an attribute. For the four power-valued roles that
-  value is the **normalised** one, not the source entity's raw state: a `net_power` entity
-  reporting `3.353 kW` shows here as `3353`. That is the more useful reading for diagnosing a
-  mis-mapping — it is what the control cycle actually used — but it does mean the attribute no
-  longer answers "what did the source entity say". It giving the dashboard something to bind to
+  *read* adapter role's current value as an attribute, giving the dashboard something to bind to
   for hardware-I/O values that have no HA entity of their own (adapter roles are code-level, NF3,
-  not catalogued entities). Unlike the three sensors above, its own entity row doesn't enumerate
+  not catalogued entities). For the four power-valued roles that value is the **normalised** one,
+  not the source entity's raw state: a `net_power` entity reporting `3.353 kW` shows here as
+  `3353`. That is the more useful reading for diagnosing a mis-mapping — it is what the control
+  cycle actually used — but it does mean the attribute no longer answers "what did the source
+  entity say". Unlike the three sensors above, its own entity row doesn't enumerate
   which roles it covers — that set is whichever *read* adapter roles the integration currently
   wires, which grows over time (ADR-0021's Context) — so this catalog would drift the moment a
   role is added or removed if it tried to list them here. This is also why a role being one of

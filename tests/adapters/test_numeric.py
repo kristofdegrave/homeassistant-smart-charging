@@ -8,7 +8,9 @@ from homeassistant.const import (
     PERCENTAGE,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
+    UnitOfPower,
 )
+from homeassistant.util.unit_conversion import PowerConverter
 
 from custom_components.smart_charging.adapters.numeric import (
     _MAX_WARNED_UNITS,
@@ -306,3 +308,37 @@ async def test_a_near_miss_unit_spelling_is_rejected_with_an_actionable_message(
     assert await adapter.read() is None
     assert "cannot be converted" in caplog.text
     assert "unit string itself" in caplog.text
+
+
+async def test_the_cap_never_silences_the_absent_unit_warning(hass, caplog):
+    """The cap exists to bound unbounded unit STRINGS, and must not take the absent-unit
+    warning with it. An entity that flaps through the cap and then settles on reporting no unit
+    at all would otherwise be assumed silently forever -- the exact silence ADR-0038 exists to
+    end, reached by a pathological but reachable route."""
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    for i in range(_MAX_WARNED_UNITS + 5):
+        hass.states.async_set("sensor.net_power", "10", {ATTR_UNIT_OF_MEASUREMENT: f"bogus{i}"})
+        assert await adapter.read() is None
+    caplog.clear()
+
+    hass.states.async_set("sensor.net_power", "2300")
+    assert await adapter.read() == 2300.0
+    assert "assuming W" in caplog.text
+
+
+async def test_reaching_the_cap_says_so_rather_than_just_going_quiet(hass, caplog):
+    """A log that stops mentioning an entity reads the same as a mapping that got fixed. One
+    terminal line distinguishes "capped by policy" from "resolved", which matters most to the
+    user debugging the flapping sensor that caused the cap."""
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    for i in range(_MAX_WARNED_UNITS + 5):
+        hass.states.async_set("sensor.net_power", "10", {ATTR_UNIT_OF_MEASUREMENT: f"bogus{i}"})
+        assert await adapter.read() is None
+    assert caplog.text.count("will not be warned about") == 1
+
+
+def test_every_ha_power_unit_is_convertible():
+    """Pins the identity the rejection-branch comment asserts. The code tests membership in
+    VALID_UNITS itself, so it stays correct either way -- but if HA ever ships a power unit its
+    own converter cannot handle, this fails loudly instead of leaving a stale comment."""
+    assert PowerConverter.VALID_UNITS == set(UnitOfPower)
