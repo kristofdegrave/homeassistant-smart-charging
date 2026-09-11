@@ -631,7 +631,11 @@ def resolve_deadline_urgency(
     # strip-to-naive approach: now that the window can span midnight it routinely straddles
     # 02:00, so a DST transition inside it stopped being a twice-a-year same-day edge case.
     required = resolve_required_current(
-        resolve_next_occurrence(inputs.deadline_today, inputs.deadline_tomorrow, inputs.now_dt),
+        resolve_next_occurrence(
+            deadline_today=inputs.deadline_today,
+            deadline_tomorrow=inputs.deadline_tomorrow,
+            now=inputs.now_dt,
+        ),
         inputs.now_dt,
         soc=ctx.ev_soc,
         active_soc_limit=ctx.active_soc_limit,
