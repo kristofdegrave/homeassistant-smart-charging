@@ -42,6 +42,28 @@ docs/adl/
   0001-...md, 0002-...md — one file per architectural decision, sequential, never renumbered
 ```
 
+```text
+docs/postmortems/
+  YYYY-MM-DD-<slug>.md — one dated analysis per shipped failure
+```
+
+A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
+is never kept current, never cited as the reason a rule exists (the rule's own reference doc
+says that), and never consulted to answer "what does the system do" — the analysis docs own
+that. Its job is to explain how a specific failure got past a specific process, so the changes
+it recommends can be argued from evidence. Once those changes land, it stays as the record of
+why and is not revised.
+
+Two rules that apply elsewhere deliberately do **not** apply here:
+
+- **Tracking refs are required, not forbidden.** Analysis docs and ADRs must not reference PR
+  numbers or issue statuses (they rot). A post-mortem's entire evidentiary value is the
+  specific PRs, issues, commits and review comments it cites, at the dates it cites them —
+  don't "fix" these.
+- **It is not an analysis document.** The 6Cs/glossary-first protocol and `analysis-reviewer`
+  do not govern it; it quotes the analysis docs as evidence rather than asserting behaviour.
+  Review it as a `workflow` artifact.
+
 ---
 
 ## Writing order
