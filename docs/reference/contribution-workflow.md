@@ -124,10 +124,11 @@ separate bot account for the interactive session.
   a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`, and a stale
   minimum-HA declaration is a `bug` whose fix is neither. So an issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
-  and the fixing artifact is not yet known ([idea-to-issues.md](idea-to-issues.md)'s **Route**),
-  and gains a context label once it is. Neither label substitutes for the other, and neither
-  triggers anything on its own — only an action label does. A kind label adds no
-  Model-selection row and no drafter `case` entry; see [ci-pipeline.md](ci-pipeline.md).
+  and the fixing artifact is not yet known, and gains a context label once it is —
+  [idea-to-issues.md](idea-to-issues.md)'s **Route** owns that track and its verify-first
+  gate. Neither label substitutes for the other, and neither triggers anything on its own —
+  only an action label does. A kind label adds no Model-selection row and no drafter `case`
+  entry; see [ci-pipeline.md](ci-pipeline.md).
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
@@ -157,11 +158,11 @@ separate bot account for the interactive session.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment, matching the `bug/<n>` branches such work already uses (the older `dev/`,
-`development/` and `fix/` spellings are historical, not alternatives). When both axes are
-present the
-**context label wins**, so the branch matches what `_ai-draft.yml` would compute from the same
-issue. If extra work on the same issue needs a second, separate
+defined segment, matching the `bug/<n>` branches such work already uses. Earlier branches for
+*this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
+alternatives (`development/<n>` keeps its own meaning above — a plan-pinned task). When both
+axes are present the **context label wins**, so the branch matches what `_ai-draft.yml` would
+compute from the same issue. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 
