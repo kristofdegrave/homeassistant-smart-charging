@@ -161,10 +161,16 @@ def seed_owned_entity(hass, entity_id: str, state: str) -> None:
 
 
 def seed_today_deadline(hass, *, hours_from_now):
-    """Seed today's departure-deadline default via the real
+    """Seed TODAY's departure-deadline default via the real
     time.smart_charging_departure_<dow> entity (ADR-0018), so it resolves `hours_from_now`
-    ahead of real wall-clock now (the deadline/required-current resolution reads
-    dt_util.now(), not the mode state machines' injected monotonic clock)."""
+    ahead of real wall-clock now (that resolution reads dt_util.now(), not the mode state
+    machines' injected monotonic clock).
+
+    Callers must freeze the clock away from midnight. Only today's weekday slot is written, and
+    `.time()` discards the date, so `hours_from_now` crossing midnight seeds a time that has
+    ALREADY PASSED today -- which since issue #1005 rolls to tomorrow's own resolution (usually
+    unseeded, i.e. no deadline at all) rather than saturating to maximum urgency. A test
+    asserting urgency would then fail only when the suite happens to run in that window."""
     now_dt = dt_util.now()
     entity_id = f"time.smart_charging_{OWNED_SUFFIX_DEPARTURE_DOW[now_dt.weekday()]}"
     seed_owned_entity(

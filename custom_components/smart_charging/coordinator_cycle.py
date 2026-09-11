@@ -25,7 +25,11 @@ from .const import (
     PROFILE_AUTO,
 )
 from .engines.capability_gate import resolve_available_modes
-from .engines.deadline import RequiredCurrentResult, resolve_required_current
+from .engines.deadline import (
+    RequiredCurrentResult,
+    resolve_next_occurrence,
+    resolve_required_current,
+)
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
 from .engines.soc_target import (
@@ -541,7 +545,11 @@ class DeadlineUrgencyInputs:
 
     deadline_resolvable: bool
     active_mode: str
+    # R14's table evaluated for each of the two days the next occurrence can fall on (R15,
+    # issue #1005) -- both are needed because the table's terminal row is a day-of-week
+    # default, so tomorrow's departure time may differ from today's or be absent entirely.
     deadline_today: time | None
+    deadline_tomorrow: time | None
     now_dt: datetime
     effective_battery_capacity_kwh: float
     max_current_a: float
@@ -557,7 +565,8 @@ def resolve_deadline_urgency(
     *,
     mode_desired_current: Callable[[str], float],
 ) -> DeadlineUrgencyResult:
-    """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
+    """R5/R14/R15: the next occurrence of the departure deadline -- resolved from R14's table
+    as evaluated for today AND tomorrow -- and the required-current/urgency it drives
     (ADR-0006 steps 3-6; ADR-0012-style extraction). `inputs.deadline_resolvable` is the
     coordinator's own `status in CHARGEABLE_STATES and ev_soc is not None` check, computed
     ONCE there and passed in rather than re-derived here from `status`/`ev_soc` -- the
@@ -615,14 +624,19 @@ def resolve_deadline_urgency(
 
     baseline_desired_a = mode_desired_current(baseline_mode)
 
+    # `now_dt` stays tz-aware here, and `resolve_next_occurrence` stamps the occurrence with
+    # its tzinfo, so the remaining-time subtraction is a true absolute duration. The
+    # departure-time entities themselves carry no tzinfo -- they are wall-clock times of day,
+    # which is exactly what `datetime.combine` needs. This deliberately replaces the earlier
+    # strip-to-naive approach: now that the window can span midnight it routinely straddles
+    # 02:00, so a DST transition inside it stopped being a twice-a-year same-day edge case.
     required = resolve_required_current(
-        inputs.deadline_today,
-        # engines/deadline.py combines this with a naive `time` (the departure-time
-        # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
-        # doesn't raise (both sides represent the same local wall clock either way).
-        # Wall-clock subtraction on the two DST-transition days a year can be off by
-        # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
-        inputs.now_dt.replace(tzinfo=None),
+        resolve_next_occurrence(
+            deadline_today=inputs.deadline_today,
+            deadline_tomorrow=inputs.deadline_tomorrow,
+            now=inputs.now_dt,
+        ),
+        inputs.now_dt,
         soc=ctx.ev_soc,
         active_soc_limit=ctx.active_soc_limit,
         ev_battery_capacity_kwh=inputs.effective_battery_capacity_kwh,

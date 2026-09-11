@@ -2,8 +2,9 @@
 
 import dataclasses
 import logging
+from datetime import datetime, timedelta
 from datetime import time as time_of_day
-from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from homeassistant.const import Platform
@@ -1419,12 +1420,21 @@ async def test_time_to_full_min_defaults_to_none_on_required_role_fault(hass):
     assert result.time_to_full_min is None
 
 
-async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_urgency(hass):
+async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_urgency(
+    hass, freezer
+):
     """Regression guard (#602 T3): promoting the ev_battery_capacity read to run
     unconditionally must not change deadline-urgency's own resolved value for a cycle where
     it was already being computed -- mirrors
     test_effective_peak_limit_raises_to_maximum_during_urgency's known-working shape so this
-    guard actually exercises the deadline branch, not just `fault is False`."""
+    guard actually exercises the deadline branch, not just `fault is False`.
+
+    Frozen away from midnight (issue #1005): `_seed_today_deadline` writes `(now + 1h).time()`
+    into TODAY's weekday slot only, so an unfrozen run between 23:00 and 24:00 local would seed
+    a `00:xx` time that has already passed today, roll to a tomorrow that has no configured
+    deadline, and resolve no urgency at all. The pre-#1005 code passed that window by accident
+    (a negative interval saturated to inf, which read as urgent)."""
+    freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=10.0)
@@ -2275,6 +2285,65 @@ async def test_baseline_dry_run_ignores_has_charged_after_escalation_deadlock(ha
     assert result.active_mode == MODE_SOLAR
 
 
+async def test_passed_morning_deadline_does_not_pin_auto_to_captar_all_afternoon(hass, freezer):
+    """Issue #1005, end-to-end through the real control cycle: the live symptom that surfaced
+    this bug. A 07:00 weekday departure time, judged on a sunny afternoon, used to resolve as a
+    deadline 5 hours in the PAST -- saturating required_a to infinity, pinning `urgent` True and
+    dragging Auto onto its urgent row, so `Captar` was dispatched (and the peak limit raised to
+    max_peak_kw) for the rest of the day despite ample solar surplus.
+
+    This is deliberately a coordinator-level test, not another pure-function one: the pure
+    rollover is covered in tests/engines/test_deadline.py and tests/test_coordinator_cycle.py,
+    but neither proves that the COORDINATOR resolves tomorrow's own weekday default and threads
+    it through DeadlineUrgencyInputs. Passing `deadline_today` there instead, or `None`, leaves
+    those tiers green and this test red."""
+    # Pin the harness's LOCAL clock to mid-afternoon, not just UTC: the whole point of this
+    # test is that a morning departure time has already passed, and `move_to` a UTC wall-clock
+    # would leave local time in the small hours under the test tz, where 07:00 is still ahead.
+    freezer.move_to("2026-01-15 12:00:00")
+    freezer.move_to(dt_util.now().replace(hour=15, minute=0, second=0, microsecond=0))
+    now_dt = dt_util.now()
+    # Ample surplus -- ideal_a = 2760W / 230V = 12 A, Solar's own desired current.
+    adapters = _adapters(
+        status=STATE_CHARGING,
+        ev_soc=50.0,
+        net_w=0.0,
+        charger_w=2760.0,
+        sun_state=SUN_STATE_ABOVE_HORIZON,
+    )
+    config = _config()  # ev_battery_capacity_kwh=75.0
+    config = dataclasses.replace(config, solar_available=True)
+    config = dataclasses.replace(config, captar_available=True)
+    config = dataclasses.replace(config, solar_restart_debounce_min=0.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    # Today's 07:00 departure time is already 8 hours in the past; tomorrow's is a DIFFERENT
+    # time of day, so this also pins that the rolled-over occurrence comes from tomorrow's own
+    # row of R14's table rather than today's time stamped onto tomorrow's date.
+    coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(7, 0)
+    coord.departure_dow_defaults[(now_dt.weekday() + 1) % 7] = time_of_day(6, 0)
+    _seed_ample_peak_headroom(coord)
+
+    result = await coord._async_update_data()
+
+    # 75 kWh * 30% = 22.5 kWh spread over the real window to TOMORROW's 06:00 -- derived
+    # from the harness's own local clock rather than hardcoded, since the frozen 12:00 UTC is
+    # not 12:00 local. Comfortably under Solar's own 12 A, so no urgency and no escalation.
+    tomorrow_at_six = datetime.combine(
+        now_dt.date() + timedelta(days=1), time_of_day(6, 0), tzinfo=now_dt.tzinfo
+    )
+    hours_remaining = (tomorrow_at_six - now_dt).total_seconds() / 3600
+    assert coord._required_current.required_a == pytest.approx(
+        22.5 * 1000 / hours_remaining / 230.0, abs=1e-3
+    )
+    assert coord._required_current.urgent is False
+    assert result.active_mode == MODE_SOLAR
+
+
 async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
     mutual-exclusivity clause)."""
@@ -2390,14 +2459,18 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
 async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_current(
     hass, freezer
 ):
-    """Issue #650: engines/deadline.py deliberately saturates `required_a` to
-    `float('inf')` once a same-day deadline has already passed (its own documented
-    design-doc-Sec6 behavior, left unchanged here). But `float('inf')` must never reach
-    the `DeadlineUnreachableNotified` payload -- it doesn't round-trip through HA's JSON
-    websocket encoding, and notification_manager.py formats it directly into user-facing
-    text ('would need inf A'). The boundary cap belongs here, in the coordinator, at the
-    point the engine's pure output crosses into the published event payload -- not inside
-    the engine itself."""
+    """Issue #650: `float('inf')` must never reach the `DeadlineUnreachableNotified` payload --
+    it doesn't round-trip through HA's JSON websocket encoding, and notification_manager.py
+    formats it directly into user-facing text ('would need inf A'). The boundary cap belongs
+    here, in the coordinator, at the point the engine's pure output crosses into the published
+    event payload -- not inside the engine itself.
+
+    Since issue #1005 the control cycle reaches the engine's saturation branch only in one
+    once-a-year corner (a fall-back repeated hour -- see `resolve_next_occurrence`'s docstring);
+    a departure time that has simply passed today now rolls to tomorrow instead of producing a
+    negative window. Rather than build that transition-hour scenario through the whole cycle,
+    this test forces the condition directly, patching the occurrence resolution to hand back an
+    elapsed datetime -- which is also what a future regression or a direct caller would do."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     config = _config()  # CONF_MAX_CURRENT=16.0
@@ -2407,7 +2480,7 @@ async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_cu
     coord.active_mode = MODE_POWER
     coord.target_current = 0.0
     coord.soc_limit_override = 80.0
-    _seed_today_deadline(coord, hours_from_now=-1)  # deadline already passed -> engine saturates
+    _seed_today_deadline(coord, hours_from_now=1)
     _seed_ample_peak_headroom(coord)
 
     events = []
@@ -2418,14 +2491,21 @@ async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_cu
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    await coord._async_update_data()
+    # Aware and relative to the harness's own local clock -- the cycle now keeps `now_dt`
+    # tz-aware end to end, and the frozen 12:00 UTC is not 12:00 local.
+    elapsed = dt_util.now() - timedelta(hours=1)
+    with patch(
+        "custom_components.smart_charging.coordinator_cycle.resolve_next_occurrence",
+        return_value=elapsed,  # already passed -> the engine's saturation branch
+    ):
+        await coord._async_update_data()
 
-    # The engine's own result is untouched (still saturates to inf, per its documented
-    # contract) -- only the published payload is capped.
-    assert coord._required_current.required_a == float("inf")
-    assert len(events) == 1
-    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
-    assert events[0].data[ATTR_REQUIRED_CURRENT_A] != float("inf")
+        # The engine's own result is untouched (still saturates to inf, per its documented
+        # contract) -- only the published payload is capped.
+        assert coord._required_current.required_a == float("inf")
+        assert len(events) == 1
+        assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
+        assert events[0].data[ATTR_REQUIRED_CURRENT_A] != float("inf")
 
 
 def _listen_cleared(hass):
