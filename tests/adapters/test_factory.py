@@ -9,6 +9,7 @@ from custom_components.smart_charging.adapters.numeric import (
     NumericReadAdapter,
     NumericReadWriteAdapter,
     PowerKilowattReadAdapter,
+    PowerWattReadAdapter,
 )
 from custom_components.smart_charging.adapters.presence import PresenceReadAdapter
 from custom_components.smart_charging.adapters.status import StatusReadAdapter
@@ -76,10 +77,13 @@ async def test_factory_builds_expected_roles(hass):
     assert adapters[ROLE_CHARGER_STATUS]._entity_id == "sensor.evse"
     assert adapters[ROLE_CHARGER_STATUS]._translation == {"Charging": "charging"}
 
-    assert isinstance(adapters[ROLE_NET_POWER], NumericReadAdapter)
+    # ADR-0038: the power roles carry a unit contract, so they are NOT plain
+    # NumericReadAdapters -- asserting the specific class is what keeps a future rewiring
+    # from silently dropping the normalisation (issue #1007).
+    assert isinstance(adapters[ROLE_NET_POWER], PowerWattReadAdapter)
     assert adapters[ROLE_NET_POWER]._entity_id == "sensor.net_power"
 
-    assert isinstance(adapters[ROLE_CHARGER_POWER], NumericReadAdapter)
+    assert isinstance(adapters[ROLE_CHARGER_POWER], PowerWattReadAdapter)
     assert adapters[ROLE_CHARGER_POWER]._entity_id == "sensor.charger_power"
 
     assert isinstance(adapters[ROLE_GRID_VOLTAGE], NumericReadAdapter)
@@ -123,7 +127,7 @@ async def test_factory_builds_solar_power_role_when_configured(hass):
     data = _data()
     data[CONF_SOLAR_POWER_ENTITY] = "sensor.solar_power"
     adapters = build_adapters(hass, data)
-    assert isinstance(adapters[ROLE_SOLAR_POWER], NumericReadAdapter)
+    assert isinstance(adapters[ROLE_SOLAR_POWER], PowerWattReadAdapter)
     assert adapters[ROLE_SOLAR_POWER]._entity_id == "sensor.solar_power"
 
 
