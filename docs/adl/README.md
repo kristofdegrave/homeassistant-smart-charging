@@ -45,6 +45,6 @@ template.
 | [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter | Accepted |
 | [0037](0037-scenario-timeline-test-tier.md) | Scenario/timeline test tier — a third tier alongside ADR-0009's two (extends ADR-0009) | Accepted |
 | [0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Unit contract at the power-read adapter boundary — convert known units, assume-and-warn when absent, reject a present non-power unit; except `monthly_peak_external`, where an absent unit is rejected too | Accepted |
-| [0039](0039-baseline-reading-during-own-actuation.md) | The peak clamp discards a baseline reading taken during its own actuation | Proposed |
+| [0039](0039-baseline-reading-during-own-actuation.md) | The peak clamp discards a baseline reading taken during its own actuation | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
