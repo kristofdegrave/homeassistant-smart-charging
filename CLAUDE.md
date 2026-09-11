@@ -162,9 +162,10 @@ acting:
   as the actor, in [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). An
   interactive session never self-applies those trigger labels — see that doc.
 
-Two related references sit just outside this lifecycle: what happens before an issue exists
-([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md), epic decomposition) and
-the completion bar an author self-checks before opening the PR
+Two related references sit just outside this lifecycle: the stages either side of it
+([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
+routing, spec, slicing into sub-issues, and verifying a shipped slice live) and the
+completion bar an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
 commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
 their own template/quality-check steps on top of these; they never replace them.
@@ -290,7 +291,10 @@ additions:
 Context labels, project-board Size/Estimate fields, and branch naming — see
 [docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md), which also
 points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the anchored
-`Plan:` line's exact required format. Epic-first filing for multi-artifact strands — see
+`Plan:` line's exact required format. Epics and their children use GitHub's **native**
+parent/sub-issue and blocked-by relationships, which `gh` supports directly — never re-derive
+a body-text convention for them; the commands are in that same **Issue conventions** section.
+Epic-first filing for multi-artifact strands — see
 [docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
 
 ---
