@@ -63,14 +63,41 @@ class BaselineDebouncer:
 
     accepted_w: float | None = None
     pending_cycles: int = 0
+    deferred_previous: bool = False
+    """ADR-0039/R3: whether the PREVIOUS call was deferred on the command-changed ground. Caps
+    that deferral at one cycle in a row -- without it, a mode whose own request moves every cycle
+    (Solar tracking a drifting surplus) would make every reading a command-changed one and freeze
+    the baseline indefinitely, which R3's own bound forbids."""
 
 
 def debounce_baseline_w(
     raw_baseline_w: float,
     tracker: BaselineDebouncer,
     debounce_cycles: int,
+    *,
+    command_changed: bool,
 ) -> tuple[float, BaselineDebouncer]:
-    """Issue #990: the charger's own power sensor (slow Modbus poll) can still report the
+    """ADR-0039: `command_changed` says the commanded current changed on the cycle this reading
+    was taken, which makes `raw_baseline_w` partly a measurement of this integration's OWN
+    actuation seen through two sensors with different latencies -- not of the household. Such a
+    reading is discarded outright and the last accepted one stands, in either direction; only a
+    reading taken while the command held steady is judged by the direction rules below. Without
+    that gate the step-UP transient described at the end of this docstring is not merely "one
+    extra cycle" of understated headroom: the clamp actuates on it, and the actuation
+    manufactures the next transient, so the commanded current runs a 3-cycle limit cycle
+    indefinitely while the clamp is binding (issue #1034 -- `Captar` requests `max_a` every
+    cycle by design, so the clamp IS the controller there).
+
+    `pending_cycles` is carried through a discarded cycle unchanged rather than reset: a
+    discarded reading is a non-observation, evidence neither for nor against a pending drop, so
+    a genuine sustained drop that straddles a step still needs `debounce_cycles` readings taken
+    while the command was steady. The `tracker.accepted_w is None` case is NOT gated -- there is
+    no prior reading to fall back on, so the first reading of a connection is always accepted
+    even if it coincides with a step. Deliberately has no default: there is one production
+    caller, and a future one that forgets this argument should be a type error rather than a
+    silent regression to the pre-ADR-0039 behavior that caused #1034.
+
+    Issue #990: the charger's own power sensor (slow Modbus poll) can still report the
     prior, higher value for one extra coordinator cycle after a current step-down, while the
     net meter (fast) already reflects the drop -- transiently swinging `baseline_w` (and, via
     it, `peak_headroom_a`/`solar_surplus_w`) artificially low. A lower `raw_baseline_w` than
@@ -85,8 +112,16 @@ def debounce_baseline_w(
     transiently too HIGH) is accepted immediately by the same "at or above" rule and becomes
     the new `accepted_w` -- an accepted trade-off: it costs one extra cycle of understated
     headroom/`solar_surplus_w` once the true, lower baseline reasserts itself, but never an
-    unsafe one.
+    unsafe one. That last sentence is the exposure `command_changed` above now closes; the rule
+    it describes still governs every reading taken while the command held steady.
     """
+    if tracker.accepted_w is not None and command_changed and not tracker.deferred_previous:
+        return tracker.accepted_w, BaselineDebouncer(
+            accepted_w=tracker.accepted_w,
+            pending_cycles=tracker.pending_cycles,
+            deferred_previous=True,
+        )
+
     if tracker.accepted_w is None or raw_baseline_w >= tracker.accepted_w:
         return raw_baseline_w, BaselineDebouncer(accepted_w=raw_baseline_w, pending_cycles=0)
 
