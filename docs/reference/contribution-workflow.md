@@ -65,8 +65,8 @@ message conventions).
    (`git worktree remove <path>`) right away if clean — don't wait for a bulk sweep.
 
 **A merged `specs` issue produces task issues, not code.** Its approved plan doesn't implement
-itself — file the `development`/`testing` task issues per [idea-to-issues.md](idea-to-issues.md)
-stage 5 (one per task, each with the anchored `Plan:` line) so the work actually gets picked
+itself — file the `development`/`testing` task issues per [idea-to-issues.md](idea-to-issues.md)'s
+**Ticket** stage (one per task, each with the anchored `Plan:` line) so the work actually gets picked
 up. Filing them is part of finishing the spec issue; implementing them is separate work that
 still waits for the check-in below.
 

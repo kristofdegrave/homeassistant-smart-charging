@@ -14,10 +14,13 @@ either way.
 
 ## 2. Grill
 
-Stress-test the idea before decomposing it. Two kinds of output, each with its own home:
+Stress-test the idea before decomposing it — `work-idea` runs this through the `grilling`
+skill, which owns the technique. Two kinds of output, each with its own home:
 
-- **Decisions** go in the epic body, under a *Decisions so far* heading — one entry per
-  settled question. The epic is the record; chat scrollback is not.
+- **Decisions** are written down, never left in chat scrollback: on the idea issue while
+  grilling, then moved into the epic body under a *Decisions so far* heading when the epic is
+  filed (**Ticket** below). One entry per settled question. A single-artifact idea, which
+  never gets an epic, keeps them on its own issue.
 - **Facts are the agent's job, never the user's.** A question of fact is answered by research
   against primary sources (Home Assistant developer docs, library source, device API docs) and
   recorded **as a comment on the issue that needed it**: date, sources read, the answer, and
@@ -47,15 +50,18 @@ fix for a behaviour nobody has seen.
 
 **Gate: a `requirement` or `uc` change that touches shipped behaviour does not get
 `needs-approval` until a `specs` child issue exists in the same epic.** Without it, an analysis
-document can merge describing behaviour the code does not have. The `specs` issue is the
+document can merge describing behaviour the code does not have. The review loop applies that
+label automatically on a clean verdict and knows nothing about child issues
+([ci-pipeline.md](ci-pipeline.md)), so on a CI-driven PR the same condition is checked by
+whoever approves the merge. The `specs` issue is the
 earliest artifact that can carry that obligation — a `development`/`testing` issue cannot,
 because it needs an approved plan's anchored `Plan:` line
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), and no such
 plan exists until the spec itself is drafted and reviewed.
 
-The spec's sections, slicing and testing-seam rules belong to `write-impl-spec`. It stays
-*derived* from the analysis and design documents — it never introduces behaviour they do not
-already state.
+The spec's own sections belong to `write-impl-spec`. Wherever it lands, it stays *derived*
+from the analysis and design documents — it never introduces behaviour they do not already
+state.
 
 ## 5. Ticket
 
@@ -84,8 +90,8 @@ What to file when:
   line, so they cannot be filed until the spec issue's plan is drafted and reviewed. File them
   then, one per task in the plan's build order.
 - **Anything that surfaces later** and belongs to the strand — a bug found mid-implementation,
-  a follow-up — is attached as a sub-issue too. A child needs no drafter context label to
-  belong to an epic; `bug` and `enhancement` are fine.
+  a follow-up — is attached as a sub-issue too. Belonging to an epic does not require a
+  drafter-facing context label; `file-task-issue` covers which label such a child takes.
 
 Milestone and priority are not yet standardized. Note urgency in the epic body rather than
 inventing a scheme ad hoc.
@@ -98,13 +104,15 @@ review → merge.
 ## 7. Verify live
 
 A slice is not finished when it merges; it is finished when it has been observed working on
-the real installation. **The first slice of a strand is verified live before slice two
-starts** — otherwise every later slice is built on a foundation nobody has seen run.
+the real installation — otherwise every later slice is built on a foundation nobody has seen
+run.
 
-What that pass must produce, and how it differs from the pre-merge runtime-verified
-self-check, is the **Verify live** bar in [definition-of-done.md](definition-of-done.md).
+What that pass must produce, when it blocks the next slice, and how it differs from the
+pre-merge runtime-verified self-check is the **Verify live** bar in
+[definition-of-done.md](definition-of-done.md).
 
 ## 8. Close
 
-When every child is closed and its slice verified live, close the epic, and close the
-originating idea issue with a summary of what shipped.
+When every child is closed and its slice verified live, close the epic with a summary of what
+shipped. The originating idea issue is already closed — that happened at **Ticket**, once the
+strand was fully captured.

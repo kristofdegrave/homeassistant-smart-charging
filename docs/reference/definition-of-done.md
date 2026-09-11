@@ -32,13 +32,14 @@ anything touching `custom_components/`/`tests/`.
 The checklist above is an author self-check on **one PR, before merge** — the author's own
 claim, about whichever behaviours the author chose to drive, on a branch. Every vertical slice
 therefore also gets a **verify-live** pass once it is deployed
-([idea-to-issues.md](idea-to-issues.md) stage 7 places it in the wider flow):
+([idea-to-issues.md](idea-to-issues.md)'s **Verify live** stage places it in the wider flow):
 
 - **The checklist comes from the spec, not from memory** — the entity ids to observe and the
-  values, with units, expected of them, fixed before the slice was built; the spec carries one
-  per slice (`write-impl-spec`).
+  values, with units, expected of them, fixed before the slice was built. Every spec must
+  define this list, one per slice.
 - **The result is a comment on the epic**: the observed value for each item on that list, plus
-  a log excerpt or dashboard screenshot.
+  a log excerpt or dashboard screenshot. Where the work has no epic — a single-artifact idea,
+  or a one-slice fix — the comment goes on the task issue instead.
 - **The first slice of a strand is verified live before slice two starts.**
 
 The runtime-verified self-check above and this pass do not substitute for each other, and a PR
@@ -49,7 +50,7 @@ that satisfies one has not satisfied the other:
 | Unit | One PR | One deployed slice |
 | Moment | Before merge | After deployment |
 | Judged against | The diff | A checklist written before the code |
-| Recorded in | The PR | A comment on the epic |
+| Recorded in | The PR | A comment on the epic (or the task issue) |
 
 ## Commit message conventions
 

@@ -291,10 +291,10 @@ additions:
 Context labels, project-board Size/Estimate fields, and branch naming — see
 [docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md), which also
 points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the anchored
-`Plan:` line's exact required format. Epics are parent issues and their children native
-sub-issues with native blocked-by edges — `gh` supports both directly (`--parent`,
-`--blocked-by`, `--add-sub-issue`, `--add-blocked-by`), so don't re-derive a body-text
-convention for them. Epic-first filing for multi-artifact strands — see
+`Plan:` line's exact required format. Epics and their children use GitHub's **native**
+parent/sub-issue and blocked-by relationships, which `gh` supports directly — never re-derive
+a body-text convention for them; the commands are in that same **Issue conventions** section.
+Epic-first filing for multi-artifact strands — see
 [docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
 
 ---
