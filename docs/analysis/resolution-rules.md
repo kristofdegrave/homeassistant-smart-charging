@@ -14,11 +14,12 @@ changes what a citation elsewhere refers to. (`docs/design/` and `docs/adl/` sti
 by ordinal as of this writing; ADR bodies are immutable and cannot be updated retroactively, and
 the design docs are a separate reconciliation pass.) The required-current rule is a shared formula
 instead, since it has no priority order to evaluate. Every rule is re-evaluated every control cycle, so a change in conditions
-changes the result on the next cycle. Two of the inputs these rules read are not values observable
+changes the result on the next cycle. Three of the inputs these rules read are not values observable
 *this* cycle but flags the coordinator threads across cycles for the current connected session:
-whether a [solar step-up](system-overview.md#ubiquitous-language) is in effect (R7/R8) and whether a
-[missed-deadline hold](system-overview.md#ubiquitous-language) is in effect (R5). Both are called out
-where the rule that reads them is defined.
+whether a [solar step-up](system-overview.md#ubiquitous-language) is in effect (R7/R8), whether
+[deadline urgency](system-overview.md#ubiquitous-language) is latched on (R5), and whether a
+[missed-deadline hold](system-overview.md#ubiquitous-language) is in effect (R5). All three are
+called out where the rule that reads them is defined.
 
 ---
 
@@ -219,8 +220,9 @@ from the slack test, which charging at the escalated rate would otherwise falsif
 cycle (the gap closes faster than the window does). It **clears** when any of these holds:
 
 - the baseline mode's own [desired charger current](system-overview.md#ubiquitous-language) is at
-  or above the required current — the **handback**: the ordinary policy is now willing to do the
-  job unaided, so there is nothing left for urgency's levers to add. Under `Manual` that is the
+  or above the required current, **on a cycle on which the slack test above does not itself hold**
+  — the **handback**: the ordinary policy is now willing to do the job unaided, so there is nothing
+  left for urgency's levers to add. Under `Manual` that is the
   manually selected mode's own desired current (`Manual` never escalates the mode, so this is
   simply the active mode itself); under `Auto`, that of whichever mode Auto mode-selection's
   baseline rows (below) would select on their own. The baseline is evaluated fresh every cycle
@@ -230,7 +232,25 @@ cycle (the gap closes faster than the window does). It **clears** when any of th
 - state of charge is at or above the active SOC limit (the required current is then zero, so the
   handback holds trivially for any baseline);
 - the car disconnects; the departure deadline resolves to "no deadline"; or the deadline
-  capability becomes absent (R18).
+  capability becomes absent (R18);
+- a [missed-deadline hold](system-overview.md#ubiquitous-language) clears (below). Neither test
+  runs while a hold is in effect, so the latch that occurrence set would otherwise never be handed
+  back. Three of the hold's four clear conditions are already urgency clears in their own right;
+  the fourth — the backstop, the *following* occurrence elapsing — is not, and without this the
+  latch would outlive the hold indefinitely against a baseline of `Off`, defeating the backstop's
+  own "a hold never outlives one deadline cycle".
+
+**The slack test takes precedence over the handback where both hold on the same cycle**, and they
+genuinely can: a [desired charger current](system-overview.md#ubiquitous-language) is what a mode
+*asks for*, before any clamp, so a baseline mode can want more than the escalated rate could ever
+deliver — a baseline `Captar` desiring 32 A satisfies the handback against a required current of
+20 A on a cycle whose escalated rate is only 15 A, while the slack test plainly holds. Letting the
+handback win there would clear urgency, re-engage it next cycle, and alternate
+`DeadlineUrgencyReverted`/`DeadlineUrgencyEngaged` indefinitely — the churn the latch exists to
+prevent. One consequence is worth naming: since a required current above the escalated rate implies
+the slack test holds, the handback can never clear urgency straight out of
+[UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s `Unreachable` state. The deadline must
+first become reachable again (`Unreachable` to `Urgent`); only then can it be handed back.
 
 Under a baseline of `Off`, the handback can only be satisfied by state of charge reaching the
 active SOC limit — so urgency, once engaged, charges through to that limit. That is deliberate: it
@@ -269,7 +289,7 @@ disconnects, when the deadline capability becomes absent (R18), or — as a back
 *following* occurrence itself elapses, so a hold never outlives one deadline cycle. Nothing else the
 departure-deadline rule resolves clears it: the hold is anchored to the occurrence already missed,
 not to the next one, so it survives that next occurrence resolving to "no deadline" or to a different
-time. From the cycle after it clears, the required current above governs normally again.
+time. From the cycle after it clears, the required current above governs normally again, and the urgency latch clears with it (the handback test above).
 
 - **Evaluation order, so the hold and the cap above are not circular.** The hold is updated once per
   cycle, *after* the active SOC limit has been resolved for that cycle (so condition 1 reads the

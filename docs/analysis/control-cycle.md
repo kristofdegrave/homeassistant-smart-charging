@@ -30,7 +30,7 @@ default 10 s). The cycle carries no decision state between firings; a handful of
 accumulators do persist across cycles — e.g. the rolling smoothing window, the monthly peak
 demand together with its own separate 15-minute window (R21), the rapid-cycling
 timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
-threaded in step 4, the last accepted [household
+and the deadline-urgency latch both threaded in step 4 (R5), the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
 charger currents that R3's deferral cases key on, and the
 [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
