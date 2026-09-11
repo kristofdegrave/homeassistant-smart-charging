@@ -136,7 +136,16 @@ flowchart TD
    ones, to avoid lag), the coordinator checks whether the desired current would push net
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
-   cycle, and emits `PeakLimitClamped`. The effective peak limit itself is resolved by
+   cycle, and emits `PeakLimitClamped`. The [household
+   baseline](system-overview.md#ubiquitous-language) this check solves around is resolved before
+   that comparison, and is not unconditionally this cycle's reading: R3 names two bounded cases in
+   which the most recently accepted reading stands instead — a reading taken on a cycle this
+   step's own output changed the commanded current (one cycle, since such a reading partly
+   measures the System's own actuation rather than the household), and a reading that would
+   increase headroom (up to a configurable number of consecutive cycles, default 2, until it
+   holds). A breaching increase is therefore never deferred by more than a single cycle, and step
+   6 below is unaffected either way — it always uses this cycle's own raw readings. R3 is
+   authoritative for both bounds. The effective peak limit itself is resolved by
    `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
    this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
    mode whose own request was previously clamped (e.g. `Captar`, `Power`) draw more, up to
