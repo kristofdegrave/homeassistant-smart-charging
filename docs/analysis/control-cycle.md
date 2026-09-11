@@ -30,7 +30,7 @@ default 10 s). The cycle carries no decision state between firings; a handful of
 accumulators do persist across cycles — e.g. the rolling smoothing window, the monthly peak
 demand together with its own separate 15-minute window (R21), the rapid-cycling
 timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
-threaded in step 4, the last accepted [household
+and the deadline-urgency latch both threaded in step 4 (R5), the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
 charger currents that R3's deferral cases key on, and the
 [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
@@ -122,10 +122,21 @@ flowchart TD
    the prior cycle's (consumed by [UC09](use-cases/UC09-sync-charge-limit-with-car.md)). That
    resolution is homed in `resolution-rules.md` (R7); this step only fixes *when* in the cycle it
    is resolved, materialized, and change-detected. Immediately after it, and for the same reason, the
-   coordinator updates the [missed-deadline hold](system-overview.md#ubiquitous-language) (R5,
-   `resolution-rules.md`, which is authoritative for its engage and clear conditions): after the
-   active SOC limit is resolved, since the hold's conditions compare against that resolved value, and
+   coordinator updates the [missed-deadline hold](system-overview.md#ubiquitous-language) and the
+   urgency latch (R5, `resolution-rules.md`, which is authoritative for the engage, handback and
+   clear conditions of both): after the
+   active SOC limit is resolved, since their conditions compare against that resolved value, and
    before the mode and peak decisions below, which consume whether deadline urgency is in effect.
+   Both are threaded across cycles rather than recomputed from scratch — urgency, once engaged, is
+   left in effect until its handback test clears it, since re-asking the engage test on a cycle
+   already charging at the escalated rate would revert it immediately (R5, UC05). The handback test
+   compares against the [baseline mode](system-overview.md#ubiquitous-language)'s own desired
+   current, so that mode's set-point is evaluated here as part of the update rather than being
+   read off the dispatch below — in every case, since the update precedes dispatch under both
+   profiles, and not only under `Auto`, where the baseline is additionally a *different* mode from
+   the one about to be dispatched. The dispatched mode's own desired current, produced further down
+   this step, is never what urgency is judged by. The evaluation is a query and never advances the
+   baseline mode's own state or timers (R5, `resolution-rules.md`, authoritative).
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under
@@ -237,9 +248,10 @@ limit for step 5.
   restarting one cycle after a stop is equally hard on the car whether `Solar` or `Captar` asks for
   it. Resetting on a mode switch would therefore defeat the guarantee precisely where mode switches
   are routine and system-initiated — under `Auto`, whose deadline-urgency escalation and revert
-  (`resolution-rules.md`) re-evaluate every cycle, so a household hovering near the urgency
+  (`resolution-rules.md`) are decided per cycle, so a household near the urgency
   threshold could bounce `Solar`↔`Captar` and restart immediately after every stop, with no user
-  action involved. The accepted cost is the mirror image: an urgency escalation can be held off for
+  action involved. R5's urgency latch removes the most acute form of that bouncing but not the
+  general case — the mode can still change for reasons other than urgency. The accepted cost is the mirror image: an urgency escalation can be held off for
   the remainder of a running cooldown (at most `Captar`'s 10 minutes), a bounded delay to R5's
   best-effort guarantee rather than a breach of R11's Must-priority hardware protection. This
   matches the has-charged flag, the other piece of state a mode switch leaves untouched: it is
