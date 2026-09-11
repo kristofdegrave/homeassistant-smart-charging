@@ -27,6 +27,30 @@ means there (`write-adr`, `write-requirement`, `write-use-case`, `write-impl-spe
 mirrored in `CLAUDE.md`'s artifact-specific sections). The checklist above is the floor for
 anything touching `custom_components/`/`tests/`.
 
+## Verify live (per slice, after deployment)
+
+The checklist above is an author self-check on **one PR, before merge** — the author's own
+claim, about whichever behaviours the author chose to drive, on a branch. Every vertical slice
+therefore also gets a **verify-live** pass once it is deployed
+([idea-to-issues.md](idea-to-issues.md) stage 7 places it in the wider flow):
+
+- **The checklist comes from the spec, not from memory** — the entity ids to observe and the
+  values, with units, expected of them, fixed before the slice was built; the spec carries one
+  per slice (`write-impl-spec`).
+- **The result is a comment on the epic**: the observed value for each item on that list, plus
+  a log excerpt or dashboard screenshot.
+- **The first slice of a strand is verified live before slice two starts.**
+
+The runtime-verified self-check above and this pass do not substitute for each other, and a PR
+that satisfies one has not satisfied the other:
+
+| | Runtime-verified (above) | Verify live |
+|---|---|---|
+| Unit | One PR | One deployed slice |
+| Moment | Before merge | After deployment |
+| Judged against | The diff | A checklist written before the code |
+| Recorded in | The PR | A comment on the epic |
+
 ## Commit message conventions
 
 The human partner's own choice of message always wins; the shape below is only the
