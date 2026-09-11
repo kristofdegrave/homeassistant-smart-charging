@@ -30,14 +30,18 @@ default 10 s). The cycle carries no decision state between firings; a handful of
 accumulators do persist across cycles — e.g. the rolling smoothing window, the monthly peak
 demand together with its own separate 15-minute window (R21), the rapid-cycling
 timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
-threaded in step 4, and the
+threaded in step 4, the last accepted [household
+baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
+charger currents that R3's deferral cases key on, and the
 [missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
 homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
 
 - `SensorsRead` — past-tense — the cycle has captured a fresh raw reading through every input
-  adapter role; signals the start of one cycle's processing.
+  adapter role and resolved this cycle's accepted
+  [household baseline](system-overview.md#ubiquitous-language) from them (R3); signals the start
+  of one cycle's processing.
 - `ActiveSocLimitChanged` — the resolved [active SOC limit](system-overview.md#ubiquitous-language)
   (`resolution-rules.md`, Active SOC limit table) differs from the value resolved on the prior
   cycle; the coordinator materializes the resolved value read-only as
@@ -62,7 +66,7 @@ homed in the rule or use-case that defines its lifecycle.
 
 ```mermaid
 flowchart TD
-    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC"]
+    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3)"]
     Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
