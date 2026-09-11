@@ -11,31 +11,32 @@ conflicts here are routine rather than exceptional. Resolving one wrongly silent
 that is already merged, and no later check catches that — which is why the procedure is written
 down.
 
-**Always resolve. Never abort the merge, and never re-run it hoping the conflict disappears.**
+**Always resolve. Never `--abort`, and never re-run the merge hoping the conflict disappears.**
 
 ## Step 0 — know which commands you have
 
-A `PreToolUse` hook (`.claude/hooks/block-destructive-git.sh`) denies the destructive git
-commands that fall outside the standing commit/push authorization. Three of its rules bite
-during a conflict, so plan around them instead of discovering them mid-merge:
+`.claude/hooks/block-destructive-git.sh` denies, as a `PreToolUse` hook, the destructive git
+commands that fall outside the standing commit/push authorization. That file is the authority on
+exactly what it denies and when — read it if a command comes back refused. Two of its decisions
+shape this procedure:
 
-- **Rebase is denied on a branch that has an upstream** — i.e. any branch already pushed, which
-  a branch under review always is. Integrate with `git merge origin/main`; the workflow step
-  that sends you here permits exactly that.
-- **Whole-tree discards are denied** — `checkout .`, `restore .`, a hard reset, a forced clean.
-  To take one side of a conflicted file wholesale, name the path:
-  `git checkout --ours -- <path>` or `--theirs -- <path>`. Never "start over" by throwing the
-  working tree away.
-- **Force-push and forced branch deletion are denied.** No resolution needs either; if you
-  believe yours does, you are rewriting published history — stop and ask the human partner.
+- **Integrate with `git merge origin/main`, not a rebase.** Starting a rebase is denied on a
+  branch that has an upstream — the hook's proxy for "already published", which a branch under
+  review normally is. Merging is what the workflow step that sends you here asks for anyway.
+  Flags that only steer a rebase *already* in progress stay available, so a rebase legitimately
+  started on an unpublished branch can always be finished.
+- **Name paths; never discard the tree.** Take one side of a conflicted file with
+  `git checkout --ours -- <path>` or `--theirs -- <path>`. Discarding the whole working tree is
+  denied, as are force-push and forced branch deletion — no resolution needs any of them, and if
+  yours seems to, you are rewriting published history: stop and ask the human partner.
 
-Aborting the merge is not blocked by the hook. It is blocked by this skill.
+`--abort` is not blocked by the hook. It is blocked by this skill.
 
 ## Step 1 — see the state
 
-`git status` for the unmerged paths, and `git log --oneline --left-right HEAD...MERGE_HEAD` for
-what each side actually contributed. Read every conflicted file whole, not just the marked
-hunks: a conflict usually means the surrounding code moved too.
+`git status` for the unmerged paths, and `git log --oneline --left-right HEAD...MERGE_HEAD` —
+`REBASE_HEAD` in a rebase — for what each side actually contributed. Read every conflicted file
+whole, not just the marked hunks: a conflict usually means the surrounding code moved too.
 
 ## Step 2 — find the primary sources for each side
 
@@ -70,9 +71,10 @@ Three cases are not ordinary hunk-merging:
 - **Generated or index-like content** — an epic body listing its children, `docs/adl/`
   numbering, a catalog or coverage table, a use-case inventory. Re-derive it from its source
   after taking both sides' underlying changes; hand-merging the rows yields a table matching
-  neither side's reality. ADR numbers are never renumbered: if both sides claimed the same
-  number, the later ADR moves to a free one (`CLAUDE.md`, **Architecture Decision Records**) and
-  every reference to it moves with it.
+  neither side's reality. `docs/adl/` needs one extra rule of its own: an ADR that has landed on
+  `main` never moves (`CLAUDE.md`, **Architecture Decision Records**), so when both sides claimed
+  the same number, it is the *unmerged* side's ADR that is renamed to a number free on a freshly
+  fetched `origin/main`, with every reference to it moved in the same commit.
 - **A conflict that is really a stacked branch.** A PR based on `main` while the local branch
   sits on an unmerged prior branch shows the combined stack in its diff; that shrinks by itself
   once the lower branch merges. It is not a conflict to resolve, and never a reason to rewrite
@@ -93,8 +95,11 @@ Fix what the merge broke, in the merge, before committing.
 
 ## Step 5 — finish
 
-Stage everything and commit. Keep git's default merge message, adding one line per hunk where a
-side had to be dropped, naming which and why.
+Stage everything, then finish the operation you are in: commit the merge, or `git rebase
+--continue` and repeat steps 1-4 for each further commit that conflicts, until the rebase is
+done. A merge commit is the one exception to the default commit-message shape the completion-bar
+doc gives — keep git's generated message, adding one line per hunk where a side had to be
+dropped, naming which and why.
 
 Then report to the human partner, before resuming the workflow step that sent you here: the
 hunks where the two intents were incompatible and what you dropped, plus any behaviour
