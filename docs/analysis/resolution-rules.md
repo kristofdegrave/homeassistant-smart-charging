@@ -229,6 +229,21 @@ cycle (the gap closes faster than the window does). It **clears** when any of th
   from those rows alone, so the test is unaffected by `Captar` already being dispatched from the
   escalation — reading the escalated mode's own (always-maximum) desired current instead would
   clear urgency the instant it engages.
+
+  **The evaluation is a query, not a dispatch.** Asking the baseline mode what it would want never
+  starts, stops, or advances that mode: its own state machine and timers — `Solar`/`SolarOnly`'s
+  `Idle`/`Charging`/`Hold`/`Cooldown` states, their hold period and their restart debounce
+  ([UC01](use-cases/UC01-charge-from-solar-surplus.md), R11) — belong to a mode that is running,
+  and during urgency the baseline mode is not the one running. What it reports is what its own
+  set-point rule would ask for from *this* cycle's conditions, with that internal restart timing
+  left out of the answer — the same treatment, for the same reason, that Auto mode-selection's
+  *Solar session* row already gives UC01/UC02's debounce (below). Without this a `Solar` baseline
+  deselected at escalation would report 0 A for the rest of the session, and the handback could
+  never fire on it however far the sun had come back up.
+
+  Where the baseline genuinely wants nothing — `Off`, or a solar mode with no surplus — it reports
+  0 A and the handback simply does not fire. That is the safe direction: urgency continues, bounded
+  by state of charge reaching the active SOC limit.
 - state of charge is at or above the active SOC limit (the required current is then zero, so the
   handback holds trivially for any baseline);
 - the car disconnects; the departure deadline resolves to "no deadline"; or the deadline

@@ -131,10 +131,12 @@ flowchart TD
    left in effect until its handback test clears it, since re-asking the engage test on a cycle
    already charging at the escalated rate would revert it immediately (R5, UC05). The handback test
    compares against the [baseline mode](system-overview.md#ubiquitous-language)'s own desired
-   current, which under `Auto` during urgency is a *different* mode from the one about to be
-   dispatched, so that mode's set-point is evaluated here as part of the update rather than being
-   read off the dispatch below — the dispatched mode's own desired current, produced further down
-   this step, is never what urgency is judged by (R5, `resolution-rules.md`).
+   current, so that mode's set-point is evaluated here as part of the update rather than being
+   read off the dispatch below — in every case, since the update precedes dispatch under both
+   profiles, and not only under `Auto`, where the baseline is additionally a *different* mode from
+   the one about to be dispatched. The dispatched mode's own desired current, produced further down
+   this step, is never what urgency is judged by. The evaluation is a query and never advances the
+   baseline mode's own state or timers (R5, `resolution-rules.md`, authoritative).
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under
