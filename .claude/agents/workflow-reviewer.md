@@ -56,7 +56,7 @@ Always read:
 
 **(2) Least privilege**
 - `--allowed-tools` / tool grants are the minimum the task needs, each with a comment saying
-  why (token-efficiency checklist, CI-worker section).
+  why (the authoring checklist's CI-worker section).
 - Job `permissions:` blocks grant only what that job's steps use; a reviewer/drafter job that
   only needs to comment does not get `contents: write`.
 - Secrets stay behind the `ai` environment; no new step reads a secret into a log-visible
@@ -71,7 +71,7 @@ Always read:
   similar), confirm the newly in-scope paths don't let a fork PR trigger a privileged job it
   couldn't reach before.
 
-**(4) Token-efficiency checklist (per artifact type)**
+**(4) Authoring checklist (per artifact type)**
 - Apply the matching checklist section in `docs/reference/ai-authoring.md`
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of

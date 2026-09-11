@@ -317,8 +317,7 @@ Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.
 
 When writing or changing a skill (`.claude/skills/`), an agent definition
 (`.claude/agents/`), or a CI worker prompt (`.github/workflows/_ai-*.yml`), follow
-[docs/reference/ai-authoring.md](docs/reference/ai-authoring.md) — the vocabulary for these
-artifacts' failure modes (context pointers, the two loads, completion criteria, negation,
-invocation choice) and the per-artifact checklists that keep them lean by construction (single
-source of truth per fact, scoped reads, bound the loop not the turn). Quality and
-review-integrity rules above always win over any token saving.
+[docs/reference/ai-authoring.md](docs/reference/ai-authoring.md) — the vocabulary for this
+artifact class's failure modes, and the per-artifact checklists that keep these lean by
+construction (single source of truth per fact, scoped reads, bound the loop not the turn).
+Quality and review-integrity rules above always win over any token saving.

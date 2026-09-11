@@ -3,8 +3,8 @@
 Reference guidance for authoring the artifacts that drive Claude runs in this repo:
 skills (`.claude/skills/`), agent definitions (`.claude/agents/`), and the CI worker
 prompts (`.github/workflows/_ai-*.yml`). It exists so that every new authored artifact is lean
-*and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes, the
-per-artifact checklists test for them.
+*and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes, and the
+per-artifact checklists test the ones a reviewer can decide mechanically.
 
 It is **reference**, not a gate: nothing here overrides the correctness, review-integrity, or
 model-selection rules in `CLAUDE.md`. Where a token saving would trade away analysis quality
@@ -37,18 +37,18 @@ for reaching it: a skill `description`, a `CLAUDE.md` line naming a doc, an agen
 first" entry. Its *wording*, not its target, decides whether a run reaches the material, so a
 must-have target behind a vague pointer is a **variance bug** — sharpen the pointer before
 inlining the material, naming what it is and the distinct branches that should trigger reaching
-it, leading word first. `ha-integration-knowledge`'s description ("Everything you need to know …
-If you're looking at an integration, you must use this as your primary reference") names no
-branch and triggers on a mood, for material the repo calls its primary reference. **Project rule,
-overriding the upstream advice:** a skill never names a `docs/reference/*.md` path directly — it
-points at the `CLAUDE.md` section owning the topic, which routes onward, keeping the route a
-one-place edit every skill inherits (`work-idea` and `handoff` predate this; fix when touched).
+it, leading word first. `ha-integration-knowledge`'s (vendored) description — "Everything you
+need to know … If you're looking at an integration, you must use this as your primary reference"
+— names one branch so broad it always fires. **Project rule, overriding the upstream advice:** a
+skill never names a `docs/reference/*.md` path directly; it points at the `CLAUDE.md` section
+owning the topic, which routes onward. That costs the run one hop against *Scope the read* below,
+and buys a route every skill inherits from one edit (`work-idea` and `handoff` predate this).
 
 **The two loads.** **Context load** is what always-loaded material costs every turn — the fixed
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
 exists and when to reach for it. Only the first is minimised here; the second is the price of the
 split, not a cost to drive to zero. `grill-me` spends cognitive load to buy zero context load;
-`grilling` pays a 60-word description every turn to stay model-reachable.
+`grilling` pays a three-sentence description every turn to stay model-reachable.
 
 **Information hierarchy.** Three rungs, by how immediately a run needs the material: in-file
 step, in-file reference, reference disclosed behind a pointer. **Progressive disclosure** is the
@@ -114,9 +114,8 @@ skill naming the others and when to reach for each.
 - [ ] The `description` is precise enough to trigger on the right task and *not* on
       adjacent ones — a skill that fires when it shouldn't costs a whole run's context. It
       names the branches that should trigger it, not a mood (see [Vocabulary](#vocabulary)).
-- [ ] Any file the skill tells the run to read is named specifically, not "read the docs" —
-      and a `docs/reference/*.md` target is reached through the `CLAUDE.md` section that owns
-      it, never named directly.
+- [ ] Any file the skill tells the run to read is named specifically, not "read the docs"; a
+      `docs/reference/*.md` target is routed to per the rule under [Vocabulary](#vocabulary).
 - [ ] Every step ends on a completion criterion a run can decide, not a judgement word.
 - [ ] The invocation choice is justified: model-invoked only where the model or another skill
       must reach it, otherwise `disable-model-invocation: true`.
