@@ -1,6 +1,6 @@
 ---
 name: diagnosing-bugs
-description: Use when a defect is reported against the shipped Smart Charging integration — a claim that the running system misbehaves — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (develop-task owns that), and not for the fix itself.
+description: Use when a defect is reported against the shipped Smart Charging integration — a claim that the running system misbehaves — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (develop-task owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context such as a CI drafter run.
 ---
 
 # Diagnosing bugs
@@ -23,12 +23,15 @@ out; without one, reading code only produces a theory. Spend disproportionate ef
 
 ### Pick a seam, in roughly this order
 
-1. **Failing test** at whatever seam reaches the defect (Step 5 decides where it lands).
-2. **Direct call** into the pure engine/mode/profile function with the reporter's numbers.
-3. **A real config entry through the HA harness** — `MockConfigEntry` plus
+1. **Direct call** into the pure engine/mode/profile function with the reporter's numbers.
+2. **A real config entry through the HA harness** — `MockConfigEntry` plus
    `coordinator.async_refresh()`, as the `test_*_end_to_end.py` suites do.
-4. **Differential loop** — the same input through two versions or configs, outputs diffed, when
+3. **Differential loop** — the same input through two versions or configs, outputs diffed, when
    the defect appeared between a known-good and a known-bad state.
+
+A throwaway script at any of these seams is fine; so is a test file, which is often the cheapest
+form. Either way it is scaffolding for *this* diagnosis, not the regression test — Step 5 reports
+which harness that belongs in, and reports this scaffolding as a leftover.
 
 ### Apply these three instruments — by the claim, not by preference
 
@@ -51,8 +54,9 @@ instrument is required whichever seam you picked.
   unit or a precision. The oracle is a human eye and nothing in `tests/` supplies one:
   `tests/test_dashboard.py` asserts which tiles exist, not what any of them shows. Get the
   rendered value — the live entity's full state object, or a screenshot. If a human has to click,
-  have them run `scripts/hitl-loop.template.sh` (read its header: you cannot run it yourself) so
-  the loop stays structured and their answers come back in one block.
+  copy `scripts/hitl-loop.template.sh` to your session scratchpad (never into the repo or a
+  worktree), adapt its steps to this claim, and have the human partner run that copy — read its
+  header first, you cannot run it yourself. Their answers then come back in one block.
 
 ### Tighten it
 
