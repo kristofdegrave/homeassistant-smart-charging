@@ -88,6 +88,12 @@ flowchart TD
    recent, unsmoothed readings (the measured grid voltage is resolved into the
    [supply voltage](system-overview.md#ubiquitous-language) in step 3). This cycle's raw net
    import also feeds the bookkeeping side-branch in *Monthly peak demand tracking* below.
+   The net import and charger power readings also resolve this cycle's accepted [household
+   baseline](system-overview.md#ubiquitous-language), subject to R3's two deferral cases — here,
+   every cycle and regardless of which [capabilities](system-overview.md#ubiquitous-language) are
+   declared, rather than inside the CapTar-gated step 5 that consumes it, since the diagnostic
+   readouts that also read it (`solar_surplus_w`, `entity-catalog.md`) are gated on the solar
+   capability instead and must still resolve on an installation with no CapTar.
    Produces `SensorsRead`.
 2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
    into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
@@ -137,15 +143,14 @@ flowchart TD
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
    cycle, and emits `PeakLimitClamped`. The [household
-   baseline](system-overview.md#ubiquitous-language) this check solves around is resolved before
-   that comparison, and is not unconditionally this cycle's reading: R3 names two bounded cases in
-   which the most recently accepted reading stands instead — a reading taken on a cycle this
-   step's own output changed the commanded current (one cycle, since such a reading partly
-   measures the System's own actuation rather than the household), and a reading that would
-   increase headroom (up to a configurable number of consecutive cycles, default 2, until it
-   holds). A breaching increase is therefore never deferred by more than a single cycle, and step
-   6 below is unaffected either way — it always uses this cycle's own raw readings. R3 is
-   authoritative for both bounds. The effective peak limit itself is resolved by
+   baseline](system-overview.md#ubiquitous-language) this check solves around is resolved in step 1
+   and is not unconditionally this cycle's reading: R3 names two cases in which the most recently
+   accepted reading stands instead — a reading taken after the System set a charger current
+   differing from the previous cycle's (never two cycles running), and a reading that would
+   increase headroom and has not yet held for 2 consecutive cycles. A breaching increase is
+   therefore deferred by at most a single cycle, and step 6 below is unaffected either way — it
+   always uses this cycle's own raw readings. R3 is authoritative for both cases and their bounds.
+   The effective peak limit itself is resolved by
    `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
    this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
    mode whose own request was previously clamped (e.g. `Captar`, `Power`) draw more, up to
