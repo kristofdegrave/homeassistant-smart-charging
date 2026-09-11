@@ -123,6 +123,12 @@ its own tree — the rule CI already uses: a PR can touch more than one tree, so
 checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
 `test-reviewer`.
 
+**The `development` and `testing` rows share three language references** —
+`.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
+`.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
+not a fourth column: each row's own work skill and reviewer agent say which one to read and
+when, so nothing here repeats a rule those files own.
+
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
 untrusted issue content outside `docs/**`, `custom_components/**` and `tests/**`, so CI
 refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a

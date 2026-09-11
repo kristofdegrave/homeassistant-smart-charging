@@ -24,6 +24,11 @@ re-derive the universal steps here.
   `tests/test_init.py`: anything HA-coupled (entity state, config-entry lifecycle, registration,
   services).
 
+Before writing an HA-harness test, read the **Testing Requirements** section of the
+`ha-integration-knowledge` skill — in particular its rule that tests exercise the integration
+through its public surface (config entry, entity state, services) rather than mocking internal
+integration details. Plain-pytest tests under `tests/modes/` and `tests/engines/` don't need it.
+
 If you cannot test a piece with plain pytest without importing `homeassistant`, it belongs in an
 adapter/coordinator/entity — that is a design signal, not a reason to reach for the harness in a
 `modes/`/`engines/` test.

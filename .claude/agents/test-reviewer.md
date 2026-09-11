@@ -18,6 +18,10 @@ Always read:
 - `docs/adl/0009-testing-strategy.md` — the authoritative plain-pytest vs HA-harness split.
 - The behavior the tests claim to verify, in `docs/analysis/` (`requirements.md`, the relevant
   use-case, `control-cycle.md`, `resolution-rules.md`).
+- The **Testing Requirements** section of the `ha-integration-knowledge` skill — when the
+  change includes HA-harness tests (`tests/adapters/`, `tests/test_coordinator.py`, entity/
+  platform, config-flow, `tests/test_init.py`). Skip it for a change confined to
+  `tests/modes/` or `tests/engines/`.
 
 ## Review checklist
 

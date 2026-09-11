@@ -1,295 +1,144 @@
 ---
 name: async-python-patterns
-description: Master Python asyncio, concurrent programming, and async/await patterns for high-performance applications. Use when building async APIs, concurrent systems, or I/O-bound applications requiring non-blocking operations.
+description: asyncio rules that apply inside a Home Assistant custom integration — event-loop discipline, awaiting, cancellation, entry-scoped listeners and shared state across awaits. Use when writing or reviewing any Smart Charging file that is not pure modes/ or engines/ logic.
 ---
 
-# Async Python Patterns
+# Async patterns inside a Home Assistant integration
 
-Comprehensive guidance for implementing asynchronous Python applications using asyncio, concurrent programming patterns, and async/await for building high-performance, non-blocking systems.
+Home Assistant **owns the event loop**. The integration never creates, runs or closes one:
+no `asyncio.run()`, no `new_event_loop()`, no hand-rolled `ThreadPoolExecutor`, no
+`asyncio.to_thread()`. Everything below assumes HA's loop is already running and that the
+integration's job is to not block it and not leak work off it.
 
-## When to Use This Skill
+Scoped deliberately — HA platform conventions live in `ha-integration-knowledge`, general
+(non-async) Python mistakes in `python-anti-patterns`, and this project's structural rules in
+`CLAUDE.md` and the ADRs.
 
-- Building async web APIs (FastAPI, aiohttp, Sanic)
-- Implementing concurrent I/O operations (database, file, network)
-- Creating web scrapers with concurrent requests
-- Developing real-time applications (WebSocket servers, chat systems)
-- Processing multiple independent tasks simultaneously
-- Building microservices with async communication
-- Optimizing I/O-bound workloads
-- Implementing async background tasks and queues
+**When this file applies** — the single statement of the condition, which everything else
+points at: any changed file under `custom_components/smart_charging/` that is **not** pure
+`modes/`/`engines/` logic. That is the coordinator, `adapters/`, `managers/`, `config_flow.py`,
+`__init__.py`, `dashboard.py` and the entity platform files — all of them run on HA's loop.
 
-## Sync vs Async Decision Guide
+## 1. Never block the event loop
 
-Before adopting async, consider whether it's the right choice for your use case.
-
-| Use Case | Recommended Approach |
-|----------|---------------------|
-| Many concurrent network/DB calls | `asyncio` |
-| CPU-bound computation | `multiprocessing` or thread pool |
-| Mixed I/O + CPU | Offload CPU work with `asyncio.to_thread()` |
-| Simple scripts, few connections | Sync (simpler, easier to debug) |
-| Web APIs with high concurrency | Async frameworks (FastAPI, aiohttp) |
-
-**Key Rule:** Stay fully sync or fully async within a call path. Mixing creates hidden blocking and complexity.
-
-## Core Concepts
-
-### 1. Event Loop
-
-The event loop is the heart of asyncio, managing and scheduling asynchronous tasks.
-
-**Key characteristics:**
-
-- Single-threaded cooperative multitasking
-- Schedules coroutines for execution
-- Handles I/O operations without blocking
-- Manages callbacks and futures
-
-### 2. Coroutines
-
-Functions defined with `async def` that can be paused and resumed.
-
-**Syntax:**
+A blocking call inside a coroutine stalls every integration in the instance, not just this one.
 
 ```python
-async def my_coroutine():
-    result = await some_async_operation()
-    return result
+# BAD
+async def _write_dashboard(path, payload):
+    time.sleep(1)
+    path.write_text(payload)      # blocking file I/O on the loop
 ```
 
-### 3. Tasks
-
-Scheduled coroutines that run concurrently on the event loop.
-
-### 4. Futures
-
-Low-level objects representing eventual results of async operations.
-
-### 5. Async Context Managers
-
-Resources that support `async with` for proper cleanup.
-
-### 6. Async Iterators
-
-Objects that support `async for` for iterating over async data sources.
-
-## Quick Start
+**Fix:** `await asyncio.sleep(...)` for delays, and push blocking work to HA's own executor.
 
 ```python
-import asyncio
-
-async def main():
-    print("Hello")
-    await asyncio.sleep(1)
-    print("World")
-
-# Python 3.7+
-asyncio.run(main())
+# GOOD
+await hass.async_add_executor_job(_write)
 ```
 
-## Fundamental Patterns
+Blocking includes: file and socket I/O, `requests`, `time.sleep`, `subprocess`, and any
+library call that is not documented as async-safe.
 
-### Pattern 1: Basic Async/Await
+## 2. Always await a coroutine
 
 ```python
-import asyncio
-
-async def fetch_data(url: str) -> dict:
-    """Fetch data from URL asynchronously."""
-    await asyncio.sleep(1)  # Simulate I/O
-    return {"url": url, "data": "result"}
-
-async def main():
-    result = await fetch_data("https://api.example.com")
-    print(result)
-
-asyncio.run(main())
+result = adapter.async_read()          # BAD: a coroutine object, never executed
+result = await adapter.async_read()    # GOOD
 ```
 
-### Pattern 2: Concurrent Execution with gather()
+A coroutine created and never awaited skips its work and surfaces as a "never awaited"
+warning far from the line that caused it.
+
+## 3. Anything that outlives the call is tied to the config entry
+
+Every timer, state listener and subscription registered during setup must stop when the entry
+unloads. This is load-bearing here: ADR-0008 reloads the entry on every reconfigure and every
+options change, so a leaked registration is not a rare edge case — each reload adds another
+one. Register the unsubscribe with `entry.async_on_unload(...)` **at the point you create
+it**, or hand the unsub straight back to setup, which does — both shapes are in use here:
 
 ```python
-import asyncio
-from typing import List
+# register at creation (__init__.py)
+entry.async_on_unload(
+    async_track_time_interval(
+        hass, notification_manager.async_evaluate, timedelta(seconds=interval_s)
+    )
+)
 
-async def fetch_user(user_id: int) -> dict:
-    """Fetch user data."""
-    await asyncio.sleep(0.5)
-    return {"id": user_id, "name": f"User {user_id}"}
-
-async def fetch_all_users(user_ids: List[int]) -> List[dict]:
-    """Fetch multiple users concurrently."""
-    tasks = [fetch_user(uid) for uid in user_ids]
-    results = await asyncio.gather(*tasks)
-    return results
-
-async def main():
-    user_ids = [1, 2, 3, 4, 5]
-    users = await fetch_all_users(user_ids)
-    print(f"Fetched {len(users)} users")
-
-asyncio.run(main())
+# or hand the unsubs back to setup, which registers them (managers/vehicle_limit.py)
+for unsub in vehicle_limit_manager.register_listeners(...):
+    entry.async_on_unload(unsub)
 ```
 
-### Pattern 3: Task Creation and Management
+(The coordinator itself needs none of this: `DataUpdateCoordinator` takes `update_interval`
+and HA owns that timer.)
+
+A registration whose unsubscribe is dropped survives the reload and then fires twice — see
+`__init__.py`'s own note on the leak this fixed.
+
+For a genuinely long-running coroutine, use `entry.async_create_background_task(...)` so it is
+tracked and cancelled with the entry — never a bare `asyncio.create_task(...)`, whose reference
+is dropped, which can be garbage-collected mid-flight, and which outlives the unload.
+
+## 4. Handle cancellation, re-raise it
+
+`CancelledError` is how HA shuts an entry down. Clean up and re-raise; never swallow it into a
+generic handler.
 
 ```python
-import asyncio
-
-async def background_task(name: str, delay: int):
-    """Long-running background task."""
-    print(f"{name} started")
-    await asyncio.sleep(delay)
-    print(f"{name} completed")
-    return f"Result from {name}"
-
-async def main():
-    # Create tasks
-    task1 = asyncio.create_task(background_task("Task 1", 2))
-    task2 = asyncio.create_task(background_task("Task 2", 1))
-
-    # Do other work
-    print("Main: doing other work")
-    await asyncio.sleep(0.5)
-
-    # Wait for tasks
-    result1 = await task1
-    result2 = await task2
-
-    print(f"Results: {result1}, {result2}")
-
-asyncio.run(main())
+try:
+    while True:
+        await asyncio.sleep(interval)
+        await self._cycle()
+except asyncio.CancelledError:
+    self._release()
+    raise            # propagate, always
 ```
 
-### Pattern 4: Error Handling in Async Code
+This is a specific catch, so it satisfies `python-anti-patterns`' rule — with one twist:
+`CancelledError` is caught **only** to clean up, never to handle. Re-raising is mandatory.
+
+## 5. Mind what an `await` interleaves
+
+Every `await` is a yield point: other code runs before the next line does. State read before
+an `await` may be stale after it.
+
+- Read all of a cycle's inputs in one uninterrupted stretch, so the cycle sees a single
+  consistent snapshot — this is why `coordinator.py`'s `_read_owned_entities` reads
+  sequentially rather than through `asyncio.gather`, and documents why in its own docstring.
+- Do not mutate shared state across an `await`; compute, then assign in one uninterrupted
+  step. If you genuinely need mutual exclusion, an `asyncio.Lock` held across the smallest
+  possible region — not a re-entrant cycle.
+
+## 6. Concurrency only where there is real concurrency
+
+`asyncio.gather` costs `Task` creation and gives up snapshot atomicity. Use it only for calls
+that genuinely wait on independent external I/O. Reads that resolve from HA's in-memory state
+machine have nothing to overlap — a sequential loop is both faster and safer there.
+
+## 7. Bound anything that can hang
+
+No current call site — every read today resolves from `hass.states` in memory. This applies
+the first time an adapter talks to a device or a network: bound every such await with an
+explicit timeout, so one unresponsive device cannot wedge a control cycle.
 
 ```python
-import asyncio
-from typing import List, Optional
-
-async def risky_operation(item_id: int) -> dict:
-    """Operation that might fail."""
-    await asyncio.sleep(0.1)
-    if item_id % 3 == 0:
-        raise ValueError(f"Item {item_id} failed")
-    return {"id": item_id, "status": "success"}
-
-async def safe_operation(item_id: int) -> Optional[dict]:
-    """Wrapper with error handling."""
-    try:
-        return await risky_operation(item_id)
-    except ValueError as e:
-        print(f"Error: {e}")
-        return None
-
-async def process_items(item_ids: List[int]):
-    """Process multiple items with error handling."""
-    tasks = [safe_operation(iid) for iid in item_ids]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Filter out failures
-    successful = [r for r in results if r is not None and not isinstance(r, Exception)]
-    failed = [r for r in results if isinstance(r, Exception)]
-
-    print(f"Success: {len(successful)}, Failed: {len(failed)}")
-    return successful
-
-asyncio.run(process_items([1, 2, 3, 4, 5, 6]))
+async with asyncio.timeout(5):
+    await client.request()
 ```
 
-### Pattern 5: Timeout Handling
+## Quick review checklist
 
-```python
-import asyncio
-
-async def slow_operation(delay: int) -> str:
-    """Operation that takes time."""
-    await asyncio.sleep(delay)
-    return f"Completed after {delay}s"
-
-async def with_timeout():
-    """Execute operation with timeout."""
-    try:
-        result = await asyncio.wait_for(slow_operation(5), timeout=2.0)
-        print(result)
-    except asyncio.TimeoutError:
-        print("Operation timed out")
-
-asyncio.run(with_timeout())
-```
-
-## Detailed worked examples and patterns
-
-Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
-
-## Common Pitfalls
-
-### 1. Forgetting await
-
-```python
-# Wrong - returns coroutine object, doesn't execute
-result = async_function()
-
-# Correct
-result = await async_function()
-```
-
-### 2. Blocking the Event Loop
-
-```python
-# Wrong - blocks event loop
-import time
-async def bad():
-    time.sleep(1)  # Blocks!
-
-# Correct
-async def good():
-    await asyncio.sleep(1)  # Non-blocking
-```
-
-### 3. Not Handling Cancellation
-
-```python
-async def cancelable_task():
-    """Task that handles cancellation."""
-    try:
-        while True:
-            await asyncio.sleep(1)
-            print("Working...")
-    except asyncio.CancelledError:
-        print("Task cancelled, cleaning up...")
-        # Perform cleanup
-        raise  # Re-raise to propagate cancellation
-```
-
-### 4. Mixing Sync and Async Code
-
-```python
-# Wrong - can't call async from sync directly
-def sync_function():
-    result = await async_function()  # SyntaxError!
-
-# Correct
-def sync_function():
-    result = asyncio.run(async_function())
-```
-
-## Testing Async Code
-
-```python
-import asyncio
-import pytest
-
-# Using pytest-asyncio
-@pytest.mark.asyncio
-async def test_async_function():
-    """Test async function."""
-    result = await fetch_data("https://api.example.com")
-    assert result is not None
-
-@pytest.mark.asyncio
-async def test_with_timeout():
-    """Test with timeout."""
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(slow_operation(5), timeout=1.0)
-```
+- [ ] No `asyncio.run`, no new event loop, no hand-rolled executor — blocking work goes
+      through `hass.async_add_executor_job`
+- [ ] No blocking I/O, `time.sleep`, or sync HTTP inside a coroutine
+- [ ] Every coroutine call is awaited (or deliberately handed to a tracked task creator)
+- [ ] Every timer, listener and subscription created during setup has its unsubscribe passed
+      to `entry.async_on_unload(...)`
+- [ ] No bare `asyncio.create_task`; background work uses HA's tracked creators and dies with
+      the entry
+- [ ] `CancelledError` is cleaned up after and re-raised, never swallowed
+- [ ] No shared state mutated across an `await`; a cycle's inputs are read as one snapshot
+- [ ] `gather` used only for genuinely independent external I/O
+- [ ] External waits are bounded by a timeout

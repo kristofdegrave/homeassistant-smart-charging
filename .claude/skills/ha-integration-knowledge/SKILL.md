@@ -7,6 +7,9 @@ description: Everything you need to know to build, test and review Home Assistan
 - **Integration code**: `./homeassistant/components/<integration_domain>/`
 - **Integration tests**: `./tests/components/<integration_domain>/`
 
+In this repo — a **custom** integration, not a core one — those are
+`custom_components/smart_charging/` and `tests/`. Everything else below applies as written.
+
 ## General guidelines
 
 - When looking for examples, prefer integrations with the platinum or gold quality scale level first.
