@@ -29,8 +29,10 @@ run() { # run BLOCK|ALLOW <command> [cwd]
   dir=${3:-$CWD}
   # A case may span lines (heredocs, newline-separated statements), so escape the
   # newlines the way JSON wants and render the case on one line in the report.
+  # Tabs and newlines are escaped, not passed through raw, so the payload is the valid
+  # JSON a real PreToolUse call would send.
   esc=$(printf '%s' "$cmd" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' |
-    awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
+    awk 'NR > 1 { printf "\\n" } { gsub(/\t/, "\\\\t"); printf "%s", $0 }')
   shown=$(printf '%s' "$cmd" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
   out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"t"}}' "$dir" "$esc" | sh "$HOOK" 2>&1)
   rc=$?
@@ -162,6 +164,10 @@ git clean -f
 A
 git push --force
 B"
+# A backslash-quoted delimiter is quoted too: the body is still inert text.
+run ALLOW 'cat <<\EOF
+git clean -f
+EOF'
 # Real commands after a terminated heredoc are still scanned -- these are allowed ones.
 run ALLOW "cat > /tmp/doc.md <<'EOF'
 git push --force
@@ -198,10 +204,17 @@ EOF"
 run BLOCK "ssh host <<'EOF'
 git clean -f
 EOF"
-# A backslash-quoted delimiter is quoted in sh but not recognised here: fails closed.
-run BLOCK 'cat <<\EOF
+# An unquoted heredoc sharing an opener line with a quoted one keeps its own body.
+run BLOCK "cat <<A <<'B'
 git clean -f
-EOF'
+A
+prose
+B"
+# Prose that merely shows an opener is not a redirection, even when a later line
+# happens to equal the delimiter.
+run BLOCK "echo \"see <<'EOF' below\"
+git clean -f
+EOF"
 # A herestring is not a heredoc opener, so the next line is still a command position.
 run BLOCK 'grep -q x <<<"payload"
 git clean -f'

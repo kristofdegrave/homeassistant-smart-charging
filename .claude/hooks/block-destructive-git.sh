@@ -134,13 +134,17 @@ has_short_flag() { # a single-dash (non "--") argument carrying that letter
   return 1
 }
 
-# Blank out the body of every quoted-delimiter heredoc, keeping the line count so the
-# lines that remain are still real command positions. Deliberately narrow, so that it
-# fails closed:
-#   - an unquoted delimiter (`<<EOF`) keeps expansions live in the body, so that body
-#     is left in place and scanned;
-#   - a body is only blanked once its terminator line has actually been found, so a
-#     stray `<<'EOF'` inside quoted prose cannot swallow the rest of the command;
+# Blank out the body of every quoted-delimiter heredoc (`<<'EOF'`, `<<"EOF"`, `<<\EOF`,
+# and their `<<-` forms), keeping the line count so the lines that remain are still real
+# command positions. Deliberately narrow, so that it fails closed:
+#   - an unquoted delimiter (`<<EOF`) keeps expansions live in the body, so that body is
+#     left in place and scanned -- and is tracked separately when it shares an opener
+#     line with a quoted one, so only the quoted heredoc's own lines are blanked;
+#   - no line is blanked until every heredoc opened on that line has been terminated, so
+#     an opener with no terminator blanks nothing;
+#   - an opener that sits inside quotes on its own line (`echo "see <<'EOF' below"`) is
+#     prose, not a redirection, and opens nothing -- otherwise a later line that happens
+#     to equal the delimiter would swallow everything up to it;
 #   - the opener line itself is kept, so `cat <<'EOF' && git clean -f` still denies;
 #   - a heredoc fed to a shell (`sh <<'EOF'`, `cat <<'EOF' | bash`, `ssh host <<'EOF'`)
 #     really does execute its body, so an opener line naming an interpreter keeps its
@@ -149,32 +153,72 @@ strip_heredoc_bodies() {
   printf '%s\n' "$1" | awk '
     BEGIN {
       q = sprintf("%c", 39)  # a single quote, unwritable inside this quoted program
-      opener = "<<-?[ \t]*(\"[^\"]*\"|" q "[^" q "]*" q ")"
+      # A delimiter is quoted (inert body), backslash-quoted, or a bare word.
+      opener = "<<-?[ \t]*(\"[^\"]*\"|" q "[^" q "]*" q "|\\\\?[A-Za-z0-9_.-]+)"
       sep = "[ \t;|&()<>\"" q "]+"
-      ni = split("sh bash dash ash ksh zsh busybox ssh eval source", s, " ")
+      ni = split("sh bash dash ash ksh zsh busybox ssh su sudo docker podman eval source", s, " ")
       for (x = 1; x <= ni; x++) interpreter[s[x]] = 1
     }
+
+    # Is position p of line s inside a quoted string?
+    function inquote(s, p,   x, c, st) {
+      st = 0
+      for (x = 1; x < p; x++) {
+        c = substr(s, x, 1)
+        if (st == 0) {
+          if (c == "\\") x++
+          else if (c == q) st = 1
+          else if (c == "\"") st = 2
+        } else if (st == 1) {
+          if (c == q) st = 0
+        } else {
+          if (c == "\\") x++
+          else if (c == "\"") st = 0
+        }
+      }
+      return st != 0
+    }
+
     { line[NR] = $0 }
     END {
       n = NR
       for (i = 1; i <= n; i++) out[i] = line[i]
       i = 1
       while (i <= n) {
-        rest = line[i]
+        seg = line[i]
         cnt = 0
-        # One line can open several heredocs (`cmd <<"A" <<"B"`); they are terminated
-        # in the order they were opened.
-        while (match(rest, opener)) {
-          tok = substr(rest, RSTART, RLENGTH)
-          rest = substr(rest, RSTART + RLENGTH)
+        pos = 1
+        # One line can open several heredocs (`cmd <<"A" <<B`); they are terminated in
+        # the order they were opened, so all of them are tracked and only the inert
+        # ones are blanked.
+        while (pos <= length(seg) && match(substr(seg, pos), opener)) {
+          abs = pos + RSTART - 1
+          len = RLENGTH
+          # A herestring (`<<<`) is not a heredoc, and neither is a `<<` inside quotes.
+          if ((abs > 1 && substr(seg, abs - 1, 1) == "<") || inquote(seg, abs)) {
+            pos = abs + 1
+            continue
+          }
+          tok = substr(seg, abs, len)
+          pos = abs + len
           cnt++
           tabbed[cnt] = (tok ~ /^<<-/)  # `<<-` strips leading tabs from the terminator
           sub(/^<<-?[ \t]*/, "", tok)
-          delim[cnt] = substr(tok, 2, length(tok) - 2)
+          c1 = substr(tok, 1, 1)
+          if (c1 == q || c1 == "\"") {
+            inert[cnt] = 1
+            delim[cnt] = substr(tok, 2, length(tok) - 2)
+          } else if (c1 == "\\") {
+            inert[cnt] = 1
+            delim[cnt] = substr(tok, 2)
+          } else {
+            inert[cnt] = 0
+            delim[cnt] = tok
+          }
         }
         if (cnt == 0) { i++; continue }
         # A body handed to an interpreter is code, not data, however it is quoted.
-        nw = split(line[i], w, sep)
+        nw = split(seg, w, sep)
         for (x = 1; x <= nw; x++) {
           v = w[x]
           sub(/^.*\//, "", v)
@@ -185,13 +229,20 @@ strip_heredoc_bodies() {
         k = 1
         while (k <= cnt && j <= n) {
           t = line[j]
-          if (tabbed[k]) sub(/^[ \t]+/, "", t)
-          if (t == delim[k]) k++
+          if (tabbed[k]) sub(/^\t+/, "", t)  # `<<-` strips tabs only, never spaces
+          if (t == delim[k]) {
+            bstart[k] = (k == 1) ? i + 1 : bend[k - 1] + 1
+            bend[k] = j
+            k++
+          }
           j++
         }
         if (k > cnt) {
-          for (m = i + 1; m < j; m++) out[m] = ""
-          i = j
+          for (k = 1; k <= cnt; k++) {
+            if (!inert[k]) continue
+            for (m = bstart[k]; m <= bend[k]; m++) out[m] = ""
+          }
+          i = bend[cnt] + 1
         } else {
           i++  # never terminated: not a heredoc after all, so blank nothing
         }
