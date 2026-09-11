@@ -18,15 +18,17 @@ already captured in two kinds of file:
   `impl-spec-reviewer`, `system-design-reviewer`, `code-reviewer`, `test-reviewer`,
   `workflow-reviewer`. Each is a fresh, read-only Opus reviewer with a type-specific checklist.
 
-CI already treats these as reference files behind a generic runner: `_ai-draft.yml` maps the
-issue's context label to a skill and tells the worker to "follow the `<skill>` skill";
-`_ai-review.yml` maps changed paths to a reviewer agent and tells the worker to "apply the
-checklist in `<agent>.md`"; `_ai-fix.yml` invokes `address-review-remarks`.
+CI already treats these as reference files behind a generic runner, for the types it covers:
+`_ai-draft.yml` maps the issue's context label to a skill and tells the worker to "follow the
+`<skill>` skill"; `_ai-review.yml` maps changed paths to a reviewer agent and tells the worker
+to "apply the checklist in `<agent>.md`"; `_ai-fix.yml` invokes `address-review-remarks`.
+Neither the drafter nor the review path filter covers `docs/design/**`, so `documentation`
+work has no CI runner today.
 
-Locally there is no such runner. An interactive session has to remember the lifecycle steps,
-pick the matching skill and reviewer by hand, drive the review loop, count rounds, and
-remember the `needs-approval` step. The mapping from label to files exists only inside CI's
-workflow files, where a local session never reads it.
+Locally there is no runner at all. An interactive session has to remember the lifecycle
+steps, pick the matching skill and reviewer by hand, drive the review loop, count rounds, and
+remember the `needs-approval` step. The label-to-file mapping exists only inside CI's workflow
+files, where a local session never reads it.
 
 Model: mattpocock/skills `engineering/implement` — a five-line skill that delegates to `/tdd`
 and `/code-review` and otherwise says nothing the delegated skills already say. The
@@ -35,28 +37,34 @@ and `/code-review` and otherwise says nothing the delegated skills already say. 
 multi-reporter project, which `work-idea` and the project board already cover here. It is not
 adopted.
 
+**Scope of this design: the local, interactive session.** CI must follow the same design,
+but is deliberately left to a later phase (see *Phasing*) so that the local shape is settled
+first. Where a local change would alter CI behaviour as a side effect — because CI loads the
+same skill files — this design says so and sequences it into that later phase rather than
+letting it happen implicitly.
+
 ---
 
 ## Decision summary
 
-1. **A work-types table in `CLAUDE.md`**, keyed by context label, pointing at the work file and
-   the review file for each type, plus the model the work runs on.
+1. **A work-types table in `CLAUDE.md`**, keyed by context label, pointing at the work file(s)
+   and the review file(s) for each type, plus the model the work runs on.
 2. **Thin, type-agnostic lifecycle skills**, one per step range of the contribution workflow,
    that look the label up in that table and delegate. They cite the workflow doc and the table
    and restate neither.
-3. **The per-type files stay exactly what they are**: work files remain skills, review files
+3. **The per-type files stay where they are for now**: work files remain skills, review files
    remain agents. No per-type `implement`/`review` skills are created.
-4. **The loop (step 6) stays with the human partner.** Each skill ends by naming the next one;
+4. **Target layout, reached in a later phase**: one directory per label,
+   `work-types/<label>/implement.md` + `review.md`, with a single generic reviewer agent. That
+   move touches the same CI files as the CI follow-up and is done together with it.
+5. **The loop (step 6) stays with the human partner.** Each skill ends by naming the next one;
    nothing chains autonomously.
-5. **CI keeps its own copies of the mapping for now.** Making CI read the table is a deferred
-   follow-up, recorded so the duplication is explicit rather than accidental.
 
 ---
 
 ## The work-types table
 
-Lives in `CLAUDE.md`. One row per context label. It absorbs the current *Model selection*
-section, whose content is already per-type, so `CLAUDE.md` barely grows.
+Lives in `CLAUDE.md`. One row per context label.
 
 | Context label | How the work is done | How it is reviewed | Model for the work |
 |---|---|---|---|
@@ -64,18 +72,37 @@ section, whose content is already per-type, so `CLAUDE.md` barely grows.
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | `.claude/skills/write-system-design/SKILL.md` or `write-project-design/SKILL.md`, by which file the issue names | `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | `.claude/skills/develop-task/SKILL.md` | `.claude/agents/code-reviewer.md` | sonnet |
+| `documentation` | `docs/design/system-design.md` → `.claude/skills/write-system-design/SKILL.md`; `docs/design/project-plan.md` → `.claude/skills/write-project-design/SKILL.md` | `.claude/agents/system-design-reviewer.md` | opus |
+| `development` | `.claude/skills/develop-task/SKILL.md` | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | sonnet |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | `.claude/agents/test-reviewer.md` | sonnet |
-| `workflow` | `docs/reference/ai-authoring-token-efficiency.md` (human-authored; no drafting skill) | `.claude/agents/workflow-reviewer.md` | opus |
+| `workflow` | none — human-authored, per `docs/reference/ai-authoring-token-efficiency.md`; `implement` stops on this label | `.claude/agents/workflow-reviewer.md` | opus |
+| *(no context label — `docs/postmortems/**`, methodology docs under `docs/plans/**`, anything else under `docs/`)* | none | by changed path: `workflow-reviewer` for process docs, otherwise the row whose tree the path falls in | opus |
 
-Reviewers always run on Opus regardless of row, per the existing model-selection rule; the
-table's model column is for the *work*. A row is meant to be complete on its own: a lifecycle
-skill needs nothing outside the row to know what to delegate to.
+Rules that sit under the table, carried over from the *Model selection* section it replaces:
 
-Once the table exists, the "Step 3's reviewer is X" line in each work skill is a duplicate and
-is removed; the table is the single source of that fact, per
-`docs/reference/ai-authoring-token-efficiency.md`.
+- **Reviewers always run on Opus**, regardless of row; the model column is for the *work*.
+  Every `*-reviewer` frontmatter must say `model: opus`, and CI's `_ai-review.yml` `model`
+  input must default to `opus` — both must keep matching, because CI self-applies the reviewer
+  prompt and never reads that frontmatter.
+- **A review column may name more than one agent.** Each is applied to the changed files under
+  its tree, the same rule CI already uses ("a PR can touch more than one tree — apply each
+  checklist to its matching files"). A `development` PR therefore gets both `code-reviewer`
+  and `test-reviewer`, locally as in CI.
+- **A row is self-contained.** A lifecycle skill needs nothing outside the row and the PR's
+  changed paths to know what to delegate to. The `documentation` row splits on which
+  `docs/design/` file the change touches, not on the issue body.
+- **The `workflow` row has no work file on purpose.** CI refuses to draft `workflow` issues
+  because there is no safe path containment for untrusted issue content outside `docs/**`,
+  `custom_components/**` and `tests/**`; a local `implement` mirrors that refusal and hands
+  the drafting to the human partner. Its review is still automated.
+
+Once the table exists, the **bare mapping** "step 3's reviewer is X" in each work skill is a
+duplicate and is removed. What stays is the rationale those lines carry today — what the
+reviewer checks, `write-adr`'s warning not to use `analysis-reviewer`, `develop-task`'s rule
+to receive findings with `receiving-code-review`, `write-project-design`'s note that the
+reviewer re-reads `system-design.md` — because none of that is in the table. Where the
+reviewer is named mid-sentence (`write-use-case`, `write-requirement`), the sentence is
+reworded to point at the table rather than deleted.
 
 ---
 
@@ -86,19 +113,45 @@ between its draft, review and fix workers.
 
 | Steps | Skill | Status | Responsibility |
 |---|---|---|---|
-| 1–2 | `implement` | new | `/implement #N`. Read the issue; look its context label up in the table; if there is no context label (or the label is `idea`), stop and point at `work-idea` / `file-task-issue`. Create the worktree per the workflow doc, delegate the actual work to the row's work file, run the Definition of Done self-check, push, open the PR against `main` with `Closes #N`, move the board Status. End by naming `review` as the next step. |
-| 3–4 | `review` | new | `/review #N` on a PR. Look the linked issue's label up; do the behind-`origin/main` check; spawn the row's reviewer agent fresh (never inline); post findings via `submit-pr-review`. Owns the **round cap**: count prior review passes on the PR by the verdict marker and, at the cap of 3, stop and escalate the disagreement instead of reviewing again. On a clean pass, hand to `finalize-pr-review`; on remarks, name `address-review-remarks` as the next step. |
-| 5 | `address-review-remarks` | widened | Already locates findings, applies the severity-based fix policy, acknowledges human comments and posts the per-finding summary. Its "fix with the author's context" section, which today knows only use-cases, ADRs and analysis docs, becomes "apply the work file from the table row", so it covers code, tests, specs and design docs too. Per finding it calls `resolve-review-thread`. |
-| 5 (mechanic) | `resolve-review-thread` | new, small | Reply in the finding's thread with what was done or why not, then resolve the thread **only if actually fixed**; disputed or partial threads stay open. Owns the REST reply call, the `ai-fix-ack` marker, the GraphQL resolve mutation and the "outdated is not resolved" rule. Extracted from `finalize-pr-review`. |
-| 7 | `finalize-pr-review` | trimmed | Keeps `needs-approval` and the stranded-stack check; points to `resolve-review-thread` for the mechanic it used to carry. |
+| 1–2 | `implement` | new | `/implement #N`. Read the issue; look its context label up in the table. No context label, or `idea`: stop and point at `work-idea` / `file-task-issue`. `workflow`: stop, per the table rule. Otherwise: worktree from fresh `origin/main` per the workflow doc, board Status → `In progress`, delegate the actual work to the row's work file, Definition of Done self-check, push, PR against `main` with `Closes #N`, board Status → `In review`. End by naming `review` as the next step. |
+| 3–4 | `review` | new | `/review #N` on a PR. Look the linked issue's label up; do the behind-`origin/main` check; for each agent the row names, spawn it fresh (never inline) on the changed files under its tree; post findings via `submit-pr-review` in local mode. Owns the **local round cap** (below). On a clean pass, hand to `finalize-pr-review`; on remarks, name `fix` as the next step. |
+| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2 and 5 remain their single source and `fix` cites them. What `fix` adds is the dispatch — "re-author with the work file from the table row" instead of `address-review-remarks`' hard-coded use-case/ADR/analysis cases — and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
+| 5 (mechanic) | `resolve-review-thread` | new, small | Per finding: reply in its thread with what was done or why not, then resolve the thread **only if actually fixed**; disputed or partial threads stay open. Owns the GraphQL resolve mutation and the "outdated is not resolved" rule (moved from `finalize-pr-review`) and the REST reply call (moved from `address-review-remarks` section 4). The `ai-fix-ack` marker keeps its existing rule unchanged: only on a reply that directly answers a **human** comment, never on a reply to an AI finding — the marker is how later runs know a human comment was handled, and AI threads are tracked by resolution instead. |
+| 7 | `finalize-pr-review` | trimmed | Keeps "confirm nothing Critical/Major remains", `needs-approval`, and the stranded-stack check; points to `resolve-review-thread` for the mechanic it used to carry. |
+
+`address-review-remarks` is **not changed in this phase**. It stays CI's step-5 entry and the
+local entry for analysis docs and ADRs, exactly as today. See *Phasing* for why, and for how it
+and `fix` converge.
 
 Step 0 (file the issue) stays with `file-task-issue`. Step 6 (the loop) and steps 8–9 (manual
 comments, merge, worktree cleanup) stay with the human partner and the workflow doc.
 
-Who decides whether a finding must be addressed is unchanged: the reviewer agent assigns
-severity (step 3); the fix skill applies the policy — every Critical/Major fixed, Minor/Nit
-when trivial, disagreements recorded as Skipped (step 5); `finalize-pr-review` refuses
-`needs-approval` while a Critical/Major stays open (step 7).
+**Two rules every lifecycle skill states explicitly**, because they are new skills and the
+omission is easy to fill in wrongly:
+
+- An interactive session never self-applies the CI trigger labels `needs-draft`,
+  `needs-review`, `needs-work` (`docs/reference/ci-pipeline.md`). `implement` and `review` are
+  exactly where that temptation lives.
+- `needs-approval` is applied only by `finalize-pr-review`, only after a clean pass.
+
+### Who decides whether a finding must be addressed
+
+Unchanged: the reviewer agent assigns severity (step 3); the fix policy applies it — every
+Critical/Major fixed, Minor/Nit when trivial, disagreements recorded as Skipped (step 5);
+`finalize-pr-review` refuses `needs-approval` while a Critical/Major stays open (step 7).
+
+### The round cap, locally
+
+The workflow caps the interactive loop at 3 rounds and CI's at 2. The two caps count
+**different populations and never interact**: CI counts its own bot reviews by the
+`ai-review-verdict` marker; `submit-pr-review` forbids a local review from carrying that
+marker precisely so CI never counts a local pass. So `review` cannot count by that marker.
+
+Instead, `submit-pr-review`'s local mode ends the review body with a distinct local marker,
+`<!-- local-review-pass -->`, which CI does not grep for. `review` counts the PR's native
+reviews carrying it; at 3, it stops and escalates the disagreement to the human partner
+instead of reviewing again. This is a small, additive change to `submit-pr-review`, made in
+the same PR as the `review` skill.
 
 ---
 
@@ -112,41 +165,90 @@ Per-type `implement-adr`, `implement-uc`, … skills were considered and rejecte
   and a skill firing on the wrong artifact costs a whole run's context.
 - CI would end up with one generic runner per side plus eight local runners to keep aligned.
 
-Converting the work skills into plain `docs/reference/` files was also considered and
-rejected: a skill *is* a reference file plus a trigger description, so keeping them as skills
-costs nothing, keeps `/write-adr` usable on its own when a draft is wanted without the full
-lifecycle, and avoids touching CI's drafter, which names them by skill name.
-
-The review files must stay agents, not checklists: the workflow requires a fresh, separate
-reviewer that never runs inline, and only an agent definition carries the tool grant, the
-read-only restriction and the `model: opus` pin. The seven agents share a preamble and an
-output format; folding that into one generic reviewer agent that reads a per-type checklist
-would mirror CI's self-applied prompt more closely and is a possible later cleanup, not part
-of this change.
+One combined file per label describing both the work and its review was also considered and
+rejected: the two halves run in different contexts (author session with write access vs. a
+fresh read-only Opus agent), review independence requires the reviewer never to run inline
+with the author's recipe, and CI loads the two halves by different mechanisms.
 
 ---
 
-## Consequences
+## Target layout (later phase)
 
-- `CLAUDE.md`: gains the work-types table (replacing *Model selection*) and one line in the
-  *Contribution workflow* section mapping the step ranges to the four lifecycle skills.
-- Each work skill loses its "Step 3's reviewer" line. Their one-line "follows the contribution
-  workflow" pointer stays.
-- `address-review-remarks` keeps its name — CI's fix worker invokes it by name and CI is out of
-  scope — but its scope widens to every type. Because that means a fix pass may now edit
-  `custom_components/` and `tests/`, the skill states explicitly that per-type path containment
-  in CI continues to come from the workflow's own `add_paths`, not from the skill.
-- `finalize-pr-review` shrinks; `resolve-review-thread` is the new home of the reply/resolve
-  mechanic.
-- **Deferred follow-up**: `_ai-draft.yml`'s label `case` (skill, model, paths, commit prefix)
-  and `_ai-review.yml`'s path-to-reviewer mapping are now the second and third copies of what
-  the table owns. Making CI read the table, and updating `ci-pipeline.md`'s "every place this
-  vocabulary must stay in sync" list, is filed separately and not started until the local
-  skills have stabilised.
+The seven reviewer agents have identical frontmatter — the same three read-only tools, the
+same `model: opus`, the same output format. Only the checklist differs. That makes a
+per-label tree with one generic reviewer the natural end state:
+
+```text
+docs/reference/work-types/
+  adr/implement.md          ← today's write-adr SKILL.md body
+  adr/review.md             ← today's adr-reviewer checklist
+  uc/implement.md, uc/review.md
+  requirement/implement.md, requirement/review.md   (review.md a pointer to uc/review.md, or the reverse)
+  specs/…
+  documentation/implement.md, documentation/review.md
+  development/implement.md, development/review.md   (review.md covers custom_components/ and tests/)
+  testing/…
+  workflow/implement.md     ← pointer to ai-authoring-token-efficiency.md
+  workflow/review.md
+.claude/skills/implement/SKILL.md      generic; reads <label>/implement.md
+.claude/skills/review/SKILL.md         generic; spawns the one agent below per tree
+.claude/skills/fix/SKILL.md            generic; re-authors with <label>/implement.md
+.claude/agents/reviewer.md             generic: fresh, read-only, opus; reads <label>/review.md
+```
+
+The `CLAUDE.md` table then shrinks to label, model and irregular-row notes, because the paths
+derive from the label. This layout mirrors CI's self-applied "checklist in file X" exactly,
+and it cuts the fixed context CI pays every cold run (the action auto-loads all of
+`.claude/skills/` and `.claude/agents/`): fifteen per-type files under `.claude/` become three
+skills and one agent there, with per-type content read on demand.
+
+It is **not** done in this phase because it renames files CI references by path and by skill
+name; moving them without touching `_ai-draft.yml` and `_ai-review.yml` breaks both workers,
+and keeping the old files alongside as pointers would be the duplication this design exists to
+remove. The table's file columns are written so the migration only re-points them.
+
+---
+
+## Phasing
+
+**Phase 1 — local (this design's epic):**
+
+- `CLAUDE.md`: the work-types table and its rules replace *Model selection*; one line in the
+  *Contribution workflow* section maps step ranges to `implement` / `review` / `fix` /
+  `finalize-pr-review`.
+- New skills `implement`, `review`, `fix`, `resolve-review-thread`; `finalize-pr-review`
+  trimmed; `submit-pr-review` gains the local marker; the bare reviewer mapping removed from
+  the work skills.
+- `address-review-remarks` untouched.
+
+**Phase 2 — CI follows, and the layout moves (one coordinated strand):**
+
+- `_ai-fix.yml` gains a real per-type path allow-list (staging scoped by the row's trees, not
+  the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
+  today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
+  solely by `address-review-remarks`' docs-only scope. Widening that skill in phase 1 would
+  widen CI's blast radius with no CI file touched, because the worker follows the skill by
+  name and the action auto-loads every skill. That is why phase 1 adds `fix` as a separate
+  skill instead. Once the allow-list exists, `address-review-remarks` is folded into `fix`
+  (its sections 1, 2 and 5 move there; CI's worker is re-pointed) and retired.
+- `_ai-draft.yml`'s label `case` and `_ai-review.yml`'s path→agent mapping read the table (or
+  a machine-readable rendering of it). Note this is partly **new coverage**, not only
+  de-duplication: CI has no `documentation` row today and no `docs/design/**` review rule, so
+  `system-design-reviewer` is currently unreachable from CI. `_ai-draft.yml` also carries
+  `add_paths` and `commit_prefix`, which the table does not; those either join the table or
+  stay CI-owned, decided in that phase.
+- The per-label tree and generic reviewer agent from *Target layout*, with
+  `docs/reference/ci-pipeline.md`'s "every place this vocabulary must stay in sync" list
+  updated.
+
+Phase 2 does not start until the phase-1 skills have been used for a while and stabilised.
+
+---
 
 ## Non-goals
 
-- No change to CI behaviour in this strand, other than the deferred follow-up above.
+- No CI behaviour change in phase 1 — including no change to any skill file CI loads by name
+  in a way that alters what CI does (`address-review-remarks`, `submit-pr-review`'s CI mode).
 - No autonomous chaining of skills; the stop-and-report rule in the workflow doc is unchanged.
 - No second state machine. Readiness and progress remain the project board's Status field plus
   `needs-approval`.
