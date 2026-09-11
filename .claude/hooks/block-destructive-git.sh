@@ -11,7 +11,12 @@
 #
 # Scope and known limits. This is an accident guard, not a sandbox. It word-splits
 # each command without understanding shell quoting, so a destructive command wrapped
-# in another shell (`bash -c "git push --force"`) or in a heredoc body is not seen.
+# in another shell (`bash -c "git push --force"`) is not seen. The one construct it
+# does parse is the heredoc: the body of a *quoted*-delimiter heredoc (`<<'EOF'`,
+# `<<"EOF"`) is inert text -- no expansion can run inside it -- so it is blanked out
+# before the scan, which would otherwise read a documentation line beginning `git
+# clean -f` as a command position. An *unquoted* delimiter (`<<EOF`) leaves `$(...)`
+# live inside the body, so that body is still scanned and such prose is still denied.
 # Conversely, only a segment whose *first* word is git is inspected, so prose that
 # merely mentions a blocked command (`gh pr comment --body "... git reset --hard ..."`)
 # runs untouched -- as long as that prose carries no shell separator, since the split on
@@ -128,6 +133,60 @@ has_short_flag() { # a single-dash (non "--") argument carrying that letter
   done
   return 1
 }
+
+# Blank out the body of every quoted-delimiter heredoc, keeping the line count so the
+# lines that remain are still real command positions. Deliberately narrow, so that it
+# fails closed:
+#   - an unquoted delimiter (`<<EOF`) keeps expansions live in the body, so that body
+#     is left in place and scanned;
+#   - a body is only blanked once its terminator line has actually been found, so a
+#     stray `<<'EOF'` inside quoted prose cannot swallow the rest of the command;
+#   - the opener line itself is kept, so `cat <<'EOF' && git clean -f` still denies.
+strip_heredoc_bodies() {
+  printf '%s\n' "$1" | awk '
+    BEGIN {
+      q = sprintf("%c", 39)  # a single quote, unwritable inside this quoted program
+      opener = "<<-?[ \t]*(\"[^\"]*\"|" q "[^" q "]*" q ")"
+    }
+    { line[NR] = $0 }
+    END {
+      n = NR
+      for (i = 1; i <= n; i++) out[i] = line[i]
+      i = 1
+      while (i <= n) {
+        rest = line[i]
+        cnt = 0
+        # One line can open several heredocs (`cmd <<"A" <<"B"`); they are terminated
+        # in the order they were opened.
+        while (match(rest, opener)) {
+          tok = substr(rest, RSTART, RLENGTH)
+          rest = substr(rest, RSTART + RLENGTH)
+          cnt++
+          tabbed[cnt] = (tok ~ /^<<-/)  # `<<-` strips leading tabs from the terminator
+          sub(/^<<-?[ \t]*/, "", tok)
+          delim[cnt] = substr(tok, 2, length(tok) - 2)
+        }
+        if (cnt == 0) { i++; continue }
+        j = i + 1
+        k = 1
+        while (k <= cnt && j <= n) {
+          t = line[j]
+          if (tabbed[k]) sub(/^[ \t]+/, "", t)
+          if (t == delim[k]) k++
+          j++
+        }
+        if (k > cnt) {
+          for (m = i + 1; m < j; m++) out[m] = ""
+          i = j
+        } else {
+          i++  # never terminated: not a heredoc after all, so blank nothing
+        }
+      }
+      for (i = 1; i <= n; i++) print out[i]
+    }'
+}
+
+cmd=$(strip_heredoc_bodies "$cmd")
 
 # Split the command line on shell separators so a guarded command placed after
 # && / || / ; / | / a newline is inspected in its own right.

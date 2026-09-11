@@ -27,22 +27,26 @@ run() { # run BLOCK|ALLOW <command> [cwd]
   expect=$1
   cmd=$2
   dir=${3:-$CWD}
-  esc=$(printf '%s' "$cmd" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+  # A case may span lines (heredocs, newline-separated statements), so escape the
+  # newlines the way JSON wants and render the case on one line in the report.
+  esc=$(printf '%s' "$cmd" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' |
+    awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
+  shown=$(printf '%s' "$cmd" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
   out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"t"}}' "$dir" "$esc" | sh "$HOOK" 2>&1)
   rc=$?
   case "$out" in *'"permissionDecision":"deny"'*) denied=1 ;; *) denied=0 ;; esac
   if [ "$expect" = BLOCK ]; then
     if [ "$rc" = 2 ] && [ "$denied" = 1 ]; then
-      printf 'ok   BLOCK  %s\n' "$cmd"
+      printf 'ok   BLOCK  %s\n' "$shown"
     else
-      printf 'FAIL expected BLOCK, got rc=%s deny=%s  %s\n' "$rc" "$denied" "$cmd"
+      printf 'FAIL expected BLOCK, got rc=%s deny=%s  %s\n' "$rc" "$denied" "$shown"
       fail=1
     fi
   else
     if [ "$rc" = 0 ] && [ -z "$out" ]; then
-      printf 'ok   ALLOW  %s\n' "$cmd"
+      printf 'ok   ALLOW  %s\n' "$shown"
     else
-      printf 'FAIL expected ALLOW, got rc=%s  %s\n%s\n' "$rc" "$cmd" "$out"
+      printf 'FAIL expected ALLOW, got rc=%s  %s\n%s\n' "$rc" "$shown" "$out"
       fail=1
     fi
   fi
@@ -137,6 +141,53 @@ run ALLOW 'git commit -m "fix: stop using git reset --hard"'
 run ALLOW 'gh pr comment 1 --body "we never run git reset --hard here"'
 run ALLOW 'grep -rn "git push --force" docs/'
 run ALLOW 'git add . && git commit -m wip && git push'
+
+echo
+echo "=== allowed: inert heredoc bodies that merely document a blocked command ==="
+run ALLOW "cat > /tmp/doc.md <<'EOF'
+Never run this:
+git clean -f
+EOF"
+run ALLOW 'cat > /tmp/doc.md <<"EOF"
+git push --force
+EOF'
+# `<<-` strips leading tabs from body and terminator alike, so this one uses real tabs.
+tab=$(printf '\t')
+run ALLOW "cat > /tmp/doc.md <<-'EOF'
+${tab}git reset --hard
+${tab}EOF"
+# Several heredocs opened on one line are terminated in the order they were opened.
+run ALLOW "cat <<'A' <<'B'
+git clean -f
+A
+git push --force
+B"
+# Real commands after a terminated heredoc are still scanned -- these are allowed ones.
+run ALLOW "cat > /tmp/doc.md <<'EOF'
+git push --force
+EOF
+git add . && git commit -m 'docs: warn about force-pushing'"
+
+echo
+echo "=== still blocked: a real invocation after a newline, separator or heredoc ==="
+run BLOCK 'git add .
+git clean -f'
+run BLOCK 'true && git clean -f'
+# An unquoted delimiter leaves $(...) live inside the body, so the body is still scanned.
+run BLOCK 'cat > /tmp/doc.md <<EOF
+git clean -f
+EOF'
+# The opener line itself is a real command position.
+run BLOCK "cat > /tmp/doc.md <<'EOF' && git clean -f
+prose
+EOF"
+run BLOCK "cat > /tmp/doc.md <<'EOF'
+prose
+EOF
+git reset --hard"
+# A heredoc opener that is never terminated is prose, not a heredoc: blank nothing.
+run BLOCK "echo \"see <<'EOF' below\"
+git clean -f"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
