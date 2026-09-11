@@ -79,7 +79,10 @@ or task off the back of one that just landed without a check-in.
 Commit and push freely, at any point during the work — no per-commit or per-push approval
 needed. This is a standing authorization the project makes in this document; it does not
 extend to anything destructive or hard to reverse (force-push, rewriting published history,
-`git reset --hard`, etc.), which still follow the general ask-before-acting default.
+`git reset --hard`, etc.), which still follow the general ask-before-acting default. Those
+exclusions are enforced by a `PreToolUse` hook (`.claude/settings.json` →
+`.claude/hooks/block-destructive-git.sh`) that refuses the destructive commands before they
+run, not by this text alone.
 
 ## Project board
 
