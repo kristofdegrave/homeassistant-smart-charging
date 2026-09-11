@@ -10,9 +10,9 @@ is the checklist to run through before running `gh issue create`, not a replacem
 deciding *what* the issue is about.
 
 Context labels, project-board Size/Estimate fields, the anchored `Plan:` line, and epic
-membership (native sub-issues) are all defined once in
-`docs/reference/contribution-workflow.md`'s **Issue conventions** section — read that first. This skill adds only the pre-flight order to run through so
-nothing gets filed half-scoped.
+membership (native sub-issues) are all defined once, and `CLAUDE.md`'s **Issue conventions**
+section routes to wherever that is — start there. This skill adds only the pre-flight order to
+run through so nothing gets filed half-scoped.
 
 ## The checklist
 
