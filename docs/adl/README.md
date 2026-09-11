@@ -36,7 +36,7 @@ template.
 | [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow — point 3's step enumeration narrowed by [ADR-0033](0033-captar-step-gains-a-mapping-half.md) | Accepted |
 | [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities | Accepted |
 | [0029](0029-process-time-for-perf-test-cpu-measurement.md) | stdlib `time.process_time()` for perf-test CPU measurement, `psutil` retained for RSS | Accepted |
-| [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role | Accepted |
+| [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role; its deferred unit contract settled by [ADR-0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Accepted |
 | [0031](0031-config-values-as-disabled-by-default-diagnostic-sensors.md) | Config-entry values also exposed as disabled-by-default diagnostic sensors | Accepted |
 | [0032](0032-external-monthly-peak-precedence.md) | External monthly-peak sensor — precedence semantics | Accepted |
 | [0033](0033-captar-step-gains-a-mapping-half.md) | External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half | Accepted |

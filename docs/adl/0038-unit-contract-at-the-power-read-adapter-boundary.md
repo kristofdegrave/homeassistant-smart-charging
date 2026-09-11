@@ -1,4 +1,4 @@
-# ADR-0038: Unit contract at the power-read adapter boundary
+# ADR-0038: Unit contract at the power-read adapter boundary — convert known units, assume-and-warn when absent, reject a present non-power unit
 
 Date: 2026-09-11
 Status: Proposed
@@ -43,17 +43,27 @@ The forces in tension:
 - **A sensor with no unit attribute is common and usually correct.** Template sensors and many
   integrations expose a bare number. Today those installs work, because the documented contract
   is watts and a bare number is taken as watts.
-- **Guessing wrongly is asymmetric, and the asymmetry differs per role.** Reading a kW value as
-  W understates `net_w`, which *widens* the peak clamp — the permissive direction. Reading a W
-  value as kW would narrow it. ADR-0030 reasoned about exactly this asymmetry for
-  `monthly_peak_external` and chose against the permissive mistake.
+- **Guessing wrongly is asymmetric, and the asymmetry differs per role.** For `net_power`,
+  reading a kW value as W understates it, which *widens* the peak clamp — the permissive
+  direction. For `monthly_peak_external` the direction reverses: reading a W value as kW
+  produces a huge operand, and since the effective peak limit resolves as
+  `min(max(monthly_peak, floor), max_peak_kw)`, it saturates at `max_peak_kw` — also fully
+  permissive, but reached the opposite way. `PowerKilowattReadAdapter`'s own docstring reasons
+  from this asymmetry; ADR-0030 itself does not, and attributing the argument to that record
+  rather than to the implementation would be a citation the record does not support.
 
-ADR-0030 does not settle the general rule. It introduced `PowerKilowattReadAdapter` for one
-optional role and explicitly deferred the contract: its Consequences state that a unit contract
-for the reading "is an implementation-spec obligation this ADR surfaces but does not itself
-resolve." Extending that adapter's strictness to the required roles by precedent alone would
-settle, by accident of which adapter was written first, a contract that users' existing
-configurations depend on.
+ADR-0030 does not settle the general rule. It decided one optional role and explicitly deferred
+the contract: its Consequences state that "a unit contract for the reading — DSO/smart-meter peak
+sensors commonly report in W, so the adapter (or its config-flow mapping) must normalize to kW
+before the value reaches the coordinator; this is an implementation-spec obligation this ADR
+surfaces but does not itself resolve." `PowerKilowattReadAdapter` is an artifact of the
+implementation spec that followed, not of that record. Extending its strictness to the required
+roles by precedent alone would settle, by accident of which adapter was written first, a contract
+that users' existing configurations depend on.
+
+Note the parenthetical inside that quote: ADR-0030 states that DSO peak sensors **commonly report
+in W**, while the role's documented unit is kW. That role's likely mis-mapping therefore runs the
+opposite way to the other three, which matters below.
 
 ## Considered options
 
@@ -74,8 +84,8 @@ responsibility, stated in the config-flow strings and `entity-catalog.md`.
 Apply `PowerKilowattReadAdapter`'s existing behaviour (in W) to all four power roles.
 
 - Pro: one rule, already implemented and tested for `monthly_peak_external`; no silently wrong
-  value can ever reach the control cycle; consistent with ADR-0030's stated reasoning about the
-  asymmetric mistake.
+  value can ever reach the control cycle; and for `monthly_peak_external` specifically it is the
+  only option that cannot saturate the peak limit.
 - Con: turns a working installation into a faulting one on upgrade. For `net_power` and
   `charger_power` — both required — a unitless sensor stops charging entirely under ADR-0007,
   for a mapping that was correct all along and produced correct behaviour. It punishes the
@@ -108,30 +118,52 @@ As C, and additionally constrain the entity pickers so a non-power entity cannot
   `device_class` filter also excludes otherwise-valid template sensors that set a unit but no
   device class, narrowing what a user may legitimately map.
 
+### Option E — Option C for the three W-valued roles, Option B for `monthly_peak_external`
+
+As C, except that `monthly_peak_external` keeps strict rejection of an absent unit.
+
+- Pro: keeps assume-and-warn where its failure mode is bounded, and strict rejection on the one
+  role where an absent unit's likely true value (W, per ADR-0030) read as the documented unit
+  (kW) saturates the effective peak limit at `max_peak_kw` — disabling the clamp outright, the
+  same outcome this ADR exists to prevent. It is also the status quo for that role, so it breaks
+  nothing that works today.
+- Con: two rules at one boundary, which is exactly what Option C's Con warned against; a future
+  reader must know which role they are looking at. The split is defensible only while the reason
+  for it stays written down, which makes this record load-bearing rather than merely informative.
+
 ## Decision
 
-**Option C.** Power-read adapters convert a recognised power unit to the role's documented unit,
-assume the documented unit with a warning when no unit is present, and read `None` when a unit
-is present but is not a power unit.
+**Option E.** Power-read adapters convert a recognised power unit to the role's documented unit,
+assume the documented unit with a warning when no unit is present, and read `None` when a unit is
+present but is not a power unit — except for `monthly_peak_external`, where an absent unit is
+also rejected.
+
+The warning is emitted once per entity per config-entry load, not per read. The control cycle
+reads every role every cycle, so a per-read warning would be log spam that trains the user to
+ignore exactly the signal this option exists to provide.
 
 The deciding trade-off is between B's and C's costs, and they are not symmetric. B's cost falls
 on installations that are correct today and would stop charging after an upgrade; C's cost falls
 on installations that are already silently wrong and stay wrong, but which C now warns about.
+E takes C's side of that trade for the three roles where it holds, and B's side for the one where
+it does not.
 Option A's "no migration risk" Pro is real, but it buys that by leaving the clamp disabled, which
 is the defect itself. D's configuration-time guard is the better *long-term* shape and is not
 rejected on its merits — it simply cannot reach entries that already exist, which is the entire
 affected population, so it is recorded as follow-up rather than part of this contract.
 
-The rejection of a *present* non-power unit is kept from B, because it is the one case where the
-reading is positive evidence of a mis-mapping rather than an absence of evidence. This is the
-same asymmetry ADR-0030 reasoned from, applied one step more narrowly: absence of a unit is not
-evidence of a wrong unit.
+The rejection of a *present* non-power unit is kept from B for every role, because it is the one
+case where the reading is positive evidence of a mis-mapping rather than an absence of evidence.
+Absence of a unit is not evidence of a wrong unit — which is why the absent case is treated
+differently at all, and why the one role whose likely absent-unit value is *known* to differ from
+its documented unit is carved out of that leniency.
 
-`PowerKilowattReadAdapter` is brought under this rule rather than left as a second, stricter
-regime, so there is one contract per boundary rather than one per role. That changes
-`monthly_peak_external`'s behaviour for a unitless sensor from "absent" to "assumed kW, warned" —
-acceptable because it is an optional role whose absence already degrades silently, so the
-warning is strictly more information than before.
+`PowerKilowattReadAdapter` therefore keeps its absent-unit behaviour, gaining only the warning
+and the present-non-power-unit rule. An earlier draft of this record brought it fully under the
+uniform rule, reasoning that a warning is strictly more information than silent absence. That was
+wrong: for this role "assumed kW" turns a W-reporting sensor into a peak operand three orders of
+magnitude too large, saturating the effective peak limit and disabling the clamp — strictly worse
+than the `None` it replaced, and the same failure this record exists to prevent.
 
 This ADR does not supersede ADR-0030. ADR-0030's decision was to introduce the role and merge it
 into the effective-peak-limit resolution; its unit handling was an implementation consequence it
@@ -140,8 +172,11 @@ explicitly declined to settle. This record settles it, for that role and the oth
 ## Consequences
 
 **Blast radius** — every site this decision governs today, and whether each conforms.
-`grep -n "NumericReadAdapter(\|PowerKilowattReadAdapter(" adapters/factory.py` returns eight
-role wirings, of which four are power-valued:
+`grep -n "Numeric.*Adapter(\|PowerKilowattReadAdapter(" adapters/factory.py` returns ten role
+wirings, of which four are power-valued. The wildcard matters: `NumericReadWriteAdapter`
+subclasses `NumericReadAdapter` and inherits the identical unitless `float(state.state)` read, but
+a literal `NumericReadAdapter(` pattern does not match it — an enumeration keyed on the narrower
+string silently drops two roles.
 
 | Role | Adapter today | Documented unit | Conforms? |
 |---|---|---|---|
@@ -150,22 +185,27 @@ role wirings, of which four are power-valued:
 | `solar_power` | `NumericReadAdapter` | W | **No** — optional, diagnostic-only today |
 | `monthly_peak_external` | `PowerKilowattReadAdapter` | kW | Partially — converts, but rejects an absent unit instead of warning |
 
-The remaining four wirings are non-power `NumericReadAdapter` roles (`grid_voltage` V,
-`ev_soc` %, `ev_battery_capacity` kWh, `solar_forecast` kWh) and are **out of scope of this
-ADR** and keep their
-current behaviour. They carry the same class of hazard and each would need its own unit set
-decided; that is named as follow-up below, not silently assumed to follow from this record.
+The remaining six wirings read through the same unitless path and are **out of scope of this
+ADR**, keeping their current behaviour: `grid_voltage` (V), `ev_soc` (%),
+`ev_battery_capacity` (kWh) and `solar_forecast` (kWh) via `NumericReadAdapter`, plus
+`charger_current` (A) and `vehicle_charge_limit` (%) via `NumericReadWriteAdapter`. They carry
+the same class of hazard and each would need its own unit set decided — and for the two
+read/write roles, a written value's unit as well as a read one's. That is named as follow-up
+below, not silently assumed to follow from this record.
 
 **Follow-up this creates:**
 
-- Implementation work for the three non-conforming power roles, bringing
-  `PowerKilowattReadAdapter` under the same rule.
+- Implementation work for the three non-conforming W-valued roles, and bringing the fourth
+  (`monthly_peak_external`, via `PowerKilowattReadAdapter`) under the warning and the
+  present-non-power-unit rule while leaving its absent-unit rejection intact.
 - A new issue for the config-flow selector guard (Option D), which this ADR records as the right
   long-term shape but does not adopt now.
 - A new issue for the non-power numeric roles above, deciding whether the same contract extends
   to them and with which unit sets.
-- `entity-catalog.md`'s unit column for the four power roles should state that normalisation
-  happens at the adapter, rather than reading as a requirement on the source entity.
+- `entity-catalog.md`'s unit column for the four power roles should state that the value is
+  normalised at the adapter and assumed to be the stated unit when the source reports none. It
+  should not stop expressing a source-side expectation altogether: the absent-unit fallback is
+  precisely an assumption about the source, and would have nothing to rest on without it.
 
 **What becomes harder:** a role's unit is now part of its adapter's contract, so adding a
 power-valued role means deciding its unit set rather than defaulting to "whatever the entity
