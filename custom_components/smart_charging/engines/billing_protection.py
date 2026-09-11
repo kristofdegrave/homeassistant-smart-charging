@@ -75,7 +75,7 @@ def debounce_baseline_w(
     tracker: BaselineDebouncer,
     debounce_cycles: int,
     *,
-    command_changed: bool = False,
+    command_changed: bool,
 ) -> tuple[float, BaselineDebouncer]:
     """ADR-0039: `command_changed` says the commanded current changed on the cycle this reading
     was taken, which makes `raw_baseline_w` partly a measurement of this integration's OWN
@@ -93,8 +93,9 @@ def debounce_baseline_w(
     a genuine sustained drop that straddles a step still needs `debounce_cycles` readings taken
     while the command was steady. The `tracker.accepted_w is None` case is NOT gated -- there is
     no prior reading to fall back on, so the first reading of a connection is always accepted
-    even if it coincides with a step. Defaults to False so a caller that cannot know (tests
-    exercising the direction rules alone) gets the pre-ADR-0039 behavior.
+    even if it coincides with a step. Deliberately has no default: there is one production
+    caller, and a future one that forgets this argument should be a type error rather than a
+    silent regression to the pre-ADR-0039 behavior that caused #1034.
 
     Issue #990: the charger's own power sensor (slow Modbus poll) can still report the
     prior, higher value for one extra coordinator cycle after a current step-down, while the

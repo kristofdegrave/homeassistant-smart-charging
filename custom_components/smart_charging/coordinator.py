@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from datetime import time as time_of_day
 from typing import Any
@@ -243,7 +243,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
         # safety-conservative direction the debounce itself always takes.
         self._baseline_debouncer = BaselineDebouncer()
-        # ADR-0039: the two fields `debounce_baseline_w`'s `command_changed` is derived from.
+        # ADR-0039/R3 case (a): the two fields `debounce_baseline_w`'s `command_changed` is
+        # derived from -- see that function's docstring for what the engine does with it.
         # `_last_commanded_a` is the value `_write` last sent; `_command_stepped` is whether that
         # write changed it. Both are maintained in `_write` -- the single write site -- so the
         # fault paths' own `_write(0.0)` counts as a step exactly like a control-path write does,
@@ -269,6 +270,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         except Exception as err:  # noqa: BLE001 - every failure funnels to the fault path (ADR-0007)
             self._log_fault(f"cycle exception: {err}")
             await self._safe_write_zero()
+            self._clear_baseline_deferral()
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -436,6 +438,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if inputs is None:
             self._log_fault("required adapter returned None")
             await self._write(0.0)
+            self._clear_baseline_deferral()
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
             # ADR-0021/entity-catalog.md:154 define the entity's own state as the timestamp of
             # the LAST SUCCESSFUL cycle, and a required-role fault means this cycle wasn't one;
@@ -1275,11 +1278,25 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return 0.0
         return current
 
+    def _clear_baseline_deferral(self) -> None:
+        """ADR-0039/R3 case (a): `deferred_previous` means "the previous CONTROL CYCLE deferred
+        on the command-changed ground", not "the previous call to `debounce_baseline_w` did".
+        A cycle that returns before that call is reached -- the required-adapter fault in
+        `_run_cycle`, or any exception funnelled to `_async_update_data` -- deferred nothing, yet
+        still writes 0 A, which is a real step. Leaving the flag set would block case (a) on the
+        RECOVERY cycle, which is precisely the cycle whose `charger_w` is stale from that forced
+        drop to 0 A: the reading then looks far below the accepted baseline, case (a) cannot
+        reject it, and the debounce window commits a contaminated, headroom-inflating value.
+        Cleared here rather than in the engine, since only the coordinator knows a cycle ended
+        without consulting it."""
+        self._baseline_debouncer = replace(self._baseline_debouncer, deferred_previous=False)
+
     async def _write(self, value: float) -> None:
         """The single write site (ADR-0039's `_command_stepped`/`_last_commanded_a` are
         maintained here for exactly that reason). The step flag is recorded only after the
         adapter write actually returns: a write that raises never reached the charger, so the
         current did not change and the next cycle's `charger_w` is not stale on its account."""
+        self._command_stepped = False
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)
         self._command_stepped = (
             self._last_commanded_a is not None and value != self._last_commanded_a

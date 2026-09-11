@@ -2,7 +2,12 @@
 
 Row 1 (deadline urgency) is added by this suite -- row 2 (min(max(operand, floor), max),
 #754/R3) is only reached when urgent=False. The operand merge (resolve_monthly_peak_operand,
-ADR-0032) is covered separately, both alone and run through the row-2 clamp."""
+ADR-0032) is covered separately, both alone and run through the row-2 clamp.
+
+Also `debounce_baseline_w`, which decides which household-baseline reading the R3 clamp is
+allowed to solve from (R3's two deferral cases, ADR-0039): its direction rules and the
+command-changed gate one call at a time, then a closed-loop section at the end of the file
+that drives it together with `apply_peak_clamp` against a lagging charger reading."""
 
 from collections.abc import Callable
 
@@ -339,7 +344,9 @@ def test_clamp_never_returns_more_than_requested():
 
 def test_debounce_first_reading_ever_applies_immediately():
     # No accepted baseline yet -- nothing to debounce against (issue #990).
-    baseline_w, tracker = debounce_baseline_w(500.0, BaselineDebouncer(), debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        500.0, BaselineDebouncer(), debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == 500.0
     assert tracker.accepted_w == 500.0
     assert tracker.pending_cycles == 0
@@ -349,7 +356,9 @@ def test_debounce_a_higher_baseline_reading_applies_immediately():
     # Higher baseline_w -> less headroom -- the safety-conservative direction always applies
     # immediately, same cycle it's read.
     tracker = BaselineDebouncer(accepted_w=500.0)
-    baseline_w, tracker = debounce_baseline_w(800.0, tracker, debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        800.0, tracker, debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == 800.0
     assert tracker.accepted_w == 800.0
     assert tracker.pending_cycles == 0
@@ -357,7 +366,9 @@ def test_debounce_a_higher_baseline_reading_applies_immediately():
 
 def test_debounce_an_equal_baseline_reading_applies_immediately():
     tracker = BaselineDebouncer(accepted_w=500.0)
-    baseline_w, tracker = debounce_baseline_w(500.0, tracker, debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        500.0, tracker, debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == 500.0
     assert tracker.pending_cycles == 0
 
@@ -369,7 +380,9 @@ def test_debounce_holds_a_lower_baseline_reading_until_it_persists():
     # for that one cycle, inflating peak_headroom_a/solar_surplus_w. The clamp must not grant
     # that headroom increase on the very first low reading.
     tracker = BaselineDebouncer(accepted_w=500.0)
-    baseline_w, tracker = debounce_baseline_w(-1500.0, tracker, debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        -1500.0, tracker, debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == 500.0  # holds the prior, safety-conservative value
     assert tracker.accepted_w == 500.0
     assert tracker.pending_cycles == 1
@@ -379,7 +392,9 @@ def test_debounce_accepts_a_lower_baseline_once_it_holds_for_the_debounce_window
     # A genuine, sustained drop (e.g. real solar surplus) is accepted once it has held for
     # `debounce_cycles` consecutive readings -- not suppressed forever.
     tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)
-    baseline_w, tracker = debounce_baseline_w(-1500.0, tracker, debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        -1500.0, tracker, debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == -1500.0
     assert tracker.accepted_w == -1500.0
     assert tracker.pending_cycles == 0
@@ -390,7 +405,9 @@ def test_debounce_a_worsening_reading_mid_pending_resets_the_pending_count():
     # debounce window elapses. The stale pending count must not carry over once a
     # not-lower reading is accepted immediately.
     tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)
-    baseline_w, tracker = debounce_baseline_w(500.0, tracker, debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        500.0, tracker, debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == 500.0
     assert tracker.pending_cycles == 0
 
@@ -400,7 +417,9 @@ def test_debounce_commits_the_newest_pending_value_not_the_one_that_started_the_
     # "has this exact value been stable" -- a still-dropping reading commits at whatever value
     # it has reached once the window elapses, not the first below-accepted value observed.
     tracker = BaselineDebouncer(accepted_w=500.0, pending_cycles=1)  # pending since -1500.0
-    baseline_w, tracker = debounce_baseline_w(-4000.0, tracker, debounce_cycles=2)
+    baseline_w, tracker = debounce_baseline_w(
+        -4000.0, tracker, debounce_cycles=2, command_changed=False
+    )
     assert baseline_w == -4000.0
     assert tracker.accepted_w == -4000.0
     assert tracker.pending_cycles == 0
@@ -454,13 +473,66 @@ def test_debounce_accepts_the_first_ever_reading_even_on_a_step():
     assert tracker.accepted_w == 986.0
 
 
-# --- Closed-loop stability (issue #1034) -------------------------------------------------
+def test_debounce_case_a_never_defers_two_consecutive_cycles():
+    # R3: "never on two consecutive cycles, case (a) not applying at all on a control cycle
+    # immediately following one it deferred". Without this cap a mode whose own request moves
+    # every cycle (Solar tracking a drifting surplus) makes every reading a command-changed one
+    # and freezes the baseline indefinitely -- the bound R3 states would not hold.
+    tracker = BaselineDebouncer(accepted_w=986.0)
+    baseline_w, tracker = debounce_baseline_w(
+        2310.0, tracker, debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 986.0  # deferred
+    baseline_w, tracker = debounce_baseline_w(
+        2310.0, tracker, debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 2310.0, "case (a) deferred two cycles running"
+    assert tracker.accepted_w == 2310.0
+
+
+def test_debounce_defers_a_breaching_increase_by_exactly_one_cycle():
+    # R3: "A household increase large enough to breach ... is deferred by at most one control
+    # cycle". A headroom-DECREASING reading arriving on a command-changed cycle is the only way
+    # a breach can be deferred at all -- case (b) never defers one.
+    tracker = BaselineDebouncer(accepted_w=986.0)
+    baseline_w, tracker = debounce_baseline_w(
+        3600.0, tracker, debounce_cycles=2, command_changed=True
+    )
+    assert baseline_w == 986.0  # the breach is not seen this cycle
+    baseline_w, tracker = debounce_baseline_w(
+        3600.0, tracker, debounce_cycles=2, command_changed=False
+    )
+    assert baseline_w == 3600.0  # and is acted on the very next one
+
+
+def test_debounce_worst_case_interleave_never_exceeds_three_deferrals():
+    # R3: "No run of consecutive deferrals exceeds 3 control cycles. That worst case needs case
+    # (a) to apply on alternate cycles throughout a case-(b) sequence." Built from a clean
+    # tracker rather than a seeded pending count, so it demonstrates the bound itself.
+    tracker = BaselineDebouncer(accepted_w=986.0)
+    accepted_on = None
+    for cycle in range(6):
+        baseline_w, tracker = debounce_baseline_w(
+            200.0, tracker, debounce_cycles=2, command_changed=True
+        )
+        if baseline_w == 200.0:
+            accepted_on = cycle
+            break
+    assert accepted_on == 3, f"accepted on cycle {accepted_on}, i.e. {accepted_on} deferrals"
+
+
+# --- Closed-loop stability (issue #1034, ADR-0039) ---------------------------------------
 # The tests above exercise debounce_baseline_w one call at a time, against a baseline_w the
 # test supplies. These drive it in the feedback loop it actually sits in: the clamp's own
 # output becomes the charger's draw, which becomes the next cycle's readings. That is the
 # only arrangement in which the step-UP transient debounce_baseline_w's docstring accepts as
 # "one extra cycle of understated headroom" can be observed for what it is -- the transient is
 # itself actuated, so it manufactures the next one.
+#
+# Placement: ADR-0009's plain-pytest tier, since this calls only pure functions and imports no
+# HA. ADR-0039's Consequences record it as "a tier-1 stand-in, not a substitute" for ADR-0037's
+# scenario/timeline tier -- when that tier exists, a lag-driven oscillation scenario belongs
+# there and this block can go.
 
 _LOOP_VOLTAGE = 220.82  # measured, from the live install in #1034
 _LOOP_HOUSE_W = 986.0  # steady household baseline, the term the clamp is meant to solve around
@@ -468,9 +540,12 @@ _LOOP_LIMIT_KW = 4.0
 _LOOP_MAX_A = 32.0
 
 
-def _closed_loop(
-    cycles: int, house_w: Callable[[int], float], *, debounce_cycles: int = 2
-) -> list[tuple[float, float]]:
+_LOOP_MIN_A = 6.0
+_LOOP_SAFETY_MARGIN_W = 250.0
+_LOOP_TARGET_W = _LOOP_LIMIT_KW * 1000 - _LOOP_SAFETY_MARGIN_W
+
+
+def _closed_loop(cycles: int, house_w: Callable[[int], float]) -> list[tuple[float, float]]:
     """(commanded_a, net_w) per cycle, with Captar's own always-max_a request as the input.
 
     Models two properties of the real install and nothing else: the net meter reflects a change
@@ -492,22 +567,22 @@ def _closed_loop(
         baseline_w, debouncer = debounce_baseline_w(
             net_w - charger_w,
             debouncer,
-            debounce_cycles=debounce_cycles,
+            debounce_cycles=2,
             command_changed=commanded != previous,
         )
         desired, breach, _ = apply_peak_clamp(
             _LOOP_MAX_A,
             baseline_w,
-            _LOOP_VOLTAGE,
-            _LOOP_LIMIT_KW,
-            250.0,
-            6.0,
-            120.0,
-            breach,
-            float(cycle * 10),
+            voltage=_LOOP_VOLTAGE,
+            effective_peak_limit_kw=_LOOP_LIMIT_KW,
+            safety_margin_w=_LOOP_SAFETY_MARGIN_W,
+            min_a=_LOOP_MIN_A,
+            grace_period_s=120.0,
+            tracker=breach,
+            now=float(cycle * 10),
         )
         previous = commanded
-        commanded = apply_floor_cap(desired, min_a=6.0, max_a=_LOOP_MAX_A)
+        commanded = apply_floor_cap(desired, min_a=_LOOP_MIN_A, max_a=_LOOP_MAX_A)
         history.append((commanded, net_w))
     return history
 
@@ -517,8 +592,14 @@ def test_closed_loop_settles_when_the_charger_power_reading_lags_a_step():
     # current must reach a value and stay there. Nothing in the simulated world moves, so a
     # current that keeps changing is the clamp oscillating against its own actuation. Before
     # ADR-0039 this ran [12, 6, 6, 12, 6, 6, ...] indefinitely -- a 3-cycle limit cycle.
-    currents = [a for a, _ in _closed_loop(12, lambda _cycle: _LOOP_HOUSE_W)]
+    history = _closed_loop(12, lambda _cycle: _LOOP_HOUSE_W)
+    currents = [a for a, _ in history]
     assert currents[-4:] == [currents[-1]] * 4, f"did not settle: {currents}"
+    # Pin the settled value, not just that it stopped moving: an over-conservative or stuck
+    # current would satisfy the assertion above. floor((3750 - 986) / 220.82) = 12 A.
+    assert currents[-1] == 12.0, f"settled on the wrong current: {currents}"
+    # And the safety property the whole clamp exists for, not only the stability one.
+    assert all(net <= _LOOP_TARGET_W for _a, net in history), f"exceeded target: {history}"
 
 
 def test_closed_loop_still_reacts_to_a_real_household_step_on_the_cycle_it_happens():
@@ -534,6 +615,8 @@ def test_closed_loop_still_reacts_to_a_real_household_step_on_the_cycle_it_happe
     # already drawing -- the clamp commands the charger, not the house, so the reading it
     # reacts to is the one that already exceeded. What it owes is that the reaction lands
     # within that same cycle, so every LATER cycle is back under target.
-    assert all(net <= 3750.0 for _a, net in history[step_cycle + 1 :]), f"stayed over: {history}"
+    assert all(net <= _LOOP_TARGET_W for _a, net in history[step_cycle + 1 :]), (
+        f"stayed over: {history}"
+    )
     settled = [a for a, _ in history[-4:]]
     assert settled == [settled[0]] * 4, f"did not re-settle after the step: {history}"

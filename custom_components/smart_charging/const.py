@@ -188,6 +188,11 @@ PEAK_WINDOW_SECONDS = 900
 # Must be >= 2: `debounce_baseline_w`'s own pending-cycle count starts at 1 on the very first
 # below-accepted reading, so 1 (or 0) would make the debounce a silent no-op.
 BASELINE_DEBOUNCE_CYCLES = 2
+# ADR-0039/R3: this value is also load-bearing for R3's "no run of consecutive deferrals exceeds
+# 3 control cycles" criterion, which holds only at exactly 2 (worst case: case (a) defers, case
+# (b) pending->1 defers, case (a) defers, case (b) pending->2 accepts). At 3 the worst case
+# becomes 5 and that acceptance criterion is silently violated -- raising it needs R3 changed
+# first, not just this constant.
 
 # --- Config entry DATA — entity-role mappings + state-translation only.
 #     Changed only via the reconfigure flow, because remapping which entity plays
