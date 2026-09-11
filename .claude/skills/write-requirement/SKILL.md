@@ -17,7 +17,7 @@ here.
 
 - **Step 1 (draft)**: the requirement in `requirements.md` (or the constraint row / glossary
   term). Before step 3's review, self-check per `CLAUDE.md`'s "Review protocol for analysis
-  documents" (6Cs + glossary-first) — the reviewer is `analysis-reviewer`.
+  documents" (6Cs + glossary-first).
 - **Propagate**, before step 3's review — a new/changed requirement usually ripples: update
   the glossary, the mechanism docs (`control-cycle.md` / `resolution-rules.md`), and
   `entity-catalog.md` (new `sc_` entities, with defaults matching the requirement) so the

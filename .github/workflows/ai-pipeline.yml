@@ -10,7 +10,8 @@ name: AI documentation pipeline
 #
 # Labels
 #   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
-#   Context/type : uc | requirement | adr | specs | development | testing | workflow
+#   Context/type : uc | requirement | adr | specs | development | testing | workflow |
+#                  documentation   (the last two are never auto-drafted; see below)
 #     `adr` is also load-bearing in the draft job's concurrency group expression below (keys
 #     the shared ai-draft-adr group) — a rename there needs updating too, or the guard silently
 #     degrades back to per-issue grouping with no error.

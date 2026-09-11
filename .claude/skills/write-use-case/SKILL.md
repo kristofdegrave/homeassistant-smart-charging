@@ -20,8 +20,7 @@ here.
   highest existing `UCnn`, zero-padded to 2 digits. This is the document's own number,
   unrelated to the branch/issue numbering the workflow handles.
 - **Step 1 (draft)**: against the template below. Before step 3's review, self-check per
-  `CLAUDE.md`'s "Review protocol for analysis documents" (6Cs + glossary-first) — the
-  reviewer is `analysis-reviewer`.
+  `CLAUDE.md`'s "Review protocol for analysis documents" (6Cs + glossary-first).
 - **Update `entity-catalog.md`**, before step 3's review — for every `sc_` entity the use-case
   touches, add this UC to the entity's *Read by* and/or *Written by* column. This is the last
   content step before review.

@@ -56,11 +56,11 @@ domain/business rules) — check those before drafting, not just the headline de
   decision contradict an existing `Accepted` ADR? If so, this record supersedes it: set
   the new ADR's Status normally, and edit the *old* ADR's Status line only, to
   `Superseded by ADR-NNNN` — never rewrite the old ADR's Context/Decision/Consequences.
-- **Step 3's reviewer**: `adr-reviewer`. It checks template conformance, that every
-  option has a genuine Pro and Con, that the Decision references those trade-offs, that
-  Consequences actually follow, and cross-ADR consistency (including the immutability
-  rule). Don't use `analysis-reviewer` — that agent is scoped to `docs/analysis/**` and
-  doesn't cover `docs/adl/**`.
+- **Step 3's review**: the reviewer checks template conformance, that every option has a
+  genuine Pro and Con, that the Decision references those trade-offs, that Consequences
+  actually follow, and cross-ADR consistency (including the immutability rule). Take it from
+  the `adr` row of `CLAUDE.md`'s **Model selection** table, not `analysis-reviewer` — that
+  agent is scoped to `docs/analysis/**` and doesn't cover `docs/adl/**`.
 
 ## Rules
 

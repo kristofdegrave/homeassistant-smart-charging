@@ -52,7 +52,6 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
     - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
   - **Run red first** — confirm each test fails without the implementation (no vacuous asserts,
     no asserting on a mock's own return). Mock only at the HA boundary.
-- **Step 3's reviewer**: `test-reviewer`.
 
 ## Rules
 
