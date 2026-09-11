@@ -25,8 +25,8 @@ message conventions).
    writing/developing (not at issue-filing time), move the issue's board **Status** to
    `In progress`. Work can be interactive, with intermediate commits. Before step 2, self-check
    against the [Definition of Done](definition-of-done.md).
-2. **Push and open a PR against `main`.** Always base `main` directly — never another
-   `<context-label>/*` branch, even if logically stacked on a not-yet-merged prior task
+2. **Push and open a PR against `main`.** Always base `main` directly — never another work
+   branch, even if logically stacked on a not-yet-merged prior task
    (squash merges orphan stacked branches). Branching off a prior task's branch locally is
    fine; the PR itself is `--base main` from the start. GitHub's diff for a dependent PR
    temporarily shows the combined stack until the branch below merges — expected, shrinks

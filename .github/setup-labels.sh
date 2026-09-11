@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Create (or update) every label the AI documentation pipeline relies on.
+# Create (or update) every label this repo's issue conventions define — the ones the AI
+# documentation pipeline relies on, plus the kind-of-work labels it deliberately ignores.
 #
 # The pipeline adds action labels with `gh pr edit --add-label` / `gh issue edit`, which do
 # NOT auto-create a missing label — so these must exist first. (peter-evans/create-pull-request

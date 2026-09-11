@@ -55,7 +55,11 @@ behaviour on all three shapes: a `bug` issue with no context label is refused wi
 label found*; a `bug` issue that also carries one routes on that one, exactly as if the kind
 label were absent (so `count` is still 1 and the single-context-label refusal is unaffected);
 and a `bug`+`development` issue must still resolve an anchored `Plan:` line, so unpinned fix
-work fails closed rather than being drafted from free-text issue content.
+work fails closed rather than being drafted from free-text issue content. What a kind label
+*does* reach is the doc side: [contribution-workflow.md](contribution-workflow.md)'s **Issue
+conventions** owns the two-axis rule and every other document points at it, so renaming one
+means updating `setup-labels.sh` and that section — and then checking the handful of
+documents that name the label in passing.
 
 ## Pipeline steps
 
