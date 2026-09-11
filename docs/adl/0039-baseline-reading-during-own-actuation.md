@@ -1,7 +1,7 @@
 # ADR-0039: The peak clamp discards a baseline reading taken during its own actuation
 
 Date: 2026-09-11
-Status: Proposed
+Status: Accepted
 
 ## Context
 
