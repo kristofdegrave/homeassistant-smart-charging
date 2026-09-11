@@ -92,12 +92,55 @@ oversight (see [ci-pipeline.md](docs/reference/ci-pipeline.md)).
 
 ## Model selection
 
-- **Analysis work** (`docs/analysis/`) → use **Opus**
-- **System/project design** (`docs/design/`) → use **Opus**
-- **Architecture decisions** (`docs/adl/`) → use **Opus**
-- **Implementation specs / TDD plans** (`docs/plans/`) → use **Opus**
-- **Development work** (`custom_components/`, `tests/`) → use **Sonnet**
-- **Review agents** (`*-reviewer`, e.g. analysis-reviewer, adr-reviewer, system-design-reviewer, impl-spec-reviewer, test-reviewer, code-reviewer, workflow-reviewer) → use **Opus**, regardless of the artifact type being reviewed. Each agent's own `.claude/agents/*.md` frontmatter must say `model: opus`; CI's `_ai-review.yml` `model` input must default to `opus` — both must keep matching this rule, since CI self-applies the reviewer prompt and never reads that frontmatter.
+One row per context label: how the work is done, how it is reviewed, and the model each side
+runs on. A lifecycle skill needs nothing outside a row and the PR's changed paths to know what
+to delegate to.
+
+| Context label | How the work is done | Work model | How it is reviewed | Review model |
+|---|---|---|---|---|
+| `adr` | `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
+| `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
+| `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
+| `documentation` | `docs/design/system-design.md` → `.claude/skills/write-system-design/SKILL.md`; `docs/design/project-plan.md` → `.claude/skills/write-project-design/SKILL.md` | opus | `.claude/agents/system-design-reviewer.md` | opus |
+| `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
+| `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
+| `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
+| *(no context label)* | none | — | by changed path (see below) | opus |
+
+**Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
+why the review-model column reads opus in every row today. The column exists anyway: it makes
+a row self-contained, and a row that ever deviates has to argue for it here. Three places must
+keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and CI's
+`_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
+reads that frontmatter.
+
+**A review column may name more than one agent.** Each is applied to the changed files under
+its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
+checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
+`test-reviewer`.
+
+**The `workflow` row has no work file on purpose.** There is no safe path containment for
+untrusted issue content outside `docs/**`, `custom_components/**` and `tests/**`, so CI
+refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a
+local session hands the drafting to the human partner. Its review is still automated. What a
+`workflow` author reads instead is
+[ai-authoring-token-efficiency.md](docs/reference/ai-authoring-token-efficiency.md).
+
+**The no-label row routes by changed path**: `docs/adl/**` → `adr-reviewer`;
+`docs/analysis/**` → `analysis-reviewer`; `docs/plans/**` → `impl-spec-reviewer`;
+`docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
+`tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
+`.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
+`CLAUDE.md` → `workflow-reviewer`. This is CI's own path→agent mapping plus one deliberate
+addition, `docs/design/**`, which CI does not route today although the reviewer exists.
+`docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
+fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also
+edits `CLAUDE.md` or the pipeline.
+
+Adding or renaming a context label means updating this table too — see
+[ci-pipeline.md](docs/reference/ci-pipeline.md)'s **Label vocabulary sync** for every other
+place the same vocabulary is baked in.
 
 ---
 

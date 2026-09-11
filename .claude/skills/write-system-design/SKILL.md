@@ -52,7 +52,6 @@ don't re-derive the universal steps here.
 - **Self-check**, before step 3's review: every service's volatility rationale is explicit; no
   upward calls; no service named after a use-case verb phrase; every domain term already
   exists in the `system-overview.md` glossary (add it there first if not).
-- **Step 3's reviewer**: `system-design-reviewer`.
 - Once `system-design.md` is approved and merged, the `write-project-design` skill consumes it
   to produce the implementation task breakdown.
 

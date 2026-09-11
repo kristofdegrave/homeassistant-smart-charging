@@ -36,8 +36,10 @@ places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-
 and `.github/setup-labels.sh`'s label definitions — and, for the three labels that have an
 issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key too (`adr.yml` → `adr`,
 `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps that label on every
-issue filed through the form. Adding a label means updating the first five; renaming one
-additionally means updating any form that stamps it. `file-task-issue/SKILL.md` doesn't hold
+issue filed through the form. A sixth place sits outside the pipeline but carries the same
+vocabulary: `CLAUDE.md`'s **Model selection** work-types table, one row per context label.
+Adding a label means updating those six; renaming one additionally means updating any form
+that stamps it. `file-task-issue/SKILL.md` doesn't hold
 its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
 [contribution-workflow.md](contribution-workflow.md).
 

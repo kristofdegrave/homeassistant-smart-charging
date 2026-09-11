@@ -48,7 +48,6 @@ steps here.
   analysis docs as a **test anchor**, not restated; every ADR gate is opened before the task
   it blocks; every domain term is already in the `system-overview.md` glossary; entity ids
   match ADR-0004 native naming.
-- **Step 3's reviewer**: `impl-spec-reviewer`.
 - Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write
   the code.
 
