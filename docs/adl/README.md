@@ -36,7 +36,7 @@ template.
 | [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow — point 3's step enumeration narrowed by [ADR-0033](0033-captar-step-gains-a-mapping-half.md) | Accepted |
 | [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities | Accepted |
 | [0029](0029-process-time-for-perf-test-cpu-measurement.md) | stdlib `time.process_time()` for perf-test CPU measurement, `psutil` retained for RSS | Accepted |
-| [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role | Accepted |
+| [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role; its deferred unit contract settled by [ADR-0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Accepted |
 | [0031](0031-config-values-as-disabled-by-default-diagnostic-sensors.md) | Config-entry values also exposed as disabled-by-default diagnostic sensors | Accepted |
 | [0032](0032-external-monthly-peak-precedence.md) | External monthly-peak sensor — precedence semantics | Accepted |
 | [0033](0033-captar-step-gains-a-mapping-half.md) | External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half | Accepted |
@@ -44,5 +44,6 @@ template.
 | [0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Unmatched `charger_status` raw states default to disconnected, not fault | Accepted |
 | [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter | Accepted |
 | [0037](0037-scenario-timeline-test-tier.md) | Scenario/timeline test tier — a third tier alongside ADR-0009's two (extends ADR-0009) | Accepted |
+| [0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Unit contract at the power-read adapter boundary — convert known units, assume-and-warn when absent, reject a present non-power unit; except `monthly_peak_external`, where an absent unit is rejected too | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
