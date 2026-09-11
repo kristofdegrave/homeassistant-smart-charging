@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.4](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.3...v0.4.4) (2026-09-11)
+
+
+### Bug Fixes
+
+* give dashboard cards a full-section width so names stop truncating ([#1030](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1030)) ([db1dbc4](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/db1dbc4b40dee5d0945c93b96df82d21df50aa37))
+* give owned sensors a display precision, and active_soc_limit its unit ([#1027](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1027)) ([0e78b22](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/0e78b2240c2c2f534173a6f9b4e16b70be952bfb))
+* judge deadline urgency against the next occurrence, not today's date ([#1010](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1010)) ([b62486d](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/b62486d7e4a2d873750093d3f40fa62c59ba0ee5))
+* normalise power-role readings at the adapter boundary (ADR-0038) ([#1023](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1023)) ([48476ab](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/48476abf4fc6a0c67e3ffbee93cd343e420dbca8))
+
 ## [0.4.3](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.2...v0.4.3) (2026-09-10)
 
 
