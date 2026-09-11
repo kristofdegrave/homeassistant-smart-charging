@@ -333,9 +333,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         tomorrow's deadline, this same block's own result. Mutates ctx.sun_is_up/
         ctx.sun_is_down/ctx.low_tariff_active/ctx.solar_reserve_active in place (ADR-0012's
         existing "assign onto ctx as each value resolves" pattern) and returns
-        (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use: deadline_tomorrow
-        was already needed by R9's own gate; resolve_deadline_for is the closure
-        `_read_deadline_urgency_inputs` (below) calls for today's deadline. is_holiday is
+        (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use. deadline_tomorrow
+        has two consumers, not one: R9's own gate (which deliberately fixes on tomorrow's
+        calendar date) and R15's next-occurrence rule (issue #1005), which needs whichever date
+        the occurrence falls on. They coincide today only because both are `now + 1 day` -- a
+        future change to R9's lookahead must not silently move urgency with it, so re-resolve
+        via the closure rather than widening this value's meaning if the two ever diverge.
+        resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) calls for
+        today's deadline. is_holiday is
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
         table never matches. Each optional-role read here goes through `_read_role` (issue
         #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
@@ -662,9 +667,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if cleared:
             self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)
         if required.unreachable:
-            # engines/deadline.py deliberately saturates required_a to float('inf') once a
-            # same-day deadline has already passed (design doc Sec6) -- that stays the pure
-            # engine's own documented contract, untouched here. But float('inf') must never
+            # engines/deadline.py saturates required_a to float('inf') for a deadline at or
+            # before `now` -- still the pure engine's own documented contract, but no longer
+            # reachable from this cycle: resolve_next_occurrence only ever yields an
+            # occurrence strictly after `now` (issue #1005), so the cap below is defence in
+            # depth for a future regression or a direct caller. But float('inf') must never
             # cross this boundary: it doesn't round-trip through HA's JSON websocket encoding,
             # and notification_manager.py formats it straight into user-facing text (issue
             # #650). Cap it to maximum_permitted_rate_a -- the same bound the engine compared

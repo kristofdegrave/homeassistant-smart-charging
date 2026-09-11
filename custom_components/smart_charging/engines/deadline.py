@@ -75,16 +75,26 @@ def resolve_next_occurrence(
     it leaves no time to charge in, and treating it as current would hand
     `resolve_required_current` a zero-length window.
 
+    The occurrence is stamped with `now`'s own tzinfo, so an aware `now` yields an aware
+    occurrence and the subtraction in `resolve_required_current` is a true absolute duration
+    rather than wall-clock arithmetic. That matters because the window this returns routinely
+    straddles 02:00 now that it can span midnight: on spring-forward, naive arithmetic would
+    report 8h where 7h remain, understating `required_a` by ~12% on the one night urgency is
+    most likely to matter. A naive `now` still works (tzinfo None combines to a naive
+    occurrence) -- both sides simply stay in whichever domain the caller chose.
+
     R5's missed-deadline hold -- the one documented case that keeps pursuing the occurrence
     that has just elapsed -- is deliberately not modelled here; it is a separate, stateful
     mechanism (issue #1006) and cannot be inferred from these two readings alone.
     """
     if deadline_today is not None:
-        today_at = datetime.combine(now.date(), deadline_today)
+        today_at = datetime.combine(now.date(), deadline_today, tzinfo=now.tzinfo)
         if today_at > now:
             return today_at
     if deadline_tomorrow is not None:
-        return datetime.combine(now.date() + timedelta(days=1), deadline_tomorrow)
+        return datetime.combine(
+            now.date() + timedelta(days=1), deadline_tomorrow, tzinfo=now.tzinfo
+        )
     return None
 
 
