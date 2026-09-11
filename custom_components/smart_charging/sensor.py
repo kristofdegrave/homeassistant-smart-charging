@@ -162,6 +162,7 @@ class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry_id: str, coordinator) -> None:
@@ -218,6 +219,7 @@ class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
@@ -231,6 +233,14 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
 
     _attr_translation_key = "active_soc_limit"
     _object_id_suffix = OWNED_SUFFIX_ACTIVE_SOC_LIMIT
+    # entity-catalog.md has always given this role's unit as %; the sensor shipped without one,
+    # so the dashboard rendered a bare "80.0". Deliberately NO device class:
+    # SensorDeviceClass.BATTERY is the obvious candidate and is wrong -- this is a resolved
+    # limit, not a battery level, and it would invite being displayed as a state of charge
+    # alongside the vehicle's real one.
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0  # every source of this value moves in whole points
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.active_soc_limit
@@ -245,6 +255,7 @@ class SolarSurplusSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry_id: str, coordinator, solar_available: bool = False) -> None:
@@ -263,6 +274,9 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    # apply_peak_clamp floors the headroom to whole amps before it reaches here, so a decimal
+    # place would claim a resolution the value does not have.
+    _attr_suggested_display_precision = 0
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
@@ -276,6 +290,11 @@ class TimeToFullSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "time_to_full"
     _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    # A quotient of two floats: 168.142101632559 is not a more precise answer than 168, it is
+    # the same answer with the division's noise still attached. No SensorDeviceClass.DURATION
+    # -- that would render this as a clock-style duration, which reads as a countdown to a
+    # fixed moment rather than the projection off the current set-point that it is.
+    _attr_suggested_display_precision = 0
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.time_to_full_min

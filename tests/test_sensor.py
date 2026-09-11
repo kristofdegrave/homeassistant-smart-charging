@@ -1202,3 +1202,52 @@ async def test_config_mirror_sensor_reflects_the_new_value_after_an_options_relo
     assert reloaded_state is not None
     assert float(reloaded_state.state) == new_options[CONF_MAX_CURRENT]
     assert reloaded_state.state != original_state.state
+
+
+# --- Display precision and units (issue #1008) --------------------------------------------
+
+
+def test_active_soc_limit_sensor_reports_percent():
+    """entity-catalog.md gives this role's unit as %, but the sensor shipped without one, so
+    the dashboard rendered a bare "80.0" with nothing saying what it measured.
+
+    Deliberately no device class: SensorDeviceClass.BATTERY would be the obvious candidate and
+    is wrong -- this is a resolved *limit*, not a battery level, and HA would let a user
+    display it as a battery state of charge alongside the vehicle's real one."""
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=SimpleNamespace(data=None))
+    assert sensor.native_unit_of_measurement == PERCENTAGE
+    assert sensor.device_class is None
+    assert sensor.state_class == SensorStateClass.MEASUREMENT
+
+
+@pytest.mark.parametrize(
+    ("factory", "precision"),
+    [
+        # A derived float over a float: 168.142101632559 minutes is not a more precise answer
+        # than 168, it is the same answer with the division's noise still attached.
+        (TimeToFullSensor, 0),
+        # Whole percent: every source of this value (the override number, the reserve cap, the
+        # step-up) moves in whole points.
+        (ActiveSocLimitSensor, 0),
+        # Watts. A tenth of a watt of "solar surplus" is noise on a reading derived from two
+        # separate meters.
+        (SolarSurplusSensor, 0),
+        # The clamp floors this to whole amps before it ever reaches the sensor, so anything
+        # past the decimal point would be a lie about the resolution.
+        (PeakHeadroomSensor, 0),
+        # kW, where the billing decisions people make off these turn on tens of watts.
+        (EffectivePeakLimitSensor, 2),
+    ],
+)
+def test_derived_sensors_declare_a_display_precision(factory, precision):
+    """No owned sensor set `suggested_display_precision`, so every derived float printed at
+    full repr width -- the dashboard showed `168.142101632559`."""
+    sensor = factory(entry_id="abc", coordinator=SimpleNamespace(data=None))
+    assert sensor.suggested_display_precision == precision
+
+
+def test_monthly_peak_sensor_declares_a_display_precision():
+    """Same rule, separate test: MonthlyPeakSensor is a RestoreSensor with its own constructor
+    signature rather than a _CoordinatorFieldSensor."""
+    sensor = MonthlyPeakSensor(entry_id="abc", coordinator=SimpleNamespace(data=None))
+    assert sensor.suggested_display_precision == 2
