@@ -35,12 +35,21 @@ More seriously, that same collapsed `baseline_w` is what R3's clamp measures hea
 limiting anything. Grid-safety headroom (C4) and R10 smoothing take the same mis-scaled value.
 
 The mis-scaled `net_w` *also* reaches the Peak-Demand Tracker, which then tracks a ~3 W monthly
-peak instead of ~3 kW — but that error pulls the other way: `resolve_effective_peak_limit` returns
-`min(max(~0, peak_floor_kw), max_peak_kw)`, i.e. the peak floor, a *tighter* limit than a correct
-tracker would produce. It is worth being precise about this, because the two effects partly cancel
-and only one of them dominates: the inflated headroom (~14 A) outweighs what the floored limit
-removes (~6.5 A), so the net direction is permissive. The clamp is inert because of `baseline_w`,
-not because the tracked peak is small.
+peak instead of ~3 kW. Whether that second error matters at all depends on the external role:
+
+- **`monthly_peak_external` unmapped** — the operand is the tracker's own value, so
+  `resolve_effective_peak_limit` returns `min(max(~0, peak_floor_kw), max_peak_kw)`: the peak
+  floor, a *tighter* limit than a correct tracker would give. This pulls against the inflated
+  headroom, and loses: ~14 A of phantom headroom against at most ~6.5 A removed by flooring
+  (`(max_peak_kw − peak_floor_kw) × 1000 / voltage` at the defaults). Net permissive.
+- **`monthly_peak_external` mapped and correct** — as on the installation above, where it reads
+  3.439 kW. `resolve_monthly_peak_operand` is `max(internal, external)`, so `max(~0.0034, 3.439)`
+  discards the tracker error entirely: the limit resolves normally and there is no counter-effect
+  at all. The inflated headroom stands alone.
+
+Either way the clamp fails to bind because of `baseline_w`, not because the tracked peak is small
+— but on the install that surfaced this, the tracker error is masked rather than merely
+outweighed.
 
 The forces in tension:
 
@@ -53,9 +62,10 @@ The forces in tension:
 - **A sensor with no unit attribute is common and usually correct.** Template sensors and many
   integrations expose a bare number. Today those installs work, because the documented contract
   is watts and a bare number is taken as watts.
-- **Every mis-scaling here fails permissive, by different routes.** For the W-valued roles a
-  kW-as-W misread inflates the clamp's headroom (above). For `monthly_peak_external` a W-as-kW
-  misread produces an operand three orders of magnitude too large, which — through
+- **The two mis-scalings that actually broke here fail permissive, by different routes.** For
+  `net_power`, a kW-as-W misread inflates the clamp's headroom (above). For
+  `monthly_peak_external` a W-as-kW misread produces an operand three orders of magnitude too
+  large, which — through
   `resolve_monthly_peak_operand`'s `max(internal, external)` merge and then
   `min(max(operand, floor), max_peak_kw)` — pins the effective peak limit at `max_peak_kw`. So
   direction of failure does not distinguish the roles.
@@ -83,9 +93,9 @@ implementation spec that followed, not of that record. Extending its strictness 
 roles by precedent alone would settle, by accident of which adapter was written first, a contract
 that users' existing configurations depend on.
 
-Note the parenthetical inside that quote: ADR-0030 states that DSO peak sensors **commonly report
-in W**, while the role's documented unit is kW. That role's likely mis-mapping therefore runs the
-opposite way to the other three, which matters below.
+Note the em-dash clause inside that quote — DSO peak sensors "commonly report in W", while the
+role's documented unit is kW. It is an unevidenced empirical claim in another record's
+Consequences, and the decision below leans on it; Option E's Con owns the case where it is wrong.
 
 ## Considered options
 
@@ -193,13 +203,11 @@ Absence of a unit is not evidence of a wrong unit — which is why the absent ca
 differently at all, and why the one role whose likely absent-unit value is *known* to differ from
 its documented unit is carved out of that leniency.
 
-`PowerKilowattReadAdapter` therefore keeps its absent-unit behaviour and its existing rejection
-of a present non-power unit, gaining only the rejection warning. An earlier draft of this record
-brought it fully under the uniform rule, reasoning that a warning is strictly more information
-than silent absence. That was
-wrong: for this role "assumed kW" turns a W-reporting sensor into a peak operand three orders of
-magnitude too large, pinning the effective peak limit at `max_peak_kw` — strictly worse than the
-`None` it replaced, which had no effect on the limit at all.
+`PowerKilowattReadAdapter` therefore keeps its absent-unit behaviour and its existing rejection of
+a present non-power unit, gaining only the rejection warning. Bringing it fully under the uniform
+rule would be worse than the status quo it replaced: "assumed kW" turns a W-reporting sensor into
+a peak operand three orders of magnitude too large, pinning the effective peak limit at
+`max_peak_kw`, where the `None` it would replace had no effect on the limit at all.
 
 **On ADR-0032, which already weighed this exposure.** The saturation argument above is only
 reachable because ADR-0032 chose `max(internal, external)` as the merge, and that record
@@ -208,15 +216,19 @@ as high as `maximum peak` for as long as it persists" — and accepted it, "beca
 is itself the ceiling the system is otherwise willing to charge to under deadline urgency (row
 1)". That reasoning is not disputed here and the merge rule is untouched. What differs is where
 the two records stand: ADR-0032 accepted a *consequence* it could not remove without giving up
-the merge's benefits, whereas this decision can remove one *cause* of it at no cost beyond a
-reading the system never had. Accepting an exposure downstream is not a reason to manufacture it
-upstream. A reader who disagrees should weigh both records, which is why this one names it.
+the merge's benefits, whereas this decision removes one *cause* of it — at the cost Option E's Con
+names, of discarding a unitless reading that may have been usable. Accepting an exposure
+downstream is not a reason to manufacture it upstream, but it is a reason to be plain that the
+trade is a possibly-lost reading against a reliably-defeated clamp, not a free win. A reader who
+weighs those differently should weigh both records, which is why this one names them.
 
 This ADR supersedes neither ADR-0030 nor ADR-0032. ADR-0030's decision was to introduce the role;
 ADR-0032's was the merge precedence. Neither is reversed — this record settles the unit handling
 ADR-0030 explicitly declined to settle, for that role and the other three. It extends ADR-0003's
-adapter boundary, whose "adapter translates in one direction, raw -> canonical" is the existing
-warrant for putting conversion in the adapter rather than in the coordinator.
+adapter boundary: that record's "adapter translates in one direction, raw -> canonical" is stated
+of enum/status translation rather than of numeric units, so it is cited here by analogy, not as an
+existing warrant — a distinction this record owes its own reader, having just censured an
+unsupported citation.
 
 ## Consequences
 
