@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from datetime import time as time_of_day
 from typing import Any
@@ -243,6 +243,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
         # safety-conservative direction the debounce itself always takes.
         self._baseline_debouncer = BaselineDebouncer()
+        # ADR-0039/R3 case (a): the two fields `debounce_baseline_w`'s `command_changed` is
+        # derived from -- see that function's docstring for what the engine does with it.
+        # `_last_commanded_a` is the value `_write` last sent; `_command_stepped` is whether that
+        # write changed it. Both are maintained in `_write` -- the single write site -- so the
+        # fault paths' own `_write(0.0)` counts as a step exactly like a control-path write does,
+        # which is correct: a fault-path drop to 0 A leaves the charger_power adapter just as
+        # stale as any other step. Read once per cycle by `_run_cycle`, where `_command_stepped`
+        # describes the write at the END of the PREVIOUS cycle -- which is what this cycle's
+        # `charger_w` reading may not have caught up with yet. Never reset for the same reason
+        # `_baseline_debouncer` above isn't: a stale `_last_commanded_a` after a long gap only
+        # ever costs one extra discarded reading.
+        self._last_commanded_a: float | None = None
+        self._command_stepped = False
         # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
         # cycles (never reset), holding each read role's most recently read value so a role not
         # read on a given cycle (e.g. `ev_soc` while disconnected) still reports its last known
@@ -257,6 +270,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         except Exception as err:  # noqa: BLE001 - every failure funnels to the fault path (ADR-0007)
             self._log_fault(f"cycle exception: {err}")
             await self._safe_write_zero()
+            self._clear_baseline_deferral()
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -424,6 +438,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if inputs is None:
             self._log_fault("required adapter returned None")
             await self._write(0.0)
+            self._clear_baseline_deferral()
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
             # ADR-0021/entity-catalog.md:154 define the entity's own state as the timestamp of
             # the LAST SUCCESSFUL cycle, and a required-role fault means this cycle wasn't one;
@@ -445,8 +460,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # solar_surplus_w/peak_headroom_a/apply_peak_clamp below -- a single source of truth so
         # all three stay in lockstep and none can transiently see the inflated (undebounced)
         # reading the others already reject. See debounce_baseline_w's own docstring.
+        # ADR-0039: `command_changed` describes the write at the end of the PREVIOUS cycle -- the
+        # one this cycle's `charger_w` may not have caught up with -- so it is read here, before
+        # this cycle's own `_write` overwrites it.
         baseline_w, self._baseline_debouncer = debounce_baseline_w(
-            net_w - charger_w, self._baseline_debouncer, debounce_cycles=BASELINE_DEBOUNCE_CYCLES
+            net_w - charger_w,
+            self._baseline_debouncer,
+            debounce_cycles=BASELINE_DEBOUNCE_CYCLES,
+            command_changed=self._command_stepped,
         )
 
         # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
@@ -1257,8 +1278,30 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return 0.0
         return current
 
+    def _clear_baseline_deferral(self) -> None:
+        """ADR-0039/R3 case (a): `deferred_previous` means "the previous CONTROL CYCLE deferred
+        on the command-changed ground", not "the previous call to `debounce_baseline_w` did".
+        A cycle that returns before that call is reached -- the required-adapter fault in
+        `_run_cycle`, or any exception funnelled to `_async_update_data` -- deferred nothing, yet
+        still writes 0 A, which is a real step. Leaving the flag set would block case (a) on the
+        RECOVERY cycle, which is precisely the cycle whose `charger_w` is stale from that forced
+        drop to 0 A: the reading then looks far below the accepted baseline, case (a) cannot
+        reject it, and the debounce window commits a contaminated, headroom-inflating value.
+        Cleared here rather than in the engine, since only the coordinator knows a cycle ended
+        without consulting it."""
+        self._baseline_debouncer = replace(self._baseline_debouncer, deferred_previous=False)
+
     async def _write(self, value: float) -> None:
+        """The single write site (ADR-0039's `_command_stepped`/`_last_commanded_a` are
+        maintained here for exactly that reason). The step flag is recorded only after the
+        adapter write actually returns: a write that raises never reached the charger, so the
+        current did not change and the next cycle's `charger_w` is not stale on its account."""
+        self._command_stepped = False
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)
+        self._command_stepped = (
+            self._last_commanded_a is not None and value != self._last_commanded_a
+        )
+        self._last_commanded_a = value
 
     async def _safe_write_zero(self) -> None:
         try:
