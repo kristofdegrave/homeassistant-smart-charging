@@ -178,8 +178,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # The action loads CLAUDE.md in full, plus every skill's/agent's frontmatter
-          # description. Bodies load on demand — hence the explicit path below and the
+          # The action loads CLAUDE.md in full, plus every skill's frontmatter description.
+          # Bodies load on demand — hence naming the skill and its directory below, and the
           # Read grant. See docs/reference/ai-authoring-token-efficiency.md.
           prompt: |
             A review of pull request #${{ inputs.pr_number }} left remarks that

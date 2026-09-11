@@ -233,8 +233,9 @@ docs/reference/work-types/
 
 The `CLAUDE.md` table then shrinks to label, the two model columns and irregular-row notes, because the paths
 derive from the label. This layout mirrors CI's self-applied "checklist in file X" exactly,
-and it trims what every run carries before it reads anything: fifteen per-type files under
-`.claude/` become three skills and one agent there.
+and it trims the description index every run carries before it reads anything: fifteen
+per-type files under `.claude/` become three skills and one agent there. What that is and is
+not worth is set out below.
 
 ### What the saving actually is
 
@@ -244,7 +245,8 @@ which `_ai-review.yml`'s runner explicitly is not ("this runner has no `Task` to
 launch one"). Either way the **body** loads only when the skill is invoked or the file is
 read. The action runs the Claude Code CLI — a worker's init record reads `Claude Code
 initialized` — and both CI prompts are written for exactly that mechanism: `_ai-draft.yml`
-points at a path ("following the `develop-task` skill in .claude/skills/"), `_ai-review.yml`
+points at a path (e.g. "following the `develop-task` skill in .claude/skills/", where the
+skill name is substituted per label), `_ai-review.yml`
 points at one per tree ("apply the full review checklist in `.claude/agents/adr-reviewer.md`
 … Read and self-apply it"), and both grant `Read`.
 
@@ -252,8 +254,8 @@ So per-type content is already read on demand today. The phase-2 saving is at mo
 descriptions (8 work skills + 7 reviewer agents) collapsing to four (3 generic skills + 1
 generic agent) — not fifteen files ceasing to load — and an upper bound rather than a figure,
 since a runner without subagent dispatch never carries the agent half at all. Phase 1's added
-cost is four descriptions (the four new skills, a different four), not four skill bodies. Two consequences, stated plainly because an earlier
-draft of this document had them wrong:
+cost is four descriptions (the four new skills, a different four), not four skill bodies.
+Two consequences, stated plainly because an earlier draft of this document had them wrong:
 
 - **The phase-1 mitigation is not "keep the skills thin".** Body length never reaches the
   cached prefix — only a frontmatter edit does. Thin skills remain right for readability and
@@ -302,14 +304,15 @@ remove. The table's file columns are written so the migration only re-points the
 **How much the pipeline actually runs.** Measured 2026-09-11 by enumerating every one of the
 873 `ai-pipeline.yml` runs and reading the jobs of all 22 that were not skipped: `draft` 11
 runs (7 success, 4 failure), `review` 8 (6, 2), `fix` 3 (3, 0), spanning 2026-07-17 to
-2026-09-04. One draft failure was `error_max_turns` at its 15-turn ceiling. The ~851 skipped
+2026-09-04. One draft failure was `error_max_turns` at its 15-turn ceiling. The other 851
 runs are the router declining to dispatch; run conclusions alone don't separate "the labeled
 event carried a label other than the three triggers" from the sender allow-list or the fork
 exclusion on `fix`.
 
-All three workers therefore work and are in occasional real use — roughly 22 worker runs over
-seven weeks, the most recent a week before this measurement. That is a modest but real per-run
-cost for phase 2 to act on, and it is the number to re-measure before phase 2 is scoped rather
+All three workers therefore work and are in occasional real use: 22 worker runs, the earliest
+2026-07-17 and the most recent a week before this measurement. Whether that rate is
+representative of any future window is the part this cannot tell you. It is a modest but real
+per-run cost for phase 2 to act on, and the number to re-measure when phase 2 is scoped rather
 than a reason to defer it.
 
 **Phase 2 — CI follows, and the layout moves (one coordinated strand):**
@@ -318,8 +321,10 @@ than a reason to defer it.
   the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
   solely by `address-review-remarks`' docs-only scope. Widening that skill in phase 1 would
-  widen CI's blast radius with no CI file touched, because the worker follows the skill by
-  name and every skill's description is listed to it (*What the saving actually is*, above). That is why phase 1 adds `fix` as a separate
+  widen CI's blast radius with no CI file touched: the worker follows the skill **by name**,
+  which `_ai-fix.yml` does outright, under an unrestricted `Write,Edit` grant. Description
+  matching would be a second route in, on the caveats in *What the saving actually is* above;
+  the by-name route needs no such caveat. That is why phase 1 adds `fix` as a separate
   skill instead. Once the allow-list exists, `address-review-remarks` is folded into `fix`
   (its sections 1, 2, 5 and 6 move there — section 6 keeping both its halves, since "in CI:
   do not commit" is load-bearing the moment CI runs `fix`; section 3 is superseded by table

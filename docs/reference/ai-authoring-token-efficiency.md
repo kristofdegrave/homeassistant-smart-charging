@@ -35,8 +35,10 @@ Everything below targets one of these two.
   and link to the source of truth, not restate it. `submit-pr-review` being "the single
   source of truth for the review payload" is the pattern: other artifacts reference it
   instead of duplicating the payload rules.
-- **One source of truth per fact.** Duplicated instructions across skills/agents are read
-  every cold session and drift over time. Deduplicate into one file and link.
+- **One source of truth per fact.** Duplicated instructions across skills/agents drift apart
+  over time, and every copy is read again by each run that needs it. Deduplicate into one file
+  and link. (Drift is the main cost here; the read cost is per use, not per cold session —
+  see item 2 above.)
 - **Scope the read.** Tell a run *which* file to read for a task, so it doesn't fan out
   across the whole `docs/` tree. The review worker already does this — it selects one
   checklist per changed path rather than loading all six.
@@ -44,9 +46,10 @@ Everything below targets one of these two.
   not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
   `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill
   **body** does not, since the body was never in the prefix. Batch edits; avoid cosmetic
-  churn. Note this lever is weaker in CI than it looks: each worker is a fresh container with
-  no cross-run cache reuse (see *Cold sessions* above), so the prefix is paid from cold every
-  run regardless.
+  churn. Note this is a **local-session lever, not a CI one**: each CI worker is a fresh
+  container with no cross-run cache reuse (see *Cold sessions* above), so CI pays the prefix
+  from cold every run whether or not anything changed. There is no CI payoff here to optimise
+  for.
 - **Bound the loop, not the turn.** Prefer capping *how many times* a run repeats
   (cycles, retries) over shrinking a single run's turn ceiling. A too-low turn ceiling
   causes truncation and a re-run, which costs more than it saved — this is why the fix pass's
@@ -108,8 +111,11 @@ summary. Use it, not estimates, to decide whether a change actually helped:
   on the PR (`ai-cost-summary` is per-run and has no per-PR aggregate). This is the dominant
   cost driver; watch it first.
 - **Cache-read ratio** — `cache_read_input_tokens` ÷ total input tokens, from the job summary.
-  A drop after an edit to `CLAUDE.md`/a skill/an agent def means that edit invalidated the
-  cached prefix.
+  A drop after an edit to `CLAUDE.md`, or to a skill's or agent's *frontmatter*, means that
+  edit invalidated the cached prefix. Editing a **body** cannot move this number: the body was
+  never in the prefix. And the comparison is only meaningful *within* a session — across CI
+  runs there is no cross-run reuse to lose (see *Cold sessions* above), so a difference between
+  two runs' ratios is not evidence about an edit.
 - **Turns vs. ceiling** — a run at its `max_turns` ceiling was likely truncated and will be
   re-run; raise the ceiling rather than eating the re-run.
 
