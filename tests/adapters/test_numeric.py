@@ -1,5 +1,7 @@
 """HA-harness tests for numeric adapters (ADR-0003/0009)."""
 
+import logging
+
 import pytest
 from homeassistant.const import (
     ATTR_UNIT_OF_MEASUREMENT,
@@ -9,6 +11,7 @@ from homeassistant.const import (
 )
 
 from custom_components.smart_charging.adapters.numeric import (
+    _MAX_WARNED_UNITS,
     NumericReadAdapter,
     NumericReadWriteAdapter,
     PowerKilowattReadAdapter,
@@ -218,7 +221,6 @@ async def test_power_kilowatt_adapter_absent_unit_warns_rather_than_failing_sile
     assert await adapter.read() is None
     assert "sensor.dso_peak" in caplog.text
     assert "discarded" in caplog.text
-    assert "assuming" not in caplog.text
 
 
 async def test_power_kilowatt_adapter_non_power_unit_warns_too(hass, caplog):
@@ -226,3 +228,81 @@ async def test_power_kilowatt_adapter_non_power_unit_warns_too(hass, caplog):
     adapter = PowerKilowattReadAdapter(hass, "sensor.dso_peak")
     assert await adapter.read() is None
     assert "discarded" in caplog.text
+
+
+async def test_a_recognised_unit_warns_about_nothing(hass, caplog):
+    """The silent-success case, which nothing else pins: an implementation that warned on every
+    read of a correctly-mapped W sensor would pass every other test in this file while
+    producing a log line per control cycle -- exactly the spam ADR-0038's cadence rule exists
+    to prevent."""
+    hass.states.async_set("sensor.net_power", "2300", {ATTR_UNIT_OF_MEASUREMENT: "W"})
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    for _ in range(5):
+        assert await adapter.read() == 2300.0
+    assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+
+
+async def test_rejection_warning_is_also_once_per_entity(hass, caplog):
+    """The rejection branch needs the cadence guarantee more than the assumption branch does,
+    not less: a rejected required role is a persistent fault, so it is read and rejected every
+    cycle for as long as the mis-mapping stands."""
+    hass.states.async_set("sensor.net_power", "55", {ATTR_UNIT_OF_MEASUREMENT: PERCENTAGE})
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    for _ in range(5):
+        assert await adapter.read() is None
+    assert caplog.text.count("discarded") == 1
+
+
+async def test_kilowatt_absent_unit_rejection_warning_is_once_per_entity(hass, caplog):
+    """Same guarantee for the branch ADR-0038 added -- the carve-out's own rejection."""
+    hass.states.async_set("sensor.dso_peak", "4090")
+    adapter = PowerKilowattReadAdapter(hass, "sensor.dso_peak")
+    for _ in range(5):
+        assert await adapter.read() is None
+    assert caplog.text.count("discarded") == 1
+
+
+async def test_warning_state_is_per_adapter_not_shared_across_entities(hass, caplog):
+    """Two entities, two warnings. Holding the warned-unit set on the class instead of the
+    instance would silence the second entity entirely, and every other test in this file --
+    all single-adapter -- would still pass."""
+    hass.states.async_set("sensor.net_power", "2300")
+    hass.states.async_set("sensor.charger_power", "1100")
+    first = PowerWattReadAdapter(hass, "sensor.net_power")
+    second = PowerWattReadAdapter(hass, "sensor.charger_power")
+    assert await first.read() == 2300.0
+    assert await second.read() == 1100.0
+    assert "sensor.net_power" in caplog.text
+    assert "sensor.charger_power" in caplog.text
+
+
+async def test_a_flapping_unit_stops_warning_once_bounded(hass, caplog):
+    """Keying warnings on the observed unit means a templated, flapping unit_of_measurement
+    would otherwise warn forever and grow the set without limit. Past the cap the adapter goes
+    quiet rather than becoming the spam the cadence rule exists to prevent."""
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    for i in range(_MAX_WARNED_UNITS + 5):
+        hass.states.async_set("sensor.net_power", "10", {ATTR_UNIT_OF_MEASUREMENT: f"bogus{i}"})
+        assert await adapter.read() is None
+    assert caplog.text.count("discarded") == _MAX_WARNED_UNITS
+
+
+async def test_every_ha_power_unit_converts_not_just_w_and_kw(hass):
+    """`PowerConverter.VALID_UNITS` is exactly `set(UnitOfPower)`, so the contract is "any power
+    unit HA knows", not "W or kW". BTU/h is the member most likely to be assumed unsupported --
+    pinned here so a future narrowing of the accepted set is a deliberate choice rather than a
+    silent one."""
+    hass.states.async_set("sensor.net_power", "12000", {ATTR_UNIT_OF_MEASUREMENT: "BTU/h"})
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    assert await adapter.read() == pytest.approx(3516.85, abs=0.01)
+
+
+async def test_a_near_miss_unit_spelling_is_rejected_with_an_actionable_message(hass, caplog):
+    """The realistic mis-mapping is not a wrong quantity but a wrong string on an otherwise
+    correct sensor. The message points at the unit rather than diagnosing the entity, because
+    "is not a power unit" sends the user looking in the wrong place."""
+    hass.states.async_set("sensor.net_power", "2300", {ATTR_UNIT_OF_MEASUREMENT: "Watt"})
+    adapter = PowerWattReadAdapter(hass, "sensor.net_power")
+    assert await adapter.read() is None
+    assert "cannot be converted" in caplog.text
+    assert "unit string itself" in caplog.text

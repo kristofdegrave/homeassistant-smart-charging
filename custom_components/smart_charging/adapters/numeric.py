@@ -11,6 +11,11 @@ from ._read_only import _ReadOnlyAdapter
 
 _LOGGER = logging.getLogger(__name__)
 
+# Distinct units one entity may be warned about before the adapter goes quiet (see
+# `_PowerReadAdapter._warn_once`). Small: a correctly-mapped entity reports one unit
+# forever, so reaching this at all means something is already badly wrong.
+_MAX_WARNED_UNITS = 8
+
 
 class NumericReadAdapter(_ReadOnlyAdapter):
     """Reads a numeric entity's native value; None if missing/unavailable/non-numeric.
@@ -40,14 +45,15 @@ class _PowerReadAdapter(_ReadOnlyAdapter):
     - a recognised power unit is converted to `_target_unit`;
     - an absent unit is either assumed to be `_target_unit` (with an *assumption* warning) or
       rejected (with a *rejection* warning), per `_assume_target_when_absent`;
-    - a unit that is present but is not a power unit is always rejected, with a rejection
+    - a unit that is present but cannot be converted is always rejected, with a rejection
       warning -- unlike an absent unit, it is positive evidence of a mis-mapping.
 
     Warnings are emitted once per observed unit rather than once per read: the control cycle
     reads every role every cycle, so a per-read warning would be log spam that trains the user
     to ignore exactly the signal this contract exists to provide. Keying on the observed unit
     rather than the adapter's lifetime means an entity that starts reporting a *different*
-    wrong unit still says so -- that is a new fact, not a repeat.
+    wrong unit still says so -- that is a new fact, not a repeat. The cost of that choice is a
+    flapping unit, which `_MAX_WARNED_UNITS` bounds.
     """
 
     _target_unit: str
@@ -59,6 +65,13 @@ class _PowerReadAdapter(_ReadOnlyAdapter):
 
     def _warn_once(self, unit: str | None, message: str, *args: object) -> None:
         if unit in self._warned_units:
+            return
+        # Bounded: a template entity whose `unit_of_measurement` is itself templated can flap,
+        # and keying on the unit would otherwise both grow this set without limit and warn
+        # afresh each time. Past the cap the adapter stays silent rather than becoming the spam
+        # the cadence rule exists to prevent -- by then the user has had several distinct
+        # warnings naming this entity.
+        if len(self._warned_units) >= _MAX_WARNED_UNITS:
             return
         self._warned_units.add(unit)
         _LOGGER.warning(message, *args)
@@ -73,9 +86,11 @@ class _PowerReadAdapter(_ReadOnlyAdapter):
             return None
 
         unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
-        if unit in PowerConverter.VALID_UNITS:
-            return PowerConverter.convert(value, unit, self._target_unit)
-
+        # `unit is None` is tested FIRST, before the converter's own set: ADR-0038's carve-out
+        # turns on the absent case specifically, and `PowerConverter.VALID_UNITS` is typed
+        # `set[str | None]` -- some HA converters do include None in theirs. Power's does not
+        # today, so the order is currently unobservable; testing it explicitly keeps the
+        # contract resting on this module rather than on an HA-internal set's contents.
         if unit is None:
             if self._assume_target_when_absent:
                 self._warn_once(
@@ -97,10 +112,20 @@ class _PowerReadAdapter(_ReadOnlyAdapter):
             )
             return None
 
+        if unit in PowerConverter.VALID_UNITS:
+            return PowerConverter.convert(value, unit, self._target_unit)
+
+        # `PowerConverter.VALID_UNITS` is currently exactly `set(UnitOfPower)` -- every power
+        # unit HA knows converts, including BTU/h -- so anything reaching here really is not a
+        # power unit as HA spells them. The message still says "cannot be converted to" rather
+        # than "is not a power unit" because it is the more actionable half: the common cause is
+        # a near-miss spelling ("Watt", "w") on an otherwise-correct sensor, where "not a power
+        # unit" reads as a wrong-entity diagnosis and sends the user looking in the wrong place.
         self._warn_once(
             unit,
-            "%s reports unit %r, which is not a power unit; reading discarded. This role is"
-            " expected in %s -- check the entity mapping.",
+            "%s reports unit %r, which cannot be converted to %s; reading discarded. Check the"
+            " entity mapping, and check the unit string itself -- a near-miss spelling reads the"
+            " same as a wrong quantity here.",
             self._entity_id,
             unit,
             self._target_unit,
