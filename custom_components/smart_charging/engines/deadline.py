@@ -19,7 +19,7 @@ explicitly two-day decision, and the formula only ever sees a concrete datetime.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 
 def resolve_departure_deadline(
@@ -75,13 +75,20 @@ def resolve_next_occurrence(
     it leaves no time to charge in, and treating it as current would hand
     `resolve_required_current` a zero-length window.
 
-    The occurrence is stamped with `now`'s own tzinfo, so an aware `now` yields an aware
-    occurrence and the subtraction in `resolve_required_current` is a true absolute duration
-    rather than wall-clock arithmetic. That matters because the window this returns routinely
-    straddles 02:00 now that it can span midnight: on spring-forward, naive arithmetic would
-    report 8h where 7h remain, understating `required_a` by ~12% on the one night urgency is
-    most likely to matter. A naive `now` still works (tzinfo None combines to a naive
-    occurrence) -- both sides simply stay in whichever domain the caller chose.
+    The occurrence is stamped with `now`'s own tzinfo (None for a naive `now`, keeping this
+    function usable from either domain), so `resolve_required_current` can normalise before
+    subtracting -- see its own docstring for why that matters now that the window spans
+    midnight.
+
+    The `today_at > now` comparison here is deliberately NOT normalised: both sides carry the
+    same tzinfo, so Python compares them as wall clocks, which is exactly what R15 asks for
+    ("a departure time earlier in the day than the current time"). Only the duration needs to
+    be absolute.
+
+    On the two DST-transition days, `datetime.combine` resolves a departure time in the
+    spring-forward gap via `fold=0` (the pre-transition offset) and an ambiguous fall-back time
+    to the earlier, still-DST instant. Neither raises, and both err toward *less* remaining
+    time -- the safe direction for a deadline.
 
     R5's missed-deadline hold -- the one documented case that keeps pursuing the occurrence
     that has just elapsed -- is deliberately not modelled here; it is a separate, stateful
@@ -107,6 +114,20 @@ class RequiredCurrentResult:
     unreachable: bool  # required_a > maximum_permitted_rate_a
 
 
+def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
+    """Hours from `earlier` to `later` as a true elapsed duration.
+
+    Both aware -> normalised to UTC first, so a DST transition inside the interval is counted.
+    Either naive -> plain subtraction, since there is no zone to normalise against (and
+    `astimezone()` on a naive datetime would silently assume the MACHINE's local zone, which is
+    not this pure engine's to know).
+    """
+    if later.tzinfo is not None and earlier.tzinfo is not None:
+        later = later.astimezone(UTC)
+        earlier = earlier.astimezone(UTC)
+    return (later - earlier).total_seconds() / 3600
+
+
 def resolve_required_current(
     deadline_at: datetime | None,
     now: datetime,
@@ -128,6 +149,17 @@ def resolve_required_current(
     bare time-of-day this function has to guess a date for -- see the module docstring for why
     that guess was wrong.
 
+    `time_remaining` is an ABSOLUTE duration, normalised to UTC first when both sides are
+    aware. Subtracting two aware datetimes that share a tzinfo object does NOT do this on its
+    own: CPython short-circuits on `self._tzinfo is other._tzinfo` and returns the plain field
+    difference, so the result is wall-clock arithmetic no matter how aware the operands look.
+    That matters because the window now spans midnight and therefore straddles 02:00 on both
+    DST-transition nights: across spring-forward, the naive difference reports 8h where 7h
+    remain, understating `required_a` by ~12% on one of the nights urgency is most likely to
+    matter -- and understating it is the permissive direction, so urgency engages late or not
+    at all. A naive `now`/`deadline_at` pair is left exactly as it is; only the aware case is
+    normalised.
+
     `urgent` = required_a > baseline_desired_a (the mode rows 3-5 of Auto mode-selection
     would otherwise pick, or the Manual mode itself -- the caller resolves
     `baseline_desired_a`, this function only compares). `unreachable` = required_a >
@@ -136,7 +168,7 @@ def resolve_required_current(
     if deadline_at is None:
         return RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)
 
-    remaining_hours = (deadline_at - now).total_seconds() / 3600
+    remaining_hours = _absolute_hours_between(deadline_at, now)
     energy_needed_kwh = ev_battery_capacity_kwh * (active_soc_limit - soc) / 100
 
     if energy_needed_kwh <= 0:

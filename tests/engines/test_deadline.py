@@ -14,6 +14,7 @@ exact arithmetic (75 kWh * 30% / 8h / 230V = 12.228 A), not because of any date 
 """
 
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -403,3 +404,87 @@ def test_overnight_deadline_is_urgent_only_on_the_real_remaining_window():
     assert result.required_a == pytest.approx(12.228, abs=0.01)
     assert result.urgent is True
     assert result.unreachable is False
+
+
+# --- DST: the window spans midnight now, so it straddles the transition ------------------
+
+BRUSSELS = ZoneInfo("Europe/Brussels")
+# Europe's spring-forward: 2026-03-29 02:00 CET -> 03:00 CEST. An overnight window ending
+# after it therefore contains one hour less than the wall clock suggests.
+SPRING_FORWARD_EVE = datetime(2026, 3, 28, 23, 0, tzinfo=BRUSSELS)
+
+
+def test_required_current_counts_the_lost_hour_across_spring_forward():
+    """The remaining window must be an ABSOLUTE duration, not wall-clock arithmetic.
+
+    23:00 the evening before spring-forward to 07:00 the next morning is 7 real hours, not 8 --
+    the clocks jump 02:00 -> 03:00 in between. Subtracting two aware datetimes does NOT give
+    this for free: CPython short-circuits when both share a tzinfo object and returns the plain
+    field difference, so an implementation that merely stamps tzinfo onto the occurrence still
+    computes 8 hours and understates required_a by ~12%, in the permissive direction, on one of
+    the nights urgency matters most.
+    """
+    occurrence = resolve_next_occurrence(
+        deadline_today=None, deadline_tomorrow=time(7, 0), now=SPRING_FORWARD_EVE
+    )
+    assert occurrence == datetime(2026, 3, 29, 7, 0, tzinfo=BRUSSELS)
+
+    result = resolve_required_current(
+        deadline_at=occurrence,
+        now=SPRING_FORWARD_EVE,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=75.0,
+        voltage=230.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    # 22.5 kWh over the REAL 7 h = 3214.3 W -> 13.975 A. Over a wall-clock 8 h it would be
+    # 12.228 A -- the same figure the same-day worked example produces, which is exactly how
+    # this class of bug hides.
+    assert result.required_a == pytest.approx(22.5 * 1000 / 7 / 230.0, abs=1e-3)
+    assert result.required_a == pytest.approx(13.975, abs=0.01)
+
+
+def test_required_current_counts_the_repeated_hour_across_fall_back():
+    """The mirror case: 2026-10-25 03:00 CEST -> 02:00 CET, so the same overnight window holds
+    one hour MORE than the wall clock suggests, and required_a is correspondingly lower."""
+    now = datetime(2026, 10, 24, 23, 0, tzinfo=BRUSSELS)
+    occurrence = resolve_next_occurrence(deadline_today=None, deadline_tomorrow=time(7, 0), now=now)
+    result = resolve_required_current(
+        deadline_at=occurrence,
+        now=now,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=75.0,
+        voltage=230.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    assert result.required_a == pytest.approx(22.5 * 1000 / 9 / 230.0, abs=1e-3)
+
+
+def test_naive_datetimes_are_left_alone_rather_than_assuming_a_machine_timezone():
+    """A naive pair keeps plain subtraction -- `astimezone()` on a naive datetime would assume
+    the machine's local zone, which this pure engine has no business knowing."""
+    result = resolve_required_current(
+        deadline_at=datetime(2026, 3, 29, 7, 0),
+        now=datetime(2026, 3, 28, 23, 0),
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=75.0,
+        voltage=230.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    assert result.required_a == pytest.approx(22.5 * 1000 / 8 / 230.0, abs=1e-3)
+
+
+def test_next_occurrence_comparison_stays_wall_clock_across_the_transition():
+    """R15 asks whether the departure time is "earlier in the day than the current time" -- a
+    wall-clock question. On the transition day itself, an 07:00 departure is still ahead of a
+    01:00 `now` even though only 5 real hours separate them."""
+    now = datetime(2026, 3, 29, 1, 0, tzinfo=BRUSSELS)
+    assert resolve_next_occurrence(
+        deadline_today=time(7, 0), deadline_tomorrow=time(7, 0), now=now
+    ) == datetime(2026, 3, 29, 7, 0, tzinfo=BRUSSELS)
