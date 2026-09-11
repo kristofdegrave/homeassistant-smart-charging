@@ -282,3 +282,96 @@ async def test_unregister_dashboard_when_nothing_was_registered_does_not_raise(h
     entry = _entry()
 
     await async_unregister_dashboard(hass, entry)  # must not raise
+
+
+# --- Tile and section width (issue #1009) -------------------------------------------------
+
+_FULL_SECTION_WIDTH = 12
+
+
+def test_every_tile_spans_its_section_so_names_are_not_truncated():
+    """Issue #1009. Owned entities use `has_entity_name` against a device called "Smart
+    Charging", so every friendly name is "Smart Charging " + the entity name -- 15 characters
+    of constant prefix. A tile defaults to half a section's width, which in a three-section
+    view left roughly 14 characters and rendered "Smart Charging L...".
+
+    Width rather than a `name:` override: the entity names are translated
+    (`translations/nl.json` carries Dutch for every one), and hardcoding short English strings
+    here would regress a translated install to English tile labels.
+    """
+    entry = _entry(**{CONF_EV_SOC_ENTITY: "sensor.ev_soc"})
+    config = build_dashboard_config(entry)
+
+    tiles = [
+        card
+        for view in config["views"]
+        for section in view["sections"]
+        for card in section["cards"]
+        if card.get("type") == "tile"
+    ]
+    assert tiles, "no tiles found -- the assertion below would pass vacuously"
+    for tile in tiles:
+        assert tile["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, tile["entity"]
+
+
+def test_sections_span_two_columns_so_row_cards_have_room_too():
+    """The auto-entities cards render entity *rows*, not tiles, and already span their section
+    -- so tile width does nothing for them. What squeezes their names is the section itself
+    being one column of the view's grid. Widening the sections is the only locale-independent
+    lever that reaches both card shapes.
+    """
+    config = build_dashboard_config(_entry())
+
+    sections = [section for view in config["views"] for section in view["sections"]]
+    assert sections
+    for section in sections:
+        assert section["column_span"] == 2, section["title"]
+
+
+def test_the_markdown_forecast_card_spans_its_section_too():
+    """Not a tile, so it is not covered by the tile assertion above -- but it sits in the same
+    section and would otherwise be laid out beside one, which is what produced the ragged
+    two-column mix in the first place."""
+    entry = _entry(**{CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"})
+    cards = _cards(build_dashboard_config(entry), "Power flow")
+
+    markdown = [c for c in cards if c["type"] == "markdown"]
+    assert len(markdown) == 1
+    assert markdown[0]["grid_options"] == {"columns": _FULL_SECTION_WIDTH}
+
+
+def test_the_mode_gate_and_auto_entities_cards_declare_their_width_explicitly():
+    """Row-rendering cards already default to a full section, so this pins the default rather
+    than changing it -- an explicit width keeps every card in the config answering the same
+    question, so a future reader does not have to know which card types default to what."""
+    cards = _cards(build_dashboard_config(_entry()), "Runtime settings")
+    for card in cards:
+        assert card["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, card["type"]
+
+    deadline_cards = _view(build_dashboard_config(_entry()), "deadline")["sections"][0]["cards"]
+    for card in deadline_cards:
+        assert card["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, card["type"]
+
+
+def test_the_dumped_yaml_contains_no_anchors_or_aliases():
+    """Regression guard for a real defect in this change's first draft.
+
+    `register_dashboard` serialises the config with `yaml.safe_dump`, which emits an
+    anchor/alias pair (`&id001` / `*id001`) for any object appearing more than once *by
+    identity*. Sharing one module-level `grid_options` dict across every card did exactly that,
+    turning most cards' width into `grid_options: *id001` in the written file.
+
+    HA's loader resolves aliases correctly, so nothing broke functionally -- which is why a
+    behavioural assertion would not have caught it. The file itself is the user-facing artifact
+    of a YAML-mode dashboard, and a card a user cannot read or copy out is a defect in it.
+    """
+    entry = _entry(
+        **{
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+        }
+    )
+    dumped = yaml.safe_dump(build_dashboard_config(entry), sort_keys=False)
+
+    assert "&id" not in dumped
+    assert "*id" not in dumped
