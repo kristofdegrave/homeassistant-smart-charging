@@ -129,7 +129,12 @@ flowchart TD
    before the mode and peak decisions below, which consume whether deadline urgency is in effect.
    Both are threaded across cycles rather than recomputed from scratch — urgency, once engaged, is
    left in effect until its handback test clears it, since re-asking the engage test on a cycle
-   already charging at the escalated rate would revert it immediately (R5, UC05).
+   already charging at the escalated rate would revert it immediately (R5, UC05). The handback test
+   compares against the [baseline mode](system-overview.md#ubiquitous-language)'s own desired
+   current, which under `Auto` during urgency is a *different* mode from the one about to be
+   dispatched, so that mode's set-point is evaluated here as part of the update rather than being
+   read off the dispatch below — the dispatched mode's own desired current, produced further down
+   this step, is never what urgency is judged by (R5, `resolution-rules.md`).
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under

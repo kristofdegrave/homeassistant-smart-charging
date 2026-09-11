@@ -289,7 +289,7 @@ disconnects, when the deadline capability becomes absent (R18), or — as a back
 *following* occurrence itself elapses, so a hold never outlives one deadline cycle. Nothing else the
 departure-deadline rule resolves clears it: the hold is anchored to the occurrence already missed,
 not to the next one, so it survives that next occurrence resolving to "no deadline" or to a different
-time. From the cycle after it clears, the required current above governs normally again, and the urgency latch clears with it (the handback test above).
+time. From the cycle after it clears, the required current above governs normally again, and the urgency latch clears with it (see that rule's clear list above).
 
 - **Evaluation order, so the hold and the cap above are not circular.** The hold is updated once per
   cycle, *after* the active SOC limit has been resolved for that cycle (so condition 1 reads the
