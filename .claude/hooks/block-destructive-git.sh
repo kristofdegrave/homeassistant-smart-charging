@@ -14,8 +14,15 @@
 # in another shell (`bash -c "git push --force"`) or in a heredoc body is not seen.
 # Conversely, only a segment whose *first* word is git is inspected, so prose that
 # merely mentions a blocked command (`gh pr comment --body "... git reset --hard ..."`)
-# runs untouched. Anyone determined to force-push can still do it; the point is that
-# nobody does it by reflex.
+# runs untouched -- as long as that prose carries no shell separator, since the split on
+# ; && || | happens first and a mention after one starts a segment of its own. A lone &
+# is not treated as a separator either. The guard runs one command of its own -- a
+# `git rev-parse` in a directory taken from the command text -- to decide the rebase
+# rule. The block list is the one the workflow doc enumerates, so same-family commands
+# it does not name (`git checkout -f`, `git switch --discard-changes`,
+# `git push origin :branch`) are deliberately left alone rather than overlooked.
+# Anyone determined to force-push can still do it; the point is that nobody does it by
+# reflex.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
@@ -145,21 +152,22 @@ for seg in $segments; do
   # (after environment assignments and transparent wrappers). Scanning deeper would
   # deny any command that merely quotes a git command in its text.
   found=0
+  wrapper=0
   while [ $# -gt 0 ]; do
     tok=$1
     tok=${tok#'$('}
     tok=${tok#'`'}
     tok=${tok#'('}
     case "$tok" in
-      sudo | env | command | exec | nohup | nice | time | xargs) shift; continue ;;
       git | git.exe | */git | */git.exe) found=1; shift; break ;;
-      -*) break ;;
-      *=*) shift; continue ;;
-      *) break ;;
+      sudo | env | command | exec | nohup | nice | time | xargs) wrapper=1; shift ;;
+      *=*) shift ;;
+      # Once a wrapper is in play its own options and operands (`sudo -u x`,
+      # `nice -n 10`, `xargs -I{}`) sit between it and git, so keep walking.
+      *) [ "$wrapper" = 1 ] || break; shift ;;
     esac
   done
-  [ "$found" = 1 ] || { IFS='
-'; continue; }
+  [ "$found" = 1 ] || continue
 
   # Skip git's own global options to reach the subcommand, remembering -C so the
   # rebase probe below can ask about the repository the command actually targets.
@@ -179,8 +187,7 @@ for seg in $segments; do
       *) sub=$1; shift; break ;;
     esac
   done
-  [ -n "$sub" ] || { IFS='
-'; continue; }
+  [ -n "$sub" ] || continue
 
   case "$sub" in
     push)
@@ -211,8 +218,11 @@ for seg in $segments; do
       fi
       ;;
     branch)
-      # -D, or --delete --force. --fo is ambiguous with --format, so --forc up.
-      if has_short_flag D "$@" || { has_long '--d*' "$@" && has_long '--forc*' "$@"; }; then
+      # -D, or delete and force in any mix of spellings. --fo is ambiguous with
+      # --format, so --forc is the shortest form of --force here.
+      if has_short_flag D "$@" ||
+        { { has_short_flag d "$@" || has_long '--d*' "$@"; } &&
+          { has_short_flag f "$@" || has_long '--forc*' "$@"; }; }; then
         deny "$seg" "'git branch -D' force-deletes a branch whose commits may not be merged anywhere"
       fi
       ;;
@@ -220,7 +230,7 @@ for seg in $segments; do
       # Whole-tree discards only. 'git restore --staged .' merely unstages, so it is
       # left alone unless the working tree is in scope too.
       if has_exact . "$@" || has_exact ./ "$@" || has_exact :/ "$@"; then
-        if [ "$sub" = restore ] && has_long '--staged*' "$@" && ! has_long '--worktree*' "$@"; then
+        if [ "$sub" = restore ] && has_long '--sta*' "$@" && ! has_long '--w*' "$@"; then
           : # unstaging the whole tree changes no file content
         else
           deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
@@ -236,14 +246,19 @@ for seg in $segments; do
     rebase)
       # Flags that only steer a rebase already in progress are an escape hatch, not a
       # new rewrite -- blocking them would strand the repository mid-rebase.
-      control=1
-      [ $# -gt 0 ] || control=0
+      # A resume flag with no operand steers an existing rebase; other options
+      # alongside it (--autostash and friends) do not change that.
+      resume=0
+      operand=0
       for t in "$@"; do
         case "$t" in
-          --abort | --continue | --skip | --quit | --edit-todo | --show-current-patch) ;;
-          *) control=0 ;;
+          --abort | --continue | --skip | --quit | --edit-todo | --show-current-patch) resume=1 ;;
+          -*) ;;
+          *) operand=1 ;;
         esac
       done
+      control=0
+      [ "$resume" = 1 ] && [ "$operand" = 0 ] && control=1
       # An upstream is the available proxy for "this branch is published". It is only
       # a proxy: a branch pushed without -u has none, and the probe can only look at
       # the payload's cwd (or an explicit -C), not at a directory an earlier segment
@@ -254,9 +269,6 @@ for seg in $segments; do
       fi
       ;;
   esac
-
-  IFS='
-'
 done
 
 exit 0

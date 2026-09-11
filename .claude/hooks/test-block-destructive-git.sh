@@ -11,9 +11,17 @@
 HOOK=$(dirname "$0")/block-destructive-git.sh
 [ -f "$HOOK" ] || { echo "cannot find $HOOK" >&2; exit 1; }
 
-# A repository whose branch has an upstream, so the rebase rule has something to see.
 CWD=$(cd "$(dirname "$0")/../.." && pwd)
 fail=0
+
+# The rebase rule keys off "the checked-out branch has an upstream", so state plainly
+# when the checkout cannot exercise it instead of failing four cases obscurely.
+if git -C "$CWD" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+  rebase_testable=1
+else
+  rebase_testable=0
+  echo "note: the branch checked out in $CWD has no upstream, so the rebase cases are skipped"
+fi
 
 run() { # run BLOCK|ALLOW <command> [cwd]
   expect=$1
@@ -69,11 +77,20 @@ run BLOCK 'git restore --staged --worktree .'
 run BLOCK 'git restore -- :/'
 run BLOCK 'git stash drop'
 run BLOCK 'git stash clear'
-run BLOCK 'git rebase main'
-run BLOCK 'git rebase -i HEAD~3'
-run BLOCK 'git fetch origin && git rebase origin/main'
+run BLOCK 'git branch -df some-branch'
+run BLOCK 'git branch -d --force some-branch'
+run BLOCK 'git branch --delete -f some-branch'
+run BLOCK 'git restore --staged --work .'
+run BLOCK 'sudo -u someone git push --force'
+run BLOCK 'nice -n 10 git clean -fd'
 run BLOCK 'echo hi; git reset --hard HEAD~1'
-run BLOCK 'GIT_EDITOR=true git rebase -i HEAD~2'
+run BLOCK 'gh pr comment 1 --body "x; git reset --hard is banned"'  # separator wins: fails safe
+if [ "$rebase_testable" = 1 ]; then
+  run BLOCK 'git rebase main'
+  run BLOCK 'git rebase -i HEAD~3'
+  run BLOCK 'git fetch origin && git rebase origin/main'
+  run BLOCK 'GIT_EDITOR=true git rebase -i HEAD~2'
+fi
 
 echo
 echo "=== allowed: the standing authorization must not be narrowed ==="
@@ -106,6 +123,9 @@ run ALLOW 'git stash pop'
 run ALLOW 'git stash list'
 run ALLOW 'git rebase --abort'
 run ALLOW 'git rebase --continue'
+run ALLOW 'git rebase --autostash --continue'
+run ALLOW 'git restore --stage .'
+run ALLOW 'sudo -u someone git status'
 run ALLOW 'gh pr create --base main --title x'
 run ALLOW 'ruff check .'
 run ALLOW 'rm -rf build'
