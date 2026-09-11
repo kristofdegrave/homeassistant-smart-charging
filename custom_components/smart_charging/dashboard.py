@@ -45,6 +45,44 @@ from .const import (
 )
 
 _TITLE = "Smart Charging"
+
+# Issue #1009. Owned entities use `has_entity_name` against a device called "Smart Charging"
+# (entity.py), so every friendly name is "Smart Charging " + the entity name -- 15 characters of
+# constant prefix before anything distinguishing. A tile defaults to half a section's width,
+# which across a three-section view left about 14 characters and rendered "Smart Charging L...".
+#
+# Width rather than a per-tile `name:` override: these names are translated (translations/nl.json
+# carries Dutch for every owned entity), and hardcoding short English strings in this file would
+# regress a translated install to English tile labels. Width costs vertical space and costs no
+# correctness.
+#
+# `_FULL_SECTION_COLUMNS` is the full 12-column span of one section. `_MAX_VIEW_COLUMNS` widens
+# the sections themselves, which is what reaches the auto-entities cards -- those render entity
+# *rows* and already span their section, so tile width does nothing for them.
+#
+# A view-level `max_columns` rather than `column_span` on each section: a sections view defaults
+# to 4 columns, so spanning each section across 2 of them lays out as 2 + 1 on the overview,
+# leaving half the second row empty -- and on a viewport that fits exactly 3 columns it degrades
+# to one section per row. Capping the view at 2 columns states "sections should be wide" once,
+# and lays out the same way at every viewport.
+_FULL_SECTION_COLUMNS = 12
+_MAX_VIEW_COLUMNS = 2
+
+
+def _full_width() -> dict:
+    """A new `grid_options` dict per card.
+
+    Deliberately a function, not a shared module-level dict: `register_dashboard` serialises this
+    config with `yaml.safe_dump`, which emits an anchor/alias pair (`&id001` / `*id001`) for any
+    object that appears more than once by identity. HA's loader resolves those correctly, but the
+    file is the user-facing artifact of a YAML-mode dashboard -- one a user may read, copy a card
+    out of, or hand to someone for support -- and a card whose width is `*id001` is not something
+    anyone can act on. A shared dict would also make any future per-card width tweak silently
+    mutate every other card.
+    """
+    return {"columns": _FULL_SECTION_COLUMNS}
+
+
 # Bare string, not `homeassistant.const.Platform.TIME` -- that's a StrEnum member, and
 # yaml.safe_dump (below) raises RepresenterError on it; a plain domain string is what
 # auto-entities' filter schema expects anyway.
@@ -64,7 +102,7 @@ _TIME_TO_FULL_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_TIME_TO_FULL}"
 
 
 def _tile(entity_id: str) -> dict:
-    return {"type": "tile", "entity": entity_id}
+    return {"type": "tile", "entity": entity_id, "grid_options": _full_width()}
 
 
 def _charging_status_cards(entry: ConfigEntry) -> list[dict]:
@@ -98,6 +136,7 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
         cards.append(
             {
                 "type": "markdown",
+                "grid_options": _full_width(),
                 "content": (
                     "\U0001f52e **{{ states('" + solar_forecast_entity + "') }} kWh** "
                     "forecast for tomorrow."
@@ -119,6 +158,7 @@ def _runtime_settings_cards() -> list[dict]:
     mode_gate_card = {
         "type": "entities",
         "entities": [_MODE_ENTITY],
+        "grid_options": _full_width(),
         "visibility": [{"condition": "state", "entity": _PROFILE_ENTITY, "state": PROFILE_MANUAL}],
     }
     return [
@@ -126,6 +166,7 @@ def _runtime_settings_cards() -> list[dict]:
         {
             "type": "custom:auto-entities",
             "card": {"type": "entities", "title": "Runtime settings"},
+            "grid_options": _full_width(),
             # Deliberately no `exclude: label: sc_install` clause here (present in the
             # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
             # reasoning, no entity is ever labelled sc_install, so that clause can never match
@@ -151,6 +192,7 @@ def _deadline_cards() -> list[dict]:
         {
             "type": "custom:auto-entities",
             "card": {"type": "entities"},
+            "grid_options": _full_width(),
             "filter": {"include": [{"label": LABEL_SC_RUNTIME, "domain": _TIME_DOMAIN}]},
             "sort": {"method": "friendly_name"},
             "show_empty": False,
@@ -171,6 +213,7 @@ def build_dashboard_config(entry: ConfigEntry) -> dict:
                 "title": _TITLE,
                 "path": "overview",
                 "type": "sections",
+                "max_columns": _MAX_VIEW_COLUMNS,
                 "sections": [
                     {
                         "type": "grid",
@@ -193,6 +236,7 @@ def build_dashboard_config(entry: ConfigEntry) -> dict:
                 "title": "Deadline",
                 "path": "deadline",
                 "type": "sections",
+                "max_columns": _MAX_VIEW_COLUMNS,
                 "sections": [
                     {
                         "type": "grid",

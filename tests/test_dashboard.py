@@ -245,8 +245,14 @@ async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_p
     dashboard = lovelace_data.dashboards[DASHBOARD_URL_PATH]
     assert dashboard.path == str(tmp_path / DASHBOARD_FILENAME)
 
-    on_disk = yaml.safe_load((tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8"))
-    assert on_disk == build_dashboard_config(entry)
+    written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
+    assert yaml.safe_load(written) == build_dashboard_config(entry)
+    # Issue #1009: bound to the artifact actually written, not to a re-derived dump. A
+    # safe_load round-trip passes happily with anchors present, because the loader resolves
+    # them -- only the raw text shows whether a reader would see `grid_options: *id001`
+    # instead of a width. See dashboard.py's `_full_width`.
+    assert "&id" not in written
+    assert "*id" not in written
 
     panel = hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH]
     assert panel.config["mode"] == "yaml"
@@ -282,3 +288,90 @@ async def test_unregister_dashboard_when_nothing_was_registered_does_not_raise(h
     entry = _entry()
 
     await async_unregister_dashboard(hass, entry)  # must not raise
+
+
+# --- Tile and section width (issue #1009) -------------------------------------------------
+
+_FULL_SECTION_WIDTH = 12
+
+
+def test_every_tile_spans_its_section_so_names_are_not_truncated():
+    """Issue #1009: tile names truncated to ~14 characters behind the device-name prefix.
+
+    `dashboard.py`'s own comment carries the reasoning (why width rather than a `name:`
+    override); this pins the result rather than restating it.
+    """
+    entry = _entry(**{CONF_EV_SOC_ENTITY: "sensor.ev_soc"})
+    config = build_dashboard_config(entry)
+
+    tiles = [
+        card
+        for view in config["views"]
+        for section in view["sections"]
+        for card in section["cards"]
+        if card.get("type") == "tile"
+    ]
+    assert tiles, "no tiles found -- the assertion below would pass vacuously"
+    for tile in tiles:
+        assert tile["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, tile["entity"]
+
+
+def test_views_cap_their_column_count_so_row_cards_have_room_too():
+    """The auto-entities cards render entity *rows*, not tiles, and already span their section
+    -- so tile width does nothing for them. What squeezes their names is the section itself
+    being one column of the view's grid, which the view's column cap controls.
+    """
+    config = build_dashboard_config(_entry())
+
+    assert config["views"]
+    for view in config["views"]:
+        assert view["max_columns"] == 2, view["path"]
+
+
+def test_the_markdown_forecast_card_spans_its_section_too():
+    """Not a tile, so it is not covered by the tile assertion above -- but it sits in the same
+    section and would otherwise be laid out beside one, which is what produced the ragged
+    two-column mix in the first place."""
+    entry = _entry(**{CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"})
+    cards = _cards(build_dashboard_config(entry), "Power flow")
+
+    markdown = [c for c in cards if c["type"] == "markdown"]
+    assert len(markdown) == 1
+    assert markdown[0]["grid_options"] == {"columns": _FULL_SECTION_WIDTH}
+
+
+def test_the_mode_gate_and_auto_entities_cards_declare_their_width_explicitly():
+    """Row-rendering cards already default to a full section, so this pins the default rather
+    than changing it -- an explicit width keeps every card in the config answering the same
+    question, so a future reader does not have to know which card types default to what."""
+    cards = _cards(build_dashboard_config(_entry()), "Runtime settings")
+    for card in cards:
+        assert card["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, card["type"]
+
+    deadline_cards = _view(build_dashboard_config(_entry()), "deadline")["sections"][0]["cards"]
+    for card in deadline_cards:
+        assert card["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, card["type"]
+
+
+def test_the_config_dumps_without_anchors_or_aliases():
+    """Regression guard for a real defect in this change's first draft.
+
+    `register_dashboard` serialises the config with `yaml.safe_dump`, which emits an
+    anchor/alias pair (`&id001` / `*id001`) for any object appearing more than once *by
+    identity*. Sharing one module-level `grid_options` dict across every card did exactly that,
+    turning most cards' width into `grid_options: *id001` in the written file.
+
+    HA's loader resolves aliases correctly, so nothing broke functionally -- which is why a
+    behavioural assertion would not have caught it. The file itself is the user-facing artifact
+    of a YAML-mode dashboard, and a card a user cannot read or copy out is a defect in it.
+    """
+    entry = _entry(
+        **{
+            CONF_EV_SOC_ENTITY: "sensor.ev_soc",
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+        }
+    )
+    dumped = yaml.safe_dump(build_dashboard_config(entry), sort_keys=False)
+
+    assert "&id" not in dumped
+    assert "*id" not in dumped
