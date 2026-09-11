@@ -8,6 +8,16 @@
 # explanation to stderr, then exits 2 -- the two channels are redundant on purpose so
 # the guard still bites on a Claude Code build that honours only one of them.
 # POSIX sh only, and no jq -- neither is guaranteed on the machines this runs on.
+#
+# Scope and known limits. This is an accident guard, not a sandbox. It word-splits
+# each command without understanding shell quoting, so a destructive command wrapped
+# in another shell (`bash -c "git push --force"`) or in a heredoc body is not seen.
+# Conversely, only a segment whose *first* word is git is inspected, so prose that
+# merely mentions a blocked command (`gh pr comment --body "... git reset --hard ..."`)
+# runs untouched. Anyone determined to force-push can still do it; the point is that
+# nobody does it by reflex.
+#
+# Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
 DOC='docs/reference/contribution-workflow.md, section "Commit & push authorization"'
 
@@ -29,7 +39,7 @@ extract() {
           e = substr(buf, i + 1, 1)
           if (e == "n") out = out "\n"
           else if (e == "t") out = out "\t"
-          else if (e == "r") out = out "\n"
+          else if (e == "r") out = out ""
           else if (e == "u") { out = out " "; i += 4 }
           else out = out e
           i += 2
@@ -44,7 +54,15 @@ extract() {
 }
 
 cmd=$(extract command)
-[ -n "$cmd" ] || exit 0
+if [ -z "$cmd" ]; then
+  # Fail open, but not silently: a payload that carries a Bash tool_input and still
+  # yields no command means this guard has stopped understanding its own input.
+  case "$payload" in
+    *'"tool_name"'*'"Bash"'*)
+      echo "block-destructive-git.sh: could not read tool_input.command from the payload; allowing the call unchecked" >&2 ;;
+  esac
+  exit 0
+fi
 
 cwd=$(extract cwd)
 [ -n "$cwd" ] || cwd=$(pwd)
@@ -71,57 +89,89 @@ Ask the human partner to run it, or choose a non-destructive alternative."
   exit 2
 }
 
-# Split the command line on shell separators so a guarded command hidden behind
-# && / || / ; / | / newline is still inspected.
+# --- predicates over the subcommand's arguments, each called as `pred <needle> "$@"` ---
+
+has_exact() { # an argument equal to the needle
+  _n=$1
+  shift
+  for _t in "$@"; do
+    [ "$_t" = "$_n" ] && return 0
+  done
+  return 1
+}
+
+has_long() { # an argument matching the glob (git accepts unambiguous abbreviations)
+  _p=$1
+  shift
+  for _t in "$@"; do
+    # shellcheck disable=SC2254  # the pattern is meant to glob
+    case "$_t" in $_p) return 0 ;; esac
+  done
+  return 1
+}
+
+has_short_flag() { # a single-dash (non "--") argument carrying that letter
+  _l=$1
+  shift
+  for _t in "$@"; do
+    case "$_t" in
+      --*) ;;
+      -?*) case "$_t" in *"$_l"*) return 0 ;; esac ;;
+    esac
+  done
+  return 1
+}
+
+# Split the command line on shell separators so a guarded command placed after
+# && / || / ; / | / a newline is inspected in its own right.
 segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
 /g' -e 's/||/\
 /g' -e 's/[;|]/\
 /g')
 
-has_word() {
-  # $padded holds " tok tok tok " for the current segment
-  case "$padded" in *" $1 "*) return 0 ;; esac
-  return 1
-}
-
-has_short_flag() {
-  # true when a single-dash (non "--") token carries that letter
-  for _t in $rest_tokens; do
-    case "$_t" in
-      --*) ;;
-      -*) case "$_t" in *"$1"*) return 0 ;; esac ;;
-    esac
-  done
-  return 1
-}
-
-oldIFS=$IFS
+# Globbing stays off for the whole scan: segments are untrusted text, never paths.
+set -f
 IFS='
 '
 for seg in $segments; do
-  IFS=$oldIFS
-
-  set -f
-  # shellcheck disable=SC2086
+  # Unset rather than saved-and-restored: an IFS arriving unset from the environment
+  # would restore as the empty string, which disables word splitting altogether and
+  # would fail the guard open on every command.
+  unset IFS
+  # shellcheck disable=SC2086  # deliberate word splitting of the segment
   set -- $seg
-  set +f
 
-  # Find the git invocation in this segment (skipping env assignments, sudo, ...).
+  # Only a segment that *invokes* git is inspected, and only as its first word
+  # (after environment assignments and transparent wrappers). Scanning deeper would
+  # deny any command that merely quotes a git command in its text.
   found=0
   while [ $# -gt 0 ]; do
-    case "$1" in
+    tok=$1
+    tok=${tok#'$('}
+    tok=${tok#'`'}
+    tok=${tok#'('}
+    case "$tok" in
+      sudo | env | command | exec | nohup | nice | time | xargs) shift; continue ;;
       git | git.exe | */git | */git.exe) found=1; shift; break ;;
+      -*) break ;;
+      *=*) shift; continue ;;
+      *) break ;;
     esac
-    shift
   done
   [ "$found" = 1 ] || { IFS='
 '; continue; }
 
-  # Skip git's own global options to reach the subcommand.
+  # Skip git's own global options to reach the subcommand, remembering -C so the
+  # rebase probe below can ask about the repository the command actually targets.
   sub=''
+  repo=$cwd
   while [ $# -gt 0 ]; do
     case "$1" in
-      -C | -c | --git-dir | --work-tree | --namespace | --exec-path)
+      -C)
+        shift
+        [ $# -gt 0 ] && { repo=$1; shift; }
+        ;;
+      -c | --git-dir | --work-tree | --namespace | --exec-path)
         shift
         [ $# -gt 0 ] && shift
         ;;
@@ -132,45 +182,49 @@ for seg in $segments; do
   [ -n "$sub" ] || { IFS='
 '; continue; }
 
-  rest_tokens=$*
-  padded=" $* "
-
   case "$sub" in
     push)
-      if has_word --force || has_word --force-with-lease || has_word --force-if-includes; then
-        deny "$seg" "force-push rewrites history that other clones and open PRs depend on"
+      # --force, --force-with-lease[=...], --force-if-includes and every unambiguous
+      # abbreviation of them all start "--force".
+      if has_long '--force*' "$@" || has_short_flag f "$@"; then
+        deny "$seg" "force-pushing rewrites history that other clones and the open PR depend on"
       fi
-      case "$padded" in
-        *" --force-with-lease="* | *" --force-if-includes="*)
-          deny "$seg" "force-push rewrites history that other clones and open PRs depend on" ;;
-      esac
-      if has_short_flag f; then
-        deny "$seg" "'git push -f' is a force-push; it rewrites published history"
+      if has_long '--mirror*' "$@"; then
+        deny "$seg" "'git push --mirror' force-updates every ref on the remote"
       fi
-      for t in $rest_tokens; do
+      for t in "$@"; do
         case "$t" in
-          +*:*) deny "$seg" "a leading '+' on a refspec is a force-push in disguise" ;;
+          +?*) deny "$seg" "a leading '+' on a refspec is a force-push in disguise" ;;
         esac
       done
       ;;
     reset)
-      if has_word --hard; then
+      # --hard; --h alone is ambiguous with --help, so --ha is the shortest form.
+      if has_long '--ha*' "$@"; then
         deny "$seg" "'git reset --hard' discards uncommitted work irrecoverably"
       fi
       ;;
     clean)
-      if has_word --force || has_short_flag f; then
+      # --force; no other git-clean long option starts with f.
+      if has_long '--f*' "$@" || has_short_flag f "$@"; then
         deny "$seg" "'git clean -f' deletes untracked files irrecoverably"
       fi
       ;;
     branch)
-      if has_short_flag D || { has_word --delete && has_word --force; }; then
+      # -D, or --delete --force. --fo is ambiguous with --format, so --forc up.
+      if has_short_flag D "$@" || { has_long '--d*' "$@" && has_long '--forc*' "$@"; }; then
         deny "$seg" "'git branch -D' force-deletes a branch whose commits may not be merged anywhere"
       fi
       ;;
     checkout | restore)
-      if has_word . || has_word ./ || has_word :/; then
-        deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
+      # Whole-tree discards only. 'git restore --staged .' merely unstages, so it is
+      # left alone unless the working tree is in scope too.
+      if has_exact . "$@" || has_exact ./ "$@" || has_exact :/ "$@"; then
+        if [ "$sub" = restore ] && has_long '--staged*' "$@" && ! has_long '--worktree*' "$@"; then
+          : # unstaging the whole tree changes no file content
+        else
+          deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
+        fi
       fi
       ;;
     stash)
@@ -180,18 +234,23 @@ for seg in $segments; do
       esac
       ;;
     rebase)
-      # In-progress control flags are an escape hatch, not a new rewrite.
+      # Flags that only steer a rebase already in progress are an escape hatch, not a
+      # new rewrite -- blocking them would strand the repository mid-rebase.
       control=1
-      [ -n "$rest_tokens" ] || control=0
-      for t in $rest_tokens; do
+      [ $# -gt 0 ] || control=0
+      for t in "$@"; do
         case "$t" in
           --abort | --continue | --skip | --quit | --edit-todo | --show-current-patch) ;;
           *) control=0 ;;
         esac
       done
+      # An upstream is the available proxy for "this branch is published". It is only
+      # a proxy: a branch pushed without -u has none, and the probe can only look at
+      # the payload's cwd (or an explicit -C), not at a directory an earlier segment
+      # cd'd into.
       if [ "$control" = 0 ] &&
-        git -C "$cwd" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
-        deny "$seg" "this branch is already pushed, so rebasing it rewrites published history"
+        git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+        deny "$seg" "this branch is already pushed, so rebasing it rewrites published history; step 3 of the workflow lets you 'git merge origin/main' instead"
       fi
       ;;
   esac
@@ -199,6 +258,5 @@ for seg in $segments; do
   IFS='
 '
 done
-IFS=$oldIFS
 
 exit 0

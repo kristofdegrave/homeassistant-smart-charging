@@ -1,0 +1,5 @@
+# Shell scripts must check out with LF endings even where core.autocrlf=true
+# (Git for Windows' default): .claude/hooks/*.sh is executed by the Claude Code
+# PreToolUse hook, and a shell that chokes on CRLF exits non-zero, which the hook
+# contract reads as a denial of every Bash call.
+*.sh text eol=lf
