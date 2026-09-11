@@ -26,8 +26,11 @@ don't re-derive the universal steps here.
 - **Step 1 (do the work)**: read the task's plan section, the **ADR it cites**, and the
   **analysis behavior** it realizes (`control-cycle.md`, `resolution-rules.md`,
   `requirements.md`, the relevant use-case) — the plan's formulas/thresholds are **test
-  anchors** attributed to those docs; reproduce them, don't reinvent. Then TDD one behavior at
-  a time (use the `test-driven-development` skill):
+  anchors** attributed to those docs; reproduce them, don't reinvent. Also read the
+  **`ha-integration-knowledge` skill** — the Home Assistant platform reference (entity
+  platforms, config-flow conventions, quality scale, thin-wrapper rule) — before writing
+  anything that touches HA APIs. Then TDD one behavior at a time (use the
+  `test-driven-development` skill):
   - Write the failing test in the **correct harness** (ADR-0009): plain pytest for `modes/`/
     `engines/`; HA harness (`pytest-homeassistant-custom-component` + `MockConfigEntry`) for
     adapters, coordinator, entities, config flow. Name it for the requirement/UC/ADR criterion.
@@ -42,6 +45,10 @@ don't re-derive the universal steps here.
     voltage `None` → nominal, not a fault (ADR-0007).
   - Native entity naming (ADR-0004); config data/options split (ADR-0005); package layout
     (ADR-0002/0010).
+- **Pre-commit self-check**: run the **Quick review checklist** at the end of the
+  `python-anti-patterns` skill over the diff before each commit. If the change touches async
+  code, also run `async-python-patterns`' checklist — that skill's **When this file applies**
+  section states exactly which files count.
 - **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s
   Contribution workflow section — read it before starting. Covers ruff/pytest green, coverage
   matches the change, runtime-verified not just test-verified.

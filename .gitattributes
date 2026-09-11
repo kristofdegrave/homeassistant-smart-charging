@@ -1,0 +1,7 @@
+# Shell scripts must check out with LF endings even where core.autocrlf=true (Git for
+# Windows' default). The case that forces it: .claude/hooks/*.sh runs as a Claude Code
+# PreToolUse hook, and a shell that chokes on a CRLF script exits 2 on the syntax error
+# -- exactly the code the hook contract reads as "deny" — so a line-ending accident
+# would block every Bash call. The rule is repo-wide because the same reasoning holds
+# for any script an automation invokes.
+*.sh text eol=lf

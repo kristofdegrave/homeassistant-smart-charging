@@ -99,8 +99,8 @@ same way as any other precondition lapsing (Postconditions).
 ## State model
 
 The reserve decision is itself a re-evaluated-every-cycle condition, not a value the System
-stores between cycles (mirrors deadline urgency's Normal/Urgent pattern in
-[UC05](UC05-guarantee-ready-by-departure.md)): each cycle the coordinator re-checks the profile,
+stores between cycles — unlike deadline urgency, which is entered by a per-cycle test and then
+latched until its own handback clears it ([UC05](UC05-guarantee-ready-by-departure.md), R5): each cycle the coordinator re-checks the profile,
 the sun position, the home-day flag, the forecast, tomorrow's departure-deadline resolution, and
 whether a [missed-deadline hold](../system-overview.md#ubiquitous-language) is in effect, so a
 change in any of them moves the System directly between the two states below on the very next

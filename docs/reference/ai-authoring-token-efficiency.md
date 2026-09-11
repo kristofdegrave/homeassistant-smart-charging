@@ -103,6 +103,26 @@ Everything below targets one of these two.
       or echoed to a step's own stdout — the untrusted-content containment above applies to it
       exactly as it does to PR diff content.
 
+## Vendored skills are forked on purpose
+
+Four skills came from external sources via a marketplace install and are recorded in
+`skills-lock.json` with their upstream hash: `python-anti-patterns`, `async-python-patterns`,
+`ha-integration-knowledge`, `domain-driven-design`. Two of them — `python-anti-patterns` and
+`async-python-patterns` — have since been **rewritten for this repo**: trimmed to the rules
+that apply to an async Home Assistant custom integration, and cross-linked so no rule is
+stated twice. `ha-integration-knowledge` carries one local note (the custom-integration path
+mapping); `domain-driven-design` is upstream-intact.
+
+Two consequences:
+
+- **`.claude/skills/` is the only authoritative tree.** It is what Claude Code loads and what
+  every CI worker prompt names. The installer's second copy under `.agents/skills/` was an
+  unreferenced byte-identical duplicate and has been removed; don't reintroduce it.
+- **A re-sync from upstream would revert that work.** The `computedHash` entries in
+  `skills-lock.json` describe where a skill came from, not what it must still contain. Before
+  re-pulling any of the four, check whether the local copy has diverged — for the two rewritten
+  ones, re-apply the trim rather than accepting the upstream text.
+
 ## How to measure
 
 `ai-cost-summary` (`.github/actions/ai-cost-summary`) writes per-run cost, turns, and token
