@@ -1226,13 +1226,7 @@ async def test_active_soc_limit_sensor_renders_its_unit_through_a_real_platform(
     HA only validates that combination when the state is actually written. The defect being
     fixed here is precisely "the rendered state had no unit", so it is worth proving at the
     boundary the user sees rather than on the class."""
-    coord = SimpleNamespace(
-        data=SimpleNamespace(active_soc_limit=82.5),
-        last_update_success=True,
-        # CoordinatorEntity.async_added_to_hass subscribes, so a bare SimpleNamespace is not
-        # enough once the entity goes through a real platform.
-        async_add_listener=lambda update_callback, context=None: lambda: None,
-    )
+    coord = _StubStatusCoordinator(data=SimpleNamespace(active_soc_limit=82.56))
     sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
     entity_id = "sensor.smart_charging_active_soc_limit"
     sensor.entity_id = entity_id
@@ -1240,7 +1234,10 @@ async def test_active_soc_limit_sensor_renders_its_unit_through_a_real_platform(
     await platform.async_add_entities([sensor])
 
     state = hass.states.get(entity_id)
-    assert state.state == "82.5"  # the state itself is never rounded -- only its display is
+    # 82.56 deliberately: a value that survives rounding to one decimal could not demonstrate
+    # that the state was left unrounded. The state is what adapters/store.py and the
+    # vehicle-limit manager read, so it must stay exact however it is displayed.
+    assert state.state == "82.56"
     assert state.attributes["unit_of_measurement"] == PERCENTAGE
     assert state.attributes["state_class"] == SensorStateClass.MEASUREMENT
     assert "device_class" not in state.attributes
@@ -1278,3 +1275,35 @@ def test_monthly_peak_sensor_declares_a_display_precision():
     signature rather than a _CoordinatorFieldSensor."""
     sensor = MonthlyPeakSensor(entry_id="abc", coordinator=SimpleNamespace(data=None))
     assert sensor.suggested_display_precision == 2
+
+
+async def test_display_precision_reaches_the_entity_registry(hass):
+    """The boundary the reported defect actually lives at.
+
+    `suggested_display_precision` reaches the frontend through the entity registry, not through
+    the class: HA writes it into `registry_entry.options["sensor"]["suggested_display_precision"]`
+    when the entity registers. Asserting the class attribute proves the constant exists; it does
+    not prove it arrives anywhere a dashboard can read it. Since the whole issue is "the
+    dashboard showed 168.142101632559", one assertion at the registry is worth more than six at
+    the class.
+    """
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for suffix, precision in (
+        ("time_to_full", 0),
+        ("active_soc_limit", 1),
+        ("peak_headroom_a", 0),
+        ("effective_peak_limit", 2),
+        ("monthly_peak_kw", 2),
+    ):
+        entity_id = registry.async_get_entity_id(
+            Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{suffix}"
+        )
+        assert entity_id is not None, suffix
+        options = registry.async_get(entity_id).options
+        assert options["sensor"]["suggested_display_precision"] == precision, suffix

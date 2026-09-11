@@ -240,12 +240,19 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     # alongside the vehicle's real one.
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    # One decimal, NOT zero. Only one of the three rows resolving this value is whole-point
-    # constrained (`number.py`'s soc_limit_override, step 1.0); `solar_reserve_soc` and the
-    # step-up's `solar_step_pp`/`max_solar_soc` are bare floats in the config flow. An override
-    # of 80 with a 2.5-point step resolves to 82.5, which rounded to 0 would display 83 while
-    # the vehicle-limit manager writes 82.5 to the car -- the dashboard contradicting what the
-    # system is doing, which is the defect class this precision work exists to remove.
+    # One decimal -- a deliberate cut-off, not a bound the schema gives us. Nothing constrains
+    # the granularity of this value: `solar_reserve_soc` and `max_solar_soc` are bare
+    # `vol.Coerce(float)` and are returned verbatim by `resolve_active_soc_limit` /
+    # `resolve_solar_step_up`, and even `soc_limit_override`'s step of 1.0 is a UI hint that
+    # `number.set_value` does not enforce. So `max_solar_soc = 82.55` renders as 82.6 here while
+    # 82.55 is what reaches the car -- the same contradiction precision 0 produced at 82.5, one
+    # decimal down. Taken to its conclusion that argument ends at "declare no precision at all",
+    # which would put `80.30000000000001` back on the dashboard the first time an accumulating
+    # step-up lands on a float boundary.
+    #
+    # One decimal is the cut-off that covers the realistic configuration space (the defaults are
+    # whole: 5 / 100 / 60) and absorbs that accumulated noise. A user with genuinely finer
+    # settings can raise it per-entity in HA's own display-precision control.
     _attr_suggested_display_precision = 1
 
     def _coordinator_value(self, data: Any) -> Any:
@@ -302,9 +309,11 @@ class TimeToFullSensor(_CoordinatorFieldSensor):
     # the same answer with the division's noise still attached. No SensorDeviceClass.DURATION
     # -- that would render this as a clock-style duration, which reads as a countdown to a
     # fixed moment rather than the projection off the current set-point that it is. And no
-    # state class, unlike ActiveSocLimitSensor in the same change: this value steps
-    # discontinuously every time the set-point moves, so long-term statistics over it would
-    # average a quantity that never held between samples.
+    # state class, unlike ActiveSocLimitSensor in the same change -- not because this value
+    # steps (so does that one, and a stepwise setpoint is a fine MEASUREMENT), but because it
+    # is intermittent: coordinator.py yields None whenever the set-point is 0 A, i.e. every
+    # moment the car is not charging. There is no continuous series to aggregate, only runs of
+    # projection separated by gaps.
     _attr_suggested_display_precision = 0
 
     def _coordinator_value(self, data: Any) -> Any:
