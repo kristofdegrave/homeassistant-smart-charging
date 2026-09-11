@@ -1,349 +1,109 @@
 ---
 name: python-anti-patterns
-description: Use this skill when reviewing Python code for common anti-patterns to avoid. Use as a checklist when reviewing code, before finalizing implementations, or when debugging issues that might stem from known bad practices.
+description: Python anti-pattern checklist for the Smart Charging Home Assistant integration — the general-Python mistakes to catch before committing code under custom_components/smart_charging/. Use as a pre-commit self-check and during code review.
 ---
 
 # Python Anti-Patterns Checklist
 
-A reference checklist of common mistakes and anti-patterns in Python code. Review this before finalizing implementations to catch issues early.
+A short checklist of **general-Python** mistakes to catch before a change under
+`custom_components/smart_charging/` is committed, and while reviewing one. Test authoring has
+its own rules — `write-tests` and `test-reviewer` own those.
 
-## When to Use This Skill
+Scoped deliberately: this file carries only rules that are **not** owned elsewhere — HA
+platform conventions belong to `ha-integration-knowledge`, everything about the event loop to
+`async-python-patterns`, and this project's structural rules to `CLAUDE.md` and the ADRs.
 
-- Reviewing code before merge
-- Debugging mysterious issues
-- Teaching or learning Python best practices
-- Establishing team coding standards
-- Refactoring legacy code
+## Error handling
 
-**Note:** This skill focuses on what to avoid. For guidance on positive patterns and architecture, see the `python-design-patterns` skill.
-
-## Infrastructure Anti-Patterns
-
-### Scattered Timeout/Retry Logic
+### Bare exception handling
 
 ```python
-# BAD: Timeout logic duplicated everywhere
-def fetch_user(user_id):
-    try:
-        return requests.get(url, timeout=30)
-    except Timeout:
-        logger.warning("Timeout fetching user")
-        return None
-
-def fetch_orders(user_id):
-    try:
-        return requests.get(url, timeout=30)
-    except Timeout:
-        logger.warning("Timeout fetching orders")
-        return None
-```
-
-**Fix:** Centralize in decorators or client wrappers.
-
-```python
-# GOOD: Centralized retry logic
-@retry(stop=stop_after_attempt(3), wait=wait_exponential())
-def http_get(url: str) -> Response:
-    return requests.get(url, timeout=30)
-```
-
-### Double Retry
-
-```python
-# BAD: Retrying at multiple layers
-@retry(max_attempts=3)  # Application retry
-def call_service():
-    return client.request()  # Client also has retry configured!
-```
-
-**Fix:** Retry at one layer only. Know your infrastructure's retry behavior.
-
-### Hard-Coded Configuration
-
-```python
-# BAD: Secrets and config in code
-DB_HOST = "prod-db.example.com"
-API_KEY = "sk-12345"
-
-def connect():
-    return psycopg.connect(f"host={DB_HOST}...")
-```
-
-**Fix:** Use environment variables with typed settings.
-
-```python
-# GOOD
-from pydantic_settings import BaseSettings
-
-class Settings(BaseSettings):
-    db_host: str = Field(alias="DB_HOST")
-    api_key: str = Field(alias="API_KEY")
-
-settings = Settings()
-```
-
-## Architecture Anti-Patterns
-
-### Exposed Internal Types
-
-```python
-# BAD: Leaking ORM model to API
-@app.get("/users/{id}")
-def get_user(id: str) -> UserModel:  # SQLAlchemy model
-    return db.query(UserModel).get(id)
-```
-
-**Fix:** Use DTOs/response models.
-
-```python
-# GOOD
-@app.get("/users/{id}")
-def get_user(id: str) -> UserResponse:
-    user = db.query(UserModel).get(id)
-    return UserResponse.from_orm(user)
-```
-
-### Mixed I/O and Business Logic
-
-```python
-# BAD: SQL embedded in business logic
-def calculate_discount(user_id: str) -> float:
-    user = db.query("SELECT * FROM users WHERE id = ?", user_id)
-    orders = db.query("SELECT * FROM orders WHERE user_id = ?", user_id)
-    # Business logic mixed with data access
-    if len(orders) > 10:
-        return 0.15
-    return 0.0
-```
-
-**Fix:** Repository pattern. Keep business logic pure.
-
-```python
-# GOOD
-def calculate_discount(user: User, orders: list[Order]) -> float:
-    # Pure business logic, easily testable
-    if len(orders) > 10:
-        return 0.15
-    return 0.0
-```
-
-## Error Handling Anti-Patterns
-
-### Bare Exception Handling
-
-```python
-# BAD: Swallowing all exceptions
+# BAD: swallows everything; a broken adapter read looks like a healthy cycle
 try:
-    process()
+    value = read()
 except Exception:
-    pass  # Silent failure - bugs hidden forever
+    pass
 ```
 
-**Fix:** Catch specific exceptions. Log or handle appropriately.
+**Fix:** catch the specific exception, and either handle it meaningfully or let it reach the
+path that is designed to deal with it (in this integration, the fault path).
+
+**Sanctioned broad catches.** This integration deliberately keeps several `except Exception`
+boundaries, because a design rule requires the failure to be *absorbed* rather than propagate:
+the coordinator's `_async_update_data` fault funnel (ADR-0007 — every failure becomes 0 A +
+`Fault`), `Store.write`'s best-effort service call (ADR-0018 — explicitly *not* a hardware
+fault), `_safe_write_zero`, the notification-delivery paths, the vehicle-limit write to a
+possibly-unplugged car, and the dashboard registration a Client must not take the control loop
+down with (ADR-0022).
+
+What makes one legitimate is not the file it sits in: it is marked `# noqa: BLE001` (where the
+linter would object) **and** carries a comment naming the rule that requires absorbing the
+failure. A broad catch missing either is the anti-pattern above; one with both is a safety
+invariant — do not flag it, and do not add a new one without the same justification.
 
 ```python
 # GOOD
 try:
-    process()
-except ConnectionError as e:
-    logger.warning("Connection failed, will retry", error=str(e))
-    raise
-except ValueError as e:
-    logger.error("Invalid input", error=str(e))
-    raise BadRequestError(str(e))
+    value = read()
+except (ValueError, TypeError):
+    _LOGGER.warning("Unparseable reading from %s", entity_id)
+    return None
 ```
 
-### Ignored Partial Failures
+### Ignored partial failures
+
+Iterating a set of independent items and letting the first error abort the whole batch loses
+the results that did succeed. Decide explicitly: either collect successes and failures, or
+document that one failure must fail the whole operation.
+
+## Resources
+
+### Unclosed resources
 
 ```python
-# BAD: Stops on first error
-def process_batch(items):
-    results = []
-    for item in items:
-        result = process(item)  # Raises on error - batch aborted
-        results.append(result)
-    return results
-```
+# BAD
+f = open(path)
+return f.read()      # leaks the handle if read() raises
 
-**Fix:** Capture both successes and failures.
-
-```python
 # GOOD
-def process_batch(items) -> BatchResult:
-    succeeded = {}
-    failed = {}
-    for idx, item in enumerate(items):
-        try:
-            succeeded[idx] = process(item)
-        except Exception as e:
-            failed[idx] = e
-    return BatchResult(succeeded, failed)
+with open(path) as f:
+    return f.read()
 ```
 
-### Missing Input Validation
+Anything with `close()`/`__exit__` (files, sessions, subscriptions) is acquired in a `with` /
+`async with`, or has an explicit paired teardown.
+
+## Type safety
+
+### Missing type hints
+
+Annotate every public function, method and dataclass field. An unannotated helper is invisible
+to both the reader and the type checker.
 
 ```python
-# BAD: No validation
-def create_user(data: dict):
-    return User(**data)  # Crashes deep in code on bad input
-```
-
-**Fix:** Validate early at API boundaries.
-
-```python
-# GOOD
-def create_user(data: dict) -> User:
-    validated = CreateUserInput.model_validate(data)
-    return User.from_input(validated)
-```
-
-## Resource Anti-Patterns
-
-### Unclosed Resources
-
-```python
-# BAD: File never closed
-def read_file(path):
-    f = open(path)
-    return f.read()  # What if this raises?
-```
-
-**Fix:** Use context managers.
-
-```python
-# GOOD
-def read_file(path):
-    with open(path) as f:
-        return f.read()
-```
-
-### Blocking in Async
-
-```python
-# BAD: Blocks the entire event loop
-async def fetch_data():
-    time.sleep(1)  # Blocks everything!
-    response = requests.get(url)  # Also blocks!
-```
-
-**Fix:** Use async-native libraries.
-
-```python
-# GOOD
-async def fetch_data():
-    await asyncio.sleep(1)
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-```
-
-## Type Safety Anti-Patterns
-
-### Missing Type Hints
-
-```python
-# BAD: No types
+# BAD
 def process(data):
     return data["value"] * 2
-```
 
-**Fix:** Annotate all public functions.
-
-```python
 # GOOD
 def process(data: dict[str, int]) -> int:
     return data["value"] * 2
 ```
 
-### Untyped Collections
+### Untyped collections
 
-```python
-# BAD: Generic list without type parameter
-def get_users() -> list:
-    ...
-```
+`list`, `dict`, `tuple` without parameters say nothing. Write `list[AdapterReading]`,
+`dict[str, float]`, `tuple[float, float]`.
 
-**Fix:** Use type parameters.
+## Quick review checklist
 
-```python
-# GOOD
-def get_users() -> list[User]:
-    ...
-```
+Run this before committing, and when reviewing a diff:
 
-## Testing Anti-Patterns
-
-### Only Testing Happy Paths
-
-```python
-# BAD: Only tests success case
-def test_create_user():
-    user = service.create_user(valid_data)
-    assert user.id is not None
-```
-
-**Fix:** Test error conditions and edge cases.
-
-```python
-# GOOD
-def test_create_user_success():
-    user = service.create_user(valid_data)
-    assert user.id is not None
-
-def test_create_user_invalid_email():
-    with pytest.raises(ValueError, match="Invalid email"):
-        service.create_user(invalid_email_data)
-
-def test_create_user_duplicate_email():
-    service.create_user(valid_data)
-    with pytest.raises(ConflictError):
-        service.create_user(valid_data)
-```
-
-### Over-Mocking
-
-```python
-# BAD: Mocking everything
-def test_user_service():
-    mock_repo = Mock()
-    mock_cache = Mock()
-    mock_logger = Mock()
-    mock_metrics = Mock()
-    # Test doesn't verify real behavior
-```
-
-**Fix:** Use integration tests for critical paths. Mock only external services.
-
-## Quick Review Checklist
-
-Before finalizing code, verify:
-
-- [ ] No scattered timeout/retry logic (centralized)
-- [ ] No double retry (app + infrastructure)
-- [ ] No hard-coded configuration or secrets
-- [ ] No exposed internal types (ORM models, protobufs)
-- [ ] No mixed I/O and business logic
-- [ ] No bare `except Exception: pass`
-- [ ] No ignored partial failures in batches
-- [ ] No missing input validation
-- [ ] No unclosed resources (using context managers)
-- [ ] No blocking calls in async code
-- [ ] All public functions have type hints
-- [ ] Collections have type parameters
-- [ ] Error paths are tested
-- [ ] Edge cases are covered
-
-## Common Fixes Summary
-
-| Anti-Pattern | Fix |
-|-------------|-----|
-| Scattered retry logic | Centralized decorators |
-| Hard-coded config | Environment variables + pydantic-settings |
-| Exposed ORM models | DTO/response schemas |
-| Mixed I/O + logic | Repository pattern |
-| Bare except | Catch specific exceptions |
-| Batch stops on error | Return BatchResult with successes/failures |
-| No validation | Validate at boundaries with Pydantic |
-| Unclosed resources | Context managers |
-| Blocking in async | Async-native libraries |
-| Missing types | Type annotations on all public APIs |
-| Only happy path tests | Test errors and edge cases |
+- [ ] No bare `except Exception:` — least of all one that swallows (`pass`) or hides a fault.
+      A broad catch is legitimate only when it is `# noqa: BLE001`-marked *and* names the rule
+      that requires absorbing the failure (see above); unmarked or unexplained is a finding
+- [ ] Exceptions caught are specific, and either handled or deliberately re-raised
+- [ ] No batch/loop that silently drops the successes when one item fails
+- [ ] Every acquired resource is released (`with` / `async with` / paired teardown)
+- [ ] All public functions, methods and dataclass fields have type hints
+- [ ] Collection annotations carry their type parameters
