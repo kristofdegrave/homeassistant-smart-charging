@@ -117,7 +117,7 @@ between its draft, review and fix workers.
 |---|---|---|---|
 | 1–2 | `implement` | new | `/implement #N`. Read the issue; look its context label up in the table. No context label, or `idea`: stop and point at `work-idea` / `file-task-issue`. `workflow`: stop, per the table rule. Otherwise: worktree from fresh `origin/main` per the workflow doc, board Status → `In progress`, delegate the actual work to the row's work file, Definition of Done self-check, push, PR against `main` with `Closes #N`, board Status → `In review`. End by naming `review` as the next step. |
 | 3–4 | `review` | new | `/review #N` on a PR. Look the linked issue's label up; do the behind-`origin/main` check; for each agent the row names, spawn it fresh (never inline) on the changed files under its tree; post findings via `submit-pr-review` in local mode. Owns the **local round cap** (below). On a clean pass, hand to `finalize-pr-review`; on remarks, name `fix` as the next step. |
-| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, the human-comment acknowledgement and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2, 4 and 5 remain their single source and `fix` cites them. What `fix` adds is the dispatch — "re-author with the work file from the table row" instead of `address-review-remarks`' hard-coded use-case/ADR/analysis cases — and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
+| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, the human-comment acknowledgement and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2, 4, 5 and 6 (the last for the local commit-and-push half) remain their single source and `fix` cites them. What `fix` adds is the dispatch — "re-author with the work file from the table row" instead of `address-review-remarks`' hard-coded use-case/ADR/analysis cases — and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
 | 5 (mechanic) | `resolve-review-thread` | new, small | Per finding: reply in its thread with what was done or why not, then resolve the thread **only if actually fixed**; disputed or partial threads stay open. Owns the GraphQL resolve mutation and the "outdated is not resolved" rule, moved out of `finalize-pr-review` (which CI never invokes, so the move changes nothing in CI). For the reply itself it **cites** `address-review-remarks` section 4 — the REST call and the `ai-fix-ack` marker stay where they are, untouched. The marker's rule is applied exactly as both consumers define it: on every reply to a comment whose author login does not end in `[bot]`. A locally posted review is authored by the maintainer's own identity, so **replies to locally posted findings carry `ai-fix-ack` too** — otherwise a later CI `needs-review` would count every local finding as unaddressed human feedback and burn both fix cycles. Replies to CI-bot findings carry no marker; those threads are tracked by resolution. |
 | 7 | `finalize-pr-review` | trimmed | Keeps "confirm nothing Critical/Major remains", `needs-approval`, and the stranded-stack check; points to `resolve-review-thread` for the mechanic it used to carry. Its frontmatter `description`, which today advertises "resolves the inline threads that were actually fixed", is rewritten so it stops firing on the step `resolve-review-thread` now owns. |
 
@@ -216,7 +216,8 @@ docs/reference/work-types/
   documentation/implement.md, documentation/review.md
   development/implement.md, development/review.md   (review.md covers custom_components/ and tests/)
   testing/…
-  workflow/implement.md     ← pointer to ai-authoring-token-efficiency.md
+  workflow/implement.md     ← pointer to ai-authoring-token-efficiency.md, for reading only;
+                              the generic implement still refuses to draft this label
   workflow/review.md
 .claude/skills/implement/SKILL.md      generic; reads <label>/implement.md
 .claude/skills/review/SKILL.md         generic; spawns the one agent below per tree
@@ -276,9 +277,13 @@ remove. The table's file columns are written so the migration only re-points the
   widen CI's blast radius with no CI file touched, because the worker follows the skill by
   name and the action auto-loads every skill. That is why phase 1 adds `fix` as a separate
   skill instead. Once the allow-list exists, `address-review-remarks` is folded into `fix`
-  (its sections 1, 2 and 5 move there; section 4 — the reply call and the `ai-fix-ack`
-  marker — moves into `resolve-review-thread`, which until then only cites it; CI's worker is
-  re-pointed) and retired.
+  (its sections 1, 2, 5 and 6 move there — section 6 keeping both its halves, since "in CI:
+  do not commit" is load-bearing the moment CI runs `fix`; section 3 is superseded by table
+  dispatch; section 4 — the reply call and the `ai-fix-ack` marker — moves into
+  `resolve-review-thread`, which until then only cites it; CI's worker is re-pointed; and
+  `fix`'s frontmatter `description` drops phase 1's "interactive session only" wording, since
+  that phrase existed precisely to keep CI from selecting it before containment existed) and
+  retired.
 - `_ai-draft.yml`'s label `case` and `_ai-review.yml`'s path→agent mapping read the table (or
   a machine-readable rendering of it). Note this is partly **new coverage**, not only
   de-duplication: CI has no `documentation` row today and no `docs/design/**` review rule, so
