@@ -22,9 +22,9 @@ Always read:
   general-Python bar every change is held to, on top of checklist (4) below.
 
 Read conditionally:
-- The `async-python-patterns` skill — **only when the diff touches async code**
-  (`coordinator*.py`, `adapters/`, `config_flow.py`, `__init__.py`). Skip it for a diff
-  confined to `modes/`/`engines/` or other pure-logic files.
+- The `async-python-patterns` skill — **only when the diff touches async code**. That skill's
+  **When this file applies** section is the single statement of which files those are; don't
+  re-derive it here. A diff confined to `modes/`/`engines/` skips it.
 - The `ha-integration-knowledge` skill — when the diff touches HA platform surface (entity
   classes, config flow, `manifest.json`, services).
 

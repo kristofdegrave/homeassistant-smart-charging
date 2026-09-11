@@ -1,21 +1,17 @@
 ---
 name: python-anti-patterns
-description: Python anti-pattern checklist for the Smart Charging Home Assistant integration — the general-Python mistakes to catch before committing code under custom_components/smart_charging/ or tests/. Use as a pre-commit self-check and during code review.
+description: Python anti-pattern checklist for the Smart Charging Home Assistant integration — the general-Python mistakes to catch before committing code under custom_components/smart_charging/. Use as a pre-commit self-check and during code review.
 ---
 
 # Python Anti-Patterns Checklist
 
 A short checklist of **general-Python** mistakes to catch before a change under
-`custom_components/smart_charging/` is committed, and while reviewing one.
+`custom_components/smart_charging/` is committed, and while reviewing one. Test authoring has
+its own rules — `write-tests` and `test-reviewer` own those.
 
-Scoped deliberately: this file carries only rules that are **not** owned elsewhere.
-
-- Home Assistant platform conventions (entity base classes, config-flow validation, quality
-  scale, thin-wrapper rule) → `ha-integration-knowledge`.
-- Event-loop and `async`/`await` rules → `async-python-patterns`.
-- This project's structural rules (engine purity, adapter isolation, clamp call sites, fault
-  path, no magic strings, harness split, test naming/coverage) → `CLAUDE.md`, the ADRs, and
-  the `develop-task` / `write-tests` skills. Not restated here.
+Scoped deliberately: this file carries only rules that are **not** owned elsewhere — HA
+platform conventions belong to `ha-integration-knowledge`, everything about the event loop to
+`async-python-patterns`, and this project's structural rules to `CLAUDE.md` and the ADRs.
 
 ## Error handling
 
@@ -31,6 +27,11 @@ except Exception:
 
 **Fix:** catch the specific exception, and either handle it meaningfully or let it reach the
 path that is designed to deal with it (in this integration, the fault path).
+
+**The one sanctioned broad catch:** the coordinator's `_async_update_data` boundary keeps a
+deliberate `except Exception` (with its `# noqa: BLE001`) because ADR-0007 requires *every*
+failure to funnel to the fault path — force 0 A + `Fault` — rather than propagate. That is a
+safety invariant, not an oversight; do not flag it, and do not copy it anywhere else.
 
 ```python
 # GOOD
@@ -91,6 +92,7 @@ def process(data: dict[str, int]) -> int:
 Run this before committing, and when reviewing a diff:
 
 - [ ] No bare `except Exception:` — least of all one that swallows (`pass`) or hides a fault
+      (sole exception: the coordinator's ADR-0007 fault-path boundary)
 - [ ] Exceptions caught are specific, and either handled or deliberately re-raised
 - [ ] No batch/loop that silently drops the successes when one item fails
 - [ ] Every acquired resource is released (`with` / `async with` / paired teardown)

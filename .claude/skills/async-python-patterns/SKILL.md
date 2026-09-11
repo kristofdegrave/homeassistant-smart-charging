@@ -1,6 +1,6 @@
 ---
 name: async-python-patterns
-description: asyncio rules that apply inside a Home Assistant custom integration — event-loop discipline, awaiting, cancellation, background tasks and shared state across awaits. Use when writing or reviewing async code in Smart Charging (coordinator*.py, adapters/, config_flow.py, __init__.py).
+description: asyncio rules that apply inside a Home Assistant custom integration — event-loop discipline, awaiting, cancellation, entry-scoped listeners and shared state across awaits. Use when writing or reviewing any Smart Charging file that is not pure modes/ or engines/ logic.
 ---
 
 # Async patterns inside a Home Assistant integration
@@ -12,8 +12,13 @@ integration's job is to not block it and not leak work off it.
 
 Scoped deliberately — HA platform conventions live in `ha-integration-knowledge`, general
 (non-async) Python mistakes in `python-anti-patterns`, and this project's structural rules in
-`CLAUDE.md` and the ADRs. Read this file when the change touches `coordinator*.py`,
-`adapters/`, `config_flow.py` or `__init__.py`.
+`CLAUDE.md` and the ADRs.
+
+**When this file applies** — the single statement of the condition, which everything else
+points at: any changed file under `custom_components/smart_charging/` that is **not** pure
+`modes/`/`engines/` logic. That is the coordinator, `adapters/`, `managers/`, `config_flow.py`,
+`__init__.py`, `dashboard.py` and the entity platform files — every one of them runs on HA's
+loop. A diff confined to `modes/`/`engines/` cannot break any rule below, so skip it there.
 
 ## 1. Never block the event loop
 
@@ -47,17 +52,30 @@ A coroutine that is created and never awaited both skips its work and surfaces a
 "coroutine was never awaited" warning at an unrelated point in the log, far from the line
 that caused it.
 
-## 3. Background tasks are owned, not fire-and-forget
+## 3. Anything that outlives the call is tied to the config entry
 
-Never leave a bare `asyncio.create_task(...)`: the reference is dropped, the task can be
-garbage-collected mid-flight, and it outlives a config-entry unload. Use HA's tracked
-creators so the task is cancelled with the entry:
+Every timer, state listener and subscription registered during setup must stop when the entry
+unloads. This is load-bearing here: ADR-0008 reloads the entry on every reconfigure and every
+options change, so a leaked registration is not a rare edge case — each reload adds another
+one. Register the unsubscribe with
+`entry.async_on_unload(...)` **at the point you create it**, or hand the unsub straight back
+to setup, which does — the pattern this integration uses throughout (`__init__.py`):
 
 ```python
-entry.async_create_background_task(hass, _poll(), name="smart_charging_poll")
-# or, for work that must finish before setup completes:
-hass.async_create_task(_one_shot())
+entry.async_on_unload(
+    async_track_time_interval(hass, coordinator.async_refresh, interval)
+)
+entry.async_on_unload(
+    async_track_state_change_event(hass, entity_ids, _handle_change)
+)
 ```
+
+A registration whose unsubscribe is dropped survives the reload and then fires twice — see
+`__init__.py`'s own note on the leak this fixed.
+
+For a genuinely long-running coroutine, use `entry.async_create_background_task(...)` so it is
+tracked and cancelled with the entry — never a bare `asyncio.create_task(...)`, whose reference
+is dropped, which can be garbage-collected mid-flight, and which outlives the unload.
 
 ## 4. Handle cancellation, re-raise it
 
@@ -74,8 +92,9 @@ except asyncio.CancelledError:
     raise            # propagate, always
 ```
 
-Note this is the one exception to `python-anti-patterns`' "catch specific exceptions and
-handle them" rule: `CancelledError` is caught only to clean up.
+This is a specific catch, so it satisfies `python-anti-patterns`' rule — but note the one
+twist: `CancelledError` is caught **only** to clean up, never to handle. Re-raising is
+mandatory, not optional.
 
 ## 5. Mind what an `await` interleaves
 
@@ -83,8 +102,8 @@ Every `await` is a yield point: other code runs before the next line does. State
 an `await` may be stale after it.
 
 - Read all of a cycle's inputs in one uninterrupted stretch, so the cycle sees a single
-  consistent snapshot — this is why `coordinator.py` reads adapters sequentially rather than
-  through `asyncio.gather` (see its own note there).
+  consistent snapshot — this is why `coordinator.py`'s `_read_owned_entities` reads
+  sequentially rather than through `asyncio.gather`, and documents why in its own docstring.
 - Do not mutate shared state across an `await`; compute, then assign in one uninterrupted
   step. If you genuinely need mutual exclusion, an `asyncio.Lock` held across the smallest
   possible region — not a re-entrant cycle.
@@ -97,8 +116,10 @@ machine have nothing to overlap — a sequential loop is both faster and safer t
 
 ## 7. Bound anything that can hang
 
-Any await on an external device, network call or unbounded queue gets an explicit timeout, so
-one unresponsive device cannot wedge a control cycle.
+No current call site — every read today resolves from `hass.states` in memory. This applies
+the first time an adapter talks to a device or a network: any await on an external device,
+network call or unbounded queue gets an explicit timeout, so one unresponsive device cannot
+wedge a control cycle.
 
 ```python
 async with asyncio.timeout(5):
