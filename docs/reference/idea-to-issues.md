@@ -9,8 +9,10 @@ Eight stages. Each one names what it must produce before the next starts.
 
 ## 1. Capture
 
-An in-conversation idea, or an issue with the `idea` label. `work-idea` runs the same dialogue
-either way.
+An in-conversation idea, or an existing issue with the `idea` label. Either way this stage
+produces one `idea`-labelled issue: everything downstream — the decisions, the research
+findings, the epic it is split from — is recorded against an issue, so an in-conversation idea
+is filed before grilling starts. `work-idea` then runs the dialogue.
 
 ## 2. Grill
 
@@ -49,8 +51,8 @@ fix for a behaviour nobody has seen.
   goes straight from the grilled issue to work.
 
 **Gate: a `requirement` or `uc` change that touches shipped behaviour does not get
-`needs-approval` until a `specs` child issue exists in the same epic.** Without it, an analysis
-document can merge describing behaviour the code does not have. The review loop applies that
+`needs-approval` until a `specs` issue exists for it** — a child of the epic, where there is
+one. Without it, an analysis document can merge describing behaviour the code does not have. The review loop applies that
 label automatically on a clean verdict and knows nothing about child issues
 ([ci-pipeline.md](ci-pipeline.md)), so on a CI-driven PR the same condition is checked by
 whoever approves the merge. The `specs` issue is the
@@ -76,11 +78,10 @@ it touches, sized to one context window, and observable on its own once deployed
 Layer-shaped children ("the adapter ticket", "the entity ticket") are the anti-pattern — they
 cannot be demoed and cannot be verified live. File them in dependency order.
 
-**Epic membership and ordering are native GitHub relationships, not body text.** The epic is
-the parent issue, every child is a sub-issue of it, and a child that cannot start until
-another finishes carries a blocked-by edge.
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** has the `gh`
-commands and the label/field rules that apply to every child.
+**Epic membership and ordering are native GitHub relationships, not body text** — sub-issues
+for membership, blocked-by edges for order.
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** owns that rule,
+its `gh` commands, and the label/field rules that apply to every child.
 
 What to file when:
 

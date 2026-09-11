@@ -123,11 +123,16 @@ separate bot account for the interactive session.
   the full cycle (when to file the epic, what to file immediately vs. defer). The epic is the
   **parent issue** and each child is a **native sub-issue** of it; a child that cannot start
   until another finishes carries a **native blocked-by relationship**. Neither is body text —
-  `gh` supports both directly, so nobody needs to re-derive them:
+  `gh` supports both directly (all four flags below verified on `gh` 2.95), so nobody needs to
+  re-derive them:
   `gh issue create --parent <epic> --blocked-by <issue>` when filing, and
   `gh issue edit <epic> --add-sub-issue <child>` / `gh issue edit <child> --add-blocked-by
   <issue>` afterwards. Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
+- **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
+  shipped behaviour also needs a `specs` issue to exist for it — see
+  [idea-to-issues.md](idea-to-issues.md)'s **Spec** stage, which owns that gate and explains
+  why the automatic label cannot enforce it.
 - **Task issues** (`development`/`testing` label) filed against an approved
   `docs/plans/<slice>.md` TDD plan must include an exact, anchored `Plan:` line identifying the
   plan file and task id (nothing else on that line) — see [ci-pipeline.md](ci-pipeline.md) for

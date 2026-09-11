@@ -10,8 +10,8 @@ is the checklist to run through before running `gh issue create`, not a replacem
 deciding *what* the issue is about.
 
 Context labels, project-board Size/Estimate fields, the anchored `Plan:` line, and epic
-membership (native sub-issues) are all defined once in `CLAUDE.md`'s **Issue conventions**
-section — read that first. This skill adds only the pre-flight order to run through so
+membership (native sub-issues) are all defined once in
+`docs/reference/contribution-workflow.md`'s **Issue conventions** section — read that first. This skill adds only the pre-flight order to run through so
 nothing gets filed half-scoped.
 
 ## The checklist
@@ -27,8 +27,7 @@ nothing gets filed half-scoped.
 3. **File it**, then move on — the drafter/review cycle is a separate, later step.
 4. **If the issue belongs to an existing epic** (e.g. a code-review finding that fits an
    already-open cleanup epic), attach it as a **native sub-issue** of that epic rather than
-   leaving it untracked — `gh` commands in `docs/reference/contribution-workflow.md`'s
-   **Issue conventions**. Don't touch the
+   leaving it untracked — `gh` commands in **Issue conventions** above. Don't touch the
    epic's other children while doing this: their state is a call for whoever owns the epic,
    not a side effect of filing an unrelated issue.
 
