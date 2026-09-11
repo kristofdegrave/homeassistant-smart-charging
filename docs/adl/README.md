@@ -15,7 +15,7 @@ template.
 | [0006](0006-coordinator-and-data-flow.md) | Coordinator and data flow — step 2's smoothed-reading list, and the smoothed-set half of its forward-looking bar, narrowed by [ADR-0036](0036-step-2-smooths-net-power-only.md) | Accepted |
 | [0007](0007-fault-handling.md) | Fault handling for adapter reads, translation failures, and uncaught exceptions — the `charger_status`-specific clause narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0008](0008-reconfigure-reload-behavior.md) | Config-entry reload on reconfigure and options changes | Accepted |
-| [0009](0009-testing-strategy.md) | Testing strategy — the `charger_status` unmapped-raw-state expectation narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
+| [0009](0009-testing-strategy.md) | Testing strategy — the `charger_status` unmapped-raw-state expectation narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md); its two-tier taxonomy extended by [ADR-0037](0037-scenario-timeline-test-tier.md) | Accepted |
 | [0010](0010-engines-package-home.md) | Package home for the cross-cutting engines | Accepted |
 | [0011](0011-cross-manager-coordination-via-domain-events.md) | Cross-Manager coordination via domain events | Accepted |
 | [0012](0012-coordinator-internal-decomposition.md) | Coordinator internal decomposition (Strategy + extracted state owners) | Accepted |
@@ -43,5 +43,6 @@ template.
 | [0034](0034-dedicated-charger-status-diagnostic-sensor.md) | Dedicated diagnostic sensor for the `charger_status` role (extends ADR-0021) — its stated `None`-on-unmatched-state premise narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Unmatched `charger_status` raw states default to disconnected, not fault | Accepted |
 | [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter | Accepted |
+| [0037](0037-scenario-timeline-test-tier.md) | Scenario/timeline test tier — a third tier alongside ADR-0009's two (extends ADR-0009) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
