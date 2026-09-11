@@ -34,7 +34,7 @@ and each time the process converted the finding into a document.
 
 | Moment | What happened | Looked, or didn't? |
 |---|---|---|
-| **T1.4 authoring** (PR #350, 2026-07-23) | The plan's own section 6 contained a contradiction: prose said "no next-day rollover", while its worked example was `NOW = 22:00` / `DEADLINE = 06:00` commented *"next-day 06:00 — 8 hours remaining"*. The author noticed, reasoned it through in 20 lines of module docstring, and picked the prose. | **Looked, reasoned, wrong conclusion** |
+| **T1.4 authoring** (PR #350, 2026-07-23) | The slice's two plan documents contradicted each other. The design doc's section 6 (`docs/plans/2026-07-21-deadline-soc-management-design.md:301-306`) treats a passed deadline as same-day and saturating — *"`deadline - now <= 0` (the deadline has already passed today) is treated the same as urgency already being maximal … a same-day deadline in the past is not one of R14's documented 'no deadline' cases"* — while the TDD plan's Task 1.4 worked example (`docs/plans/2026-07-21-deadline-soc-management.md:356-357`) is `NOW = datetime(2026, 7, 21, 22, 0)` / `DEADLINE = time(6, 0)  # next-day 06:00 -- 8 hours remaining`. The author noticed, reasoned it through in 20 lines of module docstring, and picked the design doc. | **Looked, reasoned, wrong conclusion** |
 | **T5.2 code review** (PR #373, 2026-07-23) | `code-reviewer` caught it once the engine was wired live and filed **#375**, which states the live symptom exactly: *"plug in at 22:00, departure deadline 06:00 … resolves `remaining_hours` as negative … fires `DeadlineUnreachableNotified` every cycle overnight."* | **Looked, correct conclusion** |
 | **Epic #306 closed** (2026-07-27) | Epic closed COMPLETED while **#375, an open `development`-labelled child of it, was still open.** | **No one looked** |
 | **PR #452 code review** (2026-08-02) | Found again, independently, filed as **#453**. | **Looked, correct conclusion** |
@@ -64,8 +64,9 @@ checklist is entirely document-to-document:
 > *"Every domain term used is defined in the `system-overview.md` glossary… Every requirement ID
 > referenced exists in `requirements.md`… Entity ids match `entity-catalog.md` exactly"*
 
-`analysis-reviewer` never reads `custom_components/`. Its "What to read first" list contains six
-paths, all under `docs/analysis/`. **No one looked, by design.**
+`analysis-reviewer` never reads `custom_components/`. Its "What to read first" list is six paths
+under `docs/analysis/`, plus one conditional read of a plan/design doc *"if the caller names"*
+one — nothing under `custom_components/` on any path. **No one looked, by design.**
 
 ### #1007 — kW/W mismatch on the power roles
 
@@ -74,7 +75,7 @@ paths, all under `docs/analysis/`. **No one looked, by design.**
 | **ADR-0030 review** (PR #877) | `adr-reviewer` raised the hazard: *"No unit/availability contract stated for the external reading (kW assumed) — worth naming as a constraint for the implementation spec."* Scoped to the one new role. |
 | **ADR-0030 Consequences** | *"a unit contract for the reading — DSO/smart-meter peak sensors commonly report in W, so the adapter … must normalize"*. One role. |
 | **Impl spec D-1** (`docs/plans/2026-09-03-external-monthly-peak-mapping-design.md:92-95`) | The author looked *directly at the sibling roles* and dismissed them: **"`NumericReadAdapter` does `float(state.state)` with no unit handling at all; the existing roles that use it rest on a documented unit convention. ADR-0030 records that DSO/smart-meter peak sensors 'commonly report in W', so that convention cannot be relied on *here*."** The "documented unit convention" is `entity-catalog.md`'s W column — a document the source entity's author has never read. |
-| **Same spec, Deliberate deferrals** | *"**Device-class filtering on the entity selector** — the codebase's selectors filter by domain only, with no `device_class` precedent anywhere… adding a selector-level filter is a flow-wide convention change, not this slice's to make."* The second line of defence, also declined, also on scope-hygiene grounds. |
+| **Same spec, Deliberate deferrals** | The second line of defence, also declined: *"**Device-class filtering on the entity selector** — the codebase's selectors filter by domain only, with no `device_class` precedent anywhere. D-1's unit check catches the mismatch that matters at read time and fails safe; adding a selector-level filter is a flow-wide convention change, not this slice's to make."* Note the middle clause, quoted in full because it is the stronger half of the refusal: the deferral rests not only on scope hygiene but on a claim that the hazard *is already covered* — which was true for the role in front of the author and false for the two beside it. |
 | **PR #951 review** | Two comments on `PowerKilowattReadAdapter`: class ordering, and a duplicated float-parse block. Nothing about siblings. |
 
 The purest **looked and reasoned to the wrong conclusion** of the four — twice, in writing, in
@@ -98,15 +99,16 @@ Not one word about legibility, precision, rounding, or units. A requirement stan
 "SMART, testable statements" produced a dashboard requirement with no criterion a human eye can
 fail.
 
-`tests/test_dashboard.py` mirrors this exactly — 20 tests, all structural
+`tests/test_dashboard.py` mirrors this exactly — 19 tests, all structural
 (`test_charging_status_section_has_the_seven_documented_tiles`,
 `test_power_flow_section_omits_the_solar_surplus_tile_when_solar_is_unavailable`). Nothing
 renders.
 
 There *is* a catalog-conformance test, `tests/test_init.py::test_every_owned_entity_id_matches_entity_catalog`
-— and it checks **the id column only**. `entity-catalog.md:185` specifies `%` for
-`active_soc_limit`; `sensor.py:227`'s `ActiveSocLimitSensor` sets no unit, no device class, no
-state class. The conformance test that exists covers one of the catalog's eight columns.
+— and it maps unique-id suffix to expected entity_id only — **the id column**.
+`entity-catalog.md:185` specifies `%` for `active_soc_limit`; `sensor.py:227`'s
+`ActiveSocLimitSensor` sets no unit, no device class, no state class. The conformance test that
+exists covers one of the catalog's eight columns.
 
 The one rule that would have caught both is `docs/reference/definition-of-done.md`:
 *"**Runtime-verified, not just test-verified**, for anything with observable runtime behavior —
@@ -130,7 +132,8 @@ Its "Common mistakes" section reinforces the boundary: *"Leaving ripples unpropa
 (requirement added but no `entity-catalog.md` row…)"*. The word "code" does not appear in the
 skill.
 
-`analysis-reviewer` reads only `docs/analysis/`. `_ai-review.yml` routes a docs-only diff to that
+`analysis-reviewer` reads only `docs/analysis/` (plus a named plan doc on request).
+`_ai-review.yml` routes a docs-only diff to that
 checklist and no other. So a requirement change is reviewed by an agent that is structurally
 incapable of noticing the code now contradicts it.
 
@@ -185,12 +188,18 @@ things would have had to be true for escalation instead:
    above"** — a fixture chosen to dodge the disputed case, which is a near-miss of the existing
    rule but not a hit.
 
-A footnote that sharpens the point: the same avoidance recurred in
-`tests/test_deadline_soc_management_end_to_end.py`, whose `_setup` docstring instructs
-contributors to **"freeze time on a weekend date (Sat/Sun's own default is None)"** so the
-weekday 06:00 default never resolves. Every deadline end-to-end test freezes at 12:00 and then
-seeds `_seed_today_deadline(hours_from_now=4)`. The suite navigates around the bug in a
-documented helper.
+A weaker but related observation, stated at the strength the evidence supports:
+`tests/test_deadline_soc_management_end_to_end.py`'s `_setup` docstring instructs contributors
+that *"Tests that need a genuine 'no deadline' starting condition must freeze time on a weekend
+date (Sat/Sun's own default is None), not rely on blanking the entity afterward"*. That
+instruction is legitimate on its own terms — weekends genuinely have no R14 default, and the
+stated reason is ADR-0018's capture semantics, not the rollover bug. The two weekday tests
+(`2026-01-15`, a Thursday) do run against a date whose 06:00 default has already passed. What
+is true, and is all that should be claimed, is the *effect*: every test in the suite either
+freezes on a weekend or immediately overrides the day's departure time with
+`_seed_today_deadline(hours_from_now=4)`, so no test ever observes the weekday default
+unoverridden after 06:00 — the exact condition that produces #1005. No intent to avoid the bug
+is implied or evidenced.
 
 ---
 
@@ -290,12 +299,20 @@ But look at what it optimises. **Every artifact in the loop has a document as it
 | `impl-spec-reviewer` | ADRs + analysis docs |
 | `code-reviewer` | the plan, analysis docs, and the ADRs it *touches* |
 | `test-reviewer` | ADR-0009 + analysis docs |
-| CI `_ai-review.yml` | dispatches to those same five checklists by changed path |
+| `workflow-reviewer` | **the partial exception** — see below |
+| CI `_ai-review.yml` | dispatches to those same six checklists by changed path |
 | CI `ci.yml` | ruff, pytest, hassfest, HACS |
 
-Nothing in that list reads a real entity's `unit_of_measurement`, advances a real clock past a
-configured time, or renders a page. The single step that points at reality is one bullet in
-`definition-of-done.md`, which has no artifact, no reviewer, and no gate.
+`workflow-reviewer` is the one reviewer whose oracle is not purely a document: a good part of
+its checklist is about containment and least-privilege properties of the workflow files
+themselves — real properties of a real system, checkable without reference to any spec. It is
+named here rather than quietly omitted, because it is the proof that this project *can* write a
+reviewer with a non-document oracle when it decides the stakes warrant one. It did so for
+supply-chain risk in its own CI and not for the behaviour of the shipped integration.
+
+Beyond that exception, nothing in the list reads a real entity's `unit_of_measurement`, advances
+a real clock past a configured time, or renders a page. The single step that points at reality
+is one bullet in `definition-of-done.md`, which has no artifact, no reviewer, and no gate.
 
 The arithmetic: 5.2 lines of documentation per line of product code; ~1,000 PRs for a 7.4k-line
 integration. Two of the four defects (#1005, #1006) are cases where **the documentation was
@@ -329,7 +346,10 @@ them. Each is tracked as a child of epic #1011.
    alters: locate the code implementing each; if none exists or it does something else, report
    Major.
 3. Refuse a PR whose diff is entirely under `docs/` and whose body `Closes` a
-   `development`/`testing` issue. ~10 lines in `ai-pipeline.yml`.
+   `development`/`testing` issue. This must **not** go in `ai-pipeline.yml`: that file is a
+   router fired by `pull_request: types: [labeled]`, so a check placed there runs only when
+   someone applies a label and gates no merge. It belongs in `ci.yml` as a required status
+   check, or failing that as a `_ai-review.yml` checklist item.
 
 **Would have caught:** #1005 and #1006, at three points each.
 **Would NOT have caught:** #1007 (drift was ADR-to-code), #1008/#1009 (no requirement existed).
@@ -353,9 +373,11 @@ check, performed after the fact.
 
 **Cost:** the process half is ~3 lines plus a template row; the code half is #1007 itself.
 
-1. Add "unit present and expected" to ADR-0009's mandated adapter coverage, in `write-tests`,
-   `test-reviewer` and `code-reviewer`. `PowerKilowattReadAdapter`'s own tests are already the
-   model; this makes that the rule rather than one role's good luck.
+1. Add "unit present and expected" to the mandated adapter coverage. ADR-0009 is Accepted, and
+   CLAUDE.md requires superseding rather than editing an accepted ADR in place — so this is a
+   **new ADR extending ADR-0009**, exactly as ADR-0037 did for the tier taxonomy, then mirrored
+   into `write-tests`, `test-reviewer` and `code-reviewer`. `PowerKilowattReadAdapter`'s own
+   tests are already the model; this makes that the rule rather than one role's good luck.
 2. Add a **Blast radius** line to `docs/adl/template.md`'s Consequences — every site in the
    codebase this decision governs today, and whether each conforms — and one `adr-reviewer` check
    that the enumeration is complete. For ADR-0030 that is a `grep` for `NumericReadAdapter`,
@@ -393,7 +415,7 @@ caught by a third pass.
 
 **3. Extend or stop trusting `test_every_owned_entity_id_matches_entity_catalog`** (#1017). It
 checks one of eight catalog columns and gives false confidence that the catalog is enforced —
-`active_soc_limit`'s missing `%` sits one column to the right of what it checks.
+`active_soc_limit`'s missing `%` sits three columns to the right of the one it verifies.
 
 ---
 
@@ -401,8 +423,8 @@ checks one of eight catalog columns and gives false confidence that the catalog 
 
 - **#1018** — `_apply_peak_clamp` runs unconditionally while R3 AC1 says *"When it is absent, no
   peak-protection clamp ever engages"*. A fifth instance of the same spec/code drift pattern,
-  already recorded in `docs/plans/2026-09-03-external-monthly-peak-mapping-design.md:420` with no
-  owner, where it then rotted unnoticed. Not a safety hazard — it makes a non-CapTar install
+  already recorded in `docs/plans/2026-09-03-external-monthly-peak-mapping-design.md:423-428` with
+  no owner, where it then rotted unnoticed. Not a safety hazard — it makes a non-CapTar install
   charge *more* conservatively than specified, not less.
 - **#697** — while the deadline capability defaults to present
   (`const.py:337`, `DEFAULT_DEADLINE_AVAILABLE = True`), #1005 bites every install on every

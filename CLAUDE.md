@@ -56,13 +56,24 @@ why and is not revised.
 
 Two rules that apply elsewhere deliberately do **not** apply here:
 
-- **Tracking refs are required, not forbidden.** Analysis docs and ADRs must not reference PR
-  numbers or issue statuses (they rot). A post-mortem's entire evidentiary value is the
-  specific PRs, issues, commits and review comments it cites, at the dates it cites them —
-  don't "fix" these.
+- **Tracking refs are required, not forbidden.** The *Review protocol for analysis documents*
+  section below forbids PR numbers and issue statuses in analysis-doc and ADR bodies, because
+  they rot. That rule does not reach this directory: a post-mortem's entire evidentiary value
+  is the specific PRs, issues, commits and review comments it cites, at the dates it cites
+  them — don't "fix" these.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and `analysis-reviewer`
   do not govern it; it quotes the analysis docs as evidence rather than asserting behaviour.
-  Review it as a `workflow` artifact.
+
+**How it is reviewed.** By a fresh-agent review run interactively, weighted toward **quotation
+accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
+inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
+undercut the point is the defect class that matters. Pick the reviewer from what the PR
+actually touches (`workflow-reviewer` when it also edits `CLAUDE.md` or the pipeline).
+`docs/postmortems/**` is deliberately **not** in `ai-pipeline.yml`'s path filter or
+`_ai-review.yml`'s diff enumeration: the CI reviewer's six checklists are all written against
+artifacts that assert behaviour, and none fits a narrative document. A post-mortem-only PR
+therefore gets no CI AI review at all — by design, and stated here so it doesn't read as an
+oversight (see [ci-pipeline.md](docs/reference/ci-pipeline.md)).
 
 ---
 
