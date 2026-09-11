@@ -45,7 +45,12 @@ from ..const import (
 from .base import Adapter
 from .boolean import BooleanReadAdapter
 from .notify import NotifyAdapter
-from .numeric import NumericReadAdapter, NumericReadWriteAdapter, PowerKilowattReadAdapter
+from .numeric import (
+    NumericReadAdapter,
+    NumericReadWriteAdapter,
+    PowerKilowattReadAdapter,
+    PowerWattReadAdapter,
+)
 from .presence import PresenceReadAdapter
 from .status import StatusReadAdapter
 from .sun import SunReadAdapter
@@ -71,14 +76,14 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
         ROLE_CHARGER_STATUS: StatusReadAdapter(
             hass, data[CONF_CHARGER_STATUS_ENTITY], dict(data[CONF_STATUS_TRANSLATION])
         ),
-        ROLE_NET_POWER: NumericReadAdapter(hass, data[CONF_NET_POWER_ENTITY]),
-        ROLE_CHARGER_POWER: NumericReadAdapter(hass, data[CONF_CHARGER_POWER_ENTITY]),
+        ROLE_NET_POWER: PowerWattReadAdapter(hass, data[CONF_NET_POWER_ENTITY]),
+        ROLE_CHARGER_POWER: PowerWattReadAdapter(hass, data[CONF_CHARGER_POWER_ENTITY]),
         ROLE_SUN: SunReadAdapter(hass),  # no entity mapping, always built
     }
     if data.get(CONF_GRID_VOLTAGE_ENTITY):
         adapters[ROLE_GRID_VOLTAGE] = NumericReadAdapter(hass, data[CONF_GRID_VOLTAGE_ENTITY])
     if data.get(CONF_SOLAR_POWER_ENTITY):
-        adapters[ROLE_SOLAR_POWER] = NumericReadAdapter(hass, data[CONF_SOLAR_POWER_ENTITY])
+        adapters[ROLE_SOLAR_POWER] = PowerWattReadAdapter(hass, data[CONF_SOLAR_POWER_ENTITY])
     if data.get(CONF_EV_SOC_ENTITY):
         adapters[ROLE_EV_SOC] = NumericReadAdapter(hass, data[CONF_EV_SOC_ENTITY])
     if data.get(CONF_EV_BATTERY_CAPACITY_ENTITY):
