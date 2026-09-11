@@ -51,6 +51,14 @@ its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
   `docs/**`/`custom_components/**`/`tests/**`; `documentation` simply isn't wired in yet). A
   human authors both drafts by hand; the review step is still automated for both, since
   `_ai-review.yml` routes on changed file paths, not the issue's context label.
+- **Outside the pipeline by design**: `docs/postmortems/**` is in neither `ai-pipeline.yml`'s
+  path filter nor `_ai-review.yml`'s diff enumeration, so a PR touching only that directory
+  spawns no AI job and a PR touching it alongside other trees has its post-mortem invisible to
+  the CI reviewer. That is deliberate — every one of the six checklists is written against an
+  artifact that asserts behaviour, and none fits a narrative document whose review is about
+  quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
+  pass run interactively instead. If a checklist for it is ever written, add the directory to
+  both places and this bullet becomes the record of why it was absent.
 - **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
