@@ -1202,3 +1202,108 @@ async def test_config_mirror_sensor_reflects_the_new_value_after_an_options_relo
     assert reloaded_state is not None
     assert float(reloaded_state.state) == new_options[CONF_MAX_CURRENT]
     assert reloaded_state.state != original_state.state
+
+
+# --- Display precision and units (issue #1008) --------------------------------------------
+
+
+def test_active_soc_limit_sensor_reports_percent():
+    """entity-catalog.md gives this role's unit as %, but the sensor shipped without one, so
+    the dashboard rendered a bare "80.0" with nothing saying what it measured.
+
+    Deliberately no device class: SensorDeviceClass.BATTERY would be the obvious candidate and
+    is wrong -- this is a resolved *limit*, not a battery level, and HA would let a user
+    display it as a battery state of charge alongside the vehicle's real one."""
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=SimpleNamespace(data=None))
+    assert sensor.native_unit_of_measurement == PERCENTAGE
+    assert sensor.device_class is None
+    assert sensor.state_class == SensorStateClass.MEASUREMENT
+
+
+async def test_active_soc_limit_sensor_renders_its_unit_through_a_real_platform(hass):
+    """Platform-level guard, mirroring the one MonthlyPeakSensor already carries: asserting the
+    bare class attributes cannot catch an invalid unit/device_class/state_class triple, because
+    HA only validates that combination when the state is actually written. The defect being
+    fixed here is precisely "the rendered state had no unit", so it is worth proving at the
+    boundary the user sees rather than on the class."""
+    coord = _StubStatusCoordinator(data=SimpleNamespace(active_soc_limit=82.56))
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
+    entity_id = "sensor.smart_charging_active_soc_limit"
+    sensor.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="sensor")
+    await platform.async_add_entities([sensor])
+
+    state = hass.states.get(entity_id)
+    # 82.56 deliberately: a value that survives rounding to one decimal could not demonstrate
+    # that the state was left unrounded. The state is what adapters/store.py and the
+    # vehicle-limit manager read, so it must stay exact however it is displayed.
+    assert state.state == "82.56"
+    assert state.attributes["unit_of_measurement"] == PERCENTAGE
+    assert state.attributes["state_class"] == SensorStateClass.MEASUREMENT
+    assert "device_class" not in state.attributes
+
+
+@pytest.mark.parametrize(
+    ("factory", "precision"),
+    [
+        # A derived float over a float: 168.142101632559 minutes is not a more precise answer
+        # than 168, it is the same answer with the division's noise still attached.
+        (TimeToFullSensor, 0),
+        # One decimal, not zero: only the override number is whole-point constrained. A 2.5
+        # point step-up off 80 resolves to 82.5, and rounding that to 83 on the dashboard would
+        # contradict the 82.5 the vehicle-limit manager writes to the car.
+        (ActiveSocLimitSensor, 1),
+        # Watts. A tenth of a watt of "solar surplus" is noise on a reading derived from two
+        # separate meters.
+        (SolarSurplusSensor, 0),
+        # The clamp floors this to whole amps before it ever reaches the sensor, so anything
+        # past the decimal point would be a lie about the resolution.
+        (PeakHeadroomSensor, 0),
+        # kW, where the billing decisions people make off these turn on tens of watts.
+        (EffectivePeakLimitSensor, 2),
+    ],
+)
+def test_derived_sensors_declare_a_display_precision(factory, precision):
+    """Before this, no owned sensor set `suggested_display_precision`, so every derived float
+    printed at full repr width -- the dashboard showed `168.142101632559`."""
+    sensor = factory(entry_id="abc", coordinator=SimpleNamespace(data=None))
+    assert sensor.suggested_display_precision == precision
+
+
+def test_monthly_peak_sensor_declares_a_display_precision():
+    """Same rule, separate test: MonthlyPeakSensor is a RestoreSensor with its own constructor
+    signature rather than a _CoordinatorFieldSensor."""
+    sensor = MonthlyPeakSensor(entry_id="abc", coordinator=SimpleNamespace(data=None))
+    assert sensor.suggested_display_precision == 2
+
+
+async def test_display_precision_reaches_the_entity_registry(hass):
+    """The boundary the reported defect actually lives at.
+
+    `suggested_display_precision` reaches the frontend through the entity registry, not through
+    the class: HA writes it into `registry_entry.options["sensor"]["suggested_display_precision"]`
+    when the entity registers. Asserting the class attribute proves the constant exists; it does
+    not prove it arrives anywhere a dashboard can read it. Since the whole issue is "the
+    dashboard showed 168.142101632559", one assertion at the registry is worth more than six at
+    the class.
+    """
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for suffix, precision in (
+        ("time_to_full", 0),
+        ("active_soc_limit", 1),
+        ("peak_headroom_a", 0),
+        ("effective_peak_limit", 2),
+        ("monthly_peak_kw", 2),
+    ):
+        entity_id = registry.async_get_entity_id(
+            Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{suffix}"
+        )
+        assert entity_id is not None, suffix
+        options = registry.async_get(entity_id).options
+        assert options["sensor"]["suggested_display_precision"] == precision, suffix

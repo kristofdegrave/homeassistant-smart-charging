@@ -162,6 +162,7 @@ class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry_id: str, coordinator) -> None:
@@ -218,6 +219,7 @@ class EffectivePeakLimitSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
@@ -231,6 +233,27 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
 
     _attr_translation_key = "active_soc_limit"
     _object_id_suffix = OWNED_SUFFIX_ACTIVE_SOC_LIMIT
+    # entity-catalog.md has always given this role's unit as %; the sensor shipped without one,
+    # so the dashboard rendered a bare "80.0". Deliberately NO device class:
+    # SensorDeviceClass.BATTERY is the obvious candidate and is wrong -- this is a resolved
+    # limit, not a battery level, and it would invite being displayed as a state of charge
+    # alongside the vehicle's real one.
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    # One decimal -- a deliberate cut-off, not a bound the schema gives us. Nothing constrains
+    # the granularity of this value: `solar_reserve_soc` and `max_solar_soc` are bare
+    # `vol.Coerce(float)` and are returned verbatim by `resolve_active_soc_limit` /
+    # `resolve_solar_step_up`, and even `soc_limit_override`'s step of 1.0 is a UI hint that
+    # `number.set_value` does not enforce. So `max_solar_soc = 82.55` renders as 82.6 here while
+    # 82.55 is what reaches the car -- the same contradiction precision 0 produced at 82.5, one
+    # decimal down. Taken to its conclusion that argument ends at "declare no precision at all",
+    # which would put `80.30000000000001` back on the dashboard the first time an accumulating
+    # step-up lands on a float boundary.
+    #
+    # One decimal is the cut-off that covers the realistic configuration space (the defaults are
+    # whole: 5 / 100 / 60) and absorbs that accumulated noise. A user with genuinely finer
+    # settings can raise it per-entity in HA's own display-precision control.
+    _attr_suggested_display_precision = 1
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.active_soc_limit
@@ -245,6 +268,7 @@ class SolarSurplusSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfPower.WATT
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry_id: str, coordinator, solar_available: bool = False) -> None:
@@ -263,6 +287,11 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    # coordinator.py computes this value with its own `math.floor(...)` (deliberately
+    # duplicating apply_peak_clamp's arithmetic rather than changing that function's
+    # control-path signature for a display-only need), so it is already whole amps by the time
+    # it reaches here and a decimal place would claim a resolution it does not have.
+    _attr_suggested_display_precision = 0
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _coordinator_value(self, data: Any) -> Any:
@@ -276,6 +305,16 @@ class TimeToFullSensor(_CoordinatorFieldSensor):
     _attr_translation_key = "time_to_full"
     _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    # A quotient of two floats: 168.142101632559 is not a more precise answer than 168, it is
+    # the same answer with the division's noise still attached. No SensorDeviceClass.DURATION
+    # -- that would render this as a clock-style duration, which reads as a countdown to a
+    # fixed moment rather than the projection off the current set-point that it is. And no
+    # state class, unlike ActiveSocLimitSensor in the same change -- not because this value
+    # steps (so does that one, and a stepwise setpoint is a fine MEASUREMENT), but because it
+    # is intermittent: coordinator.py yields None whenever the set-point is 0 A, i.e. every
+    # moment the car is not charging. There is no continuous series to aggregate, only runs of
+    # projection separated by gaps.
+    _attr_suggested_display_precision = 0
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.time_to_full_min
