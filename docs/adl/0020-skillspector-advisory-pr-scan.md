@@ -101,7 +101,7 @@ judged-review model.
   content) and passed to the review step via `env`, not inlined into a prompt string.
 - That implementation change is itself a change under `.github/workflows/` and must go through the
   full `workflow-reviewer` cycle (fresh Opus review) before merge, same as any other pipeline change.
-- `docs/reference/ai-authoring-token-efficiency.md`'s CI-worker checklist may need a new bullet
+- `docs/reference/ai-authoring.md`'s CI-worker checklist may need a new bullet
   once the concrete job exists, covering how scanner-report evidence is passed to a review prompt
   without becoming untrusted instructions itself (same containment discipline the prompt-injection
   checklist already requires of PR diff content).

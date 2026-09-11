@@ -26,8 +26,8 @@ this file and the caller's prompt.
 
 Always read:
 - The changed files.
-- `docs/reference/ai-authoring-token-efficiency.md` — the token-efficiency checklist for
-  each artifact type (skill / agent / CI worker prompt) and its non-negotiables.
+- `docs/reference/ai-authoring.md` — the shared vocabulary, the checklist for each artifact
+  type (skill / agent / CI worker prompt), and its non-negotiables.
 - `CLAUDE.md`'s "Authoring AI artifacts" section.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
@@ -72,7 +72,7 @@ Always read:
   couldn't reach before.
 
 **(4) Token-efficiency checklist (per artifact type)**
-- Apply the matching checklist section in `docs/reference/ai-authoring-token-efficiency.md`
+- Apply the matching checklist section in `docs/reference/ai-authoring.md`
   (skill / agent / CI worker prompt) to the changed file(s).
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).

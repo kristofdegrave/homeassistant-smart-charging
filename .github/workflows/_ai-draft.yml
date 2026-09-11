@@ -371,7 +371,7 @@ jobs:
           # it is. A too-low ceiling here means a truncated, wasted, re-run job — costlier than a
           # ceiling that's somewhat too high — and timeout_minutes (20) already bounds the
           # wall-clock downside of over-provisioning. Revisit with ai-cost-summary data per
-          # docs/reference/ai-authoring-token-efficiency.md once these have run for real.
+          # docs/reference/ai-authoring.md once these have run for real.
           case "$TYPE" in
             development|testing) xs=30; s=35; m=40; l=50; xl=75 ;;
             *)                   xs=15; s=20; m=25; l=35; xl=45 ;;

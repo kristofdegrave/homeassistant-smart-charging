@@ -271,7 +271,7 @@ jobs:
           # custom_components/tests/.github/.claude reading is structurally more turn-hungry
           # than a single doc tree, same distinction _ai-draft.yml draws for its own baselines
           # (that set also covers workflow-reviewer's wider read list — CLAUDE.md,
-          # ai-authoring-token-efficiency.md, ai-pipeline.yml — for a .github/.claude-shaped
+          # ai-authoring.md, ai-pipeline.yml — for a .github/.claude-shaped
           # change). .github/ISSUE_TEMPLATE is grouped with that heavier tier for the same
           # tree-shape reason (a structured form tree, not prose) even though it also routes to
           # workflow-reviewer; .github/setup-labels.sh and docs/reference/CLAUDE.md route there
