@@ -1220,15 +1220,42 @@ def test_active_soc_limit_sensor_reports_percent():
     assert sensor.state_class == SensorStateClass.MEASUREMENT
 
 
+async def test_active_soc_limit_sensor_renders_its_unit_through_a_real_platform(hass):
+    """Platform-level guard, mirroring the one MonthlyPeakSensor already carries: asserting the
+    bare class attributes cannot catch an invalid unit/device_class/state_class triple, because
+    HA only validates that combination when the state is actually written. The defect being
+    fixed here is precisely "the rendered state had no unit", so it is worth proving at the
+    boundary the user sees rather than on the class."""
+    coord = SimpleNamespace(
+        data=SimpleNamespace(active_soc_limit=82.5),
+        last_update_success=True,
+        # CoordinatorEntity.async_added_to_hass subscribes, so a bare SimpleNamespace is not
+        # enough once the entity goes through a real platform.
+        async_add_listener=lambda update_callback, context=None: lambda: None,
+    )
+    sensor = ActiveSocLimitSensor(entry_id="abc", coordinator=coord)
+    entity_id = "sensor.smart_charging_active_soc_limit"
+    sensor.entity_id = entity_id
+    platform = MockEntityPlatform(hass, domain="sensor")
+    await platform.async_add_entities([sensor])
+
+    state = hass.states.get(entity_id)
+    assert state.state == "82.5"  # the state itself is never rounded -- only its display is
+    assert state.attributes["unit_of_measurement"] == PERCENTAGE
+    assert state.attributes["state_class"] == SensorStateClass.MEASUREMENT
+    assert "device_class" not in state.attributes
+
+
 @pytest.mark.parametrize(
     ("factory", "precision"),
     [
         # A derived float over a float: 168.142101632559 minutes is not a more precise answer
         # than 168, it is the same answer with the division's noise still attached.
         (TimeToFullSensor, 0),
-        # Whole percent: every source of this value (the override number, the reserve cap, the
-        # step-up) moves in whole points.
-        (ActiveSocLimitSensor, 0),
+        # One decimal, not zero: only the override number is whole-point constrained. A 2.5
+        # point step-up off 80 resolves to 82.5, and rounding that to 83 on the dashboard would
+        # contradict the 82.5 the vehicle-limit manager writes to the car.
+        (ActiveSocLimitSensor, 1),
         # Watts. A tenth of a watt of "solar surplus" is noise on a reading derived from two
         # separate meters.
         (SolarSurplusSensor, 0),
@@ -1240,8 +1267,8 @@ def test_active_soc_limit_sensor_reports_percent():
     ],
 )
 def test_derived_sensors_declare_a_display_precision(factory, precision):
-    """No owned sensor set `suggested_display_precision`, so every derived float printed at
-    full repr width -- the dashboard showed `168.142101632559`."""
+    """Before this, no owned sensor set `suggested_display_precision`, so every derived float
+    printed at full repr width -- the dashboard showed `168.142101632559`."""
     sensor = factory(entry_id="abc", coordinator=SimpleNamespace(data=None))
     assert sensor.suggested_display_precision == precision
 

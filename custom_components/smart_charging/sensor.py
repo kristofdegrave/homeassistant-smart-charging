@@ -240,7 +240,13 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
     # alongside the vehicle's real one.
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_suggested_display_precision = 0  # every source of this value moves in whole points
+    # One decimal, NOT zero. Only one of the three rows resolving this value is whole-point
+    # constrained (`number.py`'s soc_limit_override, step 1.0); `solar_reserve_soc` and the
+    # step-up's `solar_step_pp`/`max_solar_soc` are bare floats in the config flow. An override
+    # of 80 with a 2.5-point step resolves to 82.5, which rounded to 0 would display 83 while
+    # the vehicle-limit manager writes 82.5 to the car -- the dashboard contradicting what the
+    # system is doing, which is the defect class this precision work exists to remove.
+    _attr_suggested_display_precision = 1
 
     def _coordinator_value(self, data: Any) -> Any:
         return data.active_soc_limit
@@ -274,8 +280,10 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
     _attr_device_class = SensorDeviceClass.CURRENT
     _attr_state_class = SensorStateClass.MEASUREMENT
-    # apply_peak_clamp floors the headroom to whole amps before it reaches here, so a decimal
-    # place would claim a resolution the value does not have.
+    # coordinator.py computes this value with its own `math.floor(...)` (deliberately
+    # duplicating apply_peak_clamp's arithmetic rather than changing that function's
+    # control-path signature for a display-only need), so it is already whole amps by the time
+    # it reaches here and a decimal place would claim a resolution it does not have.
     _attr_suggested_display_precision = 0
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -293,7 +301,10 @@ class TimeToFullSensor(_CoordinatorFieldSensor):
     # A quotient of two floats: 168.142101632559 is not a more precise answer than 168, it is
     # the same answer with the division's noise still attached. No SensorDeviceClass.DURATION
     # -- that would render this as a clock-style duration, which reads as a countdown to a
-    # fixed moment rather than the projection off the current set-point that it is.
+    # fixed moment rather than the projection off the current set-point that it is. And no
+    # state class, unlike ActiveSocLimitSensor in the same change: this value steps
+    # discontinuously every time the set-point moves, so long-term statistics over it would
+    # average a quantity that never held between samples.
     _attr_suggested_display_precision = 0
 
     def _coordinator_value(self, data: Any) -> Any:
