@@ -625,6 +625,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 deadline_resolvable=deadline_resolvable,
                 active_mode=self.active_mode,
                 deadline_today=deadline_today,
+                # R15/issue #1005: the next occurrence may fall tomorrow (today's departure
+                # time already passed), and R14's terminal row is a day-of-week default, so
+                # tomorrow's own resolution is needed rather than today's time on tomorrow's
+                # date. This is the same value R9's solar-reserve gate already resolved above
+                # -- reused, not resolved a second time -- gated on `deadline_resolvable` here
+                # so it matches `deadline_today`'s own gating (R9 needs it ungated).
+                deadline_tomorrow=deadline_tomorrow if deadline_resolvable else None,
                 now_dt=now_dt,
                 effective_battery_capacity_kwh=effective_battery_capacity_kwh,
                 max_current_a=self._config.max_current,

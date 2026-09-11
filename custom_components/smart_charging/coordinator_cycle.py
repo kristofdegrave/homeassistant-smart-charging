@@ -25,7 +25,11 @@ from .const import (
     PROFILE_AUTO,
 )
 from .engines.capability_gate import resolve_available_modes
-from .engines.deadline import RequiredCurrentResult, resolve_required_current
+from .engines.deadline import (
+    RequiredCurrentResult,
+    resolve_next_occurrence,
+    resolve_required_current,
+)
 from .engines.peak_demand_tracker import update_monthly_peak_demand
 from .engines.signal_conditioning import smooth_net_power
 from .engines.soc_target import (
@@ -541,7 +545,11 @@ class DeadlineUrgencyInputs:
 
     deadline_resolvable: bool
     active_mode: str
+    # R14's table evaluated for each of the two days the next occurrence can fall on (R15,
+    # issue #1005) -- both are needed because the table's terminal row is a day-of-week
+    # default, so tomorrow's departure time may differ from today's or be absent entirely.
     deadline_today: time | None
+    deadline_tomorrow: time | None
     now_dt: datetime
     effective_battery_capacity_kwh: float
     max_current_a: float
@@ -615,14 +623,16 @@ def resolve_deadline_urgency(
 
     baseline_desired_a = mode_desired_current(baseline_mode)
 
+    # The departure-time entities carry no tzinfo, so the occurrence is built from naive
+    # values -- strip dt_util.now()'s tzinfo so both sides of every comparison and
+    # subtraction below are naive (they represent the same local wall clock either way).
+    # Wall-clock arithmetic on the two DST-transition days a year can be off by up to 1h
+    # (naive datetimes don't observe the transition) -- bounded, accepted.
+    now_naive = inputs.now_dt.replace(tzinfo=None)
+
     required = resolve_required_current(
-        inputs.deadline_today,
-        # engines/deadline.py combines this with a naive `time` (the departure-time
-        # entities carry no tzinfo) -- strip dt_util.now()'s tzinfo so the subtraction
-        # doesn't raise (both sides represent the same local wall clock either way).
-        # Wall-clock subtraction on the two DST-transition days a year can be off by
-        # up to 1h (naive datetimes don't observe the transition) -- bounded, accepted.
-        inputs.now_dt.replace(tzinfo=None),
+        resolve_next_occurrence(inputs.deadline_today, inputs.deadline_tomorrow, now_naive),
+        now_naive,
         soc=ctx.ev_soc,
         active_soc_limit=ctx.active_soc_limit,
         ev_battery_capacity_kwh=inputs.effective_battery_capacity_kwh,

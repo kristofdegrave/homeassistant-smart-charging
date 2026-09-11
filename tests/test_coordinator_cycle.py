@@ -858,6 +858,7 @@ def _resolve_deadline_urgency(**overrides):
         active_mode=MODE_OFF,
         active_soc_limit=80.0,
         deadline_today=None,
+        deadline_tomorrow=None,
         now_dt=datetime(2026, 7, 27, 10, 0),
         effective_battery_capacity_kwh=10.0,
         voltage=230.0,
@@ -1047,6 +1048,59 @@ def test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry():
         # The registry's return value is what actually lands in resolved_mode -- not just
         # looked up and ignored.
         assert result.resolved_mode == MODE_OFF
+
+
+def test_resolve_deadline_urgency_is_not_urgent_once_todays_departure_time_has_passed():
+    """Issue #1005 regression, at the cycle boundary: a 07:00 departure time against a 15:00
+    `now` is judged as tomorrow's occurrence (R15), leaving 16 hours -- not as a deadline 8
+    hours in the past that saturates required_a to infinity and pins `urgent` True for the
+    rest of the day. The pre-fix behaviour also dragged `Auto` onto its urgent row, which is
+    what made a sunny afternoon dispatch Captar instead of Solar."""
+    result = _resolve_deadline_urgency(
+        deadline_today=time(7, 0),
+        deadline_tomorrow=time(7, 0),
+        now_dt=datetime(2026, 7, 27, 15, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        mode_desired_current=lambda mode: 6.0,
+    )
+    assert result.required.required_a != float("inf")
+    assert result.urgent is False
+    assert result.required.required_a < 6.0  # 3 kWh over 16 h at 230 V is well under the baseline
+
+
+def test_resolve_deadline_urgency_has_no_deadline_when_tomorrow_resolves_to_none():
+    """A departure time that has already passed today must not be dragged forward onto a day
+    R14 resolves as "no deadline" (e.g. today is Friday, the weekend default is none) --
+    urgency simply does not apply, exactly as if no deadline were configured at all."""
+    result = _resolve_deadline_urgency(
+        deadline_today=time(7, 0),
+        deadline_tomorrow=None,
+        now_dt=datetime(2026, 7, 27, 15, 0),
+        ev_soc=10.0,
+        active_soc_limit=80.0,
+    )
+    assert result.required.required_a is None
+    assert result.urgent is False
+    assert result.required.unreachable is False
+
+
+def test_resolve_deadline_urgency_still_urgent_for_a_genuinely_tight_deadline_tomorrow():
+    """The rollover must not make urgency unreachable: an overnight deadline that genuinely
+    cannot be met at the baseline rate is still Urgent -- now on the real remaining window
+    rather than on a saturated one."""
+    result = _resolve_deadline_urgency(
+        deadline_today=time(7, 0),
+        deadline_tomorrow=time(7, 0),
+        now_dt=datetime(2026, 7, 27, 23, 0),  # 8 hours to tomorrow 07:00
+        ev_soc=10.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=75.0,
+        mode_desired_current=lambda mode: 6.0,
+    )
+    assert result.urgent is True
+    assert result.required.required_a != float("inf")
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---

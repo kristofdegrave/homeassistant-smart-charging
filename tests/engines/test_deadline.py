@@ -1,23 +1,16 @@
 """Plain-pytest tests for the Deadline Engine (E4): departure-deadline resolution
 (R14) and required-current/urgency computation (R5/R15).
 
-Deviation from the plan's literal worked-example constants (see
-docs/plans/2026-07-21-deadline-soc-management-design.md §6): the design doc's own prose is
-explicit that `resolve_required_current` combines `deadline` with `now`'s own calendar date
-(no next-day rollover) -- "a same-day deadline in the past ... saturates". Under that
-contract, the plan's literal `NOW = datetime(2026, 7, 21, 22, 0)` / `DEADLINE = time(6, 0)`
-pairing (commented "next-day 06:00 -- 8 hours remaining") cannot produce a positive
-8-hour remaining window: combined with `now`'s date, 06:00 the same day is *before* 22:00,
-i.e. already passed, which is indistinguishable from the plan's own
-"already passed" test using `deadline=time(21, 0)` against the same `now`. Both tests
-cannot pass together under one same-day, no-rollover rule -- a plan inconsistency, not a
-bug in this test file. Resolved here (per project convention: implement the truthful,
-task-scoped contract and record the deviation) by keeping `NOW = 22:00` for the two tests
-that depend on same-day evening semantics (`test_unreachable_...`,
-`test_deadline_already_passed_...`) and using a same-day morning/afternoon pair
-(`FORMULA_NOW` / `FORMULA_DEADLINE`, still 8 hours apart) for the worked-example/
-normal/urgent group, so every test stays within one same-day, no-rollover semantics while
-preserving the plan's exact energy/current arithmetic (75 kWh * 30% / 8h / 230V = 12.228 A).
+This module used to open with a long note explaining why its constants deviated from
+docs/plans/2026-07-21-deadline-soc-management-design.md §6's literal worked example: under
+the old no-next-day-rollover contract, the plan's own `NOW = 22:00` / `DEADLINE = 06:00`
+pairing ("next-day 06:00 -- 8 hours remaining") could not produce a positive window, so the
+tests were kept same-day to stay within that contract. Issue #1005 resolved the underlying
+inconsistency in favour of the plan (and of requirements.md R15): choosing the occurrence is
+now `resolve_next_occurrence`'s job, and `resolve_required_current` takes the already-chosen
+datetime, so the two concerns are testable separately and the plan's cross-midnight example
+is expressible. The same-day constants below are kept only because they reproduce the plan's
+exact arithmetic (75 kWh * 30% / 8h / 230V = 12.228 A), not because of any date constraint.
 """
 
 from datetime import datetime, time
@@ -26,17 +19,17 @@ import pytest
 
 from custom_components.smart_charging.engines.deadline import (
     resolve_departure_deadline,
+    resolve_next_occurrence,
     resolve_required_current,
 )
 
 MON_DEFAULT = time(6, 0)
 
-NOW = datetime(2026, 7, 21, 22, 0)  # 22:00
+NOW = datetime(2026, 7, 21, 22, 0)  # Tuesday 22:00
 
-# Same-day, 8 hours apart -- avoids the cross-midnight ambiguity noted above while
-# reproducing the plan's exact worked-example numbers.
+# 8 hours apart -- reproduces the plan's exact worked-example numbers.
 FORMULA_NOW = datetime(2026, 7, 21, 6, 0)  # 06:00
-FORMULA_DEADLINE = time(14, 0)  # 14:00 -- 8 hours remaining
+FORMULA_DEADLINE_AT = datetime(2026, 7, 21, 14, 0)  # 14:00 -- 8 hours remaining
 
 
 def test_external_sensor_wins_over_everything():
@@ -167,7 +160,7 @@ def test_home_day_override_itself_may_resolve_to_no_deadline():
 
 def test_no_deadline_never_urgent():
     result = resolve_required_current(
-        deadline=None,
+        deadline_at=None,
         now=NOW,
         soc=50.0,
         active_soc_limit=80.0,
@@ -184,7 +177,7 @@ def test_no_deadline_never_urgent():
 def test_required_current_formula_worked_example():
     # energy = 75 kWh * (80-50)/100 = 22.5 kWh over 8h -> 2812.5 W -> /230V = 12.228... A
     result = resolve_required_current(
-        deadline=FORMULA_DEADLINE,
+        deadline_at=FORMULA_DEADLINE_AT,
         now=FORMULA_NOW,
         soc=50.0,
         active_soc_limit=80.0,
@@ -198,7 +191,7 @@ def test_required_current_formula_worked_example():
 
 def test_normal_when_required_at_or_below_baseline():
     result = resolve_required_current(
-        deadline=FORMULA_DEADLINE,
+        deadline_at=FORMULA_DEADLINE_AT,
         now=FORMULA_NOW,
         soc=79.0,
         active_soc_limit=80.0,
@@ -213,7 +206,7 @@ def test_normal_when_required_at_or_below_baseline():
 
 def test_urgent_when_required_between_baseline_and_max_rate():
     result = resolve_required_current(
-        deadline=FORMULA_DEADLINE,
+        deadline_at=FORMULA_DEADLINE_AT,
         now=FORMULA_NOW,
         soc=50.0,
         active_soc_limit=80.0,
@@ -228,7 +221,7 @@ def test_urgent_when_required_between_baseline_and_max_rate():
 
 def test_unreachable_when_required_exceeds_max_rate():
     result = resolve_required_current(
-        deadline=time(22, 5),
+        deadline_at=datetime(2026, 7, 21, 22, 5),
         now=NOW,
         soc=10.0,
         active_soc_limit=80.0,
@@ -242,7 +235,7 @@ def test_unreachable_when_required_exceeds_max_rate():
 
 def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
     result = resolve_required_current(
-        deadline=time(21, 0),
+        deadline_at=datetime(2026, 7, 21, 21, 0),
         now=NOW,
         soc=50.0,
         active_soc_limit=80.0,
@@ -265,7 +258,7 @@ def test_no_urgency_when_soc_already_at_or_above_limit_even_if_deadline_passed()
     # when there's nothing left to charge -- the caller (Auto row 1: SOC >= limit -> Off)
     # happens to gate on this first, but the signal itself should be correct on its own.
     result = resolve_required_current(
-        deadline=time(21, 0),
+        deadline_at=datetime(2026, 7, 21, 21, 0),
         now=NOW,
         soc=80.0,
         active_soc_limit=80.0,
@@ -282,7 +275,7 @@ def test_no_urgency_when_soc_already_at_or_above_limit_even_if_deadline_passed()
 def test_boundary_required_equals_baseline_is_not_urgent():
     # Strict '>' per resolution-rules.md: required_a == baseline_desired_a is Normal.
     result = resolve_required_current(
-        deadline=time(7, 0),
+        deadline_at=datetime(2026, 7, 21, 7, 0),
         now=datetime(2026, 7, 21, 6, 0),
         soc=79.0,
         active_soc_limit=80.0,
@@ -299,7 +292,7 @@ def test_boundary_required_equals_maximum_rate_is_still_reachable():
     # Strict '>' per resolution-rules.md: required_a == maximum_permitted_rate_a is Urgent,
     # not Unreachable.
     result = resolve_required_current(
-        deadline=time(7, 0),
+        deadline_at=datetime(2026, 7, 21, 7, 0),
         now=datetime(2026, 7, 21, 6, 0),
         soc=70.0,
         active_soc_limit=80.0,
@@ -309,5 +302,104 @@ def test_boundary_required_equals_maximum_rate_is_still_reachable():
         maximum_permitted_rate_a=32.0,
     )
     assert result.required_a == pytest.approx(32.0)
+    assert result.urgent is True
+    assert result.unreachable is False
+
+
+# --- Next-occurrence resolution (R15, issue #1005) ---------------------------------------
+
+
+def test_next_occurrence_is_today_when_departure_time_still_ahead():
+    assert resolve_next_occurrence(
+        deadline_today=time(23, 0),
+        deadline_tomorrow=time(6, 0),
+        now=NOW,  # 22:00
+    ) == datetime(2026, 7, 21, 23, 0)
+
+
+def test_next_occurrence_rolls_to_tomorrow_once_todays_departure_time_has_passed():
+    # THE #1005 REGRESSION. 07:00 against an afternoon `now` used to resolve as a deadline
+    # 8 hours in the PAST, saturating required_a to infinity and pinning `urgent` True for
+    # the rest of the day. R15: judged as the next day's occurrence instead.
+    assert resolve_next_occurrence(
+        deadline_today=time(7, 0),
+        deadline_tomorrow=time(7, 0),
+        now=datetime(2026, 7, 21, 15, 0),
+    ) == datetime(2026, 7, 22, 7, 0)
+
+
+def test_next_occurrence_uses_tomorrows_own_departure_time_not_todays():
+    # R14's terminal row is a day-of-week default, so the rolled-over occurrence must come
+    # from tomorrow's resolution -- not today's time stamped onto tomorrow's date.
+    assert resolve_next_occurrence(
+        deadline_today=time(7, 0),
+        deadline_tomorrow=time(9, 30),
+        now=datetime(2026, 7, 21, 15, 0),
+    ) == datetime(2026, 7, 22, 9, 30)
+
+
+def test_next_occurrence_is_none_when_todays_has_passed_and_tomorrow_has_no_deadline():
+    # A passed departure time must not be dragged forward onto a day R14 resolves as
+    # "no deadline" -- urgency simply does not apply.
+    assert (
+        resolve_next_occurrence(
+            deadline_today=time(7, 0),
+            deadline_tomorrow=None,
+            now=datetime(2026, 7, 21, 15, 0),
+        )
+        is None
+    )
+
+
+def test_next_occurrence_falls_to_tomorrow_when_today_has_no_deadline():
+    assert resolve_next_occurrence(
+        deadline_today=None,
+        deadline_tomorrow=time(6, 0),
+        now=datetime(2026, 7, 21, 15, 0),
+    ) == datetime(2026, 7, 22, 6, 0)
+
+
+def test_next_occurrence_is_none_when_neither_day_resolves_a_deadline():
+    assert resolve_next_occurrence(deadline_today=None, deadline_tomorrow=None, now=NOW) is None
+
+
+def test_next_occurrence_treats_a_departure_time_exactly_now_as_passed():
+    # A zero-length window leaves no time to charge in, and would hand
+    # resolve_required_current a division by zero -- roll it to tomorrow.
+    assert resolve_next_occurrence(
+        deadline_today=time(22, 0),
+        deadline_tomorrow=time(6, 0),
+        now=NOW,  # 22:00 exactly
+    ) == datetime(2026, 7, 22, 6, 0)
+
+
+def test_next_occurrence_spans_midnight_for_the_plans_own_worked_example():
+    # docs/plans/2026-07-21-deadline-soc-management-design.md Sec 6's literal pairing --
+    # plug in at 22:00 against an 06:00 departure -- now resolves to the 8-hour window the
+    # plan always described, instead of a 16-hour-negative one.
+    occurrence = resolve_next_occurrence(
+        deadline_today=time(6, 0), deadline_tomorrow=time(6, 0), now=NOW
+    )
+    assert occurrence == datetime(2026, 7, 22, 6, 0)
+    assert (occurrence - NOW).total_seconds() / 3600 == 8.0
+
+
+def test_overnight_deadline_is_urgent_only_on_the_real_remaining_window():
+    # End-to-end over both functions: the plan's 22:00 -> 06:00 case charging 75 kWh * 30%
+    # over 8 hours needs 12.228 A, which is urgent against a 6 A baseline but reachable --
+    # NOT the infinite, always-unreachable figure the old same-day contract produced.
+    result = resolve_required_current(
+        deadline_at=resolve_next_occurrence(
+            deadline_today=time(6, 0), deadline_tomorrow=time(6, 0), now=NOW
+        ),
+        now=NOW,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=75.0,
+        voltage=230.0,
+        baseline_desired_a=6.0,
+        maximum_permitted_rate_a=32.0,
+    )
+    assert result.required_a == pytest.approx(12.228, abs=0.01)
     assert result.urgent is True
     assert result.unreachable is False

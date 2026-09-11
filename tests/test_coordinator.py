@@ -4,6 +4,7 @@ import dataclasses
 import logging
 from datetime import time as time_of_day
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from homeassistant.const import Platform
@@ -2390,14 +2391,19 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
 async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_current(
     hass, freezer
 ):
-    """Issue #650: engines/deadline.py deliberately saturates `required_a` to
-    `float('inf')` once a same-day deadline has already passed (its own documented
-    design-doc-Sec6 behavior, left unchanged here). But `float('inf')` must never reach
-    the `DeadlineUnreachableNotified` payload -- it doesn't round-trip through HA's JSON
-    websocket encoding, and notification_manager.py formats it directly into user-facing
-    text ('would need inf A'). The boundary cap belongs here, in the coordinator, at the
-    point the engine's pure output crosses into the published event payload -- not inside
-    the engine itself."""
+    """Issue #650: `float('inf')` must never reach the `DeadlineUnreachableNotified` payload --
+    it doesn't round-trip through HA's JSON websocket encoding, and notification_manager.py
+    formats it directly into user-facing text ('would need inf A'). The boundary cap belongs
+    here, in the coordinator, at the point the engine's pure output crosses into the published
+    event payload -- not inside the engine itself.
+
+    Since issue #1005 the control cycle can no longer reach the engine's saturation branch on
+    its own: `resolve_next_occurrence` only ever yields an occurrence strictly after `now`, so a
+    departure time that has already passed today rolls to tomorrow instead of producing a
+    negative window. The cap is therefore defence in depth rather than a live path, and this
+    test forces the condition directly -- patching the occurrence resolution to hand back an
+    elapsed datetime, exactly what a future regression or a direct caller could do -- rather
+    than asserting a scenario the cycle can no longer produce."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     config = _config()  # CONF_MAX_CURRENT=16.0
@@ -2407,7 +2413,7 @@ async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_cu
     coord.active_mode = MODE_POWER
     coord.target_current = 0.0
     coord.soc_limit_override = 80.0
-    _seed_today_deadline(coord, hours_from_now=-1)  # deadline already passed -> engine saturates
+    _seed_today_deadline(coord, hours_from_now=1)
     _seed_ample_peak_headroom(coord)
 
     events = []
@@ -2418,14 +2424,21 @@ async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_cu
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    await coord._async_update_data()
+    # Naive and relative to the harness's own local clock -- resolve_deadline_urgency strips
+    # tzinfo before comparing, and the frozen 12:00 UTC is not 12:00 local.
+    elapsed = dt_util.now().replace(tzinfo=None) - timedelta(hours=1)
+    with patch(
+        "custom_components.smart_charging.coordinator_cycle.resolve_next_occurrence",
+        return_value=elapsed,  # already passed -> the engine's saturation branch
+    ):
+        await coord._async_update_data()
 
-    # The engine's own result is untouched (still saturates to inf, per its documented
-    # contract) -- only the published payload is capped.
-    assert coord._required_current.required_a == float("inf")
-    assert len(events) == 1
-    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
-    assert events[0].data[ATTR_REQUIRED_CURRENT_A] != float("inf")
+        # The engine's own result is untouched (still saturates to inf, per its documented
+        # contract) -- only the published payload is capped.
+        assert coord._required_current.required_a == float("inf")
+        assert len(events) == 1
+        assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
+        assert events[0].data[ATTR_REQUIRED_CURRENT_A] != float("inf")
 
 
 def _listen_cleared(hass):
