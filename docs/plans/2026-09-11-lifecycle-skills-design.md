@@ -132,8 +132,8 @@ comments, merge, worktree cleanup) stay with the human partner and the workflow 
 omission is easy to fill in wrongly:
 
 - **Local-interactive only, said in the frontmatter `description`.** Every skill's
-  frontmatter `description` is listed to the worker in every CI run (see *What the saving
-  actually is* below), and CI's fix worker has an unrestricted `Write,Edit` grant. The
+  frontmatter `description` is emitted into every CI run's context by the action (see *What
+  the saving actually is* below), and CI's fix worker has an unrestricted `Write,Edit` grant. The
   concrete risk is narrower than "CI invokes the skill": `_ai-fix.yml` grants no
   skill-invocation or `Task` tool, so what the listing buys is a worker *tempted by a
   description into reading and following a file it was not pointed at*. Whether the listing
@@ -304,7 +304,8 @@ remove. The table's file columns are written so the migration only re-points the
 **How much the pipeline actually runs.** Measured 2026-09-11 by enumerating every one of the
 873 `ai-pipeline.yml` runs and reading the jobs of all 22 that were not skipped: `draft` 11
 runs (7 success, 4 failure), `review` 8 (6, 2), `fix` 3 (3, 0), spanning 2026-07-17 to
-2026-09-04. One draft failure was `error_max_turns` at its 15-turn ceiling. The other 851
+2026-09-04. One draft failure was `error_max_turns` at the then-current flat 15-turn
+ceiling, since replaced by per-Size derived ceilings. The other 851
 runs are the router declining to dispatch; run conclusions alone don't separate "the labeled
 event carried a label other than the three triggers" from the sender allow-list or the fork
 exclusion on `fix`.
@@ -320,11 +321,12 @@ than a reason to defer it.
 - `_ai-fix.yml` gains a real per-type path allow-list (staging scoped by the row's trees, not
   the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
-  solely by `address-review-remarks`' docs-only scope. Widening that skill in phase 1 would
+  only by `address-review-remarks`' docs-only scope plus that post-hoc staging — neither of
+  which is a per-type allow-list. Widening that skill in phase 1 would
   widen CI's blast radius with no CI file touched: the worker follows the skill **by name**,
   which `_ai-fix.yml` does outright, under an unrestricted `Write,Edit` grant. Description
-  matching would be a second route in, on the caveats in *What the saving actually is* above;
-  the by-name route needs no such caveat. That is why phase 1 adds `fix` as a separate
+  matching would be a second route in, carrying the delivery caveat in *Four rules every
+  lifecycle skill states explicitly* above; the by-name route needs no such caveat. That is why phase 1 adds `fix` as a separate
   skill instead. Once the allow-list exists, `address-review-remarks` is folded into `fix`
   (its sections 1, 2, 5 and 6 move there — section 6 keeping both its halves, since "in CI:
   do not commit" is load-bearing the moment CI runs `fix`; section 3 is superseded by table

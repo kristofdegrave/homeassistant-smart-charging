@@ -20,7 +20,9 @@ Two multipliers dominate cost in this repo, and neither is "a subagent was spawn
    the cycle count is the biggest single lever.
 2. **Fixed context re-read on every cold session.** `claude-code-action` loads `CLAUDE.md`
    in full on every run, plus the frontmatter `name` and `description` of each file under
-   `.claude/skills/` (and of `.claude/agents/` wherever subagent dispatch is available). A
+   `.claude/skills/` (and of `.claude/agents/` wherever subagent dispatch is available) —
+   the action's documented behaviour; what a worker receives under a restricted tool grant is
+   not independently verified here. A
    skill or agent **body** is not loaded until the skill is invoked or the file is read — the
    CI prompts point the worker at a path and grant `Read` precisely because of this. So the
    fixed overhead is `CLAUDE.md` plus a description index, multiplied by the number of
@@ -113,9 +115,9 @@ summary. Use it, not estimates, to decide whether a change actually helped:
 - **Cache-read ratio** — `cache_read_input_tokens` ÷ total input tokens, from the job summary.
   A drop after an edit to `CLAUDE.md`, or to a skill's or agent's *frontmatter*, means that
   edit invalidated the cached prefix. Editing a **body** cannot move this number: the body was
-  never in the prefix. And the comparison is only meaningful *within* a session — across CI
-  runs there is no cross-run reuse to lose (see *Cold sessions* above), so a difference between
-  two runs' ratios is not evidence about an edit.
+  never in the prefix. And the comparison is only meaningful *between local sessions sharing
+  a warm cache* — across CI runs there is no cross-run reuse to lose (see *Cold sessions*
+  above), so a difference between two CI runs' ratios is not evidence about an edit.
 - **Turns vs. ceiling** — a run at its `max_turns` ceiling was likely truncated and will be
   re-run; raise the ceiling rather than eating the re-run.
 
