@@ -141,12 +141,18 @@ has_short_flag() { # a single-dash (non "--") argument carrying that letter
 #     is left in place and scanned;
 #   - a body is only blanked once its terminator line has actually been found, so a
 #     stray `<<'EOF'` inside quoted prose cannot swallow the rest of the command;
-#   - the opener line itself is kept, so `cat <<'EOF' && git clean -f` still denies.
+#   - the opener line itself is kept, so `cat <<'EOF' && git clean -f` still denies;
+#   - a heredoc fed to a shell (`sh <<'EOF'`, `cat <<'EOF' | bash`, `ssh host <<'EOF'`)
+#     really does execute its body, so an opener line naming an interpreter keeps its
+#     body in the scan.
 strip_heredoc_bodies() {
   printf '%s\n' "$1" | awk '
     BEGIN {
       q = sprintf("%c", 39)  # a single quote, unwritable inside this quoted program
       opener = "<<-?[ \t]*(\"[^\"]*\"|" q "[^" q "]*" q ")"
+      sep = "[ \t;|&()<>\"" q "]+"
+      ni = split("sh bash dash ash ksh zsh busybox ssh eval source", s, " ")
+      for (x = 1; x <= ni; x++) interpreter[s[x]] = 1
     }
     { line[NR] = $0 }
     END {
@@ -165,6 +171,14 @@ strip_heredoc_bodies() {
           tabbed[cnt] = (tok ~ /^<<-/)  # `<<-` strips leading tabs from the terminator
           sub(/^<<-?[ \t]*/, "", tok)
           delim[cnt] = substr(tok, 2, length(tok) - 2)
+        }
+        if (cnt == 0) { i++; continue }
+        # A body handed to an interpreter is code, not data, however it is quoted.
+        nw = split(line[i], w, sep)
+        for (x = 1; x <= nw; x++) {
+          v = w[x]
+          sub(/^.*\//, "", v)
+          if (v in interpreter) { cnt = 0; break }
         }
         if (cnt == 0) { i++; continue }
         j = i + 1

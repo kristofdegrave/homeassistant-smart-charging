@@ -188,6 +188,35 @@ git reset --hard"
 # A heredoc opener that is never terminated is prose, not a heredoc: blank nothing.
 run BLOCK "echo \"see <<'EOF' below\"
 git clean -f"
+# A body handed to an interpreter is code however it is quoted.
+run BLOCK "sh <<'EOF'
+git clean -f
+EOF"
+run BLOCK "cat <<'EOF' | bash
+git clean -f
+EOF"
+run BLOCK "ssh host <<'EOF'
+git clean -f
+EOF"
+# A backslash-quoted delimiter is quoted in sh but not recognised here: fails closed.
+run BLOCK 'cat <<\EOF
+git clean -f
+EOF'
+# A herestring is not a heredoc opener, so the next line is still a command position.
+run BLOCK 'grep -q x <<<"payload"
+git clean -f'
+# Trailing whitespace means the line is not a terminator -- in sh either.
+run BLOCK "cat <<'EOF'
+git clean -f
+EOF "
+# A real invocation sitting between two heredocs.
+run BLOCK "cat <<'A'
+prose
+A
+git clean -f
+cat <<'B'
+prose
+B"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
