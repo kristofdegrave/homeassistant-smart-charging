@@ -45,8 +45,8 @@ don't re-derive the universal steps here.
 - **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s
   Contribution workflow section — read it before starting. Covers ruff/pytest green, coverage
   matches the change, runtime-verified not just test-verified.
-- **Step 3's review** — reviewer per `CLAUDE.md`'s **Model selection** table. Receive its
-  findings with the `receiving-code-review` skill — verify, don't perform.
+- **Step 3's review**: receive the reviewer's findings with the `receiving-code-review`
+  skill — verify, don't perform.
 
 ## Rules
 

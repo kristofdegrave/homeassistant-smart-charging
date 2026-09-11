@@ -41,8 +41,8 @@ don't re-derive the universal steps here.
   diagram's call directions; every ADR-worthy service has a task line before the service that
   depends on it; every service in `system-design.md` appears in exactly one task (no service
   dropped, none duplicated).
-- **Step 3's review** — reviewer per `CLAUDE.md`'s **Model selection** table; it re-reads
-  `system-design.md` alongside this plan to check consistency.
+- **Step 3's review**: the reviewer re-reads `system-design.md` alongside this plan to check
+  consistency.
 - The approved task list feeds `writing-plans`/implementation work under `custom_components/`.
 
 ## Rules

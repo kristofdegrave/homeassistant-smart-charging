@@ -39,7 +39,9 @@ issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key too (`adr.y
 issue filed through the form. A sixth place sits outside the pipeline but carries the same
 vocabulary: `CLAUDE.md`'s **Model selection** work-types table, one row per context label.
 Adding a label means updating those six; renaming one additionally means updating any form
-that stamps it. `file-task-issue/SKILL.md` doesn't hold
+that stamps it. That table's *no context label* row separately mirrors `_ai-review.yml`'s
+path→agent routing, so adding a tree there means updating the row too — until CI reads the
+table directly, the two are kept in sync by hand. `file-task-issue/SKILL.md` doesn't hold
 its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
 [contribution-workflow.md](contribution-workflow.md).
 
@@ -51,8 +53,12 @@ its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
   are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because no
   safe path containment exists for untrusted issue content outside
   `docs/**`/`custom_components/**`/`tests/**`; `documentation` simply isn't wired in yet). A
-  human authors both drafts by hand; the review step is still automated for both, since
-  `_ai-review.yml` routes on changed file paths, not the issue's context label.
+  human authors both drafts by hand. The review step is still automated for `workflow`, since
+  `_ai-review.yml` routes on changed file paths rather than the issue's context label — but not
+  for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter nor
+  `_ai-review.yml`'s diff enumeration and path→checklist list, so a PR touching only that tree
+  gets no AI review at all, even though `system-design-reviewer` exists. `CLAUDE.md`'s
+  **Model selection** table records the same gap from the other side.
 - **Outside the pipeline by design**: `docs/postmortems/**` is in neither `ai-pipeline.yml`'s
   path filter nor `_ai-review.yml`'s diff enumeration, so a PR touching only that directory
   spawns no AI job and a PR touching it alongside other trees has its post-mortem invisible to

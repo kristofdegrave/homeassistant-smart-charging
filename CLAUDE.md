@@ -93,8 +93,7 @@ oversight (see [ci-pipeline.md](docs/reference/ci-pipeline.md)).
 ## Model selection
 
 One row per context label: how the work is done, how it is reviewed, and the model each side
-runs on. A lifecycle skill needs nothing outside a row and the PR's changed paths to know what
-to delegate to.
+runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
@@ -115,6 +114,10 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
+**A row is self-contained.** Nothing outside the row and the PR's changed paths is needed to
+know what to delegate to. The `documentation` row in particular splits on which
+`docs/design/` file the change touches, not on the issue body.
+
 **A review column may name more than one agent.** Each is applied to the changed files under
 its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
 checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
@@ -124,8 +127,7 @@ checklist to its matching files. A `development` PR therefore gets both `code-re
 untrusted issue content outside `docs/**`, `custom_components/**` and `tests/**`, so CI
 refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a
 local session hands the drafting to the human partner. Its review is still automated. What a
-`workflow` author reads instead is
-[ai-authoring-token-efficiency.md](docs/reference/ai-authoring-token-efficiency.md).
+`workflow` author reads instead is in **Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**: `docs/adl/**` → `adr-reviewer`;
 `docs/analysis/**` → `analysis-reviewer`; `docs/plans/**` → `impl-spec-reviewer`;
