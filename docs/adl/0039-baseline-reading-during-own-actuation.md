@@ -84,8 +84,8 @@ any particular band width.
 | D — time-align both operands | not measured | not measured | not measured |
 | E — damping on the commanded current | not measured | not measured | not measured |
 
-The last column is not a ranking: Option A never exceeds the target, and still fails — the
-defect this record exists for is the first column, not the last.
+The last column is not a ranking: Option A was never observed to exceed the target, and still
+fails — the defect this record exists for is the first column, not the last.
 
 ### Option A — Keep the one-directional debounce as it is
 
@@ -118,7 +118,7 @@ Keep the existing one-directional debounce for readings taken while the command 
 discard outright any reading taken on a cycle where the coordinator changed the commanded
 current — that reading measures the integration's own actuation, not the household.
 
-- Pro: the only option measured to both settle *and* never exceed the target. It reacts to a
+- Pro: the only option measured to settle *and* never observed to exceed the target. It reacts to a
   genuine household step on the cycle it happens, because a steady command means both sensors
   agree, so it gives up nothing in the conservative direction. It also states the underlying rule
   in the domain's own terms — do not measure while the actuator is settling — rather than tuning
@@ -139,17 +139,19 @@ relative lag cancels.
   different clocks, and this removes the difference rather than filtering its consequences. It
   needs no knowledge of the command history, so the engine stays judgeable from its readings
   alone.
-- Con: it cannot be taken from here at all, because it needs three separate decisions this
-  record is not entitled to make. Giving `charger_w` a smoothing window is an R10 change rather
-  than an ADR one — [ADR-0036](0036-step-2-smooths-net-power-only.md) settled that half
-  explicitly — but ADR-0036 equally kept "once a reading has both a raw and a smoothed form,
-  which of the two any given step consumes" as
-  [ADR-0006](0006-coordinator-and-data-flow.md)'s, and ADR-0006 requires a *superseding* ADR for
-  exactly that. On top of which R3's own acceptance criterion and R10's exemption both state
-  that peak-protection decisions use the most recent raw readings, so the analysis layer would
-  have to change too. Separately from the process cost, it slows the clamp's response to a
-  genuine household change by the whole smoothing window rather than by one cycle — strictly
-  worse than Option B on the axis Option B was rejected for.
+- Con: it cannot be taken from here at all, because it needs decisions in two layers this record
+  does not own — a requirements change and an ADR-0006 supersession. Giving `charger_w` a
+  smoothing window is an R10 change rather than an ADR one —
+  [ADR-0036](0036-step-2-smooths-net-power-only.md) settled that half explicitly — but ADR-0036
+  equally kept "once a reading has both a raw and a smoothed form, which of the two any given
+  step consumes" as [ADR-0006](0006-coordinator-and-data-flow.md)'s, and ADR-0006 requires a
+  *superseding* ADR for exactly that. The requirements change is a different kind from the one
+  Option C needs, and this is the discriminator rather than the process cost: R3's exemption
+  from smoothing exists precisely so a breach cannot hide behind a smoothing window, and D asks
+  R3 to adopt the smoothing window that exemption was written to forbid, while C keeps the raw
+  readings and defers one of them by a single cycle. Separately, it slows the clamp's response
+  to a genuine household change by the whole smoothing window rather than by one cycle —
+  strictly worse than Option B on the axis Option B was rejected for.
 
 ### Option E — Damp the commanded current instead of the reading
 
@@ -216,5 +218,6 @@ an argument, it does not gain a dependency.
   class this defect belongs to as its clearest case. This defect is exactly that shape and
   reached a live install without a standing oracle; the closed-loop reproduction added alongside
   the fix is a tier-1 stand-in, not a substitute for that tier.
-- Nothing here changes R3's own thresholds, the breach grace period, or the effective-peak-limit
-  resolution — only which reading the clamp is permitted to solve from.
+- Beyond the wording pass above, nothing here changes R3's own thresholds, the breach grace
+  period, or the effective-peak-limit resolution — only which reading the clamp is permitted to
+  solve from.
