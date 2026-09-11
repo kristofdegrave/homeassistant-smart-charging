@@ -66,7 +66,8 @@ responsibility, stated in the config-flow strings and `entity-catalog.md`.
   installation faulting after an upgrade.
 - Con: leaves the live defect unfixed. The failure mode is silent and indefinite — a mis-mapped
   install never recovers on its own, and the user has no signal short of noticing an implausible
-  dashboard number, which is exactly how #1007 survived.
+  dashboard number, which is how the mismatch above went unnoticed until a user questioned a
+  surplus reading.
 
 ### Option B — Strict rejection: any non-power unit, including absent, reads as `None`
 
@@ -157,8 +158,8 @@ decided; that is named as follow-up below, not silently assumed to follow from t
 
 **Follow-up this creates:**
 
-- #1007 implements the contract for the three non-conforming power roles and brings
-  `PowerKilowattReadAdapter` under it.
+- Implementation work for the three non-conforming power roles, bringing
+  `PowerKilowattReadAdapter` under the same rule.
 - A new issue for the config-flow selector guard (Option D), which this ADR records as the right
   long-term shape but does not adopt now.
 - A new issue for the non-power numeric roles above, deciding whether the same contract extends
