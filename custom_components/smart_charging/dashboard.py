@@ -56,15 +56,21 @@ _TITLE = "Smart Charging"
 # regress a translated install to English tile labels. Width costs vertical space and costs no
 # correctness.
 #
-# `_FULL_SECTION_COLUMNS` is the full 12-column span of one section; `_SECTION_COLUMN_SPAN` widens
+# `_FULL_SECTION_COLUMNS` is the full 12-column span of one section. `_MAX_VIEW_COLUMNS` widens
 # the sections themselves, which is what reaches the auto-entities cards -- those render entity
 # *rows* and already span their section, so tile width does nothing for them.
+#
+# A view-level `max_columns` rather than `column_span` on each section: a sections view defaults
+# to 4 columns, so spanning each section across 2 of them lays out as 2 + 1 on the overview,
+# leaving half the second row empty -- and on a viewport that fits exactly 3 columns it degrades
+# to one section per row. Capping the view at 2 columns states "sections should be wide" once,
+# and lays out the same way at every viewport.
 _FULL_SECTION_COLUMNS = 12
-_SECTION_COLUMN_SPAN = 2
+_MAX_VIEW_COLUMNS = 2
 
 
 def _full_width() -> dict:
-    """A FRESH `grid_options` dict per card.
+    """A new `grid_options` dict per card.
 
     Deliberately a function, not a shared module-level dict: `register_dashboard` serialises this
     config with `yaml.safe_dump`, which emits an anchor/alias pair (`&id001` / `*id001`) for any
@@ -207,23 +213,21 @@ def build_dashboard_config(entry: ConfigEntry) -> dict:
                 "title": _TITLE,
                 "path": "overview",
                 "type": "sections",
+                "max_columns": _MAX_VIEW_COLUMNS,
                 "sections": [
                     {
                         "type": "grid",
                         "title": "Charging status",
-                        "column_span": _SECTION_COLUMN_SPAN,
                         "cards": _charging_status_cards(entry),
                     },
                     {
                         "type": "grid",
                         "title": "Power flow",
-                        "column_span": _SECTION_COLUMN_SPAN,
                         "cards": _power_flow_cards(entry),
                     },
                     {
                         "type": "grid",
                         "title": "Runtime settings",
-                        "column_span": _SECTION_COLUMN_SPAN,
                         "cards": _runtime_settings_cards(),
                     },
                 ],
@@ -232,11 +236,11 @@ def build_dashboard_config(entry: ConfigEntry) -> dict:
                 "title": "Deadline",
                 "path": "deadline",
                 "type": "sections",
+                "max_columns": _MAX_VIEW_COLUMNS,
                 "sections": [
                     {
                         "type": "grid",
                         "title": "Departure times",
-                        "column_span": _SECTION_COLUMN_SPAN,
                         "cards": _deadline_cards(),
                     },
                 ],

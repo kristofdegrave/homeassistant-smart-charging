@@ -245,8 +245,14 @@ async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_p
     dashboard = lovelace_data.dashboards[DASHBOARD_URL_PATH]
     assert dashboard.path == str(tmp_path / DASHBOARD_FILENAME)
 
-    on_disk = yaml.safe_load((tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8"))
-    assert on_disk == build_dashboard_config(entry)
+    written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
+    assert yaml.safe_load(written) == build_dashboard_config(entry)
+    # Issue #1009: bound to the artifact actually written, not to a re-derived dump. A
+    # safe_load round-trip passes happily with anchors present, because the loader resolves
+    # them -- only the raw text shows whether a reader would see `grid_options: *id001`
+    # instead of a width. See dashboard.py's `_full_width`.
+    assert "&id" not in written
+    assert "*id" not in written
 
     panel = hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH]
     assert panel.config["mode"] == "yaml"
@@ -290,14 +296,10 @@ _FULL_SECTION_WIDTH = 12
 
 
 def test_every_tile_spans_its_section_so_names_are_not_truncated():
-    """Issue #1009. Owned entities use `has_entity_name` against a device called "Smart
-    Charging", so every friendly name is "Smart Charging " + the entity name -- 15 characters
-    of constant prefix. A tile defaults to half a section's width, which in a three-section
-    view left roughly 14 characters and rendered "Smart Charging L...".
+    """Issue #1009: tile names truncated to ~14 characters behind the device-name prefix.
 
-    Width rather than a `name:` override: the entity names are translated
-    (`translations/nl.json` carries Dutch for every one), and hardcoding short English strings
-    here would regress a translated install to English tile labels.
+    `dashboard.py`'s own comment carries the reasoning (why width rather than a `name:`
+    override); this pins the result rather than restating it.
     """
     entry = _entry(**{CONF_EV_SOC_ENTITY: "sensor.ev_soc"})
     config = build_dashboard_config(entry)
@@ -314,18 +316,16 @@ def test_every_tile_spans_its_section_so_names_are_not_truncated():
         assert tile["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, tile["entity"]
 
 
-def test_sections_span_two_columns_so_row_cards_have_room_too():
+def test_views_cap_their_column_count_so_row_cards_have_room_too():
     """The auto-entities cards render entity *rows*, not tiles, and already span their section
     -- so tile width does nothing for them. What squeezes their names is the section itself
-    being one column of the view's grid. Widening the sections is the only locale-independent
-    lever that reaches both card shapes.
+    being one column of the view's grid, which the view's column cap controls.
     """
     config = build_dashboard_config(_entry())
 
-    sections = [section for view in config["views"] for section in view["sections"]]
-    assert sections
-    for section in sections:
-        assert section["column_span"] == 2, section["title"]
+    assert config["views"]
+    for view in config["views"]:
+        assert view["max_columns"] == 2, view["path"]
 
 
 def test_the_markdown_forecast_card_spans_its_section_too():
@@ -353,7 +353,7 @@ def test_the_mode_gate_and_auto_entities_cards_declare_their_width_explicitly():
         assert card["grid_options"] == {"columns": _FULL_SECTION_WIDTH}, card["type"]
 
 
-def test_the_dumped_yaml_contains_no_anchors_or_aliases():
+def test_the_config_dumps_without_anchors_or_aliases():
     """Regression guard for a real defect in this change's first draft.
 
     `register_dashboard` serialises the config with `yaml.safe_dump`, which emits an
