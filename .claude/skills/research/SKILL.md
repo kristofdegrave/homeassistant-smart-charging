@@ -1,6 +1,6 @@
 ---
 name: research
-description: Use when a decision in the Smart Charging project is blocked on an external fact — "look it up", "research whether…", "what does Home Assistant do when…", how a library behaves, what a charger's API returns. Investigates high-trust primary sources and records the finding as a comment on the issue that needed it. Not for exploring this repo's own code, docs or history — plain search and the built-in explore subagent do that.
+description: Use when a decision in the Smart Charging project is blocked on an external fact — "look it up", "research whether…", "what does Home Assistant do when…", how a library behaves, what a charger's API returns. Investigates high-trust primary sources and records the finding as a comment on the issue that needed it. Not for exploring this repo's own code, docs or history — plain search and the built-in explore subagent do that — and never self-invoke it in a CI run, which grants neither web access nor `gh issue comment`.
 ---
 
 # Research
@@ -13,10 +13,10 @@ analysis docs, and every document under `docs/` already has an owner and a revie
 Deliberately narrow: one question, sources actually read, and an explicit list of what could
 not be confirmed. Not a survey, not a recommendation, not a design.
 
-Needs web access and `gh`, and no CI worker grants either — **never self-invoke this inside a
-CI run** (`_ai-draft.yml`, `_ai-review.yml`, `_ai-fix.yml`), where it would only burn turns on
-denied tools. A drafter that hits a question it cannot answer records it as an open question in
-the artifact it is drafting and moves on.
+No CI worker grants web access, and none grants `gh issue comment` — **never self-invoke this
+inside a CI run** (`_ai-draft.yml`, `_ai-review.yml`, `_ai-fix.yml`), where it would only burn
+turns on denied tools. A drafter that hits a question it cannot answer records it as an open
+question in the artifact it is drafting and moves on.
 
 ## Source tiers
 
@@ -47,8 +47,8 @@ carries a date.
 Write the comment to a file in the session scratchpad and post it with
 `gh issue comment <number> --body-file <path>` — the template below is full of em-dashes and
 backticks, which `--body` mangles on the way through a shell. The issue is the one whose
-decision is blocked: the one being grilled, specced, or drafted. If the work has no issue yet, hold the finding and post it on
-the first issue filed from it; do not invent a home for it.
+decision is blocked: the one being grilled, specced, or drafted. If the work has no issue yet,
+hold the finding and post it on the first issue filed from it; do not invent a home for it.
 
 ```markdown
 ## Research — <the question, as a question>
@@ -74,7 +74,8 @@ Rules for it:
   repeating the search.
 - Quote the source for the load-bearing sentence only. A long excerpt is the thing a reader
   skips.
-- No PR numbers or review statuses; they rot. Describe the fact directly.
+- No tracking refs for *this* repo — its PR numbers and issue statuses rot; describe the fact
+  directly. An upstream commit, tag or release is a pinned artifact and is exactly what to cite.
 
 ## Durable findings
 
@@ -87,10 +88,9 @@ carries *what was decided*.
 
 ## Dispatched from `grilling`
 
-`grilling` treats finding facts as the agent's job: when a frontier question needs one, it
-dispatches this skill as a sub-agent (several in parallel if independent) and does not block on
-the result. That rule — and what the rest of the round does meanwhile — belongs to `grilling`;
-read it there.
+`grilling` treats finding facts as the agent's job and dispatches this skill as a sub-agent when
+a frontier question needs one. How many go out at once, and what the rest of the round does
+meanwhile, are `grilling`'s rules — read them there.
 
 What this side owes the caller: the sub-agent reports back two things and nothing else, the
 one-line answer and the URL of the comment it posted. The caller quotes the answer into the
