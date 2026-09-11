@@ -123,6 +123,12 @@ its own tree — the rule CI already uses: a PR can touch more than one tree, so
 checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
 `test-reviewer`.
 
+**The `development` and `testing` rows share three language references** —
+`.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
+`.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
+not a fourth column: each row's own work skill and reviewer agent say which one to read and
+when, so nothing here repeats a rule those files own.
+
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
 untrusted issue content outside `docs/**`, `custom_components/**` and `tests/**`, so CI
 refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a
@@ -162,9 +168,10 @@ acting:
   as the actor, in [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). An
   interactive session never self-applies those trigger labels — see that doc.
 
-Two related references sit just outside this lifecycle: what happens before an issue exists
-([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md), epic decomposition) and
-the completion bar an author self-checks before opening the PR
+Two related references sit just outside this lifecycle: the stages either side of it
+([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
+routing, spec, slicing into sub-issues, and verifying a shipped slice live) and the
+completion bar an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
 commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
 their own template/quality-check steps on top of these; they never replace them.
@@ -290,7 +297,10 @@ additions:
 Context labels, project-board Size/Estimate fields, and branch naming — see
 [docs/reference/contribution-workflow.md](docs/reference/contribution-workflow.md), which also
 points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the anchored
-`Plan:` line's exact required format. Epic-first filing for multi-artifact strands — see
+`Plan:` line's exact required format. Epics and their children use GitHub's **native**
+parent/sub-issue and blocked-by relationships, which `gh` supports directly — never re-derive
+a body-text convention for them; the commands are in that same **Issue conventions** section.
+Epic-first filing for multi-artifact strands — see
 [docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
 
 ---

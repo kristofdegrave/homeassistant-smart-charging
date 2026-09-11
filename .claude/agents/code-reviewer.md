@@ -18,6 +18,15 @@ Always read:
 - The behavior the change implements, in `docs/analysis/` (`control-cycle.md`,
   `resolution-rules.md`, `requirements.md`, the relevant use-case) — the authoritative "what".
 - The accepted ADRs the change touches under `docs/adl/`.
+- The **Quick review checklist** at the end of the `python-anti-patterns` skill — the
+  general-Python bar every change is held to, on top of checklist (4) below.
+
+Read conditionally:
+- The `async-python-patterns` skill — **only when the diff touches async code**. That skill's
+  **When this file applies** section is the single statement of which files those are; don't
+  re-derive it here. A diff confined to `modes/`/`engines/` skips it.
+- The `ha-integration-knowledge` skill — when the diff touches HA platform surface (entity
+  classes, config flow, `manifest.json`, services).
 
 ## Review checklist
 

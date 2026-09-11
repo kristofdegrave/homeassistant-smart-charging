@@ -9,10 +9,10 @@ Filing an issue correctly the first time avoids a wasted `needs-draft` cycle lat
 is the checklist to run through before running `gh issue create`, not a replacement for
 deciding *what* the issue is about.
 
-Context labels, project-board Size/Estimate fields, the anchored `Plan:` line, and
-epic-checklist membership are all defined once in `CLAUDE.md`'s **Issue conventions** section —
-read that first. This skill adds only the pre-flight order to run through so nothing gets
-filed half-scoped.
+Context labels, project-board Size/Estimate fields, the anchored `Plan:` line, and epic
+membership (native sub-issues) are all defined once, and `CLAUDE.md`'s **Issue conventions**
+section routes to wherever that is — start there. This skill adds only the pre-flight order to
+run through so nothing gets filed half-scoped.
 
 ## The checklist
 
@@ -26,10 +26,10 @@ filed half-scoped.
    and its children use.
 3. **File it**, then move on — the drafter/review cycle is a separate, later step.
 4. **If the issue belongs to an existing epic** (e.g. a code-review finding that fits an
-   already-open cleanup epic), append it to that epic's checklist body
-   (`- [ ] #NNN — <short title>`) rather than leaving it untracked. Don't check off boxes for
-   *other* items while doing this unless you've verified and been asked to — status ticks are
-   a call for whoever owns the epic, not a side effect of filing an unrelated issue.
+   already-open cleanup epic), attach it as a **native sub-issue** of that epic rather than
+   leaving it untracked — `gh` commands in **Issue conventions** above. Don't touch the
+   epic's other children while doing this: their state is a call for whoever owns the epic,
+   not a side effect of filing an unrelated issue.
 
 ## Common mistakes
 
