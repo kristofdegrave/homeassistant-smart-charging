@@ -11,25 +11,34 @@ different latencies: the net meter reflects a change in charger draw on the cycl
 while the charger's own power sensor (a slow Modbus poll on the reference install) can still
 report the previous cycle's value.
 
-Issue #990 addressed one direction of that mismatch. `debounce_baseline_w` holds a *lower*
-(more permissive) reading until it has persisted `BASELINE_DEBOUNCE_CYCLES` consecutive cycles,
-while a reading at or above the last accepted value — the safety-conservative direction — is
-committed immediately. Its docstring records the remaining exposure as bounded:
+An earlier fix (issue #990) addressed one direction of that mismatch. `debounce_baseline_w`
+holds a *lower* (more permissive) reading until it has persisted `BASELINE_DEBOUNCE_CYCLES`
+consecutive cycles, while a reading at or above the last accepted value — the
+safety-conservative direction — is committed immediately. Its docstring records the remaining
+exposure as bounded:
 
 > an accepted trade-off: it costs one extra cycle of understated headroom/`solar_surplus_w`
 > once the true, lower baseline reasserts itself, but never an unsafe one.
 
 That accounting holds for an open-loop transient. It does not hold in the loop the clamp
-actually sits in, because the understated headroom is itself what actuates the next step.
-Issue #1034 reproduces the result in plain pytest against the real engine code, with a steady
-simulated household load and a charger power reading one cycle behind true draw: the commanded
-current runs `[12, 6, 6, 12, 6, 6, ...]` indefinitely. Nothing in the simulated world moves. The
-period is three cycles — one to actuate, two for the debounce to release — and field measurement
-on the reference install matches it at two different control intervals (approximately 28 s at
-10 s, approximately 14 s at 5 s), confirming the period is counted in cycles rather than
-wall-clock time.
+actually sits in, because the understated headroom is itself what actuates the next step. A
+closed-loop reproduction in plain pytest against the real engine functions — a steady simulated
+household load and a charger power reading one cycle behind true draw — runs the commanded
+current at `[12, 6, 6, 12, 6, 6, ...]` indefinitely. Nothing in the simulated world moves. The
+period is three cycles: one to actuate, two for the debounce to release. Field observation on
+the reference install is consistent with that, at two different control intervals — roughly 28 s
+at a 10 s interval and roughly 14 s at 5 s, both read off a history chart rather than
+instrumented, so they sit a little under the 30 s and 15 s a three-cycle period predicts. Two
+observations do not prove the period is counted in cycles rather than wall-clock time, but
+halving the interval halved the period while leaving the amplitude untouched, which a
+wall-clock-anchored mechanism would not do.
 
-Three forces bear on the fix.
+`baseline_w` throughout this record means the household load the clamp solves around —
+`net_w - charger_w`, everything drawing that is not the charger. It is unrelated to the
+glossary's **baseline mode** (`docs/analysis/system-overview.md`), which is the mode Auto's
+non-urgent rows would select.
+
+Four forces bear on the fix.
 
 **The clamp's input is not an independent measurement.** On any cycle where the coordinator
 changed the commanded current, `net_w - charger_w` is partly a measurement of the integration's
@@ -48,24 +57,40 @@ replacement has to keep the conservative direction fast enough to be worth havin
 `clamp_to_ceiling` re-derives its own raw `net_w - charger_w` and carries the same exposure
 (issue #992), so the shape chosen here is the shape that will be proposed there.
 
+**The requirements already name the property, and exempt the place it fails.** R10 states it
+outright — "A power spike lasting a single control cycle does not change the charger
+set-point" — and then exempts exactly this clamp: "Peak-protection decisions (R3) are exempt
+and use raw, unsmoothed readings." R3 restates the exemption as its own criterion ("This check
+uses the most recent raw (unsmoothed) sensor readings so that a breach cannot persist for the
+duration of a smoothing window"). That exemption is well-founded — a breach must not hide
+behind a smoothing window — but it was written against *smoothing*, and the defect here is a
+single-cycle spike that is not the household's at all. Both the shipped debounce and every
+option below already sit in the gap between R10's stated property and R3's exemption from the
+mechanism that would deliver it, so the analysis layer needs a pass whichever option wins.
+
 ## Considered options
 
-Each was driven through the same closed loop used to reproduce the defect — real engine
-functions, a steady household baseline, then a +1214 W household step mid-run — so the rows
-below are measured rather than argued.
+Options A, B and C were driven through the same closed loop used to reproduce the defect — real
+engine functions, a steady household baseline, then a +1214 W household step mid-run. D and E
+are argued, not run: D because taking it at all requires decisions outside this record (see its
+Con), E because its parameter space is open-ended and the argument against it does not turn on
+any particular band width.
 
 | option | settles, steady | settles, after a household step | exceeds the clamp target |
 | --- | --- | --- | --- |
-| A — status quo | no | no | never |
+| A — status quo | no | no | never observed to |
 | B — symmetric debounce | yes | yes | 1 cycle (4850 W against a 3750 W target) |
-| C — settling-aware discard | yes | yes | never |
+| C — settling-aware discard | yes | yes | never observed to |
 | D — time-align both operands | not measured | not measured | not measured |
-| E — damping on the commanded current | no (see Con) | — | — |
+| E — damping on the commanded current | not measured | not measured | not measured |
+
+The last column is not a ranking: Option A never exceeds the target, and still fails — the
+defect this record exists for is the first column, not the last.
 
 ### Option A — Keep the one-directional debounce as it is
 
 - Pro: no new state, no signature change, no new coupling; the conservative direction stays as
-  fast as it can be, and the clamp provably never exceeds its target in either measured
+  fast as it can be, and the clamp was never observed to exceed its target in either measured
   scenario. The oscillation costs energy and charger wear, not a peak breach.
 - Con: the commanded current never settles while the clamp is binding, which is the normal
   condition for `Captar` (it requests `max_a` every cycle by design, so the clamp *is* the
@@ -114,12 +139,17 @@ relative lag cancels.
   different clocks, and this removes the difference rather than filtering its consequences. It
   needs no knowledge of the command history, so the engine stays judgeable from its readings
   alone.
-- Con: it contradicts [ADR-0036](0036-step-2-smooths-net-power-only.md), which decided that step
-  2 smooths net power only and that which readings are smoothed is an R10 matter — so this option
-  cannot be taken without superseding that record, on a question (what R10 smooths) wider than
-  the defect at hand. It also slows the clamp's response to a genuine household change by the
-  whole smoothing window rather than by one cycle, which is strictly worse than Option B on the
-  axis Option B was rejected for.
+- Con: it cannot be taken from here at all, because it needs three separate decisions this
+  record is not entitled to make. Giving `charger_w` a smoothing window is an R10 change rather
+  than an ADR one — [ADR-0036](0036-step-2-smooths-net-power-only.md) settled that half
+  explicitly — but ADR-0036 equally kept "once a reading has both a raw and a smoothed form,
+  which of the two any given step consumes" as
+  [ADR-0006](0006-coordinator-and-data-flow.md)'s, and ADR-0006 requires a *superseding* ADR for
+  exactly that. On top of which R3's own acceptance criterion and R10's exemption both state
+  that peak-protection decisions use the most recent raw readings, so the analysis layer would
+  have to change too. Separately from the process cost, it slows the clamp's response to a
+  genuine household change by the whole smoothing window rather than by one cycle — strictly
+  worse than Option B on the axis Option B was rejected for.
 
 ### Option E — Damp the commanded current instead of the reading
 
@@ -138,13 +168,15 @@ value written to the charger.
 
 ## Decision
 
-**Option C.** It is the only candidate that settles the loop without paying for it in the
-conservative direction — Option B's measured cost is a real weakening of C3, and Option D's is
-the same cost multiplied by the smoothing window plus a supersession of ADR-0036 on a wider
-question than this defect raises. Option E was measured and reasoned to slow the cycle rather
-than end it, because it leaves the driving transient in place. Option A's Pro is genuine — it
-never breaches — but `Captar` makes the clamp the controller by design, so "the commanded current
-never settles" is not a cosmetic complaint.
+**Option C.** It is the only candidate measured to settle the loop without paying for it in the
+conservative direction: Option B's measured cost is a real weakening of C3, and Option D's is
+the same cost multiplied by the smoothing window, on top of decisions (an ADR-0006 supersession
+and an R3/R10 change) wider than this defect entitles anyone to take. Option E is rejected on
+the argument in its Con rather than on a measurement — it filters the response to the driving
+transient while leaving the transient itself in place, so it changes the limit cycle's period
+and not its existence. Option A's Pro is genuine — it was never observed to breach — but
+`Captar` makes the clamp the controller by design, so "the commanded current never settles" is
+not a cosmetic complaint.
 
 Option C's Con is accepted deliberately. The new coupling is narrow and one-directional: the
 coordinator tells the engine whether this cycle's reading is trustworthy, and the engine keeps
@@ -156,8 +188,18 @@ an argument, it does not gain a dependency.
 
 - `debounce_baseline_w` gains a parameter naming whether the commanded current changed on the
   cycle the reading was taken; `coordinator.py` gains the previous commanded current as state to
-  derive it. The engine stays HA-free and pure, so ADR-0009's tier-1 placement for its tests is
-  unchanged.
+  derive it. The engine stays HA-free and pure, so its tests stay in
+  [ADR-0009](0009-testing-strategy.md)'s plain-pytest tier (tier 1 under
+  [ADR-0037](0037-scenario-timeline-test-tier.md)'s placement rule).
+- **The analysis layer needs a paired pass, and it is not optional.** R3's acceptance criterion
+  says the clamp "uses the most recent raw (unsmoothed) sensor readings", and R10 restates the
+  exemption. Discarding the most recent reading and re-using the last accepted one departs from
+  that text. The intent behind it — a breach must not hide behind a smoothing window — survives,
+  because the deferral is one cycle rather than a whole window, but the criterion as written no
+  longer describes what the clamp does. This already holds for the shipped debounce; this record
+  is where it stops being an oversight. R3, R10 and `control-cycle.md`'s step 7 need wording that
+  admits a bounded, self-actuation-triggered deferral, filed as its own `requirement` issue
+  rather than smuggled in with the implementation.
 - `peak_headroom_a` and `solar_surplus_w` read the same `CycleContext.baseline_w` and therefore
   inherit the same filtering. That is intended — they are meant to show what the clamp believes —
   but it means a step cycle now holds the previous displayed value rather than showing a
@@ -170,10 +212,9 @@ an argument, it does not gain a dependency.
   every EVSE. If a slower-settling charger is reported, the discard becomes a count rather than a
   boolean; that is a later decision, and this record should be read as deciding *what* is
   discarded, not *for how long*.
-- [ADR-0037](0037-scenario-timeline-test-tier.md)'s scenario tier names "bounded oscillation" as
-  a qualifying invariant and the lag class this defect belongs to as its clearest case. This
-  defect is exactly that shape and reached a live install without a standing oracle; the
-  closed-loop reproduction added alongside the fix is a tier-1 stand-in, not a substitute for
-  that tier.
+- ADR-0037's scenario tier names "bounded oscillation" as a qualifying invariant and the lag
+  class this defect belongs to as its clearest case. This defect is exactly that shape and
+  reached a live install without a standing oracle; the closed-loop reproduction added alongside
+  the fix is a tier-1 stand-in, not a substitute for that tier.
 - Nothing here changes R3's own thresholds, the breach grace period, or the effective-peak-limit
   resolution — only which reading the clamp is permitted to solve from.
