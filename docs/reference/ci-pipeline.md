@@ -45,6 +45,18 @@ table directly, the two are kept in sync by hand. `file-task-issue/SKILL.md` doe
 its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
 [contribution-workflow.md](contribution-workflow.md).
 
+The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
+places — `.github/setup-labels.sh` — and in none of the other five. They are not context
+labels ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so
+adding or renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
+`context_labels`/reason string/`case` block, an issue form, or `CLAUDE.md`'s **Model
+selection** table. `_ai-draft.yml` consequently cannot see them, which is the intended
+behaviour on all three shapes: a `bug` issue with no context label is refused with *No context
+label found*; a `bug` issue that also carries one routes on that one, exactly as if the kind
+label were absent (so `count` is still 1 and the single-context-label refusal is unaffected);
+and a `bug`+`development` issue must still resolve an anchored `Plan:` line, so unpinned fix
+work fails closed rather than being drafted from free-text issue content.
+
 ## Pipeline steps
 
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label — a

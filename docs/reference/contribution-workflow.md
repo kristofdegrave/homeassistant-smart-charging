@@ -117,6 +117,17 @@ separate bot account for the interactive session.
   changes), `documentation` (design-doc changes, `docs/design/**` — reviewed, but not yet
   wired into automated drafting). Adding or renaming a label: see
   [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must stay in sync.
+- **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
+  labels. The context label says *which artifact* the work produces; the kind label says *why*
+  the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
+  orthogonal because the fix for a defect is not always code: an entity-catalog row that claims
+  a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`, and a stale
+  minimum-HA declaration is a `bug` whose fix is neither. So an issue carries the kind label
+  **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
+  and the fixing artifact is not yet known ([idea-to-issues.md](idea-to-issues.md)'s **Route**),
+  and gains a context label once it is. Neither label substitutes for the other, and neither
+  triggers anything on its own — only an action label does. A kind label adds no
+  Model-selection row and no drafter `case` entry; see [ci-pipeline.md](ci-pipeline.md).
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
@@ -143,7 +154,14 @@ separate bot account for the interactive session.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `specs`, `development`, `testing`, `workflow`, `documentation`),
-number is the GitHub issue number. If extra work on the same issue needs a second, separate
+number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
+`enhancement`) has no context label to name the branch, so the kind label itself is the
+segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
+defined segment, matching the `bug/<n>` branches such work already uses (the older `dev/`,
+`development/` and `fix/` spellings are historical, not alternatives). When both axes are
+present the
+**context label wins**, so the branch matches what `_ai-draft.yml` would compute from the same
+issue. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 

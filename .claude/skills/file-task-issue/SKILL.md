@@ -20,10 +20,12 @@ run through so nothing gets filed half-scoped.
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
 2. **Pick the one context label**, set Size/Estimate, and — for `development`/`testing` — write
-   the anchored `Plan:` line, per **Issue conventions** above. A code-quality/bug finding
-   against already-shipped code (not pinned to a `docs/plans` task) uses `bug`/`enhancement`
-   instead of a drafter-facing context label — the pattern the coordinator-cleanup epic (#608)
-   and its children use.
+   the anchored `Plan:` line, per **Issue conventions** above. A finding against
+   already-shipped behaviour also takes a **kind label** (`bug`/`enhancement`) on the separate,
+   orthogonal axis defined there — the pattern the coordinator-cleanup epic (#608) and its
+   children use. File it with the kind label alone while the fixing artifact is still unknown;
+   add the context label once it is (and a `development` one still needs a `Plan:` line, so an
+   unpinned fix keeps the kind label alone).
 3. **File it**, then move on — the drafter/review cycle is a separate, later step.
 4. **If the issue belongs to an existing epic** (e.g. a code-review finding that fits an
    already-open cleanup epic), attach it as a **native sub-issue** of that epic rather than
