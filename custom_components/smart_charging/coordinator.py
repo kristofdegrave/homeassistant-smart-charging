@@ -668,10 +668,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)
         if required.unreachable:
             # engines/deadline.py saturates required_a to float('inf') for a deadline at or
-            # before `now` -- still the pure engine's own documented contract, but no longer
-            # reachable from this cycle: resolve_next_occurrence only ever yields an
-            # occurrence strictly after `now` (issue #1005), so the cap below is defence in
-            # depth for a future regression or a direct caller. But float('inf') must never
+            # before `now` -- still the pure engine's own documented contract, and since issue
+            # #1005 all but unreachable from this cycle: resolve_next_occurrence yields an
+            # occurrence after `now`, except inside a fall-back repeated hour where a fold=1
+            # `now` can wall-clock-precede a fold=0 occurrence that is absolutely earlier. So
+            # the cap below still guards a real (if once-a-year) path, not only a future
+            # regression. float('inf') must never
             # cross this boundary: it doesn't round-trip through HA's JSON websocket encoding,
             # and notification_manager.py formats it straight into user-facing text (issue
             # #650). Cap it to maximum_permitted_rate_a -- the same bound the engine compared

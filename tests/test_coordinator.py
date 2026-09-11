@@ -2465,13 +2465,12 @@ async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_cu
     here, in the coordinator, at the point the engine's pure output crosses into the published
     event payload -- not inside the engine itself.
 
-    Since issue #1005 the control cycle can no longer reach the engine's saturation branch on
-    its own: `resolve_next_occurrence` only ever yields an occurrence strictly after `now`, so a
-    departure time that has already passed today rolls to tomorrow instead of producing a
-    negative window. The cap is therefore defence in depth rather than a live path, and this
-    test forces the condition directly -- patching the occurrence resolution to hand back an
-    elapsed datetime, exactly what a future regression or a direct caller could do -- rather
-    than asserting a scenario the cycle can no longer produce."""
+    Since issue #1005 the control cycle reaches the engine's saturation branch only in one
+    once-a-year corner (a fall-back repeated hour -- see `resolve_next_occurrence`'s docstring);
+    a departure time that has simply passed today now rolls to tomorrow instead of producing a
+    negative window. Rather than build that transition-hour scenario through the whole cycle,
+    this test forces the condition directly, patching the occurrence resolution to hand back an
+    elapsed datetime -- which is also what a future regression or a direct caller would do."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     config = _config()  # CONF_MAX_CURRENT=16.0

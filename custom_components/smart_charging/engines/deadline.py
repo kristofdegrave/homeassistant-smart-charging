@@ -5,7 +5,7 @@ holiday override -> home-day override -> day-of-week default. Any row, including
 terminal default, may resolve to `None` ("no deadline").
 
 `resolve_next_occurrence` turns R14's per-day resolutions into the single *next* occurrence
-the urgency criteria are judged against (requirements.md R15: "never an occurrence that has
+the urgency criteria are judged against (requirements.md R5: "never an occurrence that has
 already passed today"), and `resolve_required_current` implements R5/R15's required-current
 formula and the Normal/Urgent/Unreachable state boundaries (UC05's state model) against
 that already-resolved datetime.
@@ -60,11 +60,12 @@ def resolve_next_occurrence(
 ) -> datetime | None:
     """The next occurrence of the departure deadline, or None when none is resolved.
 
-    requirements.md R15: "The deadline every criterion above is judged against is the next
-    occurrence of the departure deadline (R14) -- never an occurrence that has already passed
-    today. A departure time earlier in the day than the current time therefore never engages
-    urgency or the unreachable notification on that basis alone; it is judged as the next
-    day's occurrence, with the full time remaining until then."
+    requirements.md R5, "Departure deadline guarantee", acceptance criteria: "The deadline
+    every criterion above is judged against is the next occurrence of the departure deadline
+    (R14) -- never an occurrence that has already passed today. A departure time earlier in
+    the day than the current time therefore never engages urgency or the unreachable
+    notification on that basis alone; it is judged as the next day's occurrence, with the full
+    time remaining until then."
 
     Both arguments are R14's four-row table already evaluated for their own day -- today's and
     tomorrow's. Two separate resolutions are required, not one time-of-day reused across two
@@ -85,10 +86,25 @@ def resolve_next_occurrence(
     ("a departure time earlier in the day than the current time"). Only the duration needs to
     be absolute.
 
-    On the two DST-transition days, `datetime.combine` resolves a departure time in the
-    spring-forward gap via `fold=0` (the pre-transition offset) and an ambiguous fall-back time
-    to the earlier, still-DST instant. Neither raises, and both err toward *less* remaining
-    time -- the safe direction for a deadline.
+    On the two DST-transition days, `datetime.combine` always produces `fold=0`, and the two
+    transitions land differently -- do NOT assume a single safe direction here:
+
+    - Fall-back (ambiguous time, occurs twice): `fold=0` is the earlier, still-DST instant, so
+      the window is the shorter of the two readings. Conservative.
+    - Spring-forward (nonexistent time, 02:00-03:00): PEP 495 inverts for gaps -- `fold=0`
+      means the *pre*-transition offset, which for a gap time is the chronologically LATER
+      instant. A 02:30 departure resolves to 01:30 UTC rather than `fold=1`'s 00:30 UTC, so the
+      window is up to an hour LONGER and `required_a` correspondingly understated. That is the
+      permissive direction, bounded by one hour, on one night a year, and only for a departure
+      time inside the gap hour.
+
+    The same `fold=0` asymmetry means the `today_at > now` comparison is not a strict guarantee
+    that the returned occurrence is chronologically after `now`. Inside the repeated hour, a
+    `now` with `fold=1` can wall-clock-precede a `fold=0` occurrence that is absolutely earlier
+    (e.g. Brussels 2026-10-25, `now` 02:30 fold=1 = 01:30 UTC, occurrence 02:45 fold=0 = 00:45
+    UTC): `resolve_required_current` then sees a negative window and saturates. Bounded by the
+    length of the repeated hour, and the saturation is capped before it reaches any user-facing
+    payload -- but it is reachable, not impossible.
 
     R5's missed-deadline hold -- the one documented case that keeps pursuing the occurrence
     that has just elapsed -- is deliberately not modelled here; it is a separate, stateful
@@ -118,9 +134,13 @@ def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
     """Hours from `earlier` to `later` as a true elapsed duration.
 
     Both aware -> normalised to UTC first, so a DST transition inside the interval is counted.
-    Either naive -> plain subtraction, since there is no zone to normalise against (and
+    Both naive -> plain subtraction, since there is no zone to normalise against (and
     `astimezone()` on a naive datetime would silently assume the MACHINE's local zone, which is
     not this pure engine's to know).
+    Mixed -> raises TypeError, from the subtraction itself. That is deliberate: the only way to
+    reconcile the pair is to guess a zone for the naive side, and a silent wrong guess here is
+    worse than a loud caller error. Unreachable from the control cycle, where `now_dt` is always
+    aware and the occurrence inherits its tzinfo.
     """
     if later.tzinfo is not None and earlier.tzinfo is not None:
         later = later.astimezone(UTC)
@@ -176,10 +196,12 @@ def resolve_required_current(
         # or imminent deadline carries no urgency regardless of time remaining.
         required_a = 0.0
     elif remaining_hours <= 0:
-        # Defensive only: `resolve_next_occurrence` never returns a datetime at or before
-        # `now`, so the control cycle cannot reach this. Kept because this is a public pure
-        # function -- an elapsed `deadline_at` passed in directly still saturates to maximum
-        # urgency rather than raising ZeroDivisionError.
+        # Near-unreachable from the control cycle: `resolve_next_occurrence` returns an
+        # occurrence strictly after `now` by wall clock, which is also after it absolutely
+        # except inside a fall-back repeated hour (see that function's docstring). Kept both
+        # for that corner and because this is a public pure function -- an elapsed
+        # `deadline_at` passed in directly saturates to maximum urgency rather than raising
+        # ZeroDivisionError.
         required_a = float("inf")
     else:
         power_w = (energy_needed_kwh * 1000) / remaining_hours

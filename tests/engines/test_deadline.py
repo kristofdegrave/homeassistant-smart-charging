@@ -13,7 +13,7 @@ is expressible. The same-day constants below are kept only because they reproduc
 exact arithmetic (75 kWh * 30% / 8h / 230V = 12.228 A), not because of any date constraint.
 """
 
-from datetime import datetime, time
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -480,11 +480,62 @@ def test_naive_datetimes_are_left_alone_rather_than_assuming_a_machine_timezone(
     assert result.required_a == pytest.approx(22.5 * 1000 / 8 / 230.0, abs=1e-3)
 
 
-def test_next_occurrence_comparison_stays_wall_clock_across_the_transition():
-    """R15 asks whether the departure time is "earlier in the day than the current time" -- a
-    wall-clock question. On the transition day itself, an 07:00 departure is still ahead of a
-    01:00 `now` even though only 5 real hours separate them."""
-    now = datetime(2026, 3, 29, 1, 0, tzinfo=BRUSSELS)
-    assert resolve_next_occurrence(
-        deadline_today=time(7, 0), deadline_tomorrow=time(7, 0), now=now
-    ) == datetime(2026, 3, 29, 7, 0, tzinfo=BRUSSELS)
+def test_next_occurrence_comparison_stays_wall_clock_inside_the_repeated_hour():
+    """R5 asks whether the departure time is "earlier in the day than the current time" -- a
+    wall-clock question, deliberately NOT normalised to absolute time.
+
+    Inside the fall-back repeated hour these two readings genuinely disagree, which is what
+    makes this test discriminate where a plain "07:00 is after 01:00" case would not: `now` at
+    02:30 fold=1 is 01:30 UTC, while a 02:45 occurrence built with combine's `fold=0` is 00:45
+    UTC -- wall-clock later, absolutely earlier. The wall-clock reading is the one R5 wants, so
+    the occurrence is returned; an implementation that normalised the comparison would skip to
+    tomorrow instead."""
+    now = datetime(2026, 10, 25, 2, 30, tzinfo=BRUSSELS, fold=1)
+    occurrence = resolve_next_occurrence(
+        deadline_today=time(2, 45), deadline_tomorrow=time(7, 0), now=now
+    )
+    assert occurrence == datetime(2026, 10, 25, 2, 45, tzinfo=BRUSSELS)
+    # ...and the documented consequence: the absolute window is NEGATIVE, so the "strictly
+    # after now" property is a wall-clock one only. This is why the saturation branch and the
+    # coordinator's inf cap are still live paths rather than dead defensive code.
+    assert occurrence.astimezone(UTC) < now.astimezone(UTC)
+
+
+def test_spring_forward_gap_departure_resolves_permissively_not_conservatively():
+    """A departure time inside the spring-forward gap (02:00-03:00, which never occurs) is
+    resolved by `combine`'s `fold=0`. PEP 495 INVERTS for gaps: fold=0 is the pre-transition
+    offset, i.e. the chronologically LATER instant -- 01:30 UTC here, against fold=1's 00:30
+    UTC. So the window is up to an hour longer and required_a correspondingly understated.
+
+    Pinned because the docstring previously claimed the opposite. The behaviour is accepted
+    (bounded by one hour, one night a year, only for a departure inside the gap); the point of
+    this test is that the claim and the code agree."""
+    now = datetime(2026, 3, 29, 0, 30, tzinfo=BRUSSELS)
+    occurrence = resolve_next_occurrence(
+        deadline_today=time(2, 30), deadline_tomorrow=time(7, 0), now=now
+    )
+    assert occurrence.utcoffset() == timedelta(hours=1)  # pre-transition CET, not CEST
+    assert occurrence.astimezone(UTC) == datetime(2026, 3, 29, 1, 30, tzinfo=UTC)
+    # The conservative reading would have been 00:30 UTC -- an hour less window, not more.
+    assert occurrence.astimezone(UTC) > datetime(2026, 3, 29, 0, 30, tzinfo=UTC)
+
+
+def test_mixed_naive_and_aware_raises_rather_than_guessing_a_timezone():
+    """The only way to reconcile a mixed pair is to guess a zone for the naive side, and a
+    silent wrong guess is worse than a loud caller error.
+
+    This also pins the tzinfo inspection itself: an implementation that called
+    `astimezone(UTC)` unconditionally would silently convert the naive operand using the
+    MACHINE's zone instead of raising -- a mutation the naive-pair test above cannot catch on a
+    UTC runner, where that conversion is the identity."""
+    with pytest.raises(TypeError):
+        resolve_required_current(
+            deadline_at=datetime(2026, 3, 29, 7, 0, tzinfo=BRUSSELS),
+            now=datetime(2026, 3, 28, 23, 0),  # naive
+            soc=50.0,
+            active_soc_limit=80.0,
+            ev_battery_capacity_kwh=75.0,
+            voltage=230.0,
+            baseline_desired_a=6.0,
+            maximum_permitted_rate_a=32.0,
+        )
