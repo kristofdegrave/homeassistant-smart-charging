@@ -28,10 +28,18 @@ except Exception:
 **Fix:** catch the specific exception, and either handle it meaningfully or let it reach the
 path that is designed to deal with it (in this integration, the fault path).
 
-**The one sanctioned broad catch:** the coordinator's `_async_update_data` boundary keeps a
-deliberate `except Exception` (with its `# noqa: BLE001`) because ADR-0007 requires *every*
-failure to funnel to the fault path — force 0 A + `Fault` — rather than propagate. That is a
-safety invariant, not an oversight; do not flag it, and do not copy it anywhere else.
+**Sanctioned broad catches.** This integration deliberately keeps several `except Exception`
+boundaries, because a design rule requires the failure to be *absorbed* rather than propagate:
+the coordinator's `_async_update_data` fault funnel (ADR-0007 — every failure becomes 0 A +
+`Fault`), `Store.write`'s best-effort service call (ADR-0018 — explicitly *not* a hardware
+fault), `_safe_write_zero`, the notification-delivery paths, the vehicle-limit write to a
+possibly-unplugged car, and the dashboard registration a Client must not take the control loop
+down with (ADR-0022).
+
+What makes one legitimate is not the file it sits in: it is marked `# noqa: BLE001` (where the
+linter would object) **and** carries a comment naming the rule that requires absorbing the
+failure. A broad catch missing either is the anti-pattern above; one with both is a safety
+invariant — do not flag it, and do not add a new one without the same justification.
 
 ```python
 # GOOD
@@ -91,8 +99,9 @@ def process(data: dict[str, int]) -> int:
 
 Run this before committing, and when reviewing a diff:
 
-- [ ] No bare `except Exception:` — least of all one that swallows (`pass`) or hides a fault
-      (sole exception: the coordinator's ADR-0007 fault-path boundary)
+- [ ] No bare `except Exception:` — least of all one that swallows (`pass`) or hides a fault.
+      A broad catch is legitimate only when it is `# noqa: BLE001`-marked *and* names the rule
+      that requires absorbing the failure (see above); unmarked or unexplained is a finding
 - [ ] Exceptions caught are specific, and either handled or deliberately re-raised
 - [ ] No batch/loop that silently drops the successes when one item fails
 - [ ] Every acquired resource is released (`with` / `async with` / paired teardown)

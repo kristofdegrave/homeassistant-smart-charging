@@ -48,7 +48,7 @@ don't re-derive the universal steps here.
 - **Pre-commit self-check**: run the **Quick review checklist** at the end of the
   `python-anti-patterns` skill over the diff before each commit. If the change touches async
   code, also run `async-python-patterns`' checklist — that skill's **When this file applies**
-  section states exactly which files count (everything but pure `modes/`/`engines/` logic).
+  section states exactly which files count.
 - **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s
   Contribution workflow section — read it before starting. Covers ruff/pytest green, coverage
   matches the change, runtime-verified not just test-verified.

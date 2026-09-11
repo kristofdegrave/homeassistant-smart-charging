@@ -17,8 +17,7 @@ Scoped deliberately — HA platform conventions live in `ha-integration-knowledg
 **When this file applies** — the single statement of the condition, which everything else
 points at: any changed file under `custom_components/smart_charging/` that is **not** pure
 `modes/`/`engines/` logic. That is the coordinator, `adapters/`, `managers/`, `config_flow.py`,
-`__init__.py`, `dashboard.py` and the entity platform files — every one of them runs on HA's
-loop. A diff confined to `modes/`/`engines/` cannot break any rule below, so skip it there.
+`__init__.py`, `dashboard.py` and the entity platform files — all of them run on HA's loop.
 
 ## 1. Never block the event loop
 
@@ -48,27 +47,32 @@ result = adapter.async_read()          # BAD: a coroutine object, never executed
 result = await adapter.async_read()    # GOOD
 ```
 
-A coroutine that is created and never awaited both skips its work and surfaces as a
-"coroutine was never awaited" warning at an unrelated point in the log, far from the line
-that caused it.
+A coroutine created and never awaited skips its work and surfaces as a "never awaited"
+warning far from the line that caused it.
 
 ## 3. Anything that outlives the call is tied to the config entry
 
 Every timer, state listener and subscription registered during setup must stop when the entry
 unloads. This is load-bearing here: ADR-0008 reloads the entry on every reconfigure and every
 options change, so a leaked registration is not a rare edge case — each reload adds another
-one. Register the unsubscribe with
-`entry.async_on_unload(...)` **at the point you create it**, or hand the unsub straight back
-to setup, which does — the pattern this integration uses throughout (`__init__.py`):
+one. Register the unsubscribe with `entry.async_on_unload(...)` **at the point you create
+it**, or hand the unsub straight back to setup, which does — both shapes are in use here:
 
 ```python
+# register at creation (__init__.py)
 entry.async_on_unload(
-    async_track_time_interval(hass, coordinator.async_refresh, interval)
+    async_track_time_interval(
+        hass, notification_manager.async_evaluate, timedelta(seconds=interval_s)
+    )
 )
-entry.async_on_unload(
-    async_track_state_change_event(hass, entity_ids, _handle_change)
-)
+
+# or hand the unsubs back to setup, which registers them (managers/vehicle_limit.py)
+for unsub in vehicle_limit_manager.register_listeners(...):
+    entry.async_on_unload(unsub)
 ```
+
+(The coordinator itself needs none of this: `DataUpdateCoordinator` takes `update_interval`
+and HA owns that timer.)
 
 A registration whose unsubscribe is dropped survives the reload and then fires twice — see
 `__init__.py`'s own note on the leak this fixed.
@@ -92,9 +96,8 @@ except asyncio.CancelledError:
     raise            # propagate, always
 ```
 
-This is a specific catch, so it satisfies `python-anti-patterns`' rule — but note the one
-twist: `CancelledError` is caught **only** to clean up, never to handle. Re-raising is
-mandatory, not optional.
+This is a specific catch, so it satisfies `python-anti-patterns`' rule — with one twist:
+`CancelledError` is caught **only** to clean up, never to handle. Re-raising is mandatory.
 
 ## 5. Mind what an `await` interleaves
 
@@ -117,9 +120,8 @@ machine have nothing to overlap — a sequential loop is both faster and safer t
 ## 7. Bound anything that can hang
 
 No current call site — every read today resolves from `hass.states` in memory. This applies
-the first time an adapter talks to a device or a network: any await on an external device,
-network call or unbounded queue gets an explicit timeout, so one unresponsive device cannot
-wedge a control cycle.
+the first time an adapter talks to a device or a network: bound every such await with an
+explicit timeout, so one unresponsive device cannot wedge a control cycle.
 
 ```python
 async with asyncio.timeout(5):
@@ -132,6 +134,8 @@ async with asyncio.timeout(5):
       through `hass.async_add_executor_job`
 - [ ] No blocking I/O, `time.sleep`, or sync HTTP inside a coroutine
 - [ ] Every coroutine call is awaited (or deliberately handed to a tracked task creator)
+- [ ] Every timer, listener and subscription created during setup has its unsubscribe passed
+      to `entry.async_on_unload(...)`
 - [ ] No bare `asyncio.create_task`; background work uses HA's tracked creators and dies with
       the entry
 - [ ] `CancelledError` is cleaned up after and re-raised, never swallowed
