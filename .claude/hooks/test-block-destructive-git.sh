@@ -168,6 +168,15 @@ B"
 run ALLOW 'cat <<\EOF
 git clean -f
 EOF'
+# An empty body is a body: the terminator still closes it.
+run ALLOW "cat <<'EOF'
+EOF"
+# An escaped quote must not flip the opener line's quote state.
+run ALLOW "printf \"a\\\"b\" > /tmp/f; cat <<'EOF'
+git clean -f
+EOF"
+# `<<` in an arithmetic shift is not a heredoc opener, and nothing follows it to blank.
+run ALLOW 'echo $((1 << 2))'
 # Real commands after a terminated heredoc are still scanned -- these are allowed ones.
 run ALLOW "cat > /tmp/doc.md <<'EOF'
 git push --force
@@ -204,6 +213,21 @@ EOF"
 run BLOCK "ssh host <<'EOF'
 git clean -f
 EOF"
+# The interpreter is recognised through a path, not just as a bare name.
+run BLOCK "/bin/sh <<'EOF'
+git clean -f
+EOF"
+# `<<-` strips tabs only: a space-indented terminator does not terminate, in sh or here.
+run BLOCK "cat > /tmp/doc.md <<-'EOF'
+  git clean -f
+  EOF"
+# The single-quote arm of the opener-line quote scan.
+run BLOCK "echo 'see <<\"EOF\" below'
+git clean -f
+EOF"
+# An arithmetic shift must not open a heredoc that swallows what follows.
+run BLOCK 'echo $((1 << 2))
+git clean -f'
 # An unquoted heredoc sharing an opener line with a quoted one keeps its own body.
 run BLOCK "cat <<A <<'B'
 git clean -f

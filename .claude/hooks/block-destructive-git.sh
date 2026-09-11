@@ -12,11 +12,15 @@
 # Scope and known limits. This is an accident guard, not a sandbox. It word-splits
 # each command without understanding shell quoting, so a destructive command wrapped
 # in another shell (`bash -c "git push --force"`) is not seen. The one construct it
-# does parse is the heredoc: the body of a *quoted*-delimiter heredoc (`<<'EOF'`,
-# `<<"EOF"`) is inert text -- no expansion can run inside it -- so it is blanked out
-# before the scan, which would otherwise read a documentation line beginning `git
-# clean -f` as a command position. An *unquoted* delimiter (`<<EOF`) leaves `$(...)`
-# live inside the body, so that body is still scanned and such prose is still denied.
+# does parse is the heredoc: the body of a quoted-delimiter heredoc (`<<'EOF'`,
+# `<<"EOF"`, `<<\EOF`, and their `<<-` forms) is inert to the shell that reads it --
+# quoting the delimiter disables every expansion -- so it is blanked out before the
+# scan, which would otherwise read a documentation line beginning `git clean -f` as a
+# command position. Quoting says nothing about what the *consumer* of the body does
+# with it, so blanking has carve-outs, all spelled out at strip_heredoc_bodies below:
+# an unquoted delimiter and any heredoc handed to an interpreter keep their body in
+# the scan, an opener that is itself inside quotes opens nothing, and that quote scan
+# is single-line and comment-blind.
 # Conversely, only a segment whose *first* word is git is inspected, so prose that
 # merely mentions a blocked command (`gh pr comment --body "... git reset --hard ..."`)
 # runs untouched -- as long as that prose carries no shell separator, since the split on
@@ -135,8 +139,9 @@ has_short_flag() { # a single-dash (non "--") argument carrying that letter
 }
 
 # Blank out the body of every quoted-delimiter heredoc (`<<'EOF'`, `<<"EOF"`, `<<\EOF`,
-# and their `<<-` forms), keeping the line count so the lines that remain are still real
-# command positions. Deliberately narrow, so that it fails closed:
+# and their `<<-` forms). Bodies are blanked rather than deleted, so every line that
+# remains is still the command position it was. Deliberately narrow, so that it fails
+# closed:
 #   - an unquoted delimiter (`<<EOF`) keeps expansions live in the body, so that body is
 #     left in place and scanned -- and is tracked separately when it shares an opener
 #     line with a quoted one, so only the quoted heredoc's own lines are blanked;
@@ -149,34 +154,44 @@ has_short_flag() { # a single-dash (non "--") argument carrying that letter
 #   - a heredoc fed to a shell (`sh <<'EOF'`, `cat <<'EOF' | bash`, `ssh host <<'EOF'`)
 #     really does execute its body, so an opener line naming an interpreter keeps its
 #     body in the scan.
+#
+# The quote scan behind the third rule reads one line at a time and knows nothing about
+# `#` comments or bash's `$'...'`, so an opener inside a quoted string that *opened on an
+# earlier line* still reads as an opener. That is the residual fail-open here, and it is
+# the same shape the header already concedes for `bash -c`: contrived to reach, and no
+# harder to reach deliberately than the wrappers this guard never claimed to see.
 strip_heredoc_bodies() {
   printf '%s\n' "$1" | awk '
     BEGIN {
       q = sprintf("%c", 39)  # a single quote, unwritable inside this quoted program
-      # A delimiter is quoted (inert body), backslash-quoted, or a bare word.
+      # A delimiter is quoted (inert body), backslash-quoted, or a bare word. The bare
+      # word arm also matches non-delimiters such as the `<< 2` of an arithmetic shift;
+      # that is harmless because a bare word is never marked inert, so it can only cause
+      # less to be blanked, never more.
       opener = "<<-?[ \t]*(\"[^\"]*\"|" q "[^" q "]*" q "|\\\\?[A-Za-z0-9_.-]+)"
       sep = "[ \t;|&()<>\"" q "]+"
       ni = split("sh bash dash ash ksh zsh busybox ssh su sudo docker podman eval source", s, " ")
       for (x = 1; x <= ni; x++) interpreter[s[x]] = 1
     }
 
-    # Is position p of line s inside a quoted string?
-    function inquote(s, p,   x, c, st) {
-      st = 0
-      for (x = 1; x < p; x++) {
-        c = substr(s, x, 1)
-        if (st == 0) {
-          if (c == "\\") x++
-          else if (c == q) st = 1
-          else if (c == "\"") st = 2
-        } else if (st == 1) {
-          if (c == q) st = 0
+    # Is position _p of line _s inside a quoted string? Parameters are prefixed so they
+    # cannot shadow the globals the END rule walks with.
+    function inquote(_s, _p,   _x, _c, _st) {
+      _st = 0
+      for (_x = 1; _x < _p; _x++) {
+        _c = substr(_s, _x, 1)
+        if (_st == 0) {
+          if (_c == "\\") _x++
+          else if (_c == q) _st = 1
+          else if (_c == "\"") _st = 2
+        } else if (_st == 1) {
+          if (_c == q) _st = 0  # sh has no escapes inside single quotes
         } else {
-          if (c == "\\") x++
-          else if (c == "\"") st = 0
+          if (_c == "\\") _x++
+          else if (_c == "\"") _st = 0
         }
       }
-      return st != 0
+      return _st != 0
     }
 
     { line[NR] = $0 }
@@ -251,7 +266,11 @@ strip_heredoc_bodies() {
     }'
 }
 
-cmd=$(strip_heredoc_bodies "$cmd")
+stripped=$(strip_heredoc_bodies "$cmd")
+# An awk that chokes on the program above would yield nothing, and an empty command
+# would sail through the scan below with every segment gone. Keep the unstripped text
+# in that case: false positives on heredoc prose are the price, denial is preserved.
+[ -n "$stripped" ] && cmd=$stripped
 
 # Split the command line on shell separators so a guarded command placed after
 # && / || / ; / | / a newline is inspected in its own right.
