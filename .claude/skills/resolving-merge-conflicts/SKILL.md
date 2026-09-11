@@ -22,21 +22,26 @@ shape this procedure:
 
 - **Integrate with `git merge origin/main`, not a rebase.** Starting a rebase is denied on a
   branch that has an upstream — the hook's proxy for "already published", which a branch under
-  review normally is. Merging is what the workflow step that sends you here asks for anyway.
-  Flags that only steer a rebase *already* in progress stay available, so a rebase legitimately
-  started on an unpublished branch can always be finished.
+  review normally is. The workflow step that sends you here accepts either, so merge. Flags that
+  only steer a rebase *already* in progress stay available, so a rebase legitimately started on
+  an unpublished branch can always be finished.
 - **Name paths; never discard the tree.** Take one side of a conflicted file with
-  `git checkout --ours -- <path>` or `--theirs -- <path>`. Discarding the whole working tree is
-  denied, as are force-push and forced branch deletion — no resolution needs any of them, and if
-  yours seems to, you are rewriting published history: stop and ask the human partner.
+  `git checkout --ours -- <path>` or `--theirs -- <path>` — but in a **rebase** those two are
+  inverted, `--ours` meaning the upstream you are replaying onto and `--theirs` your own commit,
+  so confirm which operation you are in before trusting either. Discarding the whole working
+  tree is denied, as are force-push and forced branch deletion — no resolution needs any of
+  them, and if yours seems to, you are rewriting published history: stop and ask the human
+  partner.
 
 `--abort` is not blocked by the hook. It is blocked by this skill.
 
 ## Step 1 — see the state
 
-`git status` for the unmerged paths, and `git log --oneline --left-right HEAD...MERGE_HEAD` —
-`REBASE_HEAD` in a rebase — for what each side actually contributed. Read every conflicted file
-whole, not just the marked hunks: a conflict usually means the surrounding code moved too.
+`git status` for the unmerged paths, and `git log --oneline --left-right HEAD...MERGE_HEAD` for
+what each side contributed. In a rebase the incoming commit is `REBASE_HEAD` and `HEAD` already
+carries whatever replayed cleanly before it, so read that pair as "what is landing now", not as
+a two-side split. Either way, read every conflicted file whole rather than only the marked
+hunks: a conflict usually means the surrounding code moved too.
 
 ## Step 2 — find the primary sources for each side
 
@@ -97,9 +102,10 @@ Fix what the merge broke, in the merge, before committing.
 
 Stage everything, then finish the operation you are in: commit the merge, or `git rebase
 --continue` and repeat steps 1-4 for each further commit that conflicts, until the rebase is
-done. A merge commit is the one exception to the default commit-message shape the completion-bar
-doc gives — keep git's generated message, adding one line per hunk where a side had to be
-dropped, naming which and why.
+done. A merge commit is an exception to the default commit-message shape the completion-bar doc
+gives — keep git's generated message, adding one line per hunk where a side had to be dropped,
+naming which and why. A rebase has no such commit: put those lines in the report below instead,
+since `--continue` reuses the replayed commit's own message.
 
 Then report to the human partner, before resuming the workflow step that sent you here: the
 hunks where the two intents were incompatible and what you dropped, plus any behaviour
