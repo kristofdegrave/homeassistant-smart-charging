@@ -33,9 +33,10 @@ also covering commit message conventions).
    merging auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>`
    on every PR except the one that finishes the issue. Move the issue's board **Status** to
    `In review`.
-3. **Review.** Fresh, separate reviewer agent for the artifact type, always **Opus** — never
-   inline in the main session. Which agent, and on which model, is looked up in CLAUDE.md's
-   **Model selection** table (its model-selection rule). Before this, and
+3. **Review.** Fresh, separate reviewer agent for the artifact type — never inline in the
+   main session. Which agent, and on which model, is CLAUDE.md's model-selection rule: look it
+   up in that file's **Model selection** table, whose review column reads Opus in every row
+   today. Before this, and
    before every later pass in the loop: check if the
    branch is behind `origin/main`; if so, merge/rebase `origin/main` in and resolve conflicts
    before reviewing, so review always runs against current `main`.
