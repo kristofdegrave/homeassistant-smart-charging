@@ -21,6 +21,18 @@ explicitly two-day decision, and the formula only ever sees a concrete datetime.
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 
+DEADLINE_URGENCY_MARGIN = 0.25
+"""R5's proportional slack, as a fraction of the time needed to close the gap.
+
+A domain rule, not a configurable value (system-overview.md's `deadline urgency margin`), and
+deliberately proportional rather than a fixed number of minutes so a long charge is protected
+in proportion to its length. Defined on the TIME needed, which is why the rate form below
+divides by `1 + DEADLINE_URGENCY_MARGIN` -- that is a 20% reduction of the rate, not 25%.
+
+It is not decoration: with a zero margin the engage threshold collapses onto the unreachable
+threshold and UC05's `Urgent` band disappears entirely.
+"""
+
 
 def resolve_departure_deadline(
     external_configured: bool,
@@ -126,8 +138,8 @@ class RequiredCurrentResult:
     """Result of resolving the current required to meet a departure deadline."""
 
     required_a: float | None  # None when no deadline is resolved (urgency never applies)
-    urgent: bool  # required_a > baseline_desired_a
-    unreachable: bool  # required_a > maximum_permitted_rate_a
+    urgent: bool  # slack test fired, or a latch not yet cleared by the handback test
+    unreachable: bool  # required_a > escalated_maximum_permitted_rate_a
 
 
 def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
@@ -156,7 +168,8 @@ def resolve_required_current(
     ev_battery_capacity_kwh: float,
     voltage: float,
     baseline_desired_a: float,
-    maximum_permitted_rate_a: float,
+    escalated_maximum_permitted_rate_a: float,
+    urgency_latched: bool,
 ) -> RequiredCurrentResult:
     """R5/R15's required-current formula (resolution-rules.md 'Required current for the
     departure deadline'):
@@ -180,10 +193,34 @@ def resolve_required_current(
     at all. A naive `now`/`deadline_at` pair is left exactly as it is; only the aware case is
     normalised.
 
-    `urgent` = required_a > baseline_desired_a (the mode rows 3-5 of Auto mode-selection
-    would otherwise pick, or the Manual mode itself -- the caller resolves
-    `baseline_desired_a`, this function only compares). `unreachable` = required_a >
-    maximum_permitted_rate_a even so.
+    Urgency is ENTERED by the slack test and LEFT by the handback test -- they are not each
+    other's inverse, which is why `urgency_latched` (whether urgency was in effect entering this
+    cycle) is an input rather than something this function could re-derive:
+
+        slack test:  required_a > escalated_maximum_permitted_rate_a / (1 + margin)
+        handback:    baseline_desired_a >= required_a, on a cycle whose slack test does not hold
+
+    `escalated_maximum_permitted_rate_a` is the rate that WOULD be in force with the effective
+    peak limit raised to the maximum peak -- resolved by the caller every cycle whether or not
+    urgency is actually in effect. That unconditionality is the point: judged against the rate
+    currently in force, engaging urgency would raise that rate and instantly falsify the very
+    test that engaged it.
+
+    The slack test takes precedence where both hold, which they can: a desired charger current
+    is what a mode ASKS for, pre-clamp, so a baseline mode can want more than the escalated rate
+    could ever deliver. Letting the handback win there would clear urgency and re-engage it the
+    next cycle, for ever.
+
+    The latch is why charging at the escalated rate does not revert urgency: it closes the gap
+    faster than the clock closes the window, so the slack test is falsified within one cycle.
+
+    `unreachable` = required_a > escalated_maximum_permitted_rate_a, the same comparison with no
+    margin -- so it is a strict subset of urgency by construction, and UC05's
+    Normal -> Urgent -> Unreachable ordering holds without a rule of its own.
+
+    Urgency's remaining clear conditions live with the caller, not here: a disconnect, and a
+    missed-deadline hold clearing (issue #1006). "No deadline" is handled below, since this
+    function already sees it.
     """
     if deadline_at is None:
         return RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)
@@ -207,8 +244,18 @@ def resolve_required_current(
         power_w = (energy_needed_kwh * 1000) / remaining_hours
         required_a = power_w / voltage
 
+    slack_test_holds = required_a > escalated_maximum_permitted_rate_a / (
+        1 + DEADLINE_URGENCY_MARGIN
+    )
+    if urgency_latched:
+        # Precedence: the handback only clears on a cycle the slack test would not re-engage.
+        handback = baseline_desired_a >= required_a and not slack_test_holds
+        urgent = not handback
+    else:
+        urgent = slack_test_holds
+
     return RequiredCurrentResult(
         required_a=required_a,
-        urgent=required_a > baseline_desired_a,
-        unreachable=required_a > maximum_permitted_rate_a,
+        urgent=urgent,
+        unreachable=required_a > escalated_maximum_permitted_rate_a,
     )
