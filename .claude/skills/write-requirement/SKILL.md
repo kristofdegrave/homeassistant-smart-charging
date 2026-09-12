@@ -22,6 +22,19 @@ here.
   the glossary, the mechanism docs (`control-cycle.md` / `resolution-rules.md`), and
   `entity-catalog.md` (new `sc_` entities, with defaults matching the requirement) so the
   whole analysis layer stays consistent.
+- **Propagate past the analysis layer**, same step — the documents are not the last stop, and a
+  requirement the code contradicts is not consistent. This is how you settle whether the change
+  touches shipped behaviour, which is the question `CLAUDE.md`'s **Contribution workflow**
+  section's `needs-approval` gate turns on. Search `custom_components/` for the behaviour each
+  added or changed acceptance criterion **or constraint row** constrains (the entity it names,
+  the clamp, the lookup, the default), and **state the finding in the PR body**: either the code
+  already satisfies every such criterion — name the file and the function that does it — or it
+  does not. Where it does not, **file a `specs` child issue for that gap as part of this PR**
+  and reference it in the body — a `specs` issue, not a task issue, for the reason that section
+  routes to; `CLAUDE.md`'s **Tracker mechanics** section routes to the filing commands.
+  Behaviour the code does not implement at all is this same second case, not an exemption from
+  it. Done when the PR body says which of the two cases holds, and names the `specs` issue if it
+  is the second.
 
 ## Requirement format
 
@@ -55,5 +68,7 @@ here.
 - Adding a term to a requirement without defining it in the glossary first.
 - Leaving ripples unpropagated (requirement added but no `entity-catalog.md` row / no clamp in
   `control-cycle.md`).
+- Propagating to the documents only — merging a criterion the shipped code contradicts, with
+  nothing filed to close the gap.
 - Acceptance criteria that describe *how* (a mechanism) instead of an observable *what*.
 - Duplicating a requirement's home in two documents.
