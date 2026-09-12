@@ -50,8 +50,8 @@ need to know … If you're looking at an integration, you must use this as your 
 — names one branch so broad it always fires. **Project rule, overriding the upstream advice:** a
 pointer to project-dependent material names the `CLAUDE.md` section that owns the topic rather
 than the material itself — stated in full, with its boundaries and its scope, in
-[Project-dependent content routes through `CLAUDE.md`](#project-dependent-content-routes-through-claudemd)
-below.
+[Project-dependent content routes through
+`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) below.
 
 **The two loads.** **Context load** is what always-loaded material costs every turn — the fixed
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
@@ -112,18 +112,20 @@ repository's pipeline.
 - **An artifact may name another skill or agent.** They travel together — `.claude/` moves as
   one tree — so a cross-reference between them stays valid wherever the tree is installed, and
   routing it through `CLAUDE.md` would buy nothing.
-- **An artifact may name `CLAUDE.md` and a section heading in it.** That is a specific target,
-  so it satisfies *Scope the read* below and the checklists' "name the file, not 'read the
-  docs'" bar; it costs the run one extra hop and buys a route every artifact inherits from a
-  single edit. Name the heading, never just the file: `CLAUDE.md` without a section is "read
-  the docs" again.
+- **An artifact may name `CLAUDE.md` and a section heading in it.** A *named section* is a
+  specific target, so it meets *Scope the read* below and the checklists' "name the file, not
+  'read the docs'" bar — which is why the heading is required and `CLAUDE.md` alone is not
+  enough. What it costs is the onward hop only: `CLAUDE.md` itself is already loaded on every
+  run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
+  route every artifact inherits from a single edit.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
-  resource list.** Write "this project" where a name is tempting; route the path and the list.
+  resource list** — with the one exception of its own subject matter, defined immediately
+  below. Write "this project" where a name is tempting; route the path and the list.
 - **Where no `CLAUDE.md` section owns the topic, add the route there — never the fact.** One
-  line naming the topic and the document that owns it, and no more: `CLAUDE.md` is read in full
-  on every cold session and is the cached prefix, so a fact parked in it is paid for by every
-  run and its churn by every warm one. If what you are about to add to `CLAUDE.md` is longer
-  than a route, it belongs in the document the route points at.
+  line naming the topic and the document that owns it, and no more — *Keep stable files stable*
+  below says what a fact parked in the always-loaded prefix costs every run, and its churn every
+  warm one. If what you are about to add to `CLAUDE.md` is longer than a route, it belongs in
+  the document the route points at.
 
 **What is not a route: subject matter.** The rule binds the project *documentation* an artifact
 reads to learn how to operate. The repo paths an artifact exists to *act on* — the trees a
@@ -131,40 +133,45 @@ reviewer's diff lands in, the workflow file a checklist is about, the tree a ski
 are the subject matter of its own criteria, not a route to documentation, and stay named. The
 test is which of the two a path is: *tells the artifact how to operate* → route it; *is what the
 artifact operates on* → name it. A checklist about the router workflow cannot route to the
-router workflow.
+router workflow. Where a path is **both** — `workflow-reviewer` reviews the tree this reference
+sits in *and* reads it for its criteria — subject matter wins and the path stays named; the
+route is then redundant, not forbidden.
 
-Two categories sit on that boundary often enough to have a recorded answer, so an author meeting
-them does not have to re-derive one:
+Some categories sit on that boundary often enough to have a recorded answer, so an author
+meeting one does not have to re-derive it:
 
 - **A reviewer agent's "what to read first" list is its checklist**, so it cannot simply be
-  emptied of paths — an `analysis-reviewer` with no paths is not reusable but inert. The
-  split above is the answer, and it is the one worked through on `workflow-reviewer`: project
+  emptied of paths — an `analysis-reviewer` with no paths is not reusable but inert. The split
+  above is the answer, and it is the one worked through on `workflow-reviewer`: project
   documentation the agent reads for its criteria routes through the `CLAUDE.md` section owning
   that topic, while the trees the agent exists to review stay named, including in the
   frontmatter `description` that dispatches it — an agent that cannot say what it reviews cannot
-  be dispatched to review it. Two rejected alternatives, so they are not re-proposed: moving the
-  reviewer agents’ read-lists into `CLAUDE.md` (it inflates the always-loaded prefix and inverts ownership —
-  the agent knows what it needs to read, `CLAUDE.md` knows where topics live), and exempting
-  reviewer agents wholesale (too wide: it would have excused an agent naming a document *and*
-  the `CLAUDE.md` section that points at the same document).
-- **A skill that exists for one project-invented artifact type** — `develop-task` and the
-  `write-*` family, each written for a document type that only exists because this project
-  invented it — does not gain reusability by being genericised, and the rule does not ask it to
-  be. A `write-use-case` skill has nothing to be in a repository with no use-case documents. So
-  the artifact type it produces, the tree it writes into, and the template it drafts against are
+  be dispatched to review it. Two rejected alternatives, so they are not re-proposed: moving
+  the reviewer agents' read-lists into `CLAUDE.md` (it inflates the always-loaded prefix and
+  inverts ownership — the agent knows what it needs to read, `CLAUDE.md` knows where topics
+  live), and exempting reviewer agents wholesale (too wide: it would have excused an agent
+  naming a document *and* the `CLAUDE.md` section that points at the same document).
+- **A skill whose whole purpose is one artifact type this project defines** — the `write-*`
+  family, each written for a document type that exists only because this project defines it,
+  and `develop-task`, written for a task as this project's implementation plans define one —
+  does not gain reusability by being genericised, and the rule does not ask it to be. A
+  `write-use-case` skill has nothing to be in a repository with no use-case documents. So the
+  artifact type it produces, the tree it writes into, and the template it drafts against are
   its subject matter and stay named. What still routes is everything it reads to know *how the
   project works around that artifact* — the review protocol, the lifecycle, the model tiering,
   the reference docs it is not itself about. The rule is near-vacuous for these skills, which is
   the decision, not an oversight.
 
 **Permanent scope: as written or changed, never as a sweep.** The rule binds an artifact at the
-moment it is newly written, or changed for some other reason — at which point the author brings
-it into line as part of the change already in hand. An artifact nobody has a reason to touch is
-never opened to satisfy this rule, and there is no retroactive conversion pass: artifacts
-predating the rule are conformant by age, not on borrowed time. This is the rule's standing
-scope, not a grace period that expires. A reviewer therefore applies it to the diff in front of
-it and not to an unconverted file that diff happens to read, sit beside, or resemble; a finding
-raised against untouched material is out of scope by construction.
+moment it is newly written, or changed for some other reason — and it binds **what that change
+writes**: every pointer the change adds or rewrites conforms, while prose the change leaves
+alone is owed no conversion. A typo fix is therefore not a conversion trigger, and converting
+the rest of a file you are rewriting anyway is welcome but never required. An artifact nobody
+has a reason to touch is never opened to satisfy this rule, and there is no retroactive
+conversion pass: artifacts predating the rule are conformant by age, not on borrowed time. This
+is the rule's standing scope, not a grace period that expires. A reviewer therefore applies it
+to what the diff writes, and not to an unconverted file that diff happens to read, sit beside,
+or resemble; a finding raised against untouched material is out of scope by construction.
 
 ## Principles
 
@@ -203,8 +210,8 @@ raised against untouched material is out of scope by construction.
 - [ ] Any file the skill tells the run to read is named specifically, not "read the docs".
 - [ ] Nothing project-dependent is stated in the skill; each such fact is routed per
       [Project-dependent content routes through
-      `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) — boundaries and scope
-      included.
+      `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) — its boundaries, its
+      subject-matter exception for the tree the skill writes into, and its scope included.
 - [ ] Every step ends on a completion criterion a run can decide, not a judgement word.
 - [ ] The invocation choice is justified: model-invoked only where the model or another skill
       must reach it, otherwise `disable-model-invocation: true`.
