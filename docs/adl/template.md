@@ -37,10 +37,11 @@ creates (new issues to open, docs to update) and anything it forecloses.
 **Blast radius** — required. Every site this decision governs *today*, and whether each
 conforms. Bound it like this, so it stays decidable instead of becoming an open-ended audit:
 
-1. State the **search** that enumerates the candidate sites — one literal `grep`/`glob`
-   command a reader can re-run, or a short explicitly listed set of them — and why its
-   pattern is wide enough: a pattern keyed on the narrowest name silently drops subclasses,
-   aliases and re-exports the decision also governs.
+1. State the **search** that enumerates the candidate sites — one ripgrep pattern with a
+   repo-rooted path, or a short explicitly listed set of them, runnable as written by a reader
+   holding nothing but `Grep`/`Glob` — and why its pattern is wide enough: a pattern keyed on
+   the narrowest name silently drops subclasses, aliases and re-exports the decision also
+   governs.
 2. Give **one row per hit**: the site, what it does today, and conforms / does not conform.
    Rows sharing a verdict may be grouped, as long as every hit is accounted for.
 3. Name the hits this ADR puts **out of scope** and what they keep doing instead. Silence is
@@ -51,4 +52,5 @@ in the out-of-scope list — not when the codebase has been audited. A decision 
 search genuinely returns no hits governs no existing site; say so, and give the search that
 shows it. A process decision is not automatically that case: it usually governs a tree of its
 own, and searches it like any other. Non-conforming sites are follow-up work; list them as
-such. `docs/adl/0038-unit-contract-at-the-power-read-adapter-boundary.md` is the worked example.
+such. `docs/adl/0038-unit-contract-at-the-power-read-adapter-boundary.md` is the worked example
+— for everything but its search string, whose BRE alternation and bare path predate this rule.
