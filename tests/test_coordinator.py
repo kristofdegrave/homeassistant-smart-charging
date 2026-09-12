@@ -2247,13 +2247,17 @@ async def test_baseline_dry_run_ignores_has_charged_after_escalation_deadlock(ha
     `idle()` but -- by design, issue #757 -- leaves `_has_charged` untouched), the
     baseline dry run for Solar must still be evaluated by every subsequent cycle (rows
     3-5, resolution-rules.md). Before the fix, threading the real `has_charged=True`
-    into the dry-run `CycleContext` sent Solar's `idle()` state straight to
+    into the baseline-query `CycleContext` sent Solar's `idle()` state straight to
     `Debouncing` every single cycle -- and since the dry run always discards its
     returned state, it can never advance past `Debouncing` on its own, pinning
-    `baseline_desired_a` at 0.0 forever. That makes `required_a > baseline_desired_a`
-    (any positive requirement) permanently True, so Auto can never revert from Captar
-    back to Solar even once the real deadline pressure drops well below what Solar
-    could deliver on its own."""
+    `baseline_desired_a` at 0.0 forever.
+
+    Under the pre-#1078 rule that made `required_a > baseline_desired_a` permanently True for any
+    positive requirement. The rule has since changed -- urgency engages on R5's slack test, not on
+    the baseline -- but the deadlock did not go away with it: a baseline pinned at 0 A can never
+    satisfy the HANDBACK either, so once urgency latches, Auto still cannot revert from Captar
+    back to Solar however far the deadline pressure drops. The regression this test guards is the
+    same one; only the mechanism it would break through has moved."""
     freezer.move_to("2026-01-15 12:00:00")
     # Ample surplus throughout -- ideal_a = 2760W / 230V = 12A, Solar's real un-debounced
     # desired current whenever it's actually dispatched.
@@ -3696,8 +3700,10 @@ async def test_urgency_latch_clears_on_disconnect(hass, freezer):
 # --- R5's escalated maximum permitted rate: the operands that actually bind (issue #1078) ---
 #
 # Every other urgency test uses `_seed_ample_peak_headroom`, which leaves the escalated rate at
-# C1's `max_current`. These three pin the other three operands, each of which could otherwise be
-# deleted from the `min()` with the suite still green.
+# C1's `max_current`. Three of the four below pin the other operands of the `min()`, each of which
+# could otherwise be deleted with the suite still green; the fourth pins the `max(rate_a, 0.0)`
+# floor, which is not a `min()` operand at all. The fifth test, further down, is the one that pins
+# that this helper's output is what the slack test is actually judged against.
 
 
 def _escalated_rate(coord, *, baseline_w, voltage=230.0, net_w=0.0, charger_w=0.0):
@@ -3777,3 +3783,40 @@ async def test_escalated_rate_ignores_the_peak_limit_for_power_with_its_r17_opto
     # The same baseline that floors the rate to 0 A above leaves C1's 16 A here, untouched by
     # a clamp that does not run.
     assert _escalated_rate(coord, baseline_w=9000.0) == 16.0
+
+
+async def test_urgency_is_judged_against_the_escalated_rate_not_c1(hass, freezer):
+    """The wiring the four tests above cannot reach: that
+    `_escalated_maximum_permitted_rate_a`'s result is what R5's slack test is judged against.
+
+    Every other coordinator- and e2e-tier urgency test has ample headroom, so the helper returns
+    C1's `max_current` (16 A) in all of them -- meaning the argument at the call site could be
+    replaced with `self._config.max_current` and the whole suite would stay green, silently
+    deleting the peak- and C4-bound behaviour those four tests establish.
+
+    Here C4 binds instead: `grid_ceiling_a=10` with a 2 A offset gives an 8 A escalated rate and
+    so a 6.4 A slack threshold. The deadline needs ~8.15 A -- over 6.4, but well under the 12.8 A
+    threshold C1's 16 A would have produced. So this is urgent if and only if the helper's own
+    (C4-bound) result reached the engine.
+    """
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
+    )
+    config = dataclasses.replace(
+        _config(), solar_available=False, grid_ceiling_a=10.0, grid_safety_offset_a=2.0
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)  # so the PEAK operand cannot be what binds
+    _seed_today_deadline(coord, hours_from_now=4)
+
+    await coord._async_update_data()
+
+    # ~8.15 A required: over 8.0/1.25 = 6.4, under 16.0/1.25 = 12.8.
+    assert coord._required_current.required_a == pytest.approx(8.15, abs=0.05)
+    assert coord._required_current.urgent is True

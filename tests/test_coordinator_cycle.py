@@ -999,18 +999,24 @@ def test_resolve_deadline_urgency_escalates_from_baseline_off_to_captar_when_urg
         mode_desired_current=fake_mode_desired_current,
     )
     assert calls == [MODE_OFF]  # baseline (rows 3-5, urgent=False) resolved to Off
-    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (0 A)
+    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A. The Off baseline's
+    # 0 A is NOT why this is urgent (that was the #1078 defect) -- the slack test is.
     assert result.required.urgent is True
-    assert result.required.unreachable is False  # 13.04 A < max_current_a (32.0)
+    assert result.required.unreachable is False  # 13.04 A < the 14.0 A escalated rate
     assert result.urgent is True
     assert result.resolved_mode == MODE_CAPTAR  # row 2: urgent -> Captar (available)
 
 
 def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_deadline():
-    """Auto dispatch where the baseline mode's own desired current (Solar, row 3) already
-    exceeds what the deadline requires -- urgent stays False and the real select_mode call,
-    seeing the identical (urgent=False) input as the baseline call, resolves to the same
-    mode. Proves the two calls agree when nothing escalates, not just when it does."""
+    """Auto dispatch on a deadline with ample slack: urgent stays False and the real select_mode
+    call, seeing the identical (urgent=False) input as the baseline call, resolves to the same
+    mode. Proves the two calls agree when nothing escalates, not just when it does.
+
+    The name is historical and two `docs/plans/` documents cite it as evidence for ADR-0017's
+    policy extraction, so it is kept: but since #1078 the 16 A Solar baseline is NOT what keeps
+    this out of urgency -- the slack test is, at 0.435 A required against a 25.6 A threshold.
+    The baseline would only matter to the handback, which needs a latch this call does not
+    carry. What the test still pins is the two select() calls agreeing when nothing escalates."""
 
     def fake_mode_desired_current(mode):
         return 16.0 if mode == MODE_SOLAR else 0.0
@@ -1029,7 +1035,8 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
         solar_start_threshold_w=1000.0,
         mode_desired_current=fake_mode_desired_current,
     )
-    # energy_needed = 10 * (80-79)/100 = 0.1 kWh over 1h = 100 W = 0.435 A < baseline (16 A)
+    # energy_needed = 10 * (80-79)/100 = 0.1 kWh over 1h = 100 W = 0.435 A, far under the
+    # 25.6 A slack threshold (the helper's default 32.0 A escalated rate / 1.25).
     assert result.required.urgent is False
     assert result.urgent is False
     assert result.resolved_mode == MODE_SOLAR  # same row-3 match as the baseline, unchanged
@@ -1115,6 +1122,28 @@ def test_resolve_deadline_urgency_still_urgent_for_a_genuinely_tight_deadline_to
     assert result.required.required_a != float("inf")
 
 
+def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
+    """`inputs.urgency_latched` reaches `resolve_required_current` (R5, issue #1078).
+
+    Every other DeadlineUrgencyInputs field has a discriminating test at this tier; this one is
+    the wiring for urgency's latch, so a silent failure to pass it through would make urgency
+    re-derive from the slack test every cycle and duty-cycle the charger.
+
+    Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
+    latch can account for the difference.
+    """
+    ample_slack = dict(
+        deadline_today=time(11, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        mode_desired_current=lambda mode: 0.0,
+    )
+    assert _resolve_deadline_urgency(urgency_latched=False, **ample_slack).urgent is False
+    assert _resolve_deadline_urgency(urgency_latched=True, **ample_slack).urgent is True
+
+
 # --- resolve_solar_reserve_gate (ADR-0023) ---
 
 
@@ -1181,25 +1210,3 @@ def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow
         )
         is False
     )
-
-
-def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
-    """`inputs.urgency_latched` reaches `resolve_required_current` (R5, issue #1078).
-
-    Every other DeadlineUrgencyInputs field has a discriminating test at this tier; this one is
-    the wiring for urgency's latch, so a silent failure to pass it through would make urgency
-    re-derive from the slack test every cycle and duty-cycle the charger.
-
-    Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
-    latch can account for the difference.
-    """
-    ample_slack = dict(
-        deadline_today=time(11, 0),
-        ev_soc=50.0,
-        active_soc_limit=80.0,
-        effective_battery_capacity_kwh=10.0,
-        escalated_maximum_permitted_rate_a=32.0,
-        mode_desired_current=lambda mode: 0.0,
-    )
-    assert _resolve_deadline_urgency(urgency_latched=False, **ample_slack).urgent is False
-    assert _resolve_deadline_urgency(urgency_latched=True, **ample_slack).urgent is True

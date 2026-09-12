@@ -1194,6 +1194,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         out-of-order control-path clamp. The headroom helper shares C4's arithmetic without being
         that step.
 
+        `peak_operand_kw` is threaded in for symmetry with the resolved limit and is provably
+        inert at this call: the effective-peak-limit rule's *Urgency raise* row returns the
+        maximum peak unconditionally, so no operand value can change what `urgent=True` resolves
+        to. It is passed rather than dropped so that a future row-1 that *does* consult the
+        operand needs no new plumbing here.
+
         The glossary names two cases in which the peak clamp does not run at all and only C1/C4
         bound the rate: `Power` with its own R17 peak-protection opt-out disabled, and the CapTar
         capability being absent (R18). `_peak_clamp_would_run` handles the first, mirroring
