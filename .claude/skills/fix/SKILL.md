@@ -1,6 +1,6 @@
 ---
 name: fix
-description: Use in an interactive session to run contribution-workflow step 5 on a Smart Charging PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply and resolve per thread. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
+description: Use in an interactive session to run this project's review-fix step (step 5 of its contribution workflow) on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply and resolve per thread. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
 ---
 
 # Fix review findings

@@ -1,6 +1,6 @@
 ---
 name: resolve-review-thread
-description: Use in an interactive session to close out one Smart Charging PR review thread — reply with what was done or why not, then resolve the thread only if it was actually fixed. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
+description: Use in an interactive session to close out one PR review thread in this project — reply with what was done or why not, then resolve the thread only if it was actually fixed. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
 ---
 
 # Resolve a review thread
