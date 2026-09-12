@@ -15,13 +15,14 @@ down.
 
 ## Step 0 — know which commands you have
 
-`.claude/hooks/block-destructive-git.sh` denies, as a `PreToolUse` hook, the destructive git
-commands that fall outside the standing commit/push authorization. That file is the authority on
-exactly what it denies and when — read it if a command comes back refused. Two of its decisions
-shape this procedure:
+Some destructive git commands fall outside the standing commit/push authorization and are
+refused mechanically by a `PreToolUse` guard. `CLAUDE.md`, **Contribution workflow**, names both
+the authorization and the guard script, and that script is the authority on exactly what it
+refuses and when — read it if a command comes back refused. Two of its decisions shape this
+procedure:
 
 - **Integrate with `git merge origin/main`, not a rebase.** Starting a rebase is denied on a
-  branch that has an upstream — the hook's proxy for "already published", which a branch under
+  branch that has an upstream — the guard's proxy for "already published", which a branch under
   review normally is. The workflow step that sends you here accepts either, so merge. Flags that
   only steer a rebase *already* in progress stay available, so a rebase legitimately started on
   an unpublished branch can always be finished.
@@ -33,7 +34,7 @@ shape this procedure:
   them, and if yours seems to, you are rewriting published history: stop and ask the human
   partner.
 
-`--abort` is not blocked by the hook. It is blocked by this skill.
+`--abort` is not blocked by the guard. It is blocked by this skill.
 
 ## Step 1 — see the state
 
@@ -48,13 +49,16 @@ hunks: a conflict usually means the surrounding code moved too.
 Reconstruct *intent* before touching a marker. Each side of a conflict here has a paper trail,
 in this order of usefulness:
 
-1. **The commit message** — its prefix (`T<n>:`, `UC<nn>:`, `docs:`) names the kind of work.
+1. **The commit message** — its prefix names the kind of work the commit did; the prefix
+   vocabulary is in the completion-bar doc's commit-message conventions, reached from
+   `CLAUDE.md`, **Contribution workflow**.
 2. **The anchored `Plan:` line** on the issue that commit's PR closes: it points at the exact
-   task in a `docs/plans/` implementation plan, which states what that task was allowed to
-   change.
+   task in an implementation plan, which states what that task was allowed to change.
+   `CLAUDE.md`, **Issue conventions**, gives that line's required format.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
    whose other children are often the other side of the conflict.
-4. **The owning analysis or design doc** cited by that plan task.
+4. **The owning specification document** cited by that plan task — `CLAUDE.md`'s **Document
+   structure** section says which documents own what.
 
 A side whose intent you cannot state in one sentence is a side you cannot resolve. Keep reading.
 
@@ -67,19 +71,20 @@ so in the PR thread. **Never invent a third behaviour that neither side wrote.**
 
 Three cases are not ordinary hunk-merging:
 
-- **The two sides disagree about what the system should do.** In `custom_components/`, that is
-  not a merge decision. `docs/analysis/` owns behaviour and specs derive from it rather than
-  design it (`write-impl-spec`'s *derive, don't design*). Resolve the mechanical part, then stop
-  and escalate the disagreement to the owning analysis doc through its own issue-first cycle.
+- **The two sides disagree about what the system should do.** In product code, that is not a
+  merge decision. Behaviour is owned by the analysis documents that `CLAUDE.md`'s **Document
+  structure** section lists, and specs derive from them rather than design it
+  (`write-impl-spec`'s *derive, don't design*). Resolve the mechanical part, then stop and
+  escalate the disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
   code.
-- **Generated or index-like content** — an epic body listing its children, `docs/adl/`
-  numbering, a catalog or coverage table, a use-case inventory. Re-derive it from its source
-  after taking both sides' underlying changes; hand-merging the rows yields a table matching
-  neither side's reality. `docs/adl/` needs one extra rule of its own: an ADR that has landed on
-  `main` never moves (`CLAUDE.md`, **Architecture Decision Records**), so when both sides claimed
-  the same number, it is the *unmerged* side's ADR that is renamed to a number free on a freshly
-  fetched `origin/main`, with every reference to it moved in the same commit.
+- **Generated or index-like content** — an epic body listing its children, ADR numbering, a
+  catalog or coverage table, a use-case inventory. Re-derive it from its source after taking
+  both sides' underlying changes; hand-merging the rows yields a table matching neither side's
+  reality. The ADR log needs one extra rule of its own: an ADR that has landed on `main` never
+  moves (`CLAUDE.md`, **Architecture Decision Records**), so when both sides claimed the same
+  number, it is the *unmerged* side's ADR that is renamed to a number free on a freshly fetched
+  `origin/main`, with every reference to it moved in the same commit.
 - **A conflict that is really a stacked branch.** A PR based on `main` while the local branch
   sits on an unmerged prior branch shows the combined stack in its diff; that shrinks by itself
   once the lower branch merges. It is not a conflict to resolve, and never a reason to rewrite
@@ -92,9 +97,9 @@ Leave no markers behind: grep the tree for `<<<<<<<`, `=======` and `>>>>>>>` be
 A merge breaks things neither side broke alone. Run the full completion bar for what the merged
 tree now touches — the paired lint and format checks, and the suite in the harness matched to
 the change — as defined by the doc that `CLAUDE.md`'s **Contribution workflow** section names as
-the completion bar, with the harness split per
-[ADR-0009](../../../docs/adl/0009-testing-strategy.md). Do not shortcut to "the tests near my
-conflict": the ones that catch a bad resolution are usually elsewhere.
+the completion bar; that doc also states which harness covers what, so match the suite to the
+merged tree rather than guessing. Do not shortcut to "the tests near my conflict": the ones that
+catch a bad resolution are usually elsewhere.
 
 Fix what the merge broke, in the merge, before committing.
 
