@@ -3,8 +3,13 @@
 Reference guidance for authoring the artifacts that drive Claude runs in this repo:
 skills (`.claude/skills/`), agent definitions (`.claude/agents/`), and the CI worker
 prompts (`.github/workflows/_ai-*.yml`). It exists so that every new authored artifact is lean
-*and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes, and the
-per-artifact checklists test the ones a reviewer can decide mechanically.
+*and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
+[Project-dependent content routes through
+`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent
+mechanics route through
+`CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd) fix where anything
+repository-specific and anything tracker-specific live, and the per-artifact checklists test
+the ones a reviewer can decide mechanically.
 
 It is **reference**, not a gate: nothing here overrides the correctness, review-integrity, or
 model-selection rules in `CLAUDE.md`. Where a token saving would trade away analysis quality
@@ -45,18 +50,12 @@ inlining the material, naming what it is and the distinct branches that should t
 it, leading word first. `ha-integration-knowledge`'s (vendored) description — "Everything you
 need to know … If you're looking at an integration, you must use this as your primary reference"
 — names one branch so broad it always fires. **Project rule, overriding the upstream advice:** a
-skill or agent definition never names a `docs/**` path directly; it points at the `CLAUDE.md`
-section owning the topic, which routes onward — and where no section owns it, the routing line is
-added to `CLAUDE.md` rather than the fact inlined. Only the route goes there: `CLAUDE.md` is read
-in full every cold session and is the cached prefix, so a fact parked in it is paid for by every
-run and its churn is paid for by every warm one. The rule binds the project *documentation* an
-artifact reads; the repo paths it exists to act on — the trees a reviewer's diff lands in, the
-workflow file a checklist is about — are its subject matter, not a route, and stay named. That
-costs the run one hop against *Scope the read* below, and buys a route every artifact inherits
-from one edit. It binds artifacts as they are written or changed; the back-catalogue predating it
-(`work-idea`, `handoff`, and the reviewer agents and `write-*` skills that name analysis, design
-and ADR paths) is converted on its own track, so a reviewer applies the rule to the diff in front
-of it, not to an unconverted file it happens to read.
+pointer to project-dependent material, or to the mechanics of the tracker this project's work
+lives in, names the `CLAUDE.md` section that owns the topic rather than the material itself —
+stated in full, with its boundaries and its scope, in [Project-dependent content routes through
+`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent
+mechanics route through `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd)
+below.
 
 **The two loads.** **Context load** is what always-loaded material costs every turn — the fixed
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
@@ -100,6 +99,144 @@ name-to-type whose whole body dispatches to the model-invoked `grilling`. When u
 skills multiply past what a maintainer remembers, the cure is a **router skill**: one user-invoked
 skill naming the others and when to reach for each.
 
+## Project-dependent content routes through `CLAUDE.md`
+
+**The rule.** A skill or agent definition states the **generic procedure**; everything
+project-dependent in it is resolved through `CLAUDE.md`. Project-dependent means the project's
+name, its documentation paths, its list of sources, its entity or module names — anything that
+would simply be *wrong* in another repository. The reason is reusability: the artifact is what
+travels between repositories, and `CLAUDE.md` is the one file that is rewritten per repository,
+so an artifact that reaches every project-dependent fact through a `CLAUDE.md` section lands in
+the next repository working, while one that names the facts lands in it lying. A CI worker
+prompt (`.github/workflows/_ai-*.yml`) is outside the rule: it does not travel — it *is* this
+repository's pipeline.
+
+**The four boundaries**, in the order they get argued about:
+
+- **An artifact may name another skill or agent.** They travel together — `.claude/` moves as
+  one tree — so a cross-reference between them stays valid wherever the tree is installed, and
+  routing it through `CLAUDE.md` would buy nothing.
+- **An artifact may name `CLAUDE.md` and a section heading in it.** A *named section* is a
+  specific target, so it meets *Scope the read* below and the checklists' "name the file, not
+  'read the docs'" bar — which is why the heading is required and `CLAUDE.md` alone is not
+  enough. What it costs is the onward hop only: `CLAUDE.md` itself is already loaded on every
+  run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
+  route every artifact inherits from a single edit.
+- **An artifact may not name a `docs/**` path, the project by name, or a project-specific
+  resource list** — with the one exception of its own subject matter, defined after this
+  list. Write "this project" where a name is tempting; route the path and the list.
+- **Where no `CLAUDE.md` section owns the topic, add the route there — never the fact.** One
+  line naming the topic and the document that owns it, and no more — *Keep stable files stable*
+  below says what a fact parked in the always-loaded prefix costs every run, and its churn every
+  warm one. If what you are about to add to `CLAUDE.md` is longer than a route, it belongs in
+  the document the route points at.
+
+**What is not a route: subject matter.** This exception is about paths only — the project's
+name and its resource lists are never subject matter. Among paths, the rule binds the project
+*documentation* an artifact reads to learn how to operate. The repo paths an artifact exists to
+*act on* — the trees a reviewer's diff lands in, the workflow file a checklist is about, the
+tree a skill writes into — are the subject matter of its own criteria, not a route to
+documentation, and stay named. The test is which of the two a path is: *tells the artifact how
+to operate* → route it; *is what the artifact operates on* → name it. A checklist about the
+router workflow cannot route to the router workflow. The test is applied **per path, not per
+tree**: `workflow-reviewer` names `docs/reference/` as a tree it reviews *and* routes to the
+one document inside it that carries its criteria, and both are right — a document does not
+become subject matter by sitting in a reviewed tree. Where one and the same path is genuinely
+both, subject matter wins and it stays named; the route is then redundant, not forbidden.
+
+Some categories sit on that boundary often enough to have a recorded answer, so an author
+meeting one does not have to re-derive it:
+
+- **A reviewer agent's "what to read first" list is its checklist**, so it cannot simply be
+  emptied of paths — an `analysis-reviewer` with no paths is not reusable but inert. The split
+  above is the answer, and it is the one worked through on `workflow-reviewer`: project
+  documentation the agent reads for its criteria routes through the `CLAUDE.md` section owning
+  that topic, while the trees the agent exists to review stay named, including in the
+  frontmatter `description` that dispatches it — an agent that cannot say what it reviews cannot
+  be dispatched to review it. Two rejected alternatives, so they are not re-proposed: moving
+  the reviewer agents' read-lists into `CLAUDE.md` (it inflates the always-loaded prefix and
+  inverts ownership — the agent knows what it needs to read, `CLAUDE.md` knows where topics
+  live), and exempting reviewer agents wholesale (too wide: it would have excused an agent
+  naming a document *and* the `CLAUDE.md` section that points at the same document).
+- **A skill whose whole purpose is one artifact type this project defines** — the `write-*`
+  family, each written for a document type that exists only because this project defines it,
+  and `develop-task`, written for a task as this project's implementation plans define one —
+  does not gain reusability by being genericised, and the rule does not ask it to be. A
+  `write-use-case` skill has nothing to be in a repository with no use-case documents. So the
+  artifact type it produces, the tree it writes into, and the template it drafts against are
+  its subject matter and stay named. What still routes is everything it reads to know *how the
+  project works around that artifact* — the review protocol, the lifecycle, the model tiering,
+  the reference docs it is not itself about. The rule is near-vacuous for these skills, which is
+  the decision, not an oversight.
+
+**Permanent scope: as written or changed, never as a sweep.** This paragraph states the scope
+of both rules on this page — the one above and the tracker rule below, which shares it rather
+than restating it. The rule binds an artifact at the moment it is newly written, or changed for
+some other reason — and it binds **what that change writes**: every pointer the change adds or
+rewrites conforms, while prose the change leaves alone is owed no conversion. A typo fix is
+therefore not a conversion trigger, and converting
+the rest of a file you are rewriting anyway is welcome but never required. An artifact nobody
+has a reason to touch is never opened to satisfy this rule, and there is no retroactive
+conversion pass: artifacts predating the rule are conformant by age, not on borrowed time. This
+is the rule's standing scope, not a grace period that expires. A reviewer therefore applies it
+to what the diff writes, and not to an unconverted file that diff happens to read, sit beside,
+or resemble; a finding raised against untouched material is out of scope by construction.
+
+## Tracker-dependent mechanics route through `CLAUDE.md`
+
+**The rule.** A skill or agent definition states the **generic procedure** — *file a work
+item*, *record the finding against the work item that needed it*, *reply to the finding and
+close it out* — and reaches the commands that drive one particular tracker through
+`CLAUDE.md`'s **Tracker mechanics** section. Tracker-dependent means the `gh` invocations
+themselves and everything that exists only because this project's work lives in GitHub issues,
+pull requests, review threads, labels and a project board: endpoint paths, field and option
+ids, flag spellings, and the failure mode and read-back each command needs. The reason is the
+[project-dependent](#project-dependent-content-routes-through-claudemd) one a turn further
+out: the procedure is what travels and the tracker is what gets swapped, so an artifact whose
+steps are procedures lands in a repository on another tracker needing one `CLAUDE.md` section
+rewritten, while one that spells `gh api …/pulls/<n>/reviews` into a step lands there needing
+itself rewritten. CI worker prompts (`.github/workflows/_ai-*.yml`) are outside this rule for
+the same reason the paragraph above puts them outside the project one.
+
+**The carve-out: the commands an artifact exists to issue.** `submit-pr-review`,
+`finalize-pr-review` and `address-review-remarks` do not reach the review API on the way to
+somewhere else; they exist *to drive* it, and it is what they are about. Genericising those
+calls is not a trade of one line for a pointer — take the endpoints, the payload shape and the
+thread semantics (which threads may be resolved, and when) out and nothing is left to state,
+because there is no procedure underneath that was ever independent of the tracker. They name
+them freely, and that is permanent, not pending.
+
+**The carve-out is per command, not per artifact** — the project rule's test is applied per
+path, not per tree, and this is the same move. What is carved out of one of those three is its
+*review-API* calls; a tracker command it issues in passing on the way to or from a review —
+applying a label, filing or reading a work item — is not its subject and routes like any
+other. A carved-out artifact is therefore not a carved-out *file*, and "it drives the tracker"
+is not a licence covering everything inside it.
+
+**The test.** Does the artifact merely **record or read** work items in passing — file one,
+comment on one, label one, look one up — so that the same step would still make sense on
+another tracker? The rule applies; route the command. Or is **that tracker's API the thing the
+artifact exists to operate**, so that removing the call removes the artifact's subject? The
+carve-out applies; name it. This is the project rule's **What is not a route: subject matter**
+line applied to commands instead of paths, not a second formulation — an author who has
+settled which side a path falls on has already settled which side a command does.
+
+**One source per mechanic, the carve-out included.** A carved-out call is the artifact's own
+subject, so the artifact is the source of truth for its *substance* — what the operation says
+and when it is legitimate. It is not thereby a source of truth for the **transport**: where
+the same command exists in the reference behind **Tracker mechanics**, the reference wins, and
+a copy inside a carve-out artifact that has drifted from it is a stale copy rather than a
+second authority. Drift is the expected state rather than an anomaly, since the reference was
+verified and corrected after those artifacts were written and nothing sweeps them. So an
+author converting an artifact under this rule, or copying a command out of a carve-out
+artifact into another artifact, takes it from the reference and checks the local copy against
+it — then fixes or deletes that copy only if the artifact holding it is the one being changed, per
+**Permanent scope: as written or changed, never as a sweep** above.
+
+**Scope: the project rule's, unchanged.** It is stated once for both axes in **Permanent
+scope: as written or changed, never as a sweep** above, and nothing about it is restated,
+narrowed or extended here.
+
 ## Principles
 
 - **Say what, point to where — one source of truth per fact.** An artifact carries the
@@ -134,8 +271,16 @@ skill naming the others and when to reach for each.
 - [ ] The `description` is precise enough to trigger on the right task and *not* on
       adjacent ones — a skill that fires when it shouldn't costs a whole run's context. It
       names the branches that should trigger it, not a mood (see [Vocabulary](#vocabulary)).
-- [ ] Any file the skill tells the run to read is named specifically, not "read the docs"; a
-      `docs/reference/*.md` target is routed to per the rule under [Vocabulary](#vocabulary).
+- [ ] Any file the skill tells the run to read is named specifically, not "read the docs".
+- [ ] Nothing project-dependent is stated in the skill; each such fact is routed per
+      [Project-dependent content routes through
+      `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) — its boundaries, its
+      subject-matter exception for the tree the skill writes into, and its scope included.
+- [ ] The skill states the generic procedure for anything it does to the tracker and routes
+      each command per [Tracker-dependent mechanics route through
+      `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd), unless that command is
+      one the skill exists to issue — the carve-out is per command, so a skill that drives the
+      tracker is not thereby exempt for the commands it issues in passing.
 - [ ] Every step ends on a completion criterion a run can decide, not a judgement word.
 - [ ] The invocation choice is justified: model-invoked only where the model or another skill
       must reach it, otherwise `disable-model-invocation: true`.
@@ -143,9 +288,14 @@ skill naming the others and when to reach for each.
 
 ## Checklist — authoring an agent definition (`.claude/agents/`)
 
-- [ ] The "read first" list names the minimum set of files needed to do the job, in order; a
-      `docs/**` target among them is routed to per the rule under [Vocabulary](#vocabulary),
-      while the trees the agent reviews are named directly.
+- [ ] The "read first" list names the minimum set of files needed to do the job, in order.
+- [ ] Nothing project-dependent is stated in the definition; each such fact is routed per
+      [Project-dependent content routes through
+      `CLAUDE.md`](#project-dependent-content-routes-through-claudemd), including its
+      subject-matter boundary for the trees the agent reviews.
+- [ ] Any tracker command the definition would state is routed instead, per
+      [Tracker-dependent mechanics route through
+      `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd).
 - [ ] The checklist is self-contained for its artifact type, so a review needs to load only
       *this* agent def plus the payload skill — not several agent defs.
 - [ ] Shared review mechanics (payload shape, anchoring, verdict marker) are referenced from

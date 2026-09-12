@@ -308,9 +308,21 @@ points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the
 CI-side place the context-label vocabulary is baked into and must move with it. Epics and
 their children use GitHub's **native** parent/sub-issue and blocked-by relationships, which `gh`
 supports directly — never re-derive a body-text convention for them; the commands are in
-`contribution-workflow.md`'s **Issue conventions** section.
+**Tracker mechanics** below.
 Epic-first filing for multi-artifact strands — see
 [docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
+
+---
+
+## Tracker mechanics
+
+The concrete `gh` commands for driving this project's tracker — filing, board fields, issue
+relationships, comments, PRs, review threads, labels — are in
+[docs/reference/tracker-mechanics.md](docs/reference/tracker-mechanics.md). Read it before
+typing any of them, and again whenever a `gh` call comes back refused, appears to succeed
+without taking effect, or has to be trusted without a read-back: it covers rate-limit failure
+modes, REST fallbacks, and Windows/Git Bash argument quirks. It is mechanics only — *when* to
+file and what a label means stay with **Contribution workflow** and **Issue conventions**.
 
 ---
 
