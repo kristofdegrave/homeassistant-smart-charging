@@ -97,7 +97,7 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | `docs/reference/work-types/adr/implement.md`, entered through `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
