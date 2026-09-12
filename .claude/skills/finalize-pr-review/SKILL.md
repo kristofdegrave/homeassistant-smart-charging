@@ -1,6 +1,6 @@
 ---
 name: finalize-pr-review
-description: Use after a review pass on any Smart Charging PR (CI's _ai-review.yml verdict, or a local fresh-agent review via submit-pr-review) comes back clean — confirms nothing Critical/Major remains, applies needs-approval, and checks the PR isn't a stranded stacked branch before handing it to the human partner for merge.
+description: Use after a review pass on any pull request in this project (CI's _ai-review.yml verdict, or a local fresh-agent review via submit-pr-review) comes back clean — confirms nothing Critical/Major remains, applies needs-approval, and checks the PR isn't a stranded stacked branch before handing it to the human partner for merge.
 ---
 
 # Finalize a PR review

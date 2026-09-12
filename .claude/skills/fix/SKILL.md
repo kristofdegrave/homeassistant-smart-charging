@@ -19,7 +19,10 @@ hard-coded use-case/ADR/analysis cases, is the one part this skill replaces.
 ## Dispatch on the context label
 
 Take the context label from the issue the PR closes and look it up in `CLAUDE.md`'s
-**Model selection** table. **Fixing is re-authoring**: apply the row's *How the work is done*
+**Model selection** table. Where the row names no work file — and two do not — there is
+nothing to re-author with: fix what the finding states, keep the severity policy, and say in
+the summary that no work file governed the change. **Fixing is re-authoring**: apply the row's
+*How the work is done*
 file in full, the way the original author did — its template, rules and self-checks define
 what a correct fix looks like. The row's *Work model* column says which model it wants; only
 the human partner can switch it.
@@ -28,17 +31,25 @@ Where the work file carries a rule about changing an already-merged artifact, th
 the finding, **including its own guards on when it applies** — `write-adr`'s Accepted-ADR
 immutability is the one to know, and reading it means reading the two conditions it attaches.
 
-## Then, per finding
+## Then
+
+Per finding:
 
 1. Apply the fix policy (§2), re-authoring with the work file rather than patching around it.
-2. Hand the thread to `resolve-review-thread`: reply with what was done or why not, and
-   resolve only what was actually fixed — after the fix is pushed, so a failed push never
-   leaves a thread closed over work that isn't on the branch.
-3. Post the one summary (§5), then commit and push (§6) — with the commit prefix this row's
-   work takes, per the Definition of Done. §6's own example is `docs:` because that skill is
-   scoped to docs; a `uc` or `development` fix takes a different one.
+2. Reply in its thread via `resolve-review-thread`, saying what was done or why not.
 
-Stop there and name `review` as the next step. The loop is the human partner's to run, and a
+Then once, for the run:
+
+3. Commit and push (§6), with the commit prefix this row's work takes — the completion bar
+   routed from `CLAUDE.md`'s **Contribution workflow** section carries the per-type prefixes.
+   §6's own example is `docs:` because that skill is scoped to docs.
+4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`. After
+   the push, never before: a failed push would otherwise leave threads closed over work that
+   is not on the branch.
+5. Post the one summary (§5).
+
+Stop there and hand on to step 3; `CLAUDE.md`'s **Contribution workflow** section names the
+skill that runs it. The loop is the human partner's to run, and a
 fresh agent owns the next pass — don't re-review your own fixes in this session.
 
 ## Rules

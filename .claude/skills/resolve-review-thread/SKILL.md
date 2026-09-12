@@ -23,15 +23,15 @@ wrong:
 
 ## 2. Resolve — only what was actually fixed
 
-There is no REST endpoint for this; resolution is GraphQL only. `CLAUDE.md`'s
-**Tracker mechanics** section routes to the commands — the listing query, the resolve
+`CLAUDE.md`'s **Tracker mechanics** section routes to the commands — the listing query, the
+resolve
 mutation, and the failure modes that make a resolve look like it worked when it didn't. Read
 them there; this skill owns only *which* threads may be resolved.
 
 - **Resolve only what was actually fixed.** A disputed, deferred or partially addressed
   thread stays open, with the reply saying why, and the summary saying which.
-- **`isOutdated: true` is not resolved.** A later commit moving the line hides the thread from
-  the diff; it stays open until resolved explicitly.
+- **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
+  resolved explicitly.
 - **Read the state back.** A resolve that reports success has not necessarily landed — the
   mechanics reference says why, and what to re-run.
 

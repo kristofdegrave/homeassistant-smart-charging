@@ -302,8 +302,8 @@ assuming a batch all landed.
 
 ## Relationship to the review-mechanics skills
 
-`submit-pr-review`, `finalize-pr-review` and `address-review-remarks` exist to drive the
-tracker — that is their whole subject, so they legitimately carry tracker commands of their
-own. Where they define *what a review says* (payload shape, severity grouping, verdict
-marker, which threads may be resolved), they remain the source of truth and this file defers
-to them. Where they merely need to reach the tracker, this file is the mechanics reference.
+`submit-pr-review`, `resolve-review-thread`, `finalize-pr-review` and
+`address-review-remarks` exist to drive the tracker — that is their whole subject, so they
+legitimately carry tracker commands of their own. Where they define *what a review says*
+(payload shape, severity grouping, verdict marker) or *which threads may be resolved*
+(`resolve-review-thread`), they remain the source of truth and this file defers to them. Where they merely need to reach the tracker, this file is the mechanics reference.
