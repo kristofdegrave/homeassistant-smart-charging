@@ -269,7 +269,8 @@ it is wired to its callers).
   selection; `Auto` → `resolution-rules.md` mode-selection (urgency, tariff, sun, surplus, **and the
   set of available modes passed in as an input**, not a Capability-Gate call — §4 rule 4).
 - **Depends on:** E9 output (available modes), E3 output (the resolved active SOC limit, row 1),
-  E4 output (required current, row 2), E7 output (conditioned sun/surplus, row 3), and the plain
+  E4 output (required current, row 2 — for the *dispatch* call only; the baseline call precedes E4
+  and passes the urgency input false), E7 output (conditioned sun/surplus, row 3), and the plain
   reserve-condition flag the Coordinator evaluates once for R9 (row 4) — all as input data only.
 - **ADR gate:** none (ADR-0002 home).
 - **Testable on its own:** plain pytest; `Manual` returns the selection; `Auto` reproduces the
@@ -305,9 +306,11 @@ it is wired to its callers).
   `coordinator.py`/`coordinator_cycle.py` per ADR-0023.
 - **Builds:** resolved departure deadline (today + one-day-ahead, R14), required current, whether
   urgency is in effect, and the per-profile lever set it is willing to spend (R5/R15).
-- **Depends on:** ADR-0010; adapter-read deadline sources (RA2) — as data.
-- **Testable on its own:** plain pytest — deadline resolution across sources; urgency threshold;
-  R5 unreachable determination.
+- **Depends on:** ADR-0010; adapter-read deadline sources (RA2), the escalated maximum permitted
+  rate composed from E5/E6 headroom, and E1's baseline desired current — all as data.
+- **Testable on its own:** plain pytest — deadline resolution across sources; R5's slack test
+  against the escalated rate ÷ 1.25; the handback test and the slack test's precedence over it;
+  the urgency latch; R5 unreachable determination against the same rate with no margin.
 - **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
   lead-time window once that reminder is built (project-plan §M3).
@@ -410,9 +413,11 @@ it is wired to its callers).
   way — the cycle still reads top-to-bottom as ADR-0006's ordered sequence.
 - **Builds:** the ordered cycle from [system-design §5.1](system-design.md#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing):
   read (RA1 hardware **and** RA3's owned control entities, ADR-0018) → condition (E7) → resolve
-  deadline (E4) → resolve SOC (E3) → required current/urgency (E4) → available modes (E9) → select
-  mode (E2) → desired current (E1) → peak clamp (E5) → grid clamp (E6) → invariants (E8) → write
-  (RA1). Owns and threads all stateful-Engine state; writes diagnostics
+  deadline (E4) → resolve SOC (E3) → available modes (E9) → escalated headroom (E5) + C4 headroom
+  (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
+  committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
+  clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
+  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads all stateful-Engine state; writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
   bus for a consuming Manager are the ones that ship: `ActiveSocLimitChanged` (→ M2) and

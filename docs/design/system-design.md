@@ -147,13 +147,13 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
-| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A) |
+| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). The same operation serves two callers: the Coordinator *dispatches* the active mode and commits the state it returns, and *queries* the baseline mode for R5's handback without committing it (§5.1) |
 | **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
 | **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, and what it is willing to spend (R5/R14/R15) |
-| **Billing-Protection Engine** | V6 | Effective peak limit and the R3 peak clamp (skippable only by `Power`'s R17 opt-out) |
+| **Billing-Protection Engine** | V6 | Effective peak limit, the peak headroom under it as a value, and the R3 peak clamp that fits a request to that headroom (skippable only by `Power`'s R17 opt-out). Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, so R5's escalated maximum permitted rate asks for the headroom (§5.1) |
 | **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
-| **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle |
+| **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
 | **Signal-Conditioning Engine** | V8 | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4) |
 | **Cycle-Invariant Engine** | V9 | The final current after R11 cooldown/hold gating and the C1 floor/cap |
 | **Capability-Gate Engine** | V10 | Whether a given mode/behavior is available for the declared capabilities (R18) |
@@ -398,20 +398,21 @@ sequenceDiagram
     SC-->>C: smoothed net_w + supply voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
-    C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag below; step-up row uses active profile + prior cycle's active mode, R8)
+    Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)<br/>— both the SOC-Target cap row and Auto's overnight row read the resulting flag
+    C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag, evaluated just before this call; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
     C->>S: materialize sensor.smart_charging_active_soc_limit (publish ActiveSocLimitChanged if it differs from the prior cycle)
     C->>Cap: available modes for declared capabilities (R18)
     Cap-->>C: available modes
-    Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)
-    C->>B: peak headroom at the RAISED limit (R3 row 1) — what urgency could deliver
+    Note over C: a missed-deadline hold in effect pins urgency on and short-circuits the rest<br/>of this block — no required current is computed and neither R5 test runs
+    C->>B: peak headroom under the RAISED limit (headroom, not clamp — no breach timer)
     B-->>C: escalated peak headroom
-    C->>G: C4 headroom (no clamp performed)
+    C->>G: C4 headroom (headroom, not clamp)
     G-->>C: ceiling headroom
-    Note over C: escalated maximum permitted rate = min(C1, escalated peak headroom, C4 headroom),<br/>floored at 0 — resolved every cycle, whether or not urgency is in effect (R5)
-    C->>P: which mode WITHOUT urgency? (Auto: baseline rows only · Manual: the active mode itself)
+    Note over C: compose the escalated maximum permitted rate from these bounds<br/>(system-overview.md glossary — the peak bound drops out where R3 does not run:<br/>CapTar absent, or Power's R17 opt-out). Resolved every cycle, urgency or not (R5)
+    C->>P: which mode with the urgency input FALSE? (Auto: its baseline rows · Manual: the active mode)
     P-->>C: baseline mode
-    C->>M: what would the baseline mode want? (query — never advances that mode's state, R5)
+    C->>M: what would the baseline mode want? (query — its returned state is not committed)
     M-->>C: baseline desired current
     C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, prior cycle's urgency latch)
     DL-->>C: urgency flag + required current
@@ -434,25 +435,33 @@ the active Mode Engine differ. **UC05** rides this sequence: the Deadline Engine
 the Billing-Protection Engine raises the effective peak limit, and under `Auto` the Profile
 escalates to `Captar`.
 
-**Why the Deadline Engine is called after the Profile and Mode Engines, not before them.** R5's
-urgency has two tests, and each needs an input only those engines can give. The *slack test* is
-judged against the **escalated maximum permitted rate** — what urgency could deliver if engaged —
-so it needs Billing-Protection's headroom at the raised limit and Grid-Safety's C4 headroom, both
-asked for as values rather than as clamps: neither may advance R3's breach timer, since this is a
-hypothetical and not a control decision. The *handback test* is judged against the **baseline
-mode's** own desired current, so the Profile must first resolve which mode that is (its baseline
-rows alone, urgency excluded) and the Mode Engine must be asked what that mode would want.
+**Why the Deadline Engine is called after the Profile and Mode Engines, not before them.** Each of
+R5's two tests (`resolution-rules.md` is authoritative for the rule itself) takes an input only
+those engines can produce, which is what fixes the order here:
 
-That second call is a **query, not a dispatch**: it never starts, stops or advances the baseline
-mode's own state machine or timers, and under `Auto` during urgency the baseline mode is a
-*different* mode from the one later dispatched — so two mode set-points exist in the same cycle,
-of which only the dispatched one is clamped and written. The Profile is therefore consulted twice
-per cycle, once without urgency and once with it, which is also what keeps the escalation stable:
-comparing against the already-escalated mode's own maximum request would clear urgency the instant
-it engaged.
+- the **slack test** is judged against the *escalated maximum permitted rate*, composed from
+  Billing-Protection's and Grid-Safety's **headroom** operations — asked as values, never as
+  clamps, because only a clamp may advance R3's breach timer and this is a hypothetical rather
+  than a control decision;
+- the **handback test** is judged against the *baseline mode's* desired current, so the Profile
+  must resolve that mode first and a Mode Engine must be asked what it would want.
 
-The urgency latch threaded in from the prior cycle is the third of the Coordinator's cross-cycle
-flags, alongside the solar step-up and the missed-deadline hold. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
+**The baseline call is a query, and what makes it one is a Manager obligation, not an Engine
+property.** The Mode Engines are pure leaf Engines (§3): whatever cross-cycle state they operate
+over — a mode's `Idle`/`Charging`/`Hold`/`Cooldown` progression, its timers — is threaded in by
+the Coordinator and returned back out. The query is therefore the ordinary operation called with
+this cycle's conditions, and the Coordinator simply **does not commit the returned state**. Only
+the dispatch does. Nothing in the Engine distinguishes the two calls.
+
+Under `Auto` during urgency the baseline mode is a *different* mode from the one later dispatched,
+so two mode set-points exist in the same cycle and only the dispatched one is clamped and written.
+The Profile is likewise consulted twice, once with the urgency input false and once with its
+resolved value — which is also what keeps the escalation stable, since judging against the
+already-escalated mode's own maximum request would clear urgency the instant it engaged.
+
+The urgency latch threaded in from the prior cycle is one of the Coordinator's cross-cycle flags,
+alongside the solar step-up and the missed-deadline hold; `control-cycle.md`'s Trigger section
+enumerates the full set of per-cycle carried state. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
 
 ### 5.2 Vehicle charge-limit sync (UC09)
@@ -565,7 +574,7 @@ allowed call directions. A use case crossing several services is the expected, h
 | **UC02** Solar only | Coordinator cycle | as UC01 with the `SolarOnly` Mode Engine; clamps typically inert (net ≤ 0). ✅ |
 | **UC03** Captar | Coordinator cycle | as UC01 with `Captar` Mode + Billing-Protection doing the real work (peak clamp + effective peak limit) + Peak-Demand Tracker. ✅ |
 | **UC04** Power | Coordinator cycle | as UC01 with `Power` Mode; Billing-Protection **skipped iff** R17 off; Grid-Safety still runs; Capability-Gate/selector gate availability. ✅ |
-| **UC05** Deadline | Coordinator cycle (no own service) | Deadline Engine (urgency) + Billing-Protection (ceiling raise) + Profile (`Auto` escalation) + Notification Manager (unreachable notice via event). ✅ **spans 4 services, owns none** |
+| **UC05** Deadline | Coordinator cycle (no own service) | Deadline Engine (urgency) + Billing-Protection (escalated headroom + ceiling raise) + Grid-Safety (C4 headroom for the slack test) + Profile (baseline resolution and `Auto` escalation) + Charging-Mode Engines (the baseline set-point query) + Notification Manager (unreachable notice via event). ✅ **spans 6 services, owns none** |
 | **UC06** Solar step-up | SOC-Target Engine, within cycle | Coordinator→SOC-Target (writes step-up row); Mode Engines read the resolved limit. ✅ owns no service |
 | **UC07** Solar reserve | SOC-Target + Profile, within cycle | Coordinator→SOC-Target (cap row) + `Auto` Profile (declines overnight top-up) gated by Deadline Engine (tomorrow) + Capability-Gate. ✅ owns no service |
 | **UC08** Evening prompt | Notification Manager | Trigger→NM→{Adapters, Deadline, Notification access}→writes home-day flag through Store. ✅ |
@@ -594,8 +603,10 @@ Every requirement is reachable from at least one service:
   families (one unit each). **NF1** → Profile Engine holds selection; Coordinator holds none.
 - **R3/C3** → Billing-Protection Engine; **C4** → Grid-Safety Engine (separate, un-waivable);
   **R21** (the self-tracked monthly peak demand) → Peak-Demand Tracker.
-- **R5/R15** → Deadline Engine (+ Billing-Protection ceiling raise + `Auto` Profile escalation +
-  Notification for unreachable). **R14** → Deadline Engine's deadline resolution.
+- **R5/R15** → Deadline Engine (+ Billing-Protection's escalated headroom and ceiling raise +
+  Grid-Safety's C4 headroom + the Profile's baseline resolution and `Auto` escalation + a
+  Charging-Mode Engine queried for the baseline set-point + Notification for unreachable).
+  **R14** → Deadline Engine's deadline resolution.
 - **R6/C2** → Vehicle-Limit Manager. **R7/R8** → SOC-Target Engine (R8's `Auto`-only gate is plain
   input flags — active profile + previous cycle's active mode — not a Profile call; see §3).
   **R9** has two halves: SOC-Target Engine (lowering the limit to the reserve cap) **and** the
