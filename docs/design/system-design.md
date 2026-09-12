@@ -401,11 +401,20 @@ sequenceDiagram
     C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag below; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
     C->>S: materialize sensor.smart_charging_active_soc_limit (publish ActiveSocLimitChanged if it differs from the prior cycle)
-    C->>DL: required current & urgency? (R5/R15, using active SOC limit)
-    DL-->>C: urgency flag + required current
     C->>Cap: available modes for declared capabilities (R18)
     Cap-->>C: available modes
     Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)
+    C->>B: peak headroom at the RAISED limit (R3 row 1) — what urgency could deliver
+    B-->>C: escalated peak headroom
+    C->>G: C4 headroom (no clamp performed)
+    G-->>C: ceiling headroom
+    Note over C: escalated maximum permitted rate = min(C1, escalated peak headroom, C4 headroom),<br/>floored at 0 — resolved every cycle, whether or not urgency is in effect (R5)
+    C->>P: which mode WITHOUT urgency? (Auto: baseline rows only · Manual: the active mode itself)
+    P-->>C: baseline mode
+    C->>M: what would the baseline mode want? (query — never advances that mode's state, R5)
+    M-->>C: baseline desired current
+    C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, prior cycle's urgency latch)
+    DL-->>C: urgency flag + required current
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
@@ -423,7 +432,27 @@ sequenceDiagram
 The same sequence realizes every charging mode — only the Profile's answer (step: which mode) and
 the active Mode Engine differ. **UC05** rides this sequence: the Deadline Engine returns urgency,
 the Billing-Protection Engine raises the effective peak limit, and under `Auto` the Profile
-escalates to `Captar`. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
+escalates to `Captar`.
+
+**Why the Deadline Engine is called after the Profile and Mode Engines, not before them.** R5's
+urgency has two tests, and each needs an input only those engines can give. The *slack test* is
+judged against the **escalated maximum permitted rate** — what urgency could deliver if engaged —
+so it needs Billing-Protection's headroom at the raised limit and Grid-Safety's C4 headroom, both
+asked for as values rather than as clamps: neither may advance R3's breach timer, since this is a
+hypothetical and not a control decision. The *handback test* is judged against the **baseline
+mode's** own desired current, so the Profile must first resolve which mode that is (its baseline
+rows alone, urgency excluded) and the Mode Engine must be asked what that mode would want.
+
+That second call is a **query, not a dispatch**: it never starts, stops or advances the baseline
+mode's own state machine or timers, and under `Auto` during urgency the baseline mode is a
+*different* mode from the one later dispatched — so two mode set-points exist in the same cycle,
+of which only the dispatched one is clamped and written. The Profile is therefore consulted twice
+per cycle, once without urgency and once with it, which is also what keeps the escalation stable:
+comparing against the already-escalated mode's own maximum request would clear urgency the instant
+it engaged.
+
+The urgency latch threaded in from the prior cycle is the third of the Coordinator's cross-cycle
+flags, alongside the solar step-up and the missed-deadline hold. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
 
 ### 5.2 Vehicle charge-limit sync (UC09)
