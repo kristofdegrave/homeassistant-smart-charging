@@ -47,9 +47,9 @@ than from its source or its test output, and a diff changes it when it changes a
   whether it goes **unavailable**, and the **name it displays** (`strings.json`,
   `translations/`).
 
-A diff changes none of these, and needs no section, when no input exists for which the
-observed value, unit, precision, availability or appearance would differ — the usual cases
-being an internal refactor, a rename with no surfaced effect, tests, and documentation.
+A diff changes none of these, and needs no section, when no input exists for which any item on
+that list would come out differently — the usual cases being an internal refactor, a rename
+with no surfaced effect, tests, and documentation.
 
 The section states two things, in as few lines as they take:
 
@@ -63,10 +63,16 @@ The section states two things, in as few lines as they take:
 Where the behaviour genuinely cannot be driven before merge, the section still exists and says
 so, naming what was substituted (a log excerpt, a seeded harness run) and what is left for the
 **Verify live** pass below. An absent section and an honest one are different states, and only
-the second is reviewable. **A PR drafted by the CI pipeline is always that case** — no worker
-there has a running installation to drive — so its Runtime check section names the harness run
-as the substitute and hands the observation to **Verify live**; the human partner who takes the
-merged slice live is the one who pastes the readings.
+the second is reviewable.
+
+**A PR opened by the CI pipeline's bot account is the one exception, and it is not the bot's
+finding.** That body is written by the pipeline, and no worker there has a running installation
+to drive, so such a PR carries no Runtime check section and its absence is not a review finding
+— a reviewer says what the check would have to record and stops there, rather than spending a
+fix cycle on something no fix worker can produce. The observation is still owed, by the human
+partner who approves the merge: either they add the section to the PR body before approving, or
+they carry the entity ids into the slice's **Verify live** checklist below. Approving without
+doing one of the two is the thing this bar exists to make visible.
 
 This is not a CI gate, deliberately: a mechanical presence check is satisfied by an empty
 heading, and no automated check can tell whether a pasted reading is the one the diff changed.

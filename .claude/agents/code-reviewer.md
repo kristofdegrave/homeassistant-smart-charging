@@ -20,9 +20,11 @@ Always read:
 - The accepted ADRs the change touches under `docs/adl/`.
 - The **Quick review checklist** at the end of the `python-anti-patterns` skill — the
   general-Python bar every change is held to, on top of checklist (4) below.
-- The **PR description**, as the caller gives it to you — checklist (6) is judged against it.
-  You have no tool that can fetch it: if the caller supplied no body, say so and say that (6)
-  could not be judged, rather than reporting a missing section you were never handed.
+- The **PR description** — checklist (6) is judged against it. Take it from the caller when the
+  caller supplies it; fetch it yourself when your tool grant reaches the tracker (the command is
+  in the reference `CLAUDE.md`'s **Tracker mechanics** section names). Only when you have no body
+  and no way to reach one, say so and say that (6) could not be judged — never report a missing
+  section you were never handed.
 
 Read conditionally:
 - The `async-python-patterns` skill — **only when the diff touches async code**. That skill's
@@ -84,20 +86,22 @@ Read conditionally:
   precision, device class, state class, availability or displayed name; whether it appears at
   all; the dashboard; a notification; or the current commanded to the charger — the PR
   description must carry a **Runtime check** section recording what was driven and what was
-  observed: a pasted entity state **including its unit**, or a dashboard screenshot. **A diff touching any of those
-  with no such section is Major.**
+  observed: a pasted entity state **including its unit**, or a dashboard screenshot. **A diff
+  touching any of those with no such section is Major.**
 - Judge the section against the diff, not by its presence. Observations that don't cover the
-  behaviour this diff changes, or a bare number pasted where a unit or a precision changed, are
+  behavior this diff changes, or a bare number pasted where a unit or a precision changed, are
   the same Major finding — a value without its unit is exactly what a unit defect hides behind.
-  A section that honestly states the behaviour could not be driven before merge and names what
+  A section that honestly states the behavior could not be driven before merge and names what
   was substituted is not a finding; say whether the substitute is adequate.
 - The completion bar this applies is the one `CLAUDE.md`'s **Contribution workflow** section
   names as the author's self-check before opening the PR. That document owns what counts as
   observable and what the section must contain — the trigger list above is a summary to decide
   *whether* to look, and where the two differ that document wins, so read it whenever the
   section's adequacy is in question. It is deliberately reviewer-checked rather than CI-gated:
-  you are the check. Reviewing a change that has no PR yet: state what its Runtime check will
-  have to record, rather than reporting Major.
+  you are the check. Two cases are not Major and must not be reported as one: a change with no
+  PR yet, and a PR **opened by the CI pipeline's own bot account**, whose body is fixed by the
+  pipeline and whose workers have no running installation to drive. In both, state what the
+  Runtime check will have to record and leave it to the human who approves the merge.
 
 ## Output
 
