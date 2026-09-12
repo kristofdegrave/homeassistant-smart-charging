@@ -5,8 +5,9 @@ description: Use in an interactive session to close out one PR review thread in 
 
 # Resolve a review thread
 
-The per-thread half of step 5, called once per finding by `fix`. `CLAUDE.md`'s
-**Contribution workflow** section routes to the doc that owns the step.
+The per-thread half of step 5. `fix` calls it in two passes: **§1 once per finding**, as each
+is addressed, and **§2 once for the run**, after the fixes are committed and pushed.
+`CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step.
 
 ## 1. Reply in the thread
 
@@ -21,7 +22,11 @@ wrong:
 - Replies to a CI bot's own findings carry **no** marker; those threads are tracked by
   resolution instead.
 
-## 2. Resolve — only what was actually fixed
+## 2. Resolve — only what was actually fixed, and only after the push
+
+Resolving happens once the run's fixes are committed and pushed, never as each finding is
+addressed: a failed push would otherwise leave threads closed over work that is not on the
+branch.
 
 `CLAUDE.md`'s **Tracker mechanics** section routes to the commands — the listing query, the
 resolve

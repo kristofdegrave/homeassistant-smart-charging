@@ -45,8 +45,9 @@ Name skills, not procedures — the skill carries its own instructions.
   no-context-label rows have no work skill on purpose — the human partner drafts those.
 - Before an issue exists: `work-idea` (an `idea` issue), `grilling` (stress-test a decision
   with the human partner), `file-task-issue` (file the issues that fall out).
-- In the review loop: the skills `CLAUDE.md`'s **Contribution workflow** section names per
-  step — `submit-pr-review` posts the pass, `fix` acts on the findings with
+- In the review loop, per the step ranges `CLAUDE.md`'s **Contribution workflow** section
+  maps: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
+  with
   `resolve-review-thread` per thread, and `finalize-pr-review` hands a clean pass to
   `needs-approval`. `address-review-remarks` is CI's entry for that step, not the local one.
 
