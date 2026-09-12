@@ -11,13 +11,13 @@ identity (see that doc's **Git identity** section).
 **Claude session must never self-apply one on its own initiative** to hand its own review/fix
 work to CI instead of doing it in-session; interactive review and fix always happen locally,
 per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh `*-reviewer`
-subagent posts findings via `submit-pr-review`, then `finalize-pr-review` resolves what got
-fixed. This does *not* forbid the pipeline's actual, intended human triggers below — a
-maintainer applying `needs-draft` to start the pipeline, or manually re-adding `needs-work`
-after the loop cap, is the go-signal these labels exist for. What's disallowed is a session
-adding one unprompted as a shortcut, which can also collide with the loop-cap accounting below
-(e.g. forcing an extra automated review pass eats into the 2-cycle cap a human never intended
-to spend).
+subagent posts findings via `submit-pr-review`, then `resolve-review-thread` closes out each
+thread that got fixed. This does *not* forbid the pipeline's actual, intended human triggers
+below — a maintainer applying `needs-draft` to start the pipeline, or manually re-adding
+`needs-work` after the loop cap, is the go-signal these labels exist for. What's disallowed is
+a session adding one unprompted as a shortcut, which can also collide with the loop-cap
+accounting below (e.g. forcing an extra automated review pass eats into the 2-cycle cap a
+human never intended to spend).
 
 ## Each job does exactly one task
 

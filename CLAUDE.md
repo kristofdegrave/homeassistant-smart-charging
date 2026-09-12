@@ -168,6 +168,10 @@ acting:
   as the actor, in [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). An
   interactive session never self-applies those trigger labels — see that doc.
 
+An interactive session runs the step ranges through their own skills: steps 1–2 `implement`,
+3–4 `review`, 5 `fix` (per thread, `resolve-review-thread`), 7 `finalize-pr-review`; step 0 is
+`file-task-issue`. Step 6's loop and steps 8–9 stay with the human partner.
+
 Two related references sit just outside this lifecycle: the stages either side of it
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
 routing, spec, slicing into sub-issues, and verifying a shipped slice live) and the
