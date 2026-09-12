@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.5](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.4...v0.4.5) (2026-09-12)
+
+
+### Bug Fixes
+
+* judge R5 urgency on deadline slack, not on the baseline mode ([#1101](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1101)) ([1d1cd80](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/1d1cd80264d6df3fb54c41328dbc53ba2adf7e22))
+* keep the `bug` label description inside GitHub's 100-character cap ([#1090](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1090)) ([b6cc624](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/b6cc62490f7b529f87aee53a78e4fb66a1f939d3))
+* skip inert heredoc bodies in the destructive-git guard ([#1086](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1086)) ([61b17ab](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/61b17abb3fb8ee10de2c05b9dae40470c89a9ba3))
+* stop the R3 peak clamp oscillating against its own actuation (ADR-0039) ([#1048](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1048)) ([5753e7d](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/5753e7d8046553b0a0d836e83c9c1e72f9f22b36))
+
 ## [0.4.4](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.3...v0.4.4) (2026-09-11)
 
 
