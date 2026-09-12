@@ -23,27 +23,17 @@ wrong:
 
 ## 2. Resolve — only what was actually fixed
 
-Resolve a thread when its finding was addressed. Leave it open when the finding was disputed,
-deferred, or only partially addressed, and say which and why in the summary.
+There is no REST endpoint for this; resolution is GraphQL only. `CLAUDE.md`'s
+**Tracker mechanics** section routes to the commands — the listing query, the resolve
+mutation, and the failure modes that make a resolve look like it worked when it didn't. Read
+them there; this skill owns only *which* threads may be resolved.
 
-There is no REST endpoint for this; resolution is GraphQL only. List the threads:
-
-```
-gh api graphql -f query='query { repository(owner:"kristofdegrave", name:"homeassistant-smart-charging") { pullRequest(number:N) { reviewThreads(first:50){ nodes{ id isResolved comments(first:1){nodes{path line body}} } } } } }'
-```
-
-then resolve one by its id:
-
-```
-gh api graphql -f query='mutation($tid:ID!){ resolveReviewThread(input:{threadId:$tid}){ thread{ id isResolved } } }' -f tid=<thread-id>
-```
-
+- **Resolve only what was actually fixed.** A disputed, deferred or partially addressed
+  thread stays open, with the reply saying why, and the summary saying which.
 - **`isOutdated: true` is not resolved.** A later commit moving the line hides the thread from
-  the diff; it stays unresolved until resolved explicitly.
-- GitHub refuses these mutations under a **secondary** rate limit that `gh api rate_limit`
-  does not report — it keeps showing a full quota and a reset that rolls forward on every
-  call. REST replies can keep succeeding while every GraphQL call fails. Back off and retry
-  once after a quiet interval rather than looping; repeated calls extend the block.
+  the diff; it stays open until resolved explicitly.
+- **Read the state back.** A resolve that reports success has not necessarily landed — the
+  mechanics reference says why, and what to re-run.
 
 ## Rules
 
