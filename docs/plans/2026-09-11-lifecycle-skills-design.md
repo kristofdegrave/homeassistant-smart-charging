@@ -237,6 +237,35 @@ and it trims the description index every run carries before it reads anything: f
 per-type files under `.claude/` become three skills and one agent there. What that is and is
 not worth is set out below.
 
+### Why the move is worth doing
+
+The reason recorded first was the context saving below. That is real but small, and #1064
+established the figure was overstated — fifteen descriptions collapsing to four, not fifteen
+files ceasing to load. The stronger reason is structural, and it is about *where a fact is
+allowed to live*.
+
+`ai-authoring.md`'s routing rules exist because **artifacts travel**: a skill or agent moves
+between repositories while `CLAUDE.md` is rewritten per repository, so an artifact that names
+this project's paths lands in the next repository lying. A `work-types/<label>/implement.md`
+file does **not** travel. It is project documentation, in this project's docs tree, about this
+project's conventions — so it may name project paths freely, because there is no other
+repository for it to be wrong in.
+
+So the move relocates every project-specific fact from a tree where naming it is constrained
+to one where naming it is simply correct. What is left under `.claude/` is generic: a runner
+that resolves a label to a work file, and a reviewer that resolves one to a checklist. The
+constraint stops being something each artifact has to be checked against and becomes a
+property of where the file sits.
+
+Two things this reasoning does **not** claim, because both are tempting and both are wrong:
+
+- It does not convert a pile of violations. `ai-authoring.md` already records that the rule is
+  "near-vacuous" for the `write-*` family — the artifact type a skill produces, the tree it
+  writes into and the template it drafts against are its subject matter and stay named. Those
+  paths are conformant today. The move changes where they live, not whether they were allowed.
+- It does not make the per-type content shorter. The same instructions are the same length in
+  the new tree; only their address changes.
+
 ### What the saving actually is
 
 A skill file contributes its frontmatter `name` and `description` to the always-on listing
