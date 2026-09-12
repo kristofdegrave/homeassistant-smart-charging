@@ -32,7 +32,7 @@ re-derive what's actually settled.
    linked issue's board Status should already be "In review" (moved when the PR was opened);
    this step doesn't move it further.
 4. **Verify the PR isn't a stranded stack** before treating any of the above as final:
-   - Confirm the PR's base is `main`, not another `<context-label>/*` branch:
+   - Confirm the PR's base is `main`, not another work branch:
      `gh pr view <PR> --json baseRefName`. If it's based on an unmerged branch, retarget now:
      `gh pr edit <PR> --base main`.
    - If the base branch already reached `main` via its own squash-merge, this PR's diff may
@@ -47,5 +47,5 @@ re-derive what's actually settled.
 - Applying `needs-approval` while a Critical/Major finding is still open.
 - Treating `needs-approval` as itself sufficient to merge — it's a signal for the human
   partner's decision, never a self-approval.
-- Leaving a PR based on another feature branch instead of `main`, which strands the change
+- Leaving a PR based on another work branch instead of `main`, which strands the change
   the moment the base branch squash-merges (the commits' SHAs stop existing on `main`).

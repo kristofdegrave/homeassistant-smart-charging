@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Create (or update) every label the AI documentation pipeline relies on.
+# Create (or update) every label this repo's issue conventions define — the ones the AI
+# documentation pipeline relies on, plus the kind-of-work labels it deliberately ignores.
 #
 # The pipeline adds action labels with `gh pr edit --add-label` / `gh issue edit`, which do
 # NOT auto-create a missing label — so these must exist first. (peter-evans/create-pull-request
@@ -31,5 +32,12 @@ label development c5def5 "Implementation task (code + tests), pinned to a Plan: 
 label testing     bfd4f2 "Test-authoring work, pinned to a Plan: docs/plans task"
 label workflow    e99695 "CI/skill/agent-authoring change (review only — no auto-drafter)"
 label documentation ededed "Design-doc change (docs/design/**); review only, not yet wired into the CI drafter's label set"
+
+# --- Kind-of-work labels (orthogonal to the context label, never a substitute) ------------
+# GitHub creates both by default with a vaguer description; --force rewrites it to the
+# meaning docs/reference/contribution-workflow.md's Issue conventions gives them. Colors are
+# GitHub's own defaults, so re-running this never recolors labels already on open issues.
+label bug         d73a4a "Defect in already-shipped behaviour — verify the claim first; pair with a context label once the fixing artifact is known"
+label enhancement a2eeef "Improvement to already-shipped behaviour — pair with a context label once the artifact is known"
 
 echo "Labels created/updated."

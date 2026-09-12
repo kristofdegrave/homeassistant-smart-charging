@@ -38,8 +38,11 @@ Every idea goes down exactly one track. The split is whether the behaviour alrea
 structural decision surfaced (`CLAUDE.md`'s **Architecture Decision Records** section has the
 bar for that). Then a spec, then tickets.
 
-**Bug or enhancement against shipped behaviour** → skips the analysis chain, but **the claim
-is verified before anything is designed**: reproduce it on the real installation, or as a
+**Bug or enhancement against shipped behaviour** (the `bug`/`enhancement` kind label,
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**; no context label
+yet, because the fixing artifact is not known until the claim is verified) → skips the
+analysis chain, but **the claim is verified before anything is designed** — the
+`diagnosing-bugs` skill owns that step: reproduce it on the real installation, or as a
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
 reproduced is not a defect yet — say so on the issue and stop there rather than designing a
 fix for a behaviour nobody has seen.
