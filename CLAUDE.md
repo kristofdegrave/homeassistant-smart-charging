@@ -299,9 +299,9 @@ Context labels, project-board Size/Estimate fields, and branch naming — see
 points to [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md) for the anchored
 `Plan:` line's exact required format, and to its **Label vocabulary sync** section for every
 CI-side place the context-label vocabulary is baked into and must move with it. Epics and
-their children use GitHub's **native** parent/sub-issue and blocked-by relationships, which
-`gh` supports directly — never re-derive
-a body-text convention for them; the commands are in that same **Issue conventions** section.
+their children use GitHub's **native** parent/sub-issue and blocked-by relationships, which `gh`
+supports directly — never re-derive a body-text convention for them; the commands are in
+`contribution-workflow.md`'s **Issue conventions** section.
 Epic-first filing for multi-artifact strands — see
 [docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md).
 

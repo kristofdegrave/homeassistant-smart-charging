@@ -46,12 +46,17 @@ it, leading word first. `ha-integration-knowledge`'s (vendored) description — 
 need to know … If you're looking at an integration, you must use this as your primary reference"
 — names one branch so broad it always fires. **Project rule, overriding the upstream advice:** a
 skill or agent definition never names a `docs/**` path directly; it points at the `CLAUDE.md`
-section owning the topic, which routes onward — and where no section owns it, the section is
-added to `CLAUDE.md` rather than the fact inlined. The rule binds the project *documentation* an
+section owning the topic, which routes onward — and where no section owns it, the routing line is
+added to `CLAUDE.md` rather than the fact inlined. Only the route goes there: `CLAUDE.md` is read
+in full every cold session and is the cached prefix, so a fact parked in it is paid for by every
+run and its churn is paid for by every warm one. The rule binds the project *documentation* an
 artifact reads; the repo paths it exists to act on — the trees a reviewer's diff lands in, the
 workflow file a checklist is about — are its subject matter, not a route, and stay named. That
 costs the run one hop against *Scope the read* below, and buys a route every artifact inherits
-from one edit (`work-idea` and `handoff` predate this).
+from one edit. It binds artifacts as they are written or changed; the back-catalogue predating it
+(`work-idea`, `handoff`, and the reviewer agents and `write-*` skills that name analysis, design
+and ADR paths) is converted on its own track, so a reviewer applies the rule to the diff in front
+of it, not to an unconverted file it happens to read.
 
 **The two loads.** **Context load** is what always-loaded material costs every turn — the fixed
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
