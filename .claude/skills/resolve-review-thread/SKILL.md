@@ -5,8 +5,9 @@ description: Use in an interactive session to close out one PR review thread in 
 
 # Resolve a review thread
 
-The per-thread half of step 5. `fix` calls it in two passes: **§1 once per finding**, as each
-is addressed, and **§2 once for the run**, after the fixes are committed and pushed.
+The per-thread half of step 5, model-invocable because `fix` reaches it rather than a human.
+`fix` calls it in two passes: **§1 once per finding**, as each is addressed, and **§2 once for
+the run**, after the fixes are committed and pushed.
 `CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step.
 
 ## 1. Reply in the thread

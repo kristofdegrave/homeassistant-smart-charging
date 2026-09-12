@@ -49,7 +49,7 @@ Name skills, not procedures — the skill carries its own instructions.
   maps: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
   with
   `resolve-review-thread` for the threads, and `finalize-pr-review` hands a clean pass to
-  `needs-approval`. `address-review-remarks` is CI's entry for that step, not the local one.
+  `needs-approval`. `address-review-remarks` is CI's entry for step 5, not the local one.
 
 ## Rules
 
