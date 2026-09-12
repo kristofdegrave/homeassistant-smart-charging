@@ -123,6 +123,22 @@ its own tree — the rule CI already uses: a PR can touch more than one tree, so
 checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
 `test-reviewer`.
 
+**Label and path both route, and neither overrides the other.** They answer different
+questions: the label says what kind of work this is, the changed paths say what it actually
+touched, and they come apart whenever a change is *about* one artifact type but *lives* in
+another's tree — common for `workflow` work, which edits whichever file holds the rule. So a
+PR gets the union: every tree's reviewer from the no-label row's path map, **plus** the label
+row's reviewer where it names one those paths did not already select. Each reviewer sees only
+the files its own tree covers.
+
+Path routing is the half that must never be skipped — it is what guarantees no changed tree
+goes unreviewed, and it is the only key CI's review step has, since that step runs on a PR and
+reads changed paths rather than the linked issue's label. The label row is the addition: it
+brings the checklist written for this kind of work even when the change landed somewhere else.
+A `workflow` PR editing `docs/plans/**` therefore gets `impl-spec-reviewer` for the file and
+`workflow-reviewer` for the subject, and a `development` PR that also edits a workflow file
+gets `workflow-reviewer` on that file rather than nothing.
+
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are

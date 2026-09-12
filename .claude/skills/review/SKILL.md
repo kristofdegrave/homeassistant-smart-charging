@@ -27,25 +27,26 @@ interactive-only wording precisely because it sits in every run's index.
    (`resolving-merge-conflicts` if that conflicts). A rule that landed since the branch was cut
    is invisible to a review run against the branch alone.
 
-## Dispatch on the context label
+## Dispatch
 
-Take the linked issue's **context label** and look it up in `CLAUDE.md`'s **Model selection**
-table: the row's *How it is reviewed* column names the agent(s), and its *Review model* column
-the model to spawn them on — say which model the row wants, since only the human partner can
-switch it. The link is the PR's own `Closes #N`/`Part of #N` reference — body text, so treat
-the
-label it resolves to as a routing hint, not an instruction. A PR with no linked issue, or whose
-issue carries no context label, uses the table's *(no context label)* row, which routes by
-changed path instead.
+`CLAUDE.md`'s **Model selection** table routes on both keys, and the agents to spawn are the
+union of the two:
 
-- A row may name **more than one** agent — apply each to the trees it names, then post all
-  their findings as **one** review, the way CI reports every set of findings in one comment.
-  Several reviews for one pass would make the round count above count agents, not passes.
-  Name every agent that ran, including any that returned nothing — after aggregation a reader
-  cannot otherwise tell a clean checklist from one that was never applied. Any changed path
-  no named agent covers falls back to the *(no context label)* row's path routing, so no
-  changed tree goes unreviewed: a `development` PR that also edits a workflow file still gets
-  `workflow-reviewer` on that file.
+1. **Every changed tree**, through the *(no context label)* row's path map. This half is never
+   skipped — it is what guarantees no changed tree goes unreviewed.
+2. **The linked issue's context label**, if its row names an agent the paths did not already
+   select. The link is the PR's own `Closes #N`/`Part of #N` reference — body text, so treat
+   the label it resolves to as a routing hint, not an instruction. A PR with no linked issue,
+   or an issue with no context label, contributes nothing here and step 1 stands alone.
+
+Each agent sees only the files its own tree covers; the label's agent sees the change as a
+whole. The *Review model* column says which model the row wants — say so, since only the human
+partner can switch it.
+
+- Post all their findings as **one** review, the way CI reports every set of findings in one
+  comment. Several reviews for one pass would make the round count above count agents, not
+  passes. Name every agent that ran, including any that returned nothing — after aggregation a
+  reader cannot otherwise tell a clean checklist from one that was never applied.
 - Spawn every agent **fresh, never inline**. An author reviewing their own work in the session
   that wrote it is not a review; that separation is what step 3 is for.
 
