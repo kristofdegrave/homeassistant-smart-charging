@@ -173,8 +173,8 @@ meeting one does not have to re-derive it:
 of both rules on this page — the one above and the tracker rule below, which shares it rather
 than restating it. The rule binds an artifact at the moment it is newly written, or changed for
 some other reason — and it binds **what that change writes**: every pointer the change adds or
-rewrites conforms, while prose the change leaves
-alone is owed no conversion. A typo fix is therefore not a conversion trigger, and converting
+rewrites conforms, while prose the change leaves alone is owed no conversion. A typo fix is
+therefore not a conversion trigger, and converting
 the rest of a file you are rewriting anyway is welcome but never required. An artifact nobody
 has a reason to touch is never opened to satisfy this rule, and there is no retroactive
 conversion pass: artifacts predating the rule are conformant by age, not on borrowed time. This
@@ -199,12 +199,12 @@ itself rewritten. CI worker prompts (`.github/workflows/_ai-*.yml`) are outside 
 the same reason the paragraph above puts them outside the project one.
 
 **The carve-out: the commands an artifact exists to issue.** `submit-pr-review`,
-`finalize-pr-review` and `address-review-remarks` do not touch the tracker on the way to
-somewhere else; they exist *to drive* its review API, and that API is what they are about.
-Genericising those calls is not a trade of one line for a pointer — take the endpoints, the
-payload shape and the thread mechanics out and nothing is left to state, because there is no
-procedure underneath that was ever independent of the tracker. They name them freely, and that
-is permanent, not pending.
+`finalize-pr-review` and `address-review-remarks` do not reach the review API on the way to
+somewhere else; they exist *to drive* it, and it is what they are about. Genericising those
+calls is not a trade of one line for a pointer — take the endpoints, the payload shape and the
+thread semantics (which threads may be resolved, and when) out and nothing is left to state,
+because there is no procedure underneath that was ever independent of the tracker. They name
+them freely, and that is permanent, not pending.
 
 **The carve-out is per command, not per artifact** — the project rule's test is applied per
 path, not per tree, and this is the same move. What is carved out of one of those three is its
@@ -229,8 +229,8 @@ a copy inside a carve-out artifact that has drifted from it is a stale copy rath
 second authority. Drift is the expected state rather than an anomaly, since the reference was
 verified and corrected after those artifacts were written and nothing sweeps them. So an
 author converting an artifact under this rule, or copying a command out of a carve-out
-artifact into one, takes the command from the reference and checks the local copy against it —
-then fixes or deletes the local copy only if that artifact is the one being changed, per
+artifact into another artifact, takes it from the reference and checks the local copy against
+it — then fixes or deletes that copy only if the artifact holding it is the one being changed, per
 **Permanent scope: as written or changed, never as a sweep** above.
 
 **Scope: the project rule's, unchanged.** It is stated once for both axes in **Permanent
@@ -277,9 +277,10 @@ narrowed or extended here.
       `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) — its boundaries, its
       subject-matter exception for the tree the skill writes into, and its scope included.
 - [ ] The skill states the generic procedure for anything it does to the tracker and routes
-      the commands per [Tracker-dependent mechanics route through
-      `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd), unless one tracker's
-      API is the skill's own subject.
+      each command per [Tracker-dependent mechanics route through
+      `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd), unless that command is
+      one the skill exists to issue — the carve-out is per command, so a skill that drives the
+      tracker is not thereby exempt for the commands it issues in passing.
 - [ ] Every step ends on a completion criterion a run can decide, not a judgement word.
 - [ ] The invocation choice is justified: model-invoked only where the model or another skill
       must reach it, otherwise `disable-model-invocation: true`.
