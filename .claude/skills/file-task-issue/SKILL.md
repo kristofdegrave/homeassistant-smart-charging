@@ -27,7 +27,9 @@ order to run through so nothing gets filed half-scoped.
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
    per **Tracker mechanics** above.
-3. **File it**, then move on — the drafter/review cycle is a separate, later step.
+3. **File it** — setting whichever of step 4's edges are already known as flags on the create
+   call rather than as a second pass — then move on; the drafter/review cycle is a separate,
+   later step.
 4. **If the issue belongs to an epic** — one being decomposed now, or an already-open one a
    later finding fits — attach it as a **native sub-issue** of that epic, and add a
    **blocked-by edge** to each already-filed issue it cannot start before, rather than leaving
@@ -47,4 +49,3 @@ order to run through so nothing gets filed half-scoped.
 - Setting Estimate on an epic in addition to Size.
 - Recording epic membership or ordering as body text — a checklist line, or "after #NNN" in
   prose — instead of the native sub-issue and blocked-by edges.
-- Trusting an edge or a board field because the write printed no error; read it back.

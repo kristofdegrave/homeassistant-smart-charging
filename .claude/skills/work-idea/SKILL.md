@@ -13,10 +13,9 @@ This is a manual/interactive skill, not a CI-wired one: grilling is a genuine di
 human, so it stays a session task rather than a non-interactive drafter.
 
 The stages this skill walks — the two tracks, the verification gate, the spec gate, what a
-child issue is, and when the idea issue closes — are defined once in the flow document that
-`CLAUDE.md`'s **Contribution workflow** section names as covering the stages either side of
-the lifecycle. Read that first; this skill only sequences those stages and says which skill
-performs each. Cite it, never restate it.
+child issue is, and when the idea issue closes — are defined once in the idea-to-result flow
+document, routed by `CLAUDE.md`'s **Contribution workflow** section. Read it first; this skill
+only sequences those stages and says which skill performs each. Cite it, never restate it.
 
 ## The cycle
 
@@ -35,22 +34,24 @@ performs each. Cite it, never restate it.
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
    new-behaviour track this step does not apply.
-5. **Decompose.** A single-artifact idea is one issue filed with `file-task-issue`, and keeps the
-   grilled decisions on its own body. A multi-artifact strand gets the epic filed first, with the
-   decisions from step 2 moved into its body under a *Decisions so far* heading, then each child
-   filed with `file-task-issue`. Children are vertical, demoable slices filed in dependency
-   order and attached as **native sub-issues of the epic with blocked-by edges** — never a
-   markdown checklist in the epic body; `CLAUDE.md`'s **Tracker mechanics** section routes to the
-   `gh` commands. A part still too fuzzy to scope keeps the `idea` label and gets worked later —
-   recursion is expected, not an error.
-6. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
+5. **Settle whether the strand needs a `specs` issue** — the flow document says when one is
+   required on each track, and which analysis change cannot be approved until it exists. Where
+   it is required, it is one of the children filed below, and `write-impl-spec` drafts it later.
+6. **Decompose.** A single-artifact idea is one issue filed with `file-task-issue`, and the
+   grilled decisions stay on the idea issue. A multi-artifact strand gets the epic filed first,
+   with the decisions from step 2 moved into its body under a *Decisions so far* heading, then
+   each child filed with `file-task-issue` — which owns attaching a child to its epic, so the
+   epic body never carries a checklist of them. What a child is and in what order children are
+   filed is the flow document's. A part still too fuzzy to scope keeps the `idea` label and gets
+   worked later — recursion is expected, not an error.
+7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
-7. **Close the idea issue** once it is fully captured — either directly in child issues
+8. **Close the idea issue** once it is fully captured — either directly in child issues
    (single-artifact case) or via the new epic (multi-artifact case). Closing it means the idea is
    decomposed, not that the children are *done* — the epic stays open tracking those until they
    all finish. If some part is not covered, say so explicitly in the closing comment instead of
    closing over the gap.
-8. **Stop here** — do not draft artifacts, open PRs, or write code in this cycle. That is each
+9. **Stop here** — do not draft artifacts, open PRs, or write code in this cycle. That is each
    child issue's own next step, per `CLAUDE.md`'s **Contribution workflow** section.
 
 ## Rules
@@ -71,8 +72,6 @@ performs each. Cite it, never restate it.
 - Leaving grilled decisions in chat scrollback, or leaving them on the idea issue after an epic
   was filed instead of moving them into the epic body.
 - Designing a fix on the shipped-behaviour track before the claim has been reproduced.
-- Slicing children by layer ("the adapter ticket", "the entity ticket") rather than vertically —
-  a layer-shaped child cannot be demoed and cannot be verified live.
 - Filing `development`/`testing` child issues before an approved plan exists for them to cite
   in their `Plan:` line.
 - Giving a child issue two context labels (e.g. both `uc` and `requirement`) because the
