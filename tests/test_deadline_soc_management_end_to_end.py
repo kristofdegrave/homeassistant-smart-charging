@@ -185,10 +185,14 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     assert coordinator._required_current.urgent is False
     assert coordinator.active_mode == MODE_OFF
 
-    # Urgent: a 4h deadline the Off baseline can't meet, but still within the maximum
-    # permitted rate (~8.15 A required vs. 16 A max), escalates Auto to Captar -- whose own
-    # maximum-current request (16 A) reaches the write path.
-    _seed_today_deadline(hass, hours_from_now=4)
+    # Urgent: a 2.5h deadline needing ~13.04 A. Since #1078 the Off baseline being unable to
+    # meet it is NOT what makes this urgent -- the slack test is: 13.04 A exceeds the escalated
+    # maximum permitted rate divided by 1.25 (16/1.25 = 12.8 A), while staying within the 16 A
+    # rate itself. The old 4h deadline here needed only ~8.15 A and is deliberately no longer
+    # urgent: with 4 hours to deliver a 2-hour charge there is ample slack, which is exactly the
+    # live defect this replaced. Escalates Auto to Captar, whose own maximum-current request
+    # (16 A) reaches the write path.
+    _seed_today_deadline(hass, hours_from_now=2.5)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._required_current.urgent is True

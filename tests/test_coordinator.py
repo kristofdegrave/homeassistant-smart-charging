@@ -2145,9 +2145,14 @@ async def test_active_soc_limit_changed_event_fires_on_change(hass):
 # --- Task 5.2: deadline resolution, required-current/urgency, baseline-mode comparison ---
 
 
-async def test_urgency_engages_when_required_current_exceeds_baseline(hass, freezer):
-    """Manual profile: baseline is simply the manually selected mode's own desired current
-    (Power's target_current here) -- a required current above it is urgent (R5)."""
+async def test_urgency_engages_when_the_slack_test_fires(hass, freezer):
+    """R5 (issue #1078): urgency engages when the required current exceeds the escalated
+    maximum permitted rate divided by 1.25 -- NOT when it merely exceeds the baseline mode's
+    own desired current, which is what this test asserted before and what made urgency
+    unconditional every evening.
+
+    With ample peak headroom the escalated rate is C1's 16 A ceiling, so the slack threshold is
+    12.8 A. A 15-minute deadline needs ~13.04 A: over the threshold, under the ceiling."""
     freezer.move_to("2026-01-15 12:00:00")  # fixed, away from midnight (no rollover semantics)
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
@@ -2155,9 +2160,9 @@ async def test_urgency_engages_when_required_current_exceeds_baseline(hass, free
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
     coord.active_mode = MODE_POWER
-    coord.target_current = 2.0  # well below the ~3.26 A the deadline below will require
+    coord.target_current = 2.0  # well below the ~13.04 A the deadline below will require
     coord.soc_limit_override = 80.0
-    _seed_today_deadline(coord, hours_from_now=1)
+    _seed_today_deadline(coord, hours_from_now=0.25)
     _seed_ample_peak_headroom(coord)
 
     await coord._async_update_data()
@@ -2186,10 +2191,15 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
     assert coord._required_current.urgent is False
 
 
-async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
-    """Regression per resolution-rules.md's own warning: comparing against Captar's own
-    (already-maximum) desired current would make urgency look satisfied instantly and
-    revert every cycle -- this test drives that exact scenario and asserts urgency holds."""
+async def test_handback_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
+    """Regression per resolution-rules.md's own warning, in its post-#1078 home: the baseline
+    comparison is now the HANDBACK test rather than the entry condition, and reading the
+    escalated mode's own (already-maximum) desired current there would clear urgency the instant
+    it engaged and re-engage it the next cycle, for ever.
+
+    Urgency is latched on entry here, exactly as it would be one cycle after engaging, with
+    Captar already dispatched from that escalation. Auto's baseline rows still resolve to Off
+    (no solar capability, sun up), so the handback must not fire and urgency must hold."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=78.0, sun_state=SUN_STATE_ABOVE_HORIZON)
     config = _config()
@@ -2202,8 +2212,9 @@ async def test_baseline_comparison_uses_rows_3_5_not_the_escalated_mode(hass, fr
     coord.active_mode = MODE_CAPTAR  # already escalated from a prior cycle
     coord.soc_limit_override = 80.0
     # No solar capability and sun up -> Auto's own baseline (rows 3-5, urgent=False) falls
-    # through to Off, not Captar -- the required current below (~3.26 A) only exceeds a
-    # baseline of 0 A, never Captar's own (already-maximum, 16 A) desired current.
+    # through to Off, whose 0 A can never satisfy the handback. Captar's own 16 A would, which
+    # is precisely why the handback must not read the dispatched mode.
+    coord._urgency_latched = True
     _seed_today_deadline(coord, hours_from_now=2)
     _seed_ample_peak_headroom(coord)
 
@@ -2775,6 +2786,9 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
+    # Latched on entry (issue #1078): the handback, not the engage test, is what these
+    # tariff tests discriminate through -- see the row-4 test's docstring.
+    coord._urgency_latched = True
     _seed_today_deadline(coord, hours_from_now=3)
     _seed_ample_peak_headroom(coord)
 
@@ -2784,8 +2798,14 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
 
 
 async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
-    """With ROLE_LOW_TARIFF mapped and reading False, row 4 never matches -- baseline
-    falls through to Off (0 A), so the same deadline as above now reads urgent."""
+    """With ROLE_LOW_TARIFF mapped and reading False, row 4 never matches -- baseline falls
+    through to Off (0 A), which can never satisfy R5's handback, so latched urgency holds.
+
+    Since #1078 the baseline no longer decides whether urgency ENGAGES, so this pair of tests
+    discriminates through the handback instead: urgency is latched on entry and the question is
+    whether the baseline row 4 resolves to something that can take over. That is a sharper test
+    of "which row matched" than the old one, which could pass merely because urgency fired.
+    """
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(
         status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
@@ -2799,6 +2819,9 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
+    # Latched on entry (issue #1078): the handback, not the engage test, is what these
+    # tariff tests discriminate through -- see the row-4 test's docstring.
+    coord._urgency_latched = True
     _seed_today_deadline(coord, hours_from_now=3)
     _seed_ample_peak_headroom(coord)
 

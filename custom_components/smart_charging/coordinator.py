@@ -80,7 +80,7 @@ from .engines.billing_protection import (
 )
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
-from .engines.grid_safety import clamp_to_ceiling
+from .engines.grid_safety import ceiling_headroom_a, clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
 from .modes import captar
 from .modes._phase import Phase
@@ -200,6 +200,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # site, so a fault cycle simply never reaches it and its prior flag is held (see the
         # comments on those two returns).
         self._unreachable_edge = DeadlineUnreachableEdge()
+        # R5 (issue #1078): whether deadline urgency was in effect entering the next cycle --
+        # the third flag threaded across cycles, alongside the solar step-up and (once #1006
+        # lands) the missed-deadline hold. Urgency is ENTERED by the slack test and LEFT by the
+        # handback test, which are not each other's inverse: charging at the escalated rate
+        # closes the gap faster than the clock closes the window, so a latch-free implementation
+        # would revert urgency on the cycle after it engaged and duty-cycle the charger.
+        # Cleared for free on every one of urgency's own clear conditions, because each already
+        # funnels through the resolved `urgent` this is assigned from -- a disconnect and an
+        # unresolvable deadline both short-circuit resolve_deadline_urgency to urgent=False.
+        self._urgency_latched: bool = False
         # R9/R14 inputs -- read through the Store each cycle (_read_owned_entities,
         # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
         # These constructor defaults (no home day, no configured deadline anywhere) only
@@ -661,6 +671,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 now_dt=now_dt,
                 effective_battery_capacity_kwh=effective_battery_capacity_kwh,
                 max_current_a=self._config.max_current,
+                escalated_maximum_permitted_rate_a=self._escalated_maximum_permitted_rate_a(
+                    ctx, peak_operand_kw=peak_operand_kw
+                ),
+                urgency_latched=self._urgency_latched,
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
@@ -712,6 +726,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             )
 
         urgent = deadline_urgency.urgent
+        # The latch this cycle's resolution leaves behind. Assigned from the resolved `urgent`
+        # rather than from the slack test alone, so the handback -- and every other clear
+        # condition that funnels through it -- releases the latch without a second code path.
+        self._urgency_latched = urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
             peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
         )
@@ -1116,6 +1134,62 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ceiling_a=self._config.grid_ceiling_a,
             offset_a=self._config.grid_safety_offset_a,
         )
+
+    def _escalated_maximum_permitted_rate_a(
+        self, ctx: CycleContext, *, peak_operand_kw: float
+    ) -> float:
+        """R5's `escalated maximum permitted rate` (system-overview.md glossary): the maximum
+        permitted rate that WOULD be in force if deadline urgency were engaged -- the same C1/C4
+        bounds fitted to the peak headroom under an effective peak limit raised to the maximum
+        peak.
+
+        Resolved on every cycle whether or not urgency is actually in effect, which is the whole
+        point of it: a test written against the rate CURRENTLY in force would move the moment
+        urgency raised it, so engaging urgency would immediately make the deadline look
+        comfortable again and revert it (resolution-rules.md, the required-current rule).
+
+        Deliberately NOT routed through `_apply_peak_clamp`: that call mutates `self._peak_tracker`
+        (R3's breach timer) and, on a force-stop, `self._mode_state`. This is a hypothetical --
+        "what could urgency deliver" -- and a hypothetical must not advance a breach timer. The
+        headroom
+        arithmetic below is therefore the same shape as the `peak_headroom_a` readout further up
+        `_run_cycle`, on the raised limit instead of the resolved one; keep the two in lockstep.
+
+        C4 is applied through `ceiling_headroom_a` rather than `clamp_to_ceiling` for the same
+        reason in a different key: `clamp_to_ceiling` is one of ADR-0006's ten ordered steps, and a
+        test observes the actual call order of those step functions. Calling it here -- before the
+        peak clamp, for a value that never reaches the charger -- would register as a sixth,
+        out-of-order control-path clamp. The headroom helper shares C4's arithmetic without being
+        that step.
+
+        Like `_apply_peak_clamp` itself, this applies the peak headroom with no `captar_available`
+        gate. That mirrors today's clamp behaviour rather than R3 AC1 -- the divergence between the
+        two is issue #1018, and fixing it here alone would put the escalated rate and the clamp it
+        models out of step.
+        """
+        escalated_peak_limit_kw = resolve_effective_peak_limit(
+            peak_operand_kw,
+            self._config.max_peak_kw,
+            self._config.peak_floor_kw,
+            urgent=True,
+        )
+        peak_target_w = escalated_peak_limit_kw * 1000.0 - self._config.safety_margin_w
+        peak_headroom_a = math.floor((peak_target_w - ctx.baseline_w) / ctx.voltage)
+        rate_a = min(
+            self._config.max_current,
+            float(peak_headroom_a),
+            ceiling_headroom_a(
+                net_w=ctx.net_w,
+                charger_w=ctx.charger_w,
+                voltage=ctx.voltage,
+                ceiling_a=self._config.grid_ceiling_a,
+                offset_a=self._config.grid_safety_offset_a,
+            ),
+        )
+        # Floored at 0: a household baseline at or beyond the raised limit leaves nothing for
+        # urgency to deliver, and a negative rate would make `required_a > rate` fire
+        # `unreachable` with a nonsense threshold rather than an honest "no headroom" one.
+        return max(rate_a, 0.0)
 
     def _fresh_mode_state(self) -> dict:
         """R7/R11: the idle state every SOC-gated mode resets to -- disconnect, mode switch,

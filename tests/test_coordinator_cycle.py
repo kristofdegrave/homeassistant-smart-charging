@@ -864,6 +864,11 @@ def _resolve_deadline_urgency(**overrides):
         voltage=230.0,
         surplus_w=0.0,
         max_current_a=32.0,
+        # R5 (issue #1078): urgency is judged against the escalated maximum permitted rate, not
+        # the baseline. 32.0 leaves ample slack by default, so each test that wants urgency now
+        # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
+        escalated_maximum_permitted_rate_a=32.0,
+        urgency_latched=False,
         auto_dispatchable=False,
         solar_available=False,
         captar_available=True,
@@ -952,10 +957,13 @@ def test_resolve_deadline_urgency_manual_profile_baseline_is_the_active_mode_its
         ev_soc=50.0,
         active_soc_limit=80.0,
         effective_battery_capacity_kwh=10.0,
+        escalated_maximum_permitted_rate_a=14.0,
         mode_desired_current=fake_mode_desired_current,
     )
-    assert calls == [MODE_POWER]  # baseline dry-run used the active mode, not a selected one
-    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (5.0 A)
+    assert calls == [MODE_POWER]  # baseline query used the active mode, not a selected one
+    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A, and the slack test
+    # fires because 13.04 > 14.0/1.25 = 11.2. The 5.0 A baseline is what urgency would hand
+    # BACK to (issue #1078), not what it is judged against on the way in.
     assert result.urgent is True
     assert result.resolved_mode is None  # Manual: coordinator never reassigns active_mode
 
@@ -985,6 +993,10 @@ def test_resolve_deadline_urgency_escalates_from_baseline_off_to_captar_when_urg
         sun_is_down=False,  # row 4 doesn't match at baseline -- falls through to Off
         low_tariff_active=False,
         solar_reserve_active=False,
+        # 13.04 A required against a 14.0 A escalated rate: 13.04 > 11.2, so the slack test
+        # fires. Deliberately NOT left at the default 32.0 -- under the old rule this test
+        # passed on the 0 A Off baseline alone, which is precisely the #1078 defect.
+        escalated_maximum_permitted_rate_a=14.0,
         mode_desired_current=fake_mode_desired_current,
     )
     assert calls == [MODE_OFF]  # baseline (rows 3-5, urgent=False) resolved to Off
@@ -1038,10 +1050,11 @@ def test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry():
             deadline_today=time(11, 0),
             ev_soc=50.0,
             active_soc_limit=80.0,
+            escalated_maximum_permitted_rate_a=14.0,
         )
         # auto_dispatchable=True with no deadline slack (see the sibling escalation test above
-        # for the same energy-needed math) makes both call sites fire: the baseline dry run
-        # (urgent=False) and the real resolution (urgent=True, once required exceeds baseline).
+        # for the same energy-needed math) makes both call sites fire: the baseline query
+        # (urgent=False) and the real resolution (urgent=True, once the slack test fires).
         mock_policies.__getitem__.assert_called_with(PROFILE_AUTO)
         select = mock_policies.__getitem__.return_value.select
         assert [call.kwargs["urgent"] for call in select.call_args_list] == [False, True]
