@@ -73,6 +73,23 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
+  authoring:
+    # Not gated on the `changes` filter above: that filter is about integration code, and this
+    # job is about .claude/**. Diff-scoped, so it only ever looks at what a PR adds -- see the
+    # script's header for why the back-catalogue is deliberately out of scope. Skipped on
+    # push/dispatch, where there is no PR diff to scope to.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The check diffs against the PR base, which a shallow clone does not contain.
+          fetch-depth: 0
+      - name: Authoring rules (docs/** paths in skills and agent definitions)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: .github/check-authoring-rules.sh "$BASE_SHA"
+
   test:
     needs: changes
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
