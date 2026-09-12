@@ -1,6 +1,6 @@
 ---
 name: submit-pr-review
-description: "Use when posting review findings to a pull request in this project — from CI (_ai-review.yml) or from a local pass run by the review skill, once a reviewer agent has returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
+description: "Use when posting review findings to a pull request in this project — from CI (_ai-review.yml) or from a local pass run by the review skill, once the pass's reviewer agents have returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
 ---
 
 # Submit a PR review
@@ -15,7 +15,8 @@ PR anyway (GitHub 422). Always `COMMENT`.
 
 ## 1. Build the review payload
 
-Write it to a scratch JSON file (the ONLY file you create — do **not** edit any repository file):
+Write it to a scratch JSON file (the ONLY file you create — do **not** edit any repository
+file):
 
 ```json
 {
@@ -32,16 +33,19 @@ Write it to a scratch JSON file (the ONLY file you create — do **not** edit an
 ## 2. Anchor inline comments — the reviews API is strict
 
 - Each inline comment MUST anchor to a line that is part of THIS diff
-  (`git diff <base-sha>...<head-sha>`). `line` is the line number in the file's **new** version;
+  (`git diff <base-sha>...<head-sha>`). `line` is the line number in the file's **new**
+  version;
   `side` is `RIGHT` (use `LEFT` only to comment on a removed line).
 - **A single out-of-range anchor makes the WHOLE submission fail with HTTP 422.**
 - Put every Critical/Major/Minor finding that maps to a specific changed line inline.
 - A finding that does NOT map to a changed line (e.g. "a required section is missing", a
-  cross-file concern) goes in the summary body instead — never invent a line to place it inline.
+  cross-file concern) goes in the summary body instead — never invent a line to place it
+  inline.
 
 ## 3. Summary body
 
-- Findings grouped by severity (Critical / Major / Minor / Nit), each with a file/line reference.
+- Findings grouped by severity (Critical / Major / Minor / Nit), each with a file/line
+reference.
 - Include a **Human review comments** section for any unaddressed human comments the caller
   identified (quote each with its file), treated as at least Major.
 - End with a ready-to-merge recommendation.
@@ -79,8 +83,8 @@ comment — the review must be posted.
   **Model selection** table names is read-only — they return findings, they do not post — so
   once they have all returned, the main session posts their findings here as **one** review in
   local mode (round marker, no verdict marker). One pass is one review, however many agents
-  ran. The PR always exists by then, which `CLAUDE.md`'s **Contribution workflow** section's
-  step 2 guarantees.
+  ran. The PR always exists by then, which step 2 of the doc `CLAUDE.md`'s
+  **Contribution workflow** section routes to guarantees.
   Anchor each finding that carries a file path + new-version line as an inline comment; put
   the rest in the body. If there is no PR (an uncommitted local draft), report the findings in
   the session instead of posting.
