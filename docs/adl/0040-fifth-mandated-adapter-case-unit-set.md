@@ -83,10 +83,9 @@ including "used as-is".
   answer for. Where the behaviour is *not* decided the claim is weaker and worth stating as such:
   a unit-blind adapter still passes clauses 2 and 3 when both assert "used as-is", and what the
   rule buys there is that the undecided contract becomes visible in the suite rather than absent
-  from it. It is grounded
-  rather than aspirational — the two `PowerKilowattReadAdapter` tests above already are the rule,
-  so adopting it costs that role nothing and names an existing standard rather than an imagined
-  one.
+  from it. It is grounded rather than aspirational — the two `PowerKilowattReadAdapter` tests
+  above already are the rule, so adopting it costs that role nothing and names an existing
+  standard rather than an imagined one.
 - Pro: it binds the six uncontracted roles *without* pre-deciding their behaviour. A test that
   pins "a `mV` reading on `grid_voltage` is used as the number it is" is a true and useful test:
   it makes an undecided contract visible in the suite and in review, where today it is invisible
@@ -145,12 +144,11 @@ Drop the conditional trigger: every role gets a unit case, so there is no bounda
 
 - Pro: removes Option A's second Con entirely. No author has to decide whether their role is in
   scope, and no reviewer has to adjudicate it.
-- Con: `unit_of_measurement` is meaningless on the boolean, enum, time and notify roles —
-  `charger_status`, `low_tariff`, `car_home`, `home_day_external`, `departure_external`,
-  `notification_target` and `sun`. Their meaning case is the unmapped-raw-state case ADR-0009
-  already mandates. Requiring a ritual assertion on roles where the attribute carries no
-  information trains reviewers to wave the case through, which erodes it on the roles where it is
-  load-bearing.
+- Con: `unit_of_measurement` is meaningless on the seven non-numeric roles — `charger_status`,
+  `low_tariff`, `car_home`, `home_day_external`, `departure_external`, `notification_target` and
+  `sun`. Their meaning case is the unmapped-raw-state case ADR-0009 already mandates. Requiring a
+  ritual assertion on roles where the attribute carries no information trains reviewers to wave
+  the case through, which erodes it on the roles where it is load-bearing.
 
 ### Option F — Enforce it mechanically: one parametrised conformance test over the factory's role table
 
@@ -173,14 +171,18 @@ ADR-0037 has to ADR-0009's tier taxonomy. ADR-0035 stands in the third of these 
 narrowing ADR-0009's unmapped-raw-state case rather than extending it; what all three share, and
 what matters here, is that none of them is a supersession. ADR-0009's four cases, its harness
 split and its requirement-traceability naming are untouched and remain authoritative; this record
-adds a fifth case to the mandated coverage set and nothing else. Option C is rejected on its Con: superseding a decision that still holds in every part would orphan the
-records already pointing at it.
+adds a fifth case to the mandated coverage set and nothing else. Option C is rejected on its Con:
+superseding a decision that still holds in every part would orphan the records already pointing
+at it.
 
 **The fifth mandated case.** For every adapter role whose reading is **numeric** and whose
 `entity-catalog.md` unit column **names a unit**, the role's tests must:
 
-1. **State the expected unit set** — which source units the role accepts, named in the test or its
-   docstring, not left to be inferred from the adapter's code.
+1. **State the expected unit set** — which source units the role's mapped entity is expected to
+   report, named in the test or its docstring, not left to be inferred from the adapter's code.
+   (Note this is an expectation about the *source*, not a promise about handling: a role whose
+   behaviour is "used as-is" still has an expected set, and clauses 2 and 3 are exactly what
+   record that a reading outside it is used anyway.)
 2. **Cover a foreign unit** — a reading whose `unit_of_measurement` is present and outside that
    set, asserting the role's actual behaviour.
 3. **Cover an absent unit** — a reading with no `unit_of_measurement` attribute, asserting the
@@ -190,14 +192,23 @@ records already pointing at it.
 adapter, and several roles share one: `net_power`, `charger_power` and `solar_power` are all
 `PowerWattReadAdapter`; `grid_voltage`, `ev_soc`, `ev_battery_capacity` and `solar_forecast` are
 all `NumericReadAdapter`; `charger_current` and `vehicle_charge_limit` are both
-`NumericReadWriteAdapter`. Two cases per role would mean twenty near-identical assertions against
-four classes, which is ritual rather than coverage. So clauses 2 and 3 are satisfied for a role by
-cases on **the class through which that role reads**, and a role is conforming when its class has
-them. Clause 1 stays per role: the expected unit set is a property of the role, and two roles on
-one class may legitimately have different ones — at which point the shared class no longer
-expresses both, and the divergence is itself the finding. A reviewer's question is therefore
-"which class does this role read through, and does that class have the two cases", and the
-follow-up below is counted in classes.
+`NumericReadWriteAdapter`; `monthly_peak_external` alone is `PowerKilowattReadAdapter`. Two cases
+per role would mean twenty near-identical assertions against four classes, which is ritual rather
+than coverage. So clauses 2 and 3 are satisfied for a role by cases on **the class through which
+that role reads**, and a role is conforming when its class has them.
+
+**And a subclass that does not override `read` inherits its base class's clauses 2 and 3.**
+`NumericReadWriteAdapter` subclasses `NumericReadAdapter` and adds only `write`; its read path is
+the inherited method, so cases on it would assert the code the base class's cases already assert.
+Demanding them anyway would be the same ritual this rule just rejected, one level down. The
+obligation attaches to the class that *defines* the read, and the follow-up below is counted
+accordingly.
+
+Clause 1 stays per role: the expected unit set is a property of the role, and two roles on one
+class may legitimately have different ones — at which point the shared class no longer expresses
+both, and the divergence is itself the finding. A reviewer's question is therefore "which class
+defines this role's read, does that class have the two cases, and does this role state its unit
+set", and the follow-up below is counted in classes for cases 2-3 and in roles for clause 1.
 
 Cases 2 and 3 are separate because the two are treated differently wherever the question has been
 decided: ADR-0038's whole carve-out turns on the absent case specifically, and a single combined
@@ -229,9 +240,12 @@ gap visible and it papering over the gap.
 `PowerWattReadAdapter`'s `::test_power_watt_adapter_absent_unit_assumes_watts` and
 `::test_power_watt_adapter_present_non_power_unit_is_rejected` are the same pair for the
 assume-and-warn behaviour, written under ADR-0038. Between them those two classes carry all four
-power roles, so — the obligation being per class — adopting this rule costs those roles nothing.
-Its entire cost falls on the two classes through which the other six read, which have no such
-tests.
+power roles, so — the obligation being per class — adopting this rule costs those roles no new
+*cases*. Clause 1 is a separate matter even there: none of those four tests names an accepted
+source-unit set outright, and ADR-0038 is the role-specific decision that supplies it, so what
+those roles owe is a sentence in a docstring rather than a test. The cases themselves are the
+expensive half, and their entire cost falls on `NumericReadAdapter`, which defines the read for
+the other six roles and has no such tests.
 
 **The in/out boundary, stated so a test author cannot reasonably get it wrong.** The phrase
 "carrying no unit at all" has two readings and they land on opposite sides:
@@ -284,14 +298,15 @@ is tracked as its own `workflow` change.
 
 ## Consequences
 
-- **Two adapter classes, carrying six numeric roles, are non-conforming the moment this is
-  accepted** — `NumericReadAdapter` (`grid_voltage`, `ev_soc`, `ev_battery_capacity`,
-  `solar_forecast`) and `NumericReadWriteAdapter` (`charger_current`, `vehicle_charge_limit`).
+- **One adapter class, carrying six numeric roles, is non-conforming the moment this is
+  accepted** — `NumericReadAdapter`, which reads for `grid_voltage`, `ev_soc`,
+  `ev_battery_capacity` and `solar_forecast` directly, and for `charger_current` and
+  `vehicle_charge_limit` through `NumericReadWriteAdapter`'s inherited `read`.
   This is deliberate and is the point: the rule's value is that it names them. A `testing` issue
-  to add clauses 2 and 3 to those two classes, and clause 1's unit-set statement for each of the
-  six roles, is follow-up this decision creates — four new cases, not twelve. Both classes read
-  unitlessly today, so their tests will pin "used as-is" and must carry the docstring the Decision
-  requires.
+  to add clauses 2 and 3 to `NumericReadAdapter` — which defines the read both share — and
+  clause 1's unit-set statement for each of the six roles, is follow-up this decision creates:
+  **two new cases, not twelve**, plus six docstring sentences. That read path is unitless today,
+  so both cases will pin "used as-is" and must carry the docstring the Decision requires.
 - **The rule must be propagated to the three derived copies** before it binds anyone in practice:
   `.claude/skills/write-tests/SKILL.md`, `.claude/agents/test-reviewer.md` and
   `.claude/agents/code-reviewer.md` all restate the mandated set as four cases. That is a separate
@@ -316,10 +331,10 @@ is tracked as its own `workflow` change.
   merged without the question being asked at all. That is the intended cost, and it is the same
   cost ADR-0038 accepted at runtime.
 - **What becomes easier:** a reviewer has a mechanical question to ask of any adapter diff —
-  "which class does this role read through, and does that class have its two unit cases" — that
-  does not require knowing the role's domain. The
-  failure mode that shipped a kW-as-W read behind a green suite is no longer reachable without a
+  "which class defines this role's read, does that class have its two unit cases, and does this
+  role state its expected unit set" — that does not require knowing the role's domain. The failure
+  mode that shipped a kW-as-W read behind a green suite is no longer reachable without a
   reviewer actively accepting it.
-- **Accepted before those two classes conform**, on the same basis as ADR-0009 and ADR-0037: a
+- **Accepted before that class conforms**, on the same basis as ADR-0009 and ADR-0037: a
   coverage rule has to be settled before the work it governs is scheduled, and leaving it
   Proposed would make the propagation change and the test additions provisional.
