@@ -49,13 +49,16 @@ broken reference, and judge the ADR on internal merit instead.
   not a restatement of the Decision.
 - **The Blast radius enumeration is complete.** Consequences must carry the template's Blast
   radius: a re-runnable search, a conforms/does-not-conform verdict per hit, and an explicit
-  out-of-scope list for the hits this ADR leaves alone. Re-run the stated search yourself.
-  Three things are each a **Major** finding — name the sites missed in every case: the
-  section is absent; the search pattern is narrower than the decision, so it drops a
-  subclass, alias or re-export the decision also governs; or a hit appears in neither the
-  table nor the out-of-scope list. An ADR that governs no existing site must say so and give
-  the search that shows it — an empty enumeration with no search behind it is the same
-  finding.
+  out-of-scope list. Re-run the stated search with `Grep`/`Glob`, translating shell-grep
+  syntax to ripgrep's — `\|` alternation and repo-relative paths do not carry over, and an
+  unexpectedly empty result is a defect in the *stated* search, never evidence that the
+  decision governs nothing. Three things are each a **Major** finding — name the
+  sites missed in every case: the section is absent; the search fails the template's own width
+  test, so it drops something the decision also governs; or a hit appears in neither the table
+  nor the out-of-scope list. A row carrying a verdict but not what the site does today, or an
+  out-of-scope entry not saying what it keeps doing, is **Minor**. Apply this only to an ADR
+  this change drafts — an already-Accepted ADR predating the requirement is out of scope,
+  because adding the section to it would be the immutability violation item (4) makes Critical.
 
 **(4) Cross-ADR / cross-document consistency**
 - Does this ADR contradict an existing `Accepted` ADR? If so, it must explicitly supersede
