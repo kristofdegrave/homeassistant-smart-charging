@@ -44,11 +44,10 @@ message conventions).
 4. **Post findings to the PR before fixing.** Native GitHub PR review with inline comments
    (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
    once the PR exists, which step 2 guarantees is always before review.
-5. **Fix, comment, resolve.** Per finding addressed: fix it, reply on that thread describing
-   what was done, then resolve the thread — `finalize-pr-review` owns which threads may be
-   resolved, and [tracker-mechanics.md](tracker-mechanics.md) the commands. Resolve only what
-   was actually fixed; leave
-   deferred/disputed/partial threads open and say why.
+5. **Fix, comment, resolve.** Per finding addressed: fix it and reply on that thread
+   describing what was done; resolve the thread once the round's fixes are pushed.
+   `resolve-review-thread` owns which threads may be resolved, and
+   [tracker-mechanics.md](tracker-mechanics.md) the commands.
 6. **Loop steps 3–5**, capped at **3 rounds**, until a pass finds no remaining Critical/Major
    findings. Still unresolved at round 3 → stop and escalate to the human partner with the
    disagreement instead of continuing; that usually needs a judgment call the loop can't make.
