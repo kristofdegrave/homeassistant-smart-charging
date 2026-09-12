@@ -32,6 +32,18 @@ If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for th
 - The document satisfies every requirement it claims, and each claim is actually supported by its content.
 - Nothing it describes contradicts another analysis document.
 - No requirement is mis-homed (a use-case satisfies reqs; it should not restate mechanism/resolution logic).
+- **Code backing — for changed acceptance criteria only.** Take the acceptance criteria this
+  change *adds or alters*, and only those: read them off the diff, or, when you were given no
+  diff, off the list of new/changed criteria the caller names. A change that alters no
+  acceptance criterion — pure wording, formatting, a glossary entry, a renumbering — has
+  nothing to check here, and you say so in one line and move on. For each criterion that is in
+  scope, run one targeted `Grep` over `custom_components/` for the behaviour it constrains (the
+  entity id, the default, the bound, the precedence rule it names) and open at most the file
+  that matches. Report **Major** if no code implements it, or if the code implements something
+  measurably different (a different default, bound, unit or ordering) — unless the PR body
+  already names a `specs` issue filed for that gap, which discharges it. This is one lookup per
+  changed criterion; it is never a sweep of the codebase, and the read-first list above does
+  not grow.
 
 **(3) Document quality**
 - **"What, not how"** — no code/HA implementation detail (Python modules, timer helpers, persistence). Entity ids that are part of the ubiquitous language are fine.

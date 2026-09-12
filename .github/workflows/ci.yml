@@ -20,6 +20,12 @@ name: CI
 # `push` (to main) and on a manual `workflow_dispatch` (e.g. to re-seed baseline.json without
 # waiting for a push). One consequence: the perf job and its baseline-comparison step are no
 # longer exercised on a PR at all -- a break in either is only observable after a push/dispatch.
+#
+# `docs-only-close-guard` is the other exception: it is the one *merge* gate on the
+# documentation-to-code link, so it must run on exactly the PRs the `changes` filter excludes --
+# it does not depend on `changes` at all, and instead skips on non-`pull_request` events (it
+# needs a PR body and file list). It only blocks a merge once it is added to branch protection's
+# required checks; until then it reports red without blocking.
 
 on:
   push:
@@ -146,6 +152,66 @@ jobs:
           label: median cpu
           message: ${{ steps.perf_badge.outputs.median_cpu_ms }} ms
           color: blue
+
+  docs-only-close-guard:
+    # A documentation-only diff cannot implement code, so it must not be allowed to close a
+    # code task. Refuses a PR whose changed files are all under `docs/` and whose body uses a
+    # GitHub closing keyword on an issue labelled `development` or `testing`. (Post-mortem
+    # 2026-09-11: PR #510 closed development issue #375 as COMPLETED while its own body said
+    # the code fix was still outstanding -- the task was then never picked up again.)
+    #
+    # Deliberately NOT in ai-pipeline.yml: that file is a router fired by
+    # `pull_request: types: [labeled]`, so a check placed there runs only when someone applies
+    # a label and gates no merge at all. Deliberately not a `_ai-review.yml` checklist item
+    # either: that is a model's judgement on a PR that reached `needs-review`, not a status
+    # check. This is the project's one hard gate on this failure mode; the two prompt-level
+    # checks backing it up are in `.claude/skills/write-requirement/SKILL.md` and
+    # `.claude/agents/analysis-reviewer.md`.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Refuse a docs-only PR that closes a development/testing issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')
+          if [ -z "$files" ]; then
+            echo "PR changes no files; guard does not apply."
+            exit 0
+          fi
+          if echo "$files" | grep -qv '^docs/'; then
+            echo "Diff touches paths outside docs/; guard does not apply."
+            exit 0
+          fi
+          body=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""')
+          # GitHub's own closing keywords, case-insensitive. Anything else -- notably
+          # "Part of #N" -- is not a closing reference and is ignored here.
+          closed=$(echo "$body" | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+' | grep -oE '[0-9]+' | sort -u || true)
+          if [ -z "$closed" ]; then
+            echo "Docs-only diff, no closing reference. OK."
+            exit 0
+          fi
+          offenders=""
+          for n in $closed; do
+            labels=$(gh api "repos/$REPO/issues/$n" --jq '.labels[].name' 2>/dev/null || true)
+            for label in $labels; do
+              case "$label" in
+                development|testing) offenders="$offenders #$n ($label)" ;;
+              esac
+            done
+          done
+          if [ -n "$offenders" ]; then
+            echo "::error::Documentation-only diff closes code task issue(s):$offenders. A docs change cannot complete a development/testing task -- reference them with 'Part of #N' and let the PR carrying the code close them."
+            exit 1
+          fi
+          echo "Docs-only diff closes no development/testing issue. OK."
 
   hassfest:
     # Validates manifest.json / integration structure against Home Assistant's own checks.
