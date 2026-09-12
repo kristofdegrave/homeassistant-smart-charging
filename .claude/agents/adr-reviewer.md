@@ -47,6 +47,15 @@ broken reference, and judge the ADR on internal merit instead.
 **(3) Consequences follow from the Decision**
 - Consequences add genuine new information (follow-up work, what becomes easier/harder) —
   not a restatement of the Decision.
+- **The Blast radius enumeration is complete.** Consequences must carry the template's Blast
+  radius: a re-runnable search, a conforms/does-not-conform verdict per hit, and an explicit
+  out-of-scope list for the hits this ADR leaves alone. Re-run the stated search yourself.
+  Three things are each a **Major** finding — name the sites missed in every case: the
+  section is absent; the search pattern is narrower than the decision, so it drops a
+  subclass, alias or re-export the decision also governs; or a hit appears in neither the
+  table nor the out-of-scope list. An ADR that governs no existing site must say so and give
+  the search that shows it — an empty enumeration with no search behind it is the same
+  finding.
 
 **(4) Cross-ADR / cross-document consistency**
 - Does this ADR contradict an existing `Accepted` ADR? If so, it must explicitly supersede
