@@ -401,7 +401,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # The action loads CLAUDE.md in full, plus every skill's frontmatter name and
           # description. Bodies load on demand — hence naming the skill and its directory
-          # below, and the Read grant. See docs/reference/ai-authoring-token-efficiency.md.
+          # below, and the Read grant. See docs/reference/ai-authoring.md.
           prompt: |
             A maintainer labeled issue #${{ inputs.issue_number }} `needs-draft` with the
             context label `${{ steps.kind.outputs.type }}` to have a Smart Charging
