@@ -75,11 +75,9 @@ from .engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
     debounce_baseline_w,
+    peak_headroom_a,
     resolve_effective_peak_limit,
     resolve_monthly_peak_operand,
-)
-from .engines.billing_protection import (
-    peak_headroom_a as peak_headroom_a_of,
 )
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
@@ -749,11 +747,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
         # entity-catalog.md:153/control-cycle.md step 5 -- the same target and (issue #990:
-        # debounced) baseline the R3 clamp itself holds (apply_peak_clamp's own headroom_a).
-        # The `safety_margin_w` read and the resulting computation are duplicated here rather
-        # than returned from _apply_peak_clamp, to avoid changing its control-path signature
-        # for a display-only need -- keep the two lookups in lockstep if either side changes.
-        peak_headroom_a = peak_headroom_a_of(
+        # debounced) baseline the R3 clamp itself holds. Since issue #1078 this shares
+        # `apply_peak_clamp`'s own arithmetic through `peak_headroom_a` rather than restating
+        # it, so the readout cannot drift from the clamp it reports on; reading it here instead
+        # of returning it from `_apply_peak_clamp` still avoids changing that control-path
+        # signature for a display-only need.
+        peak_headroom = peak_headroom_a(
             baseline_w=ctx.baseline_w,
             voltage=voltage,
             effective_peak_limit_kw=effective_peak_limit_kw,
@@ -823,7 +822,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_peak_limit_kw=effective_peak_limit_kw,
             active_soc_limit=active_soc_limit,
             solar_surplus_w=solar_surplus_w,
-            peak_headroom_a=peak_headroom_a,
+            peak_headroom_a=peak_headroom,
             time_to_full_min=time_to_full_min,
             adapter_readings=self._current_adapter_readings(),
             adapter_readings_at=self._role_readings_at,
@@ -1154,6 +1153,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         `_escalated_maximum_permitted_rate_a`, which predicts it -- a predictor that disagreed
         with the thing it predicts is worse than no predictor.
 
+        One caveat the sharing does not remove: `_apply_peak_clamp` runs after mode dispatch and
+        so reads the mode being dispatched, while the escalated-rate helper runs before it and
+        reads the mode from the *previous* cycle. The two only disagree for `Power` with the
+        opt-out off, which `Auto` never selects from its baseline rows -- reachable only on a
+        CapTar-absent installation (R18), where `Auto`'s urgency row escalates to `Power`, and
+        for one cycle after a profile switch away from a `Power` session. Fixing #1018 removes
+        the first from reach. Passing the mode in as a parameter would close it properly; that is
+        deliberately not done here, because the mode urgency *would* dispatch is resolved by the
+        very call this rate is an input to.
+
         Deliberately not also gating on `captar_available` (R3 AC1, R18): `_apply_peak_clamp`
         does not, and this predicate exists to say what that clamp *does*. See issue #1018.
         """
@@ -1174,10 +1183,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         Deliberately NOT routed through `_apply_peak_clamp`: that call mutates `self._peak_tracker`
         (R3's breach timer) and, on a force-stop, `self._mode_state`. This is a hypothetical --
-        "what could urgency deliver" -- and a hypothetical must not advance a breach timer. The
-        headroom
-        arithmetic below is therefore the same shape as the `peak_headroom_a` readout further up
-        `_run_cycle`, on the raised limit instead of the resolved one; keep the two in lockstep.
+        "what could urgency deliver" -- and a hypothetical must not advance a breach timer. It
+        shares the clamp's own `peak_headroom_a` arithmetic instead, applied to the raised limit
+        rather than the resolved one, so there is one formula and not a copy to keep in step.
 
         C4 is applied through `ceiling_headroom_a` rather than `clamp_to_ceiling` for the same
         reason in a different key: `clamp_to_ceiling` is one of ADR-0006's ten ordered steps, and a
@@ -1217,7 +1225,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 urgent=True,
             )
             bounds.append(
-                peak_headroom_a_of(
+                peak_headroom_a(
                     baseline_w=ctx.baseline_w,
                     voltage=ctx.voltage,
                     effective_peak_limit_kw=escalated_peak_limit_kw,

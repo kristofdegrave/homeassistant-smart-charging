@@ -3622,14 +3622,18 @@ async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_enga
     coord.soc_limit_override = 80.0
     _seed_ample_peak_headroom(coord)
 
-    # Cycle 1: ~13.04 A required (1.25 h) against a 12.8 A threshold -- the slack test fires.
+    # Cycle 1: 7.5 kWh over 1.25 h at 230 V = ~26.09 A required. That is over the 12.8 A slack
+    # threshold AND over the 16 A escalated rate, so this cycle is Unreachable -- which is still
+    # urgency in effect (Unreachable is a strict subset of Urgent), and what this test needs is
+    # simply that the latch is set.
     _seed_today_deadline(coord, hours_from_now=1.25)
     await coord._async_update_data()
     assert coord._required_current.urgent is True
     assert coord._urgency_latched is True
 
-    # Cycle 2: 6 h out, ~2.72 A required -- far under the threshold, so the slack test alone
-    # would leave this Normal. The latch, and an `Off` baseline that cannot hand back, hold it.
+    # Cycle 2: 6 h out, ~5.43 A required -- far under the 12.8 A threshold, so the slack test
+    # alone would leave this Normal. The latch, and an `Off` baseline that cannot hand back
+    # (0 A < 5.43 A), are the only reasons urgency survives.
     _seed_today_deadline(coord, hours_from_now=6)
     await coord._async_update_data()
     assert coord._required_current.urgent is True
