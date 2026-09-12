@@ -23,12 +23,11 @@ skill, which owns the technique. Two kinds of output, each with its own home:
   grilling, then moved into the epic body under a *Decisions so far* heading when the epic is
   filed (**Ticket** below). One entry per settled question. A single-artifact idea, which
   never gets an epic, keeps them on its own issue.
-- **Facts are the agent's job, never the user's.** A question of fact is answered by research
-  against primary sources (Home Assistant developer docs, library source, device API docs) and
-  recorded **as a comment on the issue that needed it**: date, sources read, the answer, and
-  what could not be confirmed. There is deliberately no research folder — a second store of
-  facts would rot beside the analysis docs. A finding that proves durable gets cited by the
-  ADR or analysis document that depends on it.
+- **Facts are the agent's job, never the user's.** A question of fact goes to the `research`
+  skill, which owns which sources count, what the comment contains and how a durable finding
+  is cited; what it produces is a comment **on the issue that needed it**. There is
+  deliberately no research folder — a second store of facts would rot beside the analysis
+  docs.
 
 ## 3. Route — two tracks
 

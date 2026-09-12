@@ -194,7 +194,7 @@ callers and would drift the same way.
 Per-type `implement-adr`, `implement-uc`, … skills were considered and rejected:
 
 - They would be eight near-identical copies of the lifecycle with one line changed — exactly
-  the duplication `ai-authoring-token-efficiency.md` forbids, and they would drift.
+  the duplication `ai-authoring.md` forbids, and they would drift.
 - Dispatch by context label is deterministic. Dispatch by skill-description matching is fuzzy,
   and a skill firing on the wrong artifact costs a whole run's context.
 - CI would end up with one generic runner per side plus eight local runners to keep aligned.
@@ -222,7 +222,7 @@ docs/reference/work-types/
   documentation/implement.md, documentation/review.md
   development/implement.md, development/review.md   (review.md covers custom_components/ and tests/)
   testing/…
-  workflow/implement.md     ← pointer to ai-authoring-token-efficiency.md, for reading only;
+  workflow/implement.md     ← pointer to ai-authoring.md, for reading only;
                               the generic implement still refuses to draft this label
   workflow/review.md
 .claude/skills/implement/SKILL.md      generic; reads <label>/implement.md
