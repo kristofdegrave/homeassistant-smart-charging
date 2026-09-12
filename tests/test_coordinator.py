@@ -60,7 +60,7 @@ from custom_components.smart_charging.const import (
     STATE_DISCONNECTED,
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
-from custom_components.smart_charging.coordinator_cycle import ActiveCooldown
+from custom_components.smart_charging.coordinator_cycle import ActiveCooldown, CycleContext
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
@@ -2152,7 +2152,13 @@ async def test_urgency_engages_when_the_slack_test_fires(hass, freezer):
     unconditional every evening.
 
     With ample peak headroom the escalated rate is C1's 16 A ceiling, so the slack threshold is
-    12.8 A. A 15-minute deadline needs ~13.04 A: over the threshold, under the ceiling."""
+    12.8 A. A 15-minute deadline needs ~13.04 A: over the threshold, under the ceiling.
+
+    That is a 1.9% margin, pinned to `max_current` staying the binding C1 bound -- a change to
+    that default makes this fail obscurely. The engine tier carries the exact-arithmetic version
+    of these boundaries (`SLACK_KWARGS` in tests/engines/test_deadline.py: 100 kWh / 30 pp / 10 h
+    / 250 V = exactly 12.0 A, against 15.0/1.25 = 12.0); this tier's job is the wiring, not the
+    threshold."""
     freezer.move_to("2026-01-15 12:00:00")  # fixed, away from midnight (no rollover semantics)
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
@@ -2160,7 +2166,9 @@ async def test_urgency_engages_when_the_slack_test_fires(hass, freezer):
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
     coord.active_mode = MODE_POWER
-    coord.target_current = 2.0  # well below the ~13.04 A the deadline below will require
+    # Power's own target. Deliberately NOT what makes this urgent -- since #1078 the baseline
+    # plays no part in the engage decision; it only matters to the handback (see the revert test).
+    coord.target_current = 2.0
     coord.soc_limit_override = 80.0
     _seed_today_deadline(coord, hours_from_now=0.25)
     _seed_ample_peak_headroom(coord)
@@ -2172,8 +2180,13 @@ async def test_urgency_engages_when_the_slack_test_fires(hass, freezer):
 
 
 async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass, freezer):
-    """Same deadline as above, but Power's own target current already exceeds what's
-    required -- urgency never engages (R16's revert case)."""
+    """R5's handback: latched urgency clears once the baseline mode's own desired current
+    reaches the required current -- the ordinary policy will meet the deadline unaided.
+
+    Latched on entry (issue #1078), because post-#1078 the revert case IS the handback and
+    nothing else at this tier covers it clearing. Without the latch this test was inert: at
+    ~3.26 A required against a 12.8 A slack threshold, `target_current` could be set to 0.0 and
+    it would still have passed."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
@@ -2183,12 +2196,16 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
     coord.active_mode = MODE_POWER
     coord.target_current = 5.0  # above the ~3.26 A the deadline below requires
     coord.soc_limit_override = 80.0
+    coord._urgency_latched = True
     _seed_today_deadline(coord, hours_from_now=1)
     _seed_ample_peak_headroom(coord)
 
     await coord._async_update_data()
 
+    # The handback fired: Power's own 5.0 A request covers the ~3.26 A required.
     assert coord._required_current.urgent is False
+    # And the latch was released, not merely reported False for this cycle.
+    assert coord._urgency_latched is False
 
 
 async def test_handback_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
@@ -2831,7 +2848,13 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
 
 
 async def test_low_tariff_mapped_true_matches_default(hass, freezer):
-    """A mapped ROLE_LOW_TARIFF reading True behaves the same as the unmapped default."""
+    """A mapped ROLE_LOW_TARIFF reading True behaves the same as the unmapped default: row 4
+    matches, the baseline is `Captar`, and its maximum-current request satisfies R5's handback
+    so latched urgency clears.
+
+    Latched on entry for the same reason as its two siblings (issue #1078) -- without it this
+    test passed whether or not row 4 matched, since ~10.87 A required is under the 12.8 A slack
+    threshold either way, and it would have read identically with `low_tariff=False`."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(
         status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=True
@@ -2845,6 +2868,7 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
+    coord._urgency_latched = True
     _seed_today_deadline(coord, hours_from_now=3)
     _seed_ample_peak_headroom(coord)
 
@@ -3568,3 +3592,184 @@ async def test_read_owned_entities_applies_every_table_driven_read(hass):
     assert coord.home_day_flag is True
     assert coord.departure_holiday_override == time_of_day(7, 30)
     assert coord.departure_home_day_override == time_of_day(8, 0)
+
+
+async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_engage(hass, freezer):
+    """R5's latch, driven naturally across two cycles rather than seeded (issue #1078).
+
+    Cycle 1 engages urgency on a tight deadline. Cycle 2 moves the deadline far enough out that
+    the slack test would NOT fire on its own, with a baseline of `Off` that can never satisfy the
+    handback -- urgency must still be in effect, and `_urgency_latched` must still be set.
+
+    This is the test that makes the latch real: with `self._urgency_latched = urgent` deleted from
+    the coordinator, every other urgency test still passes, because they all seed the flag by hand
+    and run a single cycle.
+    """
+    freezer.move_to("2026-01-15 12:00:00")
+    # low_tariff mapped False so Auto's row 4 (Overnight top-up) cannot match: the baseline falls
+    # through to Off (0 A), which can never satisfy the handback. With row 4 matching, the
+    # baseline would be Captar's 16 A and cycle 2 below would legitimately hand back.
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
+    )
+    config = _config()
+    config = dataclasses.replace(config, solar_available=False)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+
+    # Cycle 1: ~13.04 A required (1.25 h) against a 12.8 A threshold -- the slack test fires.
+    _seed_today_deadline(coord, hours_from_now=1.25)
+    await coord._async_update_data()
+    assert coord._required_current.urgent is True
+    assert coord._urgency_latched is True
+
+    # Cycle 2: 6 h out, ~2.72 A required -- far under the threshold, so the slack test alone
+    # would leave this Normal. The latch, and an `Off` baseline that cannot hand back, hold it.
+    _seed_today_deadline(coord, hours_from_now=6)
+    await coord._async_update_data()
+    assert coord._required_current.urgent is True
+    assert coord._urgency_latched is True
+
+
+async def test_urgency_latch_is_held_not_cleared_across_an_ev_soc_fault_cycle(hass, freezer):
+    """A fault cycle establishes nothing about the deadline, so it must not decide anything
+    about it either -- the same reasoning `_role_readings_at` and `_unreachable_edge` carry
+    through these early returns (ADR-0024). A fault is not one of R5's clear conditions.
+    """
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON)
+    config = _config()
+    config = dataclasses.replace(config, solar_available=False)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_SOLAR  # SOC-gated: a missing ev_soc is a fault, not a clean idle
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    _seed_today_deadline(coord, hours_from_now=1.25)
+    coord._urgency_latched = True
+
+    adapters[ROLE_EV_SOC]._value = None
+    result = await coord._async_update_data()
+
+    assert result.fault is True
+    assert coord._urgency_latched is True  # held, not cleared
+
+
+async def test_urgency_latch_clears_on_disconnect(hass, freezer):
+    """R5 lists a disconnect among urgency's clear conditions. It reaches the latch through
+    `deadline_resolvable=False` -> `urgent=False` rather than through a branch of its own, so
+    this pins that the funnel actually works."""
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
+    )
+    config = _config()
+    config = dataclasses.replace(config, solar_available=False)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    _seed_today_deadline(coord, hours_from_now=1.25)
+
+    await coord._async_update_data()
+    assert coord._urgency_latched is True
+
+    adapters[ROLE_CHARGER_STATUS]._canonical = STATE_DISCONNECTED
+    await coord._async_update_data()
+    assert coord._urgency_latched is False
+
+
+# --- R5's escalated maximum permitted rate: the operands that actually bind (issue #1078) ---
+#
+# Every other urgency test uses `_seed_ample_peak_headroom`, which leaves the escalated rate at
+# C1's `max_current`. These three pin the other three operands, each of which could otherwise be
+# deleted from the `min()` with the suite still green.
+
+
+def _escalated_rate(coord, *, baseline_w, voltage=230.0, net_w=0.0, charger_w=0.0):
+    """Call the helper directly with a hand-built context.
+
+    The helper is a pure function of `ctx` + `peak_operand_kw`, so driving it directly is what
+    lets a test say "the C4 operand bound here" instead of inferring it from an urgency verdict
+    three layers away.
+    """
+    ctx = CycleContext(
+        status=STATE_CHARGING,
+        net_w=net_w,
+        charger_w=charger_w,
+        now=0.0,
+        baseline_w=baseline_w,
+        voltage=voltage,
+        ev_soc=70.0,
+        active_soc_limit=80.0,
+        surplus_w=0.0,
+        sun_is_up=False,
+        sun_is_down=True,
+        low_tariff_active=False,
+        solar_reserve_active=False,
+    )
+    return coord._escalated_maximum_permitted_rate_a(ctx, peak_operand_kw=0.0)
+
+
+async def test_escalated_rate_is_bound_by_the_raised_peak_limit_when_headroom_is_tight(hass):
+    """The peak operand binds: with the household already drawing most of the maximum peak, what
+    urgency could deliver is the leftover headroom, not C1's ceiling."""
+    config = dataclasses.replace(_config(), max_peak_kw=4.0, safety_margin_w=250.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=config, interval_s=30, store=_FakeStore({})
+    )
+    # floor((4000 - 250 - 2000) / 230) = floor(7.60) = 7 A, below max_current's 16 A.
+    assert _escalated_rate(coord, baseline_w=2000.0) == 7.0
+
+
+async def test_escalated_rate_is_bound_by_the_c4_ceiling_when_it_is_the_tightest(hass):
+    """The C4 operand binds: a grid ceiling below both C1 and the peak headroom is what urgency
+    could actually deliver. C4 applies even where the peak clamp does not (C3/C4)."""
+    config = dataclasses.replace(
+        _config(), max_peak_kw=100.0, grid_ceiling_a=10.0, grid_safety_offset_a=2.0
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=config, interval_s=30, store=_FakeStore({})
+    )
+    # floor((10 - 2) - 0/230) = 8 A, below both max_current (16 A) and the 100 kW peak headroom.
+    assert _escalated_rate(coord, baseline_w=0.0) == 8.0
+
+
+async def test_escalated_rate_floors_at_zero_when_the_household_is_past_the_raised_limit(hass):
+    """No headroom left means urgency could deliver nothing. The floor matters: a negative rate
+    would make `required_a > rate` report `unreachable` against a nonsense threshold instead of
+    an honest 'no headroom'."""
+    config = dataclasses.replace(_config(), max_peak_kw=4.0, safety_margin_w=250.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=config, interval_s=30, store=_FakeStore({})
+    )
+    assert _escalated_rate(coord, baseline_w=9000.0) == 0.0
+
+
+async def test_escalated_rate_ignores_the_peak_limit_for_power_with_its_r17_optout(hass):
+    """R17/C3: `Power` with peak protection disabled is one of the two cases where the peak clamp
+    does not run, so the rate it could deliver is bounded by C1/C4 alone.
+
+    Without this, a `Power` session with the opt-out off and a household near the maximum peak
+    would floor the escalated rate to 0 A and make every required current both urgent and
+    unreachable -- #1078's own symptom, narrowed to one config."""
+    config = dataclasses.replace(
+        _config(), max_peak_kw=4.0, safety_margin_w=250.0, power_respect_peak=False
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    # The same baseline that floors the rate to 0 A above leaves C1's 16 A here, untouched by
+    # a clamp that does not run.
+    assert _escalated_rate(coord, baseline_w=9000.0) == 16.0

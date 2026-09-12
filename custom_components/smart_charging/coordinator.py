@@ -78,6 +78,9 @@ from .engines.billing_protection import (
     resolve_effective_peak_limit,
     resolve_monthly_peak_operand,
 )
+from .engines.billing_protection import (
+    peak_headroom_a as peak_headroom_a_of,
+)
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import ceiling_headroom_a, clamp_to_ceiling
@@ -670,7 +673,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 deadline_tomorrow=deadline_tomorrow if deadline_resolvable else None,
                 now_dt=now_dt,
                 effective_battery_capacity_kwh=effective_battery_capacity_kwh,
-                max_current_a=self._config.max_current,
                 escalated_maximum_permitted_rate_a=self._escalated_maximum_permitted_rate_a(
                     ctx, peak_operand_kw=peak_operand_kw
                 ),
@@ -729,6 +731,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # The latch this cycle's resolution leaves behind. Assigned from the resolved `urgent`
         # rather than from the slack test alone, so the handback -- and every other clear
         # condition that funnels through it -- releases the latch without a second code path.
+        # Both fault early-returns above sit UPSTREAM of this line, so a fault cycle holds
+        # whichever latch it entered with rather than clearing it -- the same reasoning
+        # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle
+        # that established nothing about the deadline must not decide anything about it either.
+        # A fault is not one of R5's clear conditions, and the cycle forces 0 A regardless.
         self._urgency_latched = urgent
         effective_peak_limit_kw = resolve_effective_peak_limit(
             peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
@@ -746,8 +753,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # The `safety_margin_w` read and the resulting computation are duplicated here rather
         # than returned from _apply_peak_clamp, to avoid changing its control-path signature
         # for a display-only need -- keep the two lookups in lockstep if either side changes.
-        peak_target_w = effective_peak_limit_kw * 1000.0 - self._config.safety_margin_w
-        peak_headroom_a = math.floor((peak_target_w - ctx.baseline_w) / voltage)
+        peak_headroom_a = peak_headroom_a_of(
+            baseline_w=ctx.baseline_w,
+            voltage=voltage,
+            effective_peak_limit_kw=effective_peak_limit_kw,
+            safety_margin_w=self._config.safety_margin_w,
+        )
         if auto_dispatchable and deadline_urgency.resolved_mode is not None:
             # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
             # never changes here while Manual, even under urgency) -- only Auto resolves its
@@ -1092,7 +1103,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         time `_run_cycle` builds ctx) rather than as separately-passed kwargs -- `_run_cycle`
         already has exactly one of each by the time this is called, so there is no second copy
         for the two to drift out of lockstep."""
-        if self.active_mode == MODE_POWER and not self._config.power_respect_peak:
+        if not self._peak_clamp_would_run():
             return desired
         desired, self._peak_tracker, force_stop = apply_peak_clamp(
             desired,
@@ -1135,6 +1146,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             offset_a=self._config.grid_safety_offset_a,
         )
 
+    def _peak_clamp_would_run(self) -> bool:
+        """R17: whether R3's peak clamp applies to the mode currently active.
+
+        `Power` alone may disable peak protection (R17, C3's second carve-out); every other mode
+        is bound by it. Shared by `_apply_peak_clamp`, which is the behaviour, and
+        `_escalated_maximum_permitted_rate_a`, which predicts it -- a predictor that disagreed
+        with the thing it predicts is worse than no predictor.
+
+        Deliberately not also gating on `captar_available` (R3 AC1, R18): `_apply_peak_clamp`
+        does not, and this predicate exists to say what that clamp *does*. See issue #1018.
+        """
+        return not (self.active_mode == MODE_POWER and not self._config.power_respect_peak)
+
     def _escalated_maximum_permitted_rate_a(
         self, ctx: CycleContext, *, peak_operand_kw: float
     ) -> float:
@@ -1162,22 +1186,21 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         out-of-order control-path clamp. The headroom helper shares C4's arithmetic without being
         that step.
 
-        Like `_apply_peak_clamp` itself, this applies the peak headroom with no `captar_available`
-        gate. That mirrors today's clamp behaviour rather than R3 AC1 -- the divergence between the
-        two is issue #1018, and fixing it here alone would put the escalated rate and the clamp it
-        models out of step.
+        The glossary names two cases in which the peak clamp does not run at all and only C1/C4
+        bound the rate: `Power` with its own R17 peak-protection opt-out disabled, and the CapTar
+        capability being absent (R18). `_peak_clamp_would_run` handles the first, mirroring
+        `_apply_peak_clamp`'s own early return -- without it, a `Power` session with the opt-out
+        off and a household baseline near the maximum peak would floor this rate to 0 A and make
+        every required current both urgent and unreachable, which is #1078's own symptom in
+        miniature.
+
+        The second case is deliberately NOT handled, because `_apply_peak_clamp` does not handle
+        it either: it carries no `captar_available` gate today, contrary to R3 AC1. That
+        divergence is issue #1018, and gating here alone would put this rate out of step with the
+        very clamp it exists to predict. Whoever fixes #1018 must change both.
         """
-        escalated_peak_limit_kw = resolve_effective_peak_limit(
-            peak_operand_kw,
-            self._config.max_peak_kw,
-            self._config.peak_floor_kw,
-            urgent=True,
-        )
-        peak_target_w = escalated_peak_limit_kw * 1000.0 - self._config.safety_margin_w
-        peak_headroom_a = math.floor((peak_target_w - ctx.baseline_w) / ctx.voltage)
-        rate_a = min(
+        bounds = [
             self._config.max_current,
-            float(peak_headroom_a),
             ceiling_headroom_a(
                 net_w=ctx.net_w,
                 charger_w=ctx.charger_w,
@@ -1185,10 +1208,32 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 ceiling_a=self._config.grid_ceiling_a,
                 offset_a=self._config.grid_safety_offset_a,
             ),
-        )
+        ]
+        if self._peak_clamp_would_run():
+            escalated_peak_limit_kw = resolve_effective_peak_limit(
+                peak_operand_kw,
+                self._config.max_peak_kw,
+                self._config.peak_floor_kw,
+                urgent=True,
+            )
+            bounds.append(
+                peak_headroom_a_of(
+                    baseline_w=ctx.baseline_w,
+                    voltage=ctx.voltage,
+                    effective_peak_limit_kw=escalated_peak_limit_kw,
+                    safety_margin_w=self._config.safety_margin_w,
+                )
+            )
+        rate_a = min(bounds)
         # Floored at 0: a household baseline at or beyond the raised limit leaves nothing for
         # urgency to deliver, and a negative rate would make `required_a > rate` fire
         # `unreachable` with a nonsense threshold rather than an honest "no headroom" one.
+        #
+        # One knowing divergence from `apply_peak_clamp` remains here: while headroom sits between
+        # 0 and the minimum charging current, the real clamp holds at `min_a` for the whole R3
+        # grace period, where this reports the sub-`min_a` headroom. The direction is safe for
+        # urgency (it engages sooner, never later), but it can report `unreachable` -- and fire
+        # the user-facing notice -- on a cycle the charger is in fact still delivering `min_a`.
         return max(rate_a, 0.0)
 
     def _fresh_mode_state(self) -> dict:

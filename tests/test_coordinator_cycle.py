@@ -863,7 +863,6 @@ def _resolve_deadline_urgency(**overrides):
         effective_battery_capacity_kwh=10.0,
         voltage=230.0,
         surplus_w=0.0,
-        max_current_a=32.0,
         # R5 (issue #1078): urgency is judged against the escalated maximum permitted rate, not
         # the baseline. 32.0 leaves ample slack by default, so each test that wants urgency now
         # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
@@ -1182,3 +1181,25 @@ def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow
         )
         is False
     )
+
+
+def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
+    """`inputs.urgency_latched` reaches `resolve_required_current` (R5, issue #1078).
+
+    Every other DeadlineUrgencyInputs field has a discriminating test at this tier; this one is
+    the wiring for urgency's latch, so a silent failure to pass it through would make urgency
+    re-derive from the slack test every cycle and duty-cycle the charger.
+
+    Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
+    latch can account for the difference.
+    """
+    ample_slack = dict(
+        deadline_today=time(11, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        mode_desired_current=lambda mode: 0.0,
+    )
+    assert _resolve_deadline_urgency(urgency_latched=False, **ample_slack).urgent is False
+    assert _resolve_deadline_urgency(urgency_latched=True, **ample_slack).urgent is True

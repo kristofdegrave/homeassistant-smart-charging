@@ -552,7 +552,6 @@ class DeadlineUrgencyInputs:
     deadline_tomorrow: time | None
     now_dt: datetime
     effective_battery_capacity_kwh: float
-    max_current_a: float
     # R5's slack test is judged against the rate that WOULD be in force with the effective peak
     # limit raised to the maximum peak -- resolved by the coordinator every cycle whether or not
     # urgency is actually in effect, which is what stops the test moving the moment it fires.

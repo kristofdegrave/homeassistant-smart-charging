@@ -552,7 +552,11 @@ def test_mixed_naive_and_aware_raises_rather_than_guessing_a_timezone():
     `astimezone(UTC)` unconditionally would silently convert the naive operand using the
     MACHINE's zone instead of raising -- a mutation the naive-pair test above cannot catch on a
     UTC runner, where that conversion is the identity."""
-    with pytest.raises(TypeError):
+    # `match` is load-bearing, not decoration: this call site was missed by #1078's signature
+    # change and for a while raised TypeError from argument binding instead of the subtraction,
+    # so a bare `pytest.raises(TypeError)` passed unconditionally and stopped guarding anything.
+    # Pinning the message means a future signature change fails here loudly rather than silently.
+    with pytest.raises(TypeError, match="offset-naive and offset-aware"):
         resolve_required_current(
             deadline_at=datetime(2026, 3, 29, 7, 0, tzinfo=BRUSSELS),
             now=datetime(2026, 3, 28, 23, 0),  # naive
@@ -561,7 +565,8 @@ def test_mixed_naive_and_aware_raises_rather_than_guessing_a_timezone():
             ev_battery_capacity_kwh=75.0,
             voltage=230.0,
             baseline_desired_a=6.0,
-            maximum_permitted_rate_a=32.0,
+            escalated_maximum_permitted_rate_a=32.0,
+            urgency_latched=False,
         )
 
 
