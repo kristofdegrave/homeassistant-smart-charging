@@ -17,8 +17,10 @@ interactive-only wording precisely because it sits in every run's index.
 1. **Count the rounds.** One pass posts **one** review, however many agents it ran — so a
    round is a native review carrying the local round marker `submit-pr-review`'s local mode
    defines. List the PR's reviews with their bodies and count the ones carrying it
-   (`CLAUDE.md`'s **Tracker mechanics** section routes to the listing command; ask it for
-   bodies). Apply step 6's rule with the cap **read from the doc routed above**, never from
+   (`CLAUDE.md`'s **Tracker mechanics** section routes to the listing command; its recipe is
+   a post read-back returning ids and states, so widen the selection to review bodies and page
+   the endpoint before counting). Apply step 6's rule with the cap **read from the doc routed
+   above**, never from
    memory: at the cap with a Critical or Major finding still open, stop and escalate to the
    human partner rather than reviewing again.
 2. **Check the branch isn't behind `origin/main`** per step 3, and merge it in first if it is
@@ -38,8 +40,9 @@ changed path instead.
 - A row may name **more than one** agent — apply each to the trees it names, then post all
   their findings as **one** review, the way CI reports every set of findings in one comment.
   Several reviews for one pass would make the round count above count agents, not passes.
-  Any changed
-  path no named agent covers falls back to the *(no context label)* row's path routing, so no
+  Name every agent that ran, including any that returned nothing — after aggregation a reader
+  cannot otherwise tell a clean checklist from one that was never applied. Any changed path
+  no named agent covers falls back to the *(no context label)* row's path routing, so no
   changed tree goes unreviewed: a `development` PR that also edits a workflow file still gets
   `workflow-reviewer` on that file.
 - Spawn every agent **fresh, never inline**. An author reviewing their own work in the session
@@ -48,8 +51,8 @@ changed path instead.
 ## Then
 
 Post every finding with `submit-pr-review` in local mode, before fixing anything, per step 4.
-Resolve the PR's current head SHA and its merge base first — CI's prompt supplies both, and
-locally this skill is the supplier; a stale head rejects the whole submission.
+Resolve the PR's current head SHA and its merge base first and hand them over: CI's prompt
+supplies both, and locally this skill is the supplier.
 Then:
 
 - **a clean pass**, as the routed doc defines it → hand to `finalize-pr-review`;
