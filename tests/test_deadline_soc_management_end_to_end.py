@@ -153,8 +153,18 @@ _seed_today_deadline = seed_today_deadline
 # --- UC05: Normal -> Urgent -> Unreachable, both profiles' lever sets ---
 #
 # With the pinned 75 kWh battery capacity and a 10 pp SOC gap (70 -> 80), the required current
-# is (75 * 10/100 * 1000) / hours / 230 A. A 4h deadline requires ~8.15 A (urgent, reachable);
-# a 0.01h deadline requires ~3261 A (unreachable, far past the 16 A CONF_MAX_CURRENT ceiling).
+# is (75 * 10/100 * 1000) / hours / 230 A. Since #1078 urgency is judged by R5's slack test --
+# required current > escalated maximum permitted rate / 1.25 -- and with ample peak headroom that
+# rate is C1's 16 A ceiling, so the threshold is 12.8 A. A 2.5h deadline requires ~13.04 A
+# (urgent, reachable); a 4h deadline requires only ~8.15 A and is deliberately NOT urgent, since
+# four hours to deliver a two-hour charge is exactly the ample slack #1078 was about; a 0.01h
+# deadline requires ~3261 A (unreachable, far past that 16 A ceiling).
+#
+# Every test below that asserts urgency is frozen on a SATURDAY. R14's day-of-week default is
+# None at weekends, so the only deadline in play is the one the test seeds. On a weekday the
+# compiled 06:00 default sits ~2 h from these tests' frozen time and needs ~16.3 A, which latches
+# urgency during `_setup`'s own refresh -- the assertions then pass on that leftover latch rather
+# than on the deadline they name, which is how three of these tests were silently vacuous.
 
 
 async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, freezer):
@@ -185,10 +195,14 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     assert coordinator._required_current.urgent is False
     assert coordinator.active_mode == MODE_OFF
 
-    # Urgent: a 4h deadline the Off baseline can't meet, but still within the maximum
-    # permitted rate (~8.15 A required vs. 16 A max), escalates Auto to Captar -- whose own
-    # maximum-current request (16 A) reaches the write path.
-    _seed_today_deadline(hass, hours_from_now=4)
+    # Urgent: a 2.5h deadline needing ~13.04 A. Since #1078 the Off baseline being unable to
+    # meet it is NOT what makes this urgent -- the slack test is: 13.04 A exceeds the escalated
+    # maximum permitted rate divided by 1.25 (16/1.25 = 12.8 A), while staying within the 16 A
+    # rate itself. The old 4h deadline here needed only ~8.15 A and is deliberately no longer
+    # urgent: with 4 hours to deliver a 2-hour charge there is ample slack, which is exactly the
+    # live defect this replaced. Escalates Auto to Captar, whose own maximum-current request
+    # (16 A) reaches the write path.
+    _seed_today_deadline(hass, hours_from_now=2.5)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._required_current.urgent is True
@@ -227,7 +241,7 @@ async def test_uc05_auto_profile_without_captar_escalates_to_power_not_captar(ha
     """UC05 alternate flow 3a' (R18 carve-out): CapTar capability absent -- Auto's urgency
     escalation falls back to Power instead of Captar, whose own configured target current (not
     a maximum-current request) is what reaches the write path."""
-    freezer.move_to("2026-01-15 12:00:00")
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(
@@ -236,8 +250,10 @@ async def test_uc05_auto_profile_without_captar_escalates_to_power_not_captar(ha
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
-    # 4h deadline: urgent (~8.15 A required), but reachable -- distinct from Unreachable.
-    _seed_today_deadline(hass, hours_from_now=4)
+    # 2.5h deadline: ~13.04 A required, over the 12.8 A slack threshold and under the 16 A
+    # escalated rate -- urgent but reachable, distinct from Unreachable. Not 4h: that needs only
+    # ~8.15 A and is deliberately not urgent (see this section's header comment).
+    _seed_today_deadline(hass, hours_from_now=2.5)
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -252,7 +268,7 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
     """UC05 alternate flow 3b (NF2): Manual's active mode is never second-guessed by urgency,
     even though the required-current computation still reports it (only the peak-limit lever
     is available under Manual)."""
-    freezer.move_to("2026-01-15 12:00:00")
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
     _seed_states(hass, status="Charging", ev_soc=70.0)
     coordinator = await _setup(hass, option_overrides={CONF_MAX_PEAK_KW: 10.0})
     # A small tracked peak (well below max_peak_kw) makes row 1's raise distinguishable from
@@ -260,7 +276,7 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
     _seed_ample_peak_headroom(coordinator, kw=1.0)
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
-    _seed_today_deadline(hass, hours_from_now=4)
+    _seed_today_deadline(hass, hours_from_now=2.5)  # ~13.04 A: over the 12.8 A slack threshold
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
