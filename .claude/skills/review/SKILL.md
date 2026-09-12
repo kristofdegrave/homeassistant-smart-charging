@@ -15,8 +15,8 @@ interactive-only wording precisely because it sits in every run's index.
 ## Before each pass
 
 1. **Count the rounds.** A local pass is a native review on the PR carrying the local round
-   marker `submit-pr-review`'s local mode defines — list the PR's reviews
-   (`gh api repos/{owner}/{repo}/pulls/N/reviews`) and count the bodies carrying it. Apply
+   marker `submit-pr-review`'s local mode defines; list the PR's reviews and count the bodies
+   carrying it (`CLAUDE.md`'s **Tracker mechanics** section routes to the command). Apply
    step 6's rule with the cap **read from the workflow doc**, never from memory: at the cap
    with a Critical or Major finding still open, stop and escalate to the human partner rather
    than reviewing again.
