@@ -20,8 +20,9 @@ Always read:
 - The accepted ADRs the change touches under `docs/adl/`.
 - The **Quick review checklist** at the end of the `python-anti-patterns` skill — the
   general-Python bar every change is held to, on top of checklist (4) below.
-- The **PR description**, whenever the change is on an open pull request — checklist (6) is
-  judged against it, so a review that never read the body cannot reach a verdict on it.
+- The **PR description**, as the caller gives it to you — checklist (6) is judged against it.
+  You have no tool that can fetch it: if the caller supplied no body, say so and say that (6)
+  could not be judged, rather than reporting a missing section you were never handed.
 
 Read conditionally:
 - The `async-python-patterns` skill — **only when the diff touches async code**. That skill's
@@ -79,10 +80,11 @@ Read conditionally:
 
 **(6) Runtime check recorded when the change is observable at runtime**
 - When the diff changes what someone can see from the *running* integration — an owned entity's
-  state value, unit of measurement, display precision, device class or state class; the
-  dashboard; a notification; or the current commanded to the charger — the PR description must
-  carry a **Runtime check** section recording what was driven and what was observed: a pasted
-  entity state **including its unit**, or a dashboard screenshot. **A diff touching any of those
+  state value **or the computation that produces it**, its unit of measurement, display
+  precision, device class, state class, availability or displayed name; whether it appears at
+  all; the dashboard; a notification; or the current commanded to the charger — the PR
+  description must carry a **Runtime check** section recording what was driven and what was
+  observed: a pasted entity state **including its unit**, or a dashboard screenshot. **A diff touching any of those
   with no such section is Major.**
 - Judge the section against the diff, not by its presence. Observations that don't cover the
   behaviour this diff changes, or a bare number pasted where a unit or a precision changed, are

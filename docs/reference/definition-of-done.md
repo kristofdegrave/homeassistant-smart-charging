@@ -18,7 +18,7 @@ distinct from step 3's fresh external reviewer:
   reliance on existing tests happening to still pass; edge cases the issue implies are
   covered, not only the happy path.
 - **Runtime-verified, not just test-verified**, for anything with observable runtime
-  behavior — drive it, don't claim it works on unit tests alone, and record what you drove
+  behaviour — drive it, don't claim it works on unit tests alone, and record what you drove
   and what you saw in the PR description's **Runtime check** section (next).
 
 Doc/ADR/design artifacts satisfy this with their own self-check instead (6Cs pass, template
@@ -30,10 +30,10 @@ anything touching `custom_components/`/`tests/`.
 
 ### Runtime check (in the PR description)
 
-A PR that changes **observable runtime behaviour** carries a `## Runtime check` section in its
-description. Observable runtime behaviour is what someone can see from the *running*
-integration rather than from its source or its test output, and a diff changes it when it
-changes any of:
+A PR that changes **observable runtime behaviour** carries a **Runtime check** section in its
+description (any heading level — the level is not load-bearing, the heading text is).
+Observable runtime behaviour is what someone can see from the *running* integration rather
+than from its source or its test output, and a diff changes it when it changes any of:
 
 - an **owned entity's state value**, or the computation that produces it;
 - an owned entity's **unit of measurement**, **display precision**, **device class** or
@@ -42,10 +42,14 @@ changes any of:
   formatted;
 - a **notification** the integration raises — its text, its trigger condition, or when it
   clears;
-- the **current commanded to the charger**.
+- the **current commanded to the charger**;
+- whether an owned entity **appears at all** — registry enablement and capability gating —
+  whether it goes **unavailable**, and the **name it displays** (`strings.json`,
+  `translations/`).
 
-A diff confined to internal refactoring, renames with no surfaced effect, tests, or
-documentation changes none of these and needs no section.
+A diff changes none of these, and needs no section, when no input exists for which the
+observed value, unit, precision, availability or appearance would differ — the usual cases
+being an internal refactor, a rename with no surfaced effect, tests, and documentation.
 
 The section states two things, in as few lines as they take:
 
@@ -59,7 +63,10 @@ The section states two things, in as few lines as they take:
 Where the behaviour genuinely cannot be driven before merge, the section still exists and says
 so, naming what was substituted (a log excerpt, a seeded harness run) and what is left for the
 **Verify live** pass below. An absent section and an honest one are different states, and only
-the second is reviewable.
+the second is reviewable. **A PR drafted by the CI pipeline is always that case** — no worker
+there has a running installation to drive — so its Runtime check section names the harness run
+as the substitute and hands the observation to **Verify live**; the human partner who takes the
+merged slice live is the one who pastes the readings.
 
 This is not a CI gate, deliberately: a mechanical presence check is satisfied by an empty
 heading, and no automated check can tell whether a pasted reading is the one the diff changed.
@@ -70,10 +77,9 @@ anything in the list above with no Runtime check section is a **Major** finding 
 
 The Definition of Done above, its Runtime check included, is an author self-check on **one PR,
 before merge** — the author's own claim, about whichever behaviours the author chose to drive,
-on a branch. Every vertical slice
-therefore also gets a **verify-live** pass once it is deployed, run by the author of the
-merged slice ([idea-to-issues.md](idea-to-issues.md)'s **Verify live** stage places it in the
-wider flow):
+on a branch. Every vertical slice therefore also gets a **verify-live** pass once it is
+deployed, run by the author of the merged slice ([idea-to-issues.md](idea-to-issues.md)'s
+**Verify live** stage places it in the wider flow):
 
 - **The checklist comes from the spec, not from memory** — the entity ids to observe and the
   values, with units, expected of them, fixed before the slice was built. Every spec defines
@@ -83,10 +89,10 @@ wider flow):
   or a one-slice fix — the comment goes on the task issue instead.
 - **The first slice of a strand is verified live before slice two starts.**
 
-The runtime-verified self-check above and this pass do not substitute for each other, and a PR
-that satisfies one has not satisfied the other:
+The Runtime check above and this pass do not substitute for each other, and a PR that satisfies
+one has not satisfied the other:
 
-| | Runtime-verified (above) | Verify live |
+| | Runtime check (above) | Verify live |
 |---|---|---|
 | Unit | One PR | One deployed slice |
 | Moment | Before merge | After deployment |
