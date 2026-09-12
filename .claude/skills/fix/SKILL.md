@@ -10,10 +10,11 @@ section routes to the doc that owns the step.
 
 `address-review-remarks` stays the single source for everything that does not vary by artifact
 type, and none of it is restated here. Read it there for: locating findings from both sources
-(its §1), the severity-based fix policy and what becomes a **Skipped** entry (§2), the reply
-call and its `ai-fix-ack` marker (§4), the one-per-run summary and the markers it must and must
-not carry (§5), and the local commit-and-push half (§6). Its §3 — the hard-coded
-use-case/ADR/analysis cases — is the one part this skill replaces.
+(its §1), the severity-based fix policy and what becomes a **Skipped** entry (§2), the
+one-per-run summary and the markers it must and must not carry (§5), and the local
+commit-and-push half (§6). Its §4 — the reply call and the `ai-fix-ack` marker — is reached
+through `resolve-review-thread`, not from here, so one thread gets one reply. Its §3, the
+hard-coded use-case/ADR/analysis cases, is the one part this skill replaces.
 
 ## Dispatch on the context label
 
@@ -24,15 +25,18 @@ what a correct fix looks like. The row's *Work model* column says which model it
 the human partner can switch it.
 
 Where the work file carries a rule about changing an already-merged artifact, that rule beats
-the finding — `write-adr`'s immutability rule for an Accepted ADR is the one to know, and it
-turns such a finding into a **Skipped** entry rather than an edit.
+the finding, **including its own guards on when it applies** — `write-adr`'s Accepted-ADR
+immutability is the one to know, and reading it means reading the two conditions it attaches.
 
 ## Then, per finding
 
 1. Apply the fix policy (§2), re-authoring with the work file rather than patching around it.
 2. Hand the thread to `resolve-review-thread`: reply with what was done or why not, and
-   resolve only what was actually fixed.
-3. Post the one summary (§5), then commit and push (§6).
+   resolve only what was actually fixed — after the fix is pushed, so a failed push never
+   leaves a thread closed over work that isn't on the branch.
+3. Post the one summary (§5), then commit and push (§6) — with the commit prefix this row's
+   work takes, per the Definition of Done. §6's own example is `docs:` because that skill is
+   scoped to docs; a `uc` or `development` fix takes a different one.
 
 Stop there and name `review` as the next step. The loop is the human partner's to run, and a
 fresh agent owns the next pass — don't re-review your own fixes in this session.

@@ -10,8 +10,9 @@ The per-thread half of step 5, called once per finding by `fix`. `CLAUDE.md`'s
 
 ## 1. Reply in the thread
 
-`address-review-remarks` §4 owns the REST call and the `ai-fix-ack` marker — use it as
-written. Two things about that marker are easy to get wrong:
+`address-review-remarks` §4 owns the REST call and the `ai-fix-ack` marker; §1 owns the test
+for whose comment it is. Use both as written. Two things about that marker are easy to get
+wrong:
 
 - It goes on **every** reply to a comment whose author login does **not** end in `[bot]`. A
   locally posted review is authored by the maintainer's own identity, so replies to local

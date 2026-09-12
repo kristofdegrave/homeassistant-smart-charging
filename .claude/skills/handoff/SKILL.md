@@ -45,8 +45,9 @@ Name skills, not procedures — the skill carries its own instructions.
   no-context-label rows have no work skill on purpose — the human partner drafts those.
 - Before an issue exists: `work-idea` (an `idea` issue), `grilling` (stress-test a decision
   with the human partner), `file-task-issue` (file the issues that fall out).
-- In the review loop: `submit-pr-review` (post a fresh-agent review), `address-review-remarks`
-  (act on findings), `finalize-pr-review` (a clean pass → `needs-approval`).
+- In the review loop: `review` (run the pass), `submit-pr-review` (post it), `fix` (act on
+  findings) with `resolve-review-thread` per thread, `finalize-pr-review` (a clean pass →
+  `needs-approval`). `address-review-remarks` is CI's entry for that step, not the local one.
 
 ## Rules
 
