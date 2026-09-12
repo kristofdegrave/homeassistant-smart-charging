@@ -37,13 +37,13 @@ only sequences those stages and says which skill performs each. Cite it, never r
 5. **Settle whether the strand needs a `specs` issue** — the flow document says when one is
    required on each track, and which analysis change cannot be approved until it exists. Where
    it is required, it is one of the children filed below, and `write-impl-spec` drafts it later.
-6. **Decompose.** A single-artifact idea is one issue filed with `file-task-issue`, and the
-   grilled decisions stay on the idea issue. A multi-artifact strand gets the epic filed first,
-   with the decisions from step 2 moved into its body under a *Decisions so far* heading, then
-   each child filed with `file-task-issue` — which owns attaching a child to its epic, so the
-   epic body never carries a checklist of them. What a child is and in what order children are
-   filed is the flow document's. A part still too fuzzy to scope keeps the `idea` label and gets
-   worked later — recursion is expected, not an error.
+   Record the answer on the issue either way, so it is not re-argued.
+6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
+   single-artifact idea, an epic plus its children for a multi-artifact strand — moving the
+   grilled decisions wherever the flow document says they end up. `file-task-issue` owns
+   attaching a child to its epic, so the epic body never carries a checklist of them; what a
+   child is and in what order children are filed is the flow document's. A part still too fuzzy
+   to scope keeps the `idea` label and gets worked later — recursion is expected, not an error.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
