@@ -45,9 +45,13 @@ inlining the material, naming what it is and the distinct branches that should t
 it, leading word first. `ha-integration-knowledge`'s (vendored) description — "Everything you
 need to know … If you're looking at an integration, you must use this as your primary reference"
 — names one branch so broad it always fires. **Project rule, overriding the upstream advice:** a
-skill never names a `docs/reference/*.md` path directly; it points at the `CLAUDE.md` section
-owning the topic, which routes onward. That costs the run one hop against *Scope the read* below,
-and buys a route every skill inherits from one edit (`work-idea` and `handoff` predate this).
+skill or agent definition never names a `docs/**` path directly; it points at the `CLAUDE.md`
+section owning the topic, which routes onward — and where no section owns it, the section is
+added to `CLAUDE.md` rather than the fact inlined. The rule binds the project *documentation* an
+artifact reads; the repo paths it exists to act on — the trees a reviewer's diff lands in, the
+workflow file a checklist is about — are its subject matter, not a route, and stay named. That
+costs the run one hop against *Scope the read* below, and buys a route every artifact inherits
+from one edit (`work-idea` and `handoff` predate this).
 
 **The two loads.** **Context load** is what always-loaded material costs every turn — the fixed
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
@@ -134,7 +138,9 @@ skill naming the others and when to reach for each.
 
 ## Checklist — authoring an agent definition (`.claude/agents/`)
 
-- [ ] The "read first" list names the minimum set of files needed to do the job, in order.
+- [ ] The "read first" list names the minimum set of files needed to do the job, in order; a
+      `docs/**` target among them is routed to per the rule under [Vocabulary](#vocabulary),
+      while the trees the agent reviews are named directly.
 - [ ] The checklist is self-contained for its artifact type, so a review needs to load only
       *this* agent def plus the payload skill — not several agent defs.
 - [ ] Shared review mechanics (payload shape, anchoring, verdict marker) are referenced from
