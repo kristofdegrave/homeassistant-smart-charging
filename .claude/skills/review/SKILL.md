@@ -46,8 +46,7 @@ Post every finding with `submit-pr-review` in local mode, before fixing anything
 Then:
 
 - **nothing Critical or Major** → hand to `finalize-pr-review`;
-- **anything remaining** → name `fix` as the next step (`address-review-remarks` until
-  `fix` lands).
+- **anything remaining** → hand on to step 5, which the `fix` skill runs.
 
 Stop there either way — don't fix in this session off the back of the review.
 
