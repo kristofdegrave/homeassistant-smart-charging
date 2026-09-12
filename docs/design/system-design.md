@@ -129,9 +129,10 @@ entities read-only through the Store; it can both read and write the control ent
 | **Notification Manager** | Evaluate a time/condition trigger → deliver a message → (for the prompt) capture the response | V11, V1, V5, V13, V4 (consumed as the Coordinator's published resolution, [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)) | UC08, UC10, and delivery of R5's deadline-unreachable notice |
 
 Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisive validation of the
-cut: none is a service. Deadline urgency (UC05) is the Deadline Engine plus the Billing-Protection
-Engine's ceiling-raise and the `Auto` Profile Engine's own escalation row, all invoked in the
-Coordinator's normal cycle. The solar step-up (UC06) is the only Engine whose *decision* changes —
+cut: none is a service. Deadline urgency (UC05) is the widest of the three — the Deadline
+Engine, Billing-Protection's headroom and ceiling-raise, Grid-Safety's headroom, the Profile
+Engine's baseline resolution and `Auto` escalation, and a Charging-Mode Engine queried for the
+baseline set-point, all invoked in the Coordinator's normal cycle (§6 counts them). The solar step-up (UC06) is the only Engine whose *decision* changes —
 SOC-Target's, gated by plain input flags the Coordinator already holds (the active profile and the
 previous cycle's active mode; R8) — but UC06 still rides the full cycle (conditioning, mode
 dispatch, both clamps, invariants), so it is not a one-use-case-to-one-engine mapping either (see
@@ -147,11 +148,11 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
-| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). The same operation serves two callers: the Coordinator *dispatches* the active mode and commits the state it returns, and *queries* the baseline mode for R5's handback without committing it (§5.1) |
+| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode and commits the state it returns, and *queries* the baseline mode for R5's handback — the query answers from this cycle's conditions with the mode's own restart timing excluded, and its returned state is not committed (`resolution-rules.md`; §5.1) |
 | **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
-| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, and what it is willing to spend (R5/R14/R15) |
-| **Billing-Protection Engine** | V6 | Effective peak limit, the peak headroom under it as a value, and the R3 peak clamp that fits a request to that headroom (skippable only by `Power`'s R17 opt-out). Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, so R5's escalated maximum permitted rate asks for the headroom (§5.1) |
+| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15) |
+| **Billing-Protection Engine** | V6 | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
 | **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
 | **Signal-Conditioning Engine** | V8 | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4) |
@@ -404,18 +405,18 @@ sequenceDiagram
     C->>S: materialize sensor.smart_charging_active_soc_limit (publish ActiveSocLimitChanged if it differs from the prior cycle)
     C->>Cap: available modes for declared capabilities (R18)
     Cap-->>C: available modes
-    Note over C: a missed-deadline hold in effect pins urgency on and short-circuits the rest<br/>of this block — no required current is computed and neither R5 test runs
     C->>B: peak headroom under the RAISED limit (headroom, not clamp — no breach timer)
     B-->>C: escalated peak headroom
     C->>G: C4 headroom (headroom, not clamp)
     G-->>C: ceiling headroom
-    Note over C: compose the escalated maximum permitted rate from these bounds<br/>(system-overview.md glossary — the peak bound drops out where R3 does not run:<br/>CapTar absent, or Power's R17 opt-out). Resolved every cycle, urgency or not (R5)
+    Note over C: compose the escalated maximum permitted rate — these two headrooms plus C1's<br/>maximum charging current, which is config already held from the Store read and needs<br/>no Engine call. Bounds and carve-outs: system-overview.md's glossary term.<br/>Resolved every cycle, urgency or not (R5)
+    Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited
     C->>P: which mode with the urgency input FALSE? (Auto: its baseline rows · Manual: the active mode)
     P-->>C: baseline mode
-    C->>M: what would the baseline mode want? (query — its returned state is not committed)
+    C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; its returned state is not committed)
     M-->>C: baseline desired current
     C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, prior cycle's urgency latch)
-    DL-->>C: urgency flag + required current
+    DL-->>C: urgency flag + required current + unreachable flag
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
@@ -427,7 +428,7 @@ sequenceDiagram
     C->>I: R11 cooldown/hold gating + C1 floor/cap
     I-->>C: final current
     C->>A: write charger_current (skip if unchanged)
-    Note over C: publish ChargerCurrentSet / ActiveSocLimitReached /<br/>DeadlineUnreachableNotified as applicable<br/>(ActiveSocLimitChanged already published above, at the resolution step)
+    Note over C: publish ChargerCurrentSet / ActiveSocLimitReached /<br/>DeadlineUnreachableNotified and its paired DeadlineUnreachableCleared (ADR-0024)<br/>as applicable (ActiveSocLimitChanged already published above, at the resolution step)
 ```
 
 The same sequence realizes every charging mode — only the Profile's answer (step: which mode) and
@@ -446,12 +447,14 @@ those engines can produce, which is what fixes the order here:
 - the **handback test** is judged against the *baseline mode's* desired current, so the Profile
   must resolve that mode first and a Mode Engine must be asked what it would want.
 
-**The baseline call is a query, and what makes it one is a Manager obligation, not an Engine
-property.** The Mode Engines are pure leaf Engines (§3): whatever cross-cycle state they operate
-over — a mode's `Idle`/`Charging`/`Hold`/`Cooldown` progression, its timers — is threaded in by
-the Coordinator and returned back out. The query is therefore the ordinary operation called with
-this cycle's conditions, and the Coordinator simply **does not commit the returned state**. Only
-the dispatch does. Nothing in the Engine distinguishes the two calls.
+**The baseline call is a distinct operation on the Mode Engine, not the dispatch call reused.**
+`resolution-rules.md` is authoritative for what it must answer and why: what the mode's own
+set-point rule would ask for from *this* cycle's conditions, with its internal restart timing
+left out — and it names the failure if that timing is not excluded, a `Solar` baseline deselected
+at escalation reporting 0 A for the rest of the session so the handback could never fire on it.
+Two consequences for the decomposition: the operation is part of the Charging-Mode Engines'
+contract (§3), and the Coordinator does not commit whatever state the call returns — only the
+dispatch does.
 
 Under `Auto` during urgency the baseline mode is a *different* mode from the one later dispatched,
 so two mode set-points exist in the same cycle and only the dispatched one is clamped and written.
