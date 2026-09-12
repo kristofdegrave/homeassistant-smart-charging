@@ -36,7 +36,7 @@ Finding _facts_ is your job, never the user's. When a frontier question needs a 
 subagent (in parallel, if several are independent) to find it: from inside the working directory
 (filesystem, tools, prior docs) by exploring it, or from outside it (how Home Assistant behaves,
 what a library does, what a device API returns) via the `research` skill. Don't ask the user for
-anything you could look up yourself. Don't block on it: a running exploration is an unsettled
+anything you could look up yourself. Don't block on it: a running lookup is an unsettled
 prerequisite, so only the questions downstream of it wait for the subagent to report; ask the rest
 of the frontier now. The _decisions_ are the user's: put each to them and wait.
 
