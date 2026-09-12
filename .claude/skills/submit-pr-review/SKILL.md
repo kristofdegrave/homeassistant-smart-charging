@@ -1,6 +1,6 @@
 ---
 name: submit-pr-review
-description: "Use when posting review findings to a Smart Charging PR — from CI (_ai-review.yml) or from a local pass run by the review skill, once a reviewer agent has returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
+description: "Use when posting review findings to a pull request in this project — from CI (_ai-review.yml) or from a local pass run by the review skill, once a reviewer agent has returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
 ---
 
 # Submit a PR review
@@ -77,8 +77,8 @@ comment — the review must be posted.
   head SHA, and base SHA. It runs as the workflow bot, so it uses CI mode (with the marker).
 - **Locally**: the `review` skill runs the pass. Every reviewer agent `CLAUDE.md`'s
   **Model selection** table names is read-only — they return findings, they do not post — so after each returns, the
-  main session posts them here in local mode (round marker, no verdict marker). The PR always
-  exists by then: the branch is pushed and the PR opened *before* the fresh-agent review.
+  main session posts them here in local mode (round marker, no verdict marker). The PR always exists by
+  then, which the contribution workflow's step 4 guarantees.
   Anchor each finding that carries a file path + new-version line as an inline comment; put
   the rest in the body. If there is no PR (an uncommitted local draft), report the findings in
   the session instead of posting.

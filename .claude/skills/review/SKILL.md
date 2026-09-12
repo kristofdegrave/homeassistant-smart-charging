@@ -17,7 +17,7 @@ interactive-only wording precisely because it sits in every run's index.
 1. **Count the rounds.** A local pass is a native review on the PR carrying the local round
    marker `submit-pr-review`'s local mode defines; list the PR's reviews and count the bodies
    carrying it (`CLAUDE.md`'s **Tracker mechanics** section routes to the command). Apply
-   step 6's rule with the cap **read from the workflow doc**, never from memory: at the cap
+   step 6's rule with the cap **read from the doc routed above**, never from memory: at the cap
    with a Critical or Major finding still open, stop and escalate to the human partner rather
    than reviewing again.
 2. **Check the branch isn't behind `origin/main`** per step 3, and merge it in first if it is
@@ -43,10 +43,13 @@ changed path instead.
 ## Then
 
 Post every finding with `submit-pr-review` in local mode, before fixing anything, per step 4.
+Resolve the PR's current head SHA and its merge base first — CI's prompt supplies both, and
+locally this skill is the supplier; a stale head rejects the whole submission.
 Then:
 
-- **nothing Critical or Major** → hand to `finalize-pr-review`;
-- **anything remaining** → hand on to step 5, which the `fix` skill runs.
+- **a clean pass**, as the routed doc defines it → hand to `finalize-pr-review`;
+- **anything remaining** → hand on to step 5; `CLAUDE.md`'s **Contribution workflow**
+  section names the skill that runs it.
 
 Stop there either way — don't fix in this session off the back of the review.
 
