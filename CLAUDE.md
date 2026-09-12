@@ -323,9 +323,10 @@ the list.
 1. **Home Assistant** — `developers.home-assistant.io` for the documented contract, and the
    `homeassistant` package source at the version pinned in `requirements-test.txt` for what
    the code actually does.
-2. **Library source** — a dependency's published source at its pinned version (same file),
-   not its README. A changelog entry counts only as a pointer to the commit that made the
-   change.
+2. **Library source** — a dependency's published source at the version the file that pins it
+   names (`requirements-test.txt` for test and dev dependencies; the integration manifest's
+   `requirements` array for anything the shipped integration depends on), not its README. A
+   changelog entry counts only as a pointer to the commit that made the change.
 3. **Device / vendor API docs** — the manufacturer's own specification for a charger,
    inverter, meter or tariff provider this project integrates with (the hardware is listed in
    `docs/analysis/system-overview.md`); a captured response from the real device outranks the
