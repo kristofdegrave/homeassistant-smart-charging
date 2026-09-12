@@ -313,6 +313,26 @@ Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.
 
 ---
 
+## Research sources
+
+When an external fact blocks a decision — what Home Assistant does in some case, how a
+dependency behaves, what a device's API returns — these are this project's primary sources,
+highest trust first. The `research` skill carries the generic procedure and routes here for
+the list.
+
+1. **Home Assistant** — `developers.home-assistant.io` for the documented contract, and the
+   `homeassistant` package source at the version pinned in `requirements-test.txt` for what
+   the code actually does.
+2. **Library source** — a dependency's published source at its pinned version (same file),
+   not its README. A changelog entry counts only as a pointer to the commit that made the
+   change.
+3. **Device / vendor API docs** — the manufacturer's own specification for a charger,
+   inverter, meter or tariff provider this project integrates with (the hardware is listed in
+   `docs/analysis/system-overview.md`); a captured response from the real device outranks the
+   specification.
+
+---
+
 ## Authoring AI artifacts (skills, agents, CI worker prompts)
 
 When writing or changing a skill (`.claude/skills/`), an agent definition
