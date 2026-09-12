@@ -9,6 +9,9 @@ Steps 1–2 of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contrib
 section routes to the doc that owns every parameter — branch scheme, base, issue reference,
 board moves, and the completion bar. This skill owns only the order and the dispatch.
 
+Model-invocable on purpose, so "start work on #N" reaches it; the description carries the
+interactive-only wording precisely because it sits in every run's index.
+
 ## Dispatch on the context label
 
 Read issue `#N` and take its **context label**. Look it up in `CLAUDE.md`'s **Model selection**
@@ -20,23 +23,29 @@ Stop instead of dispatching when:
 
 | The issue | Stop, and say why |
 |---|---|
-| has no context label, but a `bug`/`enhancement` kind label | the claim is verified before anything is designed — `diagnosing-bugs` owns that gate |
+| has no context label, but a `bug`/`enhancement` kind label | the claim is verified before anything is designed, and it gains a context label once the fixing artifact is known. `diagnosing-bugs` owns that gate for a reported defect. |
 | has no label at all | it needs one before work starts — `file-task-issue` |
 | carries more than one context label | it should be split; CI refuses these outright |
 | is labelled `idea` | not scoped yet — `work-idea` decomposes it into labelled issues first |
-| is labelled `workflow` | human-authored by design, per the table's own row. Offer to draft content if asked; don't run the rest of this skill. |
+| is labelled `workflow` | human-authored by design, per the table's own row — there is no safe path containment for untrusted issue content outside the trees CI drafts into. Hand it to the human partner; don't run the rest of this skill. |
 
 ## Then, in order
 
-1. **Read the work file first.** Where it speaks to step 1 or 2 it wins — `write-adr`, for
-   one, derives the branch name from the ADR number and requires that resolved *before* the
-   branch exists.
-2. Worktree, branch and board **Status** per step 1.
-3. Follow the work file. Its steps, self-checks and stop conditions govern.
-4. Definition of Done self-check, then push, PR and board **Status** per step 2.
+1. **Read the work file first, and resolve anything it needs before the branch exists** —
+   against a fetched `origin/main`, not a stale checkout. Step 1's branch-naming note grants a
+   work file one override, the number segment, stated with its reason in that skill:
+   `write-adr` derives `adr/<adr-number>` from the next number merged on `main`, which
+   collides on push if resolved locally. Nothing else about steps 1–2 is the work file's to
+   override.
+2. For a `development`/`testing` issue, resolve its anchored `Plan:` line first — CI fails
+   closed without one, and nothing local notices its absence otherwise.
+3. Worktree, branch and board **Status** per step 1.
+4. Follow the work file. Its steps, self-checks and stop conditions govern.
+5. Definition of Done self-check, then push, PR and board **Status** per step 2.
 
-Stop there and name `review` as the next step. Don't review the work in this session — step 3
-needs a fresh agent — and don't start the next issue off the back of this one.
+Stop there and hand on to step 3, which the `review` skill runs. Don't review the work in
+this session — step 3 needs a fresh agent — and don't start the next issue off the back of
+this one.
 
 ## Rules
 
