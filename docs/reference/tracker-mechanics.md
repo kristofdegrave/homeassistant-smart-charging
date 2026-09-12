@@ -13,7 +13,8 @@ decision is already made and answers only "what do I type".
 
 Throughout: the repo is `kristofdegrave/homeassistant-smart-charging`, the board is project
 `1` under owner `kristofdegrave` (**EMS**). Every recipe below was run against them on
-`gh` 2.95 rather than transcribed from memory.
+`gh` 2.95 — in the exact form written here, not a form it was later edited away from — rather
+than transcribed from memory. Re-run one before trusting it if `gh` has moved on.
 
 ## The one rule: read the state back
 
@@ -35,7 +36,7 @@ mutation path is still refused, so a green probe is evidence of nothing. Use it 
 network failure from a refusal, never to decide a write is safe.
 
 Worse, some of these fail *quietly enough to look like success*. `gh pr edit --add-label`
-has reported success while applying nothing, three separate times in one session. So:
+has reported success while applying nothing, repeatedly. So:
 
 > **Never trust a write command's exit status. Read the resulting state back — and prefer a
 > REST read for the read-back, so a blocked GraphQL path cannot make a failed write look
@@ -104,8 +105,9 @@ intact.
 
 ## Parent/sub-issue and blocked-by edges
 
-Both are **native GitHub relationships**, never body text, and `gh` supports both directly.
-At filing time:
+That an epic's membership and ordering use these relationships rather than body text is
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. `gh` supports
+both directly. At filing time:
 
 ```sh
 gh issue create --repo kristofdegrave/homeassistant-smart-charging … \
@@ -128,8 +130,10 @@ gh issue view <n> --repo kristofdegrave/homeassistant-smart-charging \
   --json parent,blockedBy --jq '{parent: .parent.number, blockedBy: [.blockedBy.nodes[].number]}'
 ```
 
-REST fallbacks, and the read-backs that go with them. Both take the sub-issue's / blocker's
-**database id**, not its issue number:
+REST fallbacks — and their read-backs are the better read-back for the `gh issue edit` path
+above too, since a GraphQL read cannot confirm a GraphQL write that the limiter may have
+swallowed. Both writes take the sub-issue's / blocker's **database id**, not its issue
+number:
 
 ```sh
 sid=$(gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<child> --jq .id)

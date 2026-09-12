@@ -316,15 +316,13 @@ Epic-first filing for multi-artifact strands — see
 
 ## Tracker mechanics
 
-The concrete `gh` commands for driving this project's tracker — filing a work item and setting
-its board Size/Estimate/Status, parent/sub-issue and blocked-by edges, commenting, opening a
-PR, posting a review with inline anchors, replying to and resolving a review thread, applying a
-label — are in
+The concrete `gh` commands for driving this project's tracker — filing, board fields, issue
+relationships, comments, PRs, review threads, labels — are in
 [docs/reference/tracker-mechanics.md](docs/reference/tracker-mechanics.md). Read it before
 typing any of them, and again whenever a `gh` call comes back refused, appears to succeed
-without taking effect, or has to be trusted without a read-back: it covers rate-limit
-failure modes, REST fallbacks, and Windows/Git Bash argument quirks. It is mechanics only —
-*when* to file and what a label means stay with the two sections above.
+without taking effect, or has to be trusted without a read-back: it covers rate-limit failure
+modes, REST fallbacks, and Windows/Git Bash argument quirks. It is mechanics only — *when* to
+file and what a label means stay with **Contribution workflow** and **Issue conventions**.
 
 ---
 
