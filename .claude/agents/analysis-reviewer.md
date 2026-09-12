@@ -41,15 +41,18 @@ If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for th
   is in scope, say so in one line and move on. For each criterion that is, run **one** targeted
   `Grep` over `custom_components/` for the behaviour it constrains (the entity id, the default,
   the bound, the precedence rule it names) and open at most the one file that matches. **Stop
-  after five criteria** — say the set was sampled and name the five you took; five lookups is
-  the most this check may cost a review, because a `docs/analysis/` review runs on the lighter
-  turn ceiling. Report **Major** where no code implements a criterion, or where the code
-  implements something measurably different (a different default, bound, unit or ordering). A
-  `specs` issue filed for the gap discharges the finding — the condition is the one
-  `CLAUDE.md`'s **Contribution workflow** section routes to; check the PR body for such a
-  reference if you were given it, and if you were not, report the finding and say that a filed
-  `specs` issue would discharge it. This is one lookup per changed criterion, capped at five; it
-  is never a sweep of the codebase, and the read-first list above does not grow.
+  after three criteria** — say the set was sampled and name the three you took; six tool calls
+  is the most this check may cost a review, because a `docs/analysis/` review runs on the
+  lighter turn ceiling and a truncated review is re-run from cold. Where no code implements a
+  criterion, or the code implements something measurably different (a different default, bound,
+  unit or ordering), a filed `specs` issue discharges it — the condition is the one `CLAUDE.md`'s
+  **Contribution workflow** section routes to. **Severity depends on whether you can check
+  that**: given the PR body and no such reference, report **Major**; not given the PR body,
+  report **Minor** and say the gap is Major unless a `specs` issue has been filed for it. Never
+  report Major on evidence you were not given — a new requirement's code legitimately does not
+  exist yet, and this check must not turn every requirement PR into a review cycle. This is one
+  lookup per changed criterion, capped at three; it is never a sweep of the codebase, and the
+  read-first list above does not grow.
 
 **(3) Document quality**
 - **"What, not how"** — no code/HA implementation detail (Python modules, timer helpers, persistence). Entity ids that are part of the ubiquitous language are fine.

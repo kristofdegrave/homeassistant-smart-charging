@@ -23,17 +23,18 @@ here.
   `entity-catalog.md` (new `sc_` entities, with defaults matching the requirement) so the
   whole analysis layer stays consistent.
 - **Propagate past the analysis layer**, same step — the documents are not the last stop, and a
-  requirement the code contradicts is not consistent. Search `custom_components/` for the
-  behaviour each added or changed acceptance criterion constrains (the entity it names, the
-  clamp, the lookup, the default), and **state the finding in the PR body**: either the code
+  requirement the code contradicts is not consistent. This is how you settle whether the change
+  touches shipped behaviour, which is the question `CLAUDE.md`'s **Contribution workflow**
+  section's `needs-approval` gate turns on. Search `custom_components/` for the behaviour each
+  added or changed acceptance criterion **or constraint row** constrains (the entity it names,
+  the clamp, the lookup, the default), and **state the finding in the PR body**: either the code
   already satisfies every such criterion — name the file and the function that does it — or it
   does not. Where it does not, **file a `specs` child issue for that gap as part of this PR**
-  and reference it in the body — a `specs` issue, not a task issue, for the reason `CLAUDE.md`'s
-  **Contribution workflow** section routes to; that section also routes to the `needs-approval`
-  condition this creates, and `CLAUDE.md`'s **Tracker mechanics** section to the filing
-  commands. Behaviour the code does not implement at all is this same second case, not an
-  exemption from it. Done when the PR body says which of the two cases holds, and names the
-  `specs` issue if it is the second.
+  and reference it in the body — a `specs` issue, not a task issue, for the reason that section
+  routes to; `CLAUDE.md`'s **Tracker mechanics** section routes to the filing commands.
+  Behaviour the code does not implement at all is this same second case, not an exemption from
+  it. Done when the PR body says which of the two cases holds, and names the `specs` issue if it
+  is the second.
 
 ## Requirement format
 
