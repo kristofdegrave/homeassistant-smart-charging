@@ -82,8 +82,9 @@ cannot be demoed and cannot be verified live. File them in dependency order.
 
 **Epic membership and ordering are native GitHub relationships, not body text** — sub-issues
 for membership, blocked-by edges for order.
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** owns that rule,
-its `gh` commands, and the label/field rules that apply to every child.
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** owns that rule
+and the label/field rules that apply to every child; the `gh` commands that create the edges
+are in [tracker-mechanics.md](tracker-mechanics.md).
 
 What to file when:
 

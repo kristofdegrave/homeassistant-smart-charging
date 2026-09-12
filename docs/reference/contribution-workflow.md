@@ -45,8 +45,9 @@ message conventions).
    (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
    once the PR exists, which step 2 guarantees is always before review.
 5. **Fix, comment, resolve.** Per finding addressed: fix it, reply on that thread describing
-   what was done, then resolve the thread (`finalize-pr-review` has the GraphQL mechanic — no
-   REST endpoint exists for this). Resolve only what was actually fixed; leave
+   what was done, then resolve the thread — `finalize-pr-review` owns which threads may be
+   resolved, and [tracker-mechanics.md](tracker-mechanics.md) the commands. Resolve only what
+   was actually fixed; leave
    deferred/disputed/partial threads open and say why.
 6. **Loop steps 3–5**, capped at **3 rounds**, until a pass finds no remaining Critical/Major
    findings. Still unresolved at round 3 → stop and escalate to the human partner with the
@@ -138,11 +139,10 @@ separate bot account for the interactive session.
   the full cycle (when to file the epic, what to file immediately vs. defer). The epic is the
   **parent issue** and each child is a **native sub-issue** of it; a child that cannot start
   until another finishes carries a **native blocked-by relationship**. Neither is body text —
-  `gh` supports both directly (all four flags below verified on `gh` 2.95), so nobody needs to
-  re-derive them:
-  `gh issue create --parent <epic> --blocked-by <issue>` when filing, and
-  `gh issue edit <epic> --add-sub-issue <child>` / `gh issue edit <child> --add-blocked-by
-  <issue>` afterwards. Child issue bodies still say "Part of #N" for the epic, never
+  `gh` supports both directly, so nobody needs to re-derive them — the commands, and the
+  read-backs that confirm an edge actually landed, are in
+  [tracker-mechanics.md](tracker-mechanics.md).
+  Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
   shipped behaviour also needs a `specs` issue to exist for it — see
