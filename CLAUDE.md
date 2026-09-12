@@ -321,13 +321,10 @@ its board Size/Estimate/Status, parent/sub-issue and blocked-by edges, commentin
 PR, posting a review with inline anchors, replying to and resolving a review thread, applying a
 label — are in
 [docs/reference/tracker-mechanics.md](docs/reference/tracker-mechanics.md). Read it before
-typing any of them, and specifically whenever a `gh` call has to be trusted: it records which
-commands go through GraphQL and so fail — sometimes **silently, reporting success** — under
-GitHub's secondary rate limiter, the REST fallbacks that still work in that state, the
-read-back that must follow every write, and the Windows/Git Bash argument quirks.
-
-That file is mechanics only. *When* to file, what a label means, and the lifecycle around any
-of it stay with **Contribution workflow** and **Issue conventions** above.
+typing any of them, and again whenever a `gh` call comes back refused, appears to succeed
+without taking effect, or has to be trusted without a read-back: it covers rate-limit
+failure modes, REST fallbacks, and Windows/Git Bash argument quirks. It is mechanics only —
+*when* to file and what a label means stay with the two sections above.
 
 ---
 

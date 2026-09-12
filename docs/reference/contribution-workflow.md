@@ -45,8 +45,9 @@ message conventions).
    (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
    once the PR exists, which step 2 guarantees is always before review.
 5. **Fix, comment, resolve.** Per finding addressed: fix it, reply on that thread describing
-   what was done, then resolve the thread (`finalize-pr-review` has the GraphQL mechanic — no
-   REST endpoint exists for this). Resolve only what was actually fixed; leave
+   what was done, then resolve the thread — `finalize-pr-review` owns which threads may be
+   resolved, and [tracker-mechanics.md](tracker-mechanics.md) the commands (resolution is
+   GraphQL-only; no REST endpoint exists for it). Resolve only what was actually fixed; leave
    deferred/disputed/partial threads open and say why.
 6. **Loop steps 3–5**, capped at **3 rounds**, until a pass finds no remaining Critical/Major
    findings. Still unresolved at round 3 → stop and escalate to the human partner with the

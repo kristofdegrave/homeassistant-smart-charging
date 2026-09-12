@@ -12,8 +12,8 @@ label means, when a PR is opened, when `needs-approval` goes on — all of that 
 decision is already made and answers only "what do I type".
 
 Throughout: the repo is `kristofdegrave/homeassistant-smart-charging`, the board is project
-`1` under owner `kristofdegrave` (**EMS**). Everything below was run against them on
-`gh` 2.95.
+`1` under owner `kristofdegrave` (**EMS**). Every recipe below was run against them on
+`gh` 2.95 rather than transcribed from memory.
 
 ## The one rule: read the state back
 
@@ -28,9 +28,11 @@ GitHub's **secondary (abuse) rate limiter** trips on a burst of GraphQL mutation
 of review rounds' worth of thread replies and resolutions is enough — and then blocks the
 whole GraphQL column for up to an hour **while REST keeps working**. `gh api rate_limit` does
 not surface the secondary limiter: it happily reports 5000/5000 remaining on every bucket
-while `gh project` and `gh pr edit` refuse. **The check is to try the call, not to read the
-meter.** To probe, run something cheap and GraphQL-shaped —
-`gh api graphql -f query='{viewer{login}}'` — and believe its result.
+while `gh project` and `gh pr edit` refuse. **The check is to retry the call you actually
+need and read its result back, not to consult any meter.** A cheap GraphQL *read* such as
+`gh api graphql -f query='{viewer{login}}'` is only a second meter: it can pass while the
+mutation path is still refused, so a green probe is evidence of nothing. Use it to tell a
+network failure from a refusal, never to decide a write is safe.
 
 Worse, some of these fail *quietly enough to look like success*. `gh pr edit --add-label`
 has reported success while applying nothing, three separate times in one session. So:
@@ -70,9 +72,10 @@ gh project item-edit --project-id PVT_kwHOABQtm84Bd8mI --id <item-id> \
 `--number` is right for Estimate and `--single-select-option-id` for Size and Status: Estimate
 is a plain number field, not a single-select.
 
+Project id: `PVT_kwHOABQtm84Bd8mI`.
+
 | Field | Field id | Option ids |
 |---|---|---|
-| Project | `PVT_kwHOABQtm84Bd8mI` | — |
 | Size | `PVTSSF_lAHOABQtm84Bd8mIzhYaY9g` | XS `eff732af` · S `9592a5a3` · M `9728cbdc` · L `c53df028` · XL `7b141a16` |
 | Estimate | `PVTF_lAHOABQtm84Bd8mIzhYaY9k` | number field |
 | Status | `PVTSSF_lAHOABQtm84Bd8mIzhYaYzw` | Backlog `f75ad846` · Ready `08afe404` · In progress `47fc9ee4` · In review `4cc61d42` · Done `98236657` |
@@ -80,14 +83,14 @@ is a plain number field, not a single-select.
 Re-derive these with `gh project field-list 1 --owner kristofdegrave --format json` if an edit
 is rejected — they are stable in practice but not guaranteed.
 
-**Read-back — and the `--limit` trap.** `gh project item-list` defaults to **30** items; the
-board is past 470. A lookup under the default limit returns *empty rather than erroring*, so a
-missing id reads as "the issue is not on the board" when it simply was not in the page.
-Always pass an explicit high limit:
+**Read-back — and the `--limit` trap.** `gh project item-list` defaults to **30** items, and
+the board is far past that. A lookup under the default limit returns *empty rather than
+erroring*, so a missing id reads as "the issue is not on the board" when it simply was not in
+the page. Always pass an explicit high limit:
 
 ```sh
 gh project item-list 1 --owner kristofdegrave --format json --limit 1000 \
-  | python -c "import json,sys; print([i for i in json.load(sys.stdin)['items'] if i.get('content',{}).get('number')==<n>])"
+  --jq '.items[] | select(.content.number==<n>) | {id, size, estimate, status}'
 ```
 
 **REST fallback for the creation step** (the board steps have none):
@@ -105,14 +108,15 @@ Both are **native GitHub relationships**, never body text, and `gh` supports bot
 At filing time:
 
 ```sh
-gh issue create … --parent <epic-number> --blocked-by <issue-number>
+gh issue create --repo kristofdegrave/homeassistant-smart-charging … \
+  --parent <epic-number> --blocked-by <issue-number>
 ```
 
 Afterwards:
 
 ```sh
-gh issue edit <epic> --add-sub-issue <child>
-gh issue edit <child> --add-blocked-by <issue>
+gh issue edit <epic>  --repo kristofdegrave/homeassistant-smart-charging --add-sub-issue <child>
+gh issue edit <child> --repo kristofdegrave/homeassistant-smart-charging --add-blocked-by <issue>
 ```
 
 Read-back. `gh issue view --json parent,blockedBy` nests the dependency list one level deeper
@@ -141,15 +145,33 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/dependencies
 
 ```sh
 gh issue comment <n> --repo kristofdegrave/homeassistant-smart-charging --body-file <path>
+gh pr comment    <n> --repo kristofdegrave/homeassistant-smart-charging --body-file <path>
 ```
 
-REST fallback, which also survives a blocked GraphQL path:
+One REST fallback serves both — for the comments API a PR *is* an issue, so the `issues` path
+is correct for a PR number too:
 
 ```sh
 gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments -f body='<markdown>'
 ```
 
-Read back with `gh api repos/…/issues/<n>/comments --jq '.[-1].body'`.
+Read back with:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+  --paginate --jq '.[].body' | tail -1
+```
+
+`--paginate` is not optional here. A bare `--jq '.[-1].body'` returns the last item of the
+**first 30-item page**, which on any busy issue or PR is not the newest comment — the same
+trap as `item-list`'s default limit above, and just as silent. The same applies to every
+listing read-back in this file.
+
+Two `gh api` traps that bite on these read-backs: **`-f` makes the request a POST**, so a
+query parameter on a GET needs `-X GET -f per_page=100` or a literal `?per_page=100` in the
+path — plain `-f` turns the read into a write attempt and comes back `422 "body" wasn't
+supplied`. And `--paginate` applies `--jq` per page, so the filter must emit a stream
+(`.[].body`) rather than index into one page.
 
 ## Applying a label
 
@@ -173,13 +195,16 @@ gh api -X POST   repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/la
 gh api -X DELETE repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/labels/<label>               --jq '[.[].name]'
 ```
 
-Never create or rename a label ad hoc: the vocabulary is owned by `.github/setup-labels.sh`
-and the sync list in [ci-pipeline.md](ci-pipeline.md).
+These recipes apply an existing label; they never create or rename one. Which labels exist
+and what they mean is [contribution-workflow.md](contribution-workflow.md)'s **Issue
+conventions**, and the places that vocabulary is baked into are
+[ci-pipeline.md](ci-pipeline.md)'s **Label vocabulary sync**.
 
 ## Opening a change request
 
 ```sh
-gh pr create --base main --head <branch> --title "<title>" --body-file <path>
+gh pr create --repo kristofdegrave/homeassistant-smart-charging \
+  --base main --head <branch> --title "<title>" --body-file <path>
 ```
 
 `gh pr create` is itself GraphQL and can be refused while REST is fine. The fallback creates
@@ -190,8 +215,12 @@ gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls \
   -f title='<title>' -f head='<branch>' -f base=main -F body=@<path> --jq '.html_url'
 ```
 
-Read back with `gh api repos/…/pulls/<n> --jq '{state, base: .base.ref, head: .head.ref}'` —
-which also catches the stranded-stack mistake of a PR based on anything but `main`.
+Read back with:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
+  --jq '{state, base: .base.ref, head: .head.ref}'
+```
 
 ## Posting a review with inline anchors
 
@@ -205,12 +234,22 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews --inp
 
 `--input` is mandatory rather than convenient: the payload is JSON with markdown inside it,
 and building it inline mangles exactly the characters review findings are full of. Read back
-with `gh api repos/…/pulls/<n>/reviews --jq '.[-1] | {id, state}'`.
+with:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews \
+  --paginate --jq '.[] | {id, state}' | tail -1
+```
 
 ## Replying to and resolving a thread
 
-Replying is REST and takes the **inline comment's** id, which
-`gh api repos/…/pulls/<n>/comments` lists:
+Replying is REST and takes the **inline comment's** id, which this lists (with `--paginate`,
+for the reason given under *Commenting* above — a review round easily exceeds one page):
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
+  --paginate --jq '.[] | {id, path, line}'
+```
 
 ```sh
 gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments/<comment-id>/replies \
@@ -222,9 +261,14 @@ their ids and current state:
 
 ```sh
 gh api graphql -f query='query { repository(owner:"kristofdegrave", name:"homeassistant-smart-charging") {
-  pullRequest(number:<n>) { reviewThreads(first:50) { nodes { id isResolved isOutdated
-    comments(first:1){ nodes { databaseId path line body } } } } } } }'
+  pullRequest(number:<n>) { reviewThreads(first:100) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id isResolved isOutdated
+      comments(first:1){ nodes { databaseId path line body } } } } } } }'
 ```
+
+`first:` is a hard cap, not a default that grows — the same trap as `item-list`'s limit. Check
+`hasNextPage` and fetch the next page with `after:` rather than assuming 100 covered it.
 
 then resolve one by its thread id:
 
