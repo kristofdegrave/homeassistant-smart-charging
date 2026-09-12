@@ -50,10 +50,12 @@ inlining the material, naming what it is and the distinct branches that should t
 it, leading word first. `ha-integration-knowledge`'s (vendored) description — "Everything you
 need to know … If you're looking at an integration, you must use this as your primary reference"
 — names one branch so broad it always fires. **Project rule, overriding the upstream advice:** a
-pointer to project-dependent material names the `CLAUDE.md` section that owns the topic rather
-than the material itself — stated in full, with its boundaries and its scope, in
-[Project-dependent content routes through
-`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) below.
+pointer to project-dependent material, or to the mechanics of the tracker this project's work
+lives in, names the `CLAUDE.md` section that owns the topic rather than the material itself —
+stated in full, with its boundaries and its scope, in [Project-dependent content routes through
+`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent
+mechanics route through `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd)
+below.
 
 **The two loads.** **Context load** is what always-loaded material costs every turn — the fixed
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
@@ -169,9 +171,9 @@ meeting one does not have to re-derive it:
 
 **Permanent scope: as written or changed, never as a sweep.** This paragraph states the scope
 of both rules on this page — the one above and the tracker rule below, which shares it rather
-than restating it. The rule binds an artifact at the moment it is newly written, or changed
-for some other reason — and it binds **what that change writes**: every pointer the change
-adds or rewrites conforms, while prose the change leaves
+than restating it. The rule binds an artifact at the moment it is newly written, or changed for
+some other reason — and it binds **what that change writes**: every pointer the change adds or
+rewrites conforms, while prose the change leaves
 alone is owed no conversion. A typo fix is therefore not a conversion trigger, and converting
 the rest of a file you are rewriting anyway is welcome but never required. An artifact nobody
 has a reason to touch is never opened to satisfy this rule, and there is no retroactive
@@ -194,41 +196,46 @@ out: the procedure is what travels and the tracker is what gets swapped, so an a
 steps are procedures lands in a repository on another tracker needing one `CLAUDE.md` section
 rewritten, while one that spells `gh api …/pulls/<n>/reviews` into a step lands there needing
 itself rewritten. CI worker prompts (`.github/workflows/_ai-*.yml`) are outside this rule for
-the same reason they are outside the other: they do not travel — they *are* this repository's
-pipeline, wired to this tracker's events.
+the same reason the paragraph above puts them outside the project one.
 
-**The carve-out: an artifact whose subject is one tracker's API.** `submit-pr-review`,
-`finalize-pr-review` and `address-review-remarks` do not merely touch the tracker on the way
-to somewhere else; they exist *to drive* its review API, and the review API is what they are
-about. Genericising them is not a trade of one line for a pointer — take the endpoints, the
-payload shape and the thread mechanics out of them and nothing is left to state, because there
-is no procedure underneath that was ever independent of the tracker. They name it freely, and
-that is permanent, not pending.
+**The carve-out: the commands an artifact exists to issue.** `submit-pr-review`,
+`finalize-pr-review` and `address-review-remarks` do not touch the tracker on the way to
+somewhere else; they exist *to drive* its review API, and that API is what they are about.
+Genericising those calls is not a trade of one line for a pointer — take the endpoints, the
+payload shape and the thread mechanics out and nothing is left to state, because there is no
+procedure underneath that was ever independent of the tracker. They name them freely, and that
+is permanent, not pending.
 
-**The test**, for an artifact that is neither obviously one: does it merely **record or read**
-work items in passing — file one, comment on one, label one, look one up — so that the same
-step would still make sense on another tracker? The rule applies; route the commands. Or is
-**one tracker's API the artifact's actual subject**, the thing it was written to operate? The
+**The carve-out is per command, not per artifact** — the project rule's test is applied per
+path, not per tree, and this is the same move. What is carved out of one of those three is its
+*review-API* calls; a tracker command it issues in passing on the way to or from a review —
+applying a label, filing or reading a work item — is not its subject and routes like any
+other. A carved-out artifact is therefore not a carved-out *file*, and "it drives the tracker"
+is not a licence covering everything inside it.
+
+**The test.** Does the artifact merely **record or read** work items in passing — file one,
+comment on one, label one, look one up — so that the same step would still make sense on
+another tracker? The rule applies; route the command. Or is **that tracker's API the thing the
+artifact exists to operate**, so that removing the call removes the artifact's subject? The
 carve-out applies; name it. This is the project rule's **What is not a route: subject matter**
 line applied to commands instead of paths, not a second formulation — an author who has
 settled which side a path falls on has already settled which side a command does.
 
-**One source per mechanic, the carve-out included.** A carve-out artifact is the source of
-truth for what it owns — what a review *says*: payload shape, severity grouping, the verdict
-marker, which threads may be resolved. It is not thereby a source of truth for the mechanics
-it happens to spell out. Where the same command exists in the reference behind **Tracker
-mechanics**, the reference wins; a copy inside a carve-out artifact that has drifted from it is
-a stale copy, not a second authority. Drift is the expected state rather than an anomaly,
-since the reference was verified and corrected after those artifacts were written and nothing
-sweeps them. So an author converting an artifact under this rule, or copying a command out of
-a carve-out artifact into one, takes the command from the reference and checks the local copy
-against it — and fixes or deletes the local copy only if that artifact is the one being
-changed, which the scope below decides.
+**One source per mechanic, the carve-out included.** A carved-out call is the artifact's own
+subject, so the artifact is the source of truth for its *substance* — what the operation says
+and when it is legitimate. It is not thereby a source of truth for the **transport**: where
+the same command exists in the reference behind **Tracker mechanics**, the reference wins, and
+a copy inside a carve-out artifact that has drifted from it is a stale copy rather than a
+second authority. Drift is the expected state rather than an anomaly, since the reference was
+verified and corrected after those artifacts were written and nothing sweeps them. So an
+author converting an artifact under this rule, or copying a command out of a carve-out
+artifact into one, takes the command from the reference and checks the local copy against it —
+then fixes or deletes the local copy only if that artifact is the one being changed, per
+**Permanent scope: as written or changed, never as a sweep** above.
 
-**Scope: identical to the project rule's.** It binds an artifact as it is newly written or
-changed, binds only what that change writes, mandates no sweep, and bounds a reviewer's
-findings the same way. That is stated once, for both axes, in **Permanent scope: as written or
-changed, never as a sweep** above; it is not restated here.
+**Scope: the project rule's, unchanged.** It is stated once for both axes in **Permanent
+scope: as written or changed, never as a sweep** above, and nothing about it is restated,
+narrowed or extended here.
 
 ## Principles
 
