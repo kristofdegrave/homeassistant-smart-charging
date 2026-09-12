@@ -18,14 +18,23 @@
 set -euo pipefail
 
 expected=$(mktemp)
+trap 'rm -f "$expected" "${actual:-}"' EXIT
 actual=$(mktemp)
-trap 'rm -f "$expected" "$actual"' EXIT
 
+# `${#3}` counts characters under a UTF-8 locale and bytes under LC_ALL=C, and every
+# description below contains an em dash — so the two readings differ by two per em dash. Both
+# stay covered as long as the margins do (the longest description here is 95), and the
+# verification pass at the bottom is the backstop for anything the API refuses regardless.
+# A refused description stops the run where it stands, leaving the labels before it already
+# written; that is harmless, since re-running after fixing the line applies the rest.
 label() {
   if [ "${#3}" -gt 100 ]; then
     echo "error: description for label '$1' is ${#3} characters, over GitHub's 100 limit." >&2
     exit 1
   fi
+  # Written raw, while the read-back below comes through jq's @tsv — which escapes backslashes
+  # and tabs. No description may contain either, or the two spellings diverge and every run
+  # reports a mismatch that re-running never clears.
   printf '%s\t%s\n' "$1" "$3" >>"$expected"
   gh label create "$1" --color "$2" --description "$3" --force
 }
@@ -61,11 +70,10 @@ label enhancement a2eeef "Improvement to already-shipped behaviour — pair with
 # read-back silently truncates and reports false mismatches.
 gh label list --limit 200 --json name,description --jq '.[] | [.name, .description] | @tsv' >"$actual"
 
-tab=$(printf '\t')
 status=0
 while IFS= read -r want; do
   grep -Fqx -- "$want" "$actual" || {
-    echo "mismatch: label '${want%%"$tab"*}' does not carry the description defined here." >&2
+    echo "mismatch: label '${want%%$'\t'*}' does not carry the description defined here." >&2
     status=1
   }
 done <"$expected"
