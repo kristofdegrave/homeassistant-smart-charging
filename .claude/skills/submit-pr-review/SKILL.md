@@ -1,6 +1,6 @@
 ---
 name: submit-pr-review
-description: "Use when posting review findings to a Smart Charging PR — from CI (_ai-review.yml) or from a local review after a reviewer agent (analysis-reviewer / adr-reviewer / system-design-reviewer) returns findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, and the CI verdict marker — CI and local runs both follow it so they never drift."
+description: "Use when posting review findings to a Smart Charging PR — from CI (_ai-review.yml) or from a local pass run by the review skill, once a reviewer agent has returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
 ---
 
 # Submit a PR review
@@ -53,10 +53,13 @@ Write it to a scratch JSON file (the ONLY file you create — do **not** edit an
   - `<!-- ai-review-verdict: remarks -->` if there is at least one Critical or Major finding
     that must be addressed before merge;
   - `<!-- ai-review-verdict: clean -->` otherwise (Minor/Nit findings alone are clean).
-- **Local mode** (you post as a human `gh` identity): do **NOT** emit the verdict marker. The
-  marker is CI's routing/cycle-count signal; a local review carrying it would be miscounted as an
-  automatic fix cycle. A markerless review reads as ordinary human feedback, which the
-  `address-review-remarks` skill already picks up via its human-comment / `ai-fix-ack` path.
+- **Local mode** (you post as a human `gh` identity): do **NOT** emit the verdict marker, and
+  DO end the body with exactly `<!-- local-review-round -->`. The verdict marker is CI's
+  routing/cycle-count signal; a local review carrying it would be miscounted as an automatic
+  fix cycle. A review without the CI marker reads as ordinary human feedback, which the
+  `address-review-remarks` skill already picks up via its human-comment / `ai-fix-ack` path;
+  the local marker exists only for the interactive round count the `review` skill keeps. CI
+  never greps for it, and it counts a population CI's own cap never sees.
 
 ## 5. Submit — and recover from a 422
 
@@ -72,11 +75,10 @@ comment — the review must be posted.
 
 - **CI**: `_ai-review.yml`'s prompt references this skill and supplies the repo, PR number,
   head SHA, and base SHA. It runs as the workflow bot, so it uses CI mode (with the marker).
-- **Locally**: the reviewer agents (`analysis-reviewer`, `adr-reviewer`, `system-design-reviewer`)
-  are read-only — they return findings, they do not post. After one returns, the main session
-  posts them here in local mode (no marker). This is the posting step of the CLAUDE.md review
-  protocol (analysis and ADR: step 3), which pushes the branch and opens the PR *before* the
-  fresh-agent review, so there is a PR to attach the native review to. Anchor each reviewer
-  finding that carries a file path + new-version line as an inline comment; put the rest in the
-  body. If there is no PR (an uncommitted local draft), report the findings in the session
-  instead of posting.
+- **Locally**: the `review` skill runs the pass. Every reviewer agent the work-types table
+  names is read-only — they return findings, they do not post — so after each returns, the
+  main session posts them here in local mode (round marker, no verdict marker). The PR always
+  exists by then: the branch is pushed and the PR opened *before* the fresh-agent review.
+  Anchor each finding that carries a file path + new-version line as an inline comment; put
+  the rest in the body. If there is no PR (an uncommitted local draft), report the findings in
+  the session instead of posting.
