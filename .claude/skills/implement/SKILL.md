@@ -32,13 +32,11 @@ Stop instead of dispatching when:
 ## Then, in order
 
 1. **Read the work file first, and resolve anything it needs before the branch exists** —
-   against a fetched `origin/main`, not a stale checkout. Step 1's branch-naming note grants a
-   work file one override, the number segment, stated with its reason in that skill:
-   `write-adr` derives `adr/<adr-number>` from the next number merged on `main`, which
-   collides on push if resolved locally. Nothing else about steps 1–2 is the work file's to
-   override.
-2. For a `development`/`testing` issue, resolve its anchored `Plan:` line first — CI fails
-   closed without one, and nothing local notices its absence otherwise.
+   against a fetched `origin/main`, not a stale checkout, since a work file may derive its
+   branch name from something already merged there. Step 1's branch-naming note grants one
+   override, the number segment; nothing else about steps 1–2 is the work file's to override.
+2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
+   task it names is already identified.
 3. Worktree, branch and board **Status** per step 1.
 4. Follow the work file. Its steps, self-checks and stop conditions govern.
 5. Definition of Done self-check, then push, PR and board **Status** per step 2.
