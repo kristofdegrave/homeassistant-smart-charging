@@ -552,7 +552,13 @@ class DeadlineUrgencyInputs:
     deadline_tomorrow: time | None
     now_dt: datetime
     effective_battery_capacity_kwh: float
-    max_current_a: float
+    # R5's slack test is judged against the rate that WOULD be in force with the effective peak
+    # limit raised to the maximum peak -- resolved by the coordinator every cycle whether or not
+    # urgency is actually in effect, which is what stops the test moving the moment it fires.
+    escalated_maximum_permitted_rate_a: float
+    # Whether urgency was in effect entering this cycle. Urgency latches: re-deriving it from
+    # the slack test each cycle would revert it the moment charging closed the gap.
+    urgency_latched: bool
     auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
@@ -589,8 +595,14 @@ def resolve_deadline_urgency(
 
     The baseline mode is evaluated fresh from Auto mode-selection's rows 3-5 alone
     (urgent=False) every cycle -- never Captar's own already-escalated request, per
-    resolution-rules.md's explicit warning against that (it would make urgency look satisfied
-    the instant it engages and revert every cycle). The Auto policy's `select()`
+    resolution-rules.md's explicit warning against that (it would clear urgency the instant it
+    engages). Since issue #1078 that baseline feeds only the HANDBACK test, not the entry
+    condition: urgency engages on the slack test against `escalated_maximum_permitted_rate_a`,
+    so a baseline that happens to want nothing no longer makes every evening urgent.
+
+    The evaluation is a QUERY, not a dispatch (control-cycle.md step 4): `mode_desired_current`
+    asks what the baseline mode would want from this cycle's conditions and never advances that
+    mode's own state machine or timers. The Auto policy's `select()`
     (`PROFILE_POLICIES[PROFILE_AUTO]`, ADR-0017) is consulted at most twice here -- baseline
     (urgent=False) and, only when Auto actually dispatches, the real resolution (the real
     `urgent`) -- sharing one kwargs dict so the other 9 arguments can never drift apart between
@@ -642,11 +654,13 @@ def resolve_deadline_urgency(
         ev_battery_capacity_kwh=inputs.effective_battery_capacity_kwh,
         voltage=ctx.voltage,
         baseline_desired_a=baseline_desired_a,
-        # A deliberate simplification of "maximum permitted rate"'s full peak-clamp-fitted
-        # definition (system-overview.md glossary) down to C1's hard ceiling -- refining
-        # this to the actual peak-fitted rate is deferred follow-up work, not handled
-        # here; it only affects when DeadlineUnreachableNotified fires.
-        maximum_permitted_rate_a=inputs.max_current_a,
+        # Issue #1078 closed the deferral that used to sit here (this was C1's hard ceiling,
+        # `inputs.max_current_a`, with a note calling the peak-fitted rate follow-up work
+        # because it "only affects when DeadlineUnreachableNotified fires"). That last clause
+        # stopped being true when R5's engage condition became a comparison against this rate:
+        # it is now the threshold urgency itself turns on, not just the notification's.
+        escalated_maximum_permitted_rate_a=inputs.escalated_maximum_permitted_rate_a,
+        urgency_latched=inputs.urgency_latched,
     )
 
     # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
