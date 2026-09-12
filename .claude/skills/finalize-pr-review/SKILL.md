@@ -9,7 +9,7 @@ A review pass that finds nothing left to fix isn't done until the PR itself refl
 otherwise it still looks like it has outstanding remarks, and the human partner has to
 re-derive what's actually settled.
 
-Threads are closed out per finding during step 5, by `resolve-review-thread` — this skill
+Threads are closed out during step 5, by `resolve-review-thread` — this skill
 does not repeat that mechanic. If a thread is still open for a finding that was fixed, run
 that skill before this one.
 

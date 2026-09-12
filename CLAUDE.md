@@ -169,7 +169,7 @@ acting:
   interactive session never self-applies those trigger labels — see that doc.
 
 An interactive session runs the step ranges through their own skills: steps 1–2 `implement`,
-3–4 `review`, 5 `fix` (per thread, `resolve-review-thread`), 7 `finalize-pr-review`; step 0 is
+3–4 `review`, 5 `fix` (with `resolve-review-thread`), 7 `finalize-pr-review`; step 0 is
 `file-task-issue`. Step 8's manual comments are handled like step 5; step 6's loop and step 9
 stay with the human partner.
 

@@ -1,6 +1,6 @@
 ---
 name: fix
-description: Use in an interactive session to run this project's review-fix step (step 5 of its contribution workflow) on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply and resolve per thread. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
+description: Use in an interactive session to run this project's review-fix step (step 5 of its contribution workflow) on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
 ---
 
 # Fix review findings
@@ -18,7 +18,7 @@ hard-coded use-case/ADR/analysis cases, is the one part this skill replaces.
 
 ## Dispatch on the context label
 
-Take the context label from the issue the PR closes and look it up in `CLAUDE.md`'s
+Take the context label from the PR's linked issue and look it up in `CLAUDE.md`'s
 **Model selection** table. Where the row names no work file — and two do not — there is
 nothing to re-author with: fix what the finding states, keep the severity policy, and say in
 the summary that no work file governed the change. **Fixing is re-authoring**: apply the row's
@@ -46,7 +46,8 @@ Then once, for the run:
 4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`. After
    the push, never before: a failed push would otherwise leave threads closed over work that
    is not on the branch.
-5. Post the one summary (§5).
+5. Post the one summary (§5) — its content is §5's; its transport comes from `CLAUDE.md`'s
+   **Tracker mechanics** section, which is the reason a comment body goes in a file.
 
 Stop there and hand on to step 3; `CLAUDE.md`'s **Contribution workflow** section names the
 skill that runs it. The loop is the human partner's to run, and a

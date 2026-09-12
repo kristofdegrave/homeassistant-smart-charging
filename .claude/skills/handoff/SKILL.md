@@ -48,7 +48,7 @@ Name skills, not procedures — the skill carries its own instructions.
 - In the review loop, per the step ranges `CLAUDE.md`'s **Contribution workflow** section
   maps: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
   with
-  `resolve-review-thread` per thread, and `finalize-pr-review` hands a clean pass to
+  `resolve-review-thread` for the threads, and `finalize-pr-review` hands a clean pass to
   `needs-approval`. `address-review-remarks` is CI's entry for that step, not the local one.
 
 ## Rules
