@@ -176,6 +176,13 @@ completion bar an author self-checks before opening the PR
 commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
 their own template/quality-check steps on top of these; they never replace them.
 
+Committing and pushing on a task branch is standing-authorized; the destructive git commands
+that authorization excludes are refused mechanically by a `PreToolUse` guard
+(`.claude/hooks/block-destructive-git.sh`, wired in `.claude/settings.json`). The interactive
+reference doc's **Commit & push authorization** section defines both, and the guard script
+itself is the authority on exactly what it refuses and when — read it when a git command comes
+back refused.
+
 ---
 
 ## Requirements standard
