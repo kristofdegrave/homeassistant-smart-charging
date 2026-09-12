@@ -5,9 +5,11 @@ skills (`.claude/skills/`), agent definitions (`.claude/agents/`), and the CI wo
 prompts (`.github/workflows/_ai-*.yml`). It exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
 [Project-dependent content routes through
-`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) fixes where anything
-repository-specific lives, and the per-artifact checklists test the ones a reviewer can decide
-mechanically.
+`CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent
+mechanics route through
+`CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd) fix where anything
+repository-specific and anything tracker-specific live, and the per-artifact checklists test
+the ones a reviewer can decide mechanically.
 
 It is **reference**, not a gate: nothing here overrides the correctness, review-integrity, or
 model-selection rules in `CLAUDE.md`. Where a token saving would trade away analysis quality
@@ -165,9 +167,11 @@ meeting one does not have to re-derive it:
   the reference docs it is not itself about. The rule is near-vacuous for these skills, which is
   the decision, not an oversight.
 
-**Permanent scope: as written or changed, never as a sweep.** The rule binds an artifact at the
-moment it is newly written, or changed for some other reason — and it binds **what that change
-writes**: every pointer the change adds or rewrites conforms, while prose the change leaves
+**Permanent scope: as written or changed, never as a sweep.** This paragraph states the scope
+of both rules on this page — the one above and the tracker rule below, which shares it rather
+than restating it. The rule binds an artifact at the moment it is newly written, or changed
+for some other reason — and it binds **what that change writes**: every pointer the change
+adds or rewrites conforms, while prose the change leaves
 alone is owed no conversion. A typo fix is therefore not a conversion trigger, and converting
 the rest of a file you are rewriting anyway is welcome but never required. An artifact nobody
 has a reason to touch is never opened to satisfy this rule, and there is no retroactive
@@ -175,6 +179,56 @@ conversion pass: artifacts predating the rule are conformant by age, not on borr
 is the rule's standing scope, not a grace period that expires. A reviewer therefore applies it
 to what the diff writes, and not to an unconverted file that diff happens to read, sit beside,
 or resemble; a finding raised against untouched material is out of scope by construction.
+
+## Tracker-dependent mechanics route through `CLAUDE.md`
+
+**The rule.** A skill or agent definition states the **generic procedure** — *file a work
+item*, *record the finding against the work item that needed it*, *reply to the finding and
+close it out* — and reaches the commands that drive one particular tracker through
+`CLAUDE.md`'s **Tracker mechanics** section. Tracker-dependent means the `gh` invocations
+themselves and everything that exists only because this project's work lives in GitHub issues,
+pull requests, review threads, labels and a project board: endpoint paths, field and option
+ids, flag spellings, and the failure mode and read-back each command needs. The reason is the
+[project-dependent](#project-dependent-content-routes-through-claudemd) one a turn further
+out: the procedure is what travels and the tracker is what gets swapped, so an artifact whose
+steps are procedures lands in a repository on another tracker needing one `CLAUDE.md` section
+rewritten, while one that spells `gh api …/pulls/<n>/reviews` into a step lands there needing
+itself rewritten. CI worker prompts (`.github/workflows/_ai-*.yml`) are outside this rule for
+the same reason they are outside the other: they do not travel — they *are* this repository's
+pipeline, wired to this tracker's events.
+
+**The carve-out: an artifact whose subject is one tracker's API.** `submit-pr-review`,
+`finalize-pr-review` and `address-review-remarks` do not merely touch the tracker on the way
+to somewhere else; they exist *to drive* its review API, and the review API is what they are
+about. Genericising them is not a trade of one line for a pointer — take the endpoints, the
+payload shape and the thread mechanics out of them and nothing is left to state, because there
+is no procedure underneath that was ever independent of the tracker. They name it freely, and
+that is permanent, not pending.
+
+**The test**, for an artifact that is neither obviously one: does it merely **record or read**
+work items in passing — file one, comment on one, label one, look one up — so that the same
+step would still make sense on another tracker? The rule applies; route the commands. Or is
+**one tracker's API the artifact's actual subject**, the thing it was written to operate? The
+carve-out applies; name it. This is the project rule's **What is not a route: subject matter**
+line applied to commands instead of paths, not a second formulation — an author who has
+settled which side a path falls on has already settled which side a command does.
+
+**One source per mechanic, the carve-out included.** A carve-out artifact is the source of
+truth for what it owns — what a review *says*: payload shape, severity grouping, the verdict
+marker, which threads may be resolved. It is not thereby a source of truth for the mechanics
+it happens to spell out. Where the same command exists in the reference behind **Tracker
+mechanics**, the reference wins; a copy inside a carve-out artifact that has drifted from it is
+a stale copy, not a second authority. Drift is the expected state rather than an anomaly,
+since the reference was verified and corrected after those artifacts were written and nothing
+sweeps them. So an author converting an artifact under this rule, or copying a command out of
+a carve-out artifact into one, takes the command from the reference and checks the local copy
+against it — and fixes or deletes the local copy only if that artifact is the one being
+changed, which the scope below decides.
+
+**Scope: identical to the project rule's.** It binds an artifact as it is newly written or
+changed, binds only what that change writes, mandates no sweep, and bounds a reviewer's
+findings the same way. That is stated once, for both axes, in **Permanent scope: as written or
+changed, never as a sweep** above; it is not restated here.
 
 ## Principles
 
@@ -215,6 +269,10 @@ or resemble; a finding raised against untouched material is out of scope by cons
       [Project-dependent content routes through
       `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) — its boundaries, its
       subject-matter exception for the tree the skill writes into, and its scope included.
+- [ ] The skill states the generic procedure for anything it does to the tracker and routes
+      the commands per [Tracker-dependent mechanics route through
+      `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd), unless one tracker's
+      API is the skill's own subject.
 - [ ] Every step ends on a completion criterion a run can decide, not a judgement word.
 - [ ] The invocation choice is justified: model-invoked only where the model or another skill
       must reach it, otherwise `disable-model-invocation: true`.
@@ -227,6 +285,9 @@ or resemble; a finding raised against untouched material is out of scope by cons
       [Project-dependent content routes through
       `CLAUDE.md`](#project-dependent-content-routes-through-claudemd), including its
       subject-matter boundary for the trees the agent reviews.
+- [ ] Any tracker command the definition would state is routed instead, per
+      [Tracker-dependent mechanics route through
+      `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd).
 - [ ] The checklist is self-contained for its artifact type, so a review needs to load only
       *this* agent def plus the payload skill — not several agent defs.
 - [ ] Shared review mechanics (payload shape, anchoring, verdict marker) are referenced from
