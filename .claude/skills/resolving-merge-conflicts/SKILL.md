@@ -11,7 +11,9 @@ conflicts here are routine rather than exceptional. Resolving one wrongly silent
 that is already merged, and no later check catches that — which is why the procedure is written
 down.
 
-**Always resolve. Never `--abort`, and never re-run the merge hoping the conflict disappears.**
+**Always resolve.** Never re-run the merge hoping the conflict disappears, and never `--abort`
+on your own judgement — if the operation itself was the mistake (started against the wrong ref,
+say), ask the human partner rather than deciding it here.
 
 ## Step 0 — know which commands you have
 
@@ -27,14 +29,16 @@ procedure:
   only steer a rebase *already* in progress stay available, so a rebase legitimately started on
   an unpublished branch can always be finished.
 - **Name paths; never discard the tree.** Take one side of a conflicted file with
-  `git checkout --ours -- <path>` or `--theirs -- <path>` — but in a **rebase** those two are
-  inverted, `--ours` meaning the upstream you are replaying onto and `--theirs` your own commit,
-  so confirm which operation you are in before trusting either. Discarding the whole working
-  tree is denied, as are force-push and forced branch deletion — no resolution needs any of
-  them, and if yours seems to, you are rewriting published history: stop and ask the human
-  partner.
+  `git checkout --ours -- <path>` or `--theirs -- <path>`. In a **merge**, `--ours` is the branch
+  you are on and `--theirs` is what you are merging in; in a **rebase** the two invert, `--ours`
+  becoming the upstream you are replaying onto and `--theirs` your own commit. Confirm which
+  operation you are in before trusting either — taking the wrong side here is exactly the silent
+  revert this skill exists to prevent. Discarding the whole working tree is denied, as are
+  force-push and forced branch deletion — no resolution needs any of them, and if yours seems to,
+  you are rewriting published history: stop and ask the human partner.
 
-`--abort` is not blocked by the guard. It is blocked by this skill.
+`--abort` is not blocked by the guard. It is blocked by this skill, absent the human partner's
+say-so.
 
 ## Step 1 — see the state
 
@@ -52,13 +56,15 @@ in this order of usefulness:
 1. **The commit message** — its prefix names the kind of work the commit did; the prefix
    vocabulary is in the completion-bar doc's commit-message conventions, reached from
    `CLAUDE.md`, **Contribution workflow**.
-2. **The anchored `Plan:` line** on the issue that commit's PR closes: it points at the exact
-   task in an implementation plan, which states what that task was allowed to change.
-   `CLAUDE.md`, **Issue conventions**, gives that line's required format.
+2. **The anchored `Plan:` line**, where the issue that commit's PR closes carries one — only
+   implementation-track issues do. It points at the exact task in an implementation plan, which
+   states what that task was allowed to change. `CLAUDE.md`, **Issue conventions**, gives that
+   line's required format and which issues must carry it.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
    whose other children are often the other side of the conflict.
-4. **The owning specification document** cited by that plan task — `CLAUDE.md`'s **Document
-   structure** section says which documents own what.
+4. **The owning specification document** — the analysis and design documents that `CLAUDE.md`'s
+   **Document structure** section lists, reached from the plan task or from the changed file
+   itself.
 
 A side whose intent you cannot state in one sentence is a side you cannot resolve. Keep reading.
 
@@ -81,14 +87,19 @@ Three cases are not ordinary hunk-merging:
 - **Generated or index-like content** — an epic body listing its children, ADR numbering, a
   catalog or coverage table, a use-case inventory. Re-derive it from its source after taking
   both sides' underlying changes; hand-merging the rows yields a table matching neither side's
-  reality. The ADR log needs one extra rule of its own: an ADR that has landed on `main` never
-  moves (`CLAUDE.md`, **Architecture Decision Records**), so when both sides claimed the same
-  number, it is the *unmerged* side's ADR that is renamed to a number free on a freshly fetched
-  `origin/main`, with every reference to it moved in the same commit.
+  reality. The ADR log needs one extra rule of its own, for the case where both sides claimed the
+  same number — a case `write-adr`'s one-ADR-in-flight rule is meant to prevent, so reaching it
+  means something already went wrong upstream. `CLAUDE.md`, **Architecture Decision Records**,
+  forbids renumbering outright; applied to a collision, that puts the side already on `main`
+  out of reach, so the *unmerged* side is the one that moves. Renumber it by `write-adr`'s
+  numbering rule against a freshly fetched `origin/main`, and bring everything that skill keys
+  off the number with it — cross-references and the ADL index row in the same commit; the branch
+  name only if it has not been pushed, otherwise leave it and say so in the PR.
 - **A conflict that is really a stacked branch.** A PR based on `main` while the local branch
   sits on an unmerged prior branch shows the combined stack in its diff; that shrinks by itself
   once the lower branch merges. It is not a conflict to resolve, and never a reason to rewrite
-  or re-point the lower branch — the contribution workflow's branching rule covers this case.
+  or re-point the lower branch — the branching rule reached from `CLAUDE.md`, **Contribution
+  workflow**, covers this case.
 
 Leave no markers behind: grep the tree for `<<<<<<<`, `=======` and `>>>>>>>` before moving on.
 

@@ -40,7 +40,7 @@ message conventions).
    today. Before this, and
    before every later pass in the loop: check if the
    branch is behind `origin/main`; if so, merge/rebase `origin/main` in and resolve conflicts
-   before reviewing, so review always runs against current `main`.
+   (`resolving-merge-conflicts`) before reviewing, so review always runs against current `main`.
 4. **Post findings to the PR before fixing.** Native GitHub PR review with inline comments
    (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
    once the PR exists, which step 2 guarantees is always before review.
