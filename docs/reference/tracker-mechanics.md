@@ -302,8 +302,9 @@ assuming a batch all landed.
 
 ## Relationship to the review-mechanics skills
 
-`submit-pr-review`, `finalize-pr-review` and `address-review-remarks` exist to drive the
-tracker — that is their whole subject, so they legitimately carry tracker commands of their
-own. Where they define *what a review says* (payload shape, severity grouping, verdict
-marker, which threads may be resolved), they remain the source of truth and this file defers
-to them. Where they merely need to reach the tracker, this file is the mechanics reference.
+`submit-pr-review`, `finalize-pr-review` and `address-review-remarks` carry tracker commands of
+their own. Which of their commands may be written out rather than routed, and which file wins
+where both spell the same one out, is settled by [ai-authoring.md](ai-authoring.md)'s
+**Tracker-dependent mechanics route through `CLAUDE.md`** and is not re-argued here. What this
+file never covers is *what a review says* — payload shape, severity grouping, verdict marker,
+which threads may be resolved: those stay theirs, and this file defers to them on all four.
