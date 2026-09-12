@@ -119,23 +119,26 @@ repository's pipeline.
   run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
   route every artifact inherits from a single edit.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
-  resource list** — with the one exception of its own subject matter, defined immediately
-  below. Write "this project" where a name is tempting; route the path and the list.
+  resource list** — with the one exception of its own subject matter, defined after this
+  list. Write "this project" where a name is tempting; route the path and the list.
 - **Where no `CLAUDE.md` section owns the topic, add the route there — never the fact.** One
   line naming the topic and the document that owns it, and no more — *Keep stable files stable*
   below says what a fact parked in the always-loaded prefix costs every run, and its churn every
   warm one. If what you are about to add to `CLAUDE.md` is longer than a route, it belongs in
   the document the route points at.
 
-**What is not a route: subject matter.** The rule binds the project *documentation* an artifact
-reads to learn how to operate. The repo paths an artifact exists to *act on* — the trees a
-reviewer's diff lands in, the workflow file a checklist is about, the tree a skill writes into —
-are the subject matter of its own criteria, not a route to documentation, and stay named. The
-test is which of the two a path is: *tells the artifact how to operate* → route it; *is what the
-artifact operates on* → name it. A checklist about the router workflow cannot route to the
-router workflow. Where a path is **both** — `workflow-reviewer` reviews the tree this reference
-sits in *and* reads it for its criteria — subject matter wins and the path stays named; the
-route is then redundant, not forbidden.
+**What is not a route: subject matter.** This exception is about paths only — the project's
+name and its resource lists are never subject matter. Among paths, the rule binds the project
+*documentation* an artifact reads to learn how to operate. The repo paths an artifact exists to
+*act on* — the trees a reviewer's diff lands in, the workflow file a checklist is about, the
+tree a skill writes into — are the subject matter of its own criteria, not a route to
+documentation, and stay named. The test is which of the two a path is: *tells the artifact how
+to operate* → route it; *is what the artifact operates on* → name it. A checklist about the
+router workflow cannot route to the router workflow. The test is applied **per path, not per
+tree**: `workflow-reviewer` names `docs/reference/` as a tree it reviews *and* routes to the
+one document inside it that carries its criteria, and both are right — a document does not
+become subject matter by sitting in a reviewed tree. Where one and the same path is genuinely
+both, subject matter wins and it stays named; the route is then redundant, not forbidden.
 
 Some categories sit on that boundary often enough to have a recorded answer, so an author
 meeting one does not have to re-derive it:
