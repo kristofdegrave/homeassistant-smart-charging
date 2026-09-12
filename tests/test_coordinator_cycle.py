@@ -863,7 +863,11 @@ def _resolve_deadline_urgency(**overrides):
         effective_battery_capacity_kwh=10.0,
         voltage=230.0,
         surplus_w=0.0,
-        max_current_a=32.0,
+        # R5 (issue #1078): urgency is judged against the escalated maximum permitted rate, not
+        # the baseline. 32.0 leaves ample slack by default, so each test that wants urgency now
+        # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
+        escalated_maximum_permitted_rate_a=32.0,
+        urgency_latched=False,
         auto_dispatchable=False,
         solar_available=False,
         captar_available=True,
@@ -952,10 +956,13 @@ def test_resolve_deadline_urgency_manual_profile_baseline_is_the_active_mode_its
         ev_soc=50.0,
         active_soc_limit=80.0,
         effective_battery_capacity_kwh=10.0,
+        escalated_maximum_permitted_rate_a=14.0,
         mode_desired_current=fake_mode_desired_current,
     )
-    assert calls == [MODE_POWER]  # baseline dry-run used the active mode, not a selected one
-    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (5.0 A)
+    assert calls == [MODE_POWER]  # baseline query used the active mode, not a selected one
+    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A, and the slack test
+    # fires because 13.04 > 14.0/1.25 = 11.2. The 5.0 A baseline is what urgency would hand
+    # BACK to (issue #1078), not what it is judged against on the way in.
     assert result.urgent is True
     assert result.resolved_mode is None  # Manual: coordinator never reassigns active_mode
 
@@ -985,21 +992,31 @@ def test_resolve_deadline_urgency_escalates_from_baseline_off_to_captar_when_urg
         sun_is_down=False,  # row 4 doesn't match at baseline -- falls through to Off
         low_tariff_active=False,
         solar_reserve_active=False,
+        # 13.04 A required against a 14.0 A escalated rate: 13.04 > 11.2, so the slack test
+        # fires. Deliberately NOT left at the default 32.0 -- under the old rule this test
+        # passed on the 0 A Off baseline alone, which is precisely the #1078 defect.
+        escalated_maximum_permitted_rate_a=14.0,
         mode_desired_current=fake_mode_desired_current,
     )
     assert calls == [MODE_OFF]  # baseline (rows 3-5, urgent=False) resolved to Off
-    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A > baseline (0 A)
+    # energy_needed = 10 * (80-50)/100 = 3 kWh over 1h = 3000 W = 13.04 A. The Off baseline's
+    # 0 A is NOT why this is urgent (that was the #1078 defect) -- the slack test is.
     assert result.required.urgent is True
-    assert result.required.unreachable is False  # 13.04 A < max_current_a (32.0)
+    assert result.required.unreachable is False  # 13.04 A < the 14.0 A escalated rate
     assert result.urgent is True
     assert result.resolved_mode == MODE_CAPTAR  # row 2: urgent -> Captar (available)
 
 
 def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_deadline():
-    """Auto dispatch where the baseline mode's own desired current (Solar, row 3) already
-    exceeds what the deadline requires -- urgent stays False and the real select_mode call,
-    seeing the identical (urgent=False) input as the baseline call, resolves to the same
-    mode. Proves the two calls agree when nothing escalates, not just when it does."""
+    """Auto dispatch on a deadline with ample slack: urgent stays False and the real select_mode
+    call, seeing the identical (urgent=False) input as the baseline call, resolves to the same
+    mode. Proves the two calls agree when nothing escalates, not just when it does.
+
+    The name is historical and two `docs/plans/` documents cite it as evidence for ADR-0017's
+    policy extraction, so it is kept: but since #1078 the 16 A Solar baseline is NOT what keeps
+    this out of urgency -- the slack test is, at 0.435 A required against a 25.6 A threshold.
+    The baseline would only matter to the handback, which needs a latch this call does not
+    carry. What the test still pins is the two select() calls agreeing when nothing escalates."""
 
     def fake_mode_desired_current(mode):
         return 16.0 if mode == MODE_SOLAR else 0.0
@@ -1018,7 +1035,8 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
         solar_start_threshold_w=1000.0,
         mode_desired_current=fake_mode_desired_current,
     )
-    # energy_needed = 10 * (80-79)/100 = 0.1 kWh over 1h = 100 W = 0.435 A < baseline (16 A)
+    # energy_needed = 10 * (80-79)/100 = 0.1 kWh over 1h = 100 W = 0.435 A, far under the
+    # 25.6 A slack threshold (the helper's default 32.0 A escalated rate / 1.25).
     assert result.required.urgent is False
     assert result.urgent is False
     assert result.resolved_mode == MODE_SOLAR  # same row-3 match as the baseline, unchanged
@@ -1038,10 +1056,11 @@ def test_resolve_deadline_urgency_consults_the_auto_policy_registry_entry():
             deadline_today=time(11, 0),
             ev_soc=50.0,
             active_soc_limit=80.0,
+            escalated_maximum_permitted_rate_a=14.0,
         )
         # auto_dispatchable=True with no deadline slack (see the sibling escalation test above
-        # for the same energy-needed math) makes both call sites fire: the baseline dry run
-        # (urgent=False) and the real resolution (urgent=True, once required exceeds baseline).
+        # for the same energy-needed math) makes both call sites fire: the baseline query
+        # (urgent=False) and the real resolution (urgent=True, once the slack test fires).
         mock_policies.__getitem__.assert_called_with(PROFILE_AUTO)
         select = mock_policies.__getitem__.return_value.select
         assert [call.kwargs["urgent"] for call in select.call_args_list] == [False, True]
@@ -1101,6 +1120,28 @@ def test_resolve_deadline_urgency_still_urgent_for_a_genuinely_tight_deadline_to
     )
     assert result.urgent is True
     assert result.required.required_a != float("inf")
+
+
+def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
+    """`inputs.urgency_latched` reaches `resolve_required_current` (R5, issue #1078).
+
+    Every other DeadlineUrgencyInputs field has a discriminating test at this tier; this one is
+    the wiring for urgency's latch, so a silent failure to pass it through would make urgency
+    re-derive from the slack test every cycle and duty-cycle the charger.
+
+    Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
+    latch can account for the difference.
+    """
+    ample_slack = dict(
+        deadline_today=time(11, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        mode_desired_current=lambda mode: 0.0,
+    )
+    assert _resolve_deadline_urgency(urgency_latched=False, **ample_slack).urgent is False
+    assert _resolve_deadline_urgency(urgency_latched=True, **ample_slack).urgent is True
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---

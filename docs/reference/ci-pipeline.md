@@ -11,13 +11,13 @@ identity (see that doc's **Git identity** section).
 **Claude session must never self-apply one on its own initiative** to hand its own review/fix
 work to CI instead of doing it in-session; interactive review and fix always happen locally,
 per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh `*-reviewer`
-subagent posts findings via `submit-pr-review`, then `finalize-pr-review` resolves what got
-fixed. This does *not* forbid the pipeline's actual, intended human triggers below — a
-maintainer applying `needs-draft` to start the pipeline, or manually re-adding `needs-work`
-after the loop cap, is the go-signal these labels exist for. What's disallowed is a session
-adding one unprompted as a shortcut, which can also collide with the loop-cap accounting below
-(e.g. forcing an extra automated review pass eats into the 2-cycle cap a human never intended
-to spend).
+subagent posts findings via `submit-pr-review`, then `resolve-review-thread` closes out each
+thread that got fixed. This does *not* forbid the pipeline's actual, intended human triggers
+below — a maintainer applying `needs-draft` to start the pipeline, or manually re-adding
+`needs-work` after the loop cap, is the go-signal these labels exist for. What's disallowed is
+a session adding one unprompted as a shortcut, which can also collide with the loop-cap
+accounting below (e.g. forcing an extra automated review pass eats into the 2-cycle cap a
+human never intended to spend).
 
 ## Each job does exactly one task
 
@@ -30,36 +30,63 @@ separation `workflow-reviewer`'s non-negotiables checklist enforces).
 
 The context-label vocabulary itself (values and meanings) is documented once, in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. What lives here
-is the CI-side consistency obligation: the same vocabulary is baked into five pipeline
+is the CI-side consistency obligation: the same vocabulary is baked into six pipeline
 places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-draft.yml`'s
 `context_labels` variable, its "No context label found" reason string, and its `case` block;
-and `.github/setup-labels.sh`'s label definitions — and, for the three labels that have an
-issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key too (`adr.yml` → `adr`,
-`requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps that label on every
-issue filed through the form. A sixth place sits outside the pipeline but carries the same
-vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
-Adding a label means updating those six; renaming one additionally means updating any form
-that stamps it. That table's *no context label* row separately mirrors `_ai-review.yml`'s
-path→agent routing, so adding a tree there means updating the row too — until CI reads the
-table directly, the two are kept in sync by hand. `file-task-issue/SKILL.md` doesn't hold
-its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
-[contribution-workflow.md](contribution-workflow.md).
+`.github/setup-labels.sh`'s label definitions; and `close-guard.yml`'s `case` block, which
+names `development` and `testing` (see **The docs-only close guard** below) — and, for the
+three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
+too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
+that label on every issue filed through the form. A seventh place sits outside the pipeline but
+carries the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
+Adding a label means updating those seven; renaming one additionally means updating any form
+that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
+stops matching — so that one is checked, not assumed. That table's *no context label* row
+separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
+updating the row too — until CI reads the table directly, the two are kept in sync by hand.
+`file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
+conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other five. They are not context
-labels ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so
-adding or renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
-`context_labels`/reason string/`case` block, an issue form, or `CLAUDE.md`'s **Model
-selection** table. `_ai-draft.yml` consequently cannot see them, which is the intended
-behaviour on all three shapes: a `bug` issue with no context label is refused with *No context
-label found*; a `bug` issue that also carries one routes on that one, exactly as if the kind
-label were absent (so `count` is still 1 and the single-context-label refusal is unaffected);
-and a `bug`+`development` issue must still resolve an anchored `Plan:` line, so unpinned fix
-work fails closed rather than being drafted from free-text issue content. What a kind label
-*does* reach is the doc side: [contribution-workflow.md](contribution-workflow.md)'s **Issue
-conventions** owns the two-axis rule and every other document points at it, so renaming one
-means updating `setup-labels.sh` and that section — and then checking the handful of
+places — `.github/setup-labels.sh` — and in none of the other six. They are not context labels
+([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
+renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
+`context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,
+or `CLAUDE.md`'s **Model selection** table. `_ai-draft.yml` consequently cannot see them, which
+is the intended behaviour on all three shapes: a `bug` issue with no context label is refused
+with *No context label found*; a `bug` issue that also carries one routes on that one, exactly
+as if the kind label were absent (so `count` is still 1 and the single-context-label refusal is
+unaffected); and a `bug`+`development` issue must still resolve an anchored `Plan:` line, so
+unpinned fix work fails closed rather than being drafted from free-text issue content. What a
+kind label *does* reach is the doc side: [contribution-workflow.md](contribution-workflow.md)'s
+**Issue conventions** owns the two-axis rule and every other document points at it, so renaming
+one means updating `setup-labels.sh` and that section — and then checking the handful of
 documents that name the label in passing.
+
+## The docs-only close guard
+
+`.github/workflows/close-guard.yml` fails a PR whose changed files are all under `docs/` and
+which closes a `development`/`testing` issue: a documentation-only diff cannot implement code,
+so closing a code task with one marks the work done while it is still outstanding. It is the
+one **hard** gate on the documentation-to-code link; the two prompt-level checks that back it
+up sit in `write-requirement`'s propagate step and `analysis-reviewer`'s Requirement-coverage
+checklist.
+
+It is deliberately not part of the AI pipeline this document otherwise describes. A checklist
+item in `_ai-review.yml` would be a model's judgement on a PR that reached `needs-review` and
+would gate no merge, and a check in `ai-pipeline.yml` would run only when someone applies a
+label. It is equally deliberately not a job in `ci.yml`, where the project's other required
+status checks live: it needs the `edited` trigger, since the state it refuses is created by
+editing a PR body, and putting `edited` on `ci.yml` would re-run the whole build matrix on
+every body or title edit and cancel in-flight test runs through that file's concurrency group.
+
+It detects closing references through GitHub's own resolution of them, so a keyword in the
+body, an `owner/repo#n` reference, a full issue URL and a link made in the PR's Development
+sidebar all count. It is evaluated as of the last push or edit, though: a sidebar link emits no
+`pull_request` event, so one added after the last event is caught only by the next one.
+
+It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
+in branch protection's required checks on `main`.
 
 ## Pipeline steps
 

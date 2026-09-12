@@ -16,6 +16,7 @@ from custom_components.smart_charging.engines.billing_protection import (
     PeakBreachTracker,
     apply_peak_clamp,
     debounce_baseline_w,
+    peak_headroom_a,
     resolve_effective_peak_limit,
     resolve_monthly_peak_operand,
 )
@@ -620,3 +621,77 @@ def test_closed_loop_still_reacts_to_a_real_household_step_on_the_cycle_it_happe
     )
     settled = [a for a, _ in history[-4:]]
     assert settled == [settled[0]] * 4, f"did not re-settle after the step: {history}"
+
+
+# --- peak_headroom_a: R3's headroom without the clamp (issue #1078) -----------------------
+#
+# Extracted so the `sensor.smart_charging_peak_headroom` readout and R5's escalated maximum
+# permitted rate can ask for the number without `apply_peak_clamp`'s side effects (it mutates a
+# breach tracker, and neither a readout nor a hypothetical may advance one). Its own rows belong
+# here rather than only being exercised transitively through the clamp.
+
+
+def test_peak_headroom_subtracts_the_safety_margin_from_the_limit():
+    """Exact arithmetic, so this row is about the margin term alone and not about flooring:
+    (4.0 kW - 250 W - 1250 W) / 250 V = 10.0 A exactly. Without the margin it would be 11.0."""
+    assert (
+        peak_headroom_a(
+            baseline_w=1250.0,
+            voltage=250.0,
+            effective_peak_limit_kw=4.0,
+            safety_margin_w=250.0,
+        )
+        == 10.0
+    )
+
+
+def test_peak_headroom_floors_to_a_whole_ampere():
+    """Same reason C4's headroom floors: an EVSE that rounds the setpoint up must not be able to
+    overshoot the limit. (4.0 kW - 250 W - 1000 W) / 230 V = 11.96 A of real headroom is reported
+    as 11 A, never 12."""
+    assert (
+        peak_headroom_a(
+            baseline_w=1000.0,
+            voltage=230.0,
+            effective_peak_limit_kw=4.0,
+            safety_margin_w=250.0,
+        )
+        == 11.0
+    )
+
+
+def test_peak_headroom_goes_negative_when_the_baseline_is_already_past_the_target():
+    """Documented contract: negative is returned, not floored to zero. Callers decide what it
+    means -- `apply_peak_clamp` treats it as a breach, while R5's escalated rate floors it at 0
+    so a negative never becomes a nonsense `unreachable` threshold."""
+    assert (
+        peak_headroom_a(
+            baseline_w=9000.0,
+            voltage=230.0,
+            effective_peak_limit_kw=4.0,
+            safety_margin_w=250.0,
+        )
+        < 0
+    )
+
+
+def test_peak_headroom_matches_what_apply_peak_clamp_solves_from():
+    """The drift guard the extraction exists for: the clamp and the standalone helper must never
+    disagree, since the readout and R5's escalated rate both predict the clamp through it."""
+    kwargs = dict(
+        baseline_w=1000.0,
+        voltage=230.0,
+        effective_peak_limit_kw=4.0,
+        safety_margin_w=250.0,
+    )
+    headroom = peak_headroom_a(**kwargs)
+    clamped, _tracker, force_stop = apply_peak_clamp(
+        32.0,
+        **kwargs,
+        min_a=6.0,
+        now=0.0,
+        grace_period_s=60.0,
+        tracker=PeakBreachTracker(breached_since=None),
+    )
+    assert force_stop is False
+    assert clamped == headroom  # a 32 A request is bound by the headroom, nothing else

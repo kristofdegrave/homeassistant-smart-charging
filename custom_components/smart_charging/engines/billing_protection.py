@@ -165,9 +165,13 @@ def apply_peak_clamp(
     never have a chance to elapse (R3: "a momentary breach does not stop
     charging").
     """
-    target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
-    headroom_a = math.floor((target_w - baseline_w) / voltage)
-    clamped = min(desired_current, float(headroom_a))
+    headroom_a = peak_headroom_a(
+        baseline_w=baseline_w,
+        voltage=voltage,
+        effective_peak_limit_kw=effective_peak_limit_kw,
+        safety_margin_w=safety_margin_w,
+    )
+    clamped = min(desired_current, headroom_a)
 
     is_breaching = desired_current >= min_a and headroom_a < min_a
     if is_breaching:
@@ -177,3 +181,26 @@ def apply_peak_clamp(
         return min_a, PeakBreachTracker(breached_since=breached_since), False
 
     return clamped, PeakBreachTracker(breached_since=None), False
+
+
+def peak_headroom_a(
+    *,
+    baseline_w: float,
+    voltage: float,
+    effective_peak_limit_kw: float,
+    safety_margin_w: float,
+) -> float:
+    """R3's peak headroom alone (A), without clamping anything to it.
+
+    The single home for this arithmetic, which had drifted into three copies: `apply_peak_clamp`
+    above, the `sensor.smart_charging_peak_headroom` readout in `coordinator.py`, and R5's
+    escalated maximum permitted rate (issue #1078). The last two need the number without the
+    clamp's side effects -- `apply_peak_clamp` mutates a breach tracker, and neither a readout nor
+    a hypothetical may advance one.
+
+    Floored to a whole ampere for the same reason C4's headroom is: an EVSE that rounds the
+    setpoint up must not be able to overshoot the limit. May be negative when the household
+    baseline alone is already past the target; callers decide what that means for them.
+    """
+    target_w = effective_peak_limit_kw * 1000.0 - safety_margin_w
+    return float(math.floor((target_w - baseline_w) / voltage))
