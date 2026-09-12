@@ -20,6 +20,8 @@ Always read:
 - The accepted ADRs the change touches under `docs/adl/`.
 - The **Quick review checklist** at the end of the `python-anti-patterns` skill — the
   general-Python bar every change is held to, on top of checklist (4) below.
+- The **PR description**, whenever the change is on an open pull request — checklist (6) is
+  judged against it, so a review that never read the body cannot reach a verdict on it.
 
 Read conditionally:
 - The `async-python-patterns` skill — **only when the diff touches async code**. That skill's
@@ -74,6 +76,26 @@ Read conditionally:
 **(5) Safety not weakened**
 - No clamp, floor/cap, or fault behavior is loosened, short-circuited, or made skippable beyond what
   the ADRs allow.
+
+**(6) Runtime check recorded when the change is observable at runtime**
+- When the diff changes what someone can see from the *running* integration — an owned entity's
+  state value, unit of measurement, display precision, device class or state class; the
+  dashboard; a notification; or the current commanded to the charger — the PR description must
+  carry a **Runtime check** section recording what was driven and what was observed: a pasted
+  entity state **including its unit**, or a dashboard screenshot. **A diff touching any of those
+  with no such section is Major.**
+- Judge the section against the diff, not by its presence. Observations that don't cover the
+  behaviour this diff changes, or a bare number pasted where a unit or a precision changed, are
+  the same Major finding — a value without its unit is exactly what a unit defect hides behind.
+  A section that honestly states the behaviour could not be driven before merge and names what
+  was substituted is not a finding; say whether the substitute is adequate.
+- The completion bar this applies is the one `CLAUDE.md`'s **Contribution workflow** section
+  names as the author's self-check before opening the PR. That document owns what counts as
+  observable and what the section must contain — the trigger list above is a summary to decide
+  *whether* to look, and where the two differ that document wins, so read it whenever the
+  section's adequacy is in question. It is deliberately reviewer-checked rather than CI-gated:
+  you are the check. Reviewing a change that has no PR yet: state what its Runtime check will
+  have to record, rather than reporting Major.
 
 ## Output
 
