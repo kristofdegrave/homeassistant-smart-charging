@@ -29,10 +29,11 @@ here.
   already satisfies every such criterion — name the file and the function that does it — or it
   does not. Where it does not, **file a `specs` child issue for that gap as part of this PR**
   and reference it in the body — a `specs` issue, not a task issue, for the reason `CLAUDE.md`'s
-  **Contribution workflow** section gives; that section also owns the `needs-approval`
-  condition this creates, and its **Tracker mechanics** section owns the filing commands. Done
-  when the PR body says which of the two cases holds, and names the `specs` issue if it is the
-  second.
+  **Contribution workflow** section routes to; that section also routes to the `needs-approval`
+  condition this creates, and `CLAUDE.md`'s **Tracker mechanics** section to the filing
+  commands. Behaviour the code does not implement at all is this same second case, not an
+  exemption from it. Done when the PR body says which of the two cases holds, and names the
+  `specs` issue if it is the second.
 
 ## Requirement format
 

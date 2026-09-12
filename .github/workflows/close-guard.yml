@@ -1,0 +1,92 @@
+name: Close guard
+
+# The one hard gate on the documentation-to-code link: a PR whose changed files are all under
+# `docs/` may not close a `development`/`testing` issue. A documentation-only diff cannot
+# implement code, so closing a code task with one silently marks the work done and it is never
+# picked up again (post-mortem 2026-09-11: PR #510 closed development issue #375 as COMPLETED
+# while its own body said the code fix was still outstanding).
+#
+# Why its own workflow rather than a job in ci.yml, which is where the project's other required
+# status checks live: the offending state is created by *editing the PR body*, so the check has
+# to re-run on `edited` as well as on a push. Putting `edited` on ci.yml's trigger would re-run
+# the whole lint/test/hassfest/hacs matrix on every body or title edit, and — with that file's
+# `cancel-in-progress` concurrency group — cancel an in-flight test run each time. A separate
+# workflow gets the trigger it needs and its own concurrency group while still producing exactly
+# what was wanted: a status check, not a model's judgement.
+#
+# Why not `_ai-review.yml`: a checklist item there is a prompt-level check on a PR that reached
+# `needs-review`, and it gates no merge. Why not `ai-pipeline.yml`: that file is a router fired
+# by `pull_request: types: [labeled]`, so a check placed there runs only when someone applies a
+# label. The two prompt-level checks that back this gate up are in
+# `.claude/skills/write-requirement/SKILL.md` and `.claude/agents/analysis-reviewer.md`.
+#
+# NOTE: this reports a status on every PR, but it only *blocks* a merge once
+# `docs-only-close-guard` is added to branch protection's required checks on `main`.
+
+on:
+  pull_request:
+    # `edited` fires on a title or body change -- the event this guard exists to re-check.
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: close-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  docs-only-close-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Refuse a docs-only PR that closes a development/testing issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')
+          if [ -z "$files" ]; then
+            echo "PR changes no files; guard does not apply."
+            exit 0
+          fi
+          if printf '%s\n' "$files" | grep -qv '^docs/'; then
+            echo "Diff touches paths outside docs/; guard does not apply."
+            exit 0
+          fi
+          # GitHub's own resolution of every closing form -- a keyword in the body, a manually
+          # linked issue in the PR's Development sidebar, an owner/repo#n or full-URL reference.
+          # A body regex would miss the last three. Restricted to issues in this repository:
+          # another repo's issue numbers mean nothing to the label lookup below.
+          closed=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json closingIssuesReferences --jq '
+            .closingIssuesReferences[]
+            | select(.repository.owner.login + "/" + .repository.name == env.REPO)
+            | .number')
+          if [ -z "$closed" ]; then
+            echo "Docs-only diff, no closing reference. OK."
+            exit 0
+          fi
+          offenders=""
+          for n in $closed; do
+            # No `|| true` here on purpose: GitHub just resolved these issues, so a failed
+            # lookup is a broken API call or a permissions problem, not a missing issue. The one
+            # hard gate must fail the step rather than read an empty label list as a pass.
+            labels=$(gh api "repos/$REPO/issues/$n" --jq '.labels[].name')
+            for label in $labels; do
+              # `development` and `testing` are context labels -- see
+              # docs/reference/ci-pipeline.md's "Label vocabulary sync", which lists this job
+              # among the places a rename has to reach.
+              case "$label" in
+                development|testing) offenders="$offenders #$n ($label)" ;;
+              esac
+            done
+          done
+          if [ -n "$offenders" ]; then
+            echo "::error::Documentation-only diff closes code task issue(s):$offenders. A docs change cannot complete a development/testing task -- reference them with 'Part of #N' and let the PR carrying the code close them."
+            exit 1
+          fi
+          echo "Docs-only diff closes no development/testing issue. OK."

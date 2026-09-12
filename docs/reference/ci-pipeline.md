@@ -30,23 +30,25 @@ separation `workflow-reviewer`'s non-negotiables checklist enforces).
 
 The context-label vocabulary itself (values and meanings) is documented once, in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. What lives here
-is the CI-side consistency obligation: the same vocabulary is baked into five pipeline
+is the CI-side consistency obligation: the same vocabulary is baked into six pipeline
 places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-draft.yml`'s
 `context_labels` variable, its "No context label found" reason string, and its `case` block;
-and `.github/setup-labels.sh`'s label definitions — and, for the three labels that have an
-issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key too (`adr.yml` → `adr`,
-`requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps that label on every
-issue filed through the form. A sixth place sits outside the pipeline but carries the same
-vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
-Adding a label means updating those six; renaming one additionally means updating any form
-that stamps it. That table's *no context label* row separately mirrors `_ai-review.yml`'s
+`.github/setup-labels.sh`'s label definitions; and `close-guard.yml`'s `case` block, which
+names `development` and `testing` (see **The docs-only close guard** below) — and, for the
+three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
+too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
+that label on every issue filed through the form. A seventh place sits outside the pipeline but
+carries the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
+Adding a label means updating those seven; renaming one additionally means updating any form
+that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
+stops matching — so that one is checked, not assumed. That table's *no context label* row separately mirrors `_ai-review.yml`'s
 path→agent routing, so adding a tree there means updating the row too — until CI reads the
 table directly, the two are kept in sync by hand. `file-task-issue/SKILL.md` doesn't hold
 its own copy — it points at `CLAUDE.md`'s Issue conventions, which forwards to
 [contribution-workflow.md](contribution-workflow.md).
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other five. They are not context
+places — `.github/setup-labels.sh` — and in none of the other six. They are not context
 labels ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so
 adding or renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
 `context_labels`/reason string/`case` block, an issue form, or `CLAUDE.md`'s **Model
@@ -60,6 +62,26 @@ work fails closed rather than being drafted from free-text issue content. What a
 conventions** owns the two-axis rule and every other document points at it, so renaming one
 means updating `setup-labels.sh` and that section — and then checking the handful of
 documents that name the label in passing.
+
+## The docs-only close guard
+
+`.github/workflows/close-guard.yml` fails a PR whose changed files are all under `docs/` and
+which closes a `development`/`testing` issue: a documentation-only diff cannot implement code,
+so closing a code task with one marks the work done while it is still outstanding. It is the
+one **hard** gate on the documentation-to-code link; the two prompt-level checks that back it
+up sit in `write-requirement`'s propagate step and `analysis-reviewer`'s Requirement-coverage
+checklist.
+
+It is deliberately not part of the AI pipeline this document otherwise describes. A checklist
+item in `_ai-review.yml` would be a model's judgement on a PR that reached `needs-review` and
+would gate no merge, and a check in `ai-pipeline.yml` would run only when someone applies a
+label. It is equally deliberately not a job in `ci.yml`, where the project's other required
+status checks live: it needs the `edited` trigger, since the state it refuses is created by
+editing a PR body, and putting `edited` on `ci.yml` would re-run the whole build matrix on
+every body or title edit and cancel in-flight test runs through that file's concurrency group.
+
+It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
+in branch protection's required checks on `main`.
 
 ## Pipeline steps
 
