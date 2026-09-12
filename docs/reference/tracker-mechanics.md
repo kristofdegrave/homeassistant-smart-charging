@@ -303,8 +303,8 @@ assuming a batch all landed.
 ## Relationship to the review-mechanics skills
 
 `submit-pr-review`, `finalize-pr-review` and `address-review-remarks` carry tracker commands
-of their own. Which of their commands may be
-written out rather than routed, and which file wins where both spell the same one out, is
+of their own. Which of their commands may be written out rather than routed, and which file
+wins where both spell the same one out, is
 settled by [ai-authoring.md](ai-authoring.md)'s **Tracker-dependent mechanics route through
 `CLAUDE.md`** and is not re-argued here. What this file never covers is *what a review says* —
 payload shape, severity grouping, verdict marker, and — `resolve-review-thread`'s alone —
