@@ -68,7 +68,7 @@ matching current practice (`git log`):
 | `specs` (implementation spec: design + TDD plan, `docs/plans/**`) | `specs:` for a new plan, `docs:` for a revision/review pass | `specs: nine-step topic-grouped config-flow implementation design + TDD plan` |
 | `documentation` (design docs, `docs/design/**`) | `docs:` | `docs: revise the volatility-based service decomposition` (illustrative) |
 | `development` / `testing` | `T<task-number>:` matching the issue's `Plan:` line | `T3: config flow accepts a low-tariff state-translation table` |
-| anything else (a fix, refactor, chore not tied to a plan task) | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
+| anything else (a fix, refactor, chore not tied to a plan task) — including an issue carrying only a `bug`/`enhancement` kind label, which has no context label to infer from | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
 
 CI's `_ai-draft.yml` uses its own coarser commit-prefix mapping for the initial draft commit
 only — see [ci-pipeline.md](ci-pipeline.md).
