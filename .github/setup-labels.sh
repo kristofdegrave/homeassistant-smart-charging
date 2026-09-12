@@ -9,10 +9,26 @@
 # Prerequisites: `gh` installed and authenticated (gh auth login), run from the repo root.
 # Idempotent: `gh label create --force` updates an existing label instead of erroring.
 # Run once: bash .github/setup-labels.sh
+#
+# A description longer than GitHub's 100-character cap is rejected by the API, so `label()`
+# refuses it up front, and the final pass re-reads the repo's labels to confirm each one
+# actually carries the description defined here — "the script ran" is not "the labels are
+# right".
 
 set -euo pipefail
 
-label() { gh label create "$1" --color "$2" --description "$3" --force; }
+expected=$(mktemp)
+actual=$(mktemp)
+trap 'rm -f "$expected" "$actual"' EXIT
+
+label() {
+  if [ "${#3}" -gt 100 ]; then
+    echo "error: description for label '$1' is ${#3} characters, over GitHub's 100 limit." >&2
+    exit 1
+  fi
+  printf '%s\t%s\n' "$1" "$3" >>"$expected"
+  gh label create "$1" --color "$2" --description "$3" --force
+}
 
 # --- Pre-triage label ---------------------------------------------------------------------
 label idea            f2a101 "Not yet scoped — work it with the work-idea skill before adding needs-draft"
@@ -37,7 +53,26 @@ label documentation ededed "Design-doc change (docs/design/**); review only, not
 # GitHub creates both by default with a vaguer description; --force rewrites it to the
 # meaning docs/reference/contribution-workflow.md's Issue conventions gives them. Colors are
 # GitHub's own defaults, so re-running this never recolors labels already on open issues.
-label bug         d73a4a "Defect in already-shipped behaviour — verify the claim first; pair with a context label once the fixing artifact is known"
+label bug         d73a4a "Defect in shipped behaviour — verify the claim first; pair with a context label once known"
 label enhancement a2eeef "Improvement to already-shipped behaviour — pair with a context label once the artifact is known"
 
-echo "Labels created/updated."
+# --- Verify the repo now matches this file ------------------------------------------------
+# --limit must exceed the label count (this file's, plus GitHub's own defaults) or the
+# read-back silently truncates and reports false mismatches.
+gh label list --limit 200 --json name,description --jq '.[] | [.name, .description] | @tsv' >"$actual"
+
+tab=$(printf '\t')
+status=0
+while IFS= read -r want; do
+  grep -Fqx -- "$want" "$actual" || {
+    echo "mismatch: label '${want%%"$tab"*}' does not carry the description defined here." >&2
+    status=1
+  }
+done <"$expected"
+
+if [ "$status" -ne 0 ]; then
+  echo "Labels written, but the repo does not match this file — see mismatches above." >&2
+  exit 1
+fi
+
+echo "Labels created/updated and verified."
