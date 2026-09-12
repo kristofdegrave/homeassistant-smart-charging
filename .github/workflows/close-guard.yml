@@ -1,0 +1,85 @@
+name: Close guard
+
+# The one hard gate on the documentation-to-code link: a PR whose changed files are all under
+# `docs/` may not close a `development`/`testing` issue, because a documentation-only diff cannot
+# implement code and closing a code task with one marks the work done while it is still
+# outstanding. Why it is a status check rather than a review-prompt checklist item, why it is its
+# own workflow rather than a job in ci.yml, and the branch-protection step it still needs, are in
+# docs/reference/ci-pipeline.md's "The docs-only close guard" -- the single source for that
+# argument; this header does not restate it.
+
+on:
+  pull_request:
+    # `edited` fires on a title or body change, which is how the refused state is usually
+    # created: a closing reference added after the last push. The check is therefore evaluated
+    # as of the last push or edit -- an issue linked through the PR's Development sidebar emits
+    # no event at all, so that one is only caught by the next push or edit.
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: close-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  docs-only-close-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Refuse a docs-only PR that closes a development/testing issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')
+          if [ -z "$files" ]; then
+            echo "PR changes no files; guard does not apply."
+            exit 0
+          fi
+          if printf '%s\n' "$files" | grep -qv '^docs/'; then
+            echo "Diff touches paths outside docs/; guard does not apply."
+            exit 0
+          fi
+          # GitHub's own resolution of every closing form -- a keyword in the body, a linked
+          # issue in the PR's Development sidebar, an owner/repo#n or full-URL reference. A body
+          # regex would miss the last three. Filtering on `.url` keeps this to issues in *this*
+          # repository (another repo's issue numbers mean nothing to the label lookup below) and
+          # fails closed: if the field is ever absent, `startswith` on null exits jq non-zero and
+          # `set -e` fails the step, rather than yielding an empty list that reads as a pass.
+          closed=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json closingIssuesReferences --jq '
+            .closingIssuesReferences[]
+            | select(.url | startswith("https://github.com/" + env.REPO + "/issues/"))
+            | .number')
+          if [ -z "$closed" ]; then
+            echo "Docs-only diff, no closing reference. OK."
+            exit 0
+          fi
+          offenders=""
+          for n in $closed; do
+            # No `|| true` here on purpose: GitHub has just resolved these issues, so a failed
+            # lookup is a broken call or a permissions problem, never a missing issue. The one
+            # hard gate must fail the step rather than read an empty label list as a pass.
+            # Command substitution, not a process substitution: a failure inside `< <(...)`
+            # would not reach `set -e`. Read line by line -- a label may contain spaces.
+            labels=$(gh api "repos/$REPO/issues/$n" --jq '.labels[].name')
+            while IFS= read -r label; do
+              # `development` and `testing` are context labels -- see
+              # docs/reference/ci-pipeline.md's "Label vocabulary sync", which lists this block
+              # among the places a rename has to reach.
+              case "$label" in
+                development|testing) offenders="$offenders #$n ($label)" ;;
+              esac
+            done <<< "$labels"
+          done
+          if [ -n "$offenders" ]; then
+            echo "::error::Documentation-only diff closes code task issue(s):$offenders. A docs change cannot complete a development/testing task -- reference them with 'Part of #N' and let the PR carrying the code close them."
+            exit 1
+          fi
+          echo "Docs-only diff closes no development/testing issue. OK."

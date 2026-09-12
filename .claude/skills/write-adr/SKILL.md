@@ -74,7 +74,17 @@ domain/business rules) — check those before drafting, not just the headline de
   multi-PR convention for that issue. The ADL row (see the Self-check bullet above) and
   any supersession Status-line edit belong to the same ADR's PR, not a separate one.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences
-  to reflect a change of mind — write a new ADR that supersedes it.
+  to reflect a change of mind — write a new ADR that supersedes it. `address-review-remarks`
+  carries the same rule for CI; a change here belongs in both. Two guards, because the rule is
+  easy to over-apply:
+  - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`.
+    Every ADR is drafted with `Status: Accepted` in its own PR, so a working-tree read makes
+    an ADR still being drafted look immutable. If the file doesn't exist on the base, or its
+    Status there isn't already `Accepted`, normal fixes apply.
+  - **Only the *decision* is immutable, not the write-up.** A finding about a missing Con, a
+    Decision that doesn't reference its options, or a Consequence that doesn't follow is fixed
+    normally. Only a finding arguing an already-Accepted *decision* is wrong becomes a
+    **Skipped** entry, recorded as a candidate for a superseding ADR.
 - **List the rejected options for real.** An ADR whose only "considered option" is the
   one that was chosen isn't using the template — go back and name what else was on the
   table, even if it's just "do nothing" / "keep the status quo".

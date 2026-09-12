@@ -32,6 +32,27 @@ If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for th
 - The document satisfies every requirement it claims, and each claim is actually supported by its content.
 - Nothing it describes contradicts another analysis document.
 - No requirement is mis-homed (a use-case satisfies reqs; it should not restate mechanism/resolution logic).
+- **Code backing — for changed acceptance criteria only.** In scope are the acceptance criteria
+  and constraint rows of `requirements.md` that this change *adds or alters*, and nothing else:
+  read them off the diff, or, when you were given no diff, off the list the caller names. A
+  use-case's Given/When/Then scenarios are deliberately **out of scope** — a requirement's home
+  is `requirements.md`, and a use-case restating one does not change it — as is any change that
+  alters no such criterion: wording, formatting, a glossary entry, a renumbering. Where nothing
+  is in scope, say so in one line and move on. For each criterion that is, run **one** targeted
+  `Grep` over `custom_components/` for the behaviour it constrains (the entity id, the default,
+  the bound, the precedence rule it names) and open at most the one file that matches. **Stop
+  after three criteria** — say the set was sampled and name the three you took; six tool calls
+  is the most this check may cost a review, because a `docs/analysis/` review runs on the
+  lighter turn ceiling and a truncated review is re-run from cold. Where no code implements a
+  criterion, or the code implements something measurably different (a different default, bound,
+  unit or ordering), a filed `specs` issue discharges it — the condition is the one `CLAUDE.md`'s
+  **Contribution workflow** section routes to. **Severity depends on whether you can check
+  that**: given the PR body and no such reference, report **Major**; not given the PR body,
+  report **Minor** and say the gap is Major unless a `specs` issue has been filed for it. Never
+  report Major on evidence you were not given — a new requirement's code legitimately does not
+  exist yet, and this check must not turn every requirement PR into a review cycle. This is one
+  lookup per changed criterion, capped at three; it is never a sweep of the codebase, and the
+  read-first list above does not grow.
 
 **(3) Document quality**
 - **"What, not how"** — no code/HA implementation detail (Python modules, timer helpers, persistence). Entity ids that are part of the ubiquitous language are fine.
