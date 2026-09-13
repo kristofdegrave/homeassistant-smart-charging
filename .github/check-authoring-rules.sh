@@ -47,8 +47,18 @@ fi
 # agree with, so it should stay short enough to read.
 ALLOW_FILE="${ALLOW_FILE:-.github/authoring-rule-allowlist.tsv}"
 
+cd "$(git rev-parse --show-toplevel)" || exit 2
+
 violations=0
 current=""
+
+# Captured to a file rather than piped from a process substitution: that form puts git's exit
+# status out of reach of both errexit and pipefail, so a failed diff would read as an empty
+# change and the run would report clean. A merge gate has to fail closed.
+DIFF=$(mktemp)
+trap 'rm -f "$DIFF"' EXIT
+git -c core.quotePath=false diff --unified=0 "$BASE...HEAD" \
+  -- '.claude/skills/*' '.claude/agents/*' > "$DIFF"
 
 # --unified=0 so context lines never masquerade as additions.
 #
@@ -56,7 +66,9 @@ current=""
 # every content line carries a +, - or space prefix, so a line of prose cannot forge a
 # `diff --git` header — whereas a skill documenting diff syntax can contain a line starting
 # `++`, which renders as `+++ b/...` and would otherwise retarget every later violation to the
-# wrong file. `diff --git` also survives core.quotePath, where `+++ "b/..."` does not match.
+# wrong file. The diff below sets core.quotePath=false so a non-ASCII path stays unquoted and
+# the header keeps matching; an unmatched header would leave `current` pointing at the previous
+# file, which is the mis-attribution this switch exists to prevent, so it is also guarded below.
 while IFS= read -r line; do
   case "$line" in
     'diff --git a/'*)
@@ -73,24 +85,35 @@ while IFS= read -r line; do
 
   # A markdown link whose target is a project documentation file, relative or repo-rooted.
   # A bare path in prose is a name, not a route, and is deliberately not matched.
+  # Match up to .md and no further, so none of the link forms that carry a tail can slip
+  # past: an #anchor (the most natural routing form, and the style this repo's own docs use),
+  # a "title", an <angle> wrapper, or a ./ or / prefix. Normalisation then strips the opener
+  # and any leading ./ ../ / so an allowlist entry does not depend on how deep the artifact
+  # sits or how the author spelled the relative path.
   matches=$(printf '%s\n' "$body" \
-    | grep -oE '\]\((\.\./)*docs/[A-Za-z0-9._/-]+\.md\)' \
-    | sed -E 's/^\]\(//; s/\)$//; s#^(\.\./)+##' || true)
+    | grep -oE '\]\(<?(\.*/)*docs/[A-Za-z0-9._/-]+\.md' \
+    | sed -E 's/^\]\(<?//; s#^(\.*/)+##' || true)
   [ -z "$matches" ] && continue
 
   while IFS= read -r path; do
     [ -z "$path" ] && continue
-    if [ -f "$ALLOW_FILE" ] && grep -qF "$(printf '%s\t%s' "$current" "$path")" "$ALLOW_FILE"; then
+    if [ -f "$ALLOW_FILE" ] \
+       && awk -F'\t' -v a="$current" -v p="$path" '$1==a && $2==p {found=1} END{exit !found}' \
+            "$ALLOW_FILE"; then
       continue
     fi
 
-    printf '%s: names %s\n' "$current" "$path"
+    if [ -z "$current" ]; then
+      echo "check-authoring-rules: parse error — a change with no file header" >&2
+      exit 2
+    fi
+    printf '%s: links to %s\n' "$current" "$path"
     printf '    %s\n' "$body"
     violations=$((violations + 1))
   done <<EOF
 $matches
 EOF
-done < <(git diff --unified=0 "$BASE...HEAD" -- '.claude/skills/*' '.claude/agents/*')
+done < "$DIFF"
 
 if [ "$violations" -gt 0 ]; then
   cat >&2 <<'MSG'

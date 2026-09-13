@@ -66,9 +66,13 @@ case_add "a link from an agent is rejected" 1 \
 case_add "a repo-rooted link is rejected" 1 \
   "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md" \
   'Per [ADR-0009](docs/adl/0009-testing-strategy.md), pick the harness.'
-case_add "two links on one line are both reported" 1 \
-  "docs/adl/0037-scenario-timeline-test-tier.md" ".claude/skills/demo/SKILL.md" \
+case_add "two links on one line: the second is reported too" 1 \
+  "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md" \
   'narrowed by [A](../../../docs/adl/0037-scenario-timeline-test-tier.md), reading [B](../../../docs/adl/0009-testing-strategy.md)'
+
+case_add "an anchored link is rejected" 1   "docs/reference/contribution-workflow.md" ".claude/skills/demo/SKILL.md"   'See [Step 3](../../../docs/reference/contribution-workflow.md#step-3-review).'
+case_add "a ./-prefixed link is rejected" 1   "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md"   'Per [ADR-0009](./docs/adl/0009-testing-strategy.md), pick the harness.'
+case_add "a titled link is rejected" 1   "docs/reference/ai-authoring.md" ".claude/skills/demo/SKILL.md"   'Read [it](../../docs/reference/ai-authoring.md "the reference") first.'
 
 # --- a bare path is a name, not a route, and is legal --------------------------------------
 # These are the subject-matter cases the rule expressly keeps named: the template a write-*
@@ -83,6 +87,10 @@ case_add "a CLAUDE.md section pointer is the correct form" 0 - \
   ".claude/skills/demo/SKILL.md" "See \`CLAUDE.md\`'s **Contribution workflow** section."
 case_add "CLAUDE.md itself is not project documentation here" 0 - \
   ".claude/skills/demo/SKILL.md" 'Your instructions are this skill and CLAUDE.md.'
+case_add "a link to a CLAUDE.md section is the correct form" 0 - \
+  ".claude/skills/demo/SKILL.md" 'See [Contribution workflow](../../CLAUDE.md#contribution-workflow).'
+case_add "an intra-skill reference link stays legal" 0 - \
+  ".claude/skills/demo/SKILL.md" 'Detail in [the notes](references/details.md).'
 
 # --- scope: only the watched trees, only added lines ---------------------------------------
 case_add "a link outside the watched trees is ignored" 0 - \
@@ -135,7 +143,7 @@ if [ -n "$dir" ]; then
   out=$(cd "$dir" && bash "$SCRIPT" base 2>&1); rc=$?
   if [ "$rc" != 1 ]; then
     fail_case "a violation is attributed to the right file" "expected exit 1, got $rc" "$out"
-  elif printf '%s' "$out" | grep -qF '.claude/skills/dirty/SKILL.md: names'; then
+  elif printf '%s' "$out" | grep -qF '.claude/skills/dirty/SKILL.md: links to'; then
     ok_case "a violation is attributed to the right file"
   else
     fail_case "a violation is attributed to the right file" "wrong attribution" "$out"
@@ -185,5 +193,11 @@ if [ -n "$dir" ]; then
   rm -rf "$dir"
 fi
 
-printf '\n%d passed, %d failed\n' "$pass" "$fail"
+EXPECTED=22
+printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
+if [ $((pass + fail)) -ne "$EXPECTED" ]; then
+  printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \
+    $((pass + fail)) "$EXPECTED"
+  exit 1
+fi
 [ "$fail" -eq 0 ]
