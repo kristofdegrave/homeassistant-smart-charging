@@ -56,7 +56,9 @@ message conventions).
    disagreement instead of continuing; that usually needs a judgment call the loop can't make.
    This line is the **only** statement of the interactive cap — everything that needs the
    number routes here instead of repeating it.
-7. **Label `needs-approval`** once a review pass comes back clean. Board **Status** stays
+7. **Label `needs-approval`** once a review pass comes back clean — and a pass whose
+   remaining findings are all Minor/Nit counts as clean once they are fixed, the same bar CI
+   applies to its own verdict, so the final round needs no further pass to confirm it. Board **Status** stays
    `In review` — this only signals no review/fix work is pending, it doesn't replace manual
    merge approval.
 8. **Manual PR comments**, at any point, are handled like step 5: fix, reply, resolve. Don't

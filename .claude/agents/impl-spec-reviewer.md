@@ -40,9 +40,10 @@ For cross-document consistency:
 - Behavioral rules (formulas, thresholds, resolution order, R-numbers) are attributed to their
   owning analysis doc as **test anchors**, not re-derived as if the spec owned them. **Flag any
   restatement** that could drift from `control-cycle.md` / `resolution-rules.md` / `requirements.md`.
-- Each plan document carries only what it alone can say — the design doc the `D-n` decisions,
-  the concrete structure they land in, the service mapping, deferrals, testing and packaging;
-  the TDD plan the task entries. **Flag restated ADR rationale** (the *why* belongs in the ADR
+- Each plan document carries only what it alone can say. For the design doc that is the cap
+  `write-impl-spec` states, item for item: the slice's scope and success criteria, install-time
+  config, the `D-n` decisions and the concrete structure they land in, the service mapping,
+  deliberate deferrals, testing approach and packaging. The TDD plan carries the task entries. **Flag restated ADR rationale** (the *why* belongs in the ADR
   the spec cites) **and per-task narrative that states no fact the task entry already carries**
   — the latter in the TDD plan, where those entries live.
 - **A behavioural rule (a formula, a threshold, a resolution order) that appears only in the

@@ -7,7 +7,7 @@ description: Use when authoring an implementation spec and TDD plan for a slice 
 
 Author the two documents that sit between the architecture and the code for one build slice:
 a **design** (`docs/plans/YYYY-MM-DD-<slice>-design.md` — the slice's scope and the concrete
-decisions it makes; step 3 below is the list of what it carries) and a **TDD plan**
+decisions it makes; Step 1's item 3 below lists what it carries) and a **TDD plan**
 (`docs/plans/YYYY-MM-DD-<slice>.md` — bite-sized task-by-task build order). Both **derive** from an
 already-approved slice of `docs/design/project-plan.md`; they do not re-decompose the system or
 invent behavior.
@@ -39,8 +39,8 @@ steps here.
      (`D-n`) this slice makes and the concrete structure they land in (files, classes,
      signatures), a table **mapping every piece to its named service** in `system-design.md`,
      deliberate deferrals (with any safety caveat stated out loud), testing approach, and
-     packaging. This list is the cap: anything else is a copy of a doc that owns it — cut it
-     per **Cap both plan documents** below.
+     packaging. This list is the cap: anything outside it is a **cut candidate**, not yet a
+     copy — **Cap both plan documents** below is the test that decides which it is.
   4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized
      tasks (failing test → minimal impl → green → commit), each naming exact file paths, the
      ADR it honors, and its **test boundary per ADR-0009** (plain pytest for `modes/`/
@@ -65,24 +65,25 @@ first two bullets in either document, the third in the TDD plan, where the task 
 - **A restated formula or threshold.** Cite the owning analysis doc and the R-number instead,
   as a test anchor. `develop-task` already sends the author to `control-cycle.md`,
   `resolution-rules.md`, `requirements.md` and the use-case for the rule itself, so the plan's
-  copy is only a third version to keep in sync.
+  copy is only a further version to keep in sync.
 - **Restated ADR rationale.** Name the ADR and what it obliges this slice to do; the *why*
   stays in the ADR, where a reader who needs it will look.
-- **Per-task narrative that states no fact the task does not already carry** (the TDD plan's
-  half of this) — a paragraph re-telling a task whose own entry already names its file, its
-  failing test and its boundary.
+- **Per-task narrative that states no fact the task does not already carry** — a paragraph
+  re-telling a task whose own entry already names its file, its failing test and its boundary.
 
 **This removes copies, never content that exists only in the plan.** Before cutting anything,
 find the doc that owns it and read what it actually says:
 
 - It says the same thing → a duplicate. Cut it; cite the source.
-- No doc owns it, or none says it → **not a duplicate — an undocumented rule.** A behavioural
-  rule that lives only in a plan is a rule the analysis layer is missing, and the plan holds
-  the only copy of it. So, in this order: **keep the text exactly as it stands** — cutting it
-  here loses it; say so out loud in the PR body; and open the issue against the owning doc per
-  *derive, don't design*. Only once that doc states the rule does the text here become a
-  duplicate, replaced then by a citation to it. That, and never a deletion in this document,
-  is the end state.
+- No doc owns it, or none says it → **not a duplicate.** First ask what kind of thing it is.
+  A `D-n` decision, a file layout, a signature, a test boundary appears only in the plan **by
+  construction** — that is the plan doing its job, and there is nothing to do. A *behavioural*
+  rule — a formula, a threshold, a resolution order — is different: it is a rule the analysis
+  layer is missing, and the plan holds the only copy. For that one, in this order: **keep the
+  text exactly as it stands** — cutting it here loses it; say so out loud in the PR body; and
+  open the issue against the owning doc per *derive, don't design*. Only once that doc states
+  the rule does the text here become a duplicate, replaced then by a citation to it. That, and
+  never a deletion in this document, is the end state.
 - It says something **different** → stop. One of the two is wrong, and no wording of the plan
   resolves it; take it to the owning doc rather than writing a paragraph here that explains the
   discrepancy away.
