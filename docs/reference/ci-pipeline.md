@@ -43,7 +43,7 @@ Adding a label means updating those seven; renaming one additionally means updat
 that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
 stops matching — so that one is checked, not assumed.
 
-Both workers now read the table rather than carrying their own copy of the work-file and checklist mappings, so the
+Both workers read the table rather than carrying their own copy of the work-file and checklist mappings, so the
 row is the *checklist selection* rather than a mirror of it — but it is not the whole routing:
 `ai-pipeline.yml`'s path filter decides whether a job runs at all, and `_ai-review.yml`'s diff
 enumeration decides which files a checklist can see. Adding a tree still means editing all
@@ -144,8 +144,9 @@ in branch protection's required checks on `main`.
   rather than in the workflow —
   and self-applies each against the files it covers, posting findings via `submit-pr-review`'s
   CI mode and ending in a `clean`/`remarks` verdict marker. Because that table comes from the
-  PR's own merge ref, a diff touching the Model selection section or a checklist it names is
-  reviewed against base-branch copies staged into the runner's temp directory, and the
+  PR's own merge ref, a diff touching `CLAUDE.md`, `.claude/`, `docs/reference/` or the label
+  script — computed from the changed paths by the workflow, not judged from the diff's content
+  — is reviewed against base-branch copies staged into the runner's temp directory, and the
   modification is itself reported — a PR must not be able to apply its own rewritten routing to
   itself. As with the drafter, the table
   column may name an agent definition or a work-type review document; the worker follows what
