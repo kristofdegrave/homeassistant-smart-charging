@@ -29,7 +29,7 @@ what a correct fix looks like. The row's *Work model* column says which model it
 the human partner can switch it.
 
 Where the work file carries a rule about changing an already-merged artifact, that rule beats
-the finding, **including its own guards on when it applies** — `write-adr`'s Accepted-ADR
+the finding, **including its own guards on when it applies** — the `adr` row's Accepted-ADR
 immutability is the one to know, and reading it means reading the two conditions it attaches.
 
 ## Then

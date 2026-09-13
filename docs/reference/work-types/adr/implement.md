@@ -23,7 +23,8 @@ Check those before drafting, not just the headline definition.
   existing `docs/adl/NNNN-*`, zero-padded to 4 digits. Never reuse or renumber; a superseded
   ADR keeps its number.
 - **Branch naming exception** (the general rule this overrides is in the contribution workflow,
-  which sanctions a work type overriding the number segment when it states the reason): an ADR
+  which lets a context label's own work file override the number segment when that file states
+  the exception and its reason — this is that statement): an ADR
   branches as `adr/<adr-number>` — its own zero-padded sequential number from the step above,
   not the issue number. Since that number comes from what's merged on `main` rather than a
   unique issue number, it isn't collision-free across concurrent ADRs: **only one ADR may be in
@@ -54,8 +55,8 @@ Check those before drafting, not just the headline definition.
 - **Step 3's review**: the reviewer checks template conformance, that every option has a
   genuine Pro and Con, that the Decision references those trade-offs, that Consequences
   actually follow, and cross-ADR consistency (including the immutability rule). Take it from
-  the `adr` row of the same table, not `analysis-reviewer` — that agent is scoped to
-  `docs/analysis/**` and doesn't cover `docs/adl/**`.
+  the `adr` row of `CLAUDE.md`'s **Model selection** table, not `analysis-reviewer` — that
+  agent is scoped to `docs/analysis/**` and doesn't cover `docs/adl/**`.
 
 ## Rules
 

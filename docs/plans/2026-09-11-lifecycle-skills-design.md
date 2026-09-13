@@ -57,6 +57,10 @@ letting it happen implicitly.
 4. **Target layout, reached in a later phase**: one directory per label,
    `work-types/<label>/implement.md` + `review.md`, with a single generic reviewer agent. That
    move touches the same CI files as the CI follow-up and is done together with it.
+
+   *Decisions 3 and 4 were amended in practice — see* **Deviation: per-label slices ahead of
+   CI** *under* Phasing. *The work files began moving before the CI change, which turned out to
+   be possible without touching either worker.*
 5. **The loop (step 6) stays with the human partner.** Each skill ends by naming the next one;
    nothing chains autonomously.
 
@@ -68,7 +72,7 @@ Lives in `CLAUDE.md`. One row per context label.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
@@ -214,7 +218,7 @@ per-label tree with one generic reviewer the natural end state:
 
 ```text
 docs/reference/work-types/
-  adr/implement.md          ← today's write-adr SKILL.md body
+  adr/implement.md          ← the write-adr body (moved; the skill stays as the entry point)
   adr/review.md             ← today's adr-reviewer checklist
   uc/implement.md, uc/review.md
   requirement/implement.md, requirement/review.md   (review.md a pointer to uc/review.md, or the reverse)
@@ -304,6 +308,31 @@ It is **not** done in this phase because it renames files CI references by path 
 name; moving them without touching `_ai-draft.yml` and `_ai-review.yml` breaks both workers,
 and keeping the old files alongside as pointers would be the duplication this design exists to
 remove. The table's file columns are written so the migration only re-points them.
+
+### Deviation: per-label slices ahead of CI
+
+That blocker turned out to be avoidable, and the work files began moving in phase 1, one label
+at a time, with `.github/` untouched. Recorded here because it is the most-replicated decision
+in the strand and the paragraph above says the opposite.
+
+What resolves it is that **the skill keeps its name and directory and becomes the entry
+point**. CI follows `write-adr` by name exactly as before; the skill routes to the `adr` row of
+the table; the row names the work file. Nothing CI references by path or by skill name is
+renamed, so neither worker changes.
+
+The "old files alongside as pointers would be the duplication this design exists to remove"
+objection does not apply to that shape either: the shim holds no per-type content to duplicate.
+It states what the artifact is, routes to the row, and stops — the duplication the objection
+guards against is the same *instructions* living in two files, which is exactly what a content
+move prevents.
+
+Two consequences worth stating, since the remaining labels inherit them:
+
+- Each slice is documentation-only, so it carries no CI risk and needs no coordination with
+  the CI change. The order between them stops mattering.
+- The shims are not permanent. Once the workers resolve their files from the table rather than
+  by skill name, the entry points can go, and the table's *How the work is done* column drops
+  back to one path per row.
 
 ---
 

@@ -37,11 +37,13 @@ places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-
 names `development` and `testing` (see **The docs-only close guard** below) — and, for the
 three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
 too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
-that label on every issue filed through the form. A seventh place sits outside the pipeline but
-carries the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
-Adding a label means updating those seven; renaming one additionally means updating any form
-that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
-stops matching — so that one is checked, not assumed. That table's *no context label* row
+that label on every issue filed through the form. Two more places sit outside the pipeline and
+carry the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label,
+and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
+a label means moving a directory, not editing a line. Adding a label means updating those
+eight; renaming one additionally means updating any form that stamps it. A rename that misses
+`close-guard.yml` fails open silently — its `case` simply stops matching — so that one is
+checked, not assumed. That table's *no context label* row
 separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
 updating the row too — until CI reads the table directly, the two are kept in sync by hand.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue

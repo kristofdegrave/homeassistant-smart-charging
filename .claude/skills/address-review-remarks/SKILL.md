@@ -51,7 +51,7 @@ Fixing is re-authoring — work with the same context the original author had:
   rules (glossary-first, entity-catalog columns, reference-don't-restate, state models for
   mode UCs), and common-mistakes list define what a correct fix looks like. Those rules are
   deliberately not restated here.
-- **For an ADR (`docs/adl/NNNN-*.md`): apply the `write-adr` skill in full**, with one
+- **For an ADR (`docs/adl/NNNN-*.md`): apply the `adr` row's work file in full**, with one
   overriding rule: **never edit an Accepted ADR's Context/Decision/Consequences** to
   address a finding, even if the finding says the decision itself was wrong. Determine
   "Accepted" from the **base branch**, not the working tree — run
@@ -64,8 +64,8 @@ Fixing is re-authoring — work with the same context the original author had:
   *write-up* (a missing Con, a Decision that doesn't reference its options, a Consequence
   that doesn't follow) are fixed normally.
 - For other analysis docs: follow the flow document standard and review protocol in CLAUDE.md.
-- Run the skill's 6Cs self-check on the sections you changed before writing the summary
-  (ADRs are exempt — see `write-adr`'s Self-check, which replaces the 6Cs pass for ADRs).
+- Run the 6Cs self-check on the sections you changed before writing the summary (ADRs are
+  exempt — the `adr` row's work file carries a self-check that replaces the 6Cs pass for them).
 
 ## 4. Acknowledge every human comment in its thread
 
