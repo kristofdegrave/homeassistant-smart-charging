@@ -39,9 +39,11 @@ adopted.
 
 **Scope of this design: the local, interactive session.** CI must follow the same design,
 but is deliberately left to a later phase (see *Phasing*) so that the local shape is settled
-first. Where a local change would alter CI behaviour as a side effect — because CI loads the
-same skill files — this design says so and sequences it into that later phase rather than
-letting it happen implicitly.
+first. That sequencing once extended to a blanket rule — a local change that would alter CI
+behaviour got deferred to the later phase — which has since been **retired** (see *Phasing*).
+The rule now is narrower: a CI change lands in the slice that needs it, argued on its own
+merits and named in that slice, never as an unremarked side effect of editing a file CI also
+loads.
 
 ---
 
@@ -148,8 +150,9 @@ omission is easy to fill in wrongly:
   reaches a worker at all under a restrictive `--allowed-tools` is not verifiable from this
   repo — which is why this design takes the conservative branch regardless.
   A type-agnostic `fix` that CI could select by description matching would widen CI's blast
-  radius with no CI file touched — the same argument that keeps `address-review-remarks`
-  untouched in this phase. So `implement`, `review` and `fix` each say in their description
+  radius with no CI file touched — a widening no CI file records, which is the part that makes
+  it unreviewable rather than merely early.
+  So `implement`, `review` and `fix` each say in their description
   that they are for the interactive session only and name CI's entry for that step
   (`_ai-draft.yml`'s prompt, `_ai-review.yml`'s prompt, `address-review-remarks`
   respectively). `implement` in particular must never run in CI: the Claude draft worker
@@ -348,9 +351,11 @@ Two consequences worth stating, since the remaining labels inherit them:
   different exposure from one, so the `_ai-fix.yml` per-type allow-list below is no longer only
   a precondition for a type-agnostic fix skill — it is what bounds this, and belongs before the
   bulk of the slices rather than after.
-- A slice needs no *file-level* coordination with the CI change: neither worker is touched, so
-  the two never conflict — beyond the one worker edit the slice itself must make, narrowing
-  that label's `add_paths` (above). What the bullet above adds is a *sequencing* constraint on
+- A slice needs no *file-level* coordination with the CI change beyond two worker edits it
+  makes itself, so the two never conflict. The first is per-slice: narrowing that label's
+  `add_paths` (above). The second was paid once, by the first slice — `_ai-fix.yml`'s prompt
+  now dispatches through the table instead of naming artifact types, so the remaining slices
+  need no edit there at all. What the bullet above adds is a *sequencing* constraint on
   one part
   of that change — the `_ai-fix.yml` per-type allow-list is what bounds the exposure the work
   files create, so it is pulled out of phase 2's "starts once phase 1 has stabilised" and
@@ -410,7 +415,9 @@ the slices**, not after phase 1 stabilises. Everything else below keeps its phas
 
 - `_ai-fix.yml` gains a real per-type path allow-list
   **(pulled ahead — see above)** (staging scoped by the row's trees, not
-  the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
+  the current post-hoc `git add docs`). Its section 3 is already type-agnostic; what the
+  allow-list still gates is folding `fix` itself into CI, or letting CI select a skill by
+  description match, because either would widen the blast radius with no CI file recording it:
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
   only by `address-review-remarks`' docs-only scope plus that post-hoc staging — neither of
   which is a per-type allow-list. Widening that skill in phase 1 would

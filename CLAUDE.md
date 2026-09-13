@@ -343,8 +343,8 @@ additions:
 
 - **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
   above names the work file, which carries the template, the numbering and never-renumber
-  rules, and the reviewer to use. Don't restate them here — a decision that changes is
-  superseded by a new ADR, never edited in place, and that rule lives there too.
+  rules, the immutability rule, and the reviewer to use. That file is their only home; don't
+  restate them here.
 - No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
   above; the rule applies equally here.
 

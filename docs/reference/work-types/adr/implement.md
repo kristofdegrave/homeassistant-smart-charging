@@ -78,7 +78,11 @@ Check those before drafting, not just the headline definition.
   - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`.
     Every ADR is drafted with `Status: Accepted` in its own PR, so a working-tree read makes an
     ADR still being drafted look immutable. If the file doesn't exist on the base, or its
-    Status there isn't already `Accepted`, normal fixes apply.
+    Status there isn't already `Accepted`, normal fixes apply. If the base **cannot be read at
+    all** — no base ref fetched, the command unavailable — do not fall back to the working
+    tree: record the finding as **Skipped**, saying the base read failed, and leave the file
+    alone. That is the loud failure of the two; a wrong Skipped entry is one a human reads and
+    reverses, where a wrong edit rewrites an accepted decision with nothing to notice it.
   - **Only the *decision* is immutable, not the write-up.** A finding about a missing Con, a
     Decision that doesn't reference its options, or a Consequence that doesn't follow is fixed
     normally. Only a finding arguing an already-Accepted *decision* is wrong becomes a
