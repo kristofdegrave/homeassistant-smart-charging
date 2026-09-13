@@ -321,7 +321,8 @@ it is wired to its callers).
   set it is willing to spend (R5/R15). Also the missed-deadline hold's engage/clear policy, with
   the flag threaded in and out by M1 (§3) — **designed, not built**: the shipped engine computes
   no hold, so no task below implements it yet.
-- **Depends on:** ADR-0010; adapter-read deadline sources (RA2), the escalated maximum permitted
+- **Depends on:** ADR-0010; adapter-read deadline sources (RA2), the effective EV battery
+  capacity M1 composes (R15), the escalated maximum permitted
   rate composed from E5/E6 headroom, E2's baseline mode resolution (which selects *which* E1 to
   query), and that E1's desired current — all as data.
 - **Testable on its own:** plain pytest — deadline resolution across sources; R5's slack test
@@ -441,7 +442,9 @@ it is wired to its callers).
   sequence of named calls is only partly realized. Both ADRs are internal decomposition either
   way — the cycle still reads top-to-bottom as ADR-0006's ordered sequence.
 - **Builds:** the ordered cycle from [system-design §5.1](system-design.md#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing):
-  read (RA1 hardware **and** RA3's owned control entities, ADR-0018) → condition (E7) → resolve
+  read (RA1 hardware **and** RA3's owned control entities, ADR-0018) → condition (E7) → compose
+  the effective EV battery capacity (the optional sensed RA1 role, else the configured value —
+  R15, the Manager's resolution, not the adapter's) → resolve
   deadline (E4) → resolve SOC (E3) → available modes (E9) → escalated headroom (E5) + C4 headroom
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
@@ -462,7 +465,9 @@ it is wired to its callers).
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
   UC01–UC04; the two-distinct-clamps ordering (ADR-0006); the R5 call order — the baseline
   Profile and Mode calls precede the Deadline urgency call, and the headroom calls advance no
-  breach timer; fault → force-0A + Fault sensor (ADR-0007); `set_active_mode` timer reset (R11).
+  breach timer; R15's capacity fallback (an unmapped or unavailable sensed role falls back to the
+  configured value, and the Engine sees only the composed result); fault → force-0A + Fault sensor
+  (ADR-0007); `set_active_mode` timer reset (R11).
 - **Integration checkpoint:** ⎔ driven by C1 (timer) and reading C2 (owned entities); one end-to-end
   cycle writes `charger_current` from a mocked hardware state.
 

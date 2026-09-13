@@ -203,10 +203,10 @@ place the same vocabulary is baked in.
 ## Contribution workflow
 
 Every unit of work — a doc, an ADR, a design, or code — follows one universal lifecycle:
-issue → isolated worktree → PR against `main` → review → fix/reply/resolve → loop (capped at
-3 rounds interactively, 2 in CI) → `needs-approval` → manual merge → worktree cleanup. Two
-actors run this lifecycle, each with its own reference doc — read whichever matches who's
-acting:
+issue → isolated worktree → PR against `main` → review → fix/reply/resolve → loop (round-capped;
+each reference doc below states its own actor's cap) → `needs-approval` → manual merge →
+worktree cleanup. Two actors run this lifecycle, each with its own reference doc — read
+whichever matches who's acting:
 
 - **Interactive Claude session** (this session, doing the work directly): full steps, git
   identity, and issue/branch conventions in

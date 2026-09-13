@@ -150,11 +150,11 @@ in branch protection's required checks on `main`.
   work-type tree puts files that *instruct* a drafter under `docs/`, which is why the per-type
   allow-list is pulled ahead of the rest of the CI change.
 - **Loop cap** (docs-only diffs — the only ones that reach the fix job automatically): **2**
-  automatic fix cycles, tighter than the interactive session's 3-round cap
-  ([contribution-workflow.md](contribution-workflow.md) step 6) — deliberately, since CI runs
-  fully unsupervised with no human watching in real time, unlike an interactive session. A 3rd
-  `remarks` verdict goes straight to `needs-approval` with a comment asking a human to re-add
-  `needs-work` manually for one more cycle.
+  automatic fix cycles, because CI runs fully unsupervised with no human watching in real time.
+  A 3rd `remarks` verdict goes straight to `needs-approval` with a comment asking a human to
+  re-add `needs-work` manually for one more cycle. The interactive session caps its own loop
+  separately ([contribution-workflow.md](contribution-workflow.md) step 6): the two count
+  different populations and never interact, so neither is the other's bound.
 - **Clean / cap-out** (≈ step 7): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required.
