@@ -114,9 +114,11 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
-**A row is self-contained.** Nothing outside the row and the PR's changed paths is needed to
+**A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
-`docs/design/` file the change touches, not on the issue body.
+`docs/design/` file the change touches, not on the issue body. Reviewer dispatch additionally
+resolves the linked issue's label, per the union rule below — that is the one input outside
+the row, and it only ever adds a reviewer.
 
 **A review column may name more than one agent.** Each is applied to the changed files under
 its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
