@@ -1524,6 +1524,31 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
     assert result.fault is False
 
 
+async def test_peak_clamp_never_engages_when_captar_capability_absent(hass):
+    """R3 AC1/R18: with the CapTar capability absent, no peak-protection clamp ever
+    engages -- net import is bounded only by the grid supply ceiling (C4). Same fixture
+    as test_peak_clamp_reduces_captar_below_headroom (which proves the clamp DOES engage
+    with the capability present, at max_peak_kw=3.56 -> 10 A), but here with
+    captar_available=False: the request must reach Captar's own uncapped max_current
+    (16 A, well under the ~18 A C4 ceiling headroom this fixture leaves), not the 10 A
+    the R3 clamp would otherwise impose."""
+    config = _config()
+    config = dataclasses.replace(config, max_peak_kw=3.56, captar_available=False)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
+    adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    seed_ample_peak_headroom(coord, kw=3.56)
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 16.0
+    assert result.fault is False
+
+
 async def test_peak_clamp_reduces_solar_below_headroom(hass):
     """R3 now applies to Solar too -- no opt-out (only Power has one, R17). A tight peak
     budget (below the safety margin) reduces Solar's surplus-based request even though
