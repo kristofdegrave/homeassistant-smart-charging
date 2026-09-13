@@ -73,6 +73,31 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
+  authoring:
+    # Not gated on the `changes` filter above: that filter is about integration code, and this
+    # job is about .claude/**. Diff-scoped, so it only ever looks at what a PR adds -- see the
+    # script's header for why the back-catalogue is deliberately out of scope. Skipped on
+    # push/dispatch, where there is no PR diff to scope to.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The check diffs against the PR base, which a shallow clone does not contain.
+          fetch-depth: 0
+      # Not a required status check, unlike lint/test/hassfest/hacs above: a red `authoring`
+      # surfaces at the manual merge gate rather than blocking, which is the right weight for a
+      # rule whose judgment half lives with the reviewer. Promote it once it has run a while.
+      #
+      # The check's own tests run first: its only correctness evidence would otherwise rot
+      # silently, and they need no dependencies beyond the checkout already made.
+      - name: Authoring-rule check self-test
+        run: bash .github/test-check-authoring-rules.sh
+      - name: Authoring rules (documentation links in skills and agent definitions)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/check-authoring-rules.sh "$BASE_SHA"
+
   test:
     needs: changes
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
