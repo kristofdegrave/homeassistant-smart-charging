@@ -226,13 +226,15 @@ it is wired to its callers).
 
 ### Phase 2 — Engines
 
-> All Engines are **pure functions of their inputs** and perform **no I/O and call no other Engine**
-> (§4 rule 4). Stateful Engines (E7, E8, and the E5 Tracker) take their cross-cycle state as a
-> **parameter** threaded by the Manager. Every Engine is unit-tested with **plain pytest** (ADR-0009)
+> All Engines perform **no I/O and call no other Engine** (§4 rule 4) — that is the purity this
+> guard is about. Whether an Engine is *stateful* in system-design §3's narrower sense is a
+> separate, per-Engine fact recorded on its roster row there and on its task below; the ones that
+> are take their cross-cycle state as a **parameter** threaded by the Manager rather than holding
+> it. Every Engine is unit-tested with **plain pytest** (ADR-0009)
 > — no HA harness. The per-Engine "integration checkpoint" is therefore realized in M1/M2/M3, where
 > the Manager feeds real inputs; noted per task.
 
-**E1 — Charging-Mode Engines (`Off`, `Solar`, `SolarOnly`, `Captar`, `Power`)**
+**E1 — Charging-Mode Engines (`Off`, `Solar`, `SolarOnly`, `Captar`, `Power`)** *(stateful for `Solar`/`SolarOnly`/`Captar`; `Power` pure; `Off` has no module)*
 - **Service:** Engine, V2. Home: `modes/` (ADR-0002 — no new ADR).
 - **Status:** shipped — `modes/solar.py`, `modes/solar_only.py`, `modes/captar.py`,
   `modes/power.py` (plus the shared `_amp_step.py`/`_phase.py`/`_mode_state.py` helpers); tests
@@ -262,7 +264,7 @@ it is wired to its callers).
   0 A for the rest of the session, which would leave R5's handback unable to fire.
 - **Integration checkpoint:** ⎔ M1 dispatches to the active mode and gets a desired current.
 
-**E2 — Profile Engines (`Manual`, `Auto`)**
+**E2 — Profile Engines (`Manual`, `Auto`)** *(pure)*
 - **Service:** Engine, V3. Home: `profiles/` (ADR-0002).
 - **Status:** shipped — `profiles/manual.py`, `profiles/auto.py`, and `profiles/policy.py`; tests
   under `tests/profiles/`. ADR-0017 (Accepted) settled the shape the two profiles take: a
@@ -288,7 +290,7 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1 obtains the active mode; owned selector option-list (C2) uses the
   same capability facts via the entity-definition path.
 
-**E3 — SOC-Target Engine**
+**E3 — SOC-Target Engine** *(stateful)*
 - **Service:** Engine, V4 (cross-cutting). **ADR gate: G-ADR-0010** (package home — resolved).
 - **Status:** shipped — `engines/soc_target.py`; tests in `tests/engines/test_soc_target.py`. The
   Coordinator-side gating around it (which cycle's flags feed the step-up/cap rows) lives in
@@ -309,7 +311,7 @@ it is wired to its callers).
   the Coordinator-threaded step-up/reserve context the resolution composes
   (ADR-0011; system-design §5.2/§5.3).
 
-**E4 — Deadline Engine**
+**E4 — Deadline Engine** *(stateful)*
 - **Service:** Engine, V5 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. E4
   partial — the missed-deadline hold's engage/clear policy is designed, per system-design §3, but
@@ -333,10 +335,9 @@ it is wired to its callers).
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
   lead-time window once that reminder is built (project-plan §M3).
 
-**E5 — Billing-Protection Engine + Peak-Demand Tracker**
+**E5 — Billing-Protection Engine + Peak-Demand Tracker** *(both stateful)*
 - **Service:** Engine, V6 — two **stateful** Engines: Billing-Protection (R3's breach timer and the
-  baseline debouncer) plus the Peak-Demand
-  Tracker). **ADR gate: G-ADR-0010** (resolved).
+  baseline debouncer) plus the Peak-Demand Tracker. **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/billing_protection.py` and `engines/peak_demand_tracker.py`; tests
   in `tests/engines/test_billing_protection.py` and `tests/engines/test_peak_demand_tracker.py`.
   The Tracker's monthly bookkeeping state is owned by `coordinator_cycle.py`'s `PeakDemandState`
@@ -365,7 +366,7 @@ it is wired to its callers).
   M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
 
-**E6 — Grid-Safety Engine**
+**E6 — Grid-Safety Engine** *(pure)*
 - **Service:** Engine, V7 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/grid_safety.py`; tests in `tests/engines/test_grid_safety.py`.
 - **Builds:** the **C4 headroom as a value**, for callers needing what C4 would allow without
@@ -404,7 +405,7 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1's `set_active_mode` resets timers; fault input forces stop + Fault
   sensor (via Store).
 
-**E9 — Capability-Gate Engine**
+**E9 — Capability-Gate Engine** *(pure)*
 - **Service:** Engine, V10 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/capability_gate.py`; tests in
   `tests/engines/test_capability_gate.py`.
@@ -416,8 +417,8 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1 passes available modes to E2 (`Auto`); C2 reuses the same facts.
 
 > **⎔ Phase 2 checkpoint:** every Engine unit-tested in isolation with plain pytest; no Engine
-> imports `homeassistant.*` or another Engine (the ADR-0009/ADR-0006 purity guard). Stateful Engines
-> accept and return their state as parameters. *Met:* the purity half is enforced as an executable
+> imports `homeassistant.*` or another Engine (the ADR-0009/ADR-0006 purity guard). Whichever
+> Engines are stateful accept and return their state as parameters rather than holding it. *Met:* the purity half is enforced as an executable
 > check in `tests/test_engine_purity.py` rather than by review alone.
 
 ### Phase 3 — Managers
