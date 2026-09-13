@@ -50,9 +50,11 @@ message conventions).
    describing what was done; resolve the thread once the round's fixes are pushed.
    `resolve-review-thread` owns which threads may be resolved, and
    [tracker-mechanics.md](tracker-mechanics.md) the commands.
-6. **Loop steps 3–5**, capped at **3 rounds**, until a pass finds no remaining Critical/Major
-   findings. Still unresolved at round 3 → stop and escalate to the human partner with the
+6. **Loop steps 3–5**, capped at **2 rounds**, until a pass finds no remaining Critical/Major
+   findings. Still unresolved at the cap → stop and escalate to the human partner with the
    disagreement instead of continuing; that usually needs a judgment call the loop can't make.
+   This line is the **only** statement of the interactive cap — everything that needs the
+   number routes here instead of repeating it.
 7. **Label `needs-approval`** once a review pass comes back clean. Board **Status** stays
    `In review` — this only signals no review/fix work is pending, it doesn't replace manual
    merge approval.

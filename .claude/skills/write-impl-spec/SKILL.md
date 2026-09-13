@@ -6,8 +6,8 @@ description: Use when authoring an implementation spec and TDD plan for a slice 
 # Write an implementation spec (per-slice design + TDD plan)
 
 Author the two documents that sit between the architecture and the code for one build slice:
-a **design** (`docs/plans/YYYY-MM-DD-<slice>-design.md` — scope, config surface, control flow,
-mapping to services, deferrals, testing, packaging) and a **TDD plan**
+a **design** (`docs/plans/YYYY-MM-DD-<slice>-design.md` — scope, config surface, the concrete
+decisions, mapping to services, deferrals, testing, packaging) and a **TDD plan**
 (`docs/plans/YYYY-MM-DD-<slice>.md` — bite-sized task-by-task build order). Both **derive** from an
 already-approved slice of `docs/design/project-plan.md`; they do not re-decompose the system or
 invent behavior.
@@ -34,10 +34,12 @@ steps here.
      discipline applies to any slice, MVP or post-MVP), the minimal config surface, and the
      explicit deferrals **before** writing. Get the human partner's decisions on any real
      fork (a safety-relevant omission, a config field, an entity's home).
-  3. **Write the design doc** (`...-<slice>-design.md`): success criteria, install-time
-     config, the control flow, a table **mapping every piece to its named service** in
-     `system-design.md`, deliberate deferrals (with any safety caveat stated out loud),
-     testing approach, and packaging.
+  3. **Write the design doc** (`...-<slice>-design.md`), capped at what only it can say:
+     success criteria, install-time config, the **concrete decisions** (`D-n`) this slice
+     makes and the concrete structure they land in (files, classes, signatures), a table
+     **mapping every piece to its named service** in `system-design.md`, deliberate deferrals
+     (with any safety caveat stated out loud), testing approach, and packaging. Anything else
+     is a copy of a doc that owns it — cut it per **Cap the design doc** below.
   4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized
      tasks (failing test → minimal impl → green → commit), each naming exact file paths, the
      ADR it honors, and its **test boundary per ADR-0009** (plain pytest for `modes/`/
@@ -51,6 +53,38 @@ steps here.
 - Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write
   the code.
 
+## Cap the design doc
+
+`docs/plans/` is this project's largest artifact class and its weakest oracle. A plan that
+restates a rule is a second place for that rule to be wrong, and the plan's copy is the one the
+build reads. So the design doc carries the decisions and the sequence, and not what another doc
+already owns. Cut, when a draft has it:
+
+- **A restated formula or threshold.** Cite the owning analysis doc and the R-number instead,
+  as a test anchor. `develop-task` already sends the author to `control-cycle.md`,
+  `resolution-rules.md`, `requirements.md` and the use-case for the rule itself, so the plan's
+  copy is only a third version to keep in sync.
+- **Restated ADR rationale.** Name the ADR and what it obliges this slice to do; the *why*
+  stays in the ADR, where a reader who needs it will look.
+- **Per-task narrative that states no fact the task does not already carry** — a paragraph
+  re-telling a task whose own entry already names its file, its failing test and its boundary.
+
+**This removes copies, never content that exists only here.** Before cutting anything, find the
+doc that owns it and read what it actually says:
+
+- It says the same thing → a duplicate. Cut it; cite the source.
+- No doc owns it, or none says it → **not a duplicate — an undocumented rule.** Do not cut it,
+  and do not leave it sitting in the plan either: a behavioural rule that lives only in a plan
+  is a rule the analysis layer is missing. Say so out loud, open the issue against the owning
+  doc per *derive, don't design*, and cite it here once it lands.
+- It says something **different** → stop. One of the two is wrong, and no wording of the plan
+  resolves it; take it to the owning doc rather than writing a paragraph here that explains the
+  discrepancy away.
+
+**A long plan is not the defect.** A slice whose decisions and task list genuinely run long is a
+correct plan at its natural length, and trimming detail the build needs is a regression. The
+test is never the line count — it is whether a line says something no other doc says.
+
 ## Rules
 
 - **Derive, don't design.** No service, call direction, or volatility that isn't already in
@@ -59,6 +93,8 @@ steps here.
 - **Behavior is owned by the analysis docs.** Cite `control-cycle.md`, `resolution-rules.md`,
   `requirements.md`, and the use-cases; attribute any formula/threshold as a test anchor. If a spec
   and its source ever disagree, the source wins.
+- **Keep the design doc capped**, per the section above: decisions, structure and sequence —
+  no restated formula, no restated ADR rationale, no narrative that repeats its own task.
 - **Honor the ADRs.** Adapters (0003), package layout (0002/0010), config split (0005),
   coordinator/two-clamps (0006), fault-on-`None` (0007), testing split (0009), native naming (0004).
 - **Respect the test boundary.** Pure logic → plain pytest; HA-coupled → HA harness. Name it per
@@ -70,6 +106,9 @@ steps here.
 
 - Inventing a service or a behavioral rule instead of citing the design/analysis doc that owns it.
 - Restating a formula/threshold as if the spec owns it (it will drift from the analysis doc).
+- Deleting a formula that appears **only** in the plan as if it were a duplicate — it is an
+  undocumented rule, and cutting it loses the only copy. Report it and fix the owning doc.
+- Restating an ADR's rationale, or narrating a task the task entry already describes.
 - A task with no exact file path, no failing test, or no stated test boundary.
 - Routing pure-logic tests through the HA harness (or vice versa).
 - A silent deferral of a mandated safety behavior (a clamp, the fault path) — state it as a known

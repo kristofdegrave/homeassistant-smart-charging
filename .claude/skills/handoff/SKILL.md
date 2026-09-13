@@ -27,7 +27,7 @@ Six sections, in this order. Keep each to what the next agent cannot reconstruct
    they describe what the next session will focus on: scope the whole document to that.
 2. **State** — issue number, worktree absolute path, branch, PR URL, board Status, and where
    the [contribution workflow](../../../docs/reference/contribution-workflow.md) stopped
-   (which numbered step, which review round of the 3-round interactive cap).
+   (which numbered step, and which review round against the interactive cap it states).
 3. **Decisions** — choices made in conversation that are not yet written down anywhere, each
    with the reason. This is the section that only the scrollback has; everything else can be
    re-read.

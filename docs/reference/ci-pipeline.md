@@ -144,9 +144,10 @@ in branch protection's required checks on `main`.
   to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
   job ever sees a non-docs PR.
 - **Loop cap** (docs-only diffs — the only ones that reach the fix job automatically): **2**
-  automatic fix cycles, tighter than the interactive session's 3-round cap
-  ([contribution-workflow.md](contribution-workflow.md) step 6) — deliberately, since CI runs
-  fully unsupervised with no human watching in real time, unlike an interactive session. A 3rd
+  automatic fix cycles. CI's own cap has always been 2 — it runs fully unsupervised, with no
+  human watching in real time — and the interactive session
+  ([contribution-workflow.md](contribution-workflow.md) step 6) now stops at the same count,
+  so neither flow is the tighter one. A 3rd
   `remarks` verdict goes straight to `needs-approval` with a comment asking a human to re-add
   `needs-work` manually for one more cycle.
 - **Clean / cap-out** (≈ step 7): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
