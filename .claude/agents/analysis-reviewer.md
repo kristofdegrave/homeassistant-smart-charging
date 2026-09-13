@@ -37,15 +37,16 @@ If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for th
   off the list the caller names. Two kinds qualify — an **acceptance criterion or constraint
   row** of `requirements.md`, and a **use-case's own behavioural assertions**: a Given/When/Then
   step in its main, alternate or exception flows, a trigger, a state-model state or transition,
-  and a domain event it says the System produces. A use-case *restating a requirement* is not
+  a domain event it says the System produces, and a pre- or postcondition asserting behaviour no
+  other in-scope item covers. A use-case *restating a requirement* is not
   one of them — a requirement's home is `requirements.md`, and restating one elsewhere does not
   change it — and neither is any change asserting no behaviour: wording, formatting, a glossary
   entry, a renumbering, a diagram redrawn to match steps already in the diff, a
   requirements-satisfied line. A use-case's *Scope / level* and *Relationships* lines are in
   scope wherever they do assert behaviour — the mechanism that realizes the use-case, the event
   it subscribes to, the logic it never touches — and out of scope where they only navigate.
-  Where nothing is in scope, say so in one line and move on. For
-  each item that is, run **one** targeted `Grep` over `custom_components/` for the behaviour it
+  Where nothing is in scope, say so in one line and move on. For each item that is, run **one**
+  targeted `Grep` over `custom_components/` for the behaviour it
   asserts (the entity id, the adapter role, the default, the bound, the event name, the
   precedence rule it names) and open at most one file, the best match. **Stop after three
   items** — say the set was sampled and name the three you took; six tool calls is the most this
