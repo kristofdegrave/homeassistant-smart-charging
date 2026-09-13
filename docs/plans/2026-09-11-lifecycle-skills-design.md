@@ -339,8 +339,11 @@ Two consequences worth stating, since the remaining labels inherit them:
   different exposure from one, so the `_ai-fix.yml` per-type allow-list below is no longer only
   a precondition for a type-agnostic fix skill — it is what bounds this, and belongs before the
   bulk of the slices rather than after.
-- Each slice needs no coordination with
-  the CI change. The order between them stops mattering.
+- A slice needs no *file-level* coordination with the CI change: neither worker is touched, so
+  the two never conflict. What the bullet above adds is a *sequencing* constraint on one part
+  of that change — the `_ai-fix.yml` per-type allow-list is what bounds the exposure the work
+  files create, so it is pulled out of phase 2's "starts once phase 1 has stabilised" and
+  belongs before the bulk of the slices. The rest of the CI change keeps its phase-2 slot.
 - The shims are not permanent. Once the workers resolve their files from the table rather than
   by skill name, the entry points can go, and the table's *How the work is done* column drops
   back to one path per row.

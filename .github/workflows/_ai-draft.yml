@@ -112,10 +112,17 @@ jobs:
           # writes tests/ alongside custom_components/ — a single-tree add-paths would silently
           # drop the test files from the PR). Emitted via the GITHUB_OUTPUT heredoc form below,
           # which is why it's a real embedded newline ($'...'), not "line1\nline2" as a literal.
+          # `adr` is narrowed to docs/adl/** rather than docs/**: its work file now lives under
+          # docs/reference/work-types/, so a docs/**-wide allow-list would let a drafter acting
+          # on an untrusted issue body write and commit the file instructing every future ADR
+          # draft. While that content sat in .claude/, the allow-list excluded it mechanically.
+          # An ADR draft writes only the record and the ADL index, both under docs/adl/. The
+          # other doc labels keep docs/** until their own work files move, and each should be
+          # narrowed the same way in the slice that moves it.
           case "$present" in
             uc)          skill=write-use-case;    artifact="use-case";                                          model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
             requirement) skill=write-requirement; artifact="requirement or constraint";                         model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
-            adr)         skill=write-adr;         artifact="Architecture Decision Record (ADR)";                 model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
+            adr)         skill=write-adr;         artifact="Architecture Decision Record (ADR)";                 model=opus;   add_paths="docs/adl/**";                                 commit_prefix=docs;;
             specs)       skill=write-impl-spec;   artifact="implementation spec (design + TDD plan)";            model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
             development) skill=develop-task;      artifact="implementation task (code + tests)";                model=sonnet; add_paths=$'custom_components/**\ntests/**';         commit_prefix=feat;;
             testing)     skill=write-tests;       artifact="test suite";                                        model=sonnet; add_paths="tests/**";                                 commit_prefix=test;;
