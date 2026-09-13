@@ -32,6 +32,9 @@ Read conditionally:
   re-derive it here. A diff confined to `modes/`/`engines/` skips it.
 - The `ha-integration-knowledge` skill — when the diff touches HA platform surface (entity
   classes, config flow, `manifest.json`, services).
+- ADR-0040, which extends ADR-0009's mandated coverage with the fifth, unit case — when the diff
+  touches or wires an adapter that reads a numeric role. Locate it by number per `CLAUDE.md`'s
+  **Architecture Decision Records (ADRs)** section.
 
 ## Review checklist
 
@@ -56,12 +59,25 @@ Read conditionally:
   names; files sit in the ADR-mandated package (`adapters/`, `modes/`, `engines/`, platform files
   and `coordinator.py`/`entity.py` at root).
 
-**(3) Test quality (ADR-0009)**
+**(3) Test quality (ADR-0009/0040)**
 - Correct harness: plain pytest for pure `modes/`/`engines/` logic; HA harness for adapters,
   coordinator, entities, config flow.
 - Mandated coverage present: adapter roles cover present / absent / unavailable / (status) unmapped;
+  a numeric role whose catalogued unit column names a unit also carries the fifth case — its expected
+  unit set stated, plus a foreign-unit and an absent-unit case on the adapter class defining its read
+  (ADR-0040, extending ADR-0009, is the authority on the trigger, the per-class discharge, and
+  the docstring a case pinning "used as-is" must carry);
   engines cover their behavioral rows and worked examples; the coordinator covers happy / gating /
   clamp / fault.
+- **This check owns one overlap with (6).** A diff that changes how an adapter **reads or converts
+  a source entity's unit** trips (6) as well, through "the computation that produces it". Where
+  such a diff also leaves the fifth-case coverage missing on the class defining that read, that is
+  one defect with two symptoms: report it once here as Major, naming any absent or inadequate
+  runtime evidence inside that finding — that half is empty when the section is adequate — and
+  raise nothing under (6) for it. The tests are the durable fix — a state
+  pasted into a PR body proves the value once, where the mandated cases keep proving it. A change
+  to an **owned** entity's own unit is not this overlap — ADR-0040 does not reach the entities this
+  integration publishes — and stays (6)'s alone however the role's coverage stands.
 - Test names trace to the requirement / UC / ADR criterion they verify. Tests genuinely fail without
   the implementation (no vacuous asserts, no over-mocking that hides a wiring bug).
 
@@ -87,7 +103,11 @@ Read conditionally:
   all; the dashboard; a notification; or the current commanded to the charger — the PR
   description must carry a **Runtime check** section recording what was driven and what was
   observed: a pasted entity state **including its unit**, or a dashboard screenshot. **A diff
-  touching any of those with no such section is Major.**
+  touching any of those with no such section is Major.** The one exception is the overlap
+  checklist (3) owns, and it applies to this bullet and the next alike: a diff changing how an
+  adapter reads or converts a **source** entity's unit, whose fifth-case coverage is also
+  missing, is reported once under (3), not twice. A change to an **owned** entity's own unit is
+  not that overlap and is reported here.
 - Judge the section against the diff, not by its presence. Observations that don't cover the
   behavior this diff changes, or a bare number pasted where a unit or a precision changed, are
   the same Major finding — a value without its unit is exactly what a unit defect hides behind.

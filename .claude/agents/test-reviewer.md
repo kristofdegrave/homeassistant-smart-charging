@@ -16,6 +16,9 @@ Always read:
 - The test files under review in `tests/` and the code under `custom_components/smart_charging/`
   they exercise.
 - `docs/adl/0009-testing-strategy.md` — the authoritative plain-pytest vs HA-harness split.
+- ADR-0040, which extends ADR-0009's mandated coverage with the fifth, unit case — when the change
+  touches or wires an adapter that reads a numeric role. Locate it by number per `CLAUDE.md`'s
+  **Architecture Decision Records (ADRs)** section.
 - The behavior the tests claim to verify, in `docs/analysis/` (`requirements.md`, the relevant
   use-case, `control-cycle.md`, `resolution-rules.md`).
 - The **Testing Requirements** section of the `ha-integration-knowledge` skill — when the
@@ -36,6 +39,12 @@ Always read:
 **(2) Mandated coverage**
 - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an unmapped
   raw state. A missing case is a Major finding (ADR-0009 requires all four).
+- **Every numeric role whose catalogued unit column names a unit:** the fifth mandated case — the
+  role states its expected unit set, and the adapter class that defines its read carries a
+  foreign-unit case and an absent-unit case. A missing one is Major. ADR-0040, which extends
+  ADR-0009, is the authority on the trigger, the per-class discharge and the exclusions — read it
+  before judging a role in or out, and before judging a pinned behaviour adequate — it also requires
+  a docstring on a case pinning "used as-is", and is the authority on what that docstring must say.
 - **Engines:** each behavioral row / branch, plus worked examples for the clamp math (grid-safety,
   floor/cap) and the NF4 voltage fallback.
 - **Coordinator:** happy path, status-gating-to-zero, clamp applied, and the fault path (required
