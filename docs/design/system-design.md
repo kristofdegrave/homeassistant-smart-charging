@@ -148,7 +148,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
-| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode and commits the state it returns, and *queries* the baseline mode for R5's handback — the query answers from this cycle's conditions with the mode's own restart timing excluded, and its returned state is not committed (`resolution-rules.md`; §5.1) |
+| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode, and separately *queries* the baseline mode for R5's handback. The query answers from this cycle's conditions with the mode's own restart timing excluded, and leaves the dispatched mode's own progression untouched (`resolution-rules.md`; §5.1) |
 | **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
 | **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — a plain decision flag, the same shape as SOC-Target's step-up flag below, not the cross-cycle accumulation that makes an Engine stateful. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
@@ -400,6 +400,8 @@ sequenceDiagram
     A-->>C: raw readings (or None → fault path, ADR-0007)
     C->>SC: smooth net_w (R10) + resolve voltage (NF4)
     SC-->>C: smoothed net_w + supply voltage
+    C->>A: read EV battery capacity (R15 — the optional sensed role, else the configured value)
+    A-->>C: effective battery capacity
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
     Note over C: evaluate R9's five-part reserve condition once — home-day flag set, sun down,<br/>next-day forecast above threshold, tomorrow's deadline resolving to "no deadline", and no<br/>missed-deadline hold in effect **as it stood entering this cycle** (resolution-rules.md).<br/>Both the SOC-Target cap row and Auto's overnight row read the resulting flag
@@ -418,7 +420,7 @@ sequenceDiagram
     P-->>C: baseline mode
     C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; its returned state is not committed)
     M-->>C: baseline desired current
-    C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, charger status + state of charge + deadline capability for<br/>the hold's own conditions, and the prior cycle's urgency latch and missed-deadline hold)
+    C->>DL: required current & urgency? (R5/R15 — the resolved deadline and effective battery<br/>capacity above, state of charge, the active SOC limit and the resolved supply voltage, which<br/>are the required-current formula's own five inputs; plus the escalated maximum permitted rate<br/>and baseline desired current the two R5 tests compare against; plus charger status and the<br/>deadline capability, and the prior cycle's urgency latch and missed-deadline hold)
     DL-->>C: urgency flag + unreachable flag + updated hold + required current<br/>(none computed while a hold is in effect)
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
@@ -457,9 +459,9 @@ those engines can produce, which is what fixes the order here:
 set-point rule would ask for from *this* cycle's conditions, with its internal restart timing
 left out — and it names the failure if that timing is not excluded, a `Solar` baseline deselected
 at escalation reporting 0 A for the rest of the session so the handback could never fire on it.
-Two consequences for the decomposition: the operation is part of the Charging-Mode Engines'
-contract (§3), and the Coordinator does not commit whatever state the call returns — only the
-dispatch does.
+The consequence for the decomposition is that the query is part of the Charging-Mode Engines'
+contract (§3) rather than a caller-side trick, and that it leaves the dispatched mode's own
+progression untouched.
 
 Under `Auto` during urgency the baseline mode is a *different* mode from the one later dispatched,
 so two mode set-points exist in the same cycle and only the dispatched one is clamped and written.
