@@ -14,7 +14,8 @@ decision is already made and answers only "what do I type".
 Throughout: the repo is `kristofdegrave/homeassistant-smart-charging`, the board is project
 `1` under owner `kristofdegrave` (**EMS**). Every recipe below was run against them on
 `gh` 2.95 — in the exact form written here, not a form it was later edited away from — rather
-than transcribed from memory. Re-run one before trusting it if `gh` has moved on.
+than transcribed from memory, **except where a recipe says otherwise about itself**. Re-run
+one before trusting it if `gh` has moved on.
 
 ## The one rule: read the state back
 
@@ -22,15 +23,15 @@ than transcribed from memory. Re-run one before trusting it if `gh` has moved on
 
 | Transport | Used by |
 |---|---|
-| **GraphQL** | `gh issue create/edit/view`, `gh pr create/edit/view/comment`, `gh issue comment`, every `gh project *` subcommand, all review-thread resolution |
+| **GraphQL** | `gh issue create/edit/view/list`, `gh pr create/edit/view/comment`, `gh issue comment`, every `gh project *` subcommand, all review-thread resolution |
 | **REST** | everything reached through `gh api <path>` without the `graphql` endpoint |
 
 GitHub's **secondary (abuse) rate limiter** trips on a burst of GraphQL mutations — a couple
 of review rounds' worth of thread replies and resolutions is enough — and then blocks the
-whole GraphQL column for up to an hour **while REST keeps working**. `gh api rate_limit` does
-not surface the secondary limiter: it happily reports 5000/5000 remaining on every bucket
-while `gh project` and `gh pr edit` refuse. **The check is to retry the call you actually
-need and read its result back, not to consult any meter.** A cheap GraphQL *read* such as
+whole GraphQL column **while REST keeps working**. `gh api rate_limit` does not surface the
+secondary limiter: it happily reports 5000/5000 remaining on every bucket while `gh project`
+and `gh pr edit` refuse. **The check is to retry the call you actually need and read its
+result back, not to consult any meter.** A cheap GraphQL *read* such as
 `gh api graphql -f query='{viewer{login}}'` is only a second meter: it can pass while the
 mutation path is still refused, so a green probe is evidence of nothing. Use it to tell a
 network failure from a refusal, never to decide a write is safe.
@@ -45,6 +46,22 @@ has reported success while applying nothing, repeatedly. So:
 Every recipe below therefore comes with its read-back, and with a REST fallback where one
 exists. Two operations have **no** REST equivalent and can only be waited out:
 `gh project item-add` / `item-edit` (board fields) and `resolveReviewThread`.
+
+**Recovering from a refusal.** Two behaviours seen on 2026-09-08 with the limiter tripped.
+Unlike every other recipe in this file they are **reported, not re-executed**: deliberately
+re-tripping the limiter would block whatever else is running against this repo, so neither
+was re-verified when it was written down.
+
+- *The wait is minutes.* The block lifted after roughly **nine minutes**. Retry the call you
+  actually need on a 60-second loop rather than parking the work for an hour.
+- *A write can land while its read-back is still refused.* A `gh project item-edit` returned
+  success and the `item-list` meant to confirm it was refused in the same minute — the board
+  pair above, where neither half has a REST fallback to drop to, so the refusal caught the
+  read rather than the write. That is the one state the read-back rule leaves open.
+  **Retry the read; do not retry the write.** A board-field edit is idempotent and a blind
+  retry of it is merely wasted, but the same middle state reaches writes that are not — a
+  comment, a review reply, a sub-issue edge — where the retry posts a duplicate. One rule
+  covers both: establish what landed before writing again.
 
 ## Filing a work item
 
@@ -103,6 +120,55 @@ gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues --input 
 with `{"title": …, "body": …, "labels": [ … ]}`. Using `--input` also keeps the body's UTF-8
 intact.
 
+## Rewriting a work item's body
+
+`gh issue edit --body-file` is GraphQL and inherits the silent-failure warning above, so the
+REST form is the one to reach for:
+
+```sh
+gh api -X PATCH repos/kristofdegrave/homeassistant-smart-charging/issues/<n> \
+  -F body=@<path> --jq '.body'
+```
+
+The body goes in a file, not inline, for the reason *Windows and Git Bash* below gives — and
+`-F body=@<path>` reads the markdown as-is, where `--input <payload.json>` would mean
+hand-escaping it into JSON first. Reach for `--input` here only when the same call is also
+setting `title`, `state` or `labels`. `--jq '.body'` on the PATCH prints the stored body, so
+the call is its own read-back; the independent one is
+`gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '.body'`.
+
+## Finding a work item by its body text
+
+`gh search issues` **rejects `--state all`** — `invalid argument "all" for "--state" flag:
+valid values are {open|closed}`. To search across both states, search from the list command
+instead, which accepts `all` and takes the same query qualifiers:
+
+```sh
+gh issue list --repo kristofdegrave/homeassistant-smart-charging --state all \
+  --search "<query> in:body" --limit 100 --json number,state,title
+```
+
+`--limit` is not optional, for the reason *Filing a work item*'s `--limit` trap above gives:
+the default is 30 and the overflow is silent.
+
+`gh issue list` is GraphQL, so it is refusable. The REST fallback is the search API itself,
+where the state is a query qualifier rather than a flag and so is not constrained the way
+`gh search issues` is:
+
+```sh
+gh api -X GET search/issues -f per_page=100 --paginate \
+  -f q='repo:kristofdegrave/homeassistant-smart-charging <query> in:body' \
+  --jq '.items[] | "\(.number) \(.state) \(.title)"'
+```
+
+`per_page` and `--paginate` are as mandatory here as `--limit` is above, and less obviously so:
+without them this repo's `workflow in:title` search returned 30 items against a `total_count`
+of 89, and a body-text lookup is exactly where a short page reads as "no such issue exists".
+
+`<query>` is the one piece of free text in either recipe, and it goes through the shell in
+both. Pick a distinctive substring that has no apostrophe or em-dash in it rather than pasting
+a phrase out of an issue — see *Windows and Git Bash* below for what the shell does to those.
+
 ## Parent/sub-issue and blocked-by edges
 
 That an epic's membership and ordering use these relationships rather than body text is
@@ -156,7 +222,8 @@ One REST fallback serves both — for the comments API a PR *is* an issue, so th
 is correct for a PR number too:
 
 ```sh
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments -f body='<markdown>'
+gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+  -F body=@<path>
 ```
 
 Read back with:
@@ -257,8 +324,10 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
 
 ```sh
 gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments/<comment-id>/replies \
-  -f body='<markdown>'
+  -F body=@<path> --jq '.id'
 ```
+
+The POST returns the created comment, so `--jq '.id'` is its read-back.
 
 Resolving has **no REST endpoint at all** — GraphQL only, in two steps. List the threads with
 their ids and current state:
@@ -294,6 +363,24 @@ assuming a batch all landed.
   apostrophes can abort the whole command with *unexpected EOF*. Write the body with the Write
   tool and use `--body-file` (or `--input` for a JSON payload); it costs nothing and removes
   the failure mode.
+- **A `gh api` body is a body too — `-F body=@<path>`, not inline `-f body='…'`.** The inline
+  form is the one place left where the shell still gets at the text, and an apostrophe in it
+  has aborted the call with *unexpected end of JSON input*. `-F body=@<path>` reads the file
+  itself and round-trips apostrophes, em-dashes and backticks byte for byte:
+
+  ```sh
+  gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+    -F body=@<path> --jq '.body'
+  ```
+
+  Which is why every recipe above that passes a body as a `gh api` field — comments, review
+  replies, PR creation, a body rewrite — is written that way. The two that pass a whole JSON
+  document instead (issue creation, a review payload) use `--input <file>` for the same
+  reason: the text never reaches the shell.
+- **`jq` is not on PATH here; `gh --jq` is.** `gh`'s own `--jq` flag is built in and every
+  recipe above relies on it, but a standalone `jq` in a pipe fails with *jq: command not
+  found*. So a JSON payload for `--input` cannot be assembled with the obvious
+  `jq -Rs '{body: .}' file` — write the payload file directly with the Write tool instead.
 - **Git Bash rewrites a leading-slash argument into a Windows path.** `gh api /repos/…` fails
   with *invalid API endpoint: "C:/Program Files/Git/repos/…"*. Either omit the leading slash —
   `gh api repos/…`, which is what every recipe above does — or prefix the command with
