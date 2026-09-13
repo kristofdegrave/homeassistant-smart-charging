@@ -140,7 +140,10 @@ in branch protection's required checks on `main`.
   `needs-work`, which runs `address-review-remarks`, commits as `github-actions[bot]`
   (`docs: address AI review remarks (#<pr>)`), and re-adds `needs-review`. It can only commit
   under `docs/` (its commit step is `git add docs`-only), so a diff touching **anything**
-  outside `docs/**` (`.github/`, `.claude/`, `custom_components/`, `tests/`) never reaches it
+  outside `docs/**` (`.github/`, `.claude/`, `custom_components/`, `tests/`) never reaches it —
+  though note that bound no longer means "documents only": the work-type tree puts files that
+  *instruct* a drafter under `docs/`, which is why the per-type allow-list is being pulled
+  ahead of the rest of the CI change
   automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
   `needs-approval` with a comment saying why, rather than spending fix cycles that could not
   commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
