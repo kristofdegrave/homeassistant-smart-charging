@@ -201,12 +201,13 @@ jobs:
         uses: actions/checkout@v7
 
       # ADRs branch as adr/<adr-number> instead of adr/<issue-number> — an override of
-      # contribution-workflow.md's <context-label>/<issue-number> scheme, defined in write-adr —
+      # contribution-workflow.md's <context-label>/<issue-number> scheme, defined in the adr
+      # work file —
       # so the branch name identifies which ADR is in flight without cross-referencing the
       # issue. Only resolvable after Checkout, since it scans docs/adl/ — the "kind" step above
       # runs before the repo is on disk.
       #
-      # Only one ADR may be in flight at a time (write-adr): the next
+      # Only one ADR may be in flight at a time (the adr work file): the next
       # number is a function of what's merged on main, not of the issue number, so it isn't
       # collision-free the way adr/<issue-number> was. If a second `adr` issue gets labeled
       # before the first ADR's PR merges, both would compute the same next number and the second

@@ -429,7 +429,8 @@ the phase-1 skills have been used for a while and stabilised.
 
 ## Non-goals
 
-- No CI behaviour change in phase 1 — including no change to any skill file CI loads by name
+- No CI behaviour change in phase 1, apart from the `_ai-fix.yml` allow-list pulled ahead
+  above — including no change to any skill file CI loads by name
   in a way that alters what CI does (`address-review-remarks`, `submit-pr-review`'s CI mode).
 - No autonomous chaining of skills; the stop-and-report rule in the workflow doc is unchanged.
 - No second state machine. Readiness and progress remain the project board's Status field plus

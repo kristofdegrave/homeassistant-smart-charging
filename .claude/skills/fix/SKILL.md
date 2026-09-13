@@ -24,7 +24,7 @@ Take the context label from the PR's linked issue and look it up in `CLAUDE.md`'
 nothing to re-author with: fix what the finding states, keep the severity policy, and say in
 the summary that no work file governed the change. **Fixing is re-authoring**: apply the row's
 *How the work is done*
-file in full, the way the original author did — its template, rules and self-checks define
+file(s) in full, the way the original author did — its template, rules and self-checks define
 what a correct fix looks like. The row's *Work model* column says which model it wants; only
 the human partner can switch it.
 

@@ -5,7 +5,7 @@
 #
 # Why links and not paths. The rule separates documentation an artifact reads to learn how to
 # operate (route it) from repo paths the artifact acts on (name them). Path shape does not tell
-# those apart: write-adr's `docs/adl/template.md` is the template it drafts against and stays
+# those apart: the adr work file's `docs/adl/template.md` is the template it drafts against and stays
 # named, while diagnosing-bugs' [ADR-0009](../../../docs/adl/0009-...md) is a document it reads
 # and must be routed. Both are concrete .md files in the same tree. What separates them is the
 # link: a markdown link exists to be followed, so it IS a route; a bare path in prose is a

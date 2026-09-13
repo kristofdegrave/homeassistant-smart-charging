@@ -91,7 +91,7 @@ jobs:
       # most one queued run per group with cancel-in-progress: false — a third `adr` issue
       # labeled `needs-draft` while two are already running/queued silently cancels the second
       # one's queued run, leaving that issue stuck on `needs-draft` with no comment). ADR issues
-      # are filed rarely enough (one at a time, per write-adr) that three in flight
+      # are filed rarely enough (one at a time, per the adr work file) that three in flight
       # simultaneously is not expected in practice; the "Resolve ADR branch" step's own guard
       # still prevents a silent clobber if it ever happens.
       group: >-

@@ -114,7 +114,7 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
-**A cell that names more than one file labels each role.** `work file <path>; entry point
+**A *How the work is done* cell that names more than one file labels each role.** `work file <path>; entry point
 <path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
 by name through. Where a row also splits on *which* file the change touches — `documentation`
 does — each branch is its own sentence, so `;` never has to mean two things in one cell.
