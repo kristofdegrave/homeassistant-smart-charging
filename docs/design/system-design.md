@@ -132,7 +132,9 @@ Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisiv
 cut: none is a service. Deadline urgency (UC05) is the widest of the three — the Deadline
 Engine, Billing-Protection's headroom and ceiling-raise, Grid-Safety's headroom, the Profile
 Engine's baseline resolution and `Auto` escalation, and a Charging-Mode Engine queried for the
-baseline set-point, all invoked in the Coordinator's normal cycle (§6 counts them). The solar step-up (UC06) is the only Engine whose *decision* changes —
+baseline set-point, all invoked in the Coordinator's normal cycle — five services, none of
+them UC05's own. §6 counts six, adding the Notification Manager, which the unreachable notice
+reaches by event rather than within the cycle. The solar step-up (UC06) is the only Engine whose *decision* changes —
 SOC-Target's, gated by plain input flags the Coordinator already holds (the active profile and the
 previous cycle's active mode; R8) — but UC06 still rides the full cycle (conditioning, mode
 dispatch, both clamps, invariants), so it is not a one-use-case-to-one-engine mapping either (see
@@ -394,7 +396,7 @@ sequenceDiagram
 
     T->>C: control interval fires
     Note over C: the cycle opens carrying the Coordinator's cross-cycle flags from the last one,<br/>among them R5's urgency latch and missed-deadline hold. The reserve condition below reads<br/>the hold alone, as it stood entering the cycle; both are read and updated at the urgency call
-    C->>S: read owned control-entity values (profile, mode, SOC override, target current,<br/>departure times, home-day flag) and the config-options the cycle needs (C1's current<br/>bounds, the EV battery capacity fallback, thresholds)
+    C->>S: read owned control-entity values (profile, mode, SOC override, target current,<br/>departure times, home-day flag), the config-options the cycle needs (C1's current bounds,<br/>the EV battery capacity fallback, thresholds), and the config-entry data it reads —<br/>the declared capabilities (R18) the Capability-Gate and deadline steps below consult
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
@@ -402,7 +404,7 @@ sequenceDiagram
     SC-->>C: smoothed net_w + supply voltage
     C->>A: read the optional sensed EV battery capacity role (R15, NF3)
     A-->>C: sensed capacity, or None when the role is unmapped/unavailable
-    Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>The sensed-else-configured resolution is the Manager's, not the adapter's
+    Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>It is the Manager's because it spans two Resource Access services (an adapter role and the<br/>Store) and neither may reach the other; the Deadline Engine owns what the capacity is USED<br/>for (V5), not which source supplied it — the same split as NF4's voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
     Note over C: evaluate R9's five-part reserve condition once — home-day flag set, sun down,<br/>next-day forecast above threshold, tomorrow's deadline resolving to "no deadline", and no<br/>missed-deadline hold in effect **as it stood entering this cycle** (resolution-rules.md).<br/>Both the SOC-Target cap row and Auto's overnight row read the resulting flag
@@ -429,6 +431,8 @@ sequenceDiagram
     M-->>C: desired current
     C->>B: peak clamp on raw (skip iff Power+R17 off) · effective peak limit (raised iff urgency)
     B-->>C: peak-clamped current
+    C->>B: peak headroom under that IN-FORCE limit, for the readout (headroom, not clamp)
+    B-->>C: peak headroom — surfaced as sensor.smart_charging_peak_headroom_a
     C->>G: grid-supply-ceiling clamp on raw (C4, always)
     G-->>C: ceiling-clamped current
     C->>I: R11 cooldown/hold gating + C1 floor/cap
