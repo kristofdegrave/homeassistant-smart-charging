@@ -150,37 +150,43 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 
 | Engine | Volatility | Decides |
 | --- | --- | --- |
-| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode, and separately *queries* the baseline mode for R5's handback. The query answers from this cycle's conditions with the mode's own restart timing excluded, and leaves the dispatched mode's own progression untouched (`resolution-rules.md`; §5.1) |
-| **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
-| **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
-| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — a plain decision flag, the same shape as SOC-Target's step-up flag below, not the cross-cycle accumulation that makes an Engine stateful. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
-| **Billing-Protection Engine** | V6 | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
-| **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
-| **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
-| **Signal-Conditioning Engine** | V8 | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4) |
-| **Cycle-Invariant Engine** | V9 | The final current after R11 cooldown/hold gating and the C1 floor/cap |
-| **Capability-Gate Engine** | V10 | Whether a given mode/behavior is available for the declared capabilities (R18) |
+| **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 · stateful (`ModeState`: phase + `phase_started_at`) | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode, and separately *queries* the baseline mode for R5's handback. The query answers from this cycle's conditions with the mode's own restart timing excluded, and leaves the dispatched mode's own progression untouched (`resolution-rules.md`; §5.1) |
+| **Profile Engines** (`Manual`, `Auto`) | V3 · pure | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
+| **SOC-Target Engine** | V4 · stateful (`SolarStepUpState` — `stepped_pct` ratchets, it is not a flag) | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
+| **Deadline Engine** | V5 · stateful (R5's urgency latch, and the missed-deadline hold once built — both single booleans) | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — a plain decision flag, the same shape as SOC-Target's step-up flag below, not the cross-cycle accumulation that makes an Engine stateful. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
+| **Billing-Protection Engine** | V6 · stateful (`PeakBreachTracker`'s R3 breach timer; `BaselineDebouncer`) | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
+| **Peak-Demand Tracker** | V6 · stateful (the running monthly peak and its month marker) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
+| **Grid-Safety Engine** | V7 · pure | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
+| **Signal-Conditioning Engine** | V8 · stateful (the R10 smoothing window) | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4) |
+| **Cycle-Invariant Engine** | V9 · pure **today** — R11's cooldown/hold is deferred and its timers live in the Coordinator; stateful once that lands | The final current after R11 cooldown/hold gating and the C1 floor/cap |
+| **Capability-Gate Engine** | V10 · pure | Whether a given mode/behavior is available for the declared capabilities (R18) |
 
 Engines come in two kinds, but share one hard rule: **no Engine performs Home Assistant / adapter
 I/O and no Engine calls another Engine.** Cross-engine composition and all I/O are the Coordinator's
 job (it reads once, then feeds each engine) — see the call rules in [§4](#4-static-architecture).
 
-- **Pure/leaf Engines** hold no cross-cycle state: the Charging-Mode Engines, the Profile Engines,
-  the Deadline, Billing-Protection, Grid-Safety, Capability-Gate, and **SOC-Target** Engines. Data
-  in, decision out. Two of them are handed a **decision flag** the Coordinator threads in and
-  back out — SOC-Target's R8 step-up progression (whether a step has already been applied), and
-  the Deadline Engine's urgency latch and missed-deadline hold (R5). That does not make them
-  stateful: the carve-out is *accumulation* — a window, a timer, a running total — which is what
-  the three stateful Engines below hold and what ADR-0010's count is of. A boolean the Engine
-  decides and the Manager carries is a conditional input like any other.
-- **Stateful Engines** operate over cross-cycle state that the **Manager owns and threads in and
-  out** — the state is a parameter, never HA-held inside the engine, so the engine stays testable
-  in isolation. Three engines are stateful, per ADR-0010: **Signal-Conditioning** (the R10
-  smoothing window), **Cycle-Invariant** (the R11 cooldown/hold timers), and the **Peak-Demand
-  Tracker** (the running
-  [monthly peak demand](../analysis/system-overview.md#ubiquitous-language)). The Tracker's result
-  is surfaced as the owned `sensor.smart_charging_monthly_peak_kw`, but that *write* is the Coordinator's, via
-  the Store — the engine only computes the new value.
+**The test is the signature, and it is the only place the answer lives.** An Engine is
+**stateful** iff its entry point takes cross-cycle state as a parameter and returns its successor;
+otherwise it is **pure**. Either way the state is the *Manager's* — a parameter, never HA-held
+inside the engine — which is what keeps every engine testable in isolation.
+
+This document deliberately publishes **no count** of stateful engines, and the roster below carries
+the verdict per row rather than in a list here. ADR-0010 argued for exactly this when it rejected
+encoding the distinction in the directory tree: *"the distinction is already carried where it
+matters — in each engine's signature… Encoding it in the tree adds a second source of truth that
+can drift if an engine gains or sheds state."* A frozen count in prose is that same second source,
+and it drifted the same way — the engines that hold state are not the ones an earlier draft named.
+
+Two consequences worth stating, because both have caught readers out:
+
+- **A threaded value is not automatically an accumulation.** The Deadline Engine takes R5's urgency
+  latch in and returns it out, which makes it stateful under the test above — but that state is a
+  single boolean the Engine itself decides, not a window, timer or running total. The distinction
+  does not change its kind; it changes how much there is to reason about.
+- **An engine's kind is a fact about today's code, not a permanent property.** Cycle-Invariant is
+  pure right now because R11's cooldown/hold is deferred and its timers currently live in the
+  Coordinator; it becomes stateful when that lands. Whoever moves it updates its row — which is
+  the whole reason the verdict lives on the row.
 
 This two-kind split is what keeps the ADR-0009 test strategy honest: pure and stateful engines
 alike are exercised with plain pytest by passing state in, because none of them touches HA — the

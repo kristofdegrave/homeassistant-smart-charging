@@ -334,7 +334,8 @@ it is wired to its callers).
   lead-time window once that reminder is built (project-plan §M3).
 
 **E5 — Billing-Protection Engine + Peak-Demand Tracker**
-- **Service:** Engine, V6 — a pure Engine (Billing-Protection) plus a **stateful** Engine (Peak-Demand
+- **Service:** Engine, V6 — two **stateful** Engines: Billing-Protection (R3's breach timer and the
+  baseline debouncer) plus the Peak-Demand
   Tracker). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/billing_protection.py` and `engines/peak_demand_tracker.py`; tests
   in `tests/engines/test_billing_protection.py` and `tests/engines/test_peak_demand_tracker.py`.
@@ -391,7 +392,7 @@ it is wired to its callers).
   fallback (voltage `None` does **not** enter the fault path).
 - **Integration checkpoint:** ⎔ M1 threads the smoothing state in/out each cycle.
 
-**E8 — Cycle-Invariant Engine** *(stateful)*
+**E8 — Cycle-Invariant Engine** *(pure today — R11's cooldown/hold is deferred and its timers live in M1; stateful once that lands)*
 - **Service:** Engine, V9 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/cycle_invariant.py`; tests in
   `tests/engines/test_cycle_invariant.py`.
@@ -449,8 +450,8 @@ it is wired to its callers).
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
   clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
-  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads all stateful-Engine state, plus the two decision flags the Deadline Engine
-  decides and M1 carries across cycles (R5's urgency latch and missed-deadline hold); writes diagnostics
+  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's urgency
+  latch, and the missed-deadline hold once built); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
   bus for a consuming Manager are the ones that ship: `ActiveSocLimitChanged` (→ M2) and
