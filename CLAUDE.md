@@ -105,7 +105,7 @@ runs on.
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
-| *(no context label)* | none | — | by changed path (see below) | opus |
+| *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
 **Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
 why the review-model column reads opus in every row today. The column exists anyway: it makes
@@ -128,13 +128,22 @@ questions: the label says what kind of work this is, the changed paths say what 
 touched, and they come apart whenever a change is *about* one artifact type but *lives* in
 another's tree — common for `workflow` work, which edits whichever file holds the rule. So a
 PR gets the union: every tree's reviewer from the no-label row's path map, **plus** the label
-row's reviewer where it names one those paths did not already select. Each reviewer sees only
-the files its own tree covers.
+row's reviewer where it names one those paths did not already select. An issue carrying more
+than one context label — which the filing conventions forbid and CI refuses — contributes each
+of those rows rather than forcing a choice between them.
+
+The two halves are scoped differently, and have to be. A path-selected reviewer sees the
+changed files under its own tree. A label-selected one is added *because* no changed file lies
+in its tree — scoping it to that tree would hand it nothing — so it sees the change as a whole,
+and reviews it as the kind of work the label says it is. Where a tree states its own reviewer
+rule, that rule wins over both halves: `docs/postmortems/**` is the standing case, and
+**Document structure** above states it.
 
 Path routing is the half that must never be skipped — it is what guarantees no changed tree
-goes unreviewed, and it is the only key CI's review step has, since that step runs on a PR and
-reads changed paths rather than the linked issue's label. The label row is the addition: it
-brings the checklist written for this kind of work even when the change landed somewhere else.
+goes unreviewed, and it is also the half that cannot be steered: the label is resolved from the
+PR body, which on a fork PR is written by whoever opened it, so the worst a crafted body can do
+is add a reviewer, never remove one. The label row is the addition: it brings the checklist
+written for this kind of work even when the change landed somewhere else.
 A `workflow` PR editing `docs/plans/**` therefore gets `impl-spec-reviewer` for the file and
 `workflow-reviewer` for the subject, and a `development` PR that also edits a workflow file
 gets `workflow-reviewer` on that file rather than nothing.
@@ -151,7 +160,8 @@ refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.
 local session hands the drafting to the human partner. Its review is still automated. What a
 `workflow` author reads instead is in **Authoring AI artifacts** below.
 
-**The no-label row routes by changed path**: `docs/adl/**` → `adr-reviewer`;
+**The no-label row routes by changed path**, for every PR and not only an unlabelled one:
+`docs/adl/**` → `adr-reviewer`;
 `docs/analysis/**` → `analysis-reviewer`; `docs/plans/**` → `impl-spec-reviewer`;
 `docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
