@@ -43,7 +43,8 @@ Adding a label means updating those seven; renaming one additionally means updat
 that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
 stops matching — so that one is checked, not assumed. That table's *no context label* row
 separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
-updating the row too — until CI reads the table directly, the two are kept in sync by hand.
+updating the row too. Both workers now read the table rather than carrying their own copy of
+either mapping, so the row *is* the routing, not a mirror of it.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
@@ -110,7 +111,7 @@ in branch protection's required checks on `main`.
   quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
-- **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
+- **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
   `max_turns` tier is driven by the issue's project-board **Size** field (set per
@@ -121,17 +122,26 @@ in branch protection's required checks on `main`.
   backticks, no trailing `(PR #NNN)`, no surrounding sentence) is the sole scope-pinning
   mechanism letting this job act on untrusted issue-body text, so it must resolve to exactly
   one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
-  `T5`) or the run fails. Runs the skill's *content* steps only (draft, self-checks) — never
-  its review/commit/report steps, since the workflow owns those. Opens the PR with
+  `T5`) or the run fails. **The file describing the artifact is not named in the workflow**: the
+  worker reads `CLAUDE.md`'s **Model selection** table row for the label and follows whatever
+  its *How the work is done* column names — a work-type document, a skill, or a document
+  entered through one. That is what lets a work type move out of `.claude/` without this
+  workflow changing; a missing row, or a named file that does not exist, stops the run rather
+  than drafting from memory. Runs that file's *content* steps only (draft, self-checks) —
+  never its review/commit/report steps, since the workflow owns those. Opens the PR with
   `Closes #<issue-number>` and its own, coarser commit-prefix mapping (`_ai-draft.yml`'s
   `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for `development`,
   `test` for `testing`) — deliberately simpler than the
   [commit message conventions](definition-of-done.md) table, since a single draft commit has
   no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI
   commits on the branch, which do follow that table. Then adds `needs-review`.
-- **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` runs the matching `*-reviewer`
-  agent and posts findings via `submit-pr-review`'s CI mode, ending in a `clean`/`remarks`
-  verdict marker. Unacknowledged human inline comments (no `ai-fix-ack` reply) count as
+- **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` resolves its checklists from
+  `CLAUDE.md`'s **Model selection** table — the routing rule lives there, not in the workflow —
+  and self-applies each against the files it covers, posting findings via `submit-pr-review`'s
+  CI mode and ending in a `clean`/`remarks` verdict marker. As with the drafter, the table
+  column may name an agent definition or a work-type review document; the worker follows what
+  it says, so a checklist can move without this workflow changing. Unacknowledged human inline
+  comments (no `ai-fix-ack` reply) count as
   remarks too — the CI equivalent of step 8.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict adds `needs-work`, which runs
   `address-review-remarks`, commits as `github-actions[bot]` (`docs: address AI review
