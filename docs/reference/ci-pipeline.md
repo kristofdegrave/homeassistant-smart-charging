@@ -51,7 +51,8 @@ updating the row too — until CI reads the table directly, the two are kept in 
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other seven. They are not context labels
+places — `.github/setup-labels.sh` — and in none of the other seven — including `docs/reference/work-types/<label>/`, which a kind
+label never gets. They are not context labels
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
 renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
 `context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,

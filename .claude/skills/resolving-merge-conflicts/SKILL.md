@@ -88,9 +88,9 @@ Three cases are not ordinary hunk-merging:
   catalog or coverage table, a use-case inventory. Re-derive it from its source after taking
   both sides' underlying changes; hand-merging the rows yields a table matching neither side's
   reality. The ADR log needs one extra rule of its own, for the case where both sides claimed the
-  same number — a case the one-ADR-in-flight rule in the `adr` work file, which `CLAUDE.md`'s
-  **Model selection** table names is meant to prevent, so
-  reaching it means something already went wrong upstream. `CLAUDE.md`, **Architecture
+  same number — a case the one-ADR-in-flight rule in the `adr` work file (named in
+  `CLAUDE.md`'s **Model selection** table) is meant to prevent, so reaching it means something
+  already went wrong upstream. `CLAUDE.md`, **Architecture
   Decision Records**, forbids renumbering outright; applied to a collision, that puts the side
   already on `main` out of reach, so the *unmerged* side is the one that moves. Renumber it by
   that work file's numbering rule against a freshly fetched `origin/main`, and bring everything

@@ -341,12 +341,10 @@ Use the `write-adr` skill for the full cycle. Follows the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
-- **Step 1 (draft)**: draft against `docs/adl/template.md`, numbering sequentially and
-  listing every option seriously considered, not just the chosen one. Never renumber; a
-  decision that changes is superseded by a new ADR, never edited in place.
-- **Step 3's reviewer** is `adr-reviewer`, checking the ADR against existing ADRs (no silent
-  contradictions — supersede, don't edit, a prior decision) and against the analysis/design
-  docs it touches.
+- **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
+  above names the work file, which carries the template, the numbering and never-renumber
+  rules, and the reviewer to use. Don't restate them here — a decision that changes is
+  superseded by a new ADR, never edited in place, and that rule lives there too.
 - No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
   above; the rule applies equally here.
 

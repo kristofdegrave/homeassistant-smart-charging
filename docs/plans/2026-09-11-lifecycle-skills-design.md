@@ -318,7 +318,12 @@ in the strand and the paragraph above says the opposite.
 What resolves it is that **the skill keeps its name and directory and becomes the entry
 point**. CI follows `write-adr` by name exactly as before; the skill routes to the `adr` row of
 the table; the row names the work file. Nothing CI references by path or by skill name is
-renamed, so neither worker changes.
+renamed, so no worker needs re-pointing. One worker edit is still required, and it is the
+containment half of the slice: **narrow that label's `add_paths` in `_ai-draft.yml` to the tree
+its draft actually writes** — `docs/adl/**` for `adr`. Until the move, `add_paths` excluded the
+instructing file mechanically because it lived in `.claude/`; afterwards a `docs/**`-wide
+allow-list would let a drafter acting on an untrusted issue body commit the file that instructs
+every future draft of that type. A slice that skips this step re-opens that hole.
 
 The "old files alongside as pointers would be the duplication this design exists to remove"
 objection does not apply to that shape either: the shim holds no per-type content to duplicate.
@@ -340,7 +345,9 @@ Two consequences worth stating, since the remaining labels inherit them:
   a precondition for a type-agnostic fix skill — it is what bounds this, and belongs before the
   bulk of the slices rather than after.
 - A slice needs no *file-level* coordination with the CI change: neither worker is touched, so
-  the two never conflict. What the bullet above adds is a *sequencing* constraint on one part
+  the two never conflict — beyond the one worker edit the slice itself must make, narrowing
+  that label's `add_paths` (above). What the bullet above adds is a *sequencing* constraint on
+  one part
   of that change — the `_ai-fix.yml` per-type allow-list is what bounds the exposure the work
   files create, so it is pulled out of phase 2's "starts once phase 1 has stabilised" and
   belongs before the bulk of the slices. The rest of the CI change keeps its phase-2 slot.
@@ -396,7 +403,7 @@ the slices**, not after phase 1 stabilises. Everything else below keeps its phas
 
 **Phase 2 — CI follows, and the layout moves (one coordinated strand):**
 
-- `_ai-fix.yml` gains a real per-type path allow-list (staging scoped by the row's trees, not
+- `_ai-fix.yml` gains a real per-type path allow-list **(pulled ahead — see above)** (staging scoped by the row's trees, not
   the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
   only by `address-review-remarks`' docs-only scope plus that post-hoc staging — neither of
@@ -429,8 +436,8 @@ the phase-1 skills have been used for a while and stabilised.
 
 ## Non-goals
 
-- No CI behaviour change in phase 1, apart from the `_ai-fix.yml` allow-list pulled ahead
-  above — including no change to any skill file CI loads by name
+- No CI behaviour change in phase 1, apart from two: the `_ai-fix.yml` allow-list pulled ahead
+  above, and each slice narrowing its own label's `add_paths` — including no change to any skill file CI loads by name
   in a way that alters what CI does (`address-review-remarks`, `submit-pr-review`'s CI mode).
 - No autonomous chaining of skills; the stop-and-report rule in the workflow doc is unchanged.
 - No second state machine. Readiness and progress remain the project board's Status field plus
