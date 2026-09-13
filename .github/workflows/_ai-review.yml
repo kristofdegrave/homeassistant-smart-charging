@@ -5,7 +5,7 @@ name: AI review (reusable)
 # .github/setup-labels.sh, .github/ISSUE_TEMPLATE), or a PR touching custom_components/ or
 # tests/, gets `needs-review`.
 # Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
-#   clean                            -> stop; ready for the maintainer's manual review
+#   clean                            -> add `needs-approval` and stop; the maintainer reviews
 #   remarks, any non-docs path       -> add `needs-approval` + a comment saying why, already on
 #                                       the first remarks verdict: _ai-fix.yml can only commit
 #                                       under docs/, so a fix cycle here could change nothing
@@ -462,7 +462,11 @@ jobs:
             | jq -r '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict:"))] | last.body // ""' \
             | grep -oE 'ai-review-verdict: (remarks|clean)' | awk '{print $2}' || true)
 
-          # Cycle counter: every past "remarks" review on this PR is one review->fix cycle.
+          # Cycle counter: how many "remarks" reviews this PR has had. Only the docs-only
+          # branch below spends it, so on a PR that was mixed and later became docs-only
+          # (a rebase, or the non-docs files reverted) some of the count was never a fix
+          # cycle and the budget reads as already spent. That fails safe — the cap-out asks
+          # a human — so it is left as the simpler count.
           remarks_count=$(echo "$reviews" \
             | jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
@@ -473,9 +477,11 @@ jobs:
           # through the fix cycles instead of ever changing anything, so any non-docs path in the
           # diff skips straight to a human. Non-empty = the diff touches something outside
           # docs/; the `remarks` branch below reads it before the cycle cap.
-          # `sed -n 1p` rather than `head -1`: head exits after the first line, which SIGPIPEs
-          # git (141) and, under `set -euo pipefail`, would abort this step and post a false
-          # "the review run failed" comment on a PR whose review succeeded.
+          # `sed -n 1p` rather than `head -1`: head exits after the first line and can SIGPIPE
+          # git (141) on a long path list — a race, which is why the latent bug never fired —
+          # and under `set -euo pipefail` that would abort this step and post a false "the
+          # review run failed" comment on a PR whose review actually succeeded. sed reads to
+          # EOF, so there is no race to lose.
           non_docs_changed=$(git diff --name-only "${{ inputs.base_sha }}...${{ inputs.head_sha }}" \
             -- . ':!docs' | sed -n 1p)
 
