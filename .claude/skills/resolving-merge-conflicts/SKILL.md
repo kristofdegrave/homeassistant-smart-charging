@@ -84,18 +84,17 @@ Three cases are not ordinary hunk-merging:
   escalate the disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
   code.
-- **Generated or index-like content** — an epic body listing its children, ADR numbering, a
-  catalog or coverage table, a use-case inventory. Re-derive it from its source after taking
+- **Generated or index-like content** — an epic body listing its children, a numbered
+  document series, a catalog or coverage table, a use-case inventory. Re-derive it from its source after taking
   both sides' underlying changes; hand-merging the rows yields a table matching neither side's
-  reality. The ADR log needs one extra rule of its own, for the case where both sides claimed the
-  same number — a case the one-ADR-in-flight rule in the `adr` work file (named in
-  `CLAUDE.md`'s **Model selection** table) is meant to prevent, so reaching it means something
-  already went wrong upstream. `CLAUDE.md`, **Architecture
-  Decision Records**, forbids renumbering outright; applied to a collision, that puts the side
-  already on `main` out of reach, so the *unmerged* side is the one that moves. Renumber it by
-  that work file's numbering rule against a freshly fetched `origin/main`, and bring everything
-  it keys off the number with it — cross-references and the ADL index row in the same commit;
-  the branch name only if it has not been pushed, otherwise leave it and say so in the PR.
+  reality. A sequentially numbered series needs one extra rule, for the case where both sides
+  claimed the same number — which a work file that numbers its documents
+  usually has a rule to prevent, so reaching it means something already went wrong upstream.
+  Where that file forbids renumbering an already-merged document, the side already on `main`
+  is out of reach, so the *unmerged* side is the one that moves: renumber it by that file's own
+  rule against a freshly fetched `origin/main`, and bring everything that keys off the number
+  with it — cross-references and any index row, in the same commit; the branch name only if it
+  has not been pushed, otherwise leave it and say so in the PR.
 - **A conflict that is really a stacked branch.** A PR based on `main` while the local branch
   sits on an unmerged prior branch shows the combined stack in its diff; that shrinks by itself
   once the lower branch merges. It is not a conflict to resolve, and never a reason to rewrite

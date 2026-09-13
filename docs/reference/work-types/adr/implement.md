@@ -54,11 +54,11 @@ Check those before drafting, not just the headline definition.
   contradict an existing `Accepted` ADR? If so, this record supersedes it: set the new ADR's
   Status normally, and edit the *old* ADR's Status line only, to `Superseded by ADR-NNNN` —
   never rewrite the old ADR's Context/Decision/Consequences.
-- **Step 3's review**: the reviewer checks template conformance, that every option has a
-  genuine Pro and Con, that the Decision references those trade-offs, that Consequences
-  actually follow, and cross-ADR consistency (including the immutability rule). Take it from
-  the `adr` row of `CLAUDE.md`'s **Model selection** table, not `analysis-reviewer` — that
-  agent is scoped to `docs/analysis/**` and doesn't cover `docs/adl/**`.
+- **What the review checks**: template conformance, that every option has a genuine Pro and
+  Con, that the Decision references those trade-offs, that Consequences actually follow, and
+  cross-ADR consistency including the immutability rule. The reviewer itself comes from the
+  `adr` row — not `analysis-reviewer`, which is scoped to `docs/analysis/**` and does not cover
+  `docs/adl/**`.
 
 ## Rules
 
