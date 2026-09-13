@@ -117,7 +117,10 @@ jobs:
           # lives in one place and a work type can move out of .claude/ without this file
           # changing. What stays is what CI owns rather than the work type — add_paths is the
           # containment boundary for untrusted issue content and must not come from a file a
-          # pull request can edit, and commit_prefix is a pipeline convention.
+          # pull request can edit, and commit_prefix is a pipeline convention. `model` also
+          # stays, unavoidably: the action needs it before the worker starts, so the worker
+          # cannot resolve it from the table. It duplicates the table's Work model column and
+          # must move with it.
           case "$present" in
             uc)          artifact="use-case";                                          model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
             requirement) artifact="requirement or constraint";                         model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
