@@ -98,7 +98,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`) |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
@@ -245,13 +245,21 @@ it is wired to its callers).
   four computing modes use. The four modes that *do* compute a current are the four modules.
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per computing mode (NF2); `Off` → 0 A via the Coordinator's stop branch.
+  Two operations, per [system-design §3](system-design.md#3-service-catalog): the **dispatch**, whose
+  desired current the Coordinator clamps and writes, and the **baseline query** for R5's
+  handback — the same set-point rule answered from this cycle's conditions with the mode's own
+  restart timing excluded (`resolution-rules.md` is authoritative for why), which drives no
+  charging of its own.
   `Solar`/`SolarOnly` surplus is
   `charger_w − net_w`, not `−net_w` (see [§6 scaffolding-plan reconciliation](#6-reconciliation-with-the-scaffolding-plan)).
 - **Depends on:** the shape of conditioned readings (E7 output) and resolved SOC limit (E3) — as
   plain data types; no runtime dependency (Engines don't call Engines).
 - **ADR gate:** none (ADR-0002 home). *Independently testable per mode.*
 - **Testable on its own:** plain pytest per mode, incl. the closed-loop surplus regression (a mode
-  must hold steady, not oscillate, when its own draw is in `net_w`); gate on `charger_status`.
+  must hold steady, not oscillate, when its own draw is in `net_w`); gate on `charger_status`; and
+  the baseline query answering from this cycle's conditions with the mode's own restart timing
+  excluded — the failure `resolution-rules.md` names is a deselected `Solar` baseline reporting
+  0 A for the rest of the session, which would leave R5's handback unable to fire.
 - **Integration checkpoint:** ⎔ M1 dispatches to the active mode and gets a desired current.
 
 **E2 — Profile Engines (`Manual`, `Auto`)**
@@ -269,11 +277,14 @@ it is wired to its callers).
   selection; `Auto` → `resolution-rules.md` mode-selection (urgency, tariff, sun, surplus, **and the
   set of available modes passed in as an input**, not a Capability-Gate call — §4 rule 4).
 - **Depends on:** E9 output (available modes), E3 output (the resolved active SOC limit, row 1),
-  E4 output (required current, row 2), E7 output (conditioned sun/surplus, row 3), and the plain
+  E4 output (required current, row 2 — for the *dispatch* call only; the baseline call precedes E4
+  and passes the urgency input false), E7 output (conditioned sun/surplus, row 3), and the plain
   reserve-condition flag the Coordinator evaluates once for R9 (row 4) — all as input data only.
 - **ADR gate:** none (ADR-0002 home).
 - **Testable on its own:** plain pytest; `Manual` returns the selection; `Auto` reproduces the
-  resolution-rules table, incl. UC05 escalation to `Captar` and UC07 decline of overnight top-up.
+  resolution-rules table, incl. UC05 escalation to `Captar` and UC07 decline of overnight top-up;
+  and the same table with the urgency input **false**, which is the baseline resolution R5's
+  handback compares against.
 - **Integration checkpoint:** ⎔ M1 obtains the active mode; owned selector option-list (C2) uses the
   same capability facts via the entity-definition path.
 
@@ -300,14 +311,23 @@ it is wired to its callers).
 
 **E4 — Deadline Engine**
 - **Service:** Engine, V5 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
-- **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. The
+- **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. E4
+  partial — the missed-deadline hold's engage/clear policy is designed, per system-design §3, but
+  not built: the shipped engine computes no hold. The
   urgency call site's own adapter reads and the `resolve_deadline_urgency` gating unit sit in
   `coordinator.py`/`coordinator_cycle.py` per ADR-0023.
 - **Builds:** resolved departure deadline (today + one-day-ahead, R14), required current, whether
-  urgency is in effect, and the per-profile lever set it is willing to spend (R5/R15).
-- **Depends on:** ADR-0010; adapter-read deadline sources (RA2) — as data.
-- **Testable on its own:** plain pytest — deadline resolution across sources; urgency threshold;
-  R5 unreachable determination.
+  urgency is in effect, **whether the deadline is unreachable even so**, and the per-profile lever
+  set it is willing to spend (R5/R15). Also the missed-deadline hold's engage/clear policy, with
+  the flag threaded in and out by M1 (§3) — **designed, not built**: the shipped engine computes
+  no hold, so no task below implements it yet.
+- **Depends on:** ADR-0010; adapter-read deadline sources (RA2), the escalated maximum permitted
+  rate composed from E5/E6 headroom, E2's baseline mode resolution (which selects *which* E1 to
+  query), and that E1's desired current — all as data.
+- **Testable on its own:** plain pytest — deadline resolution across sources; R5's slack test
+  against the escalated rate ÷ 1.25; the handback test and the slack test's precedence over it;
+  the urgency latch; R5 unreachable determination against the same rate with no margin; and,
+  once the hold is built, a hold in effect skipping both tests while still pinning urgency.
 - **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
   lead-time window once that reminder is built (project-plan §M3).
@@ -322,9 +342,14 @@ it is wired to its callers).
   The published monthly peak has since gained a second, optional source: ADR-0030 adds the
   `monthly_peak_external` adapter role for a DSO-reported figure, and ADR-0032 resolves the two as
   `max(external, internal)` per cycle rather than folding one into the other's state.
-- **Builds:** effective peak limit and the R3 peak clamp, skippable **only** by `Power`'s R17 opt-out
+- **Builds:** effective peak limit; the **peak headroom under a given limit as a value** — the
+  in-force limit for the `peak_headroom` readout, the raised limit for R5's escalated maximum
+  permitted rate — which performs no clamp and advances no breach timer; and the R3 peak clamp
+  that fits a request to that headroom, skippable **only** by `Power`'s R17 opt-out
   (C3); and the Tracker accumulating monthly peak demand from net import, reset monthly, surfaced as
-  `sensor.smart_charging_monthly_peak_kw`. The clamp solves from the baseline actually flowing
+  `sensor.smart_charging_monthly_peak_kw`. Test anchors include headroom under a *raised* limit
+  leaving the breach timer untouched, which is what separates the headroom operation from the
+  clamp. The clamp solves from the baseline actually flowing
   (`raw_net_w − raw_charger_w`), not the requested current (see [§6](#6-reconciliation-with-the-scaffolding-plan)).
   R3's grace period ("stop only after a *sustained* breach at minimum") lives here.
 - **Depends on:** ADR-0010; the Tracker's running state is threaded by M1 (never HA-held in the
@@ -332,20 +357,27 @@ it is wired to its callers).
 - **Testable on its own:** plain pytest — effective-limit resolution, baseline-solved clamp math with
   worked examples, urgency-driven limit raise (UC05), the grace-period tracker, and the `Power`+R17
   skip.
-- **Integration checkpoint:** ⎔ M1 applies the peak clamp as a distinct call site from Grid-Safety
+- **Integration checkpoint:** ⎔ M1 calls E5's **headroom** twice — once for the `peak_headroom`
+  readout under the in-force limit, once for R5's escalated rate under the raised one — and its
+  **clamp** once on the control path, the only one of the three that may advance the breach timer.
+  M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
 
 **E6 — Grid-Safety Engine**
 - **Service:** Engine, V7 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/grid_safety.py`; tests in `tests/engines/test_grid_safety.py`.
-- **Builds:** the C4 grid-supply-ceiling clamp — **no opt-out**, runs every cycle; solves from the
+- **Builds:** the **C4 headroom as a value**, for callers needing what C4 would allow without
+  performing a clamp (R5's escalated maximum permitted rate); and the C4 grid-supply-ceiling
+  clamp — **no opt-out**, runs every cycle; solves from the
   same baseline as E5; applied *after* the R3 grace evaluation with **no** grace period of its own
   (ADR-0006 distinction).
 - **Depends on:** ADR-0010; must be a **structurally distinct** call site from E5 so the `Power`
   opt-out can never reach C4 (ADR-0006).
 - **Testable on its own:** plain pytest — ceiling clamp bounds below the ceiling for a requesting-32A
   / drawing-6A case; never skipped.
-- **Integration checkpoint:** ⎔ M1 calls E6 unconditionally after E5.
+- **Integration checkpoint:** ⎔ M1 calls E6's **clamp** unconditionally after E5's, and its
+  **headroom** earlier in the cycle when composing R5's escalated maximum permitted rate — two
+  call sites for two operations, only the clamp on the control path.
 
 **E7 — Signal-Conditioning Engine** *(stateful)*
 - **Service:** Engine, V8 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
@@ -410,9 +442,12 @@ it is wired to its callers).
   way — the cycle still reads top-to-bottom as ADR-0006's ordered sequence.
 - **Builds:** the ordered cycle from [system-design §5.1](system-design.md#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing):
   read (RA1 hardware **and** RA3's owned control entities, ADR-0018) → condition (E7) → resolve
-  deadline (E4) → resolve SOC (E3) → required current/urgency (E4) → available modes (E9) → select
-  mode (E2) → desired current (E1) → peak clamp (E5) → grid clamp (E6) → invariants (E8) → write
-  (RA1). Owns and threads all stateful-Engine state; writes diagnostics
+  deadline (E4) → resolve SOC (E3) → available modes (E9) → escalated headroom (E5) + C4 headroom
+  (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
+  committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
+  clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
+  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads all stateful-Engine state, plus the two decision flags the Deadline Engine
+  decides and M1 carries across cycles (R5's urgency latch and missed-deadline hold); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
   bus for a consuming Manager are the ones that ship: `ActiveSocLimitChanged` (→ M2) and
@@ -425,8 +460,9 @@ it is wired to its callers).
 - **ADR gate:** G-ADR-0011 (event-publish step; resolved) and G-ADR-0018/0019 (the owned-entity read
   path's direction and the Store's home; resolved). The compute pipeline was never gated.
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
-  UC01–UC04; the two-distinct-clamps ordering (ADR-0006); fault → force-0A + Fault sensor (ADR-0007);
-  `set_active_mode` timer reset (R11).
+  UC01–UC04; the two-distinct-clamps ordering (ADR-0006); the R5 call order — the baseline
+  Profile and Mode calls precede the Deadline urgency call, and the headroom calls advance no
+  breach timer; fault → force-0A + Fault sensor (ADR-0007); `set_active_mode` timer reset (R11).
 - **Integration checkpoint:** ⎔ driven by C1 (timer) and reading C2 (owned entities); one end-to-end
   cycle writes `charger_current` from a mocked hardware state.
 
@@ -681,8 +717,9 @@ from the retired functional sequence.
   stop branch, and C6 is realized as M2/M3's own subscription surface. Neither drops a service or
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
-  `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks, all nine Engine
-  tasks, and all six Client tasks have shipped. Of the three Manager tasks, M1 and M2 have shipped;
+  `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks and all six
+  Client tasks have shipped, as have all nine Engine tasks — E4 partially, its missed-deadline
+  hold being designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Two checkpoints are only partially met and are marked as such: the Phase 3
