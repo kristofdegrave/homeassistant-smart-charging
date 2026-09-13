@@ -14,7 +14,8 @@ decision is already made and answers only "what do I type".
 Throughout: the repo is `kristofdegrave/homeassistant-smart-charging`, the board is project
 `1` under owner `kristofdegrave` (**EMS**). Every recipe below was run against them on
 `gh` 2.95 — in the exact form written here, not a form it was later edited away from — rather
-than transcribed from memory. Re-run one before trusting it if `gh` has moved on.
+than transcribed from memory, **except where a recipe says otherwise about itself**. Re-run
+one before trusting it if `gh` has moved on.
 
 ## The one rule: read the state back
 
@@ -22,7 +23,7 @@ than transcribed from memory. Re-run one before trusting it if `gh` has moved on
 
 | Transport | Used by |
 |---|---|
-| **GraphQL** | `gh issue create/edit/view`, `gh pr create/edit/view/comment`, `gh issue comment`, every `gh project *` subcommand, all review-thread resolution |
+| **GraphQL** | `gh issue create/edit/view/list`, `gh pr create/edit/view/comment`, `gh issue comment`, every `gh project *` subcommand, all review-thread resolution |
 | **REST** | everything reached through `gh api <path>` without the `graphql` endpoint |
 
 GitHub's **secondary (abuse) rate limiter** trips on a burst of GraphQL mutations — a couple
@@ -41,13 +42,15 @@ re-tripping the limiter would block whatever else is running against this repo, 
 was re-verified when it was written down.
 
 - *The wait is minutes.* The block lifted after roughly **nine minutes**. Retry the call you
-  actually need on a 60-second loop rather than parking the work for an hour — and since no
-  probe gates a retry, that retry is the only probe there is.
+  actually need on a 60-second loop rather than parking the work for an hour, and read what
+  the refusal itself returns — no separate probe stands in for it.
 - *A write can land while its read-back is still refused.* A `gh project item-edit` returned
   success and the `item-list` meant to confirm it was refused in the same minute — the one
   state the read-back rule above leaves open, because the thing being refused is the
-  read. **Retry the read; do not retry the write.** Re-issuing the write blind risks a
-  second, different edit on a field that already took the first.
+  read. **Retry the read; do not retry the write.** A board-field edit is idempotent and a
+  blind retry of it is merely wasted, but the same middle state reaches writes that are not —
+  a comment, a review reply, a sub-issue edge — where the retry posts a duplicate. One rule
+  covers both: establish what landed before writing again.
 
 Worse, some of these fail *quietly enough to look like success*. `gh pr edit --add-label`
 has reported success while applying nothing, repeatedly. So:
@@ -128,9 +131,10 @@ gh api -X PATCH repos/kristofdegrave/homeassistant-smart-charging/issues/<n> \
 ```
 
 with `{"body": "…"}`. Build that payload as a file rather than inline for the same reason the
-creation step does — it is the only form that carries em-dashes, apostrophes and backticks
-through this setup unmangled. `--jq '.body'` on the PATCH prints the stored body, so the call
-is its own read-back; the independent one is
+creation step does: an inline body is the one thing the shell still gets at, and this setup
+mangles em-dashes, apostrophes and backticks on the way through (*Windows and Git Bash*
+below). `--jq '.body'` on the PATCH prints the stored body, so the call is its own read-back;
+the independent one is
 `gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '.body'`.
 
 ## Finding a work item by its body text
@@ -144,8 +148,18 @@ gh issue list --repo kristofdegrave/homeassistant-smart-charging --state all \
   --search "<query> in:body" --limit 100 --json number,state,title
 ```
 
-`--limit` matters for the reason every other listing in this file gives: the default is 30 and
-a query that overflows it silently returns a page, not an error.
+`--limit` is not optional, for the reason *Commenting on a work item* below gives once for
+every listing in this file.
+
+`gh issue list` is GraphQL, so it is refusable. The REST fallback is the search API itself,
+where the state is a query qualifier rather than a flag and so is not constrained the way
+`gh search issues` is:
+
+```sh
+gh api -X GET search/issues \
+  -f q='repo:kristofdegrave/homeassistant-smart-charging <query> in:body' \
+  --jq '.items[] | "\(.number) \(.state) \(.title)"'
+```
 
 ## Parent/sub-issue and blocked-by edges
 
@@ -302,8 +316,10 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
 
 ```sh
 gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments/<comment-id>/replies \
-  -F body=@<path>
+  -F body=@<path> --jq '.id'
 ```
+
+The POST returns the created comment, so `--jq '.id'` is its read-back.
 
 Resolving has **no REST endpoint at all** — GraphQL only, in two steps. List the threads with
 their ids and current state:
