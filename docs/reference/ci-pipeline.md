@@ -146,9 +146,12 @@ in branch protection's required checks on `main`.
   CI mode and ending in a `clean`/`remarks` verdict marker. Because that table comes from the
   PR's own merge ref, a diff touching `CLAUDE.md`, `.claude/`, `docs/reference/` or the label
   script — computed from the changed paths by the workflow, not judged from the diff's content
-  — is reviewed against base-branch copies staged into the runner's temp directory, and the
-  modification is itself reported — a PR must not be able to apply its own rewritten routing to
-  itself. As with the drafter, the table
+  — has its **instructions** read from base-branch copies staged into the runner's temp
+  directory, and the modification is itself reported — a PR must not be able to apply its own
+  rewritten routing to itself. Only the instructions move: the files under review are still the
+  PR's, read from the checkout. The staging step verifies every base copy it wrote is present
+  and non-empty and fails the job otherwise, so whether the guard held is never the worker's
+  judgement, and a failure to enumerate the changed paths turns the guard **on**, not off. As with the drafter, the table
   column may name an agent definition or a work-type review document; the worker follows what
   it says, so a checklist can move without this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
