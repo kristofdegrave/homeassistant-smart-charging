@@ -27,13 +27,27 @@ than transcribed from memory. Re-run one before trusting it if `gh` has moved on
 
 GitHub's **secondary (abuse) rate limiter** trips on a burst of GraphQL mutations — a couple
 of review rounds' worth of thread replies and resolutions is enough — and then blocks the
-whole GraphQL column for up to an hour **while REST keeps working**. `gh api rate_limit` does
-not surface the secondary limiter: it happily reports 5000/5000 remaining on every bucket
-while `gh project` and `gh pr edit` refuse. **The check is to retry the call you actually
+whole GraphQL column **while REST keeps working**. `gh api rate_limit` does not surface the
+secondary limiter: it happily reports 5000/5000 remaining on every bucket while `gh project`
+and `gh pr edit` refuse. **The check is to retry the call you actually
 need and read its result back, not to consult any meter.** A cheap GraphQL *read* such as
 `gh api graphql -f query='{viewer{login}}'` is only a second meter: it can pass while the
 mutation path is still refused, so a green probe is evidence of nothing. Use it to tell a
 network failure from a refusal, never to decide a write is safe.
+
+**Recovering from it.** Two behaviours seen on 2026-09-08 with the limiter tripped. Unlike
+every other recipe in this file they are **reported, not re-executed**: deliberately
+re-tripping the limiter would block whatever else is running against this repo, so neither
+was re-verified when it was written down.
+
+- *The wait is minutes.* The block lifted after roughly **nine minutes**. Retry the call you
+  actually need on a 60-second loop rather than parking the work for an hour — and since no
+  probe gates a retry, that retry is the only probe there is.
+- *A write can land while its read-back is still refused.* A `gh project item-edit` returned
+  success and the `item-list` meant to confirm it was refused in the same minute — the one
+  state the read-back rule above leaves open, because the thing being refused is the
+  read. **Retry the read; do not retry the write.** Re-issuing the write blind risks a
+  second, different edit on a field that already took the first.
 
 Worse, some of these fail *quietly enough to look like success*. `gh pr edit --add-label`
 has reported success while applying nothing, repeatedly. So:
@@ -103,6 +117,36 @@ gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues --input 
 with `{"title": …, "body": …, "labels": [ … ]}`. Using `--input` also keeps the body's UTF-8
 intact.
 
+## Rewriting a work item's body
+
+`gh issue edit --body-file` is GraphQL and inherits the silent-failure warning above, so the
+REST form is the one to reach for:
+
+```sh
+gh api -X PATCH repos/kristofdegrave/homeassistant-smart-charging/issues/<n> \
+  --input <payload.json> --jq '.body'
+```
+
+with `{"body": "…"}`. Build that payload as a file rather than inline for the same reason the
+creation step does — it is the only form that carries em-dashes, apostrophes and backticks
+through this setup unmangled. `--jq '.body'` on the PATCH prints the stored body, so the call
+is its own read-back; the independent one is
+`gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '.body'`.
+
+## Finding a work item by its body text
+
+`gh search issues` **rejects `--state all`** — `invalid argument "all" for "--state" flag:
+valid values are {open|closed}`. To search across both states, search from the list command
+instead, which accepts `all` and takes the same query qualifiers:
+
+```sh
+gh issue list --repo kristofdegrave/homeassistant-smart-charging --state all \
+  --search "<query> in:body" --limit 100 --json number,state,title
+```
+
+`--limit` matters for the reason every other listing in this file gives: the default is 30 and
+a query that overflows it silently returns a page, not an error.
+
 ## Parent/sub-issue and blocked-by edges
 
 That an epic's membership and ordering use these relationships rather than body text is
@@ -156,7 +200,8 @@ One REST fallback serves both — for the comments API a PR *is* an issue, so th
 is correct for a PR number too:
 
 ```sh
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments -f body='<markdown>'
+gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+  -F body=@<path>
 ```
 
 Read back with:
@@ -257,7 +302,7 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
 
 ```sh
 gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments/<comment-id>/replies \
-  -f body='<markdown>'
+  -F body=@<path>
 ```
 
 Resolving has **no REST endpoint at all** — GraphQL only, in two steps. List the threads with
@@ -294,6 +339,22 @@ assuming a batch all landed.
   apostrophes can abort the whole command with *unexpected EOF*. Write the body with the Write
   tool and use `--body-file` (or `--input` for a JSON payload); it costs nothing and removes
   the failure mode.
+- **A `gh api` body is a body too — `-F body=@<path>`, not inline `-f body='…'`.** The inline
+  form is the one place left where the shell still gets at the text, and an apostrophe in it
+  has aborted the call with *unexpected end of JSON input*. `-F body=@<path>` reads the file
+  itself and round-trips apostrophes, em-dashes and backticks byte for byte:
+
+  ```sh
+  gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+    -F body=@<path> --jq '.body'
+  ```
+
+  Which is why every body-carrying recipe above — comments, review replies, PR creation —
+  is written that way.
+- **`jq` is not on PATH here; `gh --jq` is.** `gh`'s own `--jq` flag is built in and every
+  recipe above relies on it, but a standalone `jq` in a pipe fails with *jq: command not
+  found*. So a JSON payload for `--input` cannot be assembled with the obvious
+  `jq -Rs '{body: .}' file` — write the payload file directly with the Write tool instead.
 - **Git Bash rewrites a leading-slash argument into a Windows path.** `gh api /repos/…` fails
   with *invalid API endpoint: "C:/Program Files/Git/repos/…"*. Either omit the leading slash —
   `gh api repos/…`, which is what every recipe above does — or prefix the command with
