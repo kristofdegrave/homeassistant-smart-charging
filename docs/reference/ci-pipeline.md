@@ -150,8 +150,10 @@ in branch protection's required checks on `main`.
   directory, and the modification is itself reported — a PR must not be able to apply its own
   rewritten routing to itself. Only the instructions move: the files under review are still the
   PR's, read from the checkout. The staging step verifies every base copy it wrote is present
-  and non-empty and fails the job otherwise, so whether the guard held is never the worker's
-  judgement, and a failure to enumerate the changed paths turns the guard **on**, not off. As with the drafter, the table
+  and the right size and fails the job otherwise, so whether the guard held is never the
+  worker's judgement, and a failure to enumerate the changed paths turns the guard **on**, not
+  off. The staged set is a superset of the paths that arm it, so there is no path that turns
+  the guard on without its base copy being available. As with the drafter, the table
   column may name an agent definition or a work-type review document; the worker follows what
   it says, so a checklist can move without this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
