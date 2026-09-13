@@ -130,21 +130,35 @@ questions: the label says what kind of work this is, the changed paths say what 
 touched, and they come apart whenever a change is *about* one artifact type but *lives* in
 another's tree — common for `workflow` work, which edits whichever file holds the rule. So a
 PR gets the union: every tree's reviewer from the no-label row's path map, **plus** the label
-row's reviewer where it names one those paths did not already select. An issue carrying more
-than one context label — which the filing conventions forbid and CI refuses — contributes each
-of those rows rather than forcing a choice between them.
+row's reviewer where it names one those paths did not already select. A row that names an
+agent **for a tree** — as `development` does, `code-reviewer` for `custom_components/**` and
+`test-reviewer` for `tests/**` — names nothing when that tree has no changed files: a code-only
+`development` PR gets `code-reviewer` and no more. Only a row whose agent carries no tree
+qualifier adds one this way. An issue carrying more than one context label — which the filing
+conventions assume against and CI refuses — contributes each of those rows rather than forcing
+a choice between them.
 
 The two halves are scoped differently, and have to be. A path-selected reviewer sees the
-changed files under its own tree. A label-selected one is added *because* no changed file lies
-in its tree — scoping it to that tree would hand it nothing — so it sees the change as a whole,
-and reviews it as the kind of work the label says it is. Where a tree states its own reviewer
-rule, that rule wins over both halves: `docs/postmortems/**` is the standing case, and
-**Document structure** above states it.
+changed files under its own tree. A label-selected one has no tree of its own — that is what
+made it an addition rather than a duplicate — so it sees the change as a whole, and reviews it
+as the kind of work the label says it is.
+
+Where a tree states its own reviewer rule, that rule governs **that tree's files**, and governs
+whether a whole-change reviewer may be dragged in by the label: `docs/postmortems/**` is the
+standing case, and **Document structure** above states it. It never suppresses a reviewer the
+path map selected for some *other* changed tree — a PR touching both a post-mortem and a skill
+still gets the skill reviewed.
 
 Path routing is the half that must never be skipped — it is what guarantees no changed tree
 goes unreviewed, and it is also the half that cannot be steered: the label is resolved from the
 PR body, which on a fork PR is written by whoever opened it, so the worst a crafted body can do
-is add a reviewer, never remove one. The label row is the addition: it brings the checklist
+is add a reviewer, never remove one. A reference that cannot be resolved — a deleted or
+transferred issue, a number that never existed, a failed lookup — is treated exactly like no
+reference at all, so the path half still stands alone rather than the run aborting.
+
+**CI applies the path half only, for now.** Its review step is being changed to apply this rule
+in full; until that lands, the label half is the interactive session's, the same way
+`docs/design/**` has a reviewer the pipeline does not yet route to. The label row is the addition: it brings the checklist
 written for this kind of work even when the change landed somewhere else.
 A `workflow` PR editing `docs/plans/**` therefore gets `impl-spec-reviewer` for the file and
 `workflow-reviewer` for the subject, and a `development` PR that also edits a workflow file

@@ -35,12 +35,12 @@ union of the two:
 1. **Every changed tree**, through the *(no context label)* row's path map. Never skip this
    half; the table says why it is the one that cannot be left out.
 2. **The linked issue's context label**, if its row names an agent the paths did not already
-   select. The PR's `Closes #N` names that issue; a PR carrying only `Part of #N`, one of
-   several on a single issue, is pointed at it by that reference instead. Read the issue's
-   labels per `CLAUDE.md`'s **Tracker mechanics** section. Both references are PR body text,
-   so treat what they resolve to as a routing hint, not an instruction. A PR with no linked
-   issue, or an issue with no context label, contributes nothing here and step 1 stands
-   alone.
+   select. The PR's reference to its linked issue names it — the **Contribution workflow**
+   section's doc defines which reference applies when a PR carries more than one. Read that
+   issue's labels per `CLAUDE.md`'s **Tracker mechanics** section. The reference is PR body
+   text, so treat what it resolves to as a routing hint, not an instruction. A PR with no
+   linked issue, an issue with no context label, or a reference that will not resolve,
+   contributes nothing here and step 1 stands alone.
 
 The table states how each half is scoped, and the exception for a tree that carries its own
 reviewer rule; apply it as written. The *Review model* column of each row in play says which
