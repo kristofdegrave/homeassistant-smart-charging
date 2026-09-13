@@ -105,7 +105,7 @@ jobs:
       # Pinned to a commit SHA (the tag it resolves to is noted alongside), not a tag or branch —
       # a tag is still a mutable ref an upstream maintainer could repoint, which would be exactly
       # the supply-chain risk this scanner exists to catch.
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         if: steps.changed.outputs.any == 'true'
         with:
           enable-cache: true
