@@ -85,10 +85,14 @@ jobs:
         with:
           # The check diffs against the PR base, which a shallow clone does not contain.
           fetch-depth: 0
-      - name: Authoring rules (docs/** paths in skills and agent definitions)
+      # The check's own tests run first: its only correctness evidence would otherwise rot
+      # silently, and they need no dependencies beyond the checkout already made.
+      - name: Authoring-rule check self-test
+        run: bash .github/test-check-authoring-rules.sh
+      - name: Authoring rules (documentation links in skills and agent definitions)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: .github/check-authoring-rules.sh "$BASE_SHA"
+        run: bash .github/check-authoring-rules.sh "$BASE_SHA"
 
   test:
     needs: changes

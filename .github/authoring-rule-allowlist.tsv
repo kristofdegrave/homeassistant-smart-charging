@@ -1,0 +1,8 @@
+# Exceptions to .github/check-authoring-rules.sh: a link from a skill or agent definition to a
+# project documentation file that is genuinely subject matter — something the artifact acts on
+# rather than reads to learn how to operate — and that has to be a link rather than a bare path.
+#
+# Tab-separated: <artifact path><TAB><linked path, with any leading ../ stripped><TAB># reason
+#
+# Every entry is an exception a reviewer has to agree with, so keep this short enough to read.
+# Empty by design: the bare-path form is almost always the right answer instead.

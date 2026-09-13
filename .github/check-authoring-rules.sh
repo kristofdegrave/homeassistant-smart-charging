@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
-# Enforce the authoring rule from docs/reference/ai-authoring.md that a grep can decide:
+# Enforce the part of the authoring rule (docs/reference/ai-authoring.md) that a grep can
+# decide with certainty: a skill or agent definition must not carry a MARKDOWN LINK to a
+# project documentation file. It points at the CLAUDE.md section owning the topic instead.
 #
-#   A skill or agent definition never names a docs/** path directly; it points at the
-#   CLAUDE.md section owning the topic, which routes onward.
+# Why links and not paths. The rule separates documentation an artifact reads to learn how to
+# operate (route it) from repo paths the artifact acts on (name them). Path shape does not tell
+# those apart: write-adr's `docs/adl/template.md` is the template it drafts against and stays
+# named, while diagnosing-bugs' [ADR-0009](../../../docs/adl/0009-...md) is a document it reads
+# and must be routed. Both are concrete .md files in the same tree. What separates them is the
+# link: a markdown link exists to be followed, so it IS a route; a bare path in prose is a
+# name. Checked against the whole .claude/ tree, this flags every genuine route and nothing
+# legal.
 #
-# Diff-scoped on purpose. That reference converts the back-catalogue on its own track, so this
-# only looks at lines a change ADDS — an untouched file that still names a path is not this
+# Known false negative, stated so it is a limit rather than a surprise: a route written as a
+# bare path is missed. That is judgment, and judgment belongs to the reviewer checklist, along
+# with the rest of the rule a grep cannot see — a fact restated instead of routed, a route that
+# should exist but does not, the project named, a project-specific resource list. See #1100.
+#
+# Diff-scoped on purpose. The reference converts the back-catalogue on its own track, so this
+# only looks at lines a change ADDS — an untouched file that still carries a link is not this
 # check's business, and a big-bang retrofit is explicitly not wanted.
 #
-# What it cannot decide is the other half of the same rule: a fact restated instead of routed,
-# and a route that should exist but does not. Both are judgment calls and belong to the
-# reviewer checklist; see the epic this script was written for.
+# A PR can defeat this by editing the script, or by allowlisting its own violation. Both are
+# inherent to running a checked-in script against its own PR, and both are contained by
+# CODEOWNERS on .github/ and .claude/ plus the manual merge gate. A known limit, not a
+# guarantee.
 #
 # Usage:  .github/check-authoring-rules.sh [base-ref]
 #         base-ref defaults to origin/main.
@@ -37,33 +51,35 @@ violations=0
 current=""
 
 # --unified=0 so context lines never masquerade as additions.
+#
+# The current file comes from the `diff --git` header, not from `+++ b/`. In a unified diff
+# every content line carries a +, - or space prefix, so a line of prose cannot forge a
+# `diff --git` header — whereas a skill documenting diff syntax can contain a line starting
+# `++`, which renders as `+++ b/...` and would otherwise retarget every later violation to the
+# wrong file. `diff --git` also survives core.quotePath, where `+++ "b/..."` does not match.
 while IFS= read -r line; do
   case "$line" in
-    '+++ b/'*)
-      current="${line#+++ b/}"
+    'diff --git a/'*)
+      current="${line##* b/}"
       continue
       ;;
-    '+++'*|'---'*|'+'*' '*) ;;
   esac
 
   case "$line" in
     '+'*) ;;
     *) continue ;;
   esac
-  [ "$line" = "+++" ] && continue
-
   body="${line#+}"
 
-  # A concrete documentation file: docs/<something>.md. A glob (docs/adl/**) names a tree the
-  # artifact acts on, not a document it reads, so it is never matched here — and a pattern
-  # that does contain a wildcard is skipped explicitly below in case one ever ends in .md.
-  matches=$(printf '%s\n' "$body" | grep -oE 'docs/[A-Za-z0-9._/-]+\.md' || true)
+  # A markdown link whose target is a project documentation file, relative or repo-rooted.
+  # A bare path in prose is a name, not a route, and is deliberately not matched.
+  matches=$(printf '%s\n' "$body" \
+    | grep -oE '\]\((\.\./)*docs/[A-Za-z0-9._/-]+\.md\)' \
+    | sed -E 's/^\]\(//; s/\)$//; s#^(\.\./)+##' || true)
   [ -z "$matches" ] && continue
 
   while IFS= read -r path; do
     [ -z "$path" ] && continue
-    case "$path" in *'*'*) continue ;; esac
-
     if [ -f "$ALLOW_FILE" ] && grep -qF "$(printf '%s\t%s' "$current" "$path")" "$ALLOW_FILE"; then
       continue
     fi
@@ -79,13 +95,15 @@ done < <(git diff --unified=0 "$BASE...HEAD" -- '.claude/skills/*' '.claude/agen
 if [ "$violations" -gt 0 ]; then
   cat >&2 <<'MSG'
 
-A skill or agent definition may not name a docs/** path. Point at the CLAUDE.md section that
-owns the topic instead, and where no section owns it, add the routing line to CLAUDE.md rather
-than the fact. The full rule, its four boundaries, and the subject-matter exception are in
-CLAUDE.md's "Authoring AI artifacts" section.
+A skill or agent definition may not link to a project documentation file: a link is a route,
+and routes go through CLAUDE.md. Point at the section owning the topic instead, and where no
+section owns it, add the routing line to CLAUDE.md rather than the fact. The rule, its
+boundaries and the subject-matter exception are in the document CLAUDE.md's "Authoring AI
+artifacts" section routes to.
 
-If the path really is subject matter — something the artifact acts on rather than reads to
-learn how to operate — add it to the allowlist with a reason, so the exception is reviewed:
+A path the artifact acts on rather than reads stays named — write it as a bare path, not a
+link. If it genuinely has to be a link, add it to the allowlist with a reason so the exception
+is reviewed:
 MSG
   printf '  %s   (tab-separated: <artifact-path>\\t<named-path>)\n\n' "$ALLOW_FILE" >&2
   exit 1

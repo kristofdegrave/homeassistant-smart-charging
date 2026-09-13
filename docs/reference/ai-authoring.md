@@ -111,6 +111,17 @@ the next repository working, while one that names the facts lands in it lying. A
 prompt (`.github/workflows/_ai-*.yml`) is outside the rule: it does not travel — it *is* this
 repository's pipeline.
 
+**What enforces it.** `.github/check-authoring-rules.sh`, run per PR by `ci.yml`'s `authoring`
+job, rejects the half a grep can decide with certainty: a **markdown link** from a skill or
+agent definition to a project documentation file. A link exists to be followed, so it is a
+route; a bare path in prose is a name, which is why the subject-matter paths below pass
+untouched. It is diff-scoped, matching the conversion scope stated further down, and its
+exceptions live in `.github/authoring-rule-allowlist.tsv` — a link that is genuinely subject
+matter goes there with a reason, so the exception is reviewed rather than silent. What the
+check cannot see stays with the reviewer: a route written as a bare path, a fact restated
+instead of routed, a route that should exist and does not, the project named, a
+project-specific resource list.
+
 **The four boundaries**, in the order they get argued about:
 
 - **An artifact may name another skill or agent.** They travel together — `.claude/` moves as
