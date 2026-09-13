@@ -468,7 +468,8 @@ jobs:
           # fix .github/workflows, .claude/skills, .claude/agents, .github/ISSUE_TEMPLATE,
           # custom_components, or tests. Auto-routing those to needs-work would silently no-op
           # through the fix cycles instead of ever changing anything, so any non-docs path in the
-          # diff skips straight to a human.
+          # diff skips straight to a human. Non-empty = the diff touches something outside
+          # docs/; the `remarks` branch below reads it before the cycle cap.
           non_docs_changed=$(git diff --name-only "${{ inputs.base_sha }}...${{ inputs.head_sha }}" \
             -- . ':!docs' | head -1)
 
@@ -485,7 +486,12 @@ jobs:
             # review failure — warn instead of tripping the pipefail "Clean up on failure" path.
             gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
           elif [ "${verdict:-}" = "remarks" ]; then
-            if [ "$remarks_count" -le 2 ]; then
+            if [ -n "$non_docs_changed" ]; then
+              # Non-docs diff: the fix worker could only ever re-stage docs/, so a fix cycle
+              # here changes nothing. Skip the cycles entirely and hand it to a human.
+              gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
+              gh pr comment "$PR" --body "This PR's diff touches paths outside \`docs/\` (first one: \`${non_docs_changed}\`), which the automatic fix worker cannot author — it only commits under \`docs/\`. Routing straight to \`needs-approval\` instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff."
+            elif [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
             else
