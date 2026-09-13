@@ -121,13 +121,17 @@ between its draft, review and fix workers.
 |---|---|---|---|
 | 1–2 | `implement` | new | `/implement #N`. Read the issue; look its context label up in the table. No context label, or `idea`: stop and point at `work-idea` / `file-task-issue`. `workflow`: stop, per the table rule. Otherwise: worktree from fresh `origin/main` per the workflow doc, board Status → `In progress`, delegate the actual work to the row's work file, Definition of Done self-check, push, PR against `main` with `Closes #N`, board Status → `In review`. End by naming `review` as the next step. |
 | 3–4 | `review` | new | `/review #N` on a PR. Look the linked issue's label up; do the behind-`origin/main` check; for each agent the row names, spawn it fresh (never inline) on the changed files under its tree; post findings via `submit-pr-review` in local mode. Owns the **local round cap** (below). On a clean pass, hand to `finalize-pr-review`; on remarks, name `fix` as the next step. |
-| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, the human-comment acknowledgement and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2, 4, 5 and 6 (the last for the local commit-and-push half) remain their single source and `fix` cites them. What `fix` adds is the dispatch — "re-author with the work file from the table row" instead of `address-review-remarks`' hard-coded use-case/ADR/analysis cases — and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
+| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, the human-comment acknowledgement and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2, 4, 5 and 6 (the last for the local commit-and-push half) remain their single source and `fix` cites them. The dispatch — "re-author with the work file from the table row" — now lives in `address-review-remarks` section 3 itself, so both entry points share one copy; what `fix` adds is the *Work model* column (CI picks its own) and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
 | 5 (mechanic) | `resolve-review-thread` | new, small | **As shipped this splits into two passes, deliberately differing from the row below: reply per finding, then resolve once for the run after the fixes are pushed — resolving as each finding is addressed would close threads over work a failed push never landed.** Reply in its thread with what was done or why not, then resolve the thread **only if actually fixed**; disputed or partial threads stay open. Owns the GraphQL resolve mutation and the "outdated is not resolved" rule, moved out of `finalize-pr-review` (which CI never invokes, so the move changes nothing in CI). For the reply itself it **cites** `address-review-remarks` section 4 — the REST call and the `ai-fix-ack` marker stay where they are, untouched. The marker's rule is applied exactly as both consumers define it: on every reply to a comment whose author login does not end in `[bot]`. A locally posted review is authored by the maintainer's own identity, so **replies to locally posted findings carry `ai-fix-ack` too** — otherwise a later CI `needs-review` would count every local finding as unaddressed human feedback and burn both fix cycles. Replies to CI-bot findings carry no marker; those threads are tracked by resolution. |
 | 7 | `finalize-pr-review` | trimmed | Keeps "confirm nothing Critical/Major remains", `needs-approval`, and the stranded-stack check; points to `resolve-review-thread` for the mechanic it used to carry. Its frontmatter `description`, which today advertises "resolves the inline threads that were actually fixed", is rewritten so it stops firing on the step `resolve-review-thread` now owns. |
 
-`address-review-remarks` is **not changed in this phase**. It stays CI's step-5 entry and the
-local entry for analysis docs and ADRs, exactly as today. See *Phasing* for why, and for how it
-and `fix` converge.
+`address-review-remarks` **is changed in this phase.** The original plan froze it, and every
+other skill CI loads by name, so phase 1 could be argued safe on "nothing CI depends on
+changes". That constraint has been **retired by decision**: it existed to let the layout be
+shaped without having to reason about CI at the same time, and the layout is now shaped. Its
+section 3 becomes the type-agnostic dispatch — the linked issue's context label, that row's
+work file, and the branch for a row naming none — and `fix` cites it rather than carrying a
+second copy. CI changes now land with the slice that needs them, argued on their own merits.
 
 Step 0 (file the issue) stays with `file-task-issue`. Step 6 (the loop) and steps 8–9 (manual
 comments, merge, worktree cleanup) stay with the human partner and the workflow doc.
@@ -378,7 +382,8 @@ Two consequences worth stating, since the remaining labels inherit them:
   GraphQL mechanic") and `ci-pipeline.md`'s interactive-flow summary ("then
   `finalize-pr-review` resolves what got fixed"). Both are wrong the day the move lands
   otherwise.
-- `address-review-remarks` untouched, including its section 4.
+- `address-review-remarks` section 4 untouched — the reply call and the `ai-fix-ack` marker
+  stay where they are. Section 3 is the part that moves; see above.
 
 **How much the pipeline actually runs.** Measured 2026-09-11 by enumerating every one of the
 873 `ai-pipeline.yml` runs and reading the jobs of all 22 that were not skipped: `draft` 11
@@ -403,7 +408,8 @@ the slices**, not after phase 1 stabilises. Everything else below keeps its phas
 
 **Phase 2 — CI follows, and the layout moves (one coordinated strand):**
 
-- `_ai-fix.yml` gains a real per-type path allow-list **(pulled ahead — see above)** (staging scoped by the row's trees, not
+- `_ai-fix.yml` gains a real per-type path allow-list
+  **(pulled ahead — see above)** (staging scoped by the row's trees, not
   the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
   only by `address-review-remarks`' docs-only scope plus that post-hoc staging — neither of
@@ -436,9 +442,11 @@ the phase-1 skills have been used for a while and stabilised.
 
 ## Non-goals
 
-- No CI behaviour change in phase 1, apart from two: the `_ai-fix.yml` allow-list pulled ahead
-  above, and each slice narrowing its own label's `add_paths` — including no change to any skill file CI loads by name
-  in a way that alters what CI does (`address-review-remarks`, `submit-pr-review`'s CI mode).
+- **No longer a non-goal:** phase 1 originally changed no CI behaviour and no skill CI loads
+  by name. Retired by decision (see above). What replaces it is narrower and still binding: a
+  CI change lands **in the slice that needs it**, argued on its own merits, never as a
+  side effect — today that is the `_ai-fix.yml` allow-list pulled ahead above, each slice
+  narrowing its own label's `add_paths`, and `address-review-remarks` section 3.
 - No autonomous chaining of skills; the stop-and-report rule in the workflow doc is unchanged.
 - No second state machine. Readiness and progress remain the project board's Status field plus
   `needs-approval`.

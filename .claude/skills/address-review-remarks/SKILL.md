@@ -1,12 +1,11 @@
 ---
 name: address-review-remarks
-description: "Use when addressing review findings on this project's documents — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
+description: "Use when addressing review findings on a pull request — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
 ---
 
 # Address review remarks
 
-Fix the findings a review raised against a document
-(`docs/adl/**`), then account
+Fix the findings a review raised against a change, then account
 for every finding in a summary. The fix policy and the summary contract below are the single
 source of truth — the CI workflow (`_ai-fix.yml`) and local runs both follow them.
 
@@ -47,10 +46,14 @@ stop — do not invent work.
 
 Fixing is re-authoring — work with the same context the original author had:
 
-- **Apply the work file in full.** Take the change's context label, look its row up in
-  `CLAUDE.md`'s **Model selection** table, and apply the file its *How the work is done* column
-  names — its template, rules, self-checks and common-mistakes list are what define a correct
-  fix. None of that is restated here.
+- **Apply the work file in full.** Take the context label from the PR's **linked issue** —
+  not the PR itself, which carries none — and look its row up in `CLAUDE.md`'s **Model
+  selection** table. Apply the file its *How the work is done* column names: its template,
+  rules, self-checks and common-mistakes list are what define a correct fix, and none of that
+  is restated here.
+- **Where the row names no work file, or there is no linked issue or no context label**, there
+  is nothing to re-author with. Fix what the finding states, keep the severity policy of
+  section 2, and say in the summary that no work file governed the change.
 - **A work file's rule about changing an already-merged artifact overrides the finding**,
   including the conditions that file attaches to when the rule applies. Such a finding becomes
   a **Skipped** entry in the summary, recorded with why, rather than an edit.

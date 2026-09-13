@@ -85,12 +85,13 @@ Three cases are not ordinary hunk-merging:
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
   code.
 - **Generated or index-like content** — an epic body listing its children, a numbered
-  document series, a catalog or coverage table, a use-case inventory. Re-derive it from its source after taking
-  both sides' underlying changes; hand-merging the rows yields a table matching neither side's
-  reality. A sequentially numbered series needs one extra rule, for the case where both sides
-  claimed the same number — which a work file that numbers its documents
-  usually has a rule to prevent, so reaching it means something already went wrong upstream.
-  Where that file forbids renumbering an already-merged document, the side already on `main`
+  document series, a catalog or coverage table, an inventory or index document. Re-derive it
+  from its source after taking both sides' underlying changes; hand-merging the rows yields a
+  table matching neither side's reality. A sequentially numbered series needs one extra rule,
+  for the case where both sides claimed the same number — which a work file that numbers its documents usually has a rule
+  to prevent, so reaching it means something already went wrong upstream. That file is the one
+  `CLAUDE.md`'s **Model selection** table names for the type.
+  Where it forbids renumbering an already-merged document, the side already on `main`
   is out of reach, so the *unmerged* side is the one that moves: renumber it by that file's own
   rule against a freshly fetched `origin/main`, and bring everything that keys off the number
   with it — cross-references and any index row, in the same commit; the branch name only if it

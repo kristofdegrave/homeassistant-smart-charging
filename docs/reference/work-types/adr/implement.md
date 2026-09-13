@@ -72,9 +72,9 @@ Check those before drafting, not just the headline definition.
   issue. The ADL row (see the Self-check bullet above) and any supersession Status-line edit
   belong to the same ADR's PR, not a separate one.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences to
-  reflect a change of mind — write a new ADR that supersedes it. `address-review-remarks`
-  carries the same rule for CI; a change here belongs in both. Two guards, because the rule is
-  easy to over-apply:
+  reflect a change of mind — write a new ADR that supersedes it. This file is the only home
+  for the rule; a fix run reaches it through the `adr` row, so it never needs restating
+  elsewhere. Two guards, because the rule is easy to over-apply:
   - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`.
     Every ADR is drafted with `Status: Accepted` in its own PR, so a working-tree read makes an
     ADR still being drafted look immutable. If the file doesn't exist on the base, or its

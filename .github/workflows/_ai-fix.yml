@@ -197,10 +197,10 @@ jobs:
 
             Follow the `address-review-remarks` skill in .claude/skills/ — it defines how to
             locate the review, the fix policy, and the exact summary-comment contract
-            (including the marker rules). When fixing a use-case document, it directs you to
-            apply the `write-use-case` skill in full — the same authoring context the draft
-            was written with. When fixing an ADR (`docs/adl/**`), it directs you to the work
-            file the `adr` row names, and to respect ADR immutability. CI specifics:
+            (including the marker rules). Its section 3 dispatches on the context label of
+            the PR's linked issue through `CLAUDE.md`'s **Model selection** table, and sends
+            you to that row's work file for the same authoring context the draft was written
+            with — including any rule that file sets on changing an already-merged artifact. CI specifics:
             - The PR number is ${{ inputs.pr_number }}.
             - You are running in CI: do NOT commit or push — the workflow does that in the
               next step.
