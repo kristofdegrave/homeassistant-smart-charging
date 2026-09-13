@@ -50,6 +50,12 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
   - **Cover the mandated cases:**
     - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
       unmapped raw state (all four; ADR-0009).
+    - **Every numeric role whose catalogued unit column names a unit:** a fifth mandated case —
+      state the role's expected unit set, and pin its behaviour on a foreign unit and on an absent
+      one. ADR-0040, which extends ADR-0009, is the authority on what those clauses require, which
+      roles they reach, and how they are discharged (the two cases per adapter class defining the
+      read, the unit-set statement per role) and on the docstring a case pinning "used as-is"
+      must carry — read it before writing them, rather than working from a summary.
     - **Engines:** each behavioral row/branch, plus **worked examples** for clamp math
       (grid-safety, floor/cap) and the NF4 voltage fallback.
     - **Coordinator:** happy path, status-gating-to-zero, clamp applied, fault path (required
@@ -68,7 +74,8 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
   assertion under `# Assert` checks that same behavior. If you're tempted to test a second behavior
   (a second `# Act`, or asserts about an unrelated outcome), split it into another test. This keeps
   each Should-When-Then name honest and a failure pointing at a single cause.
-- **All four adapter cases, every role.** Present / absent / unavailable / unmapped-raw.
+- **The mandated adapter cases.** Present / absent / unavailable / unmapped-raw on every role
+  (ADR-0009), plus the fifth, unit case (ADR-0040) wherever its trigger above applies.
 - **Tests must fail without the code.** If a test passes against an empty implementation, it isn't
   testing anything.
 - **Mock at the boundary.** Don't mock so deep the wiring the test claims to cover is bypassed.
@@ -76,7 +83,7 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 ## Common mistakes
 
 - A `modes/`/`engines/` test that imports `homeassistant.*` (wrong harness).
-- Missing one of an adapter role's four state cases.
+- Missing one of an adapter role's mandated cases.
 - Clamp-math tests with no worked example (just "it returns a number").
 - Vacuous asserts or asserting on a mock's return value — green against no implementation.
 - Test names that describe mechanics (`test_function_returns`) instead of the behavior they trace
