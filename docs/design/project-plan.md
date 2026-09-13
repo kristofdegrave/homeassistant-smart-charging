@@ -245,7 +245,7 @@ it is wired to its callers).
   four computing modes use. The four modes that *do* compute a current are the four modules.
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per computing mode (NF2); `Off` → 0 A via the Coordinator's stop branch.
-  Two operations, per [system-design §3](system-design.md#3-services): the **dispatch**, whose
+  Two operations, per [system-design §3](system-design.md#3-service-catalog): the **dispatch**, whose
   returned state the caller commits, and the **baseline query** for R5's handback — the same
   set-point rule answered from this cycle's conditions with the mode's own restart timing
   excluded (`resolution-rules.md` is authoritative for why), whose returned state is not
@@ -256,7 +256,10 @@ it is wired to its callers).
   plain data types; no runtime dependency (Engines don't call Engines).
 - **ADR gate:** none (ADR-0002 home). *Independently testable per mode.*
 - **Testable on its own:** plain pytest per mode, incl. the closed-loop surplus regression (a mode
-  must hold steady, not oscillate, when its own draw is in `net_w`); gate on `charger_status`.
+  must hold steady, not oscillate, when its own draw is in `net_w`); gate on `charger_status`; and
+  the baseline query answering from this cycle's conditions with the mode's own restart timing
+  excluded — the failure `resolution-rules.md` names is a deselected `Solar` baseline reporting
+  0 A for the rest of the session, which would leave R5's handback unable to fire.
 - **Integration checkpoint:** ⎔ M1 dispatches to the active mode and gets a desired current.
 
 **E2 — Profile Engines (`Manual`, `Auto`)**
@@ -312,13 +315,17 @@ it is wired to its callers).
   urgency call site's own adapter reads and the `resolve_deadline_urgency` gating unit sit in
   `coordinator.py`/`coordinator_cycle.py` per ADR-0023.
 - **Builds:** resolved departure deadline (today + one-day-ahead, R14), required current, whether
-  urgency is in effect, and the per-profile lever set it is willing to spend (R5/R15).
+  urgency is in effect, **whether the deadline is unreachable even so**, and the per-profile lever
+  set it is willing to spend (R5/R15). Also the missed-deadline hold's engage/clear policy, with
+  the flag threaded in and out by M1 (§3) — **designed, not built**: the shipped tree defers it to
+  issue #1006, so no task below implements it yet.
 - **Depends on:** ADR-0010; adapter-read deadline sources (RA2), the escalated maximum permitted
   rate composed from E5/E6 headroom, E2's baseline mode resolution (which selects *which* E1 to
   query), and that E1's desired current — all as data.
 - **Testable on its own:** plain pytest — deadline resolution across sources; R5's slack test
   against the escalated rate ÷ 1.25; the handback test and the slack test's precedence over it;
-  the urgency latch; R5 unreachable determination against the same rate with no margin.
+  the urgency latch; R5 unreachable determination against the same rate with no margin; and,
+  once #1006 lands, a hold in effect skipping both tests while still pinning urgency.
 - **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
   lead-time window once that reminder is built (project-plan §M3).
@@ -363,6 +370,10 @@ it is wired to its callers).
   opt-out can never reach C4 (ADR-0006).
 - **Testable on its own:** plain pytest — ceiling clamp bounds below the ceiling for a requesting-32A
   / drawing-6A case; never skipped.
+- **Integration checkpoint (E5):** ⎔ M1 calls E5's **headroom** twice — once for the
+  `peak_headroom` readout under the in-force limit, once for R5's escalated rate under the raised
+  one — and its **clamp** once on the control path, which is the only call that may advance the
+  breach timer.
 - **Integration checkpoint:** ⎔ M1 calls E6's **clamp** unconditionally after E5's, and its
   **headroom** earlier in the cycle when composing R5's escalated maximum permitted rate — two
   call sites for two operations, only the clamp on the control path.

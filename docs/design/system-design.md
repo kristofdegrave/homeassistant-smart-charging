@@ -151,7 +151,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 | **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode and commits the state it returns, and *queries* the baseline mode for R5's handback — the query answers from this cycle's conditions with the mode's own restart timing excluded, and its returned state is not committed (`resolution-rules.md`; §5.1) |
 | **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
-| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15) |
+| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — the stateful shape below. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
 | **Billing-Protection Engine** | V6 | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
 | **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
@@ -409,14 +409,14 @@ sequenceDiagram
     B-->>C: escalated peak headroom
     C->>G: C4 headroom (headroom, not clamp)
     G-->>C: ceiling headroom
-    Note over C: compose the escalated maximum permitted rate — these two headrooms plus C1's<br/>maximum charging current, which is config already held from the Store read and needs<br/>no Engine call. Bounds and carve-outs: system-overview.md's glossary term.<br/>Resolved every cycle, urgency or not (R5)
-    Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited
+    Note over C: compose the escalated maximum permitted rate — these two headrooms plus C1's<br/>minimum/maximum charging current, which is config already held from the Store read and<br/>needs no Engine call. Bounds and carve-outs: system-overview.md's glossary term.<br/>Resolved every cycle, urgency or not (R5)
+    Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited. The hold is the Deadline<br/>Engine's own decision (§3); the Coordinator only threads the flag across cycles
     C->>P: which mode with the urgency input FALSE? (Auto: its baseline rows · Manual: the active mode)
     P-->>C: baseline mode
     C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; its returned state is not committed)
     M-->>C: baseline desired current
-    C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, prior cycle's urgency latch)
-    DL-->>C: urgency flag + required current + unreachable flag
+    C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, prior cycle's urgency latch and missed-deadline hold)
+    DL-->>C: urgency flag + required current + unreachable flag + updated hold
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
@@ -436,7 +436,9 @@ the active Mode Engine differ. **UC05** rides this sequence: the Deadline Engine
 the Billing-Protection Engine raises the effective peak limit, and under `Auto` the Profile
 escalates to `Captar`.
 
-**Why the Deadline Engine is called after the Profile and Mode Engines, not before them.** Each of
+**Why the Deadline Engine's *urgency* call comes after the Profile and Mode Engines.** Its
+deadline *resolution* still precedes them — SOC-Target's cap row needs tomorrow's deadline — so
+the Engine is called twice per cycle; it is the urgency call that moved. Each of
 R5's two tests (`resolution-rules.md` is authoritative for the rule itself) takes an input only
 those engines can produce, which is what fixes the order here:
 
