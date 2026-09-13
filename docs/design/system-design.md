@@ -142,7 +142,7 @@ dispatch, both clamps, invariants), so it is not a one-use-case-to-one-engine ma
 writes row 1 of the active-SOC-limit lookup, while declining opportunistic overnight top-up is the
 `Auto` Profile Engine declining to match row 4 of its own mode-selection table (R9) — not a second
 call, since mode selection is already the Profile Engine's job. The Coordinator evaluates R9's
-five-part reserve condition once and passes the resulting flag to both, the same input-not-a-call
+six-part reserve condition once and passes the resulting flag to both, the same input-not-a-call
 pattern capability gating uses (below) — the condition is not independently re-evaluated inside
 either engine. All three "happen" inside the one cycle the Coordinator already runs.
 
@@ -413,7 +413,7 @@ sequenceDiagram
     Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>It is the Manager's by rule 4: both reads are I/O, which no Engine performs, so composing<br/>them is the Coordinator's job whether there are two sources or one. Note this is NOT NF4's<br/>voltage shape — that fallback is a tunable policy and lives in the Signal-Conditioning<br/>Engine (V8). Capacity's is a plain two-source read with no policy to own, so nothing here<br/>belongs to V5; the Deadline Engine owns only what the capacity is used for
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
-    Note over C: evaluate R9's five-part reserve condition once — home-day flag set, sun down,<br/>next-day forecast above threshold, tomorrow's deadline resolving to "no deadline", and no<br/>missed-deadline hold in effect **as it stood entering this cycle** (resolution-rules.md).<br/>Both the SOC-Target cap row and Auto's overnight row read the resulting flag
+    Note over C: evaluate R9's six-part reserve condition once — the `Auto` profile is active,<br/>the home-day flag is set, sun down, next-day forecast above threshold, tomorrow's deadline<br/>resolving to "no deadline", and no missed-deadline hold in effect **as it stood entering<br/>this cycle** (resolution-rules.md). Under `Manual` the cap never applies, whatever the<br/>home-day flag or forecast say. Both the SOC-Target cap row and Auto's overnight row read the flag
     C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag, evaluated just before this call; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
     C->>S: materialize sensor.smart_charging_active_soc_limit (publish ActiveSocLimitChanged if it differs from the prior cycle)
