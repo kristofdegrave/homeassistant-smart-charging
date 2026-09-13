@@ -43,7 +43,9 @@ Always read:
   role states its expected unit set, and the adapter class that defines its read carries a
   foreign-unit case and an absent-unit case. A missing one is Major. ADR-0040, which extends
   ADR-0009, is the authority on the trigger, the per-class discharge and the exclusions — read it
-  before judging a role in or out, rather than inferring the boundary from this line.
+  before judging a role in or out, and before judging a pinned behaviour adequate: it also requires
+  a case pinning "used as-is" to say in its docstring that it records an undecided contract, not a
+  safe one.
 - **Engines:** each behavioral row / branch, plus worked examples for the clamp math (grid-safety,
   floor/cap) and the NF4 voltage fallback.
 - **Coordinator:** happy path, status-gating-to-zero, clamp applied, and the fault path (required

@@ -74,8 +74,8 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
   assertion under `# Assert` checks that same behavior. If you're tempted to test a second behavior
   (a second `# Act`, or asserts about an unrelated outcome), split it into another test. This keeps
   each Should-When-Then name honest and a failure pointing at a single cause.
-- **All four adapter cases, every role.** Present / absent / unavailable / unmapped-raw — plus
-  the fifth, unit case on numeric roles, per ADR-0040.
+- **Every adapter role's mandated cases.** Present / absent / unavailable / unmapped-raw
+  (ADR-0009), plus the fifth, unit case (ADR-0040) wherever its trigger above applies.
 - **Tests must fail without the code.** If a test passes against an empty implementation, it isn't
   testing anything.
 - **Mock at the boundary.** Don't mock so deep the wiring the test claims to cover is bypassed.
