@@ -23,7 +23,45 @@ here.
   `CLAUDE.md`'s "Review protocol for analysis documents" (6Cs + glossary-first).
 - **Update `entity-catalog.md`**, before step 3's review — for every `sc_` entity the use-case
   touches, add this UC to the entity's *Read by* and/or *Written by* column. This is the last
-  content step before review.
+  content step inside the analysis layer.
+- **Propagate past the analysis layer**, same step — the documents are not the last stop, and a
+  use-case the shipped code contradicts is not consistent. This is how you settle whether the
+  change touches shipped behaviour, which is the question `CLAUDE.md`'s **Contribution
+  workflow** section's `needs-approval` gate turns on.
+  - **In scope: the behavioural assertions this change adds or alters** — read them off the
+    diff. A use-case asserts behaviour in a Given/When/Then step of the main success scenario,
+    an alternate flow, an exception flow, a **Trigger**, a **State model** state or transition,
+    and a **domain event** under *Domain events produced*. Each names something the running
+    integration does: a value written through an adapter role, a condition it acts on, a bound
+    it applies, a state it enters, an event it fires. A pre- or postcondition is in scope only
+    where it asserts behaviour no in-scope item in the same diff already covers — otherwise
+    that item covers it and you do not search twice.
+    **Scope / level** and **Relationships** split the same way: in scope wherever they assert
+    behaviour — which existing mechanism realizes the use-case, which event it subscribes to,
+    whose set-point logic it never touches — and out of scope where they only navigate, an
+    `«include»`/`«extend»` pointer or a renumbered sibling link being the usual case.
+  - **No-op branch.** A change altering none of those asserts no behaviour, and this step is
+    one line in the PR body saying nothing was in scope: rewording, a link or cross-reference,
+    a renumbering, the Mermaid diagram redrawn to match steps already in the diff, Stakeholders
+    prose, and a *Requirements satisfied* line — the last because a requirement's home is
+    `requirements.md`, so restating one here changes nothing.
+  - **The search, capped.** Per in-scope item, run **one** targeted search of
+    `custom_components/` for the thing it names — the entity id, the adapter role, the domain
+    event name, the threshold, the ordering — and open at most one file, the best match.
+    **Stop after five items**; where the diff has more — a brand-new use-case, whose diff is
+    the whole document, always will — say the set was sampled and name the five you took. Five
+    suits a drafting session's turn budget, and one use-case edit routinely touches more
+    assertions than one requirement edit touches criteria. The cap is this step's own: it is
+    deliberately not derived from what any other artifact does, so it neither follows nor
+    constrains them. It is a fixed lookup count either way, never a sweep.
+  - **State the finding in the PR body**, per item you took: either the code already satisfies
+    it — name the file and the function that does — or it does not. Behaviour the code does
+    not implement at all is this second case, not an exemption from it. Where it does not,
+    **file a `specs` child issue for that gap as part of this PR** and reference it in the
+    body — a `specs` issue, never a task issue, for the reason `CLAUDE.md`'s **Contribution
+    workflow** section routes to; its **Tracker mechanics** section routes to the filing
+    commands. Done when the PR body names which of the two cases holds for every item you
+    took, and names the `specs` issue wherever it is the second.
 
 ## Template (section order)
 
@@ -64,4 +102,6 @@ actor-driven prompts/notifications.
 - Forgetting the `entity-catalog.md` *Read by*/*Written by* update (step 3) — the reviewer checks it.
 - Using a domain term not yet in the glossary.
 - Restating the peak/ceiling clamp or a resolution rule instead of referencing it.
+- Propagating to the documents only — merging a step, trigger, state transition or domain
+  event the shipped code contradicts, with nothing filed to close the gap.
 - A mode UC whose `stateDiagram-v2` states don't match its Given/When/Then scenarios.
