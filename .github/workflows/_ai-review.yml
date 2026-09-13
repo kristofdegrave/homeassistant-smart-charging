@@ -265,9 +265,10 @@ jobs:
             exit 0
           fi
 
-          # Workload shape from the changed paths, not the PR's context label — a review can
-          # cross trees (e.g. a plan doc plus its custom_components/tests implementation), and
-          # there's no single label to read at review time the way there is at draft time.
+          # Workload shape from the changed paths — a review can cross trees (e.g. a plan doc
+          # plus its custom_components/tests implementation), so the paths, not the label, are
+          # what predicts how much reading a run does. (Checklist *routing* reads the label too,
+          # per the table; this sizing heuristic deliberately does not.)
           # custom_components/tests/.github/.claude reading is structurally more turn-hungry
           # than a single doc tree, same distinction _ai-draft.yml draws for its own baselines
           # (that set also covers workflow-reviewer's wider read list — CLAUDE.md,
@@ -338,7 +339,9 @@ jobs:
             instructions are this prompt and the review checklists the table below names.
 
             Read CLAUDE.md's **Model selection** table. It states the routing rule and holds
-            both halves of it; apply the rule as written there. In outline: the *(no context
+            both halves of it; apply the rule as written there. Note the diff command above
+            does not enumerate every tree in the repo, so "the change as a whole" means the
+            files it shows you — say so if a checklist you applied had nothing to look at. In outline: the *(no context
             label)* row maps each changed tree to its checklist, and that half is never skipped
             — it is what stops a changed tree going unreviewed. Where the linked issue carries
             a context label, that row's *How it is reviewed* column adds its checklist too, if

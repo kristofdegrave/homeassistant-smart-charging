@@ -136,7 +136,8 @@ in branch protection's required checks on `main`.
   no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI
   commits on the branch, which do follow that table. Then adds `needs-review`.
 - **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` resolves its checklists from
-  `CLAUDE.md`'s **Model selection** table — the routing rule lives there, not in the workflow —
+  `CLAUDE.md`'s **Model selection** table — the routing rule, both halves of it, lives there
+  rather than in the workflow —
   and self-applies each against the files it covers, posting findings via `submit-pr-review`'s
   CI mode and ending in a `clean`/`remarks` verdict marker. As with the drafter, the table
   column may name an agent definition or a work-type review document; the worker follows what
