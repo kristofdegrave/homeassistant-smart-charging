@@ -4,8 +4,20 @@ from datetime import time, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.components import frontend
+from homeassistant.components.sensor import ATTR_STATE_CLASS, SensorDeviceClass, SensorStateClass
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, STATE_UNAVAILABLE, Platform
+from homeassistant.const import (
+    ATTR_DEVICE_CLASS,
+    ATTR_UNIT_OF_MEASUREMENT,
+    PERCENTAGE,
+    STATE_UNAVAILABLE,
+    Platform,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 from homeassistant.setup import async_setup_component
@@ -718,6 +730,220 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
         for e in er.async_entries_for_config_entry(registry, entry.entry_id)
     }
     assert registered == expected_by_domain
+
+
+async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(hass):
+    """issue #1017: `test_every_owned_entity_id_matches_entity_catalog` above checks one of
+    entity-catalog.md's eight columns -- the id. It gave false confidence that the catalog was
+    enforced: the catalog specified `%` for `sensor.smart_charging_active_soc_limit` while the
+    shipped sensor set no unit, no device class and no state class, and the id test stayed green
+    (issue #1008 fixed that specific case; `ActiveSocLimitSensor` in sensor.py now carries the
+    fix, and this test pins it down permanently).
+
+    This test extends the sweep to the catalog's Unit column, and to device class/state class
+    where the catalog's Realizes/description text implies them, for every owned entity whose
+    catalog Role is `state` (a config/config-data/config-options/adapter-role entity has no
+    Unit-column enforcement here -- out of this issue's scope; see the PR body).
+
+    Encoding decision (issue #1017 asks this be made explicit rather than left implicit): the
+    expected (unit, device_class, state_class) triple per entity is a hand-authored Python table
+    below, the same choice `test_every_owned_entity_id_matches_entity_catalog` already made for
+    ids -- not a markdown-table parser (which would couple this test to entity-catalog.md's exact
+    formatting) and not a generic "Unit string -> HA constant" inference rule (which does not
+    hold across this catalog: e.g. `%` never implies SensorDeviceClass.BATTERY here,
+    `sensor.smart_charging_time_to_full`'s `min` deliberately carries no state_class, and several
+    `kWh`/`min`/`h` config-mirror sensors deliberately carry no device_class at all -- see each
+    sensor's own docstring in sensor.py). A per-row human judgment call is exactly what a generic
+    rule can't make, so the table names each row instead of deriving it.
+
+    A `None` unit_of_measurement encodes both entity-catalog.md's `—` Unit and a `bool`/`time`
+    Unit -- the catalog's Unit column doubles as a semantic-type label for non-numeric values on
+    platforms (select/switch) that have no `native_unit_of_measurement` concept at all, and HA
+    has no matching unit string for those two labels regardless of platform (a `bool` value is
+    conveyed by the entity's own on/off state, not a unit; a `time`-of-day mirror value here is a
+    plain `str`, e.g. "18:00", not a `datetime.time`, so `SensorDeviceClass.TIME` -- which HA
+    requires a real `datetime.time` native_value for -- is deliberately not asserted for
+    `evening_prompt_time`; converting that mirror's storage type is out of this test-only issue's
+    scope). `timestamp` and the `enum` implied by `charger_status`'s description (not its Unit
+    column, which reads `—`) are the two cases where a device_class IS asserted despite the Unit
+    column itself being non-numeric.
+
+    Disabled-by-default entities (config-mirror sensors, ADR-0031) carry no live state to read
+    attributes off, so every owned entity for this config entry is force-enabled and the entry is
+    reloaded before checking -- unlike the id test above, which only needs the registry row a
+    disabled entity still has.
+    """
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_SOLAR_AVAILABLE] = True
+    data[CONF_EV_SOC_ENTITY] = "sensor.ev_soc"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.disabled_by is not None:
+            registry.async_update_entity(reg_entry.entity_id, disabled_by=None)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # (uid_suffix, domain) -> (unit_of_measurement, device_class, state_class). Every
+    # catalog row whose Role column reads `state`, for the platform each entity actually
+    # registers under (er.async_get_entity_id needs the domain to disambiguate, same as the
+    # id test's `expected` dict above).
+    expected_state_attrs: dict[tuple[str, str], tuple[str | None, str | None, str | None]] = {
+        # General
+        ("mode", "select"): (None, None, None),
+        ("smoothing_window", "sensor"): ("cycles", None, None),
+        # Capabilities (ADR-0031 mirrors)
+        ("solar_available", "sensor"): (None, None, None),
+        ("captar_available", "sensor"): (None, None, None),
+        ("deadline_available", "sensor"): (None, None, None),
+        ("notifications_available", "sensor"): (None, None, None),
+        # Installation
+        ("grid_supply_ceiling_a", "sensor"): (
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            None,
+        ),
+        ("grid_safety_offset_a", "sensor"): (
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            None,
+        ),
+        ("nominal_voltage_v", "sensor"): (
+            UnitOfElectricPotential.VOLT,
+            SensorDeviceClass.VOLTAGE,
+            None,
+        ),
+        # Charger
+        ("min_current_a", "sensor"): (
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            None,
+        ),
+        ("max_current_a", "sensor"): (
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            None,
+        ),
+        # Peak protection
+        ("safety_margin_w", "sensor"): (UnitOfPower.WATT, SensorDeviceClass.POWER, None),
+        ("max_peak_kw", "sensor"): (UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, None),
+        ("peak_floor_kw", "sensor"): (UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, None),
+        ("peak_grace_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        ("monthly_peak_kw", "sensor"): (
+            UnitOfPower.KILO_WATT,
+            SensorDeviceClass.POWER,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ("captar_cooldown_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        # Power mode
+        ("power_respect_peak", "sensor"): (None, None, None),
+        ("power_cooldown_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        # Diagnostics (control-cycle-driven, one per cycle)
+        ("active_mode", "sensor"): (None, None, None),
+        ("effective_peak_limit", "sensor"): (
+            UnitOfPower.KILO_WATT,
+            SensorDeviceClass.POWER,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ("active_soc_limit", "sensor"): (PERCENTAGE, None, SensorStateClass.MEASUREMENT),
+        ("status", "sensor"): (None, None, None),
+        ("solar_surplus_w", "sensor"): (
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ("time_to_full", "sensor"): (UnitOfTime.MINUTES, None, None),
+        ("peak_headroom_a", "sensor"): (
+            UnitOfElectricCurrent.AMPERE,
+            SensorDeviceClass.CURRENT,
+            SensorStateClass.MEASUREMENT,
+        ),
+        ("adapter_readings", "sensor"): (None, SensorDeviceClass.TIMESTAMP, None),
+        ("charger_status", "sensor"): (None, SensorDeviceClass.ENUM, None),
+        # EV
+        ("ev_battery_capacity_kwh", "sensor"): (UnitOfEnergy.KILO_WATT_HOUR, None, None),
+        # Solar
+        ("solar_start_threshold_w", "sensor"): (UnitOfPower.WATT, SensorDeviceClass.POWER, None),
+        ("solar_hold_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        ("solar_cooldown_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        ("solar_restart_debounce_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        # SolarOnly
+        ("solar_only_start_threshold_w", "sensor"): (
+            UnitOfPower.WATT,
+            SensorDeviceClass.POWER,
+            None,
+        ),
+        ("solar_only_hold_min", "sensor"): (UnitOfTime.MINUTES, None, None),
+        ("solar_only_rounding_strategy", "sensor"): (None, None, None),
+        ("solar_only_rounding_midpoint_pct", "sensor"): (PERCENTAGE, None, None),
+        # Solar step-up
+        ("max_solar_soc", "sensor"): (PERCENTAGE, None, None),
+        ("solar_step_pp", "sensor"): ("pp", None, None),
+        ("solar_step_threshold_pp", "sensor"): ("pp", None, None),
+        # Solar reserve
+        ("solar_forecast_threshold_kwh", "sensor"): (UnitOfEnergy.KILO_WATT_HOUR, None, None),
+        # Notifications
+        ("reminder_lead_h", "sensor"): (UnitOfTime.HOURS, None, None),
+        ("deadline_notice_enabled", "sensor"): (None, None, None),
+        ("plug_in_reminder_enabled", "sensor"): (None, None, None),
+        ("evening_prompt_enabled", "sensor"): (None, None, None),
+        # See the docstring's `time`-vocabulary paragraph: not SensorDeviceClass.TIME.
+        ("evening_prompt_time", "sensor"): (None, None, None),
+        # Home-day flag
+        ("home_day", "switch"): (None, None, None),
+    }
+
+    for (uid_suffix, domain), (unit, device_class, state_class) in expected_state_attrs.items():
+        entity_id = registry.async_get_entity_id(domain, DOMAIN, f"{entry.entry_id}_{uid_suffix}")
+        assert entity_id is not None, uid_suffix
+        state = hass.states.get(entity_id)
+        assert state is not None, f"{uid_suffix}: not enabled/added after force-enable+reload"
+        assert state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) == unit, (
+            f"{uid_suffix}: unit {state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)!r} != {unit!r}"
+        )
+        assert state.attributes.get(ATTR_DEVICE_CLASS) == device_class, (
+            f"{uid_suffix}: device_class {state.attributes.get(ATTR_DEVICE_CLASS)!r} "
+            f"!= {device_class!r}"
+        )
+        assert state.attributes.get(ATTR_STATE_CLASS) == state_class, (
+            f"{uid_suffix}: state_class {state.attributes.get(ATTR_STATE_CLASS)!r} "
+            f"!= {state_class!r}"
+        )
+
+    # No `state`-role owned entity may be missing from the table above -- same completeness
+    # guard as the id test's `expected_by_domain`/`registered` pair above, restricted to
+    # `state`-role entities (the only role this test's catalog Unit/device-class/state-class
+    # columns apply to). The 12 owned entities below are every entity the id test's own
+    # `expected` dict lists whose catalog Role is `config` (not `state`) -- named explicitly,
+    # not derived by domain, because `select`/`switch` are not single-role domains here:
+    # `select.smart_charging_mode` is `state` role (covered above) while its sibling
+    # `select.smart_charging_profile` is `config` role (excluded), so filtering by domain alone
+    # cannot separate them.
+    non_state_role_owned_entities = {
+        ("select", "profile"),
+        ("number", "target_current"),
+        ("number", "soc_limit_override"),
+        ("time", "departure_mon"),
+        ("time", "departure_tue"),
+        ("time", "departure_wed"),
+        ("time", "departure_thu"),
+        ("time", "departure_fri"),
+        ("time", "departure_sat"),
+        ("time", "departure_sun"),
+        ("time", "departure_holiday"),
+        ("time", "departure_home_day"),
+    }
+    all_registered = {
+        (reg_entry.domain, reg_entry.unique_id.removeprefix(f"{entry.entry_id}_"))
+        for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id)
+    }
+    expected_keys = {(domain, uid_suffix) for (uid_suffix, domain) in expected_state_attrs}
+    assert all_registered - non_state_role_owned_entities == expected_keys
 
 
 async def test_reload_does_not_leak_the_notify_adapters_action_listener(hass):
