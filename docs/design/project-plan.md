@@ -98,7 +98,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`) |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
@@ -311,21 +311,23 @@ it is wired to its callers).
 
 **E4 — Deadline Engine**
 - **Service:** Engine, V5 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
-- **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. The
+- **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. E4
+  partial — the missed-deadline hold's engage/clear policy is designed, per system-design §3, but
+  not built: the shipped engine computes no hold. The
   urgency call site's own adapter reads and the `resolve_deadline_urgency` gating unit sit in
   `coordinator.py`/`coordinator_cycle.py` per ADR-0023.
 - **Builds:** resolved departure deadline (today + one-day-ahead, R14), required current, whether
   urgency is in effect, **whether the deadline is unreachable even so**, and the per-profile lever
   set it is willing to spend (R5/R15). Also the missed-deadline hold's engage/clear policy, with
-  the flag threaded in and out by M1 (§3) — **designed, not built**: the shipped tree defers it to
-  issue #1006, so no task below implements it yet.
+  the flag threaded in and out by M1 (§3) — **designed, not built**: the shipped engine computes
+  no hold, so no task below implements it yet.
 - **Depends on:** ADR-0010; adapter-read deadline sources (RA2), the escalated maximum permitted
   rate composed from E5/E6 headroom, E2's baseline mode resolution (which selects *which* E1 to
   query), and that E1's desired current — all as data.
 - **Testable on its own:** plain pytest — deadline resolution across sources; R5's slack test
   against the escalated rate ÷ 1.25; the handback test and the slack test's precedence over it;
   the urgency latch; R5 unreachable determination against the same rate with no margin; and,
-  once #1006 lands, a hold in effect skipping both tests while still pinning urgency.
+  once the hold is built, a hold in effect skipping both tests while still pinning urgency.
 - **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
   lead-time window once that reminder is built (project-plan §M3).
@@ -355,7 +357,10 @@ it is wired to its callers).
 - **Testable on its own:** plain pytest — effective-limit resolution, baseline-solved clamp math with
   worked examples, urgency-driven limit raise (UC05), the grace-period tracker, and the `Power`+R17
   skip.
-- **Integration checkpoint:** ⎔ M1 applies the peak clamp as a distinct call site from Grid-Safety
+- **Integration checkpoint:** ⎔ M1 calls E5's **headroom** twice — once for the `peak_headroom`
+  readout under the in-force limit, once for R5's escalated rate under the raised one — and its
+  **clamp** once on the control path, the only one of the three that may advance the breach timer.
+  M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
 
 **E6 — Grid-Safety Engine**
@@ -370,10 +375,6 @@ it is wired to its callers).
   opt-out can never reach C4 (ADR-0006).
 - **Testable on its own:** plain pytest — ceiling clamp bounds below the ceiling for a requesting-32A
   / drawing-6A case; never skipped.
-- **Integration checkpoint (E5):** ⎔ M1 calls E5's **headroom** twice — once for the
-  `peak_headroom` readout under the in-force limit, once for R5's escalated rate under the raised
-  one — and its **clamp** once on the control path, which is the only call that may advance the
-  breach timer.
 - **Integration checkpoint:** ⎔ M1 calls E6's **clamp** unconditionally after E5's, and its
   **headroom** earlier in the cycle when composing R5's escalated maximum permitted rate — two
   call sites for two operations, only the clamp on the control path.
@@ -445,7 +446,8 @@ it is wired to its callers).
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
   clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
-  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads all stateful-Engine state; writes diagnostics
+  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads all stateful-Engine state, plus the two decision flags the Deadline Engine
+  decides and M1 carries across cycles (R5's urgency latch and missed-deadline hold); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
   bus for a consuming Manager are the ones that ship: `ActiveSocLimitChanged` (→ M2) and
@@ -715,8 +717,9 @@ from the retired functional sequence.
   stop branch, and C6 is realized as M2/M3's own subscription surface. Neither drops a service or
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
-  `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks, all nine Engine
-  tasks, and all six Client tasks have shipped. Of the three Manager tasks, M1 and M2 have shipped;
+  `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks and all six
+  Client tasks have shipped, as have all nine Engine tasks — E4 partially, its missed-deadline
+  hold being designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Two checkpoints are only partially met and are marked as such: the Phase 3

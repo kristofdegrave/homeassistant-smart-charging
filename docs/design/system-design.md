@@ -151,7 +151,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 | **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode and commits the state it returns, and *queries* the baseline mode for R5's handback — the query answers from this cycle's conditions with the mode's own restart timing excluded, and its returned state is not committed (`resolution-rules.md`; §5.1) |
 | **Profile Engines** (`Manual`, `Auto`) | V3 | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
-| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — the stateful shape below. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
+| **Deadline Engine** | V5 | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — a plain decision flag, the same shape as SOC-Target's step-up flag below, not the cross-cycle accumulation that makes an Engine stateful. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
 | **Billing-Protection Engine** | V6 | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
 | **Peak-Demand Tracker** | V6 (state) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
@@ -165,10 +165,12 @@ job (it reads once, then feeds each engine) — see the call rules in [§4](#4-s
 
 - **Pure/leaf Engines** hold no cross-cycle state: the Charging-Mode Engines, the Profile Engines,
   the Deadline, Billing-Protection, Grid-Safety, Capability-Gate, and **SOC-Target** Engines. Data
-  in, decision out — SOC-Target's R8 step-up progression (whether a step has already been applied)
-  is a plain input flag the Coordinator threads in alongside the profile/mode flags, the same
-  shape as any other conditional input, not the cross-cycle *accumulation* (a window, a timer, a
-  running total) the three stateful Engines below hold.
+  in, decision out. Two of them are handed a **decision flag** the Coordinator threads in and
+  back out — SOC-Target's R8 step-up progression (whether a step has already been applied), and
+  the Deadline Engine's urgency latch and missed-deadline hold (R5). That does not make them
+  stateful: the carve-out is *accumulation* — a window, a timer, a running total — which is what
+  the three stateful Engines below hold and what ADR-0010's count is of. A boolean the Engine
+  decides and the Manager carries is a conditional input like any other.
 - **Stateful Engines** operate over cross-cycle state that the **Manager owns and threads in and
   out** — the state is a parameter, never HA-held inside the engine, so the engine stays testable
   in isolation. Three engines are stateful, per ADR-0010: **Signal-Conditioning** (the R10
@@ -391,6 +393,7 @@ sequenceDiagram
     participant I as Cycle-Invariant
 
     T->>C: control interval fires
+    Note over C: the cycle opens carrying the Coordinator's cross-cycle flags from the last one —<br/>among them R5's urgency latch and missed-deadline hold, which the reserve condition below<br/>reads as they stood entering the cycle and the urgency call later updates
     C->>S: read owned control-entity values (profile, mode, SOC override, target current, departure times, home-day flag)
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
@@ -399,7 +402,7 @@ sequenceDiagram
     SC-->>C: smoothed net_w + supply voltage
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
-    Note over C: evaluate R9's reserve condition once (home-day, forecast, no deadline tomorrow)<br/>— both the SOC-Target cap row and Auto's overnight row read the resulting flag
+    Note over C: evaluate R9's five-part reserve condition once — home-day flag set, sun down,<br/>next-day forecast above threshold, tomorrow's deadline resolving to "no deadline", and no<br/>missed-deadline hold in effect **as it stood entering this cycle** (resolution-rules.md).<br/>Both the SOC-Target cap row and Auto's overnight row read the resulting flag
     C->>SOC: resolve active SOC limit (R7: cap→step-up→default; cap row uses tomorrow's deadline<br/>+ the R9 reserve flag, evaluated just before this call; step-up row uses active profile + prior cycle's active mode, R8)
     SOC-->>C: active SOC limit
     C->>S: materialize sensor.smart_charging_active_soc_limit (publish ActiveSocLimitChanged if it differs from the prior cycle)
@@ -410,13 +413,13 @@ sequenceDiagram
     C->>G: C4 headroom (headroom, not clamp)
     G-->>C: ceiling headroom
     Note over C: compose the escalated maximum permitted rate — these two headrooms plus C1's<br/>minimum/maximum charging current, which is config already held from the Store read and<br/>needs no Engine call. Bounds and carve-outs: system-overview.md's glossary term.<br/>Resolved every cycle, urgency or not (R5)
-    Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited. The hold is the Deadline<br/>Engine's own decision (§3); the Coordinator only threads the flag across cycles
+    Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited. The hold is the Deadline<br/>Engine's own decision (§3); the Coordinator threads the flag and skips the calls its<br/>value makes moot across cycles
     C->>P: which mode with the urgency input FALSE? (Auto: its baseline rows · Manual: the active mode)
     P-->>C: baseline mode
     C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; its returned state is not committed)
     M-->>C: baseline desired current
-    C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, prior cycle's urgency latch and missed-deadline hold)
-    DL-->>C: urgency flag + required current + unreachable flag + updated hold
+    C->>DL: required current & urgency? (R5/R15 — active SOC limit, escalated maximum permitted<br/>rate, baseline desired current, charger status + state of charge + deadline capability for<br/>the hold's own conditions, and the prior cycle's urgency latch and missed-deadline hold)
+    DL-->>C: urgency flag + unreachable flag + updated hold + required current<br/>(none computed while a hold is in effect)
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
