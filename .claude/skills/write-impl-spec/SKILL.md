@@ -6,8 +6,8 @@ description: Use when authoring an implementation spec and TDD plan for a slice 
 # Write an implementation spec (per-slice design + TDD plan)
 
 Author the two documents that sit between the architecture and the code for one build slice:
-a **design** (`docs/plans/YYYY-MM-DD-<slice>-design.md` — scope, config surface, the concrete
-decisions, mapping to services, deferrals, testing, packaging) and a **TDD plan**
+a **design** (`docs/plans/YYYY-MM-DD-<slice>-design.md` — the slice's scope and the concrete
+decisions it makes; step 3 below is the list of what it carries) and a **TDD plan**
 (`docs/plans/YYYY-MM-DD-<slice>.md` — bite-sized task-by-task build order). Both **derive** from an
 already-approved slice of `docs/design/project-plan.md`; they do not re-decompose the system or
 invent behavior.
@@ -35,11 +35,12 @@ steps here.
      explicit deferrals **before** writing. Get the human partner's decisions on any real
      fork (a safety-relevant omission, a config field, an entity's home).
   3. **Write the design doc** (`...-<slice>-design.md`), capped at what only it can say:
-     success criteria, install-time config, the **concrete decisions** (`D-n`) this slice
-     makes and the concrete structure they land in (files, classes, signatures), a table
-     **mapping every piece to its named service** in `system-design.md`, deliberate deferrals
-     (with any safety caveat stated out loud), testing approach, and packaging. Anything else
-     is a copy of a doc that owns it — cut it per **Cap the design doc** below.
+     the slice's scope and success criteria, install-time config, the **concrete decisions**
+     (`D-n`) this slice makes and the concrete structure they land in (files, classes,
+     signatures), a table **mapping every piece to its named service** in `system-design.md`,
+     deliberate deferrals (with any safety caveat stated out loud), testing approach, and
+     packaging. This list is the cap: anything else is a copy of a doc that owns it — cut it
+     per **Cap both plan documents** below.
   4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized
      tasks (failing test → minimal impl → green → commit), each naming exact file paths, the
      ADR it honors, and its **test boundary per ADR-0009** (plain pytest for `modes/`/
@@ -53,12 +54,13 @@ steps here.
 - Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write
   the code.
 
-## Cap the design doc
+## Cap both plan documents
 
 `docs/plans/` is this project's largest artifact class and its weakest oracle. A plan that
 restates a rule is a second place for that rule to be wrong, and the plan's copy is the one the
-build reads. So the design doc carries the decisions and the sequence, and not what another doc
-already owns. Cut, when a draft has it:
+build reads. So the design doc carries the decisions and the structure, the TDD plan carries
+the tasks, and neither carries what another doc already owns. Cut, when a draft has it — the
+first two bullets in either document, the third in the TDD plan, where the task entries live:
 
 - **A restated formula or threshold.** Cite the owning analysis doc and the R-number instead,
   as a test anchor. `develop-task` already sends the author to `control-cycle.md`,
@@ -66,17 +68,21 @@ already owns. Cut, when a draft has it:
   copy is only a third version to keep in sync.
 - **Restated ADR rationale.** Name the ADR and what it obliges this slice to do; the *why*
   stays in the ADR, where a reader who needs it will look.
-- **Per-task narrative that states no fact the task does not already carry** — a paragraph
-  re-telling a task whose own entry already names its file, its failing test and its boundary.
+- **Per-task narrative that states no fact the task does not already carry** (the TDD plan's
+  half of this) — a paragraph re-telling a task whose own entry already names its file, its
+  failing test and its boundary.
 
-**This removes copies, never content that exists only here.** Before cutting anything, find the
-doc that owns it and read what it actually says:
+**This removes copies, never content that exists only in the plan.** Before cutting anything,
+find the doc that owns it and read what it actually says:
 
 - It says the same thing → a duplicate. Cut it; cite the source.
-- No doc owns it, or none says it → **not a duplicate — an undocumented rule.** Do not cut it,
-  and do not leave it sitting in the plan either: a behavioural rule that lives only in a plan
-  is a rule the analysis layer is missing. Say so out loud, open the issue against the owning
-  doc per *derive, don't design*, and cite it here once it lands.
+- No doc owns it, or none says it → **not a duplicate — an undocumented rule.** A behavioural
+  rule that lives only in a plan is a rule the analysis layer is missing, and the plan holds
+  the only copy of it. So, in this order: **keep the text exactly as it stands** — cutting it
+  here loses it; say so out loud in the PR body; and open the issue against the owning doc per
+  *derive, don't design*. Only once that doc states the rule does the text here become a
+  duplicate, replaced then by a citation to it. That, and never a deletion in this document,
+  is the end state.
 - It says something **different** → stop. One of the two is wrong, and no wording of the plan
   resolves it; take it to the owning doc rather than writing a paragraph here that explains the
   discrepancy away.
@@ -93,7 +99,7 @@ test is never the line count — it is whether a line says something no other do
 - **Behavior is owned by the analysis docs.** Cite `control-cycle.md`, `resolution-rules.md`,
   `requirements.md`, and the use-cases; attribute any formula/threshold as a test anchor. If a spec
   and its source ever disagree, the source wins.
-- **Keep the design doc capped**, per the section above: decisions, structure and sequence —
+- **Keep both plan documents capped**, per the section above: decisions, structure and tasks —
   no restated formula, no restated ADR rationale, no narrative that repeats its own task.
 - **Honor the ADRs.** Adapters (0003), package layout (0002/0010), config split (0005),
   coordinator/two-clamps (0006), fault-on-`None` (0007), testing split (0009), native naming (0004).

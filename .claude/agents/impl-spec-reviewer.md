@@ -40,15 +40,21 @@ For cross-document consistency:
 - Behavioral rules (formulas, thresholds, resolution order, R-numbers) are attributed to their
   owning analysis doc as **test anchors**, not re-derived as if the spec owned them. **Flag any
   restatement** that could drift from `control-cycle.md` / `resolution-rules.md` / `requirements.md`.
-- The design doc carries only what it alone can say — the `D-n` decisions, the concrete
-  structure they land in, the service mapping, deferrals, testing and packaging. **Flag
-  restated ADR rationale** (the *why* belongs in the ADR the spec cites) **and per-task
-  narrative that states no fact the task entry already carries.**
-- **A rule that appears only in the plan is a finding, not a duplicate.** Before reporting a
-  restatement, read the owning doc and check it says the same thing. If no analysis doc says
-  it, report it as a **gap in that doc (Major)** — never recommend deleting it, since the plan
-  holds the only copy. If the two say **different** things, that is **Critical**: the spec
-  cannot resolve it and the owning doc must.
+- Each plan document carries only what it alone can say — the design doc the `D-n` decisions,
+  the concrete structure they land in, the service mapping, deferrals, testing and packaging;
+  the TDD plan the task entries. **Flag restated ADR rationale** (the *why* belongs in the ADR
+  the spec cites) **and per-task narrative that states no fact the task entry already carries**
+  — the latter in the TDD plan, where those entries live.
+- **A behavioural rule (a formula, a threshold, a resolution order) that appears only in the
+  plan is a finding, not a duplicate.** Before reporting a restatement, read the owning doc and
+  check it says the same thing. If no analysis doc says it, report it as a **gap in that doc
+  (Major)** — never recommend deleting it, since the plan holds the only copy. If the two say
+  **different** things, that is **Critical**: the spec cannot resolve it and the owning doc
+  must. A `D-n` decision, a file layout or a signature appears only in the plan by
+  construction; that is the plan doing its job, not a gap.
+- **Length is not itself a finding.** A slice whose decisions and tasks genuinely run long is a
+  correct plan at its natural length. Report a line because another doc already says it, never
+  because the document is big.
 - Every domain term is in the `system-overview.md` glossary; entity ids match `entity-catalog.md`
   and ADR-0004 native naming.
 

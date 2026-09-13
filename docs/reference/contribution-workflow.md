@@ -50,7 +50,8 @@ message conventions).
    describing what was done; resolve the thread once the round's fixes are pushed.
    `resolve-review-thread` owns which threads may be resolved, and
    [tracker-mechanics.md](tracker-mechanics.md) the commands.
-6. **Loop steps 3–5**, capped at **2 rounds**, until a pass finds no remaining Critical/Major
+6. **Loop steps 3–5**, capped at **2 rounds** — the first review pass is round 1, so the cap
+   allows two review passes in all — until a pass finds no remaining Critical/Major
    findings. Still unresolved at the cap → stop and escalate to the human partner with the
    disagreement instead of continuing; that usually needs a judgment call the loop can't make.
    This line is the **only** statement of the interactive cap — everything that needs the
