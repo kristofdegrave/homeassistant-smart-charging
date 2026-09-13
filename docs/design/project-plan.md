@@ -246,10 +246,10 @@ it is wired to its callers).
 - **Builds:** desired charger current from conditioned readings + resolved SOC limit + config, one
   self-contained module per computing mode (NF2); `Off` → 0 A via the Coordinator's stop branch.
   Two operations, per [system-design §3](system-design.md#3-service-catalog): the **dispatch**, whose
-  returned state the caller commits, and the **baseline query** for R5's handback — the same
-  set-point rule answered from this cycle's conditions with the mode's own restart timing
-  excluded (`resolution-rules.md` is authoritative for why), whose returned state is not
-  committed.
+  desired current the Coordinator clamps and writes, and the **baseline query** for R5's
+  handback — the same set-point rule answered from this cycle's conditions with the mode's own
+  restart timing excluded (`resolution-rules.md` is authoritative for why), which drives no
+  charging of its own.
   `Solar`/`SolarOnly` surplus is
   `charger_w − net_w`, not `−net_w` (see [§6 scaffolding-plan reconciliation](#6-reconciliation-with-the-scaffolding-plan)).
 - **Depends on:** the shape of conditioned readings (E7 output) and resolved SOC limit (E3) — as

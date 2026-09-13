@@ -393,15 +393,16 @@ sequenceDiagram
     participant I as Cycle-Invariant
 
     T->>C: control interval fires
-    Note over C: the cycle opens carrying the Coordinator's cross-cycle flags from the last one —<br/>among them R5's urgency latch and missed-deadline hold, which the reserve condition below<br/>reads as they stood entering the cycle and the urgency call later updates
-    C->>S: read owned control-entity values (profile, mode, SOC override, target current, departure times, home-day flag)
+    Note over C: the cycle opens carrying the Coordinator's cross-cycle flags from the last one,<br/>among them R5's urgency latch and missed-deadline hold. The reserve condition below reads<br/>the hold alone, as it stood entering the cycle; both are read and updated at the urgency call
+    C->>S: read owned control-entity values (profile, mode, SOC override, target current,<br/>departure times, home-day flag) and the config-options the cycle needs (C1's current<br/>bounds, the EV battery capacity fallback, thresholds)
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
     C->>SC: smooth net_w (R10) + resolve voltage (NF4)
     SC-->>C: smoothed net_w + supply voltage
-    C->>A: read EV battery capacity (R15 — the optional sensed role, else the configured value)
-    A-->>C: effective battery capacity
+    C->>A: read the optional sensed EV battery capacity role (R15, NF3)
+    A-->>C: sensed capacity, or None when the role is unmapped/unavailable
+    Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>The sensed-else-configured resolution is the Manager's, not the adapter's
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
     Note over C: evaluate R9's five-part reserve condition once — home-day flag set, sun down,<br/>next-day forecast above threshold, tomorrow's deadline resolving to "no deadline", and no<br/>missed-deadline hold in effect **as it stood entering this cycle** (resolution-rules.md).<br/>Both the SOC-Target cap row and Auto's overnight row read the resulting flag
@@ -418,9 +419,9 @@ sequenceDiagram
     Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited. The hold is the Deadline<br/>Engine's own decision (§3); the Coordinator threads the flag and skips the calls its<br/>value makes moot across cycles
     C->>P: which mode with the urgency input FALSE? (Auto: its baseline rows · Manual: the active mode)
     P-->>C: baseline mode
-    C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; its returned state is not committed)
+    C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; drives no charging of its own)
     M-->>C: baseline desired current
-    C->>DL: required current & urgency? (R5/R15 — the resolved deadline and effective battery<br/>capacity above, state of charge, the active SOC limit and the resolved supply voltage, which<br/>are the required-current formula's own five inputs; plus the escalated maximum permitted rate<br/>and baseline desired current the two R5 tests compare against; plus charger status and the<br/>deadline capability, and the prior cycle's urgency latch and missed-deadline hold)
+    C->>DL: required current & urgency? (R5/R15 — the resolved deadline and effective battery<br/>capacity above, state of charge, the active SOC limit and the resolved supply voltage, which<br/>are the required-current formula's own five inputs; plus the escalated maximum permitted rate<br/>and baseline desired current the two R5 tests compare against; plus charger status and the<br/>declared deadline capability from the Store read above (R18), and the prior cycle's<br/>urgency latch and missed-deadline hold)
     DL-->>C: urgency flag + unreachable flag + updated hold + required current<br/>(none computed while a hold is in effect)
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
