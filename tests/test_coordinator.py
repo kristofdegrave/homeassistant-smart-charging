@@ -1153,8 +1153,11 @@ async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
 
 async def test_external_monthly_peak_merge_ignores_captar_available(hass):
     # D-5: the merge is not gated on captar_available -- it runs, and moves
-    # effective_peak_limit_kw, even with the capability off (_apply_peak_clamp itself has no
-    # capability gate, so this is pre-existing loosening behavior, not a regression).
+    # effective_peak_limit_kw, even with the capability off. R21's own AC requires the
+    # tracked/merged value to still be tracked and surfaced for observability regardless of
+    # capability (issue #1018's fix means `_apply_peak_clamp` itself no longer consults it in
+    # that case, but this readout's own resolution is deliberately not gated on
+    # captar_available either way).
     config = _config()
     config = dataclasses.replace(
         config, max_peak_kw=10.0, peak_floor_kw=0.0, captar_available=False
@@ -1525,13 +1528,20 @@ async def test_peak_clamp_reduces_captar_below_headroom(hass):
 
 
 async def test_peak_clamp_never_engages_when_captar_capability_absent(hass):
-    """R3 AC1/R18: with the CapTar capability absent, no peak-protection clamp ever
-    engages -- net import is bounded only by the grid supply ceiling (C4). Same fixture
+    """R3 AC1/R18 (issue #1018): with the CapTar capability absent, no peak-protection clamp
+    ever engages -- net import is bounded only by the grid supply ceiling (C4). Same fixture
     as test_peak_clamp_reduces_captar_below_headroom (which proves the clamp DOES engage
     with the capability present, at max_peak_kw=3.56 -> 10 A), but here with
     captar_available=False: the request must reach Captar's own uncapped max_current
-    (16 A, well under the ~18 A C4 ceiling headroom this fixture leaves), not the 10 A
-    the R3 clamp would otherwise impose."""
+    (16 A, well under the 18 A C4 ceiling headroom this fixture leaves --
+    floor((25 - 2) - 1000/230) = 18 A), not the 10 A the R3 clamp would otherwise impose.
+
+    `active_mode` is left at MODE_CAPTAR (not a mode still selectable once the capability is
+    withdrawn -- select.py/resolve_available_modes exclude it -- but reachable as a restored
+    value after a reconfigure turns the capability off mid-connection) so this test and its
+    sibling above differ in nothing but captar_available, isolating the gate itself rather
+    than a mode change; test_peak_clamp_reduces_solar_below_headroom two tests down already
+    pins that R3 (and, by the same predicate, this absence) is not Captar-specific."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56, captar_available=False)
     config = dataclasses.replace(config, safety_margin_w=250.0)
@@ -1546,6 +1556,63 @@ async def test_peak_clamp_never_engages_when_captar_capability_absent(hass):
     result = await coord._async_update_data()
 
     assert result.commanded_current == 16.0
+    # Pins that the clamp's own target really was 10 A (same as the capability-present
+    # sibling test) and was skipped, not that it was somehow computed away: peak_headroom_a
+    # is deliberately not capability-gated (R21's own AC -- still tracked/surfaced regardless
+    # of capability, just consulted by no charging decision here).
+    assert result.peak_headroom_a == 10.0
+
+
+async def test_peak_clamp_never_engages_for_a_selectable_mode_when_captar_absent(hass):
+    """The companion to the test above using a mode that is actually selectable on a
+    non-CapTar installation (R18 AC: Captar itself is not offered once the capability is
+    withdrawn) -- Solar, mirroring test_peak_clamp_reduces_solar_below_headroom below but
+    with captar_available=False. Confirms the gate lives in the shared
+    `_peak_clamp_would_run` predicate and not in a Captar-only branch: without this, a
+    fix that special-cased MODE_CAPTAR inside `_apply_peak_clamp` would pass the test above
+    while still breaching R3 AC1 for every other mode."""
+    config = _config()
+    # 100 W -- deliberately below the 250 W safety margin, same as the Solar sibling test,
+    # so the R3 clamp (if it ran) would bind tightly enough to be unmistakable.
+    config = dataclasses.replace(config, max_peak_kw=0.1, captar_available=False)
+    config = dataclasses.replace(config, safety_margin_w=250.0)
+    # surplus = charger_w(2760) - net_w(0) = 2760 W -> round up -> 12 A ideal, well under the
+    # grid-ceiling headroom this fixture leaves (same adapters as the Solar sibling test).
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    seed_ample_peak_headroom(coord, kw=0.1)
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 12.0
+
+
+async def test_power_never_stops_on_its_own_when_captar_capability_absent(hass):
+    """R17's own AC (requirements.md): with the CapTar capability absent, Power never stops
+    on its own and never enters a cooldown -- the force-stop branch this PR's gate now
+    prevents from running at all is Captar's own R3-breach stop (coordinator.py's
+    `_apply_peak_clamp`), so a sustained breach that would otherwise force a Captar-mode
+    cooldown must instead leave a Power-mode session commanding current, uninterrupted."""
+    config = _config()
+    config = dataclasses.replace(
+        config, max_peak_kw=1.0, peak_grace_min=0.0, captar_available=False
+    )
+    breaching = _adapters(status=STATE_CHARGING, net_w=600.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=breaching, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 16.0
+    seed_ample_peak_headroom(coord, kw=1.0)
+
+    result = await coord._async_update_data()
+
+    assert result.commanded_current == 16.0
+    assert coord._active_cooldown is None
     assert result.fault is False
 
 
@@ -3807,6 +3874,26 @@ async def test_escalated_rate_ignores_the_peak_limit_for_power_with_its_r17_opto
     coord.active_mode = MODE_POWER
     # The same baseline that floors the rate to 0 A above leaves C1's 16 A here, untouched by
     # a clamp that does not run.
+    assert _escalated_rate(coord, baseline_w=9000.0) == 16.0
+
+
+async def test_escalated_rate_ignores_the_peak_limit_when_captar_capability_absent(hass):
+    """R3 AC1/R18: the second of the two cases where the peak clamp does not run at all --
+    the CapTar capability being absent -- must leave the escalated rate bounded by C1/C4
+    alone, same as the R17-opt-out case above. Mirrors that test exactly (same config, same
+    baseline, same 0 A-without-the-gate/16 A-with-it shape) with `captar_available=False`
+    instead of `power_respect_peak=False`, and with `active_mode` left at its default
+    (Captar) rather than switched to `Power` -- proving the gate lives in the shared
+    `_peak_clamp_would_run` predicate itself, not in a mode-specific branch."""
+    config = dataclasses.replace(
+        _config(), max_peak_kw=4.0, safety_margin_w=250.0, captar_available=False
+    )
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=config, interval_s=30, store=_FakeStore({})
+    )
+    # Same baseline as test_escalated_rate_floors_at_zero_when_the_household_is_past_the_
+    # raised_limit above, which floors this rate to 0 A with the capability present -- with it
+    # absent, C1's 16 A stands untouched by a clamp that never engages (R3 AC1).
     assert _escalated_rate(coord, baseline_w=9000.0) == 16.0
 
 

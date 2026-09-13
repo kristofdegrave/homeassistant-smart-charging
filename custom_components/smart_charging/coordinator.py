@@ -751,9 +751,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # entity-catalog.md:153/control-cycle.md step 5 -- the same target and (issue #990:
         # debounced) baseline the R3 clamp itself holds. Since issue #1078 this shares
         # `apply_peak_clamp`'s own arithmetic through `peak_headroom_a` rather than restating
-        # it, so the readout cannot drift from the clamp it reports on; reading it here instead
-        # of returning it from `_apply_peak_clamp` still avoids changing that control-path
-        # signature for a display-only need.
+        # it, so the readout cannot drift from the clamp it reports on while the clamp runs at
+        # all; with the CapTar capability absent (R3 AC1, issue #1018) the clamp does not run,
+        # yet this readout still resolves and is surfaced (R21's own AC), simply consulted by
+        # no charging decision in that case. Reading it here instead of returning it from
+        # `_apply_peak_clamp` still avoids changing that control-path signature for a
+        # display-only need.
         peak_headroom = peak_headroom_a(
             baseline_w=ctx.baseline_w,
             voltage=voltage,
