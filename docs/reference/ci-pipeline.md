@@ -41,9 +41,9 @@ that label on every issue filed through the form. A seventh place sits outside t
 carries the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
 Adding a label means updating those seven; renaming one additionally means updating any form
 that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
-stops matching — so that one is checked, not assumed. That table's *no context label* row
-separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
-updating the row too. Both workers now read the table rather than carrying their own copy of either mapping, so the
+stops matching — so that one is checked, not assumed.
+
+Both workers now read the table rather than carrying their own copy of either mapping, so the
 row is the *checklist selection* rather than a mirror of it — but it is not the whole routing:
 `ai-pipeline.yml`'s path filter decides whether a job runs at all, and `_ai-review.yml`'s diff
 enumeration decides which files a checklist can see. Adding a tree still means editing all
@@ -143,7 +143,11 @@ in branch protection's required checks on `main`.
   `CLAUDE.md`'s **Model selection** table — the routing rule, both halves of it, lives there
   rather than in the workflow —
   and self-applies each against the files it covers, posting findings via `submit-pr-review`'s
-  CI mode and ending in a `clean`/`remarks` verdict marker. As with the drafter, the table
+  CI mode and ending in a `clean`/`remarks` verdict marker. Because that table comes from the
+  PR's own merge ref, a diff touching the Model selection section or a checklist it names is
+  reviewed against base-branch copies staged into the runner's temp directory, and the
+  modification is itself reported — a PR must not be able to apply its own rewritten routing to
+  itself. As with the drafter, the table
   column may name an agent definition or a work-type review document; the worker follows what
   it says, so a checklist can move without this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
