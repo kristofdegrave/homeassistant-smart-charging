@@ -396,7 +396,7 @@ sequenceDiagram
 
     T->>C: control interval fires
     Note over C: the cycle opens carrying the Coordinator's cross-cycle flags from the last one,<br/>among them R5's urgency latch and missed-deadline hold. The reserve condition below reads<br/>the hold alone, as it stood entering the cycle; both are read and updated at the urgency call
-    C->>S: read owned control-entity values (profile, mode, SOC override, target current,<br/>departure times, home-day flag), the config-options the cycle needs (C1's current bounds,<br/>the EV battery capacity fallback, thresholds), and the config-entry data it reads —<br/>the declared capabilities (R18) the Capability-Gate and deadline steps below consult
+    C->>S: read owned control-entity values (profile, mode, SOC override, target current,<br/>departure times, home-day flag), the config-options the cycle needs (C1's current bounds,<br/>the EV battery capacity fallback, thresholds), and the config-entry data it reads —<br/>the declared capabilities (R18), which the Capability-Gate step, the deadline steps and<br/>the peak clamp all consult (an absent CapTar capability skips that clamp entirely)
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
@@ -404,7 +404,7 @@ sequenceDiagram
     SC-->>C: smoothed net_w + supply voltage
     C->>A: read the optional sensed EV battery capacity role (R15, NF3)
     A-->>C: sensed capacity, or None when the role is unmapped/unavailable
-    Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>It is the Manager's because it spans two Resource Access services (an adapter role and the<br/>Store) and neither may reach the other; the Deadline Engine owns what the capacity is USED<br/>for (V5), not which source supplied it — the same split as NF4's voltage
+    Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>It is the Manager's by rule 4: both reads are I/O, which no Engine performs, so composing<br/>them is the Coordinator's job whether there are two sources or one. Note this is NOT NF4's<br/>voltage shape — that fallback is a tunable policy and lives in the Signal-Conditioning<br/>Engine (V8). Capacity's is a plain two-source read with no policy to own, so nothing here<br/>belongs to V5; the Deadline Engine owns only what the capacity is used for
     C->>DL: resolve departure deadline — today + one-day-ahead (R14)
     DL-->>C: resolved deadlines
     Note over C: evaluate R9's five-part reserve condition once — home-day flag set, sun down,<br/>next-day forecast above threshold, tomorrow's deadline resolving to "no deadline", and no<br/>missed-deadline hold in effect **as it stood entering this cycle** (resolution-rules.md).<br/>Both the SOC-Target cap row and Auto's overnight row read the resulting flag
