@@ -98,7 +98,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built; E8 partial — R11's cooldown/hold gating designed, not built |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
@@ -729,8 +729,8 @@ from the retired functional sequence.
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
   `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks and all six
-  Client tasks have shipped, as have all nine Engine tasks — E4 partially, its missed-deadline
-  hold being designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
+  Client tasks have shipped, as have all nine Engine tasks — two of them partially: E4's
+  missed-deadline hold and E8's R11 cooldown/hold gating are both designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Two checkpoints are only partially met and are marked as such: the Phase 3

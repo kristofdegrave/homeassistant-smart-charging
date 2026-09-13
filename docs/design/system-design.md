@@ -179,7 +179,8 @@ and it drifted the same way — the engines that hold state are not the ones the
 named. That enumeration also survives throughout **ADR-0010's own Context and options analysis** — its
 Context ("Three of the eight are stateful… Cycle-Invariant…"), Option A's con ("which three engines
 are stateful"), and Option D's rejected directory split, which lists an `engines/pure/` and an
-`engines/stateful/` membership contradicting the roster above on five rows. All of it is a dated
+`engines/stateful/` membership the roster above contradicts on several rows — and deliberately
+not a number here either, since it would drift the moment an engine gains or sheds state. All of it is a dated
 snapshot of the forces at the time, and Option D's listing describes a layout that was **rejected**,
 not a governing decision: ADR-0010 decides package placement, and its Decision is untouched by any verdict here.
 The roster rows above are authoritative; the ADR's Context is not to be "fixed" back over them.
