@@ -43,8 +43,12 @@ Adding a label means updating those seven; renaming one additionally means updat
 that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
 stops matching — so that one is checked, not assumed. That table's *no context label* row
 separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
-updating the row too. Both workers now read the table rather than carrying their own copy of
-either mapping, so the row *is* the routing, not a mirror of it.
+updating the row too. Both workers now read the table rather than carrying their own copy of either mapping, so the
+row is the *checklist selection* rather than a mirror of it — but it is not the whole routing:
+`ai-pipeline.yml`'s path filter decides whether a job runs at all, and `_ai-review.yml`'s diff
+enumeration decides which files a checklist can see. Adding a tree still means editing all
+three, and `docs/design/**` is the standing proof — it is in the row and in neither of the
+other two.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 

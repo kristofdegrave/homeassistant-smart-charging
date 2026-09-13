@@ -161,10 +161,6 @@ landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets
 `impl-spec-reviewer` for the file and `workflow-reviewer` for the subject, and a `development`
 PR that also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
 
-**CI applies the path half only, for now.** Its review step is being changed to apply this rule
-in full; until that lands, the label half is the interactive session's, the same way
-`docs/design/**` has a reviewer the pipeline does not yet route to.
-
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
@@ -184,7 +180,9 @@ local session hands the drafting to the human partner. Its review is still autom
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
 `CLAUDE.md` → `workflow-reviewer`. This is CI's own path→agent mapping plus one deliberate
-addition, `docs/design/**`, which CI does not route today although the reviewer exists.
+addition, `docs/design/**`, which CI routes by this rule but cannot see: it is in neither the
+pipeline's path filter nor the review worker's diff enumeration, so the reviewer is reachable
+in principle and unreached in practice.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
 fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also
 edits `CLAUDE.md` or the pipeline.
