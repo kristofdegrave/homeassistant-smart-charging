@@ -734,13 +734,10 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
 
 async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(hass):
     """issue #1017: `test_every_owned_entity_id_matches_entity_catalog` above checks one of
-    entity-catalog.md's eight columns -- the id. It gave false confidence that the catalog was
-    enforced: the catalog specified `%` for `sensor.smart_charging_active_soc_limit` while the
-    shipped sensor set no unit, no device class and no state class, and the id test stayed green
-    (issue #1008 fixed that specific case; `ActiveSocLimitSensor` in sensor.py now carries the
-    fix, and this test pins it down permanently).
-
-    This test extends the sweep to the catalog's Unit column, and to device class/state class
+    entity-catalog.md's eight columns -- the id -- which is why issue #1008's missing `%` on
+    `sensor.smart_charging_active_soc_limit` stayed green until found by eye. This test pins
+    down `ActiveSocLimitSensor`'s fix permanently and extends the sweep to the catalog's Unit
+    column, and to device class/state class
     where the catalog's Realizes/description text implies them, for every owned entity whose
     catalog Role is `state` (a config/config-data/config-options/adapter-role entity has no
     Unit-column enforcement here -- out of this issue's scope; see the PR body).
@@ -772,6 +769,14 @@ async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(ha
     attributes off, so every owned entity for this config entry is force-enabled and the entry is
     reloaded before checking -- unlike the id test above, which only needs the registry row a
     disabled entity still has.
+
+    Known limitation: the completeness guard at the end (registered entities vs. this table)
+    only catches a `state`-role catalog row whose *implementation* diverges from an existing
+    entity -- it cannot notice a `state`-role row with no implementation at all, since there is
+    then no registered entity to compare against. Two such rows currently exist:
+    `sensor.smart_charging_desired_current` (entity-catalog.md:183) and
+    `binary_sensor.smart_charging_plug_in_reminder` (entity-catalog.md:296, and no
+    `binary_sensor` platform is even wired up in `PLATFORMS`) are documented but not yet built.
     """
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
@@ -794,7 +799,10 @@ async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(ha
     # registers under (er.async_get_entity_id needs the domain to disambiguate, same as the
     # id test's `expected` dict above).
     expected_state_attrs: dict[tuple[str, str], tuple[str | None, str | None, str | None]] = {
-        # General
+        # General. `select` has none of these three attributes at all (no
+        # native_unit_of_measurement/state_class, and Entity's generic device_class defaults to
+        # None) -- (None, None, None) can never fail on its own, but the row is still
+        # load-bearing for the completeness equality below.
         ("mode", "select"): (None, None, None),
         ("smoothing_window", "sensor"): ("cycles", None, None),
         # Capabilities (ADR-0031 mirrors)
@@ -894,7 +902,8 @@ async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(ha
         ("evening_prompt_enabled", "sensor"): (None, None, None),
         # See the docstring's `time`-vocabulary paragraph: not SensorDeviceClass.TIME.
         ("evening_prompt_time", "sensor"): (None, None, None),
-        # Home-day flag
+        # Home-day flag. `switch` has none of these three attributes either (same note as
+        # `mode` above) -- still load-bearing for the completeness equality below.
         ("home_day", "switch"): (None, None, None),
     }
 
@@ -938,6 +947,11 @@ async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(ha
         ("time", "departure_holiday"),
         ("time", "departure_home_day"),
     }
+    # Pinned so a future edit that grows/shrinks this set (e.g. adding a NEW entity here instead
+    # of to `expected_state_attrs` above, the cheapest way to silence a completeness failure)
+    # has to touch this number deliberately rather than pass by accident -- it is not, on its
+    # own, proof the 12 members still are `config`-role; that still rests on the comment above.
+    assert len(non_state_role_owned_entities) == 12
     all_registered = {
         (reg_entry.domain, reg_entry.unique_id.removeprefix(f"{entry.entry_id}_"))
         for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id)
