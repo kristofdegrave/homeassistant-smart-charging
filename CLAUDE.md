@@ -114,6 +114,11 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
+**A cell that names more than one file labels each role.** `work file <path>; entry point
+<path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
+by name through. Where a row also splits on *which* file the change touches, that split is a
+separate sentence in the cell, never another `;`, so one separator never means two things.
+
 **A row is self-contained.** Nothing outside the row and the PR's changed paths is needed to
 know what to delegate to. The `documentation` row in particular splits on which
 `docs/design/` file the change touches, not on the issue body.

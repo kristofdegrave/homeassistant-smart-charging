@@ -2,7 +2,12 @@
 
 Reference guidance for authoring the artifacts that drive Claude runs in this repo:
 skills (`.claude/skills/`), agent definitions (`.claude/agents/`), and the CI worker
-prompts (`.github/workflows/_ai-*.yml`). It exists so that every new authored artifact is lean
+prompts (`.github/workflows/_ai-*.yml`). **Work-type documents**
+(`docs/reference/work-types/<label>/`) hold content moved out of a skill, so everything here
+binds them **except** the two routing sections: they do not travel between repositories, which
+is the premise both rules rest on, so they name this project's paths and tracker commands
+directly. Every other rule applies unchanged — the content did not stop being an instruction to
+a run by moving. It exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
 [Project-dependent content routes through
 `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent

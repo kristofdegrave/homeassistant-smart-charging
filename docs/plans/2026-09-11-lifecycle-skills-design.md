@@ -328,7 +328,18 @@ move prevents.
 
 Two consequences worth stating, since the remaining labels inherit them:
 
-- Each slice is documentation-only, so it carries no CI risk and needs no coordination with
+- **A slice is not risk-free, and is not documentation-only.** The slice PR itself touches
+  `.claude/` and `CLAUDE.md`. And once a work file exists, a later PR editing *only* work files
+  **is** docs-only — which routes it to `needs-work` and puts it in reach of the fix worker's
+  unrestricted `Write,Edit` and its `git add docs` staging, so that worker can rewrite the file
+  instructing the drafter on the strength of a review comment. The manual merge gate still
+  holds, so this is not an approval bypass; it is a self-modifying-instructions path that did
+  not exist while the content sat in `.claude/`, where the review worker deliberately sends
+  such a PR to a human instead. Eight work files inside the auto-fix tree is a materially
+  different exposure from one, so the `_ai-fix.yml` per-type allow-list below is no longer only
+  a precondition for a type-agnostic fix skill — it is what bounds this, and belongs before the
+  bulk of the slices rather than after.
+- Each slice needs no coordination with
   the CI change. The order between them stops mattering.
 - The shims are not permanent. Once the workers resolve their files from the table rather than
   by skill name, the entry points can go, and the table's *How the work is done* column drops

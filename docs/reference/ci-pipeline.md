@@ -40,7 +40,8 @@ too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` �
 that label on every issue filed through the form. Two more places sit outside the pipeline and
 carry the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
-a label means moving a directory, not editing a line. Adding a label means updating those
+a label means moving a directory, not editing a line, for each label that has one (today,
+`adr`). Adding a label means updating those
 eight; renaming one additionally means updating any form that stamps it. A rename that misses
 `close-guard.yml` fails open silently — its `case` simply stops matching — so that one is
 checked, not assumed. That table's *no context label* row
@@ -50,7 +51,7 @@ updating the row too — until CI reads the table directly, the two are kept in 
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other six. They are not context labels
+places — `.github/setup-labels.sh` — and in none of the other seven. They are not context labels
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
 renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
 `context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,
