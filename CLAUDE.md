@@ -105,7 +105,7 @@ runs on.
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
-| *(no context label)* | none | — | by changed path (see below) | opus |
+| *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
 **Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
 why the review-model column reads opus in every row today. The column exists anyway: it makes
@@ -119,14 +119,56 @@ reads that frontmatter.
 by name through. Where a row also splits on *which* file the change touches, that split is a
 separate sentence in the cell, never another `;`, so one separator never means two things.
 
-**A row is self-contained.** Nothing outside the row and the PR's changed paths is needed to
+**A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
-`docs/design/` file the change touches, not on the issue body.
+`docs/design/` file the change touches, not on the issue body. Reviewer dispatch additionally
+resolves the linked issue's label, per the union rule below — that is the one input outside
+the row, and it only ever adds a reviewer.
 
 **A review column may name more than one agent.** Each is applied to the changed files under
 its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
 checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
 `test-reviewer`.
+
+**Label and path both route, and neither overrides the other.** They answer different
+questions: the label says what kind of work this is, the changed paths say what it actually
+touched, and they come apart whenever a change is *about* one artifact type but *lives* in
+another's tree — common for `workflow` work, which edits whichever file holds the rule. So a
+PR gets the union: every tree's reviewer from the no-label row's path map, **plus** the label
+row's reviewer where it names one those paths did not already select. A row that names an
+agent **for a tree** — as `development` does, `code-reviewer` for `custom_components/**` and
+`test-reviewer` for `tests/**` — names nothing when that tree has no changed files: a code-only
+`development` PR gets `code-reviewer` and no more. Only a row whose agent carries no tree
+qualifier adds one this way. An issue carrying more than one context label — which the filing
+conventions assume against and CI's drafter refuses — contributes each of those rows rather than forcing
+a choice between them.
+
+The two halves are scoped differently, and have to be. A path-selected reviewer sees the
+changed files under its own tree. A label-selected one has no tree of its own — that is what
+made it an addition rather than a duplicate — so it sees the change as a whole, and reviews it
+as the kind of work the label says it is.
+
+Where a tree states its own reviewer rule, that rule governs **that tree's files** and nothing
+else: `docs/postmortems/**` is the standing case, and **Document structure** above states it. A
+whole-change reviewer the label added still runs — it simply sees the change minus that tree's
+files. And the rule never suppresses a reviewer the path map selected for some *other* changed
+tree: a PR touching both a post-mortem and a skill still gets the skill reviewed. Adding a file
+must never subtract a reviewer, which a whole-change suppression would let it do.
+
+Path routing is the half that must never be skipped — it is what guarantees no changed tree
+goes unreviewed, and it is also the half that cannot be steered: the label is resolved from the
+PR body, which on a fork PR is written by whoever opened it, so the worst a crafted body can do
+is add a reviewer, never remove one. A reference that cannot be resolved — a deleted or
+transferred issue, a number that never existed, a failed lookup — is treated exactly like no
+reference at all, so the path half still stands alone rather than the run aborting. The label
+row is the addition: it brings the checklist written for this kind of work even when the change
+landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets
+`impl-spec-reviewer` for the file and `workflow-reviewer` for the subject, and a `development`
+PR that also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
+
+**CI applies the path half only, for now.** Its review step is being changed to apply this rule
+in full; until that lands, the label half is the interactive session's, the same way
+`docs/design/**` has a reviewer the pipeline does not yet route to.
 
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
@@ -140,7 +182,8 @@ refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.
 local session hands the drafting to the human partner. Its review is still automated. What a
 `workflow` author reads instead is in **Authoring AI artifacts** below.
 
-**The no-label row routes by changed path**: `docs/adl/**` → `adr-reviewer`;
+**The no-label row routes by changed path**, for every PR and not only an unlabelled one:
+`docs/adl/**` → `adr-reviewer`;
 `docs/analysis/**` → `analysis-reviewer`; `docs/plans/**` → `impl-spec-reviewer`;
 `docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,

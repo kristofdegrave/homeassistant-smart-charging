@@ -32,8 +32,10 @@ message conventions).
    temporarily shows the combined stack until the branch below merges — expected, shrinks
    automatically. PR description references the linked issue with `Closes #<issue-number>` so
    merging auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>`
-   on every PR except the one that finishes the issue. Move the issue's board **Status** to
-   `In review`.
+   on every PR except the one that finishes the issue. A task PR normally carries both — `Closes`
+   for its own task issue and `Part of` for the epic — and where anything needs to resolve a PR
+   to one issue, the `Closes` reference is the one that names it. Move the issue's board
+   **Status** to `In review`.
 3. **Review.** Fresh, separate reviewer agent for the artifact type — never inline in the
    main session. Which agent, and on which model, is CLAUDE.md's model-selection rule: look it
    up in that file's **Model selection** table, whose review column reads Opus in every row
