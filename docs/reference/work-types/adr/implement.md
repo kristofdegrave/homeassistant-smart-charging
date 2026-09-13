@@ -44,7 +44,9 @@ Check those before drafting, not just the headline definition.
     no real Con is a sign it wasn't seriously considered, or a real Con is being hidden.
   - Decision references the options' trade-offs rather than restating them.
   - Consequences names concrete follow-up (issues to open, docs to update), not just restating
-    the decision.
+    the decision, and carries the **Blast radius** enumeration `docs/adl/template.md`
+    specifies — the reviewer re-runs its search and will raise a finding if a governed site is
+    missing from it.
   - `docs/adl/README.md` (the ADL) has a new row for this ADR, and the number matches the
     numbering step above — the reviewer checks both and will raise a finding if either is
     missing.
