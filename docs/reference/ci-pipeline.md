@@ -144,20 +144,24 @@ in branch protection's required checks on `main`.
   it says, so a checklist can move without this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
   remarks too — the CI equivalent of step 8.
-- **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict adds `needs-work`, which runs
-  `address-review-remarks`, commits as `github-actions[bot]` (`docs: address AI review
-  remarks (#<pr>)`), and re-adds `needs-review`. It can only commit under `docs/` (its
-  commit step is `git add docs`-only) — for a `workflow`-labeled PR, findings outside
-  `docs/**` (e.g. in `.github/workflows/`, `.claude/`) still burn a fix cycle, but only get
-  described in the fix pass's single PR comment; nothing outside `docs/` is committed, and a
-  human has to apply those changes by hand.
-- **Loop cap**: **2** automatic fix cycles, tighter than the interactive session's 3-round cap
+- **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict on a **docs-only** diff adds
+  `needs-work`, which runs `address-review-remarks`, commits as `github-actions[bot]`
+  (`docs: address AI review remarks (#<pr>)`), and re-adds `needs-review`. It can only commit
+  under `docs/` (its commit step is `git add docs`-only), so a diff touching **anything**
+  outside `docs/**` (`.github/`, `.claude/`, `custom_components/`, `tests/`) never reaches it
+  automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
+  `needs-approval` with a comment saying why, rather than spending fix cycles that could not
+  commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
+  to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
+  job ever sees a non-docs PR.
+- **Loop cap** (docs-only diffs — the only ones that reach the fix job automatically): **2**
+  automatic fix cycles, tighter than the interactive session's 3-round cap
   ([contribution-workflow.md](contribution-workflow.md) step 6) — deliberately, since CI runs
   fully unsupervised with no human watching in real time, unlike an interactive session. A 3rd
   `remarks` verdict goes straight to `needs-approval` with a comment asking a human to re-add
   `needs-work` manually for one more cycle.
-- **Clean / cap-out** (≈ step 7): a `clean` verdict or hitting the 2-cycle cap both add
-  `needs-approval` — same label, same meaning as the interactive flow: no automated work
-  pending, human approval to merge still required.
+- **Clean / cap-out** (≈ step 7): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
+  verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
+  interactive flow: no automated work pending, human approval to merge still required.
 - **Merge** (step 9, unchanged): always a manual human action regardless of which path
   drafted or reviewed the PR.
