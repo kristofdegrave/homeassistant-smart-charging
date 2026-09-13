@@ -147,8 +147,13 @@ in branch protection's required checks on `main`.
   PR's own merge ref, a diff touching `CLAUDE.md`, `.claude/`, `docs/reference/` or the label
   script — computed from the changed paths by the workflow, not judged from the diff's content
   — has its **instructions** read from base-branch copies staged into the runner's temp
-  directory, and the modification is itself reported — a PR must not be able to apply its own
-  rewritten routing to itself. Only the instructions move: the files under review are still the
+  directory, and the review body opens with a note recording that the instructions were taken
+  from the base branch and that the new version needs a human read. That note is never a
+  finding and never makes the verdict `remarks`: there is nothing for a fix worker to do about
+  it, and a clean verdict routes the PR to `needs-approval`, which is the human read it asks
+  for. What it does not claim is that the routing was rewritten — the trigger is a path
+  trigger and cannot establish that. The protection is the base copies, not the note: a PR must
+  not be able to apply its own rewritten routing to itself. Only the instructions move: the files under review are still the
   PR's, read from the checkout. The staging step verifies every base copy it wrote is present
   and the right size and fails the job otherwise, so whether the guard held is never the
   worker's judgement, and a failure to enumerate the changed paths turns the guard **on**, not
