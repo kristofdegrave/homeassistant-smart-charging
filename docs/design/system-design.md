@@ -170,15 +170,18 @@ job (it reads once, then feeds each engine) — see the call rules in [§4](#4-s
 otherwise it is **pure**. Either way the state is the *Manager's* — a parameter, never HA-held
 inside the engine — which is what keeps every engine testable in isolation.
 
-This document deliberately publishes **no count** of stateful engines, and the roster below carries
+This document deliberately publishes **no count** of stateful engines, and the roster above carries
 the verdict per row rather than in a list here. ADR-0010 argued for exactly this when it rejected
 encoding the distinction in the directory tree: *"the distinction is already carried where it
 matters — in each engine's signature… Encoding it in the tree adds a second source of truth that
 can drift if an engine gains or sheds state."* A frozen count in prose is that same second source,
 and it drifted the same way — the engines that hold state are not the ones the earlier enumeration
-named. That enumeration also survives in **ADR-0010's own Context** ("Three of the eight are
-stateful… Cycle-Invariant…"), which is a dated snapshot of the forces at the time, not a governing
-decision: ADR-0010 decides package placement, and its Decision is untouched by any verdict here.
+named. That enumeration also survives throughout **ADR-0010's own Context and options analysis** — its
+Context ("Three of the eight are stateful… Cycle-Invariant…"), Option A's con ("which three engines
+are stateful"), and Option D's rejected directory split, which lists an `engines/pure/` and an
+`engines/stateful/` membership contradicting the roster above on five rows. All of it is a dated
+snapshot of the forces at the time, and Option D's listing describes a layout that was **rejected**,
+not a governing decision: ADR-0010 decides package placement, and its Decision is untouched by any verdict here.
 The roster rows above are authoritative; the ADR's Context is not to be "fixed" back over them.
 
 Two consequences worth stating, because both have caught readers out:

@@ -227,7 +227,7 @@ it is wired to its callers).
 ### Phase 2 — Engines
 
 > All Engines perform **no I/O and call no other Engine** (§4 rule 4) — that is the purity this
-> guard is about. Whether an Engine is *stateful* in system-design §3's narrower sense is a
+> guard is about. Whether an Engine is *stateful* in system-design §3's signature-test sense is a
 > separate, per-Engine fact recorded on its roster row there and on its task below; the ones that
 > are take their cross-cycle state as a **parameter** threaded by the Manager rather than holding
 > it. Every Engine is unit-tested with **plain pytest** (ADR-0009)
@@ -396,12 +396,16 @@ it is wired to its callers).
 **E8 — Cycle-Invariant Engine** *(pure today — R11's cooldown/hold is deferred and its timers live in M1; stateful once that lands)*
 - **Service:** Engine, V9 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/cycle_invariant.py`; tests in
-  `tests/engines/test_cycle_invariant.py`.
-- **Builds:** final current after R11 cooldown/hold gating and the C1 floor/cap; also the terminus of
-  ADR-0007's fault path (an adapter `None`/exception routes here → force stop). State (R11 timers)
-  threaded by M1; switching mode resets the incoming mode's timers (R11, wired at M1).
-- **Depends on:** ADR-0010; timer state from M1.
-- **Testable on its own:** plain pytest — cooldown/hold gating given state, C1 floor/cap, fault → 0 A.
+  `tests/engines/test_cycle_invariant.py`. E8 partial — R11's cooldown/hold gating is designed,
+  per system-design §3, but not built: the shipped engine exposes only the C1 floor/cap, and R11's
+  timers currently live in M1. That is why its kind marker reads *pure today*.
+- **Builds:** the C1 floor/cap, and the terminus of ADR-0007's fault path (an adapter
+  `None`/exception routes here → force stop). R11's cooldown/hold gating belongs here too once
+  built, taking the timer state as a threaded parameter — until then M1 owns those timers outright,
+  and switching mode resets the incoming mode's timers there (R11).
+- **Depends on:** ADR-0010; and, once R11's gating is built, timer state threaded in by M1.
+- **Testable on its own:** plain pytest — C1 floor/cap, fault → 0 A; and, once R11's gating is
+  built, cooldown/hold gating given the threaded timer state.
 - **Integration checkpoint:** ⎔ M1's `set_active_mode` resets timers; fault input forces stop + Fault
   sensor (via Store).
 
