@@ -36,26 +36,32 @@ here.
     it applies, a state it enters, an event it fires. A pre- or postcondition is in scope only
     where it asserts behaviour no in-scope item in the same diff already covers — otherwise
     that item covers it and you do not search twice.
+    **Scope / level** and **Relationships** are in scope on those same terms: they routinely
+    assert what the running integration does — which existing mechanism realizes the use-case,
+    which event it subscribes to, whose set-point logic it never touches — so treat a change to
+    one as an item unless another item in the same diff already covers it.
   - **No-op branch.** A change altering none of those asserts no behaviour, and this step is
     one line in the PR body saying nothing was in scope: rewording, a link or cross-reference,
-    a renumbering, the Mermaid diagram redrawn to match steps already in the diff, and
-    Stakeholders / Scope / Relationships / *Requirements satisfied* prose — the last because a
-    requirement's home is `requirements.md`, so restating one here changes nothing.
+    a renumbering, the Mermaid diagram redrawn to match steps already in the diff, Stakeholders
+    prose, and a *Requirements satisfied* line — the last because a requirement's home is
+    `requirements.md`, so restating one here changes nothing.
   - **The search, capped.** Per in-scope item, run **one** targeted search of
     `custom_components/` for the thing it names — the entity id, the adapter role, the domain
-    event (it ships as an `EVENT_*` constant whose value is the snake_cased event name), the
-    threshold, the ordering — and open at most the one file that matches. **Stop after five
-    items**; where the diff has more, say the set was sampled and name the five you took. Five
+    event name, the threshold, the ordering — and open at most one file, the best match.
+    **Stop after five items**; where the diff has more — a brand-new use-case, whose diff is
+    the whole document, always will — say the set was sampled and name the five you took. Five
     rather than the three `analysis-reviewer` samples, because a drafting session has the
     fuller turn budget and one use-case edit routinely touches more assertions than one
-    requirement edit touches criteria. It is a fixed lookup count either way, never a sweep.
+    requirement edit touches criteria. The cap is this step's own and the requirement path's
+    equivalent step carries none; that difference is deliberate, and nothing here depends on
+    the two matching. It is a fixed lookup count either way, never a sweep.
   - **State the finding in the PR body**, per item you took: either the code already satisfies
     it — name the file and the function that does — or it does not. Behaviour the code does
     not implement at all is this second case, not an exemption from it. Where it does not,
     **file a `specs` child issue for that gap as part of this PR** and reference it in the
-    body — a `specs` issue, never a task issue, because a task issue needs the anchored plan
-    reference `CLAUDE.md`'s **Issue conventions** section routes to, and no such plan exists
-    yet; `CLAUDE.md`'s **Tracker mechanics** section routes to the filing commands. Done when
+    body — a `specs` issue, never a task issue, for the reason `CLAUDE.md`'s **Issue
+    conventions** section routes to; its **Tracker mechanics** section routes to the filing
+    commands. Done when
     the PR body names which of the two cases holds for every item you took, and names the
     `specs` issue wherever it is the second.
 

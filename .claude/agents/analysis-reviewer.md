@@ -40,11 +40,14 @@ If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for th
   and a domain event it says the System produces. A use-case *restating a requirement* is not
   one of them — a requirement's home is `requirements.md`, and restating one elsewhere does not
   change it — and neither is any change asserting no behaviour: wording, formatting, a glossary
-  entry, a renumbering, a diagram redrawn to match steps already in the diff, a relationships or
-  requirements-satisfied line. Where nothing is in scope, say so in one line and move on. For
+  entry, a renumbering, a diagram redrawn to match steps already in the diff, a
+  requirements-satisfied line. A use-case's *Scope / level* and *Relationships* lines are in
+  scope wherever they do assert behaviour — the mechanism that realizes the use-case, the event
+  it subscribes to, the logic it never touches — and out of scope where they only navigate.
+  Where nothing is in scope, say so in one line and move on. For
   each item that is, run **one** targeted `Grep` over `custom_components/` for the behaviour it
   asserts (the entity id, the adapter role, the default, the bound, the event name, the
-  precedence rule it names) and open at most the one file that matches. **Stop after three
+  precedence rule it names) and open at most one file, the best match. **Stop after three
   items** — say the set was sampled and name the three you took; six tool calls is the most this
   check may cost a review, because a `docs/analysis/` review runs on the lighter turn ceiling
   and a truncated review is re-run from cold. Widening the unit to use-cases did not widen that
