@@ -60,8 +60,16 @@ Read conditionally:
 - Correct harness: plain pytest for pure `modes/`/`engines/` logic; HA harness for adapters,
   coordinator, entities, config flow.
 - Mandated coverage present: adapter roles cover present / absent / unavailable / (status) unmapped;
+  a numeric role whose catalogued unit column names a unit also carries the fifth case — its expected
+  unit set stated, plus a foreign-unit and an absent-unit case on the adapter class defining its read
+  (ADR-0040, extending ADR-0009, is the authority on the trigger and the per-class discharge);
   engines cover their behavioral rows and worked examples; the coordinator covers happy / gating /
   clamp / fault.
+- **This check owns the unit overlap with (6).** Where one diff both changes an entity's unit and
+  leaves that role's fifth-case coverage missing, that is one defect with two symptoms: report it
+  once here as Major, naming the absent runtime evidence inside that finding, and raise nothing
+  under (6) for it. The tests are the durable fix — a state pasted into a PR body proves the value
+  once, where the mandated cases keep proving it.
 - Test names trace to the requirement / UC / ADR criterion they verify. Tests genuinely fail without
   the implementation (no vacuous asserts, no over-mocking that hides a wiring bug).
 
@@ -91,6 +99,8 @@ Read conditionally:
 - Judge the section against the diff, not by its presence. Observations that don't cover the
   behavior this diff changes, or a bare number pasted where a unit or a precision changed, are
   the same Major finding — a value without its unit is exactly what a unit defect hides behind.
+  The one exception is the overlap checklist (3) owns: when the unit is what changed *and* that
+  role's fifth-case coverage is also missing, report the defect once under (3), not twice.
   A section that honestly states the behavior could not be driven before merge and names what
   was substituted is not a finding; say whether the substitute is adequate.
 - The completion bar this applies is the one `CLAUDE.md`'s **Contribution workflow** section
