@@ -47,6 +47,20 @@ broken reference, and judge the ADR on internal merit instead.
 **(3) Consequences follow from the Decision**
 - Consequences add genuine new information (follow-up work, what becomes easier/harder) —
   not a restatement of the Decision.
+- **The Blast radius enumeration is complete.** Consequences must carry the template's Blast
+  radius: a re-runnable search, a conforms/does-not-conform verdict per hit, and an explicit
+  out-of-scope list. Run the stated search exactly as written; the template requires it in the
+  dialect you hold, so a pattern needing translation before it runs is itself the finding below.
+  Three things are each a **Major** finding — name the sites missed in every case: the
+  section is absent; the search fails the template's own width test, so it drops something the
+  decision also governs; or a hit appears in neither the table nor the out-of-scope list. An
+  empty result counts under that width test whenever the ADR's own table lists hits, or the ADR
+  does not itself claim the template's no-hits case — there, emptiness is a defect in the
+  stated search, not an empty blast radius. A row carrying a verdict but not what the site does
+  today, a non-conforming row with no matching follow-up entry, or an out-of-scope entry not
+  saying what it keeps doing, is **Minor**. Apply this to an ADR this change **adds** — one
+  it only modifies is out of scope, because adding the section to an existing record would be
+  the immutability violation item (4) makes Critical.
 
 **(4) Cross-ADR / cross-document consistency**
 - Does this ADR contradict an existing `Accepted` ADR? If so, it must explicitly supersede
