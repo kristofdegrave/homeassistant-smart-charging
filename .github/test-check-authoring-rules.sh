@@ -72,6 +72,12 @@ case_add "two links on one line: the second is reported too" 1 \
 
 case_add "an anchored link is rejected" 1   "docs/reference/contribution-workflow.md" ".claude/skills/demo/SKILL.md"   'See [Step 3](../../../docs/reference/contribution-workflow.md#step-3-review).'
 case_add "a ./-prefixed link is rejected" 1   "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md"   'Per [ADR-0009](./docs/adl/0009-testing-strategy.md), pick the harness.'
+case_add "an angle-wrapped link is rejected" 1 \
+  "docs/adl/template.md" ".claude/skills/demo/SKILL.md" \
+  'Draft against [the template](<../../../docs/adl/template.md>).'
+case_add "a root-relative link is rejected" 1 \
+  "docs/reference/ci-pipeline.md" ".claude/skills/demo/SKILL.md" \
+  'See [the pipeline](/docs/reference/ci-pipeline.md).'
 case_add "a titled link is rejected" 1   "docs/reference/ai-authoring.md" ".claude/skills/demo/SKILL.md"   'Read [it](../../docs/reference/ai-authoring.md "the reference") first.'
 
 # --- a bare path is a name, not a route, and is legal --------------------------------------
@@ -94,7 +100,7 @@ case_add "an intra-skill reference link stays legal" 0 - \
 
 # --- scope: only the watched trees, only added lines ---------------------------------------
 case_add "a link outside the watched trees is ignored" 0 - \
-  "docs/reference/some-doc.md" 'Links to [x](../reference/ci-pipeline.md) freely.'
+  "docs/reference/some-doc.md" 'Links to [x](../../docs/reference/ci-pipeline.md) freely.'
 case_add "a link in a workflow file is ignored" 0 - \
   ".github/workflows/_ai-draft.yml" "# follows [it](../../docs/reference/contribution-workflow.md)"
 
@@ -182,6 +188,25 @@ if [ -n "$dir" ]; then
   rm -rf "$dir"
 fi
 
+# a near-miss allowlist entry must not excuse the real path
+dir=$(new_repo) || dir=""
+if [ -n "$dir" ]; then
+  mkdir -p "$dir/.claude/skills/demo" "$dir/.github"
+  printf 'seed
+' > "$dir/.claude/skills/demo/SKILL.md"
+  commit_all "$dir" seed
+  (cd "$dir" && git branch -q base)
+  printf '%s
+' "$LINK" >> "$dir/.claude/skills/demo/SKILL.md"
+  # same artifact, a path that is a strict prefix of the real one
+  printf '.claude/skills/demo/SKILL.md	docs/reference/contribution-workflow	# near miss
+'     > "$dir/.github/authoring-rule-allowlist.tsv"
+  commit_all "$dir" change
+  out=$(cd "$dir" && bash "$SCRIPT" base 2>&1); rc=$?
+  [ "$rc" = 1 ] && ok_case "a near-miss allowlist entry does not excuse the violation"                 || fail_case "a near-miss allowlist entry does not excuse the violation" "exit $rc" "$out"
+  rm -rf "$dir"
+fi
+
 # --- environment errors stay distinguishable from violations -------------------------------
 dir=$(new_repo) || dir=""
 if [ -n "$dir" ]; then
@@ -193,7 +218,7 @@ if [ -n "$dir" ]; then
   rm -rf "$dir"
 fi
 
-EXPECTED=22
+EXPECTED=25
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

@@ -57,7 +57,9 @@ current=""
 # change and the run would report clean. A merge gate has to fail closed.
 DIFF=$(mktemp)
 trap 'rm -f "$DIFF"' EXIT
-git -c core.quotePath=false diff --unified=0 "$BASE...HEAD" \
+git -c core.quotePath=false -c diff.noprefix=false \
+    -c diff.srcPrefix=a/ -c diff.dstPrefix=b/ \
+    diff --unified=0 --text "$BASE...HEAD" \
   -- '.claude/skills/*' '.claude/agents/*' > "$DIFF"
 
 # --unified=0 so context lines never masquerade as additions.
@@ -67,8 +69,10 @@ git -c core.quotePath=false diff --unified=0 "$BASE...HEAD" \
 # `diff --git` header — whereas a skill documenting diff syntax can contain a line starting
 # `++`, which renders as `+++ b/...` and would otherwise retarget every later violation to the
 # wrong file. The diff below sets core.quotePath=false so a non-ASCII path stays unquoted and
-# the header keeps matching; an unmatched header would leave `current` pointing at the previous
-# file, which is the mis-attribution this switch exists to prevent, so it is also guarded below.
+# the header keeps matching, and pins the a/ b/ prefixes so a local diff.noprefix config cannot
+# strip them — without that the header stops matching, `current` stays empty, and the guard
+# below turns every local run into a parse error. `--text` stops a `-diff` gitattribute
+# suppressing the content entirely.
 while IFS= read -r line; do
   case "$line" in
     'diff --git a/'*)
