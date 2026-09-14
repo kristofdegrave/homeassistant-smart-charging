@@ -100,7 +100,7 @@ runs on.
 | `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
-| `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
+| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |

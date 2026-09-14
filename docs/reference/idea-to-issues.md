@@ -63,7 +63,9 @@ because it needs an approved plan's anchored `Plan:` line
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), and no such
 plan exists until the spec itself is drafted and reviewed.
 
-The spec's own sections belong to `write-impl-spec`. Wherever it lands, it stays *derived*
+The spec's own sections belong to the `specs` work type —
+[work-types/specs/implement.md](work-types/specs/implement.md), named in that row of
+`CLAUDE.md`'s **Model selection** table. Wherever it lands, it stays *derived*
 from the analysis and design documents — it never introduces behaviour they do not already
 state.
 
