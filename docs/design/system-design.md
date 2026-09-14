@@ -100,9 +100,10 @@ pair (V6, V11, V12). Every service is classified as one of the five Method roles
 
 The owned control entities, the config flow, and the dashboard are all Clients, not Managers: they
 read/write owned/runtime entities and config-entry buckets through the Store, but hold no
-orchestration or policy. UC11 has no service of its own for exactly this reason — it is a Client
+orchestration or policy. UC11 and UC12 have no service of their own for exactly this reason — UC11 is a Client
 rendering owned entities (via the Store) and adapter-role read-backs (via the Adapters, read-only —
-R19's "no dashboard-specific logic per new entity" is a direct consequence). None of the three
+R19's "no dashboard-specific logic per new entity" is a direct consequence), and UC12 a Client
+writing config-entry data, options and role mappings through that same Store (R20). None of the three
 triggers a Manager directly — the Control-interval timer is the Coordinator's only trigger (§4
 rule 1), and the Coordinator reads every owned control entity's current value through the Store on
 its own cycle, the same way it reads hardware through the Adapters. A user action here takes effect
@@ -129,8 +130,9 @@ entities read-only through the Store; it can both read and write the control ent
 | **Vehicle-Limit Manager** | Bidirectional [vehicle charge-limit](../analysis/system-overview.md#ubiquitous-language) sync: write on limit change, adopt manual changes, reset on disconnect (C2) | V12, V1 (`vehicle_charge_limit`, `car_home`, `charger_status`), V13, V4 (consumed as the Coordinator's published resolution, [§5.2](#52-vehicle-charge-limit-sync-uc09)) | UC09 |
 | **Notification Manager** | Evaluate a time/condition trigger → deliver a message → (for the prompt) capture the response | V11, V1, V5, V13, V4 (consumed as the Coordinator's published resolution, [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)) | UC08, UC10, and delivery of R5's deadline-unreachable notice |
 
-Only **three** Managers realize eleven use cases. UC05/UC06/UC07 are the decisive validation of the
-cut: none is a service. Deadline urgency (UC05) is the widest of the three — the Deadline
+Only **three** Managers realize ten of the twelve use cases; the other two (UC11, UC12) need no
+Manager at all, being pure Clients over the Store ([§6](#6-use-case-validation)). UC05/UC06/UC07
+are the decisive validation of the cut: none is a service. Deadline urgency (UC05) is the widest of the three — the Deadline
 Engine, Billing-Protection's headroom and ceiling-raise, Grid-Safety's headroom, the Profile
 Engine's baseline resolution and `Auto` escalation, and a Charging-Mode Engine queried for the
 baseline set-point, all invoked in the Coordinator's normal cycle — five services, none of
@@ -274,7 +276,7 @@ flowchart TD
         Timer["Control-interval timer"]
         Owned["Owned control entities<br/>(profile/mode/SOC/departure/home-day)"]
         Dash["Runtime dashboard (UC11)"]
-        Cfg["Config flow / options flow"]
+        Cfg["Config flow / options flow (UC12)"]
         Ext["External events<br/>(connect·disconnect, vehicle limit change,<br/>notification action)"]
     end
 
@@ -506,7 +508,7 @@ The pursued occurrence threaded in from the prior cycle is one of the Coordinato
 carried values, alongside the solar step-up. It is a point in time rather than a flag, and it is
 the only one R5 needs: a missed-deadline hold is that same value read after the occurrence it
 names has passed; `control-cycle.md`'s Trigger section
-enumerates the full set of per-cycle carried state. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
+lists the carried values that have a rule or use-case of their own, this one among them. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
 
 ### 5.2 Vehicle charge-limit sync (UC09)
@@ -739,7 +741,7 @@ ADRs 0020 and later post-date this reconciliation and are not covered here.
 - **No upward calls.** [§4](#4-static-architecture) fixes one-way directions; no Engine performs
   I/O or calls another Engine (pure and stateful engines alike — stateful ones take their state as
   a parameter from the Manager); Managers coordinate only via domain events, not direct calls.
-- **Use cases validate, not drive.** UC05/UC06/UC07 own no service; UC11 is a Client; every other
+- **Use cases validate, not drive.** UC05/UC06/UC07 own no service; UC11 and UC12 are Clients; every other
   UC crosses multiple services ([§6](#6-use-case-validation)); the one Manager≈UC mapping (UC09) is
   acknowledged and justified, not hidden.
 - **Glossary.** No new *domain* term is introduced; all domain terms link to

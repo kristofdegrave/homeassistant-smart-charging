@@ -681,8 +681,10 @@ it is wired to its callers).
 > **⎔ Phase 4 / system checkpoint:** the full loop runs — timer → coordinator → clamps → write;
 > owned entities editable via dashboard and config flow; notifications and vehicle-limit sync fire on
 > their triggers — validated end-to-end against every UC01–UC11 acceptance criterion. UC12 is
-> deliberately outside this range: the guided flow runs before the loop exists, so C4's own harness
-> tests validate it, not an assembled-loop suite. *Met per
+> deliberately outside this range: its acceptance criteria are about the flow's step structure,
+> gating and validation, which no assembled-loop suite observes — so C4's own harness tests
+> validate it. (That holds for all three of its flows, not only install: reconfigure and options
+> run against a live entry with the loop assembled.) *Met per
 > slice:* the end-to-end suites (`tests/test_solar_end_to_end.py`, `test_captar_end_to_end.py`,
 > `test_deadline_soc_management_end_to_end.py`, `test_notifications_end_to_end.py`) each validate
 > their slice's use-cases against the assembled loop; there is no single suite asserting UC01–UC11
