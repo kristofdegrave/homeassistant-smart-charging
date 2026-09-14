@@ -61,8 +61,9 @@ Two rules that apply elsewhere deliberately do **not** apply here:
   they rot. That rule does not reach this directory: a post-mortem's entire evidentiary value
   is the specific PRs, issues, commits and review comments it cites, at the dates it cites
   them — don't "fix" these.
-- **It is not an analysis document.** The 6Cs/glossary-first protocol and `analysis-reviewer`
-  do not govern it; it quotes the analysis docs as evidence rather than asserting behaviour.
+- **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis
+  tree's own review checklist do not govern it; it quotes the analysis docs as evidence
+  rather than asserting behaviour.
 
 **How it is reviewed.** By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
@@ -97,10 +98,10 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `.claude/agents/adr-reviewer.md` | opus |
-| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
-| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
-| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `docs/reference/work-types/adr/review.md` | opus |
+| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
+| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
+| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
@@ -110,9 +111,9 @@ runs on.
 **Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
 why the review-model column reads opus in every row today. The column exists anyway: it makes
 a row self-contained, and a row that ever deviates has to argue for it here. Three places must
-keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and CI's
-`_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
-reads that frontmatter.
+keep matching: this column, every reviewer agent definition's frontmatter `model: opus`, and
+CI's `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and
+never reads that frontmatter.
 
 **A cell that names more than one file labels each role**, in either column. Four roles exist:
 the **work file** holds how the artifact is written; the **completion bar** holds what must be
@@ -121,6 +122,20 @@ file by name through; the **checklist** holds what only a reviewer can check —
 change, and the checks about the change rather than the artifact. Where a row also splits on
 *which* file the change touches — `documentation` does — each branch is its own sentence, so
 `;` never has to mean two things in one cell.
+
+**The checklist is a file; `.claude/agents/reviewer.md` is who applies it.** That agent holds
+nothing type-specific — only the untrusted-data rule, how to resolve a checklist and a bar from
+this table, what to do when one cannot be read, and the output and anchoring contract every
+review shares. So a row names a `docs/reference/work-types/<label>/review.md` and the generic
+agent is spawned against it. A row not yet migrated still names its own `*-reviewer` agent
+definition instead, which carries both halves; the path map below is mixed for the duration
+for the same reason. Either way the column names the file, and whoever dispatches follows what
+it says rather than a reviewer they know of from elsewhere.
+
+**A checklist is selected by the tree under review, not by the row that dispatched it.** The
+row is how the tree is resolved, not what the criteria belong to — so files under one tree get
+that tree's checklist and bar whichever row's dispatch reached them, and a checklist shared by
+two rows (`uc` and `requirement`) is one file with the other row pointing at it.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
@@ -180,9 +195,9 @@ is add a reviewer, never remove one. A reference that cannot be resolved — a d
 transferred issue, a number that never existed, a failed lookup — is treated exactly like no
 reference at all, so the path half still stands alone rather than the run aborting. The label
 row is the addition: it brings the checklist written for this kind of work even when the change
-landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets
-`impl-spec-reviewer` for the file and `workflow-reviewer` for the subject, and a `development`
-PR that also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
+landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets the `specs`
+checklist for the file and `workflow-reviewer` for the subject, and a `development` PR that
+also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
 
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
@@ -199,13 +214,19 @@ so they are routed from here rather than restated. Its review is still automated
 `workflow` author reads instead is in **Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
-`docs/adl/**` → `adr-reviewer`;
-`docs/analysis/**` → `analysis-reviewer`; `docs/plans/**` → `impl-spec-reviewer`;
+`docs/adl/**` → `docs/reference/work-types/adr/review.md`;
+`docs/analysis/**` → `docs/reference/work-types/uc/review.md`;
+`docs/plans/**` → `docs/reference/work-types/specs/review.md`;
 `docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
-`CLAUDE.md` → `workflow-reviewer`. This list **is** CI's mapping — the review worker resolves
-it from here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
+`CLAUDE.md` → `workflow-reviewer`. The map is **mixed while the reviewer collapse runs**: a
+migrated tree names its checklist file, applied by the generic `reviewer` agent, and an
+unmigrated one still names the `*-reviewer` agent definition that carries its own. Each entry
+resolves on its own, so every intermediate state is reviewable. `docs/analysis/**` names the
+`uc` checklist because that tree is wider than either label sharing it — `requirement`'s file
+points at the same one. This list **is** CI's mapping — the review worker resolves it from
+here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
 rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
 diff enumeration, so the reviewer is reachable in principle and unreached in practice.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain

@@ -10,7 +10,7 @@ identity (see that doc's **Git identity** section).
 `needs-draft`, `needs-review`, and `needs-work` exist to invoke these jobs — nothing else. A
 **Claude session must never self-apply one on its own initiative** to hand its own review/fix
 work to CI instead of doing it in-session; interactive review and fix always happen locally,
-per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh `*-reviewer`
+per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh reviewer
 subagent posts findings via `submit-pr-review`, then `resolve-review-thread` closes out each
 thread that got fixed. This does *not* forbid the pipeline's actual, intended human triggers
 below — a maintainer applying `needs-draft` to start the pipeline, or manually re-adding

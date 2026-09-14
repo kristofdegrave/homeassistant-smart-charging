@@ -177,7 +177,7 @@ Some categories sit on that boundary often enough to have a recorded answer, so 
 meeting one does not have to re-derive it:
 
 - **A reviewer agent's "what to read first" list is its checklist**, so it cannot simply be
-  emptied of paths — an `analysis-reviewer` with no paths is not reusable but inert. The split
+  emptied of paths — a reviewer agent with no paths is not reusable but inert. The split
   above is the answer, and it is the one worked through on `workflow-reviewer`: project
   documentation the agent reads for its criteria routes through the `CLAUDE.md` section owning
   that topic, while the trees the agent exists to review stay named, including in the
@@ -187,6 +187,12 @@ meeting one does not have to re-derive it:
   inverts ownership — the agent knows what it needs to read, `CLAUDE.md` knows where topics
   live), and exempting reviewer agents wholesale (too wide: it would have excused an agent
   naming a document *and* the `CLAUDE.md` section that points at the same document).
+  A third answer dissolves the tension rather than splitting it, and it is the one the
+  per-label `work-types/` tree reaches: move the read-list into a work-type document, where
+  naming a path is simply correct because the document does not travel, and leave under
+  `.claude/` only a generic reviewer that resolves which document to read. This bullet
+  governs a reviewer agent that still carries its own read-list; for one that does not, there
+  is nothing left to split.
 - **A skill whose whole purpose is one artifact type this project defines** — the `write-*`
   family, each written for a document type that exists only because this project defines it,
   and `develop-task`, written for a task as this project's implementation plans define one —
