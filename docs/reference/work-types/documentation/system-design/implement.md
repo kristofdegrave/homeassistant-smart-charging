@@ -7,15 +7,15 @@ pipeline: `docs/plans/2026-07-07-lowy-system-design-method.md`.
 
 This file is one of the two work files the `documentation` row names in `CLAUDE.md`'s **Model
 selection** table — the one for a change touching `docs/design/system-design.md`. A change
-touching `docs/design/project-plan.md` has its own work file and its own bar in this directory,
-and the row is what picks between them.
+touching `docs/design/project-plan.md` has its own work file and its own bar, in the sibling
+`project-plan/` directory, and the row is what picks between them.
 It carries **how the system design is written** and nothing else. Two things deliberately sit
 elsewhere:
 
 - The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
   contribution workflow and is not re-derived here.
 - *What must be true of a finished system design* is the completion bar,
-  [`done-system-design.md`](done-system-design.md), named alongside this file in the same row
+  [`done.md`](done.md), named alongside this file in the same row
   and again in that row's review column. The author checks it before requesting review and the
   reviewer applies it, so it is written once for both.
 
@@ -60,7 +60,7 @@ wearing this method's vocabulary.
    single service sends you back to steps 2–3 rather than forward.
 
 Once `system-design.md` is approved and merged, the project plan is derived from it — the
-row's other branch, and [`implement-project-plan.md`](implement-project-plan.md) in this
+row's other branch, and [the `project-plan` branch's own work file](../project-plan/implement.md) in this
 directory.
 
 ## Rules
@@ -96,5 +96,5 @@ none of them is restated here:
 - Writing a service down without its volatility rationale, intending to add it later.
 - Skipping step 6's walk of every use case against the static diagram, so the design is never
   tested against the behaviour it exists to serve.
-- Drafting against this file alone and never opening `done-system-design.md` — the bar is where
+- Drafting against this file alone and never opening `done.md` — the bar is where
   most of what a review will say already is.

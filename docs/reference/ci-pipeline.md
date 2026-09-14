@@ -45,16 +45,11 @@ and `docs/reference/work-types/<label>/`, where the label is a **directory name*
 a label means moving a directory, not editing a line, for each label that has one (today,
 `adr`, `documentation`, `requirement`, `specs`, `testing` and `uc`), and then fixing any
 cross-directory route into it, of which there is one: `requirement/done.md` routes to the
-shared completion bar in `uc/`. The tree is **one level deep**: a label directory, with that
-label's files directly inside it and no directory level below. The reason is uniformity rather
-than the rename above — a nested layout would rename by moving one directory too — namely that
-every row's path is then mechanically `work-types/<label>/<file>.md`, so a reader resolving a
-row never has to guess a depth. A file inside is named `<role>[-<variant>].md`: the role first
-(`implement`, `done`, and `review` where one exists), and a variant suffix **only** where the
-row branches on which file the change touches, which today is `documentation` alone — its four
-files carry that row's `system-design` / `project-plan` split without a subdirectory. Adding a
-label means updating those eight — the work-types directory only where the new
-label gets a work file, which is not a given; renaming one additionally means updating any form
+shared completion bar in `uc/`. The shape of that tree — the roles a label's directory holds,
+and the per-branch subdirectories a row that splits on the changed file gets — is
+[work-types/README.md](work-types/README.md)'s; what belongs here is only that the label is the
+directory name, so a rename moves a directory. Adding a label means updating those eight — the
+work-types directory only where the new label gets a work file, which is not a given; renaming one additionally means updating any form
 that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
 simply stops matching — so that one is checked, not assumed.
 

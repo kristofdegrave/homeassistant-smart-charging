@@ -11,13 +11,13 @@ section of either one:
 
 It states *what must be true of a finished project plan*. How it is written — the derivation
 order, the ADR flagging step, the task-list shape — is
-[`implement-project-plan.md`](implement-project-plan.md). How a review is conducted — what to
+[`implement.md`](implement.md). How a review is conducted — what to
 read first, how to anchor findings, the output format, and the checks about the *change* rather
 than the document — belongs with the reviewer.
 
 **This bar is for `docs/design/project-plan.md` only.** The `documentation` row's other branch,
 `docs/design/system-design.md`, has its own bar —
-[`done-system-design.md`](done-system-design.md). Why that row names two bars rather than one is
+[the `system-design` branch's own bar](../system-design/done.md). Why that row names two bars rather than one is
 row grammar, and `CLAUDE.md`'s **Model selection** section owns it.
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a task

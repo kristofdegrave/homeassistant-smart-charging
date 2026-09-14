@@ -10,13 +10,13 @@ section of either one:
   carries, so the two sides judge the same design against the same bar.
 
 It states *what must be true of a finished system design*. How it is written — the drafting
-order, the classifications, the diagrams — is [`implement-system-design.md`](implement-system-design.md).
+order, the classifications, the diagrams — is [`implement.md`](implement.md).
 How a review is conducted — what to read first, how to anchor findings, the output format, and
 the checks about the *change* rather than the document — belongs with the reviewer.
 
 **This bar is for `docs/design/system-design.md` only.** The `documentation` row's other
 branch, `docs/design/project-plan.md`, has its own bar —
-[`done-project-plan.md`](done-project-plan.md). Why that row names two bars rather than one is
+[the `project-plan` branch's own bar](../project-plan/done.md). Why that row names two bars rather than one is
 row grammar, and `CLAUDE.md`'s **Model selection** section owns it.
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a service

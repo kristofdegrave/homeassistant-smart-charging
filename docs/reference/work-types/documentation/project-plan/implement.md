@@ -7,15 +7,15 @@ per Löwy's "project design" step. Rationale:
 
 This file is one of the two work files the `documentation` row names in `CLAUDE.md`'s **Model
 selection** table — the one for a change touching `docs/design/project-plan.md`. A change
-touching `docs/design/system-design.md` has its own work file and its own bar in this
-directory, and the row is what picks between them.
+touching `docs/design/system-design.md` has its own work file and its own bar, in the sibling
+`system-design/` directory, and the row is what picks between them.
 It carries **how the project plan is written** and nothing else. Two things
 deliberately sit elsewhere:
 
 - The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
   contribution workflow and is not re-derived here.
 - *What must be true of a finished project plan* is the completion bar,
-  [`done-project-plan.md`](done-project-plan.md), named alongside this file in the same row and
+  [`done.md`](done.md), named alongside this file in the same row and
   again in that row's review column. The author checks it before requesting review and the
   reviewer applies it, so it is written once for both.
 
@@ -76,5 +76,5 @@ none of them is restated here:
 - Treating "project design" as team/people assignment when there is no team — the task and
   build-order breakdown is the point on a solo project.
 - Fixing an architecture gap inside the plan instead of sending it back to `system-design.md`.
-- Drafting against this file alone and never opening `done-project-plan.md` — the bar is where
+- Drafting against this file alone and never opening `done.md` — the bar is where
   most of what a review will say already is.

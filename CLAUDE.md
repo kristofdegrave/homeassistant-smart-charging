@@ -102,7 +102,7 @@ runs on.
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | For `docs/design/system-design.md`: work file `docs/reference/work-types/documentation/implement-system-design.md`; completion bar `docs/reference/work-types/documentation/done-system-design.md`; entry point `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: work file `docs/reference/work-types/documentation/implement-project-plan.md`; completion bar `docs/reference/work-types/documentation/done-project-plan.md`; entry point `.claude/skills/write-project-design/SKILL.md`. | opus | For `docs/design/system-design.md`: completion bar `docs/reference/work-types/documentation/done-system-design.md`. For `docs/design/project-plan.md`: completion bar `docs/reference/work-types/documentation/done-project-plan.md`. Either way, checklist `.claude/agents/system-design-reviewer.md`. | opus |
+| `documentation` | Files by convention, in the branch directory. For `docs/design/system-design.md`: branch `documentation/system-design`; entry point `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: branch `documentation/project-plan`; entry point `.claude/skills/write-project-design/SKILL.md`. | opus | Completion bar by convention, in the same branch directory the *How the work is done* cell names for the changed file; checklist `.claude/agents/system-design-reviewer.md`. | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
@@ -122,6 +122,14 @@ file by name through; the **checklist** holds what only a reviewer can check —
 change, and the checks about the change rather than the artifact. Where a row also splits on
 *which* file the change touches — `documentation` does — each branch is its own sentence, so
 `;` never has to mean two things in one cell.
+
+**A cell may name a directory instead of files, "by convention".** The work-file and
+completion-bar paths derive from the label — and, where the row branches, from the branch — so a
+cell that says *by convention* and names the directory has named the files.
+`docs/reference/work-types/README.md` states that convention — the roles a directory holds, what
+each is for, and what a branch directory means — and a directory a cell names this way is
+relative to `docs/reference/work-types/`. The `documentation` row is written
+this way today, and the other rows can collapse to it unchanged in meaning.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
