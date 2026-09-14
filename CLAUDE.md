@@ -103,7 +103,7 @@ runs on.
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
-| `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
+| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
@@ -114,10 +114,19 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
-**A *How the work is done* cell that names more than one file labels each role.** `work file <path>; entry point
-<path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
-by name through. Where a row also splits on *which* file the change touches — `documentation`
+**A cell that names more than one file labels each role**, in either column. Four roles exist:
+the **work file** holds how the artifact is written; the **completion bar** holds what must be
+true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
+file by name through; the **checklist** holds what only a reviewer can check. Where a row also
+splits on *which* file the change touches — `documentation`
 does — each branch is its own sentence, so `;` never has to mean two things in one cell.
+
+**The completion bar is one file named in both columns, and that is deliberate.** It is the
+only per-type fact with two readers: the author self-checks against it before requesting
+review, and the reviewer applies it as criteria. Naming it twice duplicates a *route*, not a
+rule — the alternative is the author and the reviewer each holding their own wording of the
+same bar, which is the drift this split exists to remove. A row whose type has no separate bar
+simply names none, and its work file carries what "done" means.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which

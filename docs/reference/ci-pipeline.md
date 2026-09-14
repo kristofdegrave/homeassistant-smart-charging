@@ -43,7 +43,7 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`). Adding a label means updating those eight — the work-types directory only where the
+`adr` and `testing`). Adding a label means updating those eight — the work-types directory only where the
 new label gets a work file, which is not a given; renaming one additionally means updating any
 form that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
 simply stops matching — so that one is checked, not assumed.
