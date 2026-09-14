@@ -36,8 +36,10 @@ Always read:
 - `docs/reference/ai-authoring.md`, which `CLAUDE.md`'s **Authoring AI artifacts** section
   routes to — the shared vocabulary, the checklist for each artifact type (skill / agent /
   CI worker prompt), and its non-negotiables. A work-type document under
-  `docs/reference/work-types/` is one of these artifacts even though it is not a skill; that
-  reference's own opening says how far it binds one and which checklist to apply.
+  `docs/reference/work-types/<label>/` is one of these artifacts even though it is not a skill;
+  that reference's own opening says how far it binds one and which checklist to apply, and its
+  scope is the label directories — not this tree's own `README.md`, which that file says is an
+  ordinary reference document outside the rule's subject matter.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
 - If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition

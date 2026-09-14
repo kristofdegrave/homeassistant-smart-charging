@@ -250,11 +250,10 @@ docs/reference/work-types/
 
 **Correction to the sketch, recorded where the sketch is read.** This layout originally gave
 `workflow` an `implement.md` pointing at `ai-authoring.md` and a `done.md`, for symmetry with
-every other label. That is not what was built, and it should not be: `CLAUDE.md`'s **Model
-selection** section argues that `workflow` has no drafted work at all, because a `workflow`
-change *is* the files that instruct future runs and so has no tree an allow-list could contain
-it in. A work file for a label nothing drafts would contradict that, and a completion bar with
-no drafting step behind it has no author to self-check against it. `workflow`'s directory
+every other label. That is not what was built, and it should not be — per *The work-types
+table*'s `workflow` bullet above, and `CLAUDE.md`'s **Model selection** section, which owns it.
+A work file for a label nothing drafts would contradict that, and a completion bar with no
+drafting step behind it has no author to self-check against it. `workflow`'s directory
 therefore holds `review.md` alone, and `work-types/README.md` states that asymmetry as
 deliberate rather than pending.
 

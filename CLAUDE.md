@@ -251,8 +251,10 @@ What a `workflow` author reads instead is in **Authoring AI artifacts** below.
 reviewer collapse runs**: a migrated tree names its checklist file, applied by the generic
 `reviewer` agent, and an unmigrated one still names the `*-reviewer` agent definition that
 carries its own. Only the two code trees — `custom_components/**` and `tests/**` — are still on
-the second footing; when they migrate, this paragraph goes rather than being reworded, since a
-map with nothing mixed in it needs no note saying so. Each entry resolves on its own, so every
+the second footing. When they migrate, **both** statements of the mixed state go rather than
+getting reworded — this one, and the sentence in the *checklist is a file* paragraph above
+beginning "A row not yet migrated" — since a map with nothing mixed in it needs no note saying
+so, in either place. Each entry resolves on its own, so every
 intermediate state is reviewable, and the end state it runs toward is the target layout in
 `docs/plans/2026-09-11-lifecycle-skills-design.md` — every entry naming a checklist file. `docs/analysis/**` names the `uc` checklist because that tree
 is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
