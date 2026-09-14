@@ -7,7 +7,11 @@ prompts (`.github/workflows/_ai-*.yml`). **Work-type documents**
 binds them **except** the two routing sections: they do not travel between repositories, which
 is the premise both rules rest on, so they name this project's paths and tracker commands
 directly. Every other rule applies unchanged — the content did not stop being an instruction to
-a run by moving. It exists so that every new authored artifact is lean
+a run by moving. The checklist that governs one is therefore the **skill** checklist, minus its
+two frontmatter-only items (the `description` and the invocation choice), a work-type document
+having no frontmatter. Author and reviewer build against the same list.
+
+This reference exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
 [Project-dependent content routes through
 `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent

@@ -52,7 +52,8 @@ All three workers read the table rather than carrying their own copy of the work
 checklist mappings — the drafter and the fix worker for the *How the work is done* column, the
 reviewer for *How it is reviewed* — so the row is the selection itself rather than a mirror of
 one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
-cell — and changing the table's own shape expensive, since it now reaches every worker at once.
+cell in either *How* column — and changing the table's own shape expensive, since it now
+reaches every worker at once.
 Adding or renaming a label is a third thing again, and not cheap: see the eight places above.
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job

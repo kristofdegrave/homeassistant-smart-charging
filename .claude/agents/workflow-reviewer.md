@@ -29,9 +29,8 @@ Always read:
 - `CLAUDE.md`'s **Authoring AI artifacts** section, and the authoring reference it routes to —
   the shared vocabulary, the checklist for each artifact type (skill / agent / CI worker
   prompt), and its non-negotiables. A work-type document under `docs/reference/` is one of
-  these artifacts even though it is not a skill: it holds content moved out of one, so the
-  **skill** checklist governs it. That reference's own opening says how far it binds such a
-  document.
+  these artifacts even though it is not a skill; that reference's own opening says how far it
+  binds one and which checklist to apply.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
 - If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
