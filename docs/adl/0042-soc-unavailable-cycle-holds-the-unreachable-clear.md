@@ -8,7 +8,7 @@ Status: Accepted
 [ADR-0024](0024-deadline-unreachable-cleared-event.md) added `DeadlineUnreachableCleared` as the
 paired clearing edge of the level-signal `DeadlineUnreachableNotified`, so R5's notice is delivered
 once **per occasion** rather than once per Manager instance. Its chosen mechanism is deliberately
-minimal: the edge check sits on `RequiredCurrentResult.unreachable` itself, *"never any one upstream
+minimal: the edge check sits on `RequiredCurrentResult.unreachable` itself, *"not on any one
 guard"*, on the reasoning that every path to `unreachable=False` is an exit from `Unreachable` and so
 every exit clears "for free".
 
@@ -33,10 +33,12 @@ requirement it serves disagree, and the shipped code follows the record: `coordi
 `notification_manager.py`'s `on_deadline_unreachable_cleared` re-arms `_deadline_unreachable_notified`
 mid-occasion.
 
-**The premise the row rests on is false.** ADR-0024 states it two paragraphs below the table — that
-both of `_run_cycle`'s fault early-returns *"return before the deadline-urgency block runs"*, so a
-cycle with no state of charge never reaches the edge check at all. The `ev_soc` fault return is
-gated (`coordinator.py`):
+**The step the row rests on is false.** ADR-0024 never states it outright. Two paragraphs below the
+table it records something narrower and literally true — that both of `_run_cycle`'s fault
+early-returns *"return before the deadline-urgency block runs"*, so the edge check is not reached on
+a fault cycle. Row 2 is consistent with the rest of that record only if a missing `ev_soc` always
+produces one of those fault cycles, and it does not: the `ev_soc` fault return is gated
+(`coordinator.py`):
 
 ```python
 if (
@@ -101,13 +103,13 @@ need of correction instead.
   implementation detail of one guard, with no argument for why the user is better served by a second
   notification for one occasion. It also does not survive the next slice: preserving the pursued
   occurrence across a SOC-unavailable cycle is what R5 requires, and once that lands this option
-  ships the duplicate notice it currently only risks. And it leaves the false `is_soc_gated` premise
-  in the record for the next reader to build on.
+  ships the duplicate notice it currently only risks. And it leaves the false step about
+  `is_soc_gated` in the record for the next reader to build on.
 
-### Option B — Make the premise true: drop the `is_soc_gated` gate on the `ev_soc` fault return
+### Option B — Make the step true: drop the `is_soc_gated` gate on the `ev_soc` fault return
 
-Fault on a missing `ev_soc` in every mode, so ADR-0024's "such a cycle always returns upstream" is
-literally correct and the exit table needs no change.
+Fault on a missing `ev_soc` in every mode, so the step row 2 reads into ADR-0024's fault-cycles
+paragraph becomes true and the exit table needs no change.
 
 - Pro: The smallest edit to the record — none at all — and it restores the single, simple mental
   model ADR-0024 was written under: one guard decides, and the edge check downstream of it never sees
@@ -188,7 +190,7 @@ nothing.
 
 Option A is rejected because it settles a contradiction against a Must acceptance criterion in favour
 of a guard's incidental shape, and stops being harmless the moment the pursued occurrence is
-preserved across such a cycle. Option B is rejected because its route to making ADR-0024's premise
+preserved across such a cycle. Option B is rejected because its route to making ADR-0024's row-2 step
 true runs through the requirement `is_soc_gated` was introduced to protect, trading a duplicate
 notification for a `Power`/`Off` install that faults every cycle — and leaves the underlying collapse
 of two meanings into one flag in place. Between the two options that do restore the distinction, C is
@@ -212,8 +214,9 @@ untouched, per the partial-supersede shape ADR-0033 adopted. Precisely two claus
 | Car disconnects | Charger status leaves `CHARGEABLE_STATES`, so `deadline_resolvable` goes false and `resolve_deadline_urgency` returns early without calling the engine. The connected session, and with it `UC05`'s own precondition, has ended — a real exit | `DeadlineUnreachableCleared` |
 | State of charge unavailable while the car stays connected | `ev_soc is None` makes `deadline_resolvable` false through the *other* half of the same predicate. No required current is computable, so the cycle establishes nothing about the deadline | **Nothing.** `DeadlineUnreachableEdge` holds its prior flag; the notification state is held and neither notifies nor re-arms (R5, `UC05`) |
 
-2. **The premise of "Fault cycles hold the prior state"** — that a cycle with no state of charge
-   always returns upstream of the deadline block. It does so only when the active mode's handler has
+2. **The reach of "Fault cycles hold the prior state"** — the paragraph is right about the two
+   returns it names, and row 2 reads as though a cycle with no state of charge is always one of
+   them. It is so only when the active mode's handler has
    `is_soc_gated = True`; `Off` and `Power` have it `False`, deliberately (success-criterion 6/S2), so
    such a cycle reaches the edge check with a live occasion and no fault. The *rule* that paragraph
    states is right and is kept — a cycle that established nothing must not decide anything — and this
@@ -273,15 +276,25 @@ things, and the edge detector must then be told which — it cannot be recovered
    rg -n 'DeadlineUnreachableCleared|DEADLINE_UNREACHABLE_CLEARED|DeadlineUnreachableEdge|_unreachable_edge|deadline_resolvable' custom_components docs tests
    ```
 
-   Three name families, because a governed site can reach this decision through any one of them and
-   through no other: the **event** in both its PascalCase and constant spellings (every record,
+   …plus one site listed explicitly, `docs/analysis/requirements.md`, per the template's
+   "short explicitly listed set" allowance. The reason it has to be listed rather than found is
+   itself the width argument's limit: R5's acceptance criterion states this decision's own rule in
+   domain vocabulary — "ends no occasion … neither notifies nor re-arms" — and carries none of the
+   five tokens, because a requirement names no code identifier. No pattern over identifiers reaches
+   it, so it is named instead of pretended to.
+
+   The pattern is three name families, because every *other* governed site reaches this decision
+   through one of them: the **event** in both its PascalCase and constant spellings (every record,
    producer or consumer stating when the clear fires), the **detector** by class or attribute name
    (every owner of the prior flag, including the two fault-return comments that already hold it), and
    the **guard predicate** `deadline_resolvable` (the site whose two halves this decision separates,
    which names neither of the other two). A pattern on the event name alone drops
    `coordinator_cycle.py`'s early return — the site that causes the defect; a pattern on the guard
-   alone drops every record stating the firing rule. It returns **23 files**: 16 in the table below
-   and 7 out of scope under 3.
+   alone drops every record stating the firing rule.
+
+   The search returns **24 files**, one of which is this record: **16** of them in the table below
+   and **8** out of scope under 3. With the explicitly listed `requirements.md` the table accounts
+   for 17 files, so 25 sites are enumerated in all.
 
 2. **Per-hit verdict** (rows grouped by verdict; every file the search returns appears here or in 3).
 
@@ -290,6 +303,7 @@ things, and the edge detector must then be told which — it cannot be recovered
 | `custom_components/smart_charging/coordinator_cycle.py` | `DeadlineUnreachableEdge.resolve` takes `unreachable` alone, and `resolve_deadline_urgency`'s `if not inputs.deadline_resolvable` returns one `unreachable=False` for both halves of the predicate | **Does not conform** — the split and the further input land here |
 | `custom_components/smart_charging/coordinator.py` | Fires the clear off `self._unreachable_edge.resolve(required.unreachable)` alone; its two fault early-returns already hold the prior flag, but a non-SOC-gated cycle with `ev_soc is None` reaches neither | **Does not conform** — fires the spurious clear; must thread the "established an outcome" fact to the fire site |
 | `docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md`, `docs/analysis/system-overview.md` | State the correct rule — the state is held and the event does not fire — justified as "a *fault* cycle" | **Does not conform in its stated reason only**; the rule itself is what this ADR records |
+| `docs/analysis/requirements.md` (the explicitly listed site) | R5's acceptance criterion states the rule this decision aligns to: a cycle on which state of charge is unavailable ends no occasion, and the system neither notifies nor re-arms | Conforms — it is the authority, not a site this decision changes; unlike UC05 and the glossary it gives no reason that `is_soc_gated` can falsify |
 | `docs/plans/2026-07-21-deadline-soc-management-design.md` | States the clear fires on the guard paths "(`deadline_resolvable` going false …)", unsplit | **Does not conform** |
 | `custom_components/smart_charging/const.py`, `custom_components/smart_charging/__init__.py` | Define the event constant and subscribe before the first refresh | Conform — unaffected; the narrowing is entirely about *when* the producer fires |
 | `custom_components/smart_charging/managers/notification_manager.py` | Re-arms `_deadline_unreachable_notified` on every clear received | Conforms — the consumer must trust the producer (ADR-0011); it keeps re-arming on exactly the events it gets |
@@ -298,7 +312,9 @@ things, and the edge detector must then be told which — it cannot be recovered
 | `docs/plans/2026-07-21-notifications-design.md` | Describes the consumer side and the edge's `True`→`False` trigger, without claiming which guard paths reach it | Conforms |
 | `docs/design/project-plan.md`, `docs/design/system-design.md` | Name the event pairing in a service's published-events list | Conform |
 
-3. **Out of scope** (7 files):
+3. **Out of scope** (8 files):
+   `docs/adl/0042-soc-unavailable-cycle-holds-the-unreachable-clear.md` — this record, which the
+   search matches because it states the decision; it governs itself trivially and needs no verdict.
    `docs/adl/0024-deadline-unreachable-cleared-event.md` — the record being narrowed; immutable, stays
    `Accepted`, and keeps stating its decision, with the narrowing recorded in its ADL row.
    `docs/plans/2026-07-21-deadline-soc-management.md` and `docs/plans/2026-07-21-notifications.md` —
