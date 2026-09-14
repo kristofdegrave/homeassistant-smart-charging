@@ -8,8 +8,8 @@ per Löwy's "project design" step. Rationale:
 This file is one of the two work files the `documentation` row names in `CLAUDE.md`'s **Model
 selection** table — the one for a change touching `docs/design/project-plan.md`. A change
 touching `docs/design/system-design.md` has its own work file and its own bar in this
-directory; the row picks between them by which file the change touches, and neither restates
-the other. It carries **how the project plan is written** and nothing else. Two things
+directory, and the row is what picks between them.
+It carries **how the project plan is written** and nothing else. Two things
 deliberately sit elsewhere:
 
 - The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the

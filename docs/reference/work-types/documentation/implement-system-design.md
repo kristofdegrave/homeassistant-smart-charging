@@ -7,8 +7,8 @@ pipeline: `docs/plans/2026-07-07-lowy-system-design-method.md`.
 
 This file is one of the two work files the `documentation` row names in `CLAUDE.md`'s **Model
 selection** table — the one for a change touching `docs/design/system-design.md`. A change
-touching `docs/design/project-plan.md` has its own work file and its own bar in this directory;
-the row picks between them by which file the change touches, and neither restates the other.
+touching `docs/design/project-plan.md` has its own work file and its own bar in this directory,
+and the row is what picks between them.
 It carries **how the system design is written** and nothing else. Two things deliberately sit
 elsewhere:
 
@@ -30,8 +30,7 @@ wearing this method's vocabulary.
 **Step 1 (do the work)**, in order:
 
 1. **Enumerate the behaviour already drafted** — the use cases under
-   `docs/analysis/use-cases/` and `control-cycle.md`, the one remaining flow document
-   (`docs/analysis/flows/` holds a historical mapping only). List them; do not start
+   `docs/analysis/use-cases/`, and `control-cycle.md`. List them; do not start
    decomposing from them yet — this list is what you validate against in step 6, not the input
    to step 2.
 2. **Identify volatilities.** For each area of behaviour across the enumerated use cases, ask:

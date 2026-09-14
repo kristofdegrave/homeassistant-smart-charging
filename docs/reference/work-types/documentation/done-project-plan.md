@@ -17,16 +17,21 @@ than the document — belongs with the reviewer.
 
 **This bar is for `docs/design/project-plan.md` only.** The `documentation` row's other branch,
 `docs/design/system-design.md`, has its own bar —
-[`done-system-design.md`](done-system-design.md) — because the two documents are judged on
-disjoint criteria and the reviewed tree holds exactly these two files, so a bar per branch
-leaves nothing in it unjudged.
+[`done-system-design.md`](done-system-design.md). Why that row names two bars rather than one is
+row grammar, and `CLAUDE.md`'s **Model selection** section owns it.
+
+There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a task
+breakdown's correctness is judged by whether it follows the architecture it derives from, not by
+Clarity/Concision/etc.
 
 **The plan is never judged alone.** Every item below is decided against
 `docs/design/system-design.md` — the version in the same change if the change touches it, the
 one on the base branch otherwise. Both sides read that document alongside this one, even when
 only the plan changed; a plan judged without it can only be checked for internal tidiness,
 which is not what any item here asks. Domain terms are additionally judged against the
-`system-overview.md` glossary, as in every document in this project.
+`system-overview.md` glossary, as in every document in this project — a term the plan uses and
+that glossary does not define is **Minor**, and the fix is to add it there first rather than to
+reword the plan around it.
 
 ## The bar
 

@@ -15,9 +15,9 @@ How a review is conducted — what to read first, how to anchor findings, the ou
 the checks about the *change* rather than the document — belongs with the reviewer.
 
 **This bar is for `docs/design/system-design.md` only.** The `documentation` row's other
-branch, `docs/design/project-plan.md`, has its own bar — [`done-project-plan.md`](done-project-plan.md)
-— because the two documents are judged on disjoint criteria and the reviewed tree holds exactly
-these two files, so a bar per branch leaves nothing in it unjudged.
+branch, `docs/design/project-plan.md`, has its own bar —
+[`done-project-plan.md`](done-project-plan.md). Why that row names two bars rather than one is
+row grammar, and `CLAUDE.md`'s **Model selection** section owns it.
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a service
 decomposition's correctness is judged by whether each cut encapsulates a real volatility and the

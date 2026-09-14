@@ -136,13 +136,10 @@ bar per label would leave those with none. Each row still names a path in its ow
 directory, so the row stays self-contained and label-keyed; the `requirement` one routes to the
 shared file rather than restating it. A shared reviewer alone does not earn this: the argument
 is that the reviewed tree is wider than either label, so splitting the bar would leave part of
-it unjudged.
-
-**One row may name two bars.** `documentation` does: the row splits on which
-`docs/design/` file the change touches, and the reviewed tree holds exactly those two files, so
-a bar per branch leaves nothing in it unjudged — the condition the shared-bar case above turns
-on, met from the other side. Each branch is a sentence in each column, and the branches' bars
-state disjoint criteria rather than one bar with an "if" in every item.
+it unjudged. Conversely **one row may name two bars**, as `documentation` does: bars split
+where the branches' criteria are disjoint, rather than becoming one bar with an "if" in every
+item. That rests on the reviewed tree holding exactly one document per branch — a third
+document in `docs/design/` means a third branch and a third bar, or it is silently covered by neither.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
