@@ -11,8 +11,8 @@ name: AI draft (reusable)
 #   - the issue body MUST pin an approved task via a `Plan: docs/plans/<file>.md#<task-id>`
 #     line — the drafter implements a pre-scoped task, it never invents scope from free text.
 #     Missing/unresolvable -> refuse to draft, same as an unrecognized context label.
-#   - custom_components/tests PRs get automatic code-reviewer/test-reviewer review
-#     (_ai-review.yml) before a human looks, same as every other drafted PR.
+#   - custom_components/tests PRs get an automatic review (_ai-review.yml), against the
+#     development and testing checklists, before a human looks, same as every other drafted PR.
 #   - a maintainer's manual merge approval stays mandatory regardless (CLAUDE.md).
 # Model tier also follows the label (CLAUDE.md): Opus for the doc types, Sonnet for
 # development/testing.
@@ -479,7 +479,7 @@ jobs:
             - Do NOT commit or open a PR yourself — the workflow does that in the next step.
             - No shell access here (see the tool grant below): if that cycle calls for
               running tests, write them but skip actually running them — the automatic
-              code-reviewer/test-reviewer pass on the resulting PR is the verification step for
+              review pass on the resulting PR is the verification step for
               this path, not a self-run red/green cycle.
           # No Bash: an issue-driven drafter running arbitrary shell (even just `pytest`) would
           # be a real privilege increase for untrusted issue content, worse than skipping
