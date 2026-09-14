@@ -9,7 +9,9 @@ name: AI documentation pipeline
 #   PR     + needs-work                       -> _ai-fix.yml     : address remarks, hand back to review
 #
 # Labels
-#   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR)
+#   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval,
+#                  needs-decision (PR — alongside needs-approval when the review/fix loop
+#                  capped out, so a capped PR is distinguishable from a clean one)
 #   Context/type : uc | requirement | adr | specs | development | testing | workflow |
 #                  documentation   (the last two are never auto-drafted; see below)
 #     `adr` is also load-bearing in the draft job's concurrency group expression below (keys

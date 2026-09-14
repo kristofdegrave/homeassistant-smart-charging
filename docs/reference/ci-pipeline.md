@@ -91,6 +91,15 @@ in the *no context label* row and in neither of the other two.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
+The **action/state labels** (`needs-draft`, `needs-review`, `needs-work`, `needs-approval`,
+`needs-decision`) are not context labels either and follow none of the eight places above.
+Their definitions are `.github/setup-labels.sh`'s; the places that *apply* them are
+`_ai-review.yml`'s verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger
+hand-offs), `ai-pipeline.yml`'s header comment, which lists them, and — for the two exit
+labels — the interactive skills [contribution-workflow.md](contribution-workflow.md) names
+for its clean and capped exits. Adding or renaming one means updating that set, and the
+**Pipeline steps** below where the label's meaning is stated.
+
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
 places — `.github/setup-labels.sh` — and in none of the other seven, including
 `docs/reference/work-types/<label>/`, which a kind label never gets. They are not context labels
@@ -223,12 +232,20 @@ in branch protection's required checks on `main`.
   allow-list is pulled ahead of the rest of the CI change.
 - **Loop cap** (docs-only diffs — the only ones that reach the fix job automatically): **2**
   automatic fix cycles, because CI runs fully unsupervised with no human watching in real time.
-  A 3rd `remarks` verdict goes straight to `needs-approval` with a comment asking a human to
-  re-add `needs-work` manually for one more cycle. The interactive session caps its own loop
+  A 3rd `remarks` verdict goes straight to `needs-approval` **plus `needs-decision`**, with a
+  comment giving the human the two decisions: merge as is, or re-add `needs-work` manually to
+  grant one more cycle. The interactive session caps its own loop
   separately ([contribution-workflow.md](contribution-workflow.md) step 6): the two count
-  different populations and never interact, so neither is the other's bound.
+  different populations and never interact, so neither is the other's bound — but a capped PR
+  **looks the same** whichever cap it hit: the interactive cap exit applies the same two
+  labels, per that doc's cap step.
 - **Clean / cap-out** (≈ step 7): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
-  interactive flow: no automated work pending, human approval to merge still required.
+  interactive flow: no automated work pending, human approval to merge still required. Only
+  the cap adds `needs-decision` beside it: `needs-approval` answers *does this need a human*,
+  `needs-decision` answers *is something still wrong with it* — the two states a maintainer
+  scanning the PR list most needs to tell apart, and indistinguishable from the first label
+  alone. Every new verdict clears both stale labels before applying its own, so a granted
+  extra cycle that comes back clean drops `needs-decision` again.
 - **Merge** (step 9, unchanged): always a manual human action regardless of which path
   drafted or reviewed the PR.

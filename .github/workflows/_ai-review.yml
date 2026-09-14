@@ -10,7 +10,9 @@ name: AI review (reusable)
 #                                       the first remarks verdict: _ai-fix.yml can only commit
 #                                       under docs/, so a fix cycle here could change nothing
 #   remarks, docs-only (cycles 1-2)  -> add `needs-work` (via PAT) so _ai-fix.yml addresses them
-#   remarks, docs-only (3rd time)    -> add `needs-approval` and stop (max 2 automatic fix cycles)
+#   remarks, docs-only (3rd time)    -> add `needs-approval` + `needs-decision` and stop (max 2
+#                                       automatic fix cycles); the second label is what tells a
+#                                       capped PR apart from a clean one in a list view
 # Submitted human review comments without an `ai-fix-ack` thread reply count as remarks, so
 # maintainer feedback enters the same loop instead of being silently skipped.
 #
@@ -667,10 +669,12 @@ jobs:
           echo "verdict=${verdict:-none}, remarks reviews so far (incl. this one)=${remarks_count}, non-docs changed=${non_docs_changed:+yes}"
 
           # Removal never needs to trigger anything, so the default token is fine here. Also
-          # clear a prior needs-approval so a stale "reviewed clean"/"cap reached" signal can't
-          # sit alongside the new state (e.g. a clean review followed by a later remarks review).
+          # clear a prior needs-approval / needs-decision so a stale "reviewed clean" or "cap
+          # reached" signal can't sit alongside the new state (e.g. a clean review followed by
+          # a later remarks review, or a capped PR whose granted extra cycle came back clean).
           gh pr edit "$PR" --remove-label needs-review || true
           gh pr edit "$PR" --remove-label needs-approval || true
+          gh pr edit "$PR" --remove-label needs-decision || true
 
           if [ "${verdict:-}" = "clean" ]; then
             # needs-approval triggers no job, so a failed add here is a labeling hiccup, not a
@@ -686,8 +690,11 @@ jobs:
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
             else
+              # Cap reached: needs-approval (no automated work pending) plus needs-decision (why —
+              # findings are still open), so the PR list tells this apart from a clean pass.
               gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
-              gh pr comment "$PR" --body "Automatic review/fix limit reached (2 cycles) — remaining remarks need a human. Label \`needs-work\` manually to force one more cycle."
+              gh pr edit "$PR" --add-label needs-decision || echo "::warning::failed to add needs-decision label"
+              gh pr comment "$PR" --body "Automatic review/fix limit reached (2 cycles) — remaining remarks need a human: merge as is, or label \`needs-work\` manually to grant one more cycle."
             fi
           fi
 
