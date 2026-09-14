@@ -8,8 +8,9 @@ at all, and why the template looks the way it does.
 This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
 **how an ADR is written** and nothing else.
 
-The worthiness test is not part of that: whether this decision should be an ADR at all is
-answered when the issue is filed and re-answered by the reviewer, not while drafting.
+The worthiness test is not part of how an ADR is written: whether this decision should be an
+ADR at all is answered when the issue is filed, and re-answered by the reviewer against the
+completion bar's item 1, not while drafting.
 
 ## Drafting an ADR
 
