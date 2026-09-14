@@ -636,15 +636,16 @@ jobs:
           remarks_count=$(echo "$reviews" \
             | jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
-          # _ai-fix.yml only knows how to author docs/** minus the work-type tree (its commit
+          # _ai-fix.yml only knows how to author docs/** minus the work-type tree: its commit
           # step stages `docs` with that tree excluded, and its prompt dispatches through the
-          # Model selection table to that row's authoring file, all of which are doc-authoring)
-          # — it cannot
-          # fix .github/workflows, .claude/skills, .claude/agents, .github/ISSUE_TEMPLATE,
-          # custom_components, or tests. Auto-routing those to needs-work would silently no-op
-          # through the fix cycles instead of ever changing anything, so any non-docs path in the
-          # diff skips straight to a human. Non-empty = the diff touches something outside
-          # docs/; the `remarks` branch below reads it before the cycle cap.
+          # Model selection table to that row's authoring file. It cannot fix .github/workflows,
+          # .claude/skills, .claude/agents, .github/ISSUE_TEMPLATE, custom_components, or tests.
+          # (Two of those rows name a code-authoring file rather than a doc one, which is moot
+          # here: a code diff trips the non-docs check below before ever reaching that job.)
+          # Auto-routing those to needs-work would silently no-op through the fix cycles instead
+          # of ever changing anything, so any non-docs path in the diff skips straight to a
+          # human. Non-empty = the diff touches something the fix worker cannot commit; the
+          # `remarks` branch below reads it before the cycle cap.
           # `sed -n 1p` rather than `head -1`: head exits after the first line and can SIGPIPE
           # git (141) on a long path list — a race, which is why the latent bug never fired —
           # and under `set -euo pipefail` that would abort this step and post a false "the
@@ -680,7 +681,7 @@ jobs:
               # Non-docs diff: the fix worker could only ever re-stage docs/, so a fix cycle
               # here changes nothing. Skip the cycles entirely and hand it to a human.
               gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
-              gh pr comment "$PR" --body "This PR's diff touches paths outside \`docs/\` (first one: \`${non_docs_changed}\`), which the automatic fix worker cannot author — it only commits under \`docs/\`, and not the work-type tree it reads as its own instructions. Routing straight to \`needs-approval\` instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff." || echo "::warning::failed to comment on the PR"
+              gh pr comment "$PR" --body "This PR's diff touches paths the automatic fix worker cannot author (first one: \`${non_docs_changed}\`) — it only commits under \`docs/\`, and not the work-type tree it reads as its own instructions. Routing straight to \`needs-approval\` instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff." || echo "::warning::failed to comment on the PR"
             elif [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work

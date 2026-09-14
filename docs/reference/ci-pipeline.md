@@ -37,23 +37,27 @@ places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-
 names `development` and `testing` (see **The docs-only close guard** below) — and, for the
 three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
 too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
-that label on every issue filed through the form. Two more places sit outside the pipeline and
-carry the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label,
+that label on every issue filed through the form. Two more places carry the same vocabulary
+without being part of the pipeline's own configuration — though both are read by the workers at
+run time, which is what makes them expensive to change: `CLAUDE.md`'s **Model selection**
+table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
 `adr`). Adding a label means updating those eight — the work-types directory only where the
 new label gets a work file, which is not a given; renaming one additionally means updating any
 form that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
-simply stops matching — so that one is checked, not assumed. That table's *no context label* row
-separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
-updating the row too — until CI reads the table directly, the two are kept in sync by hand.
+simply stops matching — so that one is checked, not assumed.
 
-Both workers read the table rather than carrying their own copy of the work-file and checklist
-mappings, so the row is the *checklist selection* rather than a mirror of it — but it is not
-the whole routing: `ai-pipeline.yml`'s path filter decides whether a job runs at all, and
-`_ai-review.yml`'s diff enumeration decides which files a checklist can see. Adding a tree
-still means editing all three, and `docs/design/**` is the standing proof — it is in the row
-and in neither of the other two.
+All three workers read the table rather than carrying their own copy of the work-file and
+checklist mappings — the drafter and the fix worker for the *How the work is done* column, the
+reviewer for *How it is reviewed* — so the row is the selection itself rather than a mirror of
+one kept in sync by hand. That is what makes a label edit cheap and a **table** edit expensive:
+it now reaches every worker at once.
+
+The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
+runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
+Adding a tree still means editing all three, and `docs/design/**` is the standing proof — it is
+in the row and in neither of the other two.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
@@ -116,8 +120,8 @@ in branch protection's required checks on `main`.
 - **Outside the pipeline by design**: `docs/postmortems/**` is in neither `ai-pipeline.yml`'s
   path filter nor `_ai-review.yml`'s diff enumeration, so a PR touching only that directory
   spawns no AI job and a PR touching it alongside other trees has its post-mortem invisible to
-  the CI reviewer. That is deliberate — every one of the six checklists is written against an
-  artifact that asserts behaviour, and none fits a narrative document whose review is about
+  the CI reviewer. That is deliberate — every one of the reviewer checklists is written against
+  an artifact that asserts behaviour, and none fits a narrative document whose review is about
   quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
