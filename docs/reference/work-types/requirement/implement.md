@@ -6,16 +6,10 @@ project's analysis layer — `docs/analysis/requirements.md` and
 never **how**.
 
 This file is the `requirement` row's work file in `CLAUDE.md`'s **Model selection** table. It
-carries **how a requirement is written** and nothing else. Two things deliberately sit
-elsewhere:
+carries **how a requirement is written** and nothing else.
 
-- The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here. It applies with no exceptions, including
-  to a typo-level or pure-wording edit.
-- *What must be true of a finished requirement* is the completion bar, `done.md`, named
-  alongside this file in the same row and again in that row's review column. The author checks
-  it before requesting review and the reviewer applies it, so it is written once for both. That
-  file is shared with the `uc` row, because one reviewer covers the whole analysis tree.
+The completion bar is shared with the `uc` row — `done.md` beside this file routes to it —
+because one reviewer covers the whole analysis tree.
 
 ## Drafting a requirement
 

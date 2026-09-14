@@ -1,15 +1,6 @@
 # Work type: `specs` — the completion bar
 
-**Who reads this.** Both sides of the review, which is why it is its own file rather than a
-section of either one:
-
-- **The author**, as the self-check before requesting review — this is what
-  `definition-of-done.md` means by an artifact's own completion bar, standing in for the
-  builds/lints/tests checklist that doesn't apply to a planning document.
-- **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
-  carries, so the two sides judge the same spec against the same bar.
-
-It states *what must be true of a finished spec* — the design doc and its paired TDD plan
+This file states *what must be true of a finished spec* — the design doc and its paired TDD plan
 together, since a plan inconsistent with its own design fails item 3 whichever of the two is
 wrong. How a spec is written — the drafting order, the scoping step, the cut test — is
 `implement.md`. How a review is conducted — what to read first, how to anchor findings, the
