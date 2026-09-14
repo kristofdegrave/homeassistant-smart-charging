@@ -29,7 +29,7 @@ selection** table defines what "done" means there. The analysis-doc version is a
 
 **A row's completion bar applies wherever the row names one** — not only to those artifacts.
 Where a row names a **completion bar**, that file is what the author self-checks against and
-what the reviewer applies; where it names none, the row's work file or skill carries what "done"
+what the reviewer applies; where it names none, the row's work file carries what "done"
 means. What differs between classes is how the bar meets the checklist above, and a work-type
 file may rely on this: for a doc artifact the bar **stands in for** that checklist, there being
 nothing to build or run; for a change touching `custom_components/`/`tests/` the bar **adds to**

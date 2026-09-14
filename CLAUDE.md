@@ -123,10 +123,10 @@ true of the finished artifact; the **checklist** holds what only a reviewer can 
 read the change, and the checks about the change rather than the artifact.
 
 **No row names an entry point.** How a run reaches the work file is the same for every work
-type, so it is not a per-row fact — **Contribution workflow** below names the skill that runs
-each step range, and the one covering the draft resolves the row itself. That leaves the row
-self-contained in the only sense that matters: it says what to follow, and is read by whatever
-followed it there.
+type, so it is not a per-row fact — **Contribution workflow** below routes to both actors'
+entries, an interactive session's and CI's, and each resolves the row itself. That leaves the
+row self-contained in the only sense that matters: it says what to follow, and is read by
+whatever followed it there.
 
 **No row branches in the *How the work is done* column.** A work type whose work splits between
 two artifacts names one work file and one completion bar like every other row, and those files

@@ -169,8 +169,7 @@ in branch protection's required checks on `main`.
   one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
   `T5`) or the run fails. **The file describing the artifact is not named in the workflow**: the
   worker reads `CLAUDE.md`'s **Model selection** table row for the label and follows whatever
-  its *How the work is done* column names — one or more of a work-type document, a completion
-  bar, a skill, or a document entered through one. That is what lets a work type move out of
+  its *How the work is done* column names. That is what lets a work type move out of
   `.claude/`, and change how many files it is split into, without this workflow changing; a
   missing row, or a named file that does not exist, stops the run rather than drafting from
   memory. Runs that file's *content* steps only (draft, self-checks) —
