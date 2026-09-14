@@ -7,8 +7,9 @@ per Löwy's "project design" step. Rationale:
 
 This file is the `documentation` work type's work file for a change touching
 `docs/design/project-plan.md`, reached from the label's own `implement.md` one level up, which is
-what the row names. A change touching `docs/design/system-design.md` has its own work file and
-its own bar, in the sibling `system-design/` directory.
+what the row names. Why the label splits at all, where a change touching
+`docs/design/system-design.md` goes instead, and which bar a change falls under are stated once
+in the label's own [`done.md`](../done.md).
 It carries **how the project plan is written** and nothing else; the completion bar beside
 it, `done.md`, carries what must be true of the finished plan.
 
