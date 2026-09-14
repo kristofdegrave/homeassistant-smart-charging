@@ -31,9 +31,11 @@ don't re-derive the universal steps here.
   platforms, config-flow conventions, quality scale, thin-wrapper rule) — before writing
   anything that touches HA APIs. Then TDD one behavior at a time (use the
   `test-driven-development` skill):
-  - Write the failing test in the **correct harness** (ADR-0009): plain pytest for `modes/`/
-    `engines/`; HA harness (`pytest-homeassistant-custom-component` + `MockConfigEntry`) for
-    adapters, coordinator, entities, config flow. Name it for the requirement/UC/ADR criterion.
+  - Write the failing test against the files `CLAUDE.md`'s **Model selection** table names in
+    the `testing` row — its work file for the harness split, the naming and the structure, and
+    its completion bar for what the finished tests have to satisfy. Tests written here are the
+    same artifact as tests written under a `testing` issue, and the reviewer applies that same
+    bar to them, so this is not a second standard.
   - Run it; confirm it **fails for the right reason** (red).
   - Write the **minimal** implementation to pass (green). Match the surrounding code's idioms.
   - Refactor while green. Commit.

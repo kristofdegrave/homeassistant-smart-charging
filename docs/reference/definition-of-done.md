@@ -23,11 +23,17 @@ distinct from step 3's fresh external reviewer:
 
 Doc/ADR/design artifacts satisfy this with their own self-check instead (6Cs pass, template
 conformance, cross-document consistency) — the artifact's row in `CLAUDE.md`'s **Model
-selection** table defines what "done" means there. Where that row names a **completion bar**,
-that file is it, and the reviewer applies the same one; otherwise the row's work file or skill
-carries it. The analysis-doc version is also mirrored in `CLAUDE.md`'s artifact-specific
-section. The checklist above is the floor for anything touching
+selection** table defines what "done" means there. The analysis-doc version is also mirrored in
+`CLAUDE.md`'s artifact-specific section. The checklist above is the floor for anything touching
 `custom_components/`/`tests/`.
+
+**A row's completion bar applies wherever the row names one** — not only to those artifacts.
+Where a row names a **completion bar**, that file is what the author self-checks against and
+what the reviewer applies; where it names none, the row's work file or skill carries what "done"
+means. What differs between classes is how the bar meets the checklist above, and a work-type
+file may rely on this: for a doc artifact the bar **stands in for** that checklist, there being
+nothing to build or run; for a change touching `custom_components/`/`tests/` the bar **adds to**
+it, because the checklist is the floor for exactly those trees.
 
 ### Runtime check (in the PR description)
 
