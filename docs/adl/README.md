@@ -30,7 +30,7 @@ template.
 | [0021](0021-adapter-readings-diagnostic-sensor.md) | Adapter-role readings surfaced via a single diagnostic sensor's attributes | Accepted |
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Accepted |
 | [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Accepted |
-| [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion — its exit table's `ev_soc`-becomes-`None` clause narrowed by [ADR-0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | Accepted |
+| [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion — its exit table's `ev_soc`-becomes-`None` clause, and the reach of its fault-cycle hold rule, narrowed by [ADR-0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | Accepted |
 | [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Superseded by ADR-0029 |
 | [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow — point 3's step enumeration narrowed by [ADR-0033](0033-captar-step-gains-a-mapping-half.md) | Accepted |

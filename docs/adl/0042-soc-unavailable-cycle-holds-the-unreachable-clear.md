@@ -13,7 +13,7 @@ guard"*, on the reasoning that every path to `unreachable=False` is an exit from
 every exit clears "for free".
 
 That reasoning holds for two of the three paths ADR-0024 enumerates and fails for a case bundled into
-the third. Its exit table's second row reads:
+the second. That row reads:
 
 > Car disconnects, or `ev_soc` becomes `None` | `deadline_resolvable = status in CHARGEABLE_STATES
 > and ev_soc is not None` … goes false, so `resolve_deadline_urgency` returns its early
@@ -49,8 +49,11 @@ if (
 ```
 
 `is_soc_gated` is **False** on `_OffModeHandler` and `_PowerModeHandler` and True on the three
-SOC-gated handlers (`coordinator_cycle.py`), by design: success-criterion 6/S2 forbids `Power`/`Off`
-regressing to needing an SOC sensor. So `Manual`+`Off`, `Manual`+`Power`, and `Auto` without the
+SOC-gated handlers (`coordinator_cycle.py`), by design: the gate exists so `Power`/`Off` do not
+regress to needing an SOC sensor — stated as "success-criterion 6 / S2" where the gate was built,
+`docs/plans/2026-07-20-solar-solaronly.md`, and carried into `coordinator.py`'s own comment at the
+fault return. It is a slice-plan criterion rather than a numbered requirement, which is why it is
+cited by that name and its home is given here. So `Manual`+`Off`, `Manual`+`Power`, and `Auto` without the
 CapTar capability — whose urgency row escalates to `Power` — reach the deadline block with
 `ev_soc is None`, a live occasion, and no fault. R5 is cross-cutting: it applies in every mode, which
 is precisely why `ev_soc`'s absence is not a fault outside the SOC-gated gate.
@@ -82,12 +85,18 @@ flag, move notify-once to the producer, or reuse `DeadlineUrgencyReverted` — i
 implemented; its rows 1 and 3, its forward obligation on the missed-deadline hold, and its durable
 level-signal-needs-a-clearing-edge rule all stand untouched. Retiring the whole record to correct one
 row would mark as historical a decision the shipped code implements, which is the cost
-[ADR-0036](0036-step-2-smooths-net-power-only.md) weighed under its own Option C. This project has a
-settled alternative for exactly that: the **partial supersede**, adopted as a consequence by
-[ADR-0033](0033-captar-step-gains-a-mapping-half.md) and used since by ADR-0035, ADR-0036, ADR-0037
-and ADR-0040 — the superseding record replaces the named clause, the predecessor stays `Accepted`,
-and the narrowing is recorded in its ADL row. This ADR takes that shape, and says below exactly which
-clauses it replaces.
+[ADR-0036](0036-step-2-smooths-net-power-only.md) weighed under its own Option C. The alternative is
+the **partial supersede**: the narrowing record states which clause it replaces and which reasoning
+survives, the narrowed record keeps its Status and its body untouched, and the ADL index carries the
+pointer in the narrowed row's title cell.
+[ADR-0033](0033-captar-step-gains-a-mapping-half.md) is the worked example and is careful about its
+own standing — it says it "does not legislate one", that what it did is "described rather than
+prescribed", and that making the shape a project-wide convention is a separate decision "it neither
+makes nor should". So this is established *practice* — ADR-0035, ADR-0036, ADR-0037 and ADR-0040
+have each used it since — and not a rule this ADR can cite as binding. It is followed here for the
+reason ADR-0033 gives, not by authority, and it stays within the boundary ADR-0033 does draw: a
+decision whose *reasoning* no longer holds is a full supersede, and ADR-0024's reasoning holds. This
+ADR says below exactly which clauses it narrows.
 
 ## Considered options
 
@@ -115,8 +124,8 @@ paragraph becomes true and the exit table needs no change.
   model ADR-0024 was written under: one guard decides, and the edge check downstream of it never sees
   a cycle that established nothing. It would also make every fault-cycle hold rule in the coordinator
   apply uniformly instead of per-mode.
-- Con: It regresses the very requirement `is_soc_gated` exists to protect — success-criterion 6/S2,
-  that `Power` and `Off` must not need an SOC sensor — turning a working `Manual`+`Power` install with
+- Con: It regresses the very thing `is_soc_gated` exists to protect — success-criterion 6/S2, that
+  `Power` and `Off` must not need an SOC sensor — turning a working `Manual`+`Power` install with
   no SOC integration into one that forces 0 A and logs a fault every cycle. It fixes a notification
   defect by breaking charging, and it does so for a mode that never reads state of charge for any
   other purpose. It also cures the symptom in the wrong layer: the collapse of two meanings into one
@@ -191,7 +200,7 @@ nothing.
 Option A is rejected because it settles a contradiction against a Must acceptance criterion in favour
 of a guard's incidental shape, and stops being harmless the moment the pursued occurrence is
 preserved across such a cycle. Option B is rejected because its route to making ADR-0024's row-2 step
-true runs through the requirement `is_soc_gated` was introduced to protect, trading a duplicate
+true runs through the criterion `is_soc_gated` was introduced to protect, trading a duplicate
 notification for a `Power`/`Off` install that faults every cycle — and leaves the underlying collapse
 of two meanings into one flag in place. Between the two options that do restore the distinction, C is
 chosen over D because D pays a shared-dataclass type change, and a three-way answer at every reader,
@@ -204,7 +213,8 @@ re-deriving the producer's computation, which ADR-0011's criterion forbids and A
 rejected on that ground.
 
 **This narrows ADR-0024; it does not replace it.** ADR-0024 stays `Accepted` and its text is
-untouched, per the partial-supersede shape ADR-0033 adopted. Precisely two clauses are replaced:
+untouched, per the partial-supersede shape ADR-0033 worked out. Precisely two clauses are narrowed —
+the first replaced, the second widened in its reach:
 
 1. **Exit table, row 2** — "Car disconnects, or `ev_soc` becomes `None` → `DeadlineUnreachableCleared`"
    — splits in two:
@@ -276,12 +286,18 @@ things, and the edge detector must then be told which — it cannot be recovered
    rg -n 'DeadlineUnreachableCleared|DEADLINE_UNREACHABLE_CLEARED|DeadlineUnreachableEdge|_unreachable_edge|deadline_resolvable' custom_components docs tests
    ```
 
-   …plus one site listed explicitly, `docs/analysis/requirements.md`, per the template's
-   "short explicitly listed set" allowance. The reason it has to be listed rather than found is
-   itself the width argument's limit: R5's acceptance criterion states this decision's own rule in
-   domain vocabulary — "ends no occasion … neither notifies nor re-arms" — and carries none of the
-   five tokens, because a requirement names no code identifier. No pattern over identifiers reaches
-   it, so it is named instead of pretended to.
+   …plus one site listed explicitly: `docs/analysis/requirements.md`. This is a **hybrid** of the
+   template's two forms — it offers a pattern *or* a short listed set, not both — and the deviation
+   is deliberate, because either form alone fails the width test here. The reason that site has to be
+   listed rather than found is itself the argument: R5's acceptance criterion states this decision's
+   own rule in domain vocabulary — "ends no occasion … neither notifies nor re-arms" — and carries
+   none of the five tokens, because a requirement names no code identifier. No pattern over
+   identifiers reaches it, so it is named instead of pretended to; and a listed set alone could not
+   enumerate the 24 code and document sites the pattern finds.
+
+   The paths are the three trees this decision governs. Repo-root files are outside them, which
+   drops only `CHANGELOG.md`'s two hits — generated release notes, which govern nothing and are not
+   edited by hand.
 
    The pattern is three name families, because every *other* governed site reaches this decision
    through one of them: the **event** in both its PascalCase and constant spellings (every record,
