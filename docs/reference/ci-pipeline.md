@@ -43,14 +43,17 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`, `development`, `requirement`, `specs`, `testing` and `uc`), and then fixing any
-cross-directory route into it, of which there are two: `requirement/done.md` routes to the
-shared completion bar in `uc/`, and `development/done.md` routes to `testing/`'s bar for the
-`tests/**` half of a development change. Adding a label means updating those eight — the
-work-types directory only where the new label gets a work file, which is not a given; renaming
-one additionally means updating any form that stamps it. A rename that misses
-`close-guard.yml` fails open silently — its `case` simply stops matching — so that one is
-checked, not assumed.
+`adr`, `development`, `documentation`, `requirement`, `specs`, `testing` and `uc`), and then
+fixing any cross-directory route into it, of which there are two: `requirement/done.md` routes
+to the shared completion bar in `uc/`, and `development/done.md` routes to `testing/`'s bar for
+the `tests/**` half of a development change. The shape of that tree — the roles a label's
+directory holds, and the per-branch subdirectories a label whose work covers more than one
+artifact gets — is [work-types/README.md](work-types/README.md)'s; what belongs here is only
+that the label is the directory name, so a rename moves a directory. Adding a label means
+updating those eight — the work-types directory only where the new label gets a work file,
+which is not a given; renaming one additionally means updating any form that stamps it. A
+rename that misses `close-guard.yml` fails open silently — its `case` simply stops matching —
+so that one is checked, not assumed.
 
 All three workers read the table rather than carrying their own copy of the work-file and
 checklist mappings — the drafter and the fix worker for the *How the work is done* column, the
