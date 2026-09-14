@@ -63,7 +63,9 @@ own.
    only via the one allowed orchestration pattern (never a peer-to-peer web).
 5. **Dynamic (behavioral) diagrams** — one sequence diagram per major use case, showing how its
    Manager orchestrates Engines/Resource Access to realize that use case's flow.
-6. **Self-check against structural rules** (see the `system-design-reviewer` agent's checklist).
+6. **Self-check against the completion bar** for this document — `CLAUDE.md`'s **Model
+   selection** table names it in the `documentation` row, and it is the same bar the review
+   applies.
 7. Review, address, manual approval, commit — same cycle as every other analysis document.
 
 ### `project-plan.md` — project design

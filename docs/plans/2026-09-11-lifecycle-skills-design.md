@@ -87,6 +87,16 @@ it is reviewed, the review model. The properties:
 - **A row is self-contained.** A lifecycle skill needs nothing outside the row and the PR's
   changed paths to know what to delegate to — so a row that has to split, like `documentation`,
   splits on which file the change touches rather than on the issue body.
+
+  *Amended in practice: no row splits in the* How the work is done *column at all.
+  `documentation` — the one row this clause was written for — names a single work file and a
+  single completion bar like every other row, and those two files route onward inside the
+  work-types tree, so a work type covering more than one artifact is resolved below the table
+  instead of inside it. The self-containment property itself is unchanged, and is now true of
+  every row without the qualification this clause carried; what went away is splitting as one of
+  the ways a row could satisfy it. Splitting survives only in the* How it is reviewed *column,
+  by tree, where union routing needs it.* `CLAUDE.md`'s *cell grammar is authoritative, as
+  above.*
 - **The `workflow` row has no work file on purpose.** CI refuses to draft `workflow` issues
   because there is no safe path containment for untrusted issue content outside `docs/**`,
   `custom_components/**` and `tests/**`; a local `implement` mirrors that refusal and hands
@@ -224,7 +234,11 @@ docs/reference/work-types/
   uc/implement.md, uc/done.md, uc/review.md
   requirement/…             (its done.md and review.md may be pointers to uc/'s, or the reverse)
   specs/…
-  documentation/implement.md, documentation/done.md, documentation/review.md
+  documentation/system-design/{implement,done}.md
+  documentation/project-plan/{implement,done}.md
+                            (a branching label: one subdirectory per branch, and
+                             documentation/review.md at the label's own level, since
+                             one reviewer covers both branches)
   development/…             (review.md covers custom_components/ and tests/)
   testing/…
   workflow/implement.md     ← pointer to ai-authoring.md, for reading only;
