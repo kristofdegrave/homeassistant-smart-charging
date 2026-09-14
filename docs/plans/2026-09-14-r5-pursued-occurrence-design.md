@@ -259,7 +259,7 @@ the deviation on the `DeadlineUnreachableCleared` re-arm under *Deliberate defer
 **But `required_a is None` with `unreachable=True` is a combination the coordinator cannot take
 today.** `coordinator.py:706-724` enters the unreachable block and evaluates
 `math.isinf(required.required_a)` — a `TypeError` on `None` — and
-`notification_manager.py:280-291` would drop a notification with no value to format, while the
+`managers/notification_manager.py:280-291` would drop a notification with no value to format, while the
 glossary says the notice fires *"likewise once the pursued occurrence lies in the past"*.
 
 The notification carries `self._config.max_current` — C1's configured maximum charging current,
@@ -388,15 +388,20 @@ names its tier and its exact file.
 
   It is newly reachable because of this slice, not newly wrong. On the shipped tree that cycle also
   clears `_urgency_latched`, so urgency ends outright and a later notice is a legitimately new
-  occasion; the slice keeps the urgency state and not the notification latch. Underneath it is a
-  contradiction that predates both: `UC05` says such a cycle *"neither leaves `Unreachable` nor
-  emits `DeadlineUnreachableCleared`"*, while ADR-0024's exit table has `ev_soc` becoming `None`
-  firing exactly that event — written when that input was assumed always to be a fault cycle, which
-  `is_soc_gated` makes untrue for `Off` and `Power`.
+  occasion; the slice keeps the urgency state and not the notification latch.
 
-  **The reconciliation is ADR-0024's and `UC05`'s, not this spec's** (#1178). This slice ships the
-  deviation and pins it: T5 asserts that a SOC-unavailable cycle mid-hold does not re-arm the
-  notice, which fails today and is the test that will pass once #1178 lands whichever way it lands.
+  **The rule is not in doubt.** R5's AC states it as a Must — *"A control cycle on which state of
+  charge is unavailable ends no occasion … the system holds the notification state it already had
+  and neither notifies nor re-arms"* — and `UC05` says the same, citing ADR-0024 as its reason. What
+  disagrees is one row of **ADR-0024's exit table**, which bundles a disconnect together with a
+  missing state of charge, written under the assumption ADR-0024 itself states two paragraphs later:
+  that such a cycle is always a fault cycle. `is_soc_gated` makes that untrue for `Off` and `Power`.
+
+  **So this is a deferral, not an open question.** The fix is deferred for one reason: ADR-0024 is
+  Accepted, and a spec must not silently contradict an Accepted ADR — it is superseded first
+  (#1178), and the code change follows from that. This slice ships the deviation and pins it: T5
+  lands a strict-xfail test that a SOC-unavailable cycle mid-hold does not re-arm the notice, which
+  fails today and turns red the moment #1178's fix lands, so the deviation cannot close unnoticed.
 - **Known deviation — a sustained SOC-role outage suspends the backstop.** The backstop is the
   engine's (D-4), and the engine is reached only when `deadline_resolvable` is True. D-5 has the
   SOC-unavailable half of that gate preserve the occurrence, which is what `UC05` requires — but it
@@ -432,5 +437,7 @@ names its tier and its exact file.
   gating are decided above or deferred by name here, never assumed: D-2 pins the release order the
   current control flow would swallow, D-5 the fault cycle *and* the two halves of the non-resolvable
   early return, D-6 the crash and the payload, D-7 the R18 release. Each is a place where the
-  obvious implementation drops a release R5 requires. The two deviations above are the deferrals,
-  and both carry a test: the suspended backstop, and the notification re-arm (#1178).
+  obvious implementation drops a release R5 requires. Three bullets above carry a **Known
+  deviation** label; the two *deferred* ones each carry a test — the suspended backstop, and the
+  notification re-arm (#1178). The third, the C4 clamp staying raw while its headroom moves, is a
+  deliberate difference rather than a deferral, and T10 pins it.

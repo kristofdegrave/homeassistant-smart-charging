@@ -139,11 +139,14 @@ second test asserts the notice fires **once** per occasion while held, and re-ar
 
 **A third test, for the deviation** (see *Deliberate deferrals*): a SOC-unavailable cycle mid-hold
 on `Power` must **not** re-arm the notice, so no second `DeadlineUnreachableNotified` fires when the
-reading returns and the hold is still in effect. This fails against the shipped behaviour, where
-the non-resolvable early return's `unreachable=False` fires `DeadlineUnreachableCleared`. Land it
-**xfail** with #1178 named as the reason: the reconciliation between `UC05` and ADR-0024's exit
-table is theirs to make, and this test is what turns green when it lands — whichever way it lands,
-since both readings agree a single occasion gets one notice.
+reading returns and the hold is still in effect. It asserts R5's AC directly — *"A control cycle on
+which state of charge is unavailable ends no occasion"* — and fails against the shipped behaviour,
+where the non-resolvable early return's `unreachable=False` fires `DeadlineUnreachableCleared`.
+
+Land it `@pytest.mark.xfail(strict=True, reason="#1178")`. **Strict is the point**: `xfail_strict`
+is not set in `pyproject.toml` and no other `xfail` exists under `tests/`, so a plain `xfail` would
+XPASS silently once #1178's fix lands and nothing would signal that the deviation had closed. Strict
+turns it red instead, which is what makes this a guard rather than a note.
 
 **Implementation.** Guard `math.isinf(required.required_a)` against `None`
 (`coordinator.py:706-724`) and supply the payload. Without this, T2's own case 1 crashes the cycle
@@ -238,11 +241,12 @@ other fixture that bound is never composed, the peak assertion is vacuous, and t
 instruction above has no reachable state to describe. **Add a second, smaller case** on a
 CapTar-absent fixture: the rate is C1/C4 only, and its C4 bound is still smoothed.
 
-**Implementation.** `smoothed_net_w` carried on `CycleContext`, with
-`smoothed_baseline_w = smoothed_net_w - charger_w` beside it, both read by
-`_escalated_maximum_permitted_rate_a` only: `peak_headroom_a(baseline_w=smoothed_baseline_w)` and
-`ceiling_headroom_a(net_w=smoothed_net_w)`, `charger_w` unchanged since R10 smooths net grid power
-alone. Do not derive either from `ctx.surplus_w`.
+**Implementation.** **One** new `CycleContext` field, `smoothed_net_w` — not two.
+`_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so it derives the peak
+operand itself: `peak_headroom_a(baseline_w=ctx.smoothed_net_w - ctx.charger_w)` and
+`ceiling_headroom_a(net_w=ctx.smoothed_net_w)`, with `charger_w` unchanged since R10 smooths net
+grid power alone. Both reads are the helper's and no other caller's. Do not derive either from
+`ctx.surplus_w`, which is the peak operand's exact negation (D-3).
 
 **Both construction sites, and no default.** `CycleContext` is built twice in
 `custom_components/`: `coordinator.py:579` and `:1382`, the baseline dry-run, whose docstring warns
