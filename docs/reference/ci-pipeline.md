@@ -97,11 +97,14 @@ eight places — `.github/setup-labels.sh`; where another of the eight mentions 
 form's guidance text, `_ai-draft.yml`'s reason string, `ai-pipeline.yml`'s Action/state line)
 it is prose telling a human which trigger to add next, never a value a worker matches on, so a
 rename there is a wording fix rather than a sync obligation. What binds instead is the set of
-places that *apply* them: `_ai-review.yml`'s verdict routing (and `_ai-draft.yml`/`_ai-fix.yml`
-for the two trigger hand-offs), and — for the two exit labels — the interactive skills that run
-the contribution workflow's clean and capped exits, which `CLAUDE.md`'s **Contribution
-workflow** section routes to. Adding or renaming one means updating that set, and the
-**Pipeline steps** below where the label's meaning is stated.
+places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, which compare
+`github.event.label.name` against a trigger label by string and — like `close-guard.yml`'s
+`case` block above — fail open silently on a rename, every job simply never firing; `_ai-review.yml`'s
+verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
+the two exit labels, whatever [contribution-workflow.md](contribution-workflow.md) names for
+its clean and capped exits — what those exits label is that doc's business, not this file's,
+so a rename is checked there rather than assumed from here. Adding or renaming one means
+updating that set, and the **Pipeline steps** below where the label's meaning is stated.
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
 places — `.github/setup-labels.sh` — and in none of the other seven, including
@@ -227,7 +230,8 @@ in branch protection's required checks on `main`.
   instructions, excluded from its commit step so one fix run cannot rewrite what the next one
   obeys. So a diff touching **anything** outside that set (`.github/`, `.claude/`,
   `custom_components/`, `tests/`, or a work file) never reaches it automatically:
-  `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to `needs-approval` with a comment saying why, rather than spending fix cycles that could not
+  `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to the two exit labels
+  (**Clean / cap-out** below) with a comment saying why, rather than spending fix cycles that could not
   commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
   to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
   job ever sees a non-docs PR. That bound no longer means "documents only", though: the
@@ -248,7 +252,9 @@ in branch protection's required checks on `main`.
   clean verdict never does. `needs-approval` answers *does this need a human*,
   `needs-decision` answers *did the review leave findings open* — the two states a maintainer
   scanning the PR list most needs to tell apart, and indistinguishable from the first label
-  alone. Every new verdict clears both stale labels before applying its own, so a granted
-  extra cycle that comes back clean drops `needs-decision` again.
+  alone. Every new verdict clears a stale `needs-approval` before applying its own; a stale
+  `needs-decision` is cleared only by a `clean` verdict, so a granted extra cycle that comes
+  back clean drops it, while a run that produced no verdict at all leaves the findings-open
+  signal standing.
 - **Merge** (step 9, unchanged): always a manual human action regardless of which path
   drafted or reviewed the PR.
