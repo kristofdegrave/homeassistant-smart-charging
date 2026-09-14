@@ -257,14 +257,16 @@ drafting step behind it has no author to self-check against it. `workflow`'s dir
 therefore holds `review.md` alone, and `work-types/README.md` states that asymmetry as
 deliberate rather than pending.
 
-**Second correction to the sketch, same reason.** The parenthetical beside the two
-`documentation/` lines reads as an exhaustive statement of what sits at that label's own level,
-and it is not. The shipped tree keeps `implement.md` and `done.md` there as well — each routing
-onward to the branch file beside it — and `CLAUDE.md`'s **Model selection** row *requires* that:
-a row names label-level paths and never a branch one. Only the `review.md` half of the
-parenthetical is right, and `work-types/README.md`'s **When a label branches** section is the
-authority on the shape. A later phase following the sketch as written would build branch-only
-`implement`/`done` files and leave the row naming paths that do not exist.
+**Second correction to the sketch, same reason.** Nothing the parenthetical beside the two
+`documentation/` lines says is wrong — there is one subdirectory per branch, and
+`documentation/review.md` does sit at the label's own level. What it omits is the defect: it
+reads as an exhaustive statement of what sits at that level, and the shipped tree keeps
+`implement.md` and `done.md` there too, each routing onward to the branch file one level below
+it. That is not an accident of how it was built but what the row requires, per the amendment to
+*The work-types table*'s self-containment clause above; `work-types/README.md`'s **When a label
+branches** section is the authority on the shape. A later phase reading the parenthetical as
+exhaustive would build branch-only `implement`/`done` files and leave the row naming paths that
+do not exist.
 
 The `CLAUDE.md` table then shrinks to label, the two model columns and irregular-row notes, because the paths
 derive from the label. This layout mirrors CI's self-applied "checklist in file X" exactly,

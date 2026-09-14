@@ -25,6 +25,10 @@ an "if" in every item, and an item that applies to half its artifact is one a re
 skim.
 
 That rests on `docs/design/` holding exactly one document per branch. **A third document there
-means a third branch**: a third bar routed to from here, and a third work file routed to from
-[`implement.md`](implement.md) beside this one. Both halves, or the document is silently covered
-by neither branch — matched by neither route above and judged by nothing.
+means a third branch**, and the branch is not finished until four things are true: a third bar,
+routed to from here; a third work file, routed to from [`implement.md`](implement.md) beside
+this one; [`review.md`](review.md), which today says one reviewer covers *both* of the label's
+documents and would then cover three; and `CLAUDE.md`'s **Document structure** section, whose
+`docs/design/` block enumerates them. Stop after the first two and the document is silently
+covered by neither existing branch — matched by neither route above and judged by nothing —
+while the shared reviewer goes on asserting there are two.

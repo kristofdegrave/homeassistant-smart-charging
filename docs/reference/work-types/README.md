@@ -35,11 +35,12 @@ row, not a gap in this tree.
 
 ## The three roles
 
-`CLAUDE.md`'s row is what names a file; this table says what each name holds. A directory holds
-`implement.md`, `done.md` and, where one exists, `review.md` — this tree's own convention, not
-something the cell grammar states, which names the three *roles* and leaves each row to name its
-paths literally. So if a row ever names a different filename, the row governs and this line is
-the copy that shrinks.
+`CLAUDE.md`'s row is what names a file; this table says what each name holds. The names are
+`implement.md`, `done.md` and `review.md`, each appearing when the role it carries has content —
+which of them a given directory holds is **The shape** above. They are this tree's own
+convention, not something the cell grammar states: that names the three *roles* and leaves each
+row to name its paths literally. So if a row ever names a different filename, the row governs
+and this line is the copy that shrinks.
 
 | File | What it holds | Who reads it |
 |---|---|---|
