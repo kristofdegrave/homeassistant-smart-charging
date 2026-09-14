@@ -182,7 +182,7 @@ urgency comes to be in effect.
   it reads is the **smoothed** one (R10), not the instantaneous reading, and undeferred — R3's two
   deferral cases belong to its clamp, not to this forecast. Every bound of the rate that depends
   on that baseline is fitted to that same reading, the C4 ceiling headroom as much as the peak
-  headroom; R5 is authoritative for both. This rate is a forecast of what urgency could sustain
+  headroom; R5 is authoritative for both the smoothing and the absence of deferral. This rate is a forecast of what urgency could sustain
   over the remaining window, and one cycle of household load is not evidence about that. The
   split is the one the System already draws — R3's clamp and C4's ceiling clamp read
   [raw values](system-overview.md#ubiquitous-language) so a real breach cannot persist for a
