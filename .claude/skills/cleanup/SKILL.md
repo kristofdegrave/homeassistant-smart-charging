@@ -23,16 +23,18 @@ step below is what makes an early or mistaken invocation harmless.
    alone cannot decide this). A PR that is open, approved, or closed without merging stops this
    skill here — report the state and do nothing below. "Approved" and "merged" are different
    states, and only the second has anything to clean up after.
-2. **Verify the change landed.** Fetch, then check each path the PR changed against
+2. **Verify the change landed.** Read the list of paths the PR changed (**Tracker mechanics**
+   routes to the read, beside the merge-state one), fetch, then check each against
    `origin/main`:
 
    ```sh
    git fetch origin && git ls-tree origin/main <path>
    ```
 
-   A deleted path is verified by its *absence*. A path the PR added or changed that is not
-   there means the merge is not what the PR shows — stop and report which paths, rather than
-   removing a worktree that still holds the only copy.
+   Read the output, not the exit status: `git ls-tree` exits 0 either way, and empty output
+   means the path is not there. A deleted path is verified by exactly that *absence*. A path
+   the PR added or changed that is not there means the merge is not what the PR shows — stop
+   and report which paths, rather than removing a worktree that still holds the only copy.
 3. **Remove the task's worktree**, if it is clean — from the main checkout, never from inside
    the worktree, which `git` refuses to remove while it is the current directory:
 

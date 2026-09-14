@@ -31,7 +31,7 @@ that skill before this one.
    - If the base branch already reached `main` via its own squash-merge, this PR's diff may
      be showing stale content — check before approving further.
    - Don't just trust "merged" status on a related PR; verify its artifact is actually on
-     `origin/main` the way the `cleanup` skill's landed-check does, before relying on it.
+     `origin/main` the way step 2 of the `cleanup` skill does, before relying on it.
 
 ## Common mistakes
 
