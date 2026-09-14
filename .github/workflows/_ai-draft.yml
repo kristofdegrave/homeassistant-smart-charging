@@ -108,7 +108,7 @@ jobs:
           fi
 
           plan_ref=""
-          # add_paths for development is two lines (develop-task does TDD test-first, so it
+          # add_paths for development is two lines (that work type is TDD test-first, so it
           # writes tests/ alongside custom_components/ — a single-tree add-paths would silently
           # drop the test files from the PR). Emitted via the GITHUB_OUTPUT heredoc form below,
           # which is why it's a real embedded newline ($'...'), not "line1\nline2" as a literal.
@@ -463,9 +463,8 @@ jobs:
             names the file or files defining this artifact's location, template and format,
             and where it labels one a completion bar, that is what the finished draft must
             satisfy — follow every file it names, plus the project conventions in CLAUDE.md.
-            The column may name a work-type document, a completion bar, a skill, or a document
-            entered through a skill; follow what it
-            actually says rather than a file you know of from elsewhere. If the row is missing,
+            Follow what the column
+            actually names rather than a file you know of from elsewhere. If the row is missing,
             or a file it names does not exist, write nothing and say so — the workflow
             reports a no-diff draft, which is the right outcome. Do not draft from memory, and
             do not write a stub in order to have produced something. CI overrides to that file's cycle:
@@ -483,7 +482,7 @@ jobs:
               this path, not a self-run red/green cycle.
           # No Bash: an issue-driven drafter running arbitrary shell (even just `pytest`) would
           # be a real privilege increase for untrusted issue content, worse than skipping
-          # develop-task's self-run TDD verification step for this one path.
+          # the development work type's self-run TDD verification step for this one path.
           claude_args: "--model ${{ inputs.model != '' && inputs.model || steps.kind.outputs.model }} --max-turns ${{ steps.turns.outputs.value }} --allowed-tools Read,Write,Edit,Glob,Grep"
 
       # Cost/turns/token visibility in the job summary. always() (scoped to the draftable path)

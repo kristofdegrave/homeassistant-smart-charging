@@ -36,7 +36,8 @@ only sequences those stages and says which skill performs each. Cite it, never r
    new-behaviour track this step does not apply.
 5. **Settle whether the strand needs a `specs` issue** — the flow document says when one is
    required on each track, and which analysis change cannot be approved until it exists. Where
-   it is required, it is one of the children filed below, and `write-impl-spec` drafts it later.
+   it is required, it is one of the children filed below, and the `specs` work type drafts it
+   later.
    Record the answer on the issue either way, so it is not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
    single-artifact idea, an epic plus its children for a multi-artifact strand — moving the
