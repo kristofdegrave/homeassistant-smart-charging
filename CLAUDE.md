@@ -70,7 +70,7 @@ inaccurate, truncated in a way that changes its meaning, or mined out of a conte
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (`workflow-reviewer` when it also edits `CLAUDE.md` or the pipeline).
 `docs/postmortems/**` is deliberately **not** in `ai-pipeline.yml`'s path filter or
-`_ai-review.yml`'s diff enumeration: the CI reviewer's six checklists are all written against
+`_ai-review.yml`'s diff enumeration: the reviewer checklists are all written against
 artifacts that assert behaviour, and none fits a narrative document. A post-mortem-only PR
 therefore gets no CI AI review at all — by design, and stated here so it doesn't read as an
 oversight (see [ci-pipeline.md](docs/reference/ci-pipeline.md)).
@@ -173,10 +173,12 @@ not a fourth column: each row's own work skill and reviewer agent say which one 
 when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
-untrusted issue content outside `docs/**`, `custom_components/**` and `tests/**`, so CI
-refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a
-local session hands the drafting to the human partner. Its review is still automated. What a
-`workflow` author reads instead is in **Authoring AI artifacts** below.
+untrusted issue content outside `docs/**` (minus the work-type tree, which instructs future
+drafts and is excluded from every drafter's allow-list), `custom_components/**` and
+`tests/**`, so CI refuses to draft `workflow` issues
+([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a local session hands the drafting to the
+human partner. Its review is still automated. What a `workflow` author reads instead is in
+**Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
 `docs/adl/**` → `adr-reviewer`;
@@ -184,10 +186,10 @@ local session hands the drafting to the human partner. Its review is still autom
 `docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
-`CLAUDE.md` → `workflow-reviewer`. This is CI's own path→agent mapping plus one deliberate
-addition, `docs/design/**`, which CI routes by this rule but cannot see: it is in neither the
-pipeline's path filter nor the review worker's diff enumeration, so the reviewer is reachable
-in principle and unreached in practice.
+`CLAUDE.md` → `workflow-reviewer`. This list **is** CI's mapping — the review worker resolves
+it from here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
+rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
+diff enumeration, so the reviewer is reachable in principle and unreached in practice.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
 fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also
 edits `CLAUDE.md` or the pipeline.

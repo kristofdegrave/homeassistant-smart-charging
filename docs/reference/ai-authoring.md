@@ -6,8 +6,16 @@ prompts (`.github/workflows/_ai-*.yml`). **Work-type documents**
 (`docs/reference/work-types/<label>/`) hold content moved out of a skill, so everything here
 binds them **except** the two routing sections: they do not travel between repositories, which
 is the premise both rules rest on, so they name this project's paths and tracker commands
-directly. Every other rule applies unchanged — the content did not stop being an instruction to
-a run by moving. It exists so that every new authored artifact is lean
+directly. Every other rule binds it — the content did not stop being an instruction to a run by
+moving. The checklist that governs one is therefore the **skill** checklist, minus four of its
+items: the two that read frontmatter (the `description`'s trigger precision and the invocation
+choice), a work-type document having none; and the two that exist only to enforce the routing
+sections carved out above (nothing project-dependent stated inline, tracker commands routed).
+Applying those two literally would flag a work file for naming a `docs/` path or a tracker
+command, which is exactly what the carve-out permits. Author and reviewer build against the
+same list.
+
+This reference exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
 [Project-dependent content routes through
 `CLAUDE.md`](#project-dependent-content-routes-through-claudemd) and [Tracker-dependent
@@ -267,7 +275,7 @@ narrowed or extended here.
   pattern: other artifacts reference it instead of duplicating the payload rules. (Drift is the
   main cost; the read cost is per use, not per cold session — see item 2 above.)
 - **Scope the read.** Tell a run *which* file to read, so it doesn't fan out across `docs/`.
-  The review worker already does this — one checklist per changed path, not all six.
+  The review worker already does this — one checklist per changed path, never all of them.
 - **Keep stable files stable.** Prompt caching only pays off when the cached prefix does
   not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
   `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill
