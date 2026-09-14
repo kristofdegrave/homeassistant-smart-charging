@@ -33,7 +33,7 @@ exist, so an absent file is a fact about the row, not a gap in this tree.
 | File | What it holds | Who reads it |
 |---|---|---|
 | `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author, and a CI drafting run. |
-| `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria. It is one file with two readers, which is why it is not a section of either neighbour. |
+| `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — `CLAUDE.md`'s **Model selection** section says why one file serves both. |
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
 `review.md` **does not exist for any label yet.** That material still sits in the reviewer agent
@@ -57,11 +57,12 @@ The level a file sits at is what says who it binds:
 - a file **inside a branch directory** applies to that branch only;
 - a file at the **label's own level**, beside the branch directories, applies to every branch.
 
-That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic: a
-role can be shared across branches while another is split. `documentation`'s reviewer is shared
-across both of its branches, so when `review.md` lands it belongs at the label's own level,
-while `implement.md` and `done.md` stay per-branch because the two documents are written
-differently and judged on disjoint criteria.
+That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic:
+one role can be shared across a label's branches while another is split, and the level a file
+sits at is the whole of how that is expressed. **Which** of a branching label's roles are shared
+and which are split is that label's own question, not this document's: its row decides it, under
+the rules `CLAUDE.md`'s **Model selection** section states. This document says only where a file
+of each kind goes once that is settled.
 
 Because the role names never change with the depth, every leaf reads the same as every
 unbranched label's directory.

@@ -224,7 +224,11 @@ docs/reference/work-types/
   uc/implement.md, uc/done.md, uc/review.md
   requirement/…             (its done.md and review.md may be pointers to uc/'s, or the reverse)
   specs/…
-  documentation/implement.md, documentation/done.md, documentation/review.md
+  documentation/system-design/{implement,done}.md
+  documentation/project-plan/{implement,done}.md
+                            (a branching label: one subdirectory per branch, and
+                             documentation/review.md at the label's own level, since
+                             one reviewer covers both branches)
   development/…             (review.md covers custom_components/ and tests/)
   testing/…
   workflow/implement.md     ← pointer to ai-authoring.md, for reading only;

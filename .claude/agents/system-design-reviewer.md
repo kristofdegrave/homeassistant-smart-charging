@@ -18,10 +18,8 @@ Always read:
   if both exist, even when only one changed, since the plan's bar judges it against the design.
 
 Then the documents the design is judged against, which is what makes the bar below decidable.
-The `CLAUDE.md` section that owns them names them: **Document structure**, for the analysis
-documents this project's behaviour lives in — the glossary, the requirements, the control cycle,
-the resolution rules, the entity catalog and the use-cases. Each bar item names the ones it
-needs; read those, not the trees whole.
+`CLAUDE.md`'s **Document structure** section owns them, and each bar item names the ones that
+item needs — read those, not the trees whole.
 
 Then the completion bar, which the checklist below sends you to — read it before you start
 scoring, not while you write up.
