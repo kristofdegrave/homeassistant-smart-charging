@@ -342,10 +342,10 @@ it is wired to its callers).
   baseline debouncer) plus the Peak-Demand Tracker. **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/billing_protection.py` and `engines/peak_demand_tracker.py`; tests
   in `tests/engines/test_billing_protection.py` and `tests/engines/test_peak_demand_tracker.py`.
-  Complete, R5's two-baseline split included: that split needs no change here, because which
-  baseline reaches a headroom call is the Coordinator's choice and this Engine cannot tell one
-  operand from the other. It is designed and not yet built, and the gap is **M1's** — recorded in
-  M1's Status, not counted against this task.
+  Complete. R5's two-baseline split needs no change here, because which baseline reaches a headroom
+  call is the Coordinator's choice and this Engine cannot tell one operand from the other. The split
+  itself is designed and not yet built, and that gap is **M1's** — recorded in M1's Status, not
+  counted against this task.
   The Tracker's monthly bookkeeping state is owned by `coordinator_cycle.py`'s `PeakDemandState`
   (ADR-0012), which is a distinct concern from the R3 clamp's own `PeakBreachTracker` breach timer.
   The published monthly peak has since gained a second, optional source: ADR-0030 adds the
@@ -388,8 +388,9 @@ it is wired to its callers).
   clamp — **no opt-out**, runs every cycle; solves from the raw reading, as E5's clamp does,
   applied *after* the R3 grace evaluation with **no** grace period of its own (ADR-0006
   distinction). The headroom operation is the one R5 specifies on the smoothed baseline. Like
-  E5, this Engine needs no change for that: it takes its readings as parameters. The gap is
-  M1's, which passes raw readings to both bounds today — recorded in M1's Status.
+  E5, this Engine needs no change for that: it takes `net_w` and `charger_w` as parameters and
+  cannot tell a raw reading from a smoothed one. The gap is M1's, which passes raw readings to both
+  of the rate's baseline-dependent bounds today — recorded in M1's Status.
 - **Depends on:** ADR-0010; must be a **structurally distinct** call site from E5 so the `Power`
   opt-out can never reach C4 (ADR-0006).
 - **Testable on its own:** plain pytest — ceiling clamp bounds below the ceiling for a requesting-32A
@@ -449,9 +450,10 @@ it is wired to its callers).
   moving it under `managers/` with M2/M3.
 - **Status:** shipped, with one gap — **partial:** R5's forecast reads the wrong baseline. The
   escalated maximum permitted rate is specified on the *smoothed* household baseline while
-  delivery stays on raw, and both of its **baseline-dependent** bounds are affected — the third,
-  C1's maximum charging current, is config: the coordinator passes the raw, debounced baseline to
-  the peak-headroom call and the raw readings to the C4 ceiling-headroom call. Designed, not built.
+  delivery stays on raw, and both of its **baseline-dependent** bounds are affected: the coordinator
+  passes the raw, debounced baseline to the peak-headroom call and the raw readings to the C4
+  ceiling-headroom call. (The rate's third bound, C1's minimum/maximum charging current, is config
+  and reads nothing.) Designed, not built.
   E5 and E6 point here rather than carrying it themselves, since which baseline reaches an Engine
   is the Coordinator's choice and neither Engine can tell one operand from the other. Otherwise shipped —
   `coordinator.py` plus `coordinator_cycle.py`; tests in
@@ -538,7 +540,8 @@ it is wired to its callers).
   `tests/test_notification_state.py`, and `tests/test_notifications_end_to_end.py` cover only
   those two. UC10's plug-in reminder is designed (system-design §5.3) but not yet built: no
   `binary_sensor.py` exists for its reminder-due readout, `const.py`'s `CONF_REMINDER_LEAD_H` is
-  contract-first with no reader, and no test exercises it.
+  collected and mirrored but nothing in the reminder path consumes it — the config flow asks for it
+  and an ADR-0031 mirror sensor surfaces it, and that is all — and no test exercises the reminder.
 - **Builds:** [system-design §5.3](system-design.md#53-notification-plug-in-reminder-uc10--evening-prompt-uc08) —
   UC08 evening home-day prompt (writes the home-day flag on "yes"), delivery of R5's
   deadline-unreachable notice (subscribing to M1's `DeadlineUnreachableNotified`, and re-arming
@@ -762,7 +765,8 @@ from the retired functional sequence.
   reason and M2 has shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
-  gaps). Two checkpoints are only partially met and are marked as such: the Phase 3
+  gaps). Checkpoint markers are not uniform and say so individually rather than to one formula —
+  Phase 2 reads *Met:*, Phase 4 *Met per slice:*, and only Phase 3 *Partially met:*: the Phase 3
   no-cross-Manager-call assertion (no executable guard) and the Phase 4 UC01–UC11 end-to-end
   validation (per-slice, not one suite).
 - **Independently testable.** Each task names its unit boundary per ADR-0009 (pure Engines → plain
