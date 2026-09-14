@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Use in an interactive session to run contribution-workflow step 1 for one Smart Charging issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for these steps is _ai-draft.yml's own prompt, never this skill.
+description: Use in an interactive session to run contribution-workflow step 1 for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for these steps is _ai-draft.yml's own prompt, never this skill.
 ---
 
 # Implement an issue

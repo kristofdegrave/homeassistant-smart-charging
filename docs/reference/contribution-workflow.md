@@ -108,8 +108,8 @@ go-signal — an interactive session never self-applies them ([ci-pipeline.md](c
 - **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
   resolved explicitly.
 
-`resolve-review-thread` owns which threads may be resolved, and
-[tracker-mechanics.md](tracker-mechanics.md) the commands.
+These four are the rule; `resolve-review-thread` applies them per thread, and
+[tracker-mechanics.md](tracker-mechanics.md) holds the commands.
 
 ## Base `main` and stacking
 
