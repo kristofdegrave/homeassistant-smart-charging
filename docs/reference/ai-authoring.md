@@ -108,10 +108,12 @@ with the positive target.
 fire it and other skills can reach it, at permanent context load. A user-invoked skill
 (`disable-model-invocation: true`) costs nothing standing, but only a human can fire it and no
 skill can reach it. Choose model-invocation only when the model or another skill must reach the
-skill on its own. The repo's two user-invoked skills are `handoff` and `grill-me`, the latter a
-name-to-type whose whole body dispatches to the model-invoked `grilling`. When user-invoked
-skills multiply past what a maintainer remembers, the cure is a **router skill**: one user-invoked
-skill naming the others and when to reach for each.
+skill on its own. Which skills are user-invoked is not a list to maintain here — it is the set
+whose frontmatter carries `disable-model-invocation: true`, and one `grep` over
+`.claude/skills/*/SKILL.md` enumerates it. One shape in that set is worth naming: a
+name-to-type such as `grill-me`, whose whole body dispatches to a model-invoked skill. When
+user-invoked skills multiply past what a maintainer remembers, the cure is a **router skill**:
+one user-invoked skill naming the others and when to reach for each.
 
 ## Project-dependent content routes through `CLAUDE.md`
 
