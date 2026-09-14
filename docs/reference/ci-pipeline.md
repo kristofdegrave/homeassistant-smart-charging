@@ -86,8 +86,10 @@ Adding or renaming a label is a third thing again, and not cheap: see the eight 
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
-Adding a tree still means editing all three, and `docs/design/**` is the standing proof — it is
-in the *no context label* row and in neither of the other two.
+Adding a tree means editing all three. `docs/design/**` was the standing proof of what happens
+otherwise: it sat in the *no context label* row and in neither of the other two, so a
+`docs/design`-only PR spawned no job — which takes out the **label** half as well as the path
+half, since a job that never runs cannot add a reviewer either. All three now carry it.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
@@ -144,12 +146,12 @@ in branch protection's required checks on `main`.
   `workflow` change **is** those instructing files — `.github/`, `.claude/`, `CLAUDE.md` — so
   no allow-list can contain one; `documentation` simply isn't wired in yet). A human authors
   both drafts by hand. The review step is still automated
-  for `workflow`, since
-  routing reaches it through the changed paths and not only through the issue's context label —
-  but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter
-  nor `_ai-review.yml`'s diff enumeration, so a PR touching only that tree gets no AI review at
-  all, even though the `documentation` review checklist exists. The *no context label*
-  row of `CLAUDE.md`'s **Model selection** table records the same gap from the other side.
+  for `workflow` and for `documentation`, since
+  routing reaches both through the changed paths and not only through the issue's context label.
+  `docs/design/**` is in `ai-pipeline.yml`'s path filter and `_ai-review.yml`'s diff enumeration,
+  so a PR touching only that tree reaches the `documentation` checklist. Being outside the
+  drafter and being outside review are separate facts: `documentation` is still never
+  auto-drafted, for the reason above.
 - **Outside the pipeline by design**: `docs/postmortems/**` is in neither `ai-pipeline.yml`'s
   path filter nor `_ai-review.yml`'s diff enumeration, so a PR touching only that directory
   spawns no AI job and a PR touching it alongside other trees has its post-mortem invisible to
