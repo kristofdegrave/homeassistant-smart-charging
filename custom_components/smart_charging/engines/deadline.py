@@ -148,9 +148,11 @@ def resolve_next_occurrence(
 class RequiredCurrentResult:
     """Result of resolving the current required to meet a departure deadline."""
 
-    # None when no deadline is resolved (urgency never applies), and also while a
-    # missed-deadline hold is in effect -- the time remaining to a past occurrence is not
-    # positive, so there is nothing to compute (resolution-rules.md, 'Missed-deadline hold').
+    # None on the three cycles that compute no required current: no deadline is resolved
+    # (urgency never applies); a missed-deadline hold is in effect, the time remaining to a past
+    # occurrence not being positive; and the cycle the backstop releases that hold, which
+    # returns to `Normal` with the ordinary resolution governing from the NEXT cycle
+    # (resolution-rules.md, 'Missed-deadline hold').
     required_a: float | None
     # Slack test fired, an occurrence not yet released by the handback test, or a
     # missed-deadline hold in effect -- the third is urgency seen after the occurrence it
@@ -242,7 +244,11 @@ def resolve_required_current(
     margin -- so it is a strict subset of urgency by construction, and UC05's
     Normal -> Urgent -> Unreachable ordering holds without a rule of its own.
 
-    Urgency's one remaining clear condition lives with the caller, not here: a disconnect.
+    Two of urgency's clear conditions are not this function's: a disconnect, which the caller
+    sees and this function cannot; and the deadline capability becoming absent (R18), which
+    needs no code at all -- withdrawing it reloads the config entry, and the pursued occurrence
+    is scoped to the connected session and never preserved across a restart (UC05's State
+    model).
     "No deadline" is handled below, since this function already sees it, and so is the
     missed-deadline hold -- which is not a second mechanism but a reading of
     `pursued_occurrence` at a moment after that occurrence has passed, released by state of
@@ -279,12 +285,15 @@ def resolve_required_current(
             # `urgent` and `unreachable` both False, which is what the state table's backstop
             # exit requires -- `-> Normal (DeadlineUnreachableCleared + DeadlineUrgencyReverted)`.
             #
-            # Deliberately NOT a fall-through into the ordinary path. Re-deriving `urgent` from
-            # the slack test on the NEW occurrence here would, whenever that test holds, leave
-            # `unreachable` True on every cycle and never pass through `Normal` -- so the
-            # coordinator's `_unreachable_edge`, which keys on this flag alone (ADR-0024),
-            # would never fire `DeadlineUnreachableCleared` and the next occasion would go
-            # unnotified. The new occurrence is judged from the next cycle instead.
+            # Deliberately NOT a fall-through into the ordinary path. Re-deriving urgency from
+            # the NEW occurrence here would leave the System in `Urgent` or `Unreachable` on a
+            # cycle the analysis puts in `Normal`. Where that new occurrence is not merely
+            # urgent but UNREACHABLE -- `required_a` above the escalated rate outright, the
+            # no-margin comparison at the foot of this function, which is a strict subset of
+            # the slack test -- `unreachable` never falls, so the coordinator's
+            # `_unreachable_edge`, which keys on that flag alone (ADR-0024), never fires
+            # `DeadlineUnreachableCleared` and the next occasion goes unnotified. The new
+            # occurrence is judged from the next cycle instead.
             return RequiredCurrentResult(
                 required_a=None,
                 urgent=False,

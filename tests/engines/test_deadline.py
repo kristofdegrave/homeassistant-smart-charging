@@ -729,6 +729,7 @@ def test_should_pursue_nothing_when_the_slack_test_does_not_engage_urgency():
     )
 
     # Assert
+    assert result.urgent is False
     assert result.pursued_occurrence is None
 
 
@@ -763,7 +764,8 @@ def test_should_keep_the_original_occurrence_when_the_deadline_resolves_to_a_dif
     this test used a pursued occurrence in the PAST, which returns from the hold branch and
     never reaches the ordinary path's preservation line at all -- so re-anchoring the
     occurrence to `deadline_at` there left the whole suite green. Since
-    `resolve_next_occurrence` always yields an occurrence strictly after `now`, that mutation
+    `resolve_next_occurrence` always yields an occurrence strictly after `now` BY WALL CLOCK
+    (the one exception being the fall-back repeated hour, per its own docstring), that mutation
     makes a missed-deadline hold unreachable in production.
     """
     # Arrange -- 14:00 is pursued and still ahead of the 06:00 `now`; R14 resolves 16:00.
@@ -863,6 +865,33 @@ def test_should_hold_urgency_when_the_pursued_occurrence_has_elapsed():
     assert result.pursued_occurrence == HOLD_PURSUED
 
 
+def test_should_hold_urgency_when_the_pursued_occurrence_is_exactly_now():
+    """The engage boundary, pinned because the analysis does not state which side it falls on.
+
+    R5 says the System is in a missed-deadline hold "exactly when the pursued occurrence lies in
+    the past", which reads as strictly before `now`. This engine treats an occurrence landing
+    exactly ON `now` as held, for the reason `resolve_next_occurrence` already treats a departure
+    time exactly now as passed: a zero-length window leaves no time to charge in, so the deadline
+    is unreachable by the same definition. That is this engine's reading rather than a quoted
+    rule -- pinned so a later change has to be deliberate.
+    """
+    # Arrange -- the pursued occurrence and `now` are the same instant.
+
+    # Act
+    result = resolve_required_current(
+        **{**HOLD_KWARGS, "now": HOLD_PURSUED},
+        deadline_at=HOLD_NEXT_OCCURRENCE,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.required_a is None
+    assert result.urgent is True
+    assert result.unreachable is True
+    assert result.pursued_occurrence == HOLD_PURSUED
+
+
 def test_should_release_the_hold_when_state_of_charge_reaches_the_active_limit():
     """THE RELEASE A NAIVE SHORT-CIRCUIT DESTROYS.
 
@@ -882,9 +911,12 @@ def test_should_release_the_hold_when_state_of_charge_reaches_the_active_limit()
         escalated_maximum_permitted_rate_a=32.0,
     )
 
-    # Assert
+    # Assert -- UC05 lists this first among the exits while held, emitting
+    # `DeadlineUnreachableCleared` alongside `DeadlineUrgencyReverted`, so `unreachable` falls
+    # here for the same reason it does on the backstop's own releases.
     assert result.required_a == 0.0
     assert result.urgent is False
+    assert result.unreachable is False
     assert result.pursued_occurrence is None
 
 
@@ -913,7 +945,7 @@ def test_should_keep_the_hold_when_a_later_occurrence_resolves_to_no_deadline():
     assert result.pursued_occurrence == HOLD_PURSUED
 
 
-def test_should_take_the_ordinary_path_when_the_pursued_occurrence_is_still_ahead():
+def test_should_compute_a_required_current_when_the_pursued_occurrence_is_still_ahead():
     """A pursued occurrence that has not yet elapsed is ordinary urgency, not a hold: the
     required current is computed and the handback can clear it as usual."""
     # Arrange -- the pursued occurrence is the one still being judged, 10 h out.
@@ -985,6 +1017,8 @@ def test_should_keep_the_hold_when_neither_backstop_arm_has_fired():
 
     # Assert
     assert result.urgent is True
+    assert result.unreachable is True
+    assert result.required_a is None
     assert result.pursued_occurrence == HOLD_PURSUED
 
 
@@ -1081,10 +1115,14 @@ def test_should_return_to_normal_on_the_backstop_even_when_the_next_deadline_is_
     `DeadlineUrgencyReverted`.
 
     An implementation that dropped the occurrence and fell through into the ordinary path would
-    re-derive urgency from the slack test on the NEW occurrence here -- and since that occurrence
-    is at risk, `unreachable` would never fall, `_unreachable_edge` would never fire, and the next
-    occasion would go unnotified. The other three backstop tests cannot catch this: their new
-    occurrence is comfortably reachable, so a fall-through and an early return agree.
+    re-derive urgency from the NEW occurrence here -- and since that occurrence is UNREACHABLE,
+    not merely urgent, `unreachable` would never fall, `_unreachable_edge` would never fire, and
+    the next occasion would go unnotified.
+
+    That last step is what this case adds. Two of the three release tests above would also fail
+    against a fall-through, on their `required_a is None` assertion -- but on both, the new
+    occurrence is comfortably reachable, so `unreachable` stays False and the notification edge
+    behaves. This is the only case that exercises the flag the edge actually keys on.
     """
     # Arrange -- the following occurrence has elapsed, so the backstop fires. The next deadline
     # is 1 h out with 30 kWh still needed: 120 A required against a 32 A rate, which would be
@@ -1107,7 +1145,7 @@ def test_should_return_to_normal_on_the_backstop_even_when_the_next_deadline_is_
     assert result.pursued_occurrence is None
 
 
-def test_should_count_the_24_hour_arm_as_an_absolute_duration_across_spring_forward():
+def test_should_keep_the_hold_when_only_wall_clock_arithmetic_would_reach_24_hours():
     """The 24-hour arm spans midnight by construction, so it straddles both DST transitions --
     the exact hazard `_absolute_hours_between` exists for. Across spring-forward the wall clock
     reads 24 h where only 23 h have elapsed; releasing there would cut the hold an hour short
@@ -1134,3 +1172,35 @@ def test_should_count_the_24_hour_arm_as_an_absolute_duration_across_spring_forw
     # Assert
     assert result.urgent is True
     assert result.pursued_occurrence == pursued
+
+
+def test_should_release_the_hold_when_wall_clock_arithmetic_would_still_be_short_of_24_hours():
+    """The fall-back mirror of the case above, and the opposite hazard.
+
+    Across fall-back the repeated hour makes 23 wall-clock hours span 24 absolute ones, so an
+    implementation doing wall-clock arithmetic would hold PAST the bound R5 states rather than
+    short of it. `_absolute_hours_between` normalises both sides to UTC, so the arm fires on the
+    elapsed duration either way.
+    """
+    # Arrange -- 20:00 the evening before the transition to 19:00 the evening after: 23 h by
+    # wall clock, 24 h absolute, because 2026-10-25 03:00 CEST falls back to 02:00 CET.
+    pursued = datetime(2026, 10, 24, 20, 0, tzinfo=BRUSSELS)
+    now = datetime(2026, 10, 25, 19, 0, tzinfo=BRUSSELS)
+
+    # Act
+    result = resolve_required_current(
+        deadline_at=None,
+        following_occurrence=None,
+        now=now,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=100.0,
+        voltage=250.0,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        pursued_occurrence=pursued,
+    )
+
+    # Assert
+    assert result.urgent is False
+    assert result.pursued_occurrence is None
