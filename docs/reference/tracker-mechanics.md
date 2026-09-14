@@ -319,8 +319,10 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/files \
 
 `--paginate` is not optional, for the reason *Commenting* above gives: a bare read returns the
 first 30 files, and a large change is exactly where a short page reads as "every path
-verified". A deleted path is listed like any other; the read says nothing about *how* a path
-changed, only that it did.
+verified". Like the merge-state read above it is REST, so the GraphQL limiter cannot refuse
+it. A deleted path is listed like any other; the read says nothing about *how* a path changed,
+only that it did — `.[].status` carries `added`/`removed`/`modified` if a caller needs to tell
+them apart.
 
 ## Posting a review with inline anchors
 

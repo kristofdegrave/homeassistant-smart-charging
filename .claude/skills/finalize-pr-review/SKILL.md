@@ -31,7 +31,10 @@ that skill before this one.
    - If the base branch already reached `main` via its own squash-merge, this PR's diff may
      be showing stale content — check before approving further.
    - Don't just trust "merged" status on a related PR; verify its artifact is actually on
-     `origin/main` the way step 2 of the `cleanup` skill does, before relying on it.
+     `origin/main` before relying on it — `git fetch origin && git ls-tree origin/main <path>`,
+     judged by output, not exit status. Step 2 of the `cleanup` skill is where that check is
+     reasoned through; this bullet only repeats the one command, because that skill is
+     user-invoked and a run here cannot dispatch to it.
 
 ## Common mistakes
 

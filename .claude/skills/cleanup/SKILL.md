@@ -12,9 +12,11 @@ follows is manual, so nothing in the session can know it happened until the huma
 so. `CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step and
 every rule below — what closes the issue, which issue a PR names, what a merged spec owes.
 
-User-invoked (`disable-model-invocation`), because no skill or chain step ever reaches it on
-its own and the invocation is the human partner's statement that the merge happened. The first
-step below is what makes an early or mistaken invocation harmless.
+User-invoked (`disable-model-invocation`), because no skill or chain step ever *invokes* it —
+the invocation is the human partner's statement that the merge happened. Other skills may point
+at a procedure in this file (`finalize-pr-review` does, for step 2's check); a reference is not
+a dispatch, and none of them runs it. The first step below is what makes an early or mistaken
+invocation harmless.
 
 ## Then, in order
 
@@ -32,11 +34,16 @@ step below is what makes an early or mistaken invocation harmless.
    ```
 
    Read the output, not the exit status: `git ls-tree` exits 0 either way, and empty output
-   means the path is not there. A deleted path is verified by exactly that *absence*. A path
-   the PR added or changed that is not there means the merge is not what the PR shows — stop
-   and report which paths, rather than removing a worktree that still holds the only copy.
+   means the path is not there. The check is decisive for **added** and **deleted** paths — an
+   added path must be present, a deleted one is verified by exactly its *absence*. For a
+   **modified** path presence proves little, since the file existed before the PR; step 1's
+   `merged: true` is the assurance for those. An added path that is missing, or a deleted one
+   still present, means the merge is not what the PR shows — stop and report which paths,
+   rather than removing a worktree that still holds the only copy.
 3. **Remove the task's worktree**, if it is clean — from the main checkout, never from inside
-   the worktree, which `git` refuses to remove while it is the current directory:
+   the worktree, which `git` refuses to remove while it is the current directory. `git worktree
+   list` names every worktree with its path and branch; the main checkout is the first line,
+   the task's worktree the one on the PR's branch:
 
    ```sh
    git -C <main-checkout> worktree remove <path>
@@ -45,24 +52,22 @@ step below is what makes an early or mistaken invocation harmless.
    If it still refuses — uncommitted changes, untracked files, a locked worktree — report
    exactly what blocks it and leave it in place. Never force the removal: whatever is in there
    was not pushed, and the human partner decides whether it matters.
-4. **Move the linked issue's board Status to Done.** The linked issue is the one the PR's
-   `Closes #N` reference names — the **Contribution workflow** section's doc defines which
-   reference applies when a PR carries more than one. Merging has already closed that issue
-   through the reference; this step only moves its board field, per **Tracker mechanics**. A
-   PR that carried only `Part of #N` leaves its issue open and its Status unchanged, because
-   the issue is not finished. Never close an issue directly: closing is the reference's job,
-   and doing it by hand hides a PR that forgot to carry it.
-5. **A merged `specs` PR owes its task issues.** An approved plan does not implement itself.
-   File the `development`/`testing` task issues through `file-task-issue`, one per task in the
-   plan's build order, each with its anchored `Plan:` line and attached to the strand's epic —
-   the **Ticket** stage of the stages-either-side doc that the **Contribution workflow** section
-   routes to owns what is filed when. This is filing, not drafting: it is inside this run and
-   needs no separate go from the human partner. Implementing any of them is a new issue and a
-   new chain, and does not start here.
+4. **Move the linked issue's board Status to Done** — the field move only, per **Tracker
+   mechanics**. Which issue that is, what merging has already done to it, and why a PR that
+   carried only `Part of #N` leaves its issue's Status alone, are the **Contribution
+   workflow** section's doc's rules on the `Closes` reference and on issue closing; apply them
+   as written there. What this step adds: it never closes an issue itself, whatever state the
+   issue is found in.
+5. **A merged `specs` PR owes its task issues.** That rule, and what is filed when, are the
+   **Contribution workflow** section's doc's and the **Ticket** stage of the stages-either-side
+   doc it routes to. What this step adds: the filing runs through `file-task-issue`, one issue
+   per plan task, inside this run — it is filing, not drafting, so it needs no separate go from
+   the human partner. Implementing any of them is a new issue and a new chain, and does not
+   start here.
 
-Done when the PR is confirmed merged, every changed path is verified on `origin/main`, the
-worktree is gone or its blocker is reported, the linked issue's Status is Done or stated why
-not, and for a `specs` PR every plan task has an issue. Report those five facts and stop.
+Done when the PR is confirmed merged, every added or deleted path is verified on `origin/main`,
+the worktree is gone or its blocker is reported, the linked issue's Status is Done or stated
+why not, and for a `specs` PR every plan task has an issue. Report those five facts and stop.
 
 ## Rules
 
