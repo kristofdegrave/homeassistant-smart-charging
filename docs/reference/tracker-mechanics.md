@@ -293,6 +293,37 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
   --jq '{state, base: .base.ref, head: .head.ref}'
 ```
 
+## Reading a change request's merge state
+
+`state` cannot tell a merged PR from one closed without merging — REST reports `closed` for
+both. The fields that decide it are `merged` and `merged_at`:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
+  --jq '{state, merged, merged_at}'
+```
+
+A merged PR reads `{"state":"closed","merged":true,"merged_at":"<timestamp>"}`; anything else
+is not merged, whatever its `state`. This is a REST read, so it is not refusable by the
+GraphQL limiter; `gh pr view <n> --json state,mergedAt` is the GraphQL form of the same read
+and offers nothing over it.
+
+The paths a change request touched — what a landed-check has to verify one by one — come from
+the same API, not from a local diff, since the worktree that made the change may be gone by
+the time anyone asks:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/files \
+  --paginate --jq '.[].filename'
+```
+
+`--paginate` is not optional, for the reason *Commenting* above gives: a bare read returns the
+first 30 files, and a large change is exactly where a short page reads as "every path
+verified". Like the merge-state read above it is REST, so the GraphQL limiter cannot refuse
+it. A deleted path is listed like any other; the read says nothing about *how* a path changed,
+only that it did — `.[].status` carries `added`/`removed`/`modified` if a caller needs to tell
+them apart.
+
 ## Posting a review with inline anchors
 
 The review **payload** — what goes in the body, how findings are grouped, the anchoring rules
