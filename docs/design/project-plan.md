@@ -98,10 +98,8 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence and the missed-deadline hold read from it designed, not
-built; E5 partial — the raw/smoothed baseline split designed, not built (M1 passes raw to both
-headroom calls); E8 partial — R11's cooldown/hold gating designed, not built |
-| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence, and the missed-deadline hold read from it, designed but not built; E5 partial — the raw/smoothed baseline split designed but not built, M1 passing raw to both headroom calls; E8 partial — R11's cooldown/hold gating designed, not built |
+| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M1 partial — R5's forecast still reads the raw baseline for both of its headroom bounds (the E5/E6 split, designed but not built); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
@@ -386,8 +384,10 @@ it is wired to its callers).
 - **Status:** shipped — `engines/grid_safety.py`; tests in `tests/engines/test_grid_safety.py`.
 - **Builds:** the **C4 headroom as a value**, for callers needing what C4 would allow without
   performing a clamp (R5's escalated maximum permitted rate); and the C4 grid-supply-ceiling
-  clamp — **no opt-out**, runs every cycle; solves from the
-  same baseline as E5; applied *after* the R3 grace evaluation with **no** grace period of its own
+  clamp — **no opt-out**, runs every cycle; solves from the raw reading, as E5's clamp does.
+  Its *headroom* operation feeds R5's escalated rate and is therefore specified on the smoothed
+  baseline, the same split E5 carries and with the same gap: M1 passes raw readings today
+  (designed, not built); applied *after* the R3 grace evaluation with **no** grace period of its own
   (ADR-0006 distinction).
 - **Depends on:** ADR-0010; must be a **structurally distinct** call site from E5 so the `Power`
   opt-out can never reach C4 (ADR-0006).
@@ -446,7 +446,13 @@ it is wired to its callers).
 - **Service:** Manager (the control cycle, `control-cycle.md`). Home: `coordinator.py` (ADR-0002),
   a `DataUpdateCoordinator` (ADR-0006). ADR-0015 grandfathers it at the package root rather than
   moving it under `managers/` with M2/M3.
-- **Status:** shipped — `coordinator.py` plus `coordinator_cycle.py`; tests in
+- **Status:** shipped, with one gap — **partial:** R5's forecast reads the wrong baseline. The
+  escalated maximum permitted rate is specified on the *smoothed* household baseline while
+  delivery stays on raw, and both of its bounds are affected: the coordinator passes the raw,
+  debounced baseline to the peak-headroom call and the raw readings to the C4 ceiling-headroom
+  call. Designed, not built; E5 and E6 record the same gap from their side, and it is M1's to
+  close, since which baseline reaches an Engine is the Coordinator's choice. Otherwise shipped —
+  `coordinator.py` plus `coordinator_cycle.py`; tests in
   `tests/test_coordinator.py`, `tests/test_coordinator_cycle.py`, the per-slice end-to-end suites
   (`tests/test_solar_end_to_end.py`, `test_captar_end_to_end.py`,
   `test_deadline_soc_management_end_to_end.py`, `test_notifications_end_to_end.py`), and
@@ -470,7 +476,7 @@ it is wired to its callers).
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
   clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
-  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's urgency
+  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
   pursued occurrence, once built); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
@@ -486,9 +492,9 @@ it is wired to its callers).
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
   UC01–UC04; the two-distinct-clamps ordering (ADR-0006); the R5 call order — the baseline
   Profile and Mode calls precede the Deadline urgency call, and the headroom calls advance no
-  breach timer, each fitted to its own baseline — raw for the `peak_headroom` readout and the R3
-  clamp, smoothed for R5's escalated rate, a distinction only observable from here; R15's capacity
-  fallback (an unmapped or unavailable sensed role falls back to the
+  breach timer, and — once the split below is built — each fitted to its own baseline: raw for the
+  `peak_headroom` readout and the R3 clamp, smoothed for R5's escalated rate, a distinction only
+  observable from here; R15's capacity fallback (an unmapped or unavailable sensed role falls back to the
   configured value, and the Engine sees only the composed result); fault → force-0A + Fault sensor
   (ADR-0007); `set_active_mode` timer reset (R11).
 - **Integration checkpoint:** ⎔ driven by C1 (timer) and reading C2 (owned entities); one end-to-end
@@ -746,8 +752,12 @@ from the retired functional sequence.
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
   `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks and all six
-  Client tasks have shipped, as have all nine Engine tasks — two of them partially: E4's
-  missed-deadline hold and E8's R11 cooldown/hold gating are both designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
+  Client tasks have shipped, as have all nine Engine tasks — three of them
+  partially: E4's pursued occurrence and the hold read from it, E5's raw/smoothed baseline split,
+  and E8's R11 cooldown/hold gating are all designed but not built. The E5 gap is M1's code rather
+  than the Engine's — which baseline reaches a headroom call is the Coordinator's choice — and M1's
+  own Status names it. Of the three Manager tasks, M2 has shipped and M1 is partial
+  for the same reason;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Two checkpoints are only partially met and are marked as such: the Phase 3
