@@ -814,3 +814,144 @@ def test_should_report_urgency_exactly_when_an_occurrence_is_pursued(
 
     # Assert
     assert result.urgent == (result.pursued_occurrence is not None)
+
+
+# --- R5 missed-deadline hold (issue #1187, T2) --------------------------------------------
+#
+# The hold is not tracked: it is the pursued occurrence read at a moment after that occurrence
+# has passed (resolution-rules.md, 'Missed-deadline hold'; UC05's `Unreachable` row). What is
+# decided here is the ORDER the releases are evaluated in -- a short-circuit placed naively
+# destroys two of them.
+
+# 17:00 on the 21st: the pursued 16:00 occurrence has elapsed and R14 has rolled forward.
+HOLD_PURSUED = SLACK_DEADLINE_AT
+HOLD_NOW = datetime(2026, 7, 21, 17, 0)
+HOLD_NEXT_OCCURRENCE = datetime(2026, 7, 22, 16, 0)
+
+HOLD_KWARGS = dict(
+    now=HOLD_NOW,
+    soc=50.0,
+    active_soc_limit=80.0,
+    ev_battery_capacity_kwh=100.0,
+    voltage=250.0,
+    pursued_occurrence=HOLD_PURSUED,
+)
+
+
+def test_should_hold_urgency_when_the_pursued_occurrence_has_elapsed():
+    """No required current is computed while the hold lasts -- the time remaining to a past
+    occurrence is not positive, so neither the slack test nor the handback can run, and the
+    deadline is unreachable by definition (resolution-rules.md, 'Missed-deadline hold';
+    requirements.md R5). The baseline and rate below would fire the handback on the ordinary
+    path, and must not end the hold."""
+    # Arrange -- a baseline wanting 32.0 A against a 32.0 A rate: the handback would hold.
+
+    # Act
+    result = resolve_required_current(
+        **HOLD_KWARGS,
+        deadline_at=HOLD_NEXT_OCCURRENCE,
+        baseline_desired_a=32.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.required_a is None
+    assert result.urgent is True
+    assert result.unreachable is True
+    assert result.pursued_occurrence == HOLD_PURSUED
+
+
+def test_should_release_the_hold_when_state_of_charge_reaches_the_active_limit():
+    """THE RELEASE A NAIVE SHORT-CIRCUIT DESTROYS.
+
+    This release is produced inside the ordinary path -- energy needed is non-positive, so the
+    required current is 0 A and the handback holds trivially. A hold branch placed above that
+    computation removes it, and a car that finished charging after a missed deadline would stay
+    pinned until the 24-hour backstop: max peak held, `Auto` escalated, R9's cap suppressed
+    (resolution-rules.md's release list; UC05's `Unreachable` row).
+    """
+    # Arrange -- state of charge is at the active SOC limit, so nothing is left to charge.
+
+    # Act
+    result = resolve_required_current(
+        **{**HOLD_KWARGS, "soc": 80.0},
+        deadline_at=HOLD_NEXT_OCCURRENCE,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.required_a == 0.0
+    assert result.urgent is False
+    assert result.pursued_occurrence is None
+
+
+def test_should_keep_the_hold_when_a_later_occurrence_resolves_to_no_deadline():
+    """THE OTHER RELEASE A NAIVE ORDERING DESTROYS.
+
+    A later occurrence resolving to "no deadline" never ends a missed-deadline hold, which is
+    anchored to the occurrence already pursued (requirements.md R5; resolution-rules.md's
+    release list; UC05's `Unreachable` row, which excludes the "no deadline" exit while a hold
+    is in effect). The engine returns `urgent=False` on a `deadline_at is None` input, so the
+    hold branch must sit ABOVE that early return.
+    """
+    # Arrange -- R14 resolves the 22nd to "no deadline" while the 21st's is still pursued.
+
+    # Act
+    result = resolve_required_current(
+        **HOLD_KWARGS,
+        deadline_at=None,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.urgent is True
+    assert result.unreachable is True
+    assert result.pursued_occurrence == HOLD_PURSUED
+
+
+def test_should_take_the_ordinary_path_when_the_pursued_occurrence_is_still_ahead():
+    """A pursued occurrence that has not yet elapsed is ordinary urgency, not a hold: the
+    required current is computed and the handback can clear it as usual."""
+    # Arrange -- the pursued occurrence is the one still being judged, 10 h out.
+
+    # Act
+    result = resolve_required_current(
+        **SLACK_KWARGS,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        pursued_occurrence=SLACK_PURSUED,
+    )
+
+    # Assert
+    assert result.required_a == 12.0
+    assert result.urgent is True
+    assert result.unreachable is False
+
+
+def test_should_release_a_future_occurrence_when_the_deadline_resolves_to_no_deadline():
+    """The ordinary "no deadline" release (requirements.md R5, resolution-rules.md's release
+    list), which is NOT the case the hold above protects: the carve-out covers only a later
+    occurrence resolving that way while an ELAPSED one is pursued. Pinned because an
+    implementation that threaded the occurrence through this early return would keep a future
+    one pursued for ever, and every other case here would still pass."""
+    # Arrange -- the pursued occurrence is still ahead of `now`, so no hold is in effect.
+
+    # Act
+    result = resolve_required_current(
+        deadline_at=None,
+        now=SLACK_NOW,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=100.0,
+        voltage=250.0,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        pursued_occurrence=SLACK_PURSUED,
+    )
+
+    # Assert
+    assert result.required_a is None
+    assert result.urgent is False
+    assert result.pursued_occurrence is None

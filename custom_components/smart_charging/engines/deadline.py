@@ -228,15 +228,42 @@ def resolve_required_current(
     missed-deadline hold clearing (issue #1006). "No deadline" is handled below, since this
     function already sees it.
     """
+    # ORDER IS THE DECISION HERE, not an implementation detail: two releases the analysis
+    # requires are destroyed by a hold short-circuit placed naively (resolution-rules.md's
+    # release list; UC05's `Unreachable` row).
+    #
+    # 1. The energy need is computed FIRST, so state of charge reaching the active SOC limit
+    #    releases whether or not the occurrence has passed. That release is produced inside
+    #    the ordinary path below (required_a = 0.0, then the handback), and a hold branch above
+    #    it would leave a car that finished charging pinned until the backstop.
+    energy_needed_kwh = ev_battery_capacity_kwh * (active_soc_limit - soc) / 100
+    soc_at_active_limit = energy_needed_kwh <= 0
+
+    # 2. Then the hold, which is a READING of the pursued occurrence rather than a tracked
+    #    flag: the System is in a missed-deadline hold exactly when that occurrence lies in
+    #    the past. It sits ABOVE the `deadline_at is None` return because a later occurrence
+    #    resolving to "no deadline" must not end it -- the hold is anchored to the occurrence
+    #    already missed (requirements.md R5).
+    if pursued_occurrence is not None and pursued_occurrence <= now and not soc_at_active_limit:
+        # No required current is computed while the hold lasts -- the time remaining is not
+        # positive, so neither test can run -- and the deadline is unreachable by definition,
+        # time having run out on it.
+        return RequiredCurrentResult(
+            required_a=None,
+            urgent=True,
+            unreachable=True,
+            pursued_occurrence=pursued_occurrence,
+        )
+
+    # 3. Only now: R14's "no deadline" is one of urgency's own release conditions, so the
+    #    occurrence is dropped rather than threaded through (resolution-rules.md's release
+    #    list). Reached only when no hold is in effect, per the branch above.
     if deadline_at is None:
-        # R14's "no deadline" is one of urgency's own release conditions, so the occurrence is
-        # dropped rather than threaded through (resolution-rules.md's release list).
         return RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)
 
     remaining_hours = _absolute_hours_between(deadline_at, now)
-    energy_needed_kwh = ev_battery_capacity_kwh * (active_soc_limit - soc) / 100
 
-    if energy_needed_kwh <= 0:
+    if soc_at_active_limit:
         # SOC already at/above the active limit -- nothing left to charge, so a passed
         # or imminent deadline carries no urgency regardless of time remaining.
         required_a = 0.0
