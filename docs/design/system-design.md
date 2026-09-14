@@ -153,7 +153,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 | **Charging-Mode Engines** (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) | V2 · stateful for `Solar`/`SolarOnly`/`Captar` (`ModeState`: phase + `phase_started_at`); `Power` is pure; `Off` has no module at all — the Coordinator's stop branch | Desired charger current from conditioned readings + resolved SOC limit + config (per UC01–UC04; `Off` → 0 A). Two operations, not one: the Coordinator *dispatches* the active mode, and separately *queries* the baseline mode for R5's handback. The query answers from this cycle's conditions with the mode's own restart timing excluded, and leaves the dispatched mode's own progression untouched (`resolution-rules.md`; §5.1) |
 | **Profile Engines** (`Manual`, `Auto`) | V3 · pure | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 · stateful (`SolarStepUpState` — `stepped_pct` ratchets, it is not a flag) | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
-| **Deadline Engine** | V5 · stateful (R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language) — one value, from which a missed-deadline hold is read rather than separately tracked) | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). The [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language)'s engage/clear policy is V5 too and lives here, with the flag itself threaded in and out by the Coordinator — one boolean rather than a window or running total, which changes how much there is to reason about but not its kind (see the note below the table). While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
+| **Deadline Engine** | V5 · stateful (R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language) — one value, from which a missed-deadline hold is read rather than separately tracked) | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language) is V5 too and lives here, threaded in and out by the Coordinator — one occurrence rather than a window or running total, which changes how much there is to reason about but not its kind (see the note below the table). A [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language) needs no policy of its own: it is that occurrence read after it has passed. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
 | **Billing-Protection Engine** | V6 · stateful (`PeakBreachTracker`'s R3 breach timer; `BaselineDebouncer`) | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
 | **Peak-Demand Tracker** | V6 · stateful (the running monthly peak and its month marker) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 · pure | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
@@ -187,10 +187,10 @@ The roster rows above are authoritative; the ADR's Context is not to be "fixed" 
 
 Two consequences worth stating, because both have caught readers out:
 
-- **A threaded value is not automatically an accumulation.** The Deadline Engine takes R5's urgency
-  latch in and returns it out, which makes it stateful under the test above — but that state is a
-  single boolean the Engine itself decides, not a window, timer or running total. The distinction
-  does not change its kind; it changes how much there is to reason about.
+- **A threaded value is not automatically an accumulation.** The Deadline Engine takes R5's pursued
+  occurrence in and returns it out, which makes it stateful under the test above — but that state is
+  a single occurrence the Engine itself decides, not a window, timer or running total. The
+  distinction does not change its kind; it changes how much there is to reason about.
 - **An engine's kind is a fact about today's code, not a permanent property.** Cycle-Invariant is
   pure right now because R11's cooldown/hold is deferred and its timers currently live in the
   Coordinator; it becomes stateful when that lands. Whoever moves it updates its row — which is
@@ -432,13 +432,13 @@ sequenceDiagram
     C->>G: C4 headroom (headroom, not clamp)
     G-->>C: ceiling headroom
     Note over C: compose the escalated maximum permitted rate — these two headrooms plus C1's<br/>minimum/maximum charging current, which is config already held from the Store read and<br/>needs no Engine call. Bounds and carve-outs: system-overview.md's glossary term.<br/>Resolved every cycle, urgency or not (R5)
-    Note over C: a missed-deadline hold in effect pins urgency on, so the two R5 tests below —<br/>and the baseline calls that exist only to feed them — are skipped (resolution-rules.md).<br/>The rate above still resolves; only the tests are short-circuited. The hold is the Deadline<br/>Engine's own decision (§3); the Coordinator threads the flag and skips the calls its<br/>value makes moot across cycles
+    Note over C: a pursued occurrence already in the past — a missed-deadline hold — pins urgency<br/>on, so the two R5 tests below, and the baseline calls that exist only to feed them, are<br/>skipped (resolution-rules.md). The rate above still resolves; only the tests are<br/>short-circuited. The Coordinator threads the occurrence and skips the calls its value makes moot across cycles
     C->>P: which mode with the urgency input FALSE? (Auto: its baseline rows · Manual: the active mode)
     P-->>C: baseline mode
     C->>M: what would the baseline mode want, ignoring its own restart timing?<br/>(the baseline query — resolution-rules.md; drives no charging of its own)
     M-->>C: baseline desired current
     C->>DL: required current & urgency? (R5/R15 — the resolved deadline and effective battery<br/>capacity above, state of charge, the active SOC limit and the resolved supply voltage, which<br/>are the required-current formula's own five inputs; plus the escalated maximum permitted rate<br/>and baseline desired current the two R5 tests compare against; plus charger status and the<br/>declared deadline capability from the Store read above (R18), and the prior cycle's<br/>pursued occurrence)
-    DL-->>C: urgency flag + unreachable flag + updated hold + required current<br/>(none computed while a hold is in effect)
+    DL-->>C: urgency flag + unreachable flag + updated pursued occurrence + required<br/>current (none computed once that occurrence is in the past)
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
@@ -488,8 +488,9 @@ The Profile is likewise consulted twice, once with the urgency input false and o
 resolved value — which is also what keeps the escalation stable, since judging against the
 already-escalated mode's own maximum request would clear urgency the instant it engaged.
 
-The pursued occurrence threaded in from the prior cycle is one of the Coordinator's cross-cycle flags,
-alongside the solar step-up and the missed-deadline hold; `control-cycle.md`'s Trigger section
+The pursued occurrence threaded in from the prior cycle is one of the Coordinator's cross-cycle
+flags, alongside the solar step-up — and it is the only one R5 needs, a missed-deadline hold
+being that same value read after the occurrence it names has passed; `control-cycle.md`'s Trigger section
 enumerates the full set of per-cycle carried state. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
 
