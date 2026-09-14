@@ -41,9 +41,12 @@ untouched — a success criterion below.
 
 ## Success criteria
 
-1. `resolve_required_current` takes and returns a `datetime | None`, and `urgency_latched` and every
-   hold-named boolean are gone from `custom_components/`. (`urgent` stays a bool on the result —
-   D-1 says why.)
+1. `resolve_required_current` takes and returns a `datetime | None`, and `urgency_latched` is gone
+   from `custom_components/`. Two booleans deliberately remain and are **not** what this criterion
+   is about: `urgent` on the result (D-1 says why), and E3's `missed_deadline_hold` parameter, which
+   carries the *reading* of an occurrence across a service boundary that has no business holding a
+   datetime. What the criterion forbids is a boolean that is urgency state — something a cycle
+   writes and the next cycle reads.
 2. A missed-deadline hold is nowhere a stored field — it is `pursued is not None and pursued <= now`
    at every site that needs it.
 3. Every release condition `resolution-rules.md` lists for a hold is reachable, including the two
@@ -88,8 +91,10 @@ Manager threads back in.
 limit's `urgent` parameter, `Auto`'s escalation row, the notification edge — and re-deriving it at
 each of those sites would spread R5's precedence rule across the coordinator.
 
-The relation is fixed and stated once, in the engine: `urgent == (pursued_occurrence is not None)`.
-A test asserts that invariant on every branch, which is what stops the two drifting.
+The relation is the glossary's, not this slice's — `system-overview.md`'s `urgency` and `pursued
+occurrence` entries define urgency as being in effect exactly when there is a pursued occurrence. It
+is rendered once, in the engine, as `urgent == (pursued_occurrence is not None)`, and a test asserts
+it on every branch, which is what stops the two drifting.
 
 ### D-2 — the hold's release order inside the engine
 
@@ -122,13 +127,23 @@ capability, which release in opposite directions — that distinction is the cal
 The one thing #1154 says this spec must resolve rather than assume. Two questions hide in it, and
 they resolve differently.
 
-**Which bounds move.** Both. `_escalated_maximum_permitted_rate_a` is
+**Which bounds move.** Both — and this is an **inference, not a stated rule**.
+`_escalated_maximum_permitted_rate_a` is
 `min(max_current, ceiling_headroom_a(ctx.net_w, ctx.charger_w), peak_headroom_a(ctx.baseline_w))`.
-R5 puts the *whole* rate on the smoothed reading, and it has two resolved bounds, not one. A slice
-that moved only the peak bound would leave the forecast shrinkable by a single cycle of household
-load through the C4 bound — the artefact R5 says must not decide this rate, which is #1078's own
-symptom one bound down. The two *clamps* on the delivery path, and the `peak_headroom` readout, all
-stay raw.
+The analysis scopes the smoothing to the *household baseline*, which is the **peak** bound's
+operand, and in the same breath names C4's ceiling among the raw readers. So the text can be read
+either way.
+
+This slice reads it as *both bounds smoothed*, because the rate is a **forecast** and a bound fitted
+to this instant defeats that purpose whichever bound it is: a single cycle of household load
+shrinking the forecast through C4 is #1078's own symptom, one bound down. The "C4 reads raw"
+statement is about the **clamp**, which is on the delivery path and must react to this instant — a
+different operation on the same Engine, already split as `ceiling_headroom_a`/`clamp_to_ceiling`.
+The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw.
+
+Because this document holds the only copy of that rule, **#1167** asks R5 or the glossary to state
+which reading each bound is fitted to. The text stays here until it does, and if the answer comes
+back the other way, the source wins.
 
 **Whether the operand carries R3's deferrals.** It does not. The argument, and the one text that
 cuts against it:
@@ -161,8 +176,8 @@ defensible input to a clamp that must not over-react and a poor input to a forec
 already smoothing — but it is not, as an earlier draft of this document asserted, forbidden by any
 "never more than one cycle" rule. That rule is about breaches, not about deferral in general.
 
-So: on balance, **undeferred** — a two-of-three argument with the counter-text answered rather than
-an airtight derivation. Because it is a derivation across three documents rather than a stated rule,
+So: on balance, **undeferred** — a two-of-three argument with the counter-text answered, not an
+airtight derivation. Because it is a derivation across three documents rather than a stated rule,
 **#1164** asks R5 or the glossary to say it in one line. It does not block this slice, and if it
 lands contradicting this, the source wins and D-3 changes with it.
 
@@ -181,9 +196,9 @@ The first is **not** `resolve_next_occurrence`'s output. That yields an occurren
 `now` (`deadline.py:127`), whereas the backstop's operand is relative to the *pursued* occurrence,
 which while held has already elapsed. Fed the existing call's output, `following_occurrence <= now`
 would be unreachable in production and only the 24-hour arm could ever fire. It must be built from
-the per-day resolution for the day after the pursued occurrence — `resolve_deadline_for`
-(`coordinator.py:408/418`), the same R14 table both existing occurrence resolutions use — and passed
-in as `following_occurrence: datetime | None`.
+the per-day resolution for the day after the pursued occurrence — `resolve_deadline_for` (defined at
+`coordinator.py:395`, returned at `:418` and in scope at the urgency call site), the same R14 table
+both existing occurrence resolutions use — and passed in as `following_occurrence: datetime | None`.
 
 `None` is a normal value here, not an error: R14 lets any day resolve to "no deadline". That is
 precisely why the 24-hour arm exists.
@@ -195,13 +210,22 @@ entered with rather than releasing it — the same reasoning `_role_readings_at`
 `_unreachable_edge` already carry (ADR-0024). Swapping the field's type must not move that line; the
 existing fault tests are re-pointed at the new field rather than rewritten.
 
-This also settles `coordinator_cycle.py:613`'s `not deadline_resolvable` early return, which the new
-`pursued_occurrence` field forces a value onto. `deadline_resolvable` is
-`status in CHARGEABLE_STATES and ev_soc is not None`: the SOC-unavailable half never reaches this
-line, because `coordinator.py`'s fault early-return fires upstream of the assignment. What is left
-is a disconnect, which *is* one of R5's release conditions. So the early return yields
-`pursued_occurrence=None`, and a test pins that the fault half is still handled upstream rather than
-here.
+**`coordinator_cycle.py:613`'s early return must split its two halves.** The new field forces a
+value onto it, and `deadline_resolvable` is `status in CHARGEABLE_STATES and ev_soc is not None` —
+two conditions with **opposite** answers:
+
+- **Disconnected** — a release condition R5 names. Returns `pursued_occurrence=None`.
+- **SOC unavailable** — explicitly *not* an exit: *"State of charge becoming unavailable is
+  deliberately not one of those exits … the System holds whichever state it was already in"*
+  (`UC05`). Returns the occurrence **threaded in**, unchanged.
+
+It is tempting to assume the SOC half never gets here because the fault early-return fires first. It
+does not. That return is gated on `is_soc_gated` (`coordinator.py:534-538`), which is **False for
+`Off` and `Power`** — `coordinator.py:525-532` says so: *"outside that gate a missing reading just
+means deadline urgency can't be computed this cycle, not a fault."* So `Manual`+`Off`, and `Auto`
+without the CapTar capability whose urgency row escalates to `Power`, both reach this line with a
+missing SOC reading and a live hold. Collapsing the two halves releases it on a cycle that
+established nothing.
 
 ### D-6 — `unreachable` while held, and what the notification carries
 
@@ -219,23 +243,37 @@ today.** `coordinator.py:706-724` enters the unreachable block and evaluates
 `notification_manager.py:280-291` would drop a notification with no value to format, while the
 glossary says the notice fires *"likewise once the pursued occurrence lies in the past"*.
 
-The notification carries the **maximum permitted rate**, exactly as the saturated case already does.
-That is not a new rule: the existing `float('inf')` cap resolves to the same value for the same
-reason — it is the bound `unreachable` was decided against, so "would need at least *max* A" is
-true rather than an arbitrary numeric artifact. The `None` case is the same statement about a
-deadline that has run out entirely. A task pins both the guard and the payload.
+The notification carries `self._config.max_current` — C1's configured maximum charging current,
+which is precisely what the existing `float('inf')` saturation caps to (`coordinator.py:722-724`),
+and **not** the [maximum permitted rate], which the glossary defines as the clamped delivered value.
+The `None` case is the same statement as the saturated one, about a deadline that has run out
+entirely rather than one needing more than the hardware can give.
 
-### D-7 — the caller distinguishes R18 from R14, because the engine cannot
+No analysis escalation is owed for the value: `notification_manager.py` already records message
+content as M3's own presentation detail. A task pins both the guard and the payload.
+
+### D-7 — R18's release needs no code, and this slice adds none
 
 Two inputs reach the engine as "no deadline resolved" and release in opposite directions while a
 hold is in effect: the **deadline capability becoming absent** (R18) *releases*; the deadline
-**resolving to "no deadline"** (R14) does *not*. The engine sees `deadline_at is None` for both.
+**resolving to "no deadline"** (R14) does *not*. The engine sees `deadline_at is None` for both, so
+the obvious move is to have the caller distinguish them.
 
-So the capability is the caller's to act on. M1 already reads the declared capabilities from the
-Store every cycle and already passes them into `resolve_deadline_urgency`; the release is applied
-there, ahead of the engine call, and the engine's own `deadline_at is None` path is left meaning
-R14's case only. A test pins both directions from the coordinator, since neither is expressible in
-a pure-engine test.
+It cannot, and does not need to. `resolve_deadline_urgency` receives two capabilities,
+`solar_available` and `captar_available`; `SmartChargingConfig` carries no `deadline_available`
+field at all, and `CONF_DEADLINE_AVAILABLE` is read only by `time.py` and `sensor.py` off
+`entry.data`. The coordinator is in exactly the engine's position.
+
+**The release already happens, by reload.** `__init__.py` registers
+`entry.add_update_listener(_async_reload_entry)`, which calls `hass.config_entries.async_reload`.
+Withdrawing the capability is a reconfigure that updates `entry.data`, so the entry reloads, the
+coordinator is re-created, and `_pursued_occurrence` starts at `None` — R5's own *"scoped to the
+current connected session and never preserved across a restart"* rule producing exactly the release
+R5 asks for.
+
+So this slice adds no plumbing for R18, and the engine's `deadline_at is None` path keeps meaning
+R14's case only, which is what D-2 already requires. Specifying a capability parameter here would
+build a second mechanism for a release the entry lifecycle already makes.
 
 ### D-8 — the parameter is additive first, so no commit is red
 
@@ -243,9 +281,10 @@ Swapping `urgency_latched` for `pursued_occurrence` in one commit breaks every H
 T1 until T4, because `coordinator_cycle.py:663` passes a keyword the engine no longer accepts. The
 Definition of Done's green-suite bar is per commit, not per slice.
 
-So T1 **adds** `pursued_occurrence` alongside `urgency_latched` and derives the boolean from it
-internally; T4 moves the coordinator onto the new parameter; T4a removes the old one in the same
-commit that stops using it. Every commit in between is green.
+So T1 **adds** `pursued_occurrence` alongside `urgency_latched`, with a default on both the
+parameter and the result field, and derives the boolean internally; T4 moves the coordinator onto
+the new parameter and removes the old one in the same commit that stops passing it. Every commit in
+between is green.
 
 ## Structure
 
@@ -254,7 +293,7 @@ commit that stops using it. Every commit in between is green.
 | `resolve_required_current` signature and return | `custom_components/smart_charging/engines/deadline.py` | **E4** Deadline Engine |
 | The hold's release order and the backstop | same | **E4** |
 | R9's sixth precondition | `custom_components/smart_charging/engines/soc_target.py` | **E3** SOC-Target Engine |
-| `self._pursued_occurrence`, threaded in and out (init at `coordinator.py:225`) | `coordinator.py` | **M1** Coordinator |
+| `self._pursued_occurrence`, threaded in and out (init at `coordinator.py:213`) | `coordinator.py` | **M1** Coordinator |
 | `smoothed_net_w` on `CycleContext`, **both** construction sites | `coordinator.py`, `coordinator_cycle.py` | **M1** |
 | `_escalated_maximum_permitted_rate_a` reads both smoothed operands | `coordinator.py` | **M1** calling **E5** and **E6** |
 | `following_occurrence` from the pursued occurrence's following day | `coordinator.py`, `coordinator_cycle.py` | **M1** calling **E4** |
@@ -284,7 +323,9 @@ class RequiredCurrentResult:
     required_a: float | None
     urgent: bool
     unreachable: bool
-    pursued_occurrence: datetime | None  # the successor M1 threads back in
+    pursued_occurrence: datetime | None = None  # the successor M1 threads back in
+    # The default is load-bearing, not decoration: `RequiredCurrentResult` is constructed at three
+    # sites outside the engine, and without it T1's commit turns the HA suite red (D-8).
 
 
 def resolve_solar_reserve_active(
@@ -311,6 +352,11 @@ names its tier and its exact file.
 
 - **No entity surfaces the pursued occurrence.** `entity-catalog.md` lists none; adding one is a
   `requirement` change, not this slice's.
+- **The baseline calls are not skipped while held.** `system-design.md` §5.1's note says the two
+  R5 tests "and the baseline calls that exist only to feed them" are skipped under a hold. T2 does
+  the engine half; the Coordinator will still call `mode_desired_current`. It is a query that
+  advances no mode state (`control-cycle.md` step 4), so the only cost is a wasted call — deferred
+  deliberately rather than left unmentioned.
 - **The `following_occurrence` resolution lag.** Like the escalated rate's own mode-lag caveat
   already recorded in `coordinator.py`, it is resolved once per cycle before dispatch. No case is
   known where that matters within a single cycle; recorded rather than left silent.
@@ -320,5 +366,7 @@ names its tier and its exact file.
   Stated here because a reader could otherwise take it for an oversight.
 - **No safety behaviour is silently deferred.** Every clamp, the fault path, and the notification
   gating are covered above rather than assumed: D-2 pins the release order the current control flow
-  would swallow, D-5 the fault cycle, D-6 the crash and the payload, D-7 the R18 release. Those four
-  exist because an earlier draft of this document claimed completeness it did not have.
+  would swallow, D-5 the fault cycle *and* the two halves of the non-resolvable early return, D-6
+  the crash and the payload, D-7 the R18 release. Each of those four is a place where the obvious
+  implementation silently drops a release R5 requires, which is why they are decisions rather than
+  notes.

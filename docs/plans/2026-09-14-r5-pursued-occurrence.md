@@ -4,9 +4,8 @@ Derived from [2026-09-14-r5-pursued-occurrence-design.md](2026-09-14-r5-pursued-
 Decisions are cited as `D-n`; behaviour is cited to the analysis doc that owns it and never restated
 here.
 
-Every task is failing test → minimal implementation → green → commit. **Every commit is green**: the
-engine's new parameter is additive in T1 and the old boolean is removed in T4, once nothing passes
-it (D-8). Each task names its ADR-0009 tier and its exact file.
+Every task is failing test → minimal implementation → green → commit, and **every commit is green**
+(D-8). Each task names its ADR-0009 tier and its exact file.
 
 ## T1 — The pursued occurrence, added alongside the boolean
 
@@ -17,16 +16,30 @@ test holds returns `RequiredCurrentResult.pursued_occurrence == deadline_at`; on
 test does not hold, `None`. A second test threads a non-`None` occurrence in across a cycle the
 handback clears and asserts `None` comes back out.
 
-**Implementation.** Add `pursued_occurrence: datetime | None` as a parameter and a result field
-(D-1). **Keep `urgency_latched` accepted** and derive the effective latch as
-`pursued_occurrence is not None or urgency_latched`, so `coordinator_cycle.py:663` keeps working
-untouched and the HA suite stays green (D-8). The slack test, the handback and their precedence are
+**Implementation.** Add `pursued_occurrence: datetime | None` as a parameter and a result field,
+**both defaulting to `None`** — the result field's default is what keeps the three construction sites
+outside the engine (`coordinator.py:225`, `coordinator_cycle.py:613`, `engines/deadline.py:226`)
+compiling on this commit (D-1, D-8). **Keep `urgency_latched` accepted** and derive the effective
+latch as `pursued_occurrence is not None or urgency_latched`, so `coordinator_cycle.py:663` keeps
+working untouched and the HA suite stays green. The slack test, the handback and their precedence are
 otherwise unchanged.
 
-**Also assert.** `urgent == (result.pursued_occurrence is not None)` on every branch the existing
-`SLACK_KWARGS` cases cover — D-1's invariant, and the guard against the two drifting.
+**Also assert**, two things:
 
-**Anchors:** `requirements.md` R5; `resolution-rules.md`, the R5 lookup.
+- `urgent == (result.pursued_occurrence is not None)` on every branch the existing `SLACK_KWARGS`
+  cases cover — the glossary's invariant, and the guard against the two drifting.
+- **The occurrence is not re-anchored.** Thread an occurrence in, advance `now` past it, and pass a
+  freshly resolved `deadline_at` for the *next* occurrence: the result must still carry the
+  **original** occurrence. This is the rule that makes a hold reachable at all — since
+  `resolve_next_occurrence` always yields a future occurrence, an implementation of "pursued =
+  deadline_at while urgent" makes a hold **impossible**, and every other engine test still passes
+  because T2 and T3 inject a past occurrence directly.
+
+**Mutation check.** Re-anchor the occurrence to `deadline_at` every cycle: this test and T2's case 1
+must both fail.
+
+**Anchors:** `requirements.md` R5; `resolution-rules.md`, the R5 lookup; `control-cycle.md` step 4
+for the preservation rule ("once an occurrence is pursued it stays pursued until released").
 
 ## T2 — The hold, in the order the releases require
 
@@ -37,10 +50,7 @@ otherwise unchanged.
 1. `pursued_occurrence` at or before `now`, energy still needed → `urgent=True`,
    `unreachable=True`, `required_a is None`, *whatever* `baseline_desired_a` and
    `escalated_maximum_permitted_rate_a` say, including values that would fire the handback.
-2. **`pursued_occurrence` in the past and SOC at or above the active SOC limit → released.** This is
-   the release the naive short-circuit destroys: today it is produced inside the ordinary path
-   (`energy_needed_kwh <= 0` → `required_a = 0.0` → handback). A car that finishes charging after a
-   missed deadline must not stay pinned until the backstop.
+2. **`pursued_occurrence` in the past and SOC at or above the active SOC limit → released** (D-2).
 3. **`pursued_occurrence` in the past and `deadline_at is None` → still held.** `resolution-rules.md`
    and R5's AC both say a later occurrence resolving to "no deadline" cannot end a hold, and
    `deadline.py:225-226` returns `urgent=False` on that input today. The hold branch sits **above**
@@ -91,19 +101,24 @@ exists for.
 **Failing test.** Across three cycles — engage, hold, release — `coordinator._pursued_occurrence`
 holds the expected datetime or `None`, and `_urgency_latched` no longer exists.
 
-**Implementation.** Rename and retype the field, initialised at `coordinator.py:225`; assign from
+**Implementation.** Rename and retype the field, initialised at `coordinator.py:213`; assign from
 `deadline_urgency.required.pursued_occurrence` at the same line the boolean was assigned; pass it in
 at the same call site; retype `DeadlineUrgencyInputs.urgency_latched`. **In the same commit**, drop
 the `urgency_latched` parameter T1 kept, now that nothing passes it (D-8).
 
-`coordinator_cycle.py:613`'s `not deadline_resolvable` early return returns
-`pursued_occurrence=None` (D-5): what reaches that line is a disconnect, which *is* a release
-condition — the SOC-unavailable half never gets there.
+`coordinator_cycle.py:613`'s `not deadline_resolvable` early return **splits its two halves**
+(D-5): disconnected returns `pursued_occurrence=None`, SOC-unavailable returns the occurrence
+threaded in.
 
 **Do not move the assignment.** It stays below both fault early-returns (D-5). Re-point, don't
 rewrite, the existing fault tests, and keep the one asserting a fault cycle holds the value it
-entered with. **Add** the test that pins the two apart: a SOC-unavailable cycle holds the occurrence
-(fault, upstream), a disconnected cycle releases it.
+entered with.
+
+**Add the test that pins the split — and set it up in `Power`, not a solar mode.** A SOC-unavailable
+cycle must hold the occurrence, a disconnected cycle must release it. `is_soc_gated` is False for
+`Off` and `Power` (`coordinator_cycle.py:233,:254`), so those are the modes where a missing SOC
+reading reaches this line at all instead of faulting upstream. Written with a solar mode active the
+test passes on the fault path and proves nothing.
 
 **Anchors:** `control-cycle.md`'s Trigger section; ADR-0024 for the fault-cycle reasoning;
 `resolution-rules.md`'s release list for the disconnect.
@@ -113,9 +128,10 @@ entered with. **Add** the test that pins the two apart: a SOC-unavailable cycle 
 **Tier:** HA harness · `tests/test_coordinator.py`, `tests/test_notifications_end_to_end.py`
 
 **Failing test.** A held cycle reaches the unreachable block with `required_a is None` and does not
-raise, and the `DeadlineUnreachableNotified` it fires carries the **maximum permitted rate** — the
-same value the existing `float('inf')` saturation resolves to, for the same reason (D-6). A second
-test asserts the notice fires **once** per occasion while held, and re-arms on release.
+raise, and the `DeadlineUnreachableNotified` it fires carries `self._config.max_current` — the same
+value the existing `float('inf')` saturation caps to at `coordinator.py:722-724`, and *not* the
+[maximum permitted rate], which is the clamped delivered value (D-6). A second test asserts the
+notice fires **once** per occasion while held, and re-arms on release.
 
 **Implementation.** Guard `math.isinf(required.required_a)` against `None`
 (`coordinator.py:706-724`) and supply the payload. Without this, T2's own case 1 crashes the cycle
@@ -124,22 +140,21 @@ the moment it reaches the coordinator.
 **Anchors:** `system-overview.md`'s `escalated maximum permitted rate` entry (the notice fires once
 the pursued occurrence lies in the past); ADR-0024 for the re-arm.
 
-## T6 — R18's release, which the engine cannot make
+## T6 — R14's "no deadline" does not release a hold, and R18's absence needs no code
 
 **Tier:** HA harness · `tests/test_coordinator_cycle.py`
 
-**Failing tests**, two, in opposite directions (D-7):
+**Failing test**, one: held, the deadline **resolves to "no deadline"** (R14) → **still held**. This
+is T2 case 3 asserted end to end, and it is the direction the coordinator can get wrong on its own.
 
-1. Held, the **deadline capability becomes absent** (R18) → released.
-2. Held, the deadline **resolves to "no deadline"** (R14, capability still present) → still held.
+**No implementation for R18** (D-7). Withdrawing the deadline capability is a reconfigure that
+updates `entry.data`, which reloads the entry through `__init__.py`'s update listener and re-creates
+the coordinator with `_pursued_occurrence` at `None` — R5's "never preserved across a restart" rule
+already producing the release. **Assert that** rather than building a second mechanism: a
+reload-mid-hold test that the occurrence does not survive it, which also covers T11's first case.
 
-Both arrive at the engine as `deadline_at is None`, so neither is expressible in a pure-engine test
-and the distinction has to live with the caller.
-
-**Implementation.** Apply the R18 release in `coordinator_cycle.py` ahead of the engine call, from
-the declared capabilities M1 already reads every cycle.
-
-**Anchors:** `requirements.md` R18; `resolution-rules.md`'s release list; `UC05`'s `Unreachable` row.
+**Anchors:** `requirements.md` R18 and R5's AC on restart; `resolution-rules.md`'s release list;
+`UC05`'s `Unreachable` row.
 
 ## T7 — The following occurrence, relative to the pursued one
 
@@ -189,14 +204,14 @@ updates it (D-2).
 
 ## T10 — Both escalated bounds on smoothed readings
 
-**Tier:** HA harness · `tests/test_coordinator.py`, `tests/test_captar_end_to_end.py`
+**Tier:** HA harness · `tests/test_coordinator.py`, `tests/test_captar_end_to_end.py`,
+`tests/test_deadline_soc_management_end_to_end.py` (the UC05 path the split changes)
 
 **Failing test.** A cycle where the smoothed and raw readings *differ* — a single-cycle spike, so
 the smoothing window and the debounced raw value disagree — asserts, in one test:
 
 - the escalated rate's **peak** bound is computed from the smoothed baseline;
-- its **C4 ceiling** bound is computed from the smoothed net reading — R5 puts the whole rate on the
-  smoothed reading, and it has two bounds, not one (D-3);
+- its **C4 ceiling** bound is computed from the smoothed net reading (D-3, and #1167);
 - the R3 clamp and the C4 clamp both still compute from raw;
 - `sensor.smart_charging_peak_headroom_a` is still the raw-based readout.
 
@@ -219,20 +234,20 @@ the test which one is exercised.
 `ctx.net_w`, and confirm the test fails each time on its own.
 
 **Anchors:** `requirements.md` R5 and R10; `system-overview.md`'s `escalated maximum permitted rate`
-and `maximum permitted rate` entries. D-3 records why no R3 deferral is applied, and #1164 asks for
-that to be stated in the source.
+and `maximum permitted rate` entries. **ADR-0012** governs the `CycleContext` field. D-3 records why
+no R3 deferral is applied (#1164) and why both bounds move rather than one (#1167) — both are asks
+against the analysis layer, and if either lands the other way, the source wins.
 
 ## T11 — The two ACs that rot silently
 
 **Tier:** HA harness · `tests/test_coordinator.py`
 
-**Failing tests**, two, both from `requirements.md` R5's AC:
+**Failing test**: a car connecting **after** the deadline elapsed is never held — it never pursued
+that occurrence. It follows from `_pursued_occurrence` starting `None`, which makes it cheap now and
+the kind of AC that silently rots later.
 
-1. A hold is **not** preserved across a restart spanning the elapsed moment.
-2. A car connecting **after** the deadline elapsed is never held — it never pursued that occurrence.
-
-Both follow from `_pursued_occurrence` starting `None`, which makes them cheap now and the kind of
-AC that silently rots later.
+The sibling AC — a hold not preserved across a restart spanning the elapsed moment — is asserted in
+T6, where it does double duty as the evidence for D-7.
 
 **Anchors:** `requirements.md` R5's AC; `UC05`'s State model ("scoped to the current connected
 session and never preserved across a restart").
@@ -241,10 +256,15 @@ session and never preserved across a restart").
 
 **Tier:** HA harness · full suite
 
-- ADR-0006's call-order spy test passes **unchanged** — no step added, removed or reordered.
-- `grep` `custom_components/` for `urgency_latched` and for any hold-named boolean: none.
+- **ADR-0006**'s call-order spy test passes **unchanged** — no step added, removed or reordered.
+- `grep` `custom_components/` for `urgency_latched`: none. (E3's `missed_deadline_hold` parameter
+  is expected and is not urgency state — success criterion 1 says why.)
 - `grep` `_escalated_maximum_permitted_rate_a`'s body for `ctx.net_w` and `ctx.baseline_w`: neither
   reaches it any more — the raw readings belong to the clamps and the readout.
+- **The prose this slice falsifies is updated, not just the code.** `engines/deadline.py:121-123`
+  and `:196-223` (the `urgency_latched` explanation, and "a missed-deadline hold clearing (issue
+  #1006)"), `coordinator.py:204-212` ("once #1006 lands"), and `project-plan.md`'s E4 and M1 status
+  lines all describe a model this slice replaces. A grep for `urgency_latched` catches none of them.
 - The UC05 end-to-end tests pass on **probed** values — assert the actual `required_a`, `urgent` and
   pursued occurrence, never infer from a green run; the accidental-latch-from-a-setup-cycle failure
   is the reason this line is here.
@@ -254,7 +274,8 @@ session and never preserved across a restart").
 
 - **#1006 closes into this slice.** Its premise — a missed-deadline hold to build — no longer holds:
   T2 makes it a comparison. Close it referencing this plan rather than working it.
-- **#1164**, asking R5 or the glossary to state the undeferred smoothed operand in one line.
-  Non-blocking; if it lands contradicting D-3, the source wins.
+- **#1164**, asking R5 or the glossary to state the undeferred smoothed operand in one line, and
+  **#1167**, asking it to state which reading each of the escalated rate's bounds is fitted to. Both
+  non-blocking; if either lands contradicting D-3, the source wins.
 - **#1141** brings `docs/design/` into line with the smoothed/raw split this slice builds. Not a
   dependency — this spec derives from the analysis layer, which already states it.
