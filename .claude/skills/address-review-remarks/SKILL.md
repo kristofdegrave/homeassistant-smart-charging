@@ -1,12 +1,11 @@
 ---
 name: address-review-remarks
-description: "Use when addressing review findings on Smart Charging analysis documents (docs/analysis/**) or ADRs (docs/adl/**) — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. Works locally and in CI."
+description: "Use when addressing review findings on a pull request — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. CI's entry for step 5; an interactive session reaches it through the `fix` skill rather than directly."
 ---
 
 # Address review remarks
 
-Fix the findings a review raised against analysis documents (`docs/analysis/**`) or ADRs
-(`docs/adl/**`), then account
+Fix the findings a review raised against a change, then account
 for every finding in a summary. The fix policy and the summary contract below are the single
 source of truth — the CI workflow (`_ai-fix.yml`) and local runs both follow them.
 
@@ -47,25 +46,19 @@ stop — do not invent work.
 
 Fixing is re-authoring — work with the same context the original author had:
 
-- **For a use-case (`UCnn-*.md`): apply the `write-use-case` skill in full** — its template,
-  rules (glossary-first, entity-catalog columns, reference-don't-restate, state models for
-  mode UCs), and common-mistakes list define what a correct fix looks like. Those rules are
-  deliberately not restated here.
-- **For an ADR (`docs/adl/NNNN-*.md`): apply the `write-adr` skill in full**, with one
-  overriding rule: **never edit an Accepted ADR's Context/Decision/Consequences** to
-  address a finding, even if the finding says the decision itself was wrong. Determine
-  "Accepted" from the **base branch**, not the working tree — run
-  `git show <base-sha-or-ref>:<path>` for the file; if it doesn't exist there, or its
-  Status there isn't already `Accepted`, this PR is still drafting the ADR and normal
-  fixes apply. Only a Status that already read `Accepted` on the base branch is immutable.
-  If a finding argues the *decision* on an already-Accepted ADR is wrong (not just its
-  write-up), that is a **Skipped** entry in the summary — record it as a candidate for a
-  new, superseding ADR and say so, rather than rewriting history. Findings about the ADR's
-  *write-up* (a missing Con, a Decision that doesn't reference its options, a Consequence
-  that doesn't follow) are fixed normally.
-- For other analysis docs: follow the flow document standard and review protocol in CLAUDE.md.
-- Run the skill's 6Cs self-check on the sections you changed before writing the summary
-  (ADRs are exempt — see `write-adr`'s Self-check, which replaces the 6Cs pass for ADRs).
+- **Apply the work file in full.** Take the context label from the PR's **linked issue** —
+  not the PR itself, which carries none — and look its row up in `CLAUDE.md`'s **Model
+  selection** table. Apply the file its *How the work is done* column names: its template,
+  rules, self-checks and common-mistakes list are what define a correct fix, and none of that
+  is restated here.
+- **Where the row names no work file, or there is no linked issue or no context label**, there
+  is nothing to re-author with. Fix what the finding states, keep the severity policy of
+  section 2, and say in the summary that no work file governed the change.
+- **A work file's rule about changing an already-merged artifact overrides the finding**,
+  including the conditions that file attaches to when the rule applies. Such a finding becomes
+  a **Skipped** entry in the summary, recorded with why, rather than an edit.
+- **Self-checks are the work file's**, including whether a general one this project applies to
+  its documents is replaced by a type-specific one.
 
 ## 4. Acknowledge every human comment in its thread
 

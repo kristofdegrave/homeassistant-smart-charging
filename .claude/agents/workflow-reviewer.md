@@ -28,7 +28,9 @@ Always read:
 - The changed files.
 - `CLAUDE.md`'s **Authoring AI artifacts** section, and the authoring reference it routes to —
   the shared vocabulary, the checklist for each artifact type (skill / agent / CI worker
-  prompt), and its non-negotiables.
+  prompt), and its non-negotiables. A work-type document under `docs/reference/` is one of
+  these artifacts even though it is not a skill; that reference's own opening says how far it
+  binds one and which checklist to apply.
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
 - If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
@@ -73,7 +75,8 @@ Always read:
 
 **(4) Authoring checklist (per artifact type)**
 - Apply the matching checklist section (skill / agent / CI worker prompt) of the authoring
-  reference above to the changed file(s).
+  reference above to the changed file(s) — or, for a work-type document, the skill checklist as
+  that reference scopes it.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
 - The context-label vocabulary's values and the CI-side sync obligation — every pipeline place

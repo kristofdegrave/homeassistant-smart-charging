@@ -37,18 +37,35 @@ places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-
 names `development` and `testing` (see **The docs-only close guard** below) — and, for the
 three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
 too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
-that label on every issue filed through the form. A seventh place sits outside the pipeline but
-carries the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
-Adding a label means updating those seven; renaming one additionally means updating any form
-that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
-stops matching — so that one is checked, not assumed. That table's *no context label* row
-separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
-updating the row too — until CI reads the table directly, the two are kept in sync by hand.
+that label on every issue filed through the form. Two more places carry the same vocabulary
+without being part of the pipeline's own configuration — though both are read by the workers at
+run time, which is what makes *renaming* a label expensive here rather than merely tedious:
+`CLAUDE.md`'s **Model selection** table, one row per context label,
+and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
+a label means moving a directory, not editing a line, for each label that has one (today,
+`adr`). Adding a label means updating those eight — the work-types directory only where the
+new label gets a work file, which is not a given; renaming one additionally means updating any
+form that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
+simply stops matching — so that one is checked, not assumed.
+
+All three workers read the table rather than carrying their own copy of the work-file and
+checklist mappings — the drafter and the fix worker for the *How the work is done* column, the
+reviewer for *How it is reviewed* — so the row is the selection itself rather than a mirror of
+one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
+cell in either *How* column — and changing the table's own shape expensive, since it now
+reaches every worker at once.
+Adding or renaming a label is a third thing again, and not cheap: see the eight places above.
+
+The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
+runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
+Adding a tree still means editing all three, and `docs/design/**` is the standing proof — it is
+in the *no context label* row and in neither of the other two.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other six. They are not context labels
+places — `.github/setup-labels.sh` — and in none of the other seven, including
+`docs/reference/work-types/<label>/`, which a kind label never gets. They are not context labels
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
 renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
 `context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,
@@ -95,22 +112,23 @@ in branch protection's required checks on `main`.
   issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` and `documentation`
   are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because no
   safe path containment exists for untrusted issue content outside
-  `docs/**`/`custom_components/**`/`tests/**`; `documentation` simply isn't wired in yet). A
-  human authors both drafts by hand. The review step is still automated for `workflow`, since
-  `_ai-review.yml` routes on changed file paths rather than the issue's context label — but not
-  for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter nor
-  `_ai-review.yml`'s diff enumeration and path→checklist list, so a PR touching only that tree
-  gets no AI review at all, even though `system-design-reviewer` exists. The *no context label*
+  `docs/**` (less the work-type tree)/`custom_components/**`/`tests/**`; `documentation` simply
+  isn't wired in yet). A human authors both drafts by hand. The review step is still automated
+  for `workflow`, since
+  routing reaches it through the changed paths and not only through the issue's context label —
+  but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter
+  nor `_ai-review.yml`'s diff enumeration, so a PR touching only that tree gets no AI review at
+  all, even though `system-design-reviewer` exists. The *no context label*
   row of `CLAUDE.md`'s **Model selection** table records the same gap from the other side.
 - **Outside the pipeline by design**: `docs/postmortems/**` is in neither `ai-pipeline.yml`'s
   path filter nor `_ai-review.yml`'s diff enumeration, so a PR touching only that directory
   spawns no AI job and a PR touching it alongside other trees has its post-mortem invisible to
-  the CI reviewer. That is deliberate — every one of the six checklists is written against an
-  artifact that asserts behaviour, and none fits a narrative document whose review is about
+  the CI reviewer. That is deliberate — every one of the reviewer checklists is written against
+  an artifact that asserts behaviour, and none fits a narrative document whose review is about
   quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
-- **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the skill, model, and branch
+- **Draft** (`_ai-draft.yml`, ≈ steps 0–2): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
   `max_turns` tier is driven by the issue's project-board **Size** field (set per
@@ -121,28 +139,57 @@ in branch protection's required checks on `main`.
   backticks, no trailing `(PR #NNN)`, no surrounding sentence) is the sole scope-pinning
   mechanism letting this job act on untrusted issue-body text, so it must resolve to exactly
   one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
-  `T5`) or the run fails. Runs the skill's *content* steps only (draft, self-checks) — never
-  its review/commit/report steps, since the workflow owns those. Opens the PR with
+  `T5`) or the run fails. **The file describing the artifact is not named in the workflow**: the
+  worker reads `CLAUDE.md`'s **Model selection** table row for the label and follows whatever
+  its *How the work is done* column names — a work-type document, a skill, or a document
+  entered through one. That is what lets a work type move out of `.claude/` without this
+  workflow changing; a missing row, or a named file that does not exist, stops the run rather
+  than drafting from memory. Runs that file's *content* steps only (draft, self-checks) —
+  never its review/commit/report steps, since the workflow owns those. Opens the PR with
   `Closes #<issue-number>` and its own, coarser commit-prefix mapping (`_ai-draft.yml`'s
   `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for `development`,
   `test` for `testing`) — deliberately simpler than the
   [commit message conventions](definition-of-done.md) table, since a single draft commit has
   no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI
   commits on the branch, which do follow that table. Then adds `needs-review`.
-- **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` runs the matching `*-reviewer`
-  agent and posts findings via `submit-pr-review`'s CI mode, ending in a `clean`/`remarks`
-  verdict marker. Unacknowledged human inline comments (no `ai-fix-ack` reply) count as
+- **Review** (`_ai-review.yml`, ≈ steps 3–4): `needs-review` resolves its checklists from
+  `CLAUDE.md`'s **Model selection** table — the routing rule, both halves of it, lives there
+  rather than in the workflow —
+  and self-applies each against the files it covers, posting findings via `submit-pr-review`'s
+  CI mode and ending in a `clean`/`remarks` verdict marker. Because that table comes from the
+  PR's own merge ref, a diff touching `CLAUDE.md`, `.claude/`, `docs/reference/` or the label
+  script — computed from the changed paths by the workflow, not judged from the diff's content
+  — has its **instructions** read from base-branch copies staged into the runner's temp
+  directory, and the review body opens with a note recording that the instructions were taken
+  from the base branch and that the new version needs a human read. That note is never a
+  finding and never makes the verdict `remarks`: there is nothing for a fix worker to do about
+  it, and a clean verdict routes the PR to `needs-approval`, which is the human read it asks
+  for. What it does not claim is that the routing was rewritten — the trigger is a path
+  trigger and cannot establish that. The protection is the base copies, not the note: a PR must
+  not be able to apply its own rewritten routing to itself. Only the instructions move: the files under review are still the
+  PR's, read from the checkout. The staging step verifies every base copy it wrote is present
+  and the right size and fails the job otherwise, so whether the guard held is never the
+  worker's judgement, and a failure to enumerate the changed paths turns the guard **on**, not
+  off. The staged set is a superset of the paths that arm it, so base routing can never name a
+  file that has no base copy. A file the PR *adds* under a watched tree arms the guard and has
+  no base copy, which is correct: it is not something the base standard can route to. As with the drafter, the table
+  column may name an agent definition or a work-type review document; the worker follows what
+  it says, so a checklist can move without this workflow changing. Unacknowledged human inline
+  comments (no `ai-fix-ack` reply) count as
   remarks too — the CI equivalent of step 8.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict on a **docs-only** diff adds
   `needs-work`, which runs `address-review-remarks`, commits as `github-actions[bot]`
   (`docs: address AI review remarks (#<pr>)`), and re-adds `needs-review`. It can only commit
-  under `docs/` (its commit step is `git add docs`-only), so a diff touching **anything**
-  outside `docs/**` (`.github/`, `.claude/`, `custom_components/`, `tests/`) never reaches it
-  automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
-  `needs-approval` with a comment saying why, rather than spending fix cycles that could not
+  under `docs/`, and not `docs/reference/work-types/**` — the tree it reads as its own
+  instructions, excluded from its commit step so one fix run cannot rewrite what the next one
+  obeys. So a diff touching **anything** outside that set (`.github/`, `.claude/`,
+  `custom_components/`, `tests/`, or a work file) never reaches it automatically:
+  `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to `needs-approval` with a comment saying why, rather than spending fix cycles that could not
   commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
   to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
-  job ever sees a non-docs PR.
+  job ever sees a non-docs PR. That bound no longer means "documents only", though: the
+  work-type tree puts files that *instruct* a drafter under `docs/`, which is why the per-type
+  allow-list is pulled ahead of the rest of the CI change.
 - **Loop cap** (docs-only diffs — the only ones that reach the fix job automatically): **2**
   automatic fix cycles, because CI runs fully unsupervised with no human watching in real time.
   A 3rd `remarks` verdict goes straight to `needs-approval` with a comment asking a human to

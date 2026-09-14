@@ -70,7 +70,7 @@ inaccurate, truncated in a way that changes its meaning, or mined out of a conte
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (`workflow-reviewer` when it also edits `CLAUDE.md` or the pipeline).
 `docs/postmortems/**` is deliberately **not** in `ai-pipeline.yml`'s path filter or
-`_ai-review.yml`'s diff enumeration: the CI reviewer's six checklists are all written against
+`_ai-review.yml`'s diff enumeration: the reviewer checklists are all written against
 artifacts that assert behaviour, and none fits a narrative document. A post-mortem-only PR
 therefore gets no CI AI review at all — by design, and stated here so it doesn't read as an
 oversight (see [ci-pipeline.md](docs/reference/ci-pipeline.md)).
@@ -97,11 +97,11 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | `docs/design/system-design.md` → `.claude/skills/write-system-design/SKILL.md`; `docs/design/project-plan.md` → `.claude/skills/write-project-design/SKILL.md` | opus | `.claude/agents/system-design-reviewer.md` | opus |
+| `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
@@ -113,6 +113,11 @@ a row self-contained, and a row that ever deviates has to argue for it here. Thr
 keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and CI's
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
+
+**A *How the work is done* cell that names more than one file labels each role.** `work file <path>; entry point
+<path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
+by name through. Where a row also splits on *which* file the change touches — `documentation`
+does — each branch is its own sentence, so `;` never has to mean two things in one cell.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
@@ -161,10 +166,6 @@ landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets
 `impl-spec-reviewer` for the file and `workflow-reviewer` for the subject, and a `development`
 PR that also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
 
-**CI applies the path half only, for now.** Its review step is being changed to apply this rule
-in full; until that lands, the label half is the interactive session's, the same way
-`docs/design/**` has a reviewer the pipeline does not yet route to.
-
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
@@ -172,10 +173,12 @@ not a fourth column: each row's own work skill and reviewer agent say which one 
 when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
-untrusted issue content outside `docs/**`, `custom_components/**` and `tests/**`, so CI
-refuses to draft `workflow` issues ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a
-local session hands the drafting to the human partner. Its review is still automated. What a
-`workflow` author reads instead is in **Authoring AI artifacts** below.
+untrusted issue content outside `docs/**` (minus the work-type tree, which instructs future
+drafts and is excluded from every drafter's allow-list), `custom_components/**` and
+`tests/**`, so CI refuses to draft `workflow` issues
+([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a local session hands the drafting to the
+human partner. Its review is still automated. What a `workflow` author reads instead is in
+**Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
 `docs/adl/**` → `adr-reviewer`;
@@ -183,8 +186,10 @@ local session hands the drafting to the human partner. Its review is still autom
 `docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
-`CLAUDE.md` → `workflow-reviewer`. This is CI's own path→agent mapping plus one deliberate
-addition, `docs/design/**`, which CI does not route today although the reviewer exists.
+`CLAUDE.md` → `workflow-reviewer`. This list **is** CI's mapping — the review worker resolves
+it from here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
+rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
+diff enumeration, so the reviewer is reachable in principle and unreached in practice.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
 fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also
 edits `CLAUDE.md` or the pipeline.
@@ -336,12 +341,10 @@ Use the `write-adr` skill for the full cycle. Follows the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
-- **Step 1 (draft)**: draft against `docs/adl/template.md`, numbering sequentially and
-  listing every option seriously considered, not just the chosen one. Never renumber; a
-  decision that changes is superseded by a new ADR, never edited in place.
-- **Step 3's reviewer** is `adr-reviewer`, checking the ADR against existing ADRs (no silent
-  contradictions — supersede, don't edit, a prior decision) and against the analysis/design
-  docs it touches.
+- **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
+  above names the work file, which carries the template, the numbering and never-renumber
+  rules, the immutability rule, and the reviewer to use. That file is their only home; don't
+  restate them here.
 - No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
   above; the rule applies equally here.
 

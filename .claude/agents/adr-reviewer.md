@@ -1,6 +1,6 @@
 ﻿---
 name: adr-reviewer
-description: Use to review any Architecture Decision Record under docs/adl/ (a new ADR or a change to one) before it is committed. Provides the fresh, separate Opus review the write-adr skill requires. Read-only; reports issues by severity and never edits files.
+description: Use to review any Architecture Decision Record under docs/adl/ (a new ADR or a change to one) before it is committed. Provides the fresh, separate Opus review this project requires for an ADR. Read-only; reports issues by severity and never edits files.
 tools: Read, Glob, Grep
 model: opus
 ---

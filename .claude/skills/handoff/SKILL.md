@@ -41,9 +41,10 @@ Six sections, in this order. Keep each to what the next agent cannot reconstruct
 
 Name skills, not procedures — the skill carries its own instructions.
 
-- Artifact work: the skill in the issue's row of `CLAUDE.md`'s **Model selection** table (e.g.
-  an `adr` issue → `write-adr`). Cite the row, don't restate the table. The `workflow` and
-  no-context-label rows have no work skill on purpose — the human partner drafts those.
+- Artifact work: the work file in the issue's row of `CLAUDE.md`'s **Model selection** table,
+  reached through the entry point the row names. Cite the row, don't restate the table. The
+  `workflow` and no-context-label rows have no work file on purpose — the human partner drafts
+  those.
 - Before an issue exists: `work-idea` (an `idea` issue), `grilling` (stress-test a decision
   with the human partner), `file-task-issue` (file the issues that fall out).
 - In the review loop, per the step ranges `CLAUDE.md`'s **Contribution workflow** section

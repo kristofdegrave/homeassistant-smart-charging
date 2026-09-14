@@ -22,10 +22,10 @@ distinct from step 3's fresh external reviewer:
   and what you saw in the PR description's **Runtime check** section (next).
 
 Doc/ADR/design artifacts satisfy this with their own self-check instead (6Cs pass, template
-conformance, cross-document consistency) — each artifact's own skill defines what "done"
-means there (`write-adr`, `write-requirement`, `write-use-case`, `write-impl-spec`,
-`write-system-design`, `write-project-design`; the analysis-doc and ADR versions are also
-mirrored in `CLAUDE.md`'s artifact-specific sections). The checklist above is the floor for
+conformance, cross-document consistency) — the work file in the artifact's row of `CLAUDE.md`'s
+**Model selection** table defines what "done" means there, whether that row names a work-type
+document or the skill itself; the analysis-doc and ADR versions are also mirrored in
+`CLAUDE.md`'s artifact-specific sections. The checklist above is the floor for
 anything touching `custom_components/`/`tests/`.
 
 ### Runtime check (in the PR description)
