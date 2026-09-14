@@ -193,8 +193,8 @@ routing rather than to the worker.
   and `docs/adl/0009-testing-strategy.md` — are read from the checkout, and the staging step's
   comment defers the question of widening the boundary to cover them to this record. They are
   not the only unstaged standards: a checklist also routes to `docs/analysis/**`,
-  `docs/design/**` and the accepted-ADR log as a whole, every one of them outside the watched
-  roots and read from the merge ref. This ADR widens the boundary for none of them, and the
+  `docs/design/**`, `docs/plans/**` and the accepted-ADR log as a whole, every one of them
+  outside the watched roots and read from the merge ref. This ADR widens the boundary for none of them, and the
   `docs/adl/` pair is named separately only because the staging comment names it. Widening is
   deferred rather than rejected: `docs/adl/template.md` is the sharpest case precisely because a
   template-only PR routes to `adr-reviewer` and never arms the guard at all, so covering it is
@@ -218,6 +218,13 @@ surprise:
   PR the rewritten **Model selection** section is in the model's context regardless. The staged
   base copy mitigates the vector — the prompt names the base path as the one to resolve routing
   from — but does not close it.
+- `.github/workflows/` is not a watched root, and two files in it are read as instruction on a
+  PR that edits them. This workflow's own prompt is the case above. The other is
+  `.github/workflows/ai-pipeline.yml`: it reads no instruction of its own, but the
+  `workflow-reviewer` checklist routes *to* it for context on how a changed workflow fits, so a
+  PR editing it is reviewed with its own copy of that context in play. Staging it would mean
+  staging `.github/workflows/`, which is where the prompt being staged-against lives — a
+  different decision from this one, and the same shape as the deferred widening above.
 
 **Blast radius** — every site this decision governs today, and whether each conforms.
 
@@ -235,13 +242,20 @@ nothing but `Grep`/`Glob`.
    places that describe the boundary, or the worker class as a class, in prose — the copies
    that can drift away from the implementation. It returns **seven** files, one of which is
    this record.
-2. **Instruction sources** — `Glob` for `.claude/agents/*.md`, `.claude/skills/*/SKILL.md` and
+2. **Instruction sources** — `Glob` for `.claude/**/*.md` and
    `docs/reference/work-types/**/*.md`. No content pattern can enumerate these, and a wider
    one would not be a fix: a checklist, a skill a worker prompt reads as instruction, and a
    work-type document are identified by where they sit and by what routes to them, never by a
    string they contain — none of the seven reviewer checklists matches any alternative in part
    1. Since the constraint this ADR places on them is itself a location rule, location is both
-   the search and the test. It returns **35** files.
+   the search and the test — which is also why the glob is by tree and not by filename. A
+   `.claude/skills/*/SKILL.md` pattern would be the same mistake one level down: a skill's
+   supporting documents are instructions too, and eight of them exist today (including the two
+   `ha-integration-knowledge/platform-*.md` files the `development` and `testing` reviewers are
+   routed to), reachable by no filename a `SKILL.md` pattern names. The extension is the one
+   narrowing kept, and deliberately: the four non-markdown files under `.claude/` are two hooks,
+   a script template and `settings.json` — executed or read as config, never read as
+   instruction — and the whole-root staging covers them regardless. It returns **43** files.
 
 Verdicts below are file-level. Where a Site cell names a section in parentheses, that names the
 passage the row is *about* in a long file; it does not narrow what the verdict covers.
@@ -252,15 +266,18 @@ passage the row is *about* in a long file; it does not narrow what the verdict c
 | `.github/workflows/_ai-draft.yml` | Runs from an issue against a checkout of the default branch; resolves its work file from `CLAUDE.md`'s table, which on that checkout is the merged copy | **Yes**, trivially — no PR ref is in play, so instruction and subject cannot be the same PR-controlled tree |
 | `.github/workflows/_ai-fix.yml` | Checks out the PR head and resolves its instructions from `CLAUDE.md`, `.claude/**` and the work-type tree — all PR-controlled — with no base staging | **Yes**, by routing rather than by staging: a PR that can edit any of those never reaches this worker, per the property recorded above |
 | `docs/reference/ci-pipeline.md` (**Review** bullet) | Prose copy of the watched set, the path-computed trigger, the staging verification, the fail-toward-ON behaviour, and the note's non-verdict status | **Yes** — and it is the copy this decision obliges a future change to the set to update |
-| `docs/reference/ai-authoring.md` — four hits; three name the worker class while carving it out of a rule of their own, the fourth heads **Checklist — authoring a CI worker prompt/config**, which is where a provenance rule for workers would belong | Covers checklist selection, tool grants, turn ceilings, loop caps, untrusted PR content and third-party report containment; says nothing about where a worker's own instructions are read from | **No** — the checklist line is named as follow-up above |
+| `docs/reference/ai-authoring.md` (**Checklist — authoring a CI worker prompt/config**) | Four hits: three name the worker class while carving it out of a rule of their own; the fourth heads the checklist, which is where a provenance rule for workers would belong. The checklist covers selection, tool grants, turn ceilings, loop caps, untrusted PR content and third-party report containment; it says nothing about where a worker's own instructions are read from | **No** — the checklist line is named as follow-up above |
 | `CLAUDE.md` (**Authoring AI artifacts**) | Routes CI worker prompts to `ai-authoring.md` and states no provenance rule of its own | **Yes** — the routing is correct; the rule belongs in the file it routes to |
-| The 35 files part 2 returns: `.claude/agents/*.md` (7), `.claude/skills/*/SKILL.md` (27), `docs/reference/work-types/adr/implement.md` (1) | Every reviewer checklist, every skill a worker prompt can read as instruction — `submit-pr-review` among them, named as a base-staged source by the review prompt — and the one work-type document that exists today | **Yes**, by location, for all 35 — each sits under `.claude/` or `docs/reference/`, both watched, so each is staged and resolved from its base copy on a guard-ON run. This grouped row *is* the standing constraint above, checked: it holds for every such file today, and nothing in CI would say so if a future one landed outside those roots |
+| The 43 files part 2 returns: `.claude/agents/*.md` (7), `.claude/skills/**/*.md` (35 — 27 `SKILL.md` plus 8 supporting documents a skill routes to), `docs/reference/work-types/adr/implement.md` (1) | Every reviewer checklist, every skill a worker prompt can read as instruction — `submit-pr-review` among them, named as a base-staged source by the review prompt — the further reading those skills route to, and the one work-type document that exists today | **Yes**, by location, for all 43 — each sits under `.claude/` or `docs/reference/`, both watched, so each is staged and resolved from its base copy on a guard-ON run. This grouped row *is* the standing constraint above, checked: it holds for every such file today, and nothing in CI would say so if a future one landed outside those roots |
 
 **Out of scope.** `.github/workflows/ai-pipeline.yml` is matched by neither part and is not
 governed here: it triggers the workers and passes SHAs, and reads no instruction of its own —
-it keeps doing exactly that. This record is part 1's seventh hit and is the decision rather
-than a site it governs. The unstaged standards named under *Follow-up* — the two under
-`docs/adl/`, plus `docs/analysis/**` and `docs/design/**` — and the two structural gaps named
-under *What this does not close* are likewise matched by neither part; they keep being read
-from the checkout and from the merge ref respectively, and are named above as a known gap and
-as limits so that their absence from this table is stated rather than silent.
+it keeps doing exactly that. It is a *standard* a checklist routes to, though, which is a
+different question from being a consumer, and it is named as a limit under *What this does not
+close* rather than left to the silence of this list. This record is part 1's seventh hit and is
+the decision rather than a site it governs. The unstaged standards named under *Follow-up* —
+the two under `docs/adl/`, plus `docs/analysis/**`, `docs/design/**` and `docs/plans/**` — and
+the structural gaps named under *What this does not close* are likewise matched by neither
+part; they keep being read from the checkout and from the merge ref respectively, and are named
+above as a known gap and as limits so that their absence from this table is stated rather than
+silent.
