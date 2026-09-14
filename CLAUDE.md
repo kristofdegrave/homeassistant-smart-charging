@@ -103,7 +103,7 @@ runs on.
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
-| `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
+| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
@@ -187,8 +187,8 @@ PR that also edits a workflow file gets `workflow-reviewer` on that file rather 
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
-not a fourth column: each row's own work skill and reviewer agent say which one to read and
-when, so nothing here repeats a rule those files own.
+not a fourth column: each row's own work file or skill, and its reviewer agent, say which one
+to read and when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
 untrusted issue content outside the `docs/` trees each doc drafter's allow-list confines it to,

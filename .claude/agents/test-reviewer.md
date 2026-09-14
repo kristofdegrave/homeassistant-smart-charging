@@ -28,37 +28,21 @@ Always read:
 
 ## Review checklist
 
-**(1) Harness split (ADR-0009)**
-- Pure logic (`tests/modes/`, `tests/engines/`) uses **plain pytest** and imports no
-  `homeassistant.*`. **Flag a pure-logic test that pulls in the HA harness as Major** — it defeats
-  the package boundary that makes the logic HA-free.
-- Adapters, coordinator, entities, and config flow use the **HA harness**
-  (`pytest-homeassistant-custom-component` + `MockConfigEntry`). Flag one tested with plain pytest
-  where it needs a real (mocked) HA runtime.
+**The completion bar for a test suite is the bulk of your checklist, and it is not restated
+here.** `CLAUDE.md`'s **Model selection** table names it in the `testing` row — in that row's
+*How it is reviewed* column and again in its *How the work is done* column, because the author
+self-checked against the same file. Read it and apply every item as a review criterion, at the
+severity it states. You are not applying a second, differently-worded standard.
 
-**(2) Mandated coverage**
-- **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an unmapped
-  raw state. A missing case is a Major finding (ADR-0009 requires all four).
-- **Every numeric role whose catalogued unit column names a unit:** the fifth mandated case — the
-  role states its expected unit set, and the adapter class that defines its read carries a
-  foreign-unit case and an absent-unit case. A missing one is Major. ADR-0040, which extends
-  ADR-0009, is the authority on the trigger, the per-class discharge and the exclusions — read it
-  before judging a role in or out, and before judging a pinned behaviour adequate — it also requires
-  a docstring on a case pinning "used as-is", and is the authority on what that docstring must say.
-- **Engines:** each behavioral row / branch, plus worked examples for the clamp math (grid-safety,
-  floor/cap) and the NF4 voltage fallback.
-- **Coordinator:** happy path, status-gating-to-zero, clamp applied, and the fault path (required
-  adapter `None` → 0 A + `Fault`; grid voltage `None` → not a fault).
-- **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
+**Resolve the bar from the `testing` row whatever dispatched you.** The bar belongs to the
+artifact, not to the label — the bar itself says so — so `tests/**` files reviewed as part of a
+`development` change get the same one. A dispatching row that names no completion bar therefore
+tells you nothing about whether a bar applies: go to the `testing` row and apply what it names.
 
-**(3) Traceability**
-- Test names reference the requirement / UC / ADR criterion they verify (e.g.
-  `test_grid_safety_clamps_to_remaining_headroom`), so a reviewer can check coverage by name.
-
-**(4) Test honesty**
-- Each test genuinely **fails without the implementation** — no vacuous asserts, no asserting on a
-  mock's own return. Mocking is at the HA boundary, not so deep it hides the wiring the test claims
-  to cover. Fixtures don't silently pin values that make the assertion trivially true.
+If that file genuinely cannot be read, you have no criteria — this definition holds none. Say so
+plainly at the top of your summary, report what you could still judge, and end on **address
+items first**, never a clean recommendation (in CI, that is a `remarks`-class result). A review
+that could not read the bar is not a review that found nothing wrong.
 
 ## Output
 
