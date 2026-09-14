@@ -24,6 +24,10 @@ the resolution rules, the entity catalog and the use-cases) and for the design d
 own the service catalog and the build order; and **Architecture Decision Records (ADRs)**, for
 the accepted records the spec is gated on. Read the ones the spec touches, not the trees whole.
 
+Then the completion bar, which the checklist below sends you to — read it before you start
+scoring, not while you write up. It also enumerates the records a slice is ordinarily gated on,
+which is what turns "the ones the spec touches" into a list rather than a judgement call.
+
 ## Review checklist
 
 **The per-type completion bar is the bulk of your checklist, and it is not restated here.**

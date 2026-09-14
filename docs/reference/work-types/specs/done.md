@@ -72,6 +72,13 @@ contradicted rule is a safety behaviour (a single merged clamp instead of the tw
 requires, a fault path that guesses a value instead of forcing 0 A). An engine reaching Home
 Assistant directly, against ADR-0003, is **Major**.
 
+The records a slice is ordinarily gated on, and the list to read the spec against rather than
+the whole log: adapters (0003), package layout (0002/0010), config split (0005),
+coordinator/two-clamps (0006), fault-on-`None` (0007), testing split (0009), native naming
+(0004). This is the enumeration, for both the author and the reviewer; `implement.md`'s
+*Honor the ADRs* rule points here rather than keeping a second copy. It is the usual set, not
+a closed one — an ADR outside it that the slice touches is judged by the same item.
+
 **(5) TDD plan quality.** Tasks are bite-sized (a failing test → minimal impl → green →
 commit), each naming **exact file paths** and a concrete failing test — a task missing either
 is **Major**, since `develop-task` consumes it literally. Each task names its **test boundary

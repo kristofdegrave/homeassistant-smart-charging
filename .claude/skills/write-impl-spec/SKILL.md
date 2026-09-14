@@ -8,8 +8,9 @@ description: Use when authoring an implementation spec and TDD plan for a slice 
 A build slice is specified as two documents that derive from an already-approved slice of the
 project plan: a per-slice design, and the task-by-task TDD plan built from it.
 
-`CLAUDE.md`'s **Model selection** table names the files in the `specs` row. Read and follow
-both of the ones its *How the work is done* column names: the **work file** carries the
+`CLAUDE.md`'s **Model selection** table names the files in the `specs` row. Its *How the work
+is done* column names three — this skill is the entry point, so read and follow the other two.
+The **work file** carries the
 drafting order, the derive-don't-design discipline, the cap on both documents and the rules;
 the **completion bar** carries what must be true before the draft is reviewable, including the
 Verify-live checklist the slice is judged against after deployment. The same bar is what the

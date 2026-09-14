@@ -43,13 +43,13 @@ Step 1 of the contribution workflow, in order:
 4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized tasks
    (failing test → minimal impl → green → commit), each naming exact file paths, the ADR it
    honors, and its test boundary per ADR-0009. Name the integration checkpoints.
-5. **Write the slice's Verify-live checklist** into the design doc — the entity ids to observe
-   once the slice is deployed and the values, with units, expected of them. Fixing it now,
-   before the code exists, is the point: a checklist written after deployment is written from
-   what the build produced rather than from what the slice promised. The bar's item 7, *The
-   slice's Verify-live checklist is present and usable*, judges it, and
-   [definition-of-done.md](../../definition-of-done.md)'s **Verify live** stage is what
-   consumes it.
+5. **Write the slice's Verify-live checklist** into the design doc. The bar's item 7, *The
+   slice's Verify-live checklist is present and usable*, defines what it must contain and
+   judges it. What that means while drafting: write it **now**, before the code exists. That
+   is the whole of the timing rule — a checklist written after deployment is written from what
+   the build produced rather than from what the slice promised, and
+   [definition-of-done.md](../../definition-of-done.md)'s **Verify live** stage, which is run
+   against it once the slice ships, has no other source to fall back on.
 
 Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write the
 code.
@@ -88,6 +88,14 @@ find the doc that owns it and read what it actually says:
   resolves it; take it to the owning doc rather than writing a paragraph here that explains the
   discrepancy away.
 
+This file is the only home for the **author and fix side** of that three-way test — what to do
+with the *text* in front of you: cut it, keep it and open an issue, or stop. The bar's item 2
+holds the reviewer's side — what to do with the *finding*: which severity it carries, and that
+a rule only the plan states is reported as a gap against the owning doc rather than as a
+deletion here. Different actors, different actions, so neither is a duplicate of the other;
+what they share is the one classification both start from, which the bar states as the
+criterion and this file states as the procedure.
+
 **A long plan is not the defect.** A slice whose decisions and task list genuinely run long is a
 correct plan at its natural length, and trimming detail the build needs is a regression. The
 test is never the line count — it is whether a line says something no other doc says.
@@ -102,9 +110,10 @@ test is never the line count — it is whether a line says something no other do
   spec and its source ever disagree, the source wins.
 - **Keep both plan documents capped**, per the section above: decisions, structure and tasks —
   no restated formula, no restated ADR rationale, no narrative that repeats its own task.
-- **Honor the ADRs.** Adapters (0003), package layout (0002/0010), config split (0005),
-  coordinator/two-clamps (0006), fault-on-`None` (0007), testing split (0009), native naming
-  (0004).
+- **Honor the ADRs.** The bar's item 4, *ADR compliance and gates*, enumerates the records a
+  slice is ordinarily gated on and judges compliance with them. What that means while
+  drafting: open each gate in the plan **before** the task it blocks, rather than leaving the
+  review to discover the order is wrong.
 - **Respect the test boundary.** Pure logic → plain pytest; HA-coupled → HA harness. Name it
   per task.
 - **No `custom_components/` code here.** The spec is a planning artifact; code is written by

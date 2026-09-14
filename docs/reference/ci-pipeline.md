@@ -110,10 +110,10 @@ in branch protection's required checks on `main`.
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label — a
   context label alone never triggers anything; only an *action* label (`needs-draft` on an
   issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` and `documentation`
-  are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because no
-  safe path containment exists for untrusted issue content outside
-  `docs/**` (less the work-type tree)/`custom_components/**`/`tests/**`; `documentation` simply
-  isn't wired in yet). A human authors both drafts by hand. The review step is still automated
+  are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because the
+  containment for a drafted label is the one tree that label's drafts write, and `workflow`
+  changes land in the files that instruct future runs — `.github/`, `.claude/`, `CLAUDE.md` —
+  so there is no such tree to confine one to; `documentation` simply isn't wired in yet). A human authors both drafts by hand. The review step is still automated
   for `workflow`, since
   routing reaches it through the changed paths and not only through the issue's context label —
   but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter
