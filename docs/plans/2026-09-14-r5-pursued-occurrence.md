@@ -145,8 +145,12 @@ where the non-resolvable early return's `unreachable=False` fires `DeadlineUnrea
 
 Land it `@pytest.mark.xfail(strict=True, reason="#1178")`. **Strict is the point**: `xfail_strict`
 is not set in `pyproject.toml` and no other `xfail` exists under `tests/`, so a plain `xfail` would
-XPASS silently once #1178's fix lands and nothing would signal that the deviation had closed. Strict
+XPASS silently once the fix lands and nothing would signal that the deviation had closed. Strict
 turns it red instead, which is what makes this a guard rather than a note.
+
+**T13 is what turns it.** The fix is in this plan now (ADR-0042 closed the deferral), so T13 removes
+this marker in the same commit that makes the test pass. If T13 is built before T5, the marker is
+never added — write the test unmarked and let T13's own implementation make it green.
 
 **Implementation.** Guard `math.isinf(required.required_a)` against `None`
 (`coordinator.py:706-724`) and supply the payload. Without this, T2's own case 1 crashes the cycle
@@ -283,6 +287,46 @@ T6, where it does double duty as the evidence for D-7.
 **Anchors:** `requirements.md` R5's AC; `UC05`'s State model ("scoped to the current connected
 session and never preserved across a restart").
 
+## T13 — A SOC-unavailable cycle holds the unreachable clear, and T5's guard turns green
+
+**Tier:** HA harness · `tests/test_coordinator_cycle.py` (the detector), `tests/test_coordinator.py`
+(the cycle)
+
+Builds D-9. Depends on T4, whose split of the same early return it extends, and on T5, whose guard
+it removes.
+
+**It is numbered last and ordered second-to-last.** T13 was added after this plan was approved
+(ADR-0042 closed the deferral it was waiting on), and numbers are never reused, so it takes the next
+free one — but it is a build task and T12 is the integration checkpoint, which stays last. Build
+T13, then run T12.
+
+**Failing test, detector half** (`tests/test_coordinator_cycle.py`, alongside the existing
+`DeadlineUnreachableEdge` cases): `resolve(unreachable=False, outcome_established=False)` after a
+`True` reports **no clear** and leaves the prior flag `True`, so the next
+`resolve(False, outcome_established=True)` reports the clear exactly once. A second case: the same
+call while the prior flag is already `False` still reports no clear.
+
+**Failing test, cycle half** (`tests/test_coordinator.py`): a cycle with the car connected, `ev_soc`
+`None`, the deadline unreachable entering the cycle, and **`Power` or `Off` active** fires no
+`EVENT_DEADLINE_UNREACHABLE_CLEARED`; a disconnected cycle from the same state still fires it once.
+
+**Set it up in `Power` or `Off`, not a solar mode.** `is_soc_gated` is `True` on the Solar,
+SolarOnly and CapTar handlers, so the same test written with a solar mode active never reaches this
+line — it returns on the `ev_soc` fault path and passes while proving nothing. This is the same trap
+T4's own entry names, for the same reason.
+
+**Implementation.** `DeadlineUnreachableEdge.resolve` gains the keyword and the hold (D-9);
+`resolve_deadline_urgency`'s non-resolvable early return carries the fact out alongside the pursued
+occurrence T4 already threads through it; `coordinator.py`'s fire site passes it in. No new
+constant, no new event, no entity.
+
+**Remove T5's `@pytest.mark.xfail(strict=True)` marker in this same commit.** It is `strict=True`,
+so leaving it makes the suite red the moment this lands — the marker's whole purpose.
+
+**Anchors:** ADR-0042 for the rule and for why `is_soc_gated` makes the old one wrong; R5's
+notification acceptance criterion in `requirements.md` for the behaviour; `UC05` for the
+`Unreachable` exits. None restated here.
+
 ## T12 — Integration checkpoint
 
 **Tier:** HA harness · full suite
@@ -302,6 +346,8 @@ session and never preserved across a restart").
   a second at T5), and `project-plan.md`'s Phase-2 status row (`:101`) alongside its E4 and M1 status
   lines, all describe a model this slice replaces. A grep for `urgency_latched` catches none of them,
   which is why this bullet is a list and not a grep.
+- `grep` `tests/` for `xfail`: none. T5's strict marker is the slice's only one and T13 removes it;
+  a surviving marker means either T13 did not land or it landed without turning the guard.
 - The UC05 end-to-end tests pass on **probed** values — assert the actual `required_a`, `urgent` and
   pursued occurrence, never infer from a green run; the accidental-latch-from-a-setup-cycle failure
   is the reason this line is here.
