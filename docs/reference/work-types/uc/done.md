@@ -1,19 +1,10 @@
 # Work types `uc` and `requirement` — the completion bar
 
-**Who reads this.** Both sides of the review, which is why it is its own file rather than a
-section of either one:
-
-- **The author**, as the self-check before requesting review — this is what
-  `definition-of-done.md` means by an artifact's own completion bar, standing in for the
-  builds/lints/tests checklist that doesn't apply to a document.
-- **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
-  carries, so the two sides judge the same document against the same bar.
-
-It states *what must be true of a finished analysis document*. How one is written — numbering,
-the template, the drafting order, the propagation procedure — is the `implement.md` beside this
-file and the one in `../requirement/`. How a review is conducted — what to read first, how to
-anchor findings, the output format, and the checks that are about the *change* rather than the
-document — belongs with the reviewer.
+This file states *what must be true of a finished analysis document*. How one is written —
+numbering, the template, the drafting order, the propagation procedure — is the `implement.md`
+beside this file and the one in `../requirement/`. How a review is conducted — what to read
+first, how to anchor findings, the output format, and the checks that are about the *change*
+rather than the document — belongs with the reviewer.
 
 **Why one file for two labels.** The `uc` and `requirement` rows share one reviewer, and that
 reviewer is dispatched over one tree: `docs/analysis/**`. That tree also holds documents

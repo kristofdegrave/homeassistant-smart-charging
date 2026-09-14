@@ -22,14 +22,15 @@ the architecture, not who does each task.
   by an ADR before a given task starts**.
 - Behavior stays owned by the analysis docs: `control-cycle.md` for the order of operations in one
   cycle, `resolution-rules.md` for the priority-ordered lookups, `entity-catalog.md` for
-  entity/role bindings, `requirements.md`/UC01–UC11 for acceptance criteria. This plan cites those
+  entity/role bindings, `requirements.md`/UC01–UC12 for acceptance criteria. This plan cites those
   documents as the source of truth and does not re-derive their behavior. Where a task names a
   specific formula, threshold, or rule (e.g. the surplus formula, the clamp baseline, an R-number),
   it does so as a **test anchor** — the concrete thing that task's test must reproduce, attributed
   to its owning doc — not as a restatement that this plan owns. If an anchor and its source doc ever
   disagree, the source doc wins.
 - If executing this plan reveals a gap in `system-design.md`, the gap is fixed **there first**
-  (re-running the `write-system-design` review cycle), then this plan resumes — the derivation must
+  (re-running that document's own review against the criteria the `documentation` row of
+  `CLAUDE.md`'s **Model selection** table names), then this plan resumes — the derivation must
   stay mechanical.
 - **This is a planning artifact — no `custom_components/` code is written as part of it.** Approved
   tasks feed `writing-plans`/`test-driven-development` for the actual implementation.
@@ -100,7 +101,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
 | **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence, and the missed-deadline hold read from it, designed but not built; E8 partial — R11's cooldown/hold gating designed, not built |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M1 partial — R5's forecast still passes raw readings to both of its baseline-dependent bounds, the smoothed split being designed but not built; M3 partial — UC10's plug-in reminder designed, not built |
-| **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
+| **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow (UC12); Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
 before the next phase depends on it.
@@ -307,7 +308,7 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1 (cycle) is its only caller today. M2 (vehicle-limit sync)
   consumes its *resolved* output through the materialized `sensor.smart_charging_active_soc_limit`
   the Coordinator publishes, not by calling this engine; M3 would consume it the same way for
-  UC10's below-limit check once that reminder is built (project-plan §M3) — neither Manager holds
+  UC10's below-limit check once that reminder is built (see M3 below) — neither Manager holds
   the Coordinator-threaded step-up/reserve context the resolution composes
   (ADR-0011; system-design §5.2/§5.3).
 
@@ -335,7 +336,7 @@ it is wired to its callers).
   once the hold is built, a hold in effect skipping both tests while still pinning urgency.
 - **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
-  lead-time window once that reminder is built (project-plan §M3).
+  lead-time window once that reminder is built (see M3 below).
 
 **E5 — Billing-Protection Engine + Peak-Demand Tracker** *(both stateful)*
 - **Service:** Engine, V6 — two **stateful** Engines: Billing-Protection (R3's breach timer and the
@@ -479,8 +480,8 @@ it is wired to its callers).
   deadline (E4) → resolve SOC (E3) → available modes (E9) → escalated headroom (E5) + C4 headroom
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
-  clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
-  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
+  clamp (E5) → readout headroom (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1
+  are each called twice per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
   pursued occurrence, once built); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
@@ -623,7 +624,7 @@ it is wired to its callers).
   ADR-0007 path.
 - **Integration checkpoint:** ⎔ dashboard (C5) reads these read-only.
 
-**C4 — Install-time config flow / options flow**
+**C4 — Install-time config flow / options flow (UC12)**
 - **Service:** Client, V14 (ADR-0003/0005).
 - **Status:** shipped — `config_flow.py`; tests in `tests/test_config_flow.py` and
   `tests/test_config_flow_translations.py`. Its step structure was decided after this task was
@@ -632,7 +633,8 @@ it is wired to its callers).
   ADR-0005) and the reload it triggers (ADR-0008) are unchanged.
 - **Builds:** maps adapter roles, declares capabilities,
   sets install-time thresholds (data); tunes options anytime; triggers reload on change (ADR-0008).
-  Holds no orchestration — writes only through the Store.
+  Holds no orchestration — writes only through the Store. Realizes **UC12** (the capability-gated
+  topic steps ADR-0027 fixed), and owns no service, as system-design §6 records.
 - **Depends on:** RA3 (Store data/options write), RA1 factory (role list to map). **ADR gate:** none
   new (its owned-entity *creation* is C2's concern; C4 writes config buckets).
 - **Testable on its own:** HA harness — a full flow produces a valid config entry; an options change
@@ -679,7 +681,11 @@ it is wired to its callers).
 
 > **⎔ Phase 4 / system checkpoint:** the full loop runs — timer → coordinator → clamps → write;
 > owned entities editable via dashboard and config flow; notifications and vehicle-limit sync fire on
-> their triggers — validated end-to-end against every UC01–UC11 acceptance criterion. *Met per
+> their triggers — validated end-to-end against every UC01–UC11 acceptance criterion. UC12 is
+> deliberately outside this range: its acceptance criteria are about the flow's step structure,
+> gating and validation, which no assembled-loop suite observes — so C4's own harness tests
+> validate it. (That holds for all three of its flows, not only install: reconfigure and options
+> run against a live entry with the loop assembled.) *Met per
 > slice:* the end-to-end suites (`tests/test_solar_end_to_end.py`, `test_captar_end_to_end.py`,
 > `test_deadline_soc_management_end_to_end.py`, `test_notifications_end_to_end.py`) each validate
 > their slice's use-cases against the assembled loop; there is no single suite asserting UC01–UC11
@@ -750,7 +756,7 @@ from the retired functional sequence.
   Billing-Protection + Peak-Demand Tracker → E5; Grid-Safety → E6; Signal-Conditioning → E7;
   Cycle-Invariant → E8; Capability-Gate → E9; Charging Coordinator → M1; Vehicle-Limit Manager → M2;
   Notification Manager → M3; Control-interval timer → C1; Owned control entities → C2; Diagnostic
-  outputs → C3; Config/options flow → C4; Dashboard (UC11) → C5; External-event sources → C6.
+  outputs → C3; Config/options flow (UC12) → C4; Dashboard (UC11) → C5; External-event sources → C6.
   Resources are external and built by no task (noted in §2). Two mappings are one-task-to-no-module
   rather than one-task-to-one-module, and say so at the task: `Off` (part of E1) is a Coordinator
   stop branch, and C6 is realized as M2/M3's own subscription surface. Neither drops a service or

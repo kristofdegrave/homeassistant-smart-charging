@@ -1,9 +1,8 @@
 # Work type: `documentation` — the completion bar
 
 This file is the `documentation` row's completion bar in `CLAUDE.md`'s **Model selection**
-table. Like every completion bar it is read by both sides — the author, as the self-check before
-requesting review, and the reviewer, as the bulk of the review criteria — and like this label's
-work file it routes, because the label's two documents are judged against disjoint criteria.
+table. Like this label's work file it routes rather than instructs, because the label's two
+documents are judged against disjoint criteria.
 
 ## Which bar applies
 
@@ -26,5 +25,10 @@ an "if" in every item, and an item that applies to half its artifact is one a re
 skim.
 
 That rests on `docs/design/` holding exactly one document per branch. **A third document there
-means a third branch and a third bar** — otherwise it is silently covered by neither, matched by
-neither route above and judged by nothing.
+means a third branch**, and the branch is not finished until four things are true: a third bar,
+routed to from here; a third work file, routed to from [`implement.md`](implement.md) beside
+this one; [`review.md`](review.md), which today says one reviewer covers *both* of the label's
+documents and would then cover three; and `CLAUDE.md`'s **Document structure** section, whose
+`docs/design/` block enumerates them. Stop after the first two and the document is silently
+covered by neither existing branch — matched by neither route above and judged by nothing —
+while the shared reviewer goes on asserting there are two.
