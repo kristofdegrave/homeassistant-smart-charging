@@ -68,16 +68,18 @@ unbranched label's directory.
 
 ## When two labels share a bar
 
-Two labels may point at **one** `done.md` rather than each having their own. The rule that earns
-it is stated in `CLAUDE.md`'s **Model selection** section: the labels share a reviewer, and that
-reviewer is dispatched over a tree **wider than either label**, so a bar per label would leave
-the documents belonging to neither with none.
+Two labels may point at **one** `done.md` rather than each having their own. **Whether a given
+pair may is `CLAUDE.md`'s Model selection section to decide** — it states the rule that earns
+it, and this document does not repeat it: a rule restated here, however carefully attributed,
+is a second copy that drifts.
 
-The worked case is `requirement/done.md`, which is a route to `uc/done.md` and restates nothing
-of it. Each label still keeps its own directory and its row still names a path inside that
-directory, so the row stays self-contained; only the file's contents are shared. A shared
-reviewer on its own does not earn this — `documentation`'s two branches share a reviewer and
-still have a bar each, because that reviewer's tree holds exactly one document per branch.
+What the shape looks like where it applies: the worked case is `requirement/done.md`, which is
+a route to `uc/done.md` and restates nothing of it. Each label still keeps its own directory
+and its row still names a path inside that directory, so the row stays self-contained; only
+the file's contents are shared.
+
+Two branches of one label are a different case, not this one — see **When a label branches**
+above.
 
 ## What a file in this tree may say
 
