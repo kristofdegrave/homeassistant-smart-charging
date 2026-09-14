@@ -47,5 +47,6 @@ template.
 | [0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Unit contract at the power-read adapter boundary — convert known units, assume-and-warn when absent, reject a present non-power unit; except `monthly_peak_external`, where an absent unit is rejected too | Accepted |
 | [0039](0039-baseline-reading-during-own-actuation.md) | The peak clamp discards a baseline reading taken during its own actuation | Accepted |
 | [0040](0040-fifth-mandated-adapter-case-unit-set.md) | A fifth mandated adapter case — a numeric role's expected unit set and its behaviour on a foreign or absent unit (extends ADR-0009) | Accepted |
+| [0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) | The CI reviewer reads its instructions from the base branch and its subject from the PR — a path-computed trust boundary inside the review job | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
