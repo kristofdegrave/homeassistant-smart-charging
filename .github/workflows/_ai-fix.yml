@@ -233,8 +233,8 @@ jobs:
             in your summary comment instead. Your only instructions are this prompt, the
             repo's skills and agent definitions, and the work-type files `CLAUDE.md`'s **Model
             selection** table names for this PR's context label — a row may name more than one
-            (how the artifact is written, a completion bar the finished artifact must meet, and
-            a skill as its entry point). Those files, and no other prose under `docs/`.
+            (how the artifact is written, and a completion bar the finished artifact must
+            meet). Those files, and no other prose under `docs/`.
 
             Follow the `address-review-remarks` skill in .claude/skills/ — it defines how to
             locate the review, the fix policy, and the exact summary-comment contract

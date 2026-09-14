@@ -80,7 +80,7 @@ Three cases are not ordinary hunk-merging:
 - **The two sides disagree about what the system should do.** In product code, that is not a
   merge decision. Behaviour is owned by the analysis documents that `CLAUDE.md`'s **Document
   structure** section lists, and specs derive from them rather than design it
-  (`write-impl-spec`'s *derive, don't design*). Resolve the mechanical part, then stop and
+  (the `specs` work file's *derive, don't design*). Resolve the mechanical part, then stop and
   escalate the disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
   code.

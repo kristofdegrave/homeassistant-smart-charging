@@ -1,6 +1,6 @@
 ---
 name: test-reviewer
-description: Use to review a test suite or test change under tests/ before it is committed. Provides the fresh, separate Opus review the write-tests skill requires, checking the ADR-0009 harness split, edge-case coverage, and requirement traceability. Read-only; reports issues by severity and never edits files.
+description: Use to review a test suite or test change under tests/ before it is committed. Provides the fresh, separate Opus review the `testing` work type requires, checking the ADR-0009 harness split, edge-case coverage, and requirement traceability. Read-only; reports issues by severity and never edits files.
 tools: Read, Glob, Grep
 model: opus
 ---

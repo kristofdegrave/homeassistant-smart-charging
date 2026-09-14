@@ -173,8 +173,8 @@ one document inside it that carries its criteria, and both are right — a docum
 become subject matter by sitting in a reviewed tree. Where one and the same path is genuinely
 both, subject matter wins and it stays named; the route is then redundant, not forbidden.
 
-Some categories sit on that boundary often enough to have a recorded answer, so an author
-meeting one does not have to re-derive it:
+One category sits on that boundary often enough to have a recorded answer, so an author
+meeting it does not have to re-derive it:
 
 - **A reviewer agent's "what to read first" list is its checklist**, so it cannot simply be
   emptied of paths — a reviewer agent with no paths is not reusable but inert. The split
@@ -197,16 +197,6 @@ meeting one does not have to re-derive it:
   `description`. A generic reviewer is reached by **explicit dispatch** instead — the caller
   names the checklist, resolved from `CLAUDE.md`'s **Model selection** table — so it can say
   nothing about what it reviews and still be dispatched to review it.
-- **A skill whose whole purpose is one artifact type this project defines** — the `write-*`
-  family, each written for a document type that exists only because this project defines it,
-  and `develop-task`, written for a task as this project's implementation plans define one —
-  does not gain reusability by being genericised, and the rule does not ask it to be. A
-  `write-use-case` skill has nothing to be in a repository with no use-case documents. So the
-  artifact type it produces, the tree it writes into, and the template it drafts against are
-  its subject matter and stay named. What still routes is everything it reads to know *how the
-  project works around that artifact* — the review protocol, the lifecycle, the model tiering,
-  the reference docs it is not itself about. The rule is near-vacuous for these skills, which is
-  the decision, not an oversight.
 
 **Permanent scope: as written or changed, never as a sweep.** This paragraph states the scope
 of both rules on this page — the one above and the tracker rule below, which shares it rather

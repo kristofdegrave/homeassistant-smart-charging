@@ -7,7 +7,7 @@ description: Python anti-pattern checklist for the Smart Charging Home Assistant
 
 A short checklist of **general-Python** mistakes to catch before a change under
 `custom_components/smart_charging/` is committed, and while reviewing one. Test authoring has
-its own rules — `write-tests` and `test-reviewer` own those.
+its own rules — the `testing` work type's own files own those.
 
 Scoped deliberately: this file carries only rules that are **not** owned elsewhere — HA
 platform conventions belong to `ha-integration-knowledge`, everything about the event loop to

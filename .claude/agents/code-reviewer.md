@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Use to review a code change under custom_components/smart_charging/ (and its tests) before it is committed or merged. Provides the fresh, separate Opus review the develop-task skill requires, tuned to this project's ADR conventions. Read-only; reports issues by severity and never edits files.
+description: Use to review a code change under custom_components/smart_charging/ (and its tests) before it is committed or merged. Provides the fresh, separate Opus review the `development` work type requires, tuned to this project's ADR conventions. Read-only; reports issues by severity and never edits files.
 tools: Read, Glob, Grep
 model: opus
 ---

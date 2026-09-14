@@ -7,7 +7,9 @@ body:
     attributes:
       value: |
         This form applies the `adr` context label. Add `needs-draft` yourself afterwards
-        to trigger the AI documentation pipeline, which follows the `write-adr` skill.
+        to trigger the AI documentation pipeline, which resolves how an ADR is written from
+        CLAUDE.md's Model selection table. To draft it in a local session instead, run
+        `/implement` on this issue once it exists.
 
         Before filing: is this decision ADR-worthy? Write one when the choice is about
         structure that would be expensive to reverse or materially constrains future

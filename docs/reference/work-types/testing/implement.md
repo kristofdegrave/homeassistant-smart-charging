@@ -17,7 +17,7 @@ elsewhere:
   alongside this file in the same row and again in that row's review column. The author checks
   it before requesting review and the reviewer applies it, so it is written once for both.
 
-It is also what `develop-task` routes its TDD loop to when that loop reaches the test it is
+It is also what the `development` work file routes its TDD loop to when that loop reaches the test it is
 about to write, and the bar goes with it: a test written inside a development task is the same
 artifact as one written under a `testing` issue, and is judged against the same bar.
 
