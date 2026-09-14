@@ -30,6 +30,11 @@ exist, so an absent file is a fact about the row, not a gap in this tree.
 
 ## The three roles
 
+Which filename carries which role is `CLAUDE.md`'s cell grammar to state, and it does — a
+directory holds `implement.md`, `done.md` and, where one exists, `review.md`. What this table
+adds is what each of them holds and who reads it; if the two ever disagree about the names, this
+one is the copy that shrinks.
+
 | File | What it holds | Who reads it |
 |---|---|---|
 | `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author, and a CI drafting run. |
@@ -74,23 +79,24 @@ pair may is `CLAUDE.md`'s Model selection section to decide** — it states the 
 it, and this document does not repeat it: a rule restated here, however carefully attributed,
 is a second copy that drifts.
 
-What the shape looks like where it applies: the worked case is `requirement/done.md`, which is
-a route to `uc/done.md` and restates nothing of it. Each label still keeps its own directory
-and its row still names a path inside that directory, so the row stays self-contained; only
-the file's contents are shared.
+What the shape looks like where it applies: each label still has its own directory with its own
+`done.md` in it, and one of those files is a route to the other rather than a copy of it. Only
+the contents are shared — no label loses its directory, and nothing moves out of one.
 
 Two branches of one label are a different case, not this one — see **When a label branches**
 above.
 
 ## What a file in this tree may say
 
-These documents do not travel between repositories the way a skill or an agent definition does,
-so `ai-authoring.md`'s routing rules bind them only in part: they may name this project's paths,
-its documents and its tracker commands directly. That reference states exactly which of its
-checklist items still apply and which are carved out — read it there rather than inferring the
-line from examples here.
+**A file in a label's directory** does not travel between repositories the way a skill or an
+agent definition does, so `ai-authoring.md`'s routing rules bind it only in part: it may name
+this project's paths, its documents and its tracker commands directly. That reference states
+exactly which of its checklist items still apply to such a file and which are carved out — read
+it there rather than inferring the line from examples here, and note that the carve-out it
+grants is scoped to those directories. This README is not one of them: it is an ordinary
+reference document under `docs/reference/`, outside that rule's subject matter altogether.
 
-Two rules do apply, in full:
+Two rules bind every file in this tree, in full, this README included:
 
 - **One source of truth per fact.** A rule stated in the bar is not restated in the work file;
   the work file points at the bar's item by number and title and says what it means while

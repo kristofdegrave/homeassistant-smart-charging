@@ -128,10 +128,12 @@ completion-bar paths derive from the label — and, where the row branches, from
 cell that says *by convention* and names the directory has named the files: a directory holds
 `implement.md`, the work file, and `done.md`, the completion bar — plus `review.md` where a
 reviewer-only file exists. A directory a cell names this way is relative to
-`docs/reference/work-types/`, whose `README.md` owns the rest of that tree's shape: what a
-branch directory means, when a label gets one, and what a file at the label's own level binds.
-The `documentation` row is written this way today, and the other rows can collapse to it
-unchanged in meaning.
+`docs/reference/work-types/`, and a row that branches names one such directory per branch, as
+`branch <label>/<branch>` — a fifth label beside the four roles above, naming a directory where
+those name files. The `README.md` in that tree owns the rest of its shape: what a branch
+directory means, when a label gets one, and what a file at the label's own level binds. The
+`documentation` row is written this way today, and the other rows can collapse to it unchanged
+in meaning.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
@@ -151,8 +153,8 @@ where the branches' criteria are disjoint, rather than becoming one bar with an 
 item. That rests on the reviewed tree holding exactly one document per branch — a third
 document in `docs/design/` means a third branch and a third bar, or it is silently covered by neither.
 
-**A row is self-contained.** Nothing outside the row, this section's cell grammar, and the
-change's own files is needed to know what to delegate to. The grammar is what resolves a *by
+**A row resolves from this section alone.** Nothing outside the row, this section's cell
+grammar, and the change's own files is needed to know what to delegate to. The grammar is what resolves a *by
 convention* cell to its files, and it sits in this file, loaded with the row rather than fetched
 — which is why it counts as part of the row for this invariant and a reference document never
 does.
