@@ -102,7 +102,7 @@ runs on.
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | Files by convention, in the branch directory. For `docs/design/system-design.md`: branch `documentation/system-design`; entry point `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: branch `documentation/project-plan`; entry point `.claude/skills/write-project-design/SKILL.md`. | opus | Completion bar by convention, in the same branch directory the *How the work is done* cell names for the changed file; checklist `.claude/agents/system-design-reviewer.md`. | opus |
+| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
@@ -119,21 +119,14 @@ reads that frontmatter.
 the **work file** holds how the artifact is written; the **completion bar** holds what must be
 true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
 file by name through; the **checklist** holds what only a reviewer can check — how to read the
-change, and the checks about the change rather than the artifact. Where a row also splits on
-*which* file the change touches — `documentation` does — each branch is its own sentence, so
-`;` never has to mean two things in one cell.
+change, and the checks about the change rather than the artifact.
 
-**A cell may name a directory instead of files, "by convention".** The work-file and
-completion-bar paths derive from the label — and, where the row branches, from the branch — so a
-cell that says *by convention* and names the directory has named the files: a directory holds
-`implement.md`, the work file, and `done.md`, the completion bar — plus `review.md` where a
-reviewer-only file exists. A directory a cell names this way is relative to
-`docs/reference/work-types/`, and a row that branches names one such directory per branch, as
-`branch <label>/<branch>` — a fifth label beside the four roles above, naming a directory where
-those name files. The `README.md` in that tree owns the rest of its shape: what a branch
-directory means, when a label gets one, and what a file at the label's own level binds. The
-`documentation` row is written this way today, and the other rows can collapse to it unchanged
-in meaning.
+**No row branches in the *How the work is done* column.** A work type whose work splits between
+two artifacts names one work file and one completion bar like every other row, and those files
+route onward inside `docs/reference/work-types/` — `documentation` is the case, and
+`work-types/README.md` describes the shape. What a row may still split by is a **tree**, in the
+review column, where the split is what the union routing below is for and so cannot move into a
+file.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
@@ -148,21 +141,15 @@ bar per label would leave those with none. Each row still names a path in its ow
 directory, so the row stays self-contained and label-keyed; the `requirement` one routes to the
 shared file rather than restating it. A shared reviewer alone does not earn this: the argument
 is that the reviewed tree is wider than either label, so splitting the bar would leave part of
-it unjudged. Conversely **one row may name two bars**, as `documentation` does: bars split
-where the branches' criteria are disjoint, rather than becoming one bar with an "if" in every
-item. That rests on the reviewed tree holding exactly one document per branch — a third
-document in `docs/design/` means a third branch and a third bar, or it is silently covered by neither.
+it unjudged. The converse — one work type needing more than one bar, because its artifacts are
+judged on disjoint criteria — is settled inside its own completion bar and never in the row:
+`documentation`'s bar routes to one per document.
 
-**A row resolves from this section alone.** Nothing outside the row, this section's cell
-grammar, and the change's own files is needed to know what to delegate to. The grammar is what resolves a *by
-convention* cell to its files, and it sits in this file, loaded with the row rather than fetched
-— which is why it counts as part of the row for this invariant and a reference document never
-does.
-
-The `documentation` row in particular splits on which `docs/design/` file the change touches,
-not on the issue body. Reviewer dispatch additionally
-resolves the linked issue's label, per the union rule below — that is the one input outside
-the row, and it only ever adds a reviewer.
+**A row is self-contained.** Nothing outside the row and the change's own files is needed to
+know what to delegate to — a row names its files outright, and where a work type splits further
+that is settled inside those files rather than by anything a run has to resolve here. Reviewer
+dispatch additionally resolves the linked issue's label, per the union rule below — that is the
+one input outside the row, and it only ever adds a reviewer.
 
 **A review column may name more than one agent.** Each is applied to the changed files under
 its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each

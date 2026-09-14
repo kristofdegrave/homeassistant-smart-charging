@@ -47,8 +47,10 @@ agents generic, and it is that pass which adds these files.
 
 ## When a label branches
 
-A row may split on **which file the change touches** rather than on the label alone. Such a
-label gets one subdirectory per branch, named for the branch:
+A work type may cover more than one artifact, written differently and judged differently. Such
+a label keeps the ordinary role files at its **own level** — that is what its row names, exactly
+like an unbranched label — and those files route onward to one subdirectory per branch, named
+for the branch:
 
 ```text
 docs/reference/work-types/<label>/<branch>/<role>.md
@@ -59,15 +61,20 @@ docs/reference/work-types/<label>/<branch>/<role>.md
 
 The level a file sits at is what says who it binds:
 
-- a file **inside a branch directory** applies to that branch only;
-- a file at the **label's own level**, beside the branch directories, applies to every branch.
+- a file at the **label's own level** applies to every branch — and, for a role that is split,
+  it is where the branch condition and the route to each branch's file live;
+- a file **inside a branch directory** applies to that branch only.
 
-That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic:
-one role can be shared across a label's branches while another is split, and the level a file
-sits at is the whole of how that is expressed. **Which** of a branching label's roles are shared
-and which are split is that label's own question, not this document's: its row decides it, under
-the rules `CLAUDE.md`'s **Model selection** section states. This document says only where a file
-of each kind goes once that is settled.
+That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic: one
+role can be shared across a label's branches while another is split, and the level a file sits
+at is the whole of how that is expressed. A shared role is simply one file at the label's own
+level with no branch copies beneath it — which is what `review.md` will be for `documentation`,
+whose reviewer covers both branches. **Which** of a label's roles are split is that label's own
+question, settled in its files rather than here; this document says only where a file of each
+kind goes.
+
+The row is unaffected by any of this: it names the label's own `implement.md` and `done.md`, and
+a run that follows them reaches the branch without the row ever mentioning one.
 
 Because the role names never change with the depth, every leaf reads the same as every
 unbranched label's directory.

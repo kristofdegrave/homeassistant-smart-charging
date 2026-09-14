@@ -5,19 +5,19 @@ dynamic architecture — derived from the behaviour already drafted under `docs/
 Juval Löwy's IDesign Method. Full rationale for why this phase exists and where it sits in the
 pipeline: `docs/plans/2026-07-07-lowy-system-design-method.md`.
 
-This file is one of the two work files the `documentation` row names in `CLAUDE.md`'s **Model
-selection** table — the one for a change touching `docs/design/system-design.md`. A change
-touching `docs/design/project-plan.md` has its own work file and its own bar, in the sibling
-`project-plan/` directory, and the row is what picks between them.
+This file is the `documentation` work type's work file for a change touching
+`docs/design/system-design.md`, reached from the label's own `implement.md` one level up, which
+is what the row names. A change touching `docs/design/project-plan.md` has its own work file and
+its own bar, in the sibling `project-plan/` directory.
 It carries **how the system design is written** and nothing else. Two things deliberately sit
 elsewhere:
 
 - The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
   contribution workflow and is not re-derived here.
 - *What must be true of a finished system design* is the completion bar,
-  [`done.md`](done.md), named alongside this file in the same row
-  and again in that row's review column. The author checks it before requesting review and the
-  reviewer applies it, so it is written once for both.
+  [`done.md`](done.md) beside this file, which the label's own `done.md` routes to for this
+  branch. The author checks it before requesting review and the reviewer applies it, so it is
+  written once for both.
 
 **The core discipline of the Method: use cases validate the decomposition, they never drive
 it.** The bar's item 1, *Volatility, not function, drives the decomposition*, states it and
@@ -59,9 +59,8 @@ wearing this method's vocabulary.
    one-to-one design smell. What that means while drafting: a use case that maps cleanly onto a
    single service sends you back to steps 2–3 rather than forward.
 
-Once `system-design.md` is approved and merged, the project plan is derived from it — the
-row's other branch, and [the `project-plan` branch's own work file](../project-plan/implement.md) in this
-directory.
+Once `system-design.md` is approved and merged, the project plan is derived from it — the other
+branch of this work type, and [its own work file](../project-plan/implement.md).
 
 ## Rules
 

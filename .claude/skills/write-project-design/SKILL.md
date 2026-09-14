@@ -9,14 +9,14 @@ A project plan is the implementation task breakdown, build order and per-service
 derived mechanically from an approved system design. It consumes that architecture; it never
 decomposes services itself.
 
-`CLAUDE.md`'s **Model selection** table resolves the files in the `documentation` row. That row
-splits on which document the change touches: take the branch for the **project-plan** document,
-and read and follow the **work file** and the **completion bar** in the directory that branch
-names — the roles inside it are fixed by convention. The work file carries the derivation order,
-the ADR-flagging step and the task-list shape; the completion bar carries what must be true
-before the draft is reviewable, including that the plan is judged against the system design
-rather than on its own. The same bar is what the review applies, so satisfying it is
-not a separate exercise from passing review.
+`CLAUDE.md`'s **Model selection** table names the files in the `documentation` row — one work
+file and one completion bar, as in every other row. Both route onward: the label covers two
+documents, and each file says which of its per-document files applies to the change in hand.
+Follow them through to the project plan's own pair, and follow those. The work file carries how the
+document is written; the completion bar carries what must be true before the draft is
+reviewable, and is also what the review applies, so satisfying it is not a separate exercise
+from passing review. A change touching the system design instead follows that branch, through the same two
+files.
 
 The lifecycle around the draft — issue, worktree, PR, review, fix, merge — is the contribution
 workflow's, routed from `CLAUDE.md`'s **Contribution workflow** section. The work file states

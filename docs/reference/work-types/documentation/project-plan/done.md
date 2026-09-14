@@ -15,10 +15,10 @@ order, the ADR flagging step, the task-list shape — is
 read first, how to anchor findings, the output format, and the checks about the *change* rather
 than the document — belongs with the reviewer.
 
-**This bar is for `docs/design/project-plan.md` only.** The `documentation` row's other branch,
-`docs/design/system-design.md`, has its own bar —
-[the `system-design` branch's own bar](../system-design/done.md). Why that row names two bars rather than one is
-row grammar, and `CLAUDE.md`'s **Model selection** section owns it.
+**This bar is for `docs/design/project-plan.md` only.** The other branch,
+`docs/design/system-design.md`, has [its own bar](../system-design/done.md). Why this work type
+has a bar per document, and which one a change falls under, is stated once in the label's own
+[`done.md`](../done.md) — the file that routed you here.
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a task
 breakdown's correctness is judged by whether it follows the architecture it derives from, not by

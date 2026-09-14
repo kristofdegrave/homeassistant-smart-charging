@@ -46,7 +46,7 @@ a label means moving a directory, not editing a line, for each label that has on
 `adr`, `documentation`, `requirement`, `specs`, `testing` and `uc`), and then fixing any
 cross-directory route into it, of which there is one: `requirement/done.md` routes to the
 shared completion bar in `uc/`. The shape of that tree — the roles a label's directory holds,
-and the per-branch subdirectories a row that splits on the changed file gets — is
+and the per-branch subdirectories a label whose work covers more than one artifact gets — is
 [work-types/README.md](work-types/README.md)'s; what belongs here is only that the label is the
 directory name, so a rename moves a directory. Adding a label means updating those eight — the
 work-types directory only where the new label gets a work file, which is not a given; renaming one additionally means updating any form

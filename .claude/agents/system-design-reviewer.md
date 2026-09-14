@@ -28,11 +28,11 @@ scoring, not while you write up.
 
 **The per-type completion bar is the bulk of your checklist, and it is not restated here.**
 `CLAUDE.md`'s **Model selection** table names it in the `documentation` row's *How it is
-reviewed* column. That row splits on which document the change touches, and so does the bar:
-take the branch for each changed file and apply **that** file's bar. Apply every item in it as a
-review criterion, at the severity that item states. It is the same bar the author self-checked
-against before requesting review — that is the point of it being one file per branch: you are
-not applying a second, differently-worded standard.
+reviewed* column. That bar routes: it states which of its per-document bars applies to which
+changed file, so follow it to the one for each file you were handed and apply **that** bar's
+every item as a review criterion, at the severity the item states. It is the same bar the author
+self-checked against before requesting review — you are not applying a second,
+differently-worded standard.
 
 Two checks are yours alone, because they are about the **change** rather than about the
 finished documents, and an author checking their own draft cannot make them. Everything else —
