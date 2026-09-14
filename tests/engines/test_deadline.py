@@ -955,3 +955,129 @@ def test_should_release_a_future_occurrence_when_the_deadline_resolves_to_no_dea
     assert result.required_a is None
     assert result.urgent is False
     assert result.pursued_occurrence is None
+
+
+# --- R5 missed-deadline hold: the backstop (issue #1187, T3) -------------------------------
+#
+# "It ends ... as a backstop, when the occurrence FOLLOWING the pursued one elapses, or 24
+# hours pass since the pursued occurrence, whichever comes first -- so a hold never outlives
+# one deadline cycle" (requirements.md R5; resolution-rules.md's release list). The 24-hour arm
+# is not belt-and-braces: R14 lets any day resolve to "no deadline", so a following occurrence
+# does not always exist, and this is the only release peculiar to a hold -- without it an `Off`
+# baseline that can never hand back would keep the occurrence pursued indefinitely.
+
+
+def test_should_keep_the_hold_when_neither_backstop_arm_has_fired():
+    """The following occurrence is still ahead and less than 24 h have passed since the
+    pursued one, so the hold stands (resolution-rules.md's release list)."""
+    # Arrange -- 1 h since the pursued 16:00 occurrence; the following one is 23 h out.
+
+    # Act
+    result = resolve_required_current(
+        **HOLD_KWARGS,
+        deadline_at=HOLD_NEXT_OCCURRENCE,
+        following_occurrence=HOLD_NEXT_OCCURRENCE,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.urgent is True
+    assert result.pursued_occurrence == HOLD_PURSUED
+
+
+def test_should_release_the_hold_when_the_following_occurrence_elapses():
+    """The occurrence arm of the backstop, fired well inside 24 h so it is the arm under
+    test: a 06:00 departure the next morning, now 07:00 -- 15 h since the pursued occurrence,
+    so the 24-hour arm cannot be what releases it."""
+    # Arrange
+    now = datetime(2026, 7, 22, 7, 0)
+    following = datetime(2026, 7, 22, 6, 0)
+
+    # Act
+    result = resolve_required_current(
+        **{**HOLD_KWARGS, "now": now},
+        deadline_at=datetime(2026, 7, 23, 6, 0),
+        following_occurrence=following,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.urgent is False
+    assert result.pursued_occurrence is None
+
+
+def test_should_release_the_hold_on_the_24_hour_arm_when_no_following_occurrence_resolves():
+    """THE CASE AN IMPLEMENTATION WITHOUT THE SECOND ARM GETS WRONG.
+
+    R14 lets any day resolve to "no deadline" (requirements.md R14), so there is not always a
+    following occurrence to wait for. Without the 24-hour bound such a hold would run until
+    state of charge or a disconnect ended it, and R5's "never outlives one deadline cycle"
+    would be conditional on there being a deadline tomorrow.
+    """
+    # Arrange -- exactly 24 h since the pursued occurrence, and no following one resolves.
+    now = datetime(2026, 7, 22, 16, 0)
+
+    # Act
+    result = resolve_required_current(
+        **{**HOLD_KWARGS, "now": now},
+        deadline_at=None,
+        following_occurrence=None,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.urgent is False
+    assert result.pursued_occurrence is None
+
+
+def test_should_release_the_hold_on_the_24_hour_arm_when_the_following_occurrence_is_later():
+    """'Whichever comes first': a following occurrence beyond the 24-hour bound must not
+    postpone the release past it (resolution-rules.md's release list)."""
+    # Arrange -- 25 h since the pursued occurrence; the following one is still 13 h out.
+    now = datetime(2026, 7, 22, 17, 0)
+    following = datetime(2026, 7, 23, 6, 0)
+
+    # Act
+    result = resolve_required_current(
+        **{**HOLD_KWARGS, "now": now},
+        deadline_at=following,
+        following_occurrence=following,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert result.urgent is False
+    assert result.pursued_occurrence is None
+
+
+def test_should_count_the_24_hour_arm_as_an_absolute_duration_across_spring_forward():
+    """The 24-hour arm spans midnight by construction, so it straddles both DST transitions --
+    the exact hazard `_absolute_hours_between` exists for. Across spring-forward the wall clock
+    reads 24 h where only 23 h have elapsed; releasing there would cut the hold an hour short
+    of the bound R5 states."""
+    # Arrange -- 20:00 the evening before the transition to 20:00 the evening after: 24 h by
+    # wall clock, 23 h absolute, because 2026-03-29 02:00 CET jumps to 03:00 CEST.
+    pursued = datetime(2026, 3, 28, 20, 0, tzinfo=BRUSSELS)
+    now = datetime(2026, 3, 29, 20, 0, tzinfo=BRUSSELS)
+
+    # Act
+    result = resolve_required_current(
+        deadline_at=None,
+        following_occurrence=None,
+        now=now,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=100.0,
+        voltage=250.0,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        pursued_occurrence=pursued,
+    )
+
+    # Assert
+    assert result.urgent is True
+    assert result.pursued_occurrence == pursued

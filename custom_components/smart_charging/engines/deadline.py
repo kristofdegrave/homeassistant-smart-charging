@@ -33,6 +33,15 @@ It is not decoration: with a zero margin the engage threshold collapses onto the
 threshold and UC05's `Urgent` band disappears entirely.
 """
 
+MISSED_DEADLINE_HOLD_BACKSTOP_HOURS = 24.0
+"""R5's unconditional bound on a missed-deadline hold, in hours since the pursued occurrence.
+
+The second arm of the backstop, and the one that makes "a hold never outlives one deadline
+cycle" a guarantee rather than a hope (requirements.md R5, resolution-rules.md's release list):
+R14 lets any day resolve to "no deadline", so the FOLLOWING occurrence the first arm waits for
+does not always exist. A domain rule, not a configurable value.
+"""
+
 
 def resolve_departure_deadline(
     external_configured: bool,
@@ -176,6 +185,7 @@ def resolve_required_current(
     escalated_maximum_permitted_rate_a: float,
     urgency_latched: bool = False,
     pursued_occurrence: datetime | None = None,
+    following_occurrence: datetime | None = None,
 ) -> RequiredCurrentResult:
     """R5/R15's required-current formula (resolution-rules.md 'Required current for the
     departure deadline'):
@@ -245,15 +255,29 @@ def resolve_required_current(
     #    resolving to "no deadline" must not end it -- the hold is anchored to the occurrence
     #    already missed (requirements.md R5).
     if pursued_occurrence is not None and pursued_occurrence <= now and not soc_at_active_limit:
-        # No required current is computed while the hold lasts -- the time remaining is not
-        # positive, so neither test can run -- and the deadline is unreachable by definition,
-        # time having run out on it.
-        return RequiredCurrentResult(
-            required_a=None,
-            urgent=True,
-            unreachable=True,
-            pursued_occurrence=pursued_occurrence,
+        # The backstop, whose two arms fire on whichever comes first. `_absolute_hours_between`
+        # rather than wall-clock arithmetic: a 24-hour span crosses midnight by construction and
+        # so straddles both DST transitions, which is the hazard that helper exists for.
+        backstop_fired = (following_occurrence is not None and following_occurrence <= now) or (
+            _absolute_hours_between(now, pursued_occurrence) >= MISSED_DEADLINE_HOLD_BACKSTOP_HOURS
         )
+        if backstop_fired:
+            # Releasing the pursued occurrence ends the hold and urgency together -- they were
+            # never two things -- and from here the ordinary resolution governs again
+            # (resolution-rules.md, 'Missed-deadline hold'). Dropping it rather than returning
+            # early is what lets the slack test judge the NEW occurrence on this same cycle:
+            # a fresh deadline genuinely at risk should engage, not wait a cycle.
+            pursued_occurrence = None
+        else:
+            # No required current is computed while the hold lasts -- the time remaining is not
+            # positive, so neither test can run -- and the deadline is unreachable by
+            # definition, time having run out on it.
+            return RequiredCurrentResult(
+                required_a=None,
+                urgent=True,
+                unreachable=True,
+                pursued_occurrence=pursued_occurrence,
+            )
 
     # 3. Only now: R14's "no deadline" is one of urgency's own release conditions, so the
     #    occurrence is dropped rather than threaded through (resolution-rules.md's release
