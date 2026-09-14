@@ -102,7 +102,8 @@ exists for.
 
 ## T4 — The coordinator threads one occurrence, and the boolean goes
 
-**Tier:** HA harness · `tests/test_coordinator.py`, `tests/test_coordinator_cycle.py`
+**Tier:** per file (ADR-0009) — **HA harness** · `tests/test_coordinator.py`; **plain pytest** ·
+`tests/test_coordinator_cycle.py`
 
 **Failing test.** Across three cycles — engage, hold, release — `coordinator._pursued_occurrence`
 holds the expected datetime or `None`, and `_urgency_latched` no longer exists.
@@ -161,7 +162,7 @@ the pursued occurrence lies in the past); ADR-0024 for the re-arm.
 
 ## T6 — R14's "no deadline" does not release a hold, and R18's absence needs no code
 
-**Tier:** HA harness · `tests/test_coordinator_cycle.py`
+**Tier:** plain pytest · `tests/test_coordinator_cycle.py`
 
 **Failing test**, one: held, the deadline **resolves to "no deadline"** (R14) → **still held**. This
 is T2 case 3 asserted end to end, and it is the direction the coordinator can get wrong on its own.
@@ -175,7 +176,7 @@ once.
 
 ## T7 — The following occurrence, relative to the pursued one
 
-**Tier:** HA harness · `tests/test_coordinator_cycle.py`
+**Tier:** plain pytest · `tests/test_coordinator_cycle.py`
 
 **Failing tests**, two:
 
@@ -208,7 +209,8 @@ existing cases stay as they are.
 
 ## T9 — R9 reads the hold as it stood entering the cycle
 
-**Tier:** HA harness · `tests/test_coordinator_cycle.py`, `tests/test_coordinator.py`
+**Tier:** per file (ADR-0009) — **plain pytest** · `tests/test_coordinator_cycle.py`; **HA harness**
+· `tests/test_coordinator.py`
 
 **Failing test.** One cycle on which the pursued occurrence is in the past *entering* the cycle but
 released by the urgency call: the reserve cap must read *held* for that cycle and *not held* on the
@@ -289,8 +291,9 @@ session and never preserved across a restart").
 
 ## T13 — A SOC-unavailable cycle holds the unreachable clear, and T5's guard turns green
 
-**Tier:** HA harness · `tests/test_coordinator_cycle.py` (the detector), `tests/test_coordinator.py`
-(the cycle)
+**Tier:** per file (ADR-0009) — **plain pytest** · `tests/test_coordinator_cycle.py` for the
+detector, which is pure logic reached without a harness; **HA harness** ·
+`tests/test_coordinator.py` for the cycle, which needs a running coordinator.
 
 Builds D-9. Depends on T4, whose split of the same early return it extends, and on T5, whose guard
 it removes.
@@ -317,7 +320,7 @@ T4's own entry names, for the same reason.
 
 **Implementation.** `DeadlineUnreachableEdge.resolve` gains the keyword and the hold (D-9);
 `resolve_deadline_urgency`'s non-resolvable early return carries the fact out alongside the pursued
-occurrence T4 already threads through it; `coordinator.py`'s fire site passes it in. No new
+occurrence T4 already threads through it; `coordinator.py:703`'s fire site passes it in. No new
 constant, no new event, no entity.
 
 **Remove T5's `@pytest.mark.xfail(strict=True)` marker in this same commit.** It is `strict=True`,

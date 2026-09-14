@@ -16,7 +16,7 @@ a test anchor rather than restated.
 | --- | --- |
 | `engines/deadline.py` — the urgency-state parameter and return, the hold, the backstop | The required-current formula itself (R5/R15, unchanged) |
 | `engines/soc_target.py` — R9's sixth precondition | R9's cap rule itself; only its precondition set grows |
-| `coordinator.py` / `coordinator_cycle.py` — threading one occurrence where a boolean is threaded | ADR-0006's step order — no step added, removed or reordered |
+| `coordinator.py` / `coordinator_cycle.py` — threading one occurrence where a boolean is threaded, and one further fact out of the same early return for the clear edge (D-9) | ADR-0006's step order — no step added, removed or reordered |
 | Both of the escalated rate's bounds moved to smoothed readings | The R3 clamp, the C4 clamp, and the `peak_headroom` readout — all stay raw |
 | Closing #1006 (there is no separate hold left to build) | `debounce_baseline_w` (ADR-0039) — not on this path; see D-3 |
 
@@ -318,8 +318,8 @@ between is green.
 
 ### D-9 — the clear edge is told whether the cycle established anything (ADR-0042)
 
-[ADR-0042](../adl/0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) decides the rule and is
-not restated here: `DeadlineUnreachableCleared` fires only on a cycle that **established** the
+[ADR-0042](../adl/0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) decides the rule and
+owns it; in brief, `DeadlineUnreachableCleared` fires only on a cycle that **established** the
 deadline is no longer unreachable, and the two halves of `deadline_resolvable` answer that question
 differently — a disconnect is a genuine exit, a missing state of charge establishes nothing. This
 decision records only the structure that lands in, which is D-5's split extended from the pursued
@@ -340,7 +340,7 @@ def resolve(self, unreachable: bool, *, outcome_established: bool = True) -> tup
 
 The keyword's default is `True` for the same reason D-8 gives for `pursued_occurrence`'s. There is
 one production call site (`coordinator.py`, off the single `DeadlineUnreachableEdge()` at `:203`),
-but **seven existing test call sites** in `tests/test_coordinator_cycle.py` pass `unreachable`
+but **seven existing tests** in `tests/test_coordinator_cycle.py` call `resolve` with `unreachable`
 positionally and nothing else. A required second argument turns all seven red in the commit that
 adds it; a defaulted keyword leaves every one of them asserting exactly what it asserts today, which
 is correct — a cycle that establishes an outcome is the case they cover.
@@ -418,9 +418,14 @@ def resolve_solar_reserve_active(
 `engines/deadline.py` and `engines/soc_target.py` are pure — **plain pytest**, in
 `tests/engines/test_deadline.py` and `tests/engines/test_soc_target.py`, no HA harness. The
 coordinator threading, the `CycleContext` field, the R18 release, the notification payload and the
-two-baseline split are HA-coupled — **HA harness**, in `tests/test_coordinator.py`,
-`tests/test_coordinator_cycle.py` and `tests/test_deadline_soc_management_end_to_end.py`. Each task
-names its tier and its exact file.
+two-baseline split are HA-coupled — **HA harness**, in `tests/test_coordinator.py` and
+`tests/test_deadline_soc_management_end_to_end.py`. Each task names its tier and its exact file.
+
+`tests/test_coordinator_cycle.py` is a **third** placement and belongs to the first group, not the
+second: it is plain pytest over `coordinator_cycle.py`'s pure units — its own module docstring says
+so, and it imports no harness. The clear-edge detector D-9 adds (T13) is one of those units and is
+tested there; only T13's *cycle* half needs the harness. Where an earlier draft of this document put
+that file on the HA-harness list, the list was wrong and the file has not moved.
 
 ## Deliberate deferrals, and the known deviations
 
