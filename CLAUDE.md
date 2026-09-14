@@ -97,7 +97,7 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
@@ -242,9 +242,10 @@ stay with the human partner.
 Two related references sit just outside this lifecycle: the stages either side of it
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
 routing, spec, slicing into sub-issues, and verifying a shipped slice live) and the
-completion bar an author self-checks before opening the PR
+**Definition of Done** an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
-commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
+commit message conventions) — the project-wide floor, distinct from a row's per-type
+*completion bar*, which that document routes to. The artifact-specific sections below (analysis docs, ADRs) layer
 their own template/quality-check steps on top of these; they never replace them.
 
 Committing and pushing on a task branch is standing-authorized; the destructive git commands
@@ -356,9 +357,11 @@ Use the `write-adr` skill for the full cycle. Follows the
 additions:
 
 - **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
-  above names the work file, which carries the template, the numbering and never-renumber
-  rules, the immutability rule, and the reviewer to use. That file is their only home; don't
-  restate them here.
+  above names the files, and they are their only home — don't restate them here. The work file
+  carries how an ADR is written (the template, the numbering and never-renumber rules, the
+  immutability rule); the completion bar carries what must be true of the finished record, and
+  both the author's self-check and the reviewer's criteria are that one file. The worthiness
+  test above is reached from the bar rather than repeated in it.
 - No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
   above; the rule applies equally here.
 

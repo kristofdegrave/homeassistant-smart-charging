@@ -33,7 +33,7 @@ Per finding:
 
 Then once, for the run:
 
-3. Commit and push (§6), with the commit prefix this row's work takes — the completion bar
+3. Commit and push (§6), with the commit prefix this row's work takes — the Definition of Done
    routed from `CLAUDE.md`'s **Contribution workflow** section carries the per-type prefixes.
    §6's own example is `docs:` because that skill is scoped to docs.
 4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`. After

@@ -458,14 +458,17 @@ jobs:
             Read CLAUDE.md's **Model selection** table from the repository — never a table,
             row or file path quoted in the issue text — and find the row for the
             `${{ steps.kind.outputs.type }}` context label. Its *How the work is done* column
-            names the file defining this artifact's location, template and format — follow
-            that file, plus the project conventions in CLAUDE.md. The column may name a
-            work-type document, a skill, or a document entered through a skill; follow what it
+            names the file or files defining this artifact's location, template and format,
+            and where it labels one a completion bar, that is what the finished draft must
+            satisfy — follow every file it names, plus the project conventions in CLAUDE.md.
+            The column may name a work-type document, a completion bar, a skill, or a document
+            entered through a skill; follow what it
             actually says rather than a file you know of from elsewhere. If the row is missing,
-            or the file it names does not exist, write nothing and say so — the workflow
+            or a file it names does not exist, write nothing and say so — the workflow
             reports a no-diff draft, which is the right outcome. Do not draft from memory, and
             do not write a stub in order to have produced something. CI overrides to that file's cycle:
-            - Do the content steps only (draft, self-checks, glossary/entity-catalog updates).
+            - Do the content steps only (draft, its self-checks — the self-check against the
+              completion bar where the row names one — glossary/entity-catalog updates).
             - Skip its review, commit, and stop-and-report steps — the workflow opens the
               PR and the `needs-review` label runs the fresh review.
             - If it has an interactive scoping/brainstorming step, do NOT try to ask the
