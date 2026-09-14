@@ -30,7 +30,7 @@ template.
 | [0021](0021-adapter-readings-diagnostic-sensor.md) | Adapter-role readings surfaced via a single diagnostic sensor's attributes | Accepted |
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Accepted |
 | [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Accepted |
-| [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion | Accepted |
+| [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion — its exit table's `ev_soc`-becomes-`None` clause, and the reach of its fault-cycle hold rule, narrowed by [ADR-0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | Accepted |
 | [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Superseded by ADR-0029 |
 | [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow — point 3's step enumeration narrowed by [ADR-0033](0033-captar-step-gains-a-mapping-half.md) | Accepted |
@@ -48,5 +48,6 @@ template.
 | [0039](0039-baseline-reading-during-own-actuation.md) | The peak clamp discards a baseline reading taken during its own actuation | Accepted |
 | [0040](0040-fifth-mandated-adapter-case-unit-set.md) | A fifth mandated adapter case — a numeric role's expected unit set and its behaviour on a foreign or absent unit (extends ADR-0009) | Accepted |
 | [0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) | The CI reviewer reads its instructions from the base branch and its subject from the PR | Accepted |
+| [0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | A state-of-charge-unavailable cycle holds the deadline-unreachable clear rather than firing it (narrows [ADR-0024](0024-deadline-unreachable-cleared-event.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
