@@ -313,7 +313,7 @@ the same API, not from a local diff, since the worktree that made the change may
 the time anyone asks:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/files \r
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/files \
   --paginate --jq '.[].filename'
 ```
 
