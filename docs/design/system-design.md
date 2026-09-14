@@ -58,7 +58,7 @@ one service that encapsulates it. Services are catalogued in [§3](#3-service-ca
 | **V3** | **Mode-selection strategy** — how the [active mode](../analysis/system-overview.md#ubiquitous-language) is chosen over time | `Manual` vs `Auto` today; user-defined [profiles](../analysis/system-overview.md#ubiquitous-language) later (R16, NF1); the coordinator must never absorb this (NF1) | Profile (Mode-Selection) Engines |
 | **V4** | **SOC-target policy** — what charge level to aim for and its lifecycle | Default / [solar step-up](../analysis/system-overview.md#ubiquitous-language) / [solar-reserve cap](../analysis/system-overview.md#ubiquitous-language) rules and thresholds evolve (R6–R9) | SOC-Target Engine |
 | **V5** | **Deadline-urgency policy** — how the [departure deadline](../analysis/system-overview.md#ubiquitous-language), [required current](../analysis/system-overview.md#ubiquitous-language), and [urgency](../analysis/system-overview.md#ubiquitous-language) are determined and which levers they pull | Deadline sources (sensor/holiday/home-day/day-of-week), urgency thresholds, and the per-profile lever set (R5, R14, R15) | Deadline Engine |
-| **V6** | **Billing-peak protection** — how charging is bounded to protect the CapTar [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) | [Effective peak limit](../analysis/system-overview.md#ubiquitous-language) resolution, [safety margin](../analysis/system-overview.md#ubiquitous-language), grace period, and the `Power` opt-out (R3, C3, R17); tariff-regime specific | Billing-Protection Engine + Peak-Demand Tracker |
+| **V6** | **Billing-peak protection** — how charging is bounded to protect the CapTar [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) | [Effective peak limit](../analysis/system-overview.md#ubiquitous-language) resolution, [safety margin](../analysis/system-overview.md#ubiquitous-language), grace period, and the two cases in which the clamp does not run at all — `Power`'s opt-out and an absent CapTar capability (R3, C3, R17, R18); tariff-regime specific | Billing-Protection Engine + Peak-Demand Tracker |
 | **V7** | **Grid-safety (fuse) protection** — the hard ceiling on total net import | [Grid supply ceiling](../analysis/system-overview.md#ubiquitous-language)/[offset](../analysis/system-overview.md#ubiquitous-language) per installation; a physical-safety limit that is **never** waivable and must stay structurally separate from billing (C4, ADR-0006) | Grid-Safety Engine |
 | **V8** | **Signal conditioning** — how raw readings become decision-ready values | [Smoothing](../analysis/system-overview.md#ubiquitous-language) window size (R10) and [supply-voltage](../analysis/system-overview.md#ubiquitous-language) resolution/fallback (NF4) are tunable | Signal-Conditioning Engine |
 | **V9** | **Cycle invariants** — how the final set-point is bounded and start/stop churn prevented | Per-mode cooldown/hold durations (R11) and the C1 floor/cap; hardware fault-avoidance timing changes | Cycle-Invariant Engine |
@@ -71,7 +71,8 @@ one service that encapsulates it. Services are catalogued in [§3](#3-service-ca
 Two notes on the cut:
 
 - **V6 and V7 are split deliberately.** Billing-peak protection is a configurable *cost* concern
-  that `Power` mode may waive (R17); grid-safety is a hard *physical* concern that no mode may
+  that `Power` mode may waive (R17) and that a non-CapTar tariff never raises at all (R18);
+  grid-safety is a hard *physical* concern that no mode may
   waive (C4). ADR-0006 requires the two clamps to be distinct call sites so the `Power` opt-out can
   never reach C4; encapsulating them as two engines makes that boundary structural, not a
   convention.
@@ -410,7 +411,7 @@ sequenceDiagram
     participant I as Cycle-Invariant
 
     T->>C: control interval fires
-    Note over C: the cycle opens carrying the Coordinator's cross-cycle state from the last one,<br/>R5's pursued occurrence among them — a point in time, not a flag. The reserve condition<br/>below reads whether that occurrence already lies in the past — a missed-deadline hold — as it stood entering the<br/>cycle; the occurrence itself is read and updated at the urgency call
+    Note over C: the cycle opens carrying the Coordinator's cross-cycle state from the last one,<br/>R5's pursued occurrence among those values — a point in time, not a flag. The reserve<br/>condition below reads whether that occurrence already lies in the past — a missed-deadline<br/>hold — as it stood entering the cycle; the occurrence itself is read and updated at the urgency call
     C->>S: read owned control-entity values (profile, mode, SOC override, target current,<br/>departure times, home-day flag), the config-options the cycle needs (C1's current bounds,<br/>the EV battery capacity fallback, thresholds), and the config-entry data it reads —<br/>the declared capabilities (R18), which the Capability-Gate step, the deadline steps and<br/>the peak clamp all consult (an absent CapTar capability skips that clamp entirely)
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
@@ -444,9 +445,9 @@ sequenceDiagram
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
     M-->>C: desired current
-    C->>B: peak clamp on raw (skip iff CapTar absent (R18), or Power+R17 off)<br/>· effective peak limit (raised iff urgency)
+    C->>B: peak clamp on raw — skipped in exactly two cases: the CapTar capability is<br/>absent (R18), or `Power`'s peak-protection option is disabled (R17) ·<br/>effective peak limit (raised iff urgency)
     B-->>C: peak-clamped current
-    C->>B: peak headroom under that IN-FORCE limit, for the readout (headroom, not clamp)
+    C->>B: peak headroom under that IN-FORCE limit, fitted to the RAW baseline,<br/>for the readout (headroom, not clamp)
     B-->>C: peak headroom — surfaced as sensor.smart_charging_peak_headroom_a
     C->>G: grid-supply-ceiling clamp on raw (C4, always)
     G-->>C: ceiling-clamped current
@@ -490,8 +491,9 @@ resolved value — which is also what keeps the escalation stable, since judging
 already-escalated mode's own maximum request would clear urgency the instant it engaged.
 
 The pursued occurrence threaded in from the prior cycle is one of the Coordinator's cross-cycle
-carried values — a point in time, not a flag — alongside the solar step-up — and it is the only one R5 needs, a missed-deadline hold
-being that same value read after the occurrence it names has passed; `control-cycle.md`'s Trigger section
+carried values, alongside the solar step-up. It is a point in time rather than a flag, and it is
+the only one R5 needs: a missed-deadline hold is that same value read after the occurrence it
+names has passed; `control-cycle.md`'s Trigger section
 enumerates the full set of per-cycle carried state. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
 

@@ -98,7 +98,9 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built; E8 partial — R11's cooldown/hold gating designed, not built |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence and the missed-deadline hold read from it designed, not
+built; E5 partial — the raw/smoothed baseline split designed, not built (M1 passes raw to both
+headroom calls); E8 partial — R11's cooldown/hold gating designed, not built |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
@@ -342,6 +344,10 @@ it is wired to its callers).
   baseline debouncer) plus the Peak-Demand Tracker. **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/billing_protection.py` and `engines/peak_demand_tracker.py`; tests
   in `tests/engines/test_billing_protection.py` and `tests/engines/test_peak_demand_tracker.py`.
+  **Partial:** the two-baseline split below is designed, not built — M1 passes its raw, debounced
+  baseline to *both* headroom calls today, so R5's escalated rate is currently fitted to the raw
+  reading rather than the smoothed one. The Engine needs no change for it: which baseline reaches
+  it is M1's choice, per the caveat under **Testable on its own**.
   The Tracker's monthly bookkeeping state is owned by `coordinator_cycle.py`'s `PeakDemandState`
   (ADR-0012), which is a distinct concern from the R3 clamp's own `PeakBreachTracker` breach timer.
   The published monthly peak has since gained a second, optional source: ADR-0030 adds the
@@ -352,8 +358,8 @@ it is wired to its callers).
   permitted rate — which performs no clamp and advances no breach timer. The two are fitted to
   different readings: the readout to a raw one, R5's to the smoothed baseline, since that one
   forecasts what urgency could sustain rather than bounding this instant (R5). Also the R3 peak
-  clamp that fits a request to that headroom, skipped where the CapTar capability is absent
-  (R18) or `Power`'s R17 opt-out is set (C3) — two conditions, not one; and the Tracker accumulating monthly peak demand from net import, reset monthly, surfaced as
+  clamp that fits a request to that headroom, skipped in exactly two cases — the CapTar
+  capability is absent (R18), or `Power`'s peak-protection option is disabled (R17) (C3); and the Tracker accumulating monthly peak demand from net import, reset monthly, surfaced as
   `sensor.smart_charging_monthly_peak_kw`. Test anchors include headroom under a *raised* limit
   leaving the breach timer untouched, which is what separates the headroom operation from the
   clamp. The clamp solves from the baseline actually flowing
@@ -362,13 +368,15 @@ it is wired to its callers).
 - **Depends on:** ADR-0010; the Tracker's running state is threaded by M1 (never HA-held in the
   Engine). The Tracker's *write* to `sensor.smart_charging_monthly_peak_kw` is M1's via the Store, not the Engine's.
 - **Testable on its own:** plain pytest — effective-limit resolution, baseline-solved clamp math with
-  worked examples, urgency-driven limit raise (UC05), headroom answered under a raw and a
-  smoothed baseline, the grace-period tracker, and both skip conditions — `Power`+R17 and an
-  absent CapTar capability (R18).
+  worked examples, urgency-driven limit raise (UC05), headroom under a *given* baseline
+  advancing no breach timer, the grace-period tracker, and both skip conditions. Note the
+  raw/smoothed split is **not** testable here: the Engine takes `baseline_w` as a parameter and
+  cannot tell one operand from the other — which baseline each call site passes is M1's choice,
+  and its anchor sits with M1 below.
 - **Integration checkpoint:** ⎔ M1 calls E5's **headroom** twice — once for the `peak_headroom`
   readout under the in-force limit, once for R5's escalated rate under the raised one — on
-  *different baselines*, the readout and the clamp on the raw household baseline and R5's rate
-  on the smoothed one (above). Its **clamp** runs once on the control path, the only one of the
+  *different baselines* once the split is built (Status above): the readout and the clamp on the
+  raw household baseline, R5's rate on the smoothed one. Its **clamp** runs once on the control path, the only one of the
   three calls that may advance the breach timer.
   M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
@@ -478,7 +486,9 @@ it is wired to its callers).
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
   UC01–UC04; the two-distinct-clamps ordering (ADR-0006); the R5 call order — the baseline
   Profile and Mode calls precede the Deadline urgency call, and the headroom calls advance no
-  breach timer; R15's capacity fallback (an unmapped or unavailable sensed role falls back to the
+  breach timer, each fitted to its own baseline — raw for the `peak_headroom` readout and the R3
+  clamp, smoothed for R5's escalated rate, a distinction only observable from here; R15's capacity
+  fallback (an unmapped or unavailable sensed role falls back to the
   configured value, and the Engine sees only the composed result); fault → force-0A + Fault sensor
   (ADR-0007); `set_active_mode` timer reset (R11).
 - **Integration checkpoint:** ⎔ driven by C1 (timer) and reading C2 (owned entities); one end-to-end

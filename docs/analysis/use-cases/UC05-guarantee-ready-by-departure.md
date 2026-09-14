@@ -119,7 +119,7 @@ stateDiagram-v2
     Urgent --> Normal: disconnect, SOC at/above active<br/>SOC limit, or resolved deadline<br/>becomes no deadline — incl. deadline<br/>capability absent (R18)<br/>(DeadlineUrgencyReverted)
     Unreachable --> Urgent: required current ≤<br/>escalated max permitted rate<br/>(not while held)<br/>(DeadlineUnreachableCleared)
     Unreachable --> Normal: disconnect, SOC at/above active<br/>SOC limit, or resolved deadline<br/>becomes no deadline — incl. deadline<br/>capability absent (R18)<br/>(DeadlineUnreachableCleared +<br/>DeadlineUrgencyReverted)
-    Unreachable --> Normal: SOC at/above active SOC limit,<br/>disconnect, deadline capability absent,<br/>or the backstop:<br/>the occurrence following the pursued one<br/>elapses, or 24 h since it — the only<br/>exits while held<br/>(DeadlineUnreachableCleared +<br/>DeadlineUrgencyReverted)
+    Unreachable --> Normal: SOC at/above active SOC limit,<br/>disconnect, deadline capability absent (R18),<br/>or the backstop: the occurrence following<br/>the pursued one elapses, or 24 h since<br/>the pursued one — the only exits while held<br/>(DeadlineUnreachableCleared +<br/>DeadlineUrgencyReverted)
     note right of Normal
         The slack test is asked afresh on every
         cycle only in this state. Once an
