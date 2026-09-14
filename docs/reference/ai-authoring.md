@@ -108,7 +108,7 @@ with the positive target.
 fire it and other skills can reach it, at permanent context load. A user-invoked skill
 (`disable-model-invocation: true`) costs nothing standing, but only a human can fire it and no
 skill can reach it. Choose model-invocation only when the model or another skill must reach the
-skill on its own. The repo's two user-invoked skills are `handoff` and `grill-me`, the latter a
+skill on its own. The repo's user-invoked skills are `handoff`, `cleanup` and `grill-me`, the last a
 name-to-type whose whole body dispatches to the model-invoked `grilling`. When user-invoked
 skills multiply past what a maintainer remembers, the cure is a **router skill**: one user-invoked
 skill naming the others and when to reach for each.

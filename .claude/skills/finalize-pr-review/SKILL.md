@@ -30,8 +30,8 @@ that skill before this one.
      `gh pr edit <PR> --base main`.
    - If the base branch already reached `main` via its own squash-merge, this PR's diff may
      be showing stale content — check before approving further.
-   - Don't just trust "merged" status on a related PR; verify the artifact is actually on
-     `origin/main` with `git ls-tree origin/main <path>` before relying on it.
+   - Don't just trust "merged" status on a related PR; verify its artifact is actually on
+     `origin/main` the way the `cleanup` skill's landed-check does, before relying on it.
 
 ## Common mistakes
 

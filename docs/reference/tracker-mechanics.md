@@ -293,6 +293,21 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
   --jq '{state, base: .base.ref, head: .head.ref}'
 ```
 
+## Reading a change request's merge state
+
+`state` cannot tell a merged PR from one closed without merging — REST reports `closed` for
+both. The fields that decide it are `merged` and `merged_at`:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
+  --jq '{state, merged, merged_at}'
+```
+
+A merged PR reads `{"state":"closed","merged":true,"merged_at":"<timestamp>"}`; anything else
+is not merged, whatever its `state`. This is a REST read, so it is not refusable by the
+GraphQL limiter; `gh pr view <n> --json state,mergedAt` is the GraphQL form of the same read
+and offers nothing over it.
+
 ## Posting a review with inline anchors
 
 The review **payload** — what goes in the body, how findings are grouped, the anchoring rules
