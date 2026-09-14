@@ -47,7 +47,7 @@ label needs-draft    0e8a16 "Issue: with one context label, trigger the CI draft
 label needs-review   fbca04 "PR: trigger the fresh AI review"
 label needs-work     d93f0b "PR: trigger the AI fix pass to address review remarks"
 label needs-approval b60205 "PR: no automated review/fix work is pending — a maintainer must decide"
-label needs-decision e4e669 "PR: review loop hit its cap — a maintainer must break the tie"
+label needs-decision e4e669 "PR: review exited with findings still open — a maintainer must decide how to proceed"
 
 # --- Context / artifact-type labels ------------------------------------------------------
 label uc          1d76db "Use-case analysis document"
