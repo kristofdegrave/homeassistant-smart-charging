@@ -71,7 +71,7 @@ Two rules that apply elsewhere deliberately do **not** apply here:
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
 inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
-actually touches (`workflow-reviewer` when it also edits `CLAUDE.md` or the pipeline).
+actually touches (the `workflow` checklist when it also edits `CLAUDE.md` or the pipeline).
 `docs/postmortems/**` is deliberately **not** in `ai-pipeline.yml`'s path filter or
 `_ai-review.yml`'s diff enumeration: the reviewer checklists are all written against
 artifacts that assert behaviour, and none fits a narrative document. A post-mortem-only PR
@@ -100,14 +100,14 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `docs/reference/work-types/adr/review.md` | opus |
-| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
-| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
-| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
-| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `docs/reference/work-types/development/review.md`. For `tests/**`: completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md`. | opus |
-| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md` | opus |
-| `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `docs/reference/work-types/adr/review.md` | opus |
+| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
+| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
+| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
+| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `docs/reference/work-types/documentation/review.md` | opus |
+| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `docs/reference/work-types/development/review.md`. For `tests/**`: completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md`. | opus |
+| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md` | opus |
+| `workflow` | none — human-authored (see below) | — | checklist `docs/reference/work-types/workflow/review.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
 **Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
@@ -117,17 +117,16 @@ keep matching: this column, every reviewer agent definition's frontmatter `model
 CI's `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and
 never reads that frontmatter.
 
-**A cell that names more than one file labels each role**, in either column. Four roles exist:
+**A cell that names more than one file labels each role**, in either column. Three roles exist:
 the **work file** holds how the artifact is written; the **completion bar** holds what must be
-true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
-file by name through; the **checklist** holds what only a reviewer can check — how to read the
-change, and the checks about the change rather than the artifact.
+true of the finished artifact; the **checklist** holds what only a reviewer can check — how to
+read the change, and the checks about the change rather than the artifact.
 
-**A role may be named more than once in one cell** where the work type genuinely has more than
-one of that thing — and only the **entry point** does today. `documentation` is reached by two
-skills, one per document, and both lead to the same work file, so the cell names both and no
-rule for choosing between them is needed: whichever fires has already selected itself by its own
-`description`.
+**No row names an entry point.** How a run reaches the work file is the same for every work
+type, so it is not a per-row fact — **Contribution workflow** below routes to both actors'
+entries, an interactive session's and CI's, and each resolves the row itself. That leaves the
+row self-contained in the only sense that matters: it says what to follow, and is read by
+whatever followed it there.
 
 **No row branches in the *How the work is done* column.** A work type whose work splits between
 two artifacts names one work file and one completion bar like every other row, and those files
@@ -144,9 +143,7 @@ own review worker there.** That agent holds
 nothing type-specific — only the untrusted-data rule, how to resolve a checklist and a bar from
 this table, what to do when one cannot be read, and the output and anchoring contract every
 review shares. So a row names a `docs/reference/work-types/<label>/review.md` and the generic
-agent is spawned against it. A row not yet migrated still names its own `*-reviewer` agent
-definition instead, which carries both halves; the path map below is mixed for the duration
-for the same reason. Either way the column names the file, and whoever dispatches follows what
+agent is spawned against it. The column names the file, and whoever dispatches follows what
 it says rather than a reviewer they know of from elsewhere. Locally that agent is spawned
 against the file; CI has no agent to spawn and its own worker self-applies the same file, so
 "who applies it" varies while the file does not.
@@ -224,45 +221,43 @@ transferred issue, a number that never existed, a failed lookup — is treated e
 reference at all, so the path half still stands alone rather than the run aborting. The label
 row is the addition: it brings the checklist written for this kind of work even when the change
 landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets the `specs`
-checklist for the file and `workflow-reviewer` for the subject, and a `development` PR that
-also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
+checklist for the file and the `workflow` checklist for the subject, and a `development` PR
+that also edits a workflow file gets the `workflow` checklist on that file rather than nothing.
 
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
-not a fourth column: each row's own work file or skill, and its checklist and bar, say which
-one to read and when, so nothing here repeats a rule those files own.
+not a fourth column: each row's own work file, and its checklist and bar, say which one to
+read and when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** A drafted label is contained by the tree
 its drafts write, and `workflow` changes land in the files that instruct future runs, so there
 is no tree to contain one in — CI therefore refuses to draft `workflow` issues and a local
 session hands the drafting to the human partner. The containment rule and the tree each label
 gets are [ci-pipeline.md](docs/reference/ci-pipeline.md)'s; they narrow as work types migrate,
-so they are routed from here rather than restated. Its review is still automated. What a
-`workflow` author reads instead is in **Authoring AI artifacts** below.
+so they are routed from here rather than restated. Its review is still automated, and its
+checklist is the one file in its `docs/reference/work-types/workflow/` directory: with no bar
+beside it, that file carries the whole of the criteria rather than only what a bar cannot.
+What a `workflow` author reads instead is in **Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
 `docs/adl/**` → `docs/reference/work-types/adr/review.md`;
 `docs/analysis/**` → `docs/reference/work-types/uc/review.md`;
 `docs/plans/**` → `docs/reference/work-types/specs/review.md`;
-`docs/design/**` → `system-design-reviewer`;
+`docs/design/**` → `docs/reference/work-types/documentation/review.md`;
 `custom_components/**` → `docs/reference/work-types/development/review.md`;
 `tests/**` → `docs/reference/work-types/testing/review.md`;
 `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
-`CLAUDE.md` → `workflow-reviewer`. The map is **mixed while the reviewer collapse runs**: a
-migrated tree names its checklist file, applied by the generic `reviewer` agent, and an
-unmigrated one still names the `*-reviewer` agent definition that carries its own. Each entry
-resolves on its own, so every intermediate state is reviewable, and the end state it runs
-toward is the target layout in `docs/plans/2026-09-11-lifecycle-skills-design.md` — every
-entry naming a checklist file. `docs/analysis/**` names the `uc` checklist because that tree
+`CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
+file, which the generic `reviewer` agent applies. `docs/analysis/**` names the `uc` checklist because that tree
 is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
 here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
 rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
 diff enumeration, so the reviewer is reachable in principle and unreached in practice.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
-fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also
-edits `CLAUDE.md` or the pipeline.
+fresh-agent pass weighted to quotation accuracy, the `workflow` checklist only when the PR
+also edits `CLAUDE.md` or the pipeline.
 
 Adding or renaming a context label means updating this table too — see
 [ci-pipeline.md](docs/reference/ci-pipeline.md)'s **Label vocabulary sync** for every other
@@ -407,9 +402,8 @@ Consequences state a forward-looking bar for future decisions in a category one 
 carve-outs above now excludes, this carve-out governs going forward and that ADR should
 be superseded to say so, rather than the conflict being left implicit.
 
-Use the `write-adr` skill for the full cycle. Follows the
-[Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
-additions:
+An ADR follows the [Contribution workflow](docs/reference/contribution-workflow.md), with these
+artifact-specific additions:
 
 - **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
   above names the files, and they are their only home — don't restate them here. The work file

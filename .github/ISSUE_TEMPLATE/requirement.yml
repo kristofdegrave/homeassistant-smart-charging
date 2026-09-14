@@ -7,10 +7,11 @@ body:
     attributes:
       value: |
         This form applies the `requirement` context label. Add `needs-draft` yourself
-        afterwards to trigger the AI documentation pipeline, which follows the
-        `write-requirement` skill. Skip the issue-first step entirely only for
-        typo-level/pure-wording edits — this form is for anything that changes behavior
-        or acceptance criteria.
+        afterwards to trigger the AI documentation pipeline, which resolves how a
+        requirement is written from CLAUDE.md's Model selection table. To draft it in a
+        local session instead, run `/implement` on this issue once it exists. Skip the
+        issue-first step entirely only for typo-level/pure-wording edits — this form is
+        for anything that changes behavior or acceptance criteria.
   - type: dropdown
     id: kind
     attributes:

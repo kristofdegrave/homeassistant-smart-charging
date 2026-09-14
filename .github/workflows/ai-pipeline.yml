@@ -19,7 +19,8 @@ name: AI documentation pipeline
 # go-signal. `development`/`testing` drafts must additionally pin an approved task via a
 # `Plan: docs/plans/<file>.md#T<task-number>` line in the issue body — see _ai-draft.yml's header
 # comment for the full containment story. `workflow` (CI/skill/agent changes) is deliberately
-# never auto-drafted — only its review is wired (see _ai-review.yml / workflow-reviewer.md).
+# never auto-drafted — only its review is wired (see _ai-review.yml and
+# docs/reference/work-types/workflow/review.md).
 # Review picks its checklists from CLAUDE.md's Model selection table, which routes on the
 # changed file paths and on the linked issue's label — the path half is why a human-authored
 # `development`/`testing` PR (touching custom_components/ or tests/) gets reviewed today,

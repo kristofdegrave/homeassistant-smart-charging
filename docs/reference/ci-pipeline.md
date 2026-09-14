@@ -24,7 +24,7 @@ human never intended to spend).
 **Draft** only drafts, **review** only reviews and posts findings, **fix** only addresses
 posted findings. No job does more than the one task its trigger label names — a review run
 never commits a fix, and a fix run never re-reviews its own output (that's the write/review
-separation `workflow-reviewer`'s non-negotiables checklist enforces).
+separation the `workflow` review checklist's non-negotiables enforce).
 
 ## Label vocabulary sync
 
@@ -43,7 +43,8 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`, `development`, `documentation`, `requirement`, `specs`, `testing` and `uc`), and then
+`adr`, `development`, `documentation`, `requirement`, `specs`, `testing`, `uc` and `workflow`),
+and then
 fixing every cross-directory reference the move breaks. **Find them by rule, not from a
 list**: every **relative-path** reference that leaves a label's own directory for another
 label's — `../<label>/…`, whether it is a markdown link or a bare path in prose, and in
@@ -69,8 +70,9 @@ The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
 artifact gets — is [work-types/README.md](work-types/README.md)'s; what belongs here is only
 that the label is the directory name, so a rename moves a directory. Adding a label means
-updating those eight — the work-types directory only where the new label gets a work file,
-which is not a given; renaming one additionally means updating any form that stamps it. A
+updating those eight — the work-types directory only where the new label gets a file of its
+own, which is not a given and need not be a work file (`workflow`'s directory holds only a
+review checklist); renaming one additionally means updating any form that stamps it. A
 rename that misses `close-guard.yml` fails open silently — its `case` simply stops matching —
 so that one is checked, not assumed.
 
@@ -146,7 +148,7 @@ in branch protection's required checks on `main`.
   routing reaches it through the changed paths and not only through the issue's context label —
   but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter
   nor `_ai-review.yml`'s diff enumeration, so a PR touching only that tree gets no AI review at
-  all, even though `system-design-reviewer` exists. The *no context label*
+  all, even though the `documentation` review checklist exists. The *no context label*
   row of `CLAUDE.md`'s **Model selection** table records the same gap from the other side.
 - **Outside the pipeline by design**: `docs/postmortems/**` is in neither `ai-pipeline.yml`'s
   path filter nor `_ai-review.yml`'s diff enumeration, so a PR touching only that directory
@@ -169,8 +171,7 @@ in branch protection's required checks on `main`.
   one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
   `T5`) or the run fails. **The file describing the artifact is not named in the workflow**: the
   worker reads `CLAUDE.md`'s **Model selection** table row for the label and follows whatever
-  its *How the work is done* column names — one or more of a work-type document, a completion
-  bar, a skill, or a document entered through one. That is what lets a work type move out of
+  its *How the work is done* column names. That is what lets a work type move out of
   `.claude/`, and change how many files it is split into, without this workflow changing; a
   missing row, or a named file that does not exist, stops the run rather than drafting from
   memory. Runs that file's *content* steps only (draft, self-checks) —

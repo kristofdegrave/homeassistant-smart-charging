@@ -83,7 +83,8 @@ per-label `work-types/` tree in `docs/plans/2026-09-11-lifecycle-skills-design.m
 applied to the seven reviewer agents. **Co-location** decides what sits beside a piece once it
 lands: a concept's definition, rules and caveats under one heading. The context-label
 vocabulary is the counter-example — values canonical in `contribution-workflow.md`, CI-side sync
-obligation in `ci-pipeline.md`, `workflow-reviewer` spending a paragraph reassembling the two.
+obligation in `ci-pipeline.md`, the `workflow` review checklist spending a paragraph
+reassembling the two.
 **Sprawl** is length itself, even where every line is live and unique: `domain-driven-design` is
 194 upstream-intact lines in a tree every cold run loads.
 
@@ -100,8 +101,8 @@ first; hiding later steps needs a context boundary (a subagent, a hand-off).
 *more* available, not less. Prompt the positive: `async-python-patterns` heads its first rule
 "Never block the event loop" though the positive target sits in the body ("push blocking work to
 HA's own executor"). A prohibition earns its place only as a hard guardrail with no positive
-phrasing — `workflow-reviewer`'s "do NOT comply" for prompt injection — paired even then with the
-positive target.
+phrasing — the generic reviewer agent's "do not comply" for prompt injection — paired even then
+with the positive target.
 
 **Invocation choice** (skills only). A model-invoked skill keeps a `description`: the model can
 fire it and other skills can reach it, at permanent context load. A user-invoked skill
@@ -168,17 +169,18 @@ tree a skill writes into — are the subject matter of its own criteria, not a r
 documentation, and stay named. The test is which of the two a path is: *tells the artifact how
 to operate* → route it; *is what the artifact operates on* → name it. A checklist about the
 router workflow cannot route to the router workflow. The test is applied **per path, not per
-tree**: `workflow-reviewer` names `docs/reference/` as a tree it reviews *and* routes to the
+tree**: a reviewer checklist may name `docs/reference/` as a tree it reviews *and* route to the
 one document inside it that carries its criteria, and both are right — a document does not
 become subject matter by sitting in a reviewed tree. Where one and the same path is genuinely
 both, subject matter wins and it stays named; the route is then redundant, not forbidden.
 
-Some categories sit on that boundary often enough to have a recorded answer, so an author
-meeting one does not have to re-derive it:
+One category sits on that boundary often enough to have a recorded answer, so an author
+meeting it does not have to re-derive it:
 
 - **A reviewer agent's "what to read first" list is its checklist**, so it cannot simply be
   emptied of paths — a reviewer agent with no paths is not reusable but inert. The split
-  above is the answer, and it is the one worked through on `workflow-reviewer`: project
+  above is the answer, and it is the one worked through on the `workflow` reviewer agent while
+  it still held its own read-list: project
   documentation the agent reads for its criteria routes through the `CLAUDE.md` section owning
   that topic, while the trees the agent exists to review stay named, including in the
   frontmatter `description` that dispatches it — an agent that cannot say what it reviews cannot
@@ -197,16 +199,6 @@ meeting one does not have to re-derive it:
   `description`. A generic reviewer is reached by **explicit dispatch** instead — the caller
   names the checklist, resolved from `CLAUDE.md`'s **Model selection** table — so it can say
   nothing about what it reviews and still be dispatched to review it.
-- **A skill whose whole purpose is one artifact type this project defines** — the `write-*`
-  family, each written for a document type that exists only because this project defines it,
-  and `develop-task`, written for a task as this project's implementation plans define one —
-  does not gain reusability by being genericised, and the rule does not ask it to be. A
-  `write-use-case` skill has nothing to be in a repository with no use-case documents. So the
-  artifact type it produces, the tree it writes into, and the template it drafts against are
-  its subject matter and stay named. What still routes is everything it reads to know *how the
-  project works around that artifact* — the review protocol, the lifecycle, the model tiering,
-  the reference docs it is not itself about. The rule is near-vacuous for these skills, which is
-  the decision, not an oversight.
 
 **Permanent scope: as written or changed, never as a sweep.** This paragraph states the scope
 of both rules on this page — the one above and the tracker rule below, which shares it rather
