@@ -8,9 +8,9 @@ disable-model-invocation: true
 # Handoff
 
 Write one Markdown document that lets a fresh agent resume this work without the scrollback.
-The repo's own boundaries make this routine: `contribution-workflow.md`'s **stop and report**
-rule pauses an interactive session once an issue's chain reaches approval or the review cap,
-and each task runs in its own worktree.
+The repo's own boundaries make this routine: the stop-and-report rule (**Rule B** of the doc
+`CLAUDE.md`'s **Contribution workflow** section routes to) pauses an interactive session once
+an issue's chain reaches approval or the review cap, and each task runs in its own worktree.
 
 ## Where it goes
 
@@ -47,8 +47,8 @@ Name skills, not procedures — the skill carries its own instructions.
   those.
 - Before an issue exists: `work-idea` (an `idea` issue), `grilling` (stress-test a decision
   with the human partner), `file-task-issue` (file the issues that fall out).
-- In the review loop, per the step ranges `CLAUDE.md`'s **Contribution workflow** section
-  maps: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
+- In the review loop, per the steps of the doc `CLAUDE.md`'s **Contribution workflow** section
+  routes to: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
   with
   `resolve-review-thread` for the threads, and `finalize-pr-review` hands a clean pass to
   `needs-approval`. `address-review-remarks` is CI's entry for step 3, not the local one.

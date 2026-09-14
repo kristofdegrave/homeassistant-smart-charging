@@ -22,7 +22,7 @@ covering commit message conventions) — the project-wide floor, distinct from a
    `Backlog`.
 1. **Implement** (`implement`). Isolated `git worktree`, always, even for a one-line fix —
    it removes the shared-checkout risk of a concurrent session switching branches underneath
-   you. Branch `<context-label>/<issue-number>` (see **Branch naming** below) from an
+   you. Branch `<context-label>/<issue-number>` (see **Issue conventions** below) from an
    up-to-date `origin/main`, never a stale local `main`. Board **Status** → `In progress` when
    writing actually starts, not at filing time. Self-check against the
    [Definition of Done](definition-of-done.md), then push and open a PR against `main` — never
@@ -33,10 +33,10 @@ covering commit message conventions) — the project-wide floor, distinct from a
    table resolves for the change. All findings go to the PR as one native review before
    anything is fixed.
 3. **Fix, then re-review** (`fix`, then `review` again). Every finding gets a fix and a reply
-   on its thread, or a reply saying why not. Threads are resolved only for findings actually
-   fixed, and only after the push (**Thread discipline** below). Human PR comments, at any
-   point, are findings like any other. Loop until a pass is clean, at most **2** review passes
-   in all (**Rounds and the cap** below). Still Critical or Major open at the cap →
+   on its thread, or a reply saying why not, and its thread is closed out per **Thread
+   discipline** below. Human PR comments, at any
+   point, are findings like any other. Loop until a pass is clean, up to the cap (**Rounds
+   and the cap** below). Still Critical or Major open at the cap →
    `escalate-pr-review`.
 4. **Approval** (`finalize-pr-review`). A clean pass → `needs-approval` (**Exit labels**
    below). Board **Status** stays `In review`. Merge is the human's, always.
@@ -69,8 +69,8 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
-- **The cap is 2 review passes** per count. This line is the **only** statement of the
-  interactive cap — everything that needs the number routes here instead of repeating it.
+- **The cap is 2 review passes**, counted from the most recent reset event (see below). This
+  line is the **only** statement of the interactive cap — everything that needs the number routes here instead of repeating it.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
   so the final round needs no further pass to confirm it.

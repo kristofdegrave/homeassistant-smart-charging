@@ -39,7 +39,7 @@ Stop instead of dispatching when:
    task it names is already identified.
 3. Worktree, branch and board **Status** per step 1.
 4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
-   completion bar, that file is the self-check before step 5 — the same one the reviewer will
+   completion bar, that file is the self-check before item 5 below — the same one the reviewer will
    apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per step 1.
 

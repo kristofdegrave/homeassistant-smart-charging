@@ -281,12 +281,11 @@ whichever matches who's acting:
   as the actor, in [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). An
   interactive session never self-applies those trigger labels — see that doc.
 
-Each step of that doc names the skill an interactive session runs it through. The chain runs
-**unattended** from the step it is entered at until a clean pass or the review cap — no
-check-in between steps — and a step skill invoked directly (`/implement #N`, `/review #N`)
-enters the chain at that step. Only the clean-up step is the human's to invoke, after the
-merge. The doc's own rules (its **Rule A**, **Rule B** and **Rounds and the cap** sections)
-state this once; nothing else restates it.
+Each step of that doc names the skill an interactive session runs it through, and two
+defaults hold for the whole chain: it runs **unattended** from the step it is entered at until
+a clean pass or the review cap, and a step skill invoked directly (`/implement #N`) enters the
+chain at that step. Only the clean-up step is the human's to invoke. The rules behind both are
+that doc's **Rule B** and **Rounds and the cap** sections.
 
 Two related references sit just outside this lifecycle: the stages either side of it
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track

@@ -1,6 +1,6 @@
 ---
 name: review
-description: Use in an interactive session to run this project's review steps (3-4 of its contribution workflow) on a PR (/review #N) — behind-main check, a fresh reviewer agent for every changed tree plus the work type's own, findings posted as a native PR review. Interactive sessions only; CI's entry for these steps is _ai-review.yml's own prompt, never this skill.
+description: Use in an interactive session to run this project's review step (step 2 of its contribution workflow) on a PR (/review #N) — behind-main check, a fresh reviewer agent for every changed tree plus the work type's own, findings posted as a native PR review. Interactive sessions only; CI's entry for this step is _ai-review.yml's own prompt, never this skill.
 ---
 
 # Review a PR
