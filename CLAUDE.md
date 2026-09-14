@@ -194,15 +194,15 @@ checklist, over its code, and the `testing` one, over its tests.
 questions: the label says what kind of work this is, the changed paths say what it actually
 touched, and they come apart whenever a change is *about* one artifact type but *lives* in
 another's tree — common for `workflow` work, which edits whichever file holds the rule. So a
-PR gets the union: every tree's reviewer from the no-label row's path map, **plus** the label
-row's reviewer where it names one those paths did not already select. A row that names a
-checklist **for a tree** — as `development` does, its own `review.md` for
-`custom_components/**` and the `testing` row's for `tests/**` — names nothing when that tree
-has no changed files: a code-only `development` PR resolves the `development` checklist and no
-more, and a tests-only one resolves the `testing` checklist and no code bar. Only a row whose
-reviewer carries no tree qualifier adds one this way. An issue carrying more than one context
-label — which the filing conventions assume against and CI's drafter refuses — contributes each
-of those rows rather than forcing a choice between them.
+PR gets the union: every tree's checklist from the no-label row's path map, **plus** the label
+row's where it names one those paths did not already select. A row that names a checklist
+**for a tree** — as `development` does, its own `review.md` for `custom_components/**` and the
+`testing` row's for `tests/**` — names nothing when that tree has no changed files: a code-only
+`development` PR resolves the `development` checklist and no more, and a tests-only one
+resolves the `testing` checklist and no code bar. Only a row whose checklist carries no tree
+qualifier adds one this way. An issue carrying more than one context label — which the filing
+conventions assume against and CI's drafter refuses — contributes each of those rows rather
+than forcing a choice between them.
 
 The two halves are scoped differently, and have to be. A path-selected reviewer sees the
 changed files under its own tree. A label-selected one has no tree of its own — that is what

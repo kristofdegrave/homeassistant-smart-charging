@@ -12,12 +12,12 @@ checklist — the generic `reviewer` agent definition locally, the review workfl
 in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
 way, through `CLAUDE.md`'s **Model selection** table.
 
-**This checklist covers `custom_components/smart_charging/` and nothing else.** A `development`
-change produces two artifacts in two trees, and the criteria belong to the artifact rather than
-to the label that dispatched the review — which is why the `development` row names the
-`testing` row's checklist and bar for its `tests/**` half, and why a code-only change resolves
-this file alone. So a test defect is reported against the item the `testing` bar names for it,
-never against an item here.
+**This checklist covers `custom_components/**`, the tree the path map selects it for, and
+nothing else.** A `development` change produces two artifacts in two trees, and the criteria
+belong to the artifact rather than to the label that dispatched the review — which is why the
+`development` row names the `testing` row's checklist and bar for its `tests/**` half, and why
+a code-only change resolves this file alone. So a test defect is reported against the item the
+`testing` bar names for it, never against an item here.
 
 ## What to read first
 
