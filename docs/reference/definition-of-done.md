@@ -83,8 +83,10 @@ doing one of the two is the thing this bar exists to make visible.
 
 This is not a CI gate, deliberately: a mechanical presence check is satisfied by an empty
 heading, and no automated check can tell whether a pasted reading is the one the diff changed.
-The check is `code-reviewer` reading the section against the diff — a diff that touches
-anything in the list above with no Runtime check section is a **Major** finding there.
+The check is the review of the PR's `custom_components/**` half reading the section against
+the diff — a diff that touches anything in the list above with no Runtime check section is a
+**Major** finding there. That review's checklist and the completion bar it applies are named in
+the `development` row of `CLAUDE.md`'s **Model selection** table.
 
 ## Verify live (per slice, after deployment)
 
@@ -113,7 +115,7 @@ one has not satisfied the other:
 | Moment | Before merge | After deployment |
 | Judged against | The diff | A checklist written before the code |
 | Recorded in | The PR's **Runtime check** section | A comment on the epic (or the task issue) |
-| Checked by | `code-reviewer`, on the open PR | The author of the merged slice, against the spec's list |
+| Checked by | The `development` review, on the open PR | The author of the merged slice, against the spec's list |
 
 ## Commit message conventions
 

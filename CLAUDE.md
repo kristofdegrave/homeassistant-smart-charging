@@ -105,8 +105,8 @@ runs on.
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
 | `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `.claude/agents/code-reviewer.md`. For `tests/**`: checklist `.claude/agents/test-reviewer.md`. | opus |
-| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
+| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `docs/reference/work-types/development/review.md`. For `tests/**`: completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md`. | opus |
+| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
@@ -157,7 +157,10 @@ files get that tree's checklist and bar whichever row reached them, and a checkl
 two rows (`uc` and `requirement`) is one file with the other row pointing at it. This says
 nothing about *which* reviewers run, and it does not narrow a label-selected reviewer's
 whole-change scope: that reviewer has no tree of its own, which is exactly what makes it an
-addition, and the union rule below governs it unchanged.
+addition, and the union rule below governs it unchanged. `development`'s `tests/**` branch is
+the same rule in its other shape: rather than a file of its own pointing elsewhere, the row
+names the `testing` row's checklist and bar outright for that tree — so the row stays
+self-contained, and `tests/**` has one source of truth however it was reached.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
@@ -182,23 +185,24 @@ that is settled inside those files rather than by anything a run has to resolve 
 dispatch additionally resolves the linked issue's label, per the union rule below — that is the
 one input outside the row, and it only ever adds a reviewer.
 
-**A review column may name more than one agent.** Each is applied to the changed files under
-its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
-checklist to its matching files. A `development` PR therefore gets both `code-reviewer` and
-`test-reviewer`.
+**A review column may name more than one checklist.** Each is applied to the changed files
+under its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
+checklist to its matching files. A `development` PR therefore gets both the `development`
+checklist, over its code, and the `testing` one, over its tests.
 
 **Label and path both route, and neither overrides the other.** They answer different
 questions: the label says what kind of work this is, the changed paths say what it actually
 touched, and they come apart whenever a change is *about* one artifact type but *lives* in
 another's tree — common for `workflow` work, which edits whichever file holds the rule. So a
 PR gets the union: every tree's reviewer from the no-label row's path map, **plus** the label
-row's reviewer where it names one those paths did not already select. A row that names an
-agent **for a tree** — as `development` does, `code-reviewer` for `custom_components/**` and
-`test-reviewer` for `tests/**` — names nothing when that tree has no changed files: a code-only
-`development` PR gets `code-reviewer` and no more. Only a row whose agent carries no tree
-qualifier adds one this way. An issue carrying more than one context label — which the filing
-conventions assume against and CI's drafter refuses — contributes each of those rows rather than forcing
-a choice between them.
+row's reviewer where it names one those paths did not already select. A row that names a
+checklist **for a tree** — as `development` does, its own `review.md` for
+`custom_components/**` and the `testing` row's for `tests/**` — names nothing when that tree
+has no changed files: a code-only `development` PR resolves the `development` checklist and no
+more, and a tests-only one resolves the `testing` checklist and no code bar. Only a row whose
+reviewer carries no tree qualifier adds one this way. An issue carrying more than one context
+label — which the filing conventions assume against and CI's drafter refuses — contributes each
+of those rows rather than forcing a choice between them.
 
 The two halves are scoped differently, and have to be. A path-selected reviewer sees the
 changed files under its own tree. A label-selected one has no tree of its own — that is what
@@ -226,8 +230,8 @@ also edits a workflow file gets `workflow-reviewer` on that file rather than not
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
-not a fourth column: each row's own work file or skill, and its reviewer agent, say which one
-to read and when, so nothing here repeats a rule those files own.
+not a fourth column: each row's own work file or skill, and its checklist and bar, say which
+one to read and when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** A drafted label is contained by the tree
 its drafts write, and `workflow` changes land in the files that instruct future runs, so there
@@ -241,8 +245,10 @@ so they are routed from here rather than restated. Its review is still automated
 `docs/adl/**` → `docs/reference/work-types/adr/review.md`;
 `docs/analysis/**` → `docs/reference/work-types/uc/review.md`;
 `docs/plans/**` → `docs/reference/work-types/specs/review.md`;
-`docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
-`tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
+`docs/design/**` → `system-design-reviewer`;
+`custom_components/**` → `docs/reference/work-types/development/review.md`;
+`tests/**` → `docs/reference/work-types/testing/review.md`;
+`.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
 `CLAUDE.md` → `workflow-reviewer`. The map is **mixed while the reviewer collapse runs**: a
 migrated tree names its checklist file, applied by the generic `reviewer` agent, and an
