@@ -194,11 +194,13 @@ airtight derivation. Because it is a derivation across three documents rather th
 **#1164** asks R5 or the glossary to say it in one line. It does not block this slice, and if it
 lands contradicting this, the source wins and D-3 changes with it.
 
-**Where it lands.** `_run_cycle` already computes `smoothed_net_w`. It is carried on `CycleContext`
-as its own field, with a named local `smoothed_baseline_w = smoothed_net_w - charger_w` beside it
-for the peak bound; the C4 bound takes `net_w=smoothed_net_w` with `charger_w` unchanged, since R10
-smooths net grid power alone. Deliberately *not* derived from `ctx.surplus_w`, which is
-`smoothed_baseline_w`'s exact negation: one refactor of either would silently change the other.
+**Where it lands.** `_run_cycle` already computes `smoothed_net_w`; it is carried on `CycleContext`
+as its own field. `_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so
+it derives the peak bound's operand itself — `ctx.smoothed_net_w - ctx.charger_w` — rather than
+reading a `_run_cycle` local it cannot see. The C4 bound takes `net_w=ctx.smoothed_net_w` with
+`charger_w` unchanged, since R10 smooths net grid power alone. Deliberately *not* derived from
+`ctx.surplus_w`, which is that operand's exact negation: one refactor of either would silently
+change the other.
 
 ### D-4 — the backstop's operands, and where the following occurrence comes from
 
@@ -247,9 +249,12 @@ While the hold is in effect no required current is computed (`UC05`), so `unreac
 from the comparison. The engine sets it directly: a pursued occurrence in the past is unreachable by
 definition, time having run out on it.
 
-`_unreachable_edge` keeps working untouched, because every release flips `unreachable` back to False
-through the same flag it already reads — ADR-0024's own argument for keying the edge on the flag
-rather than on any one upstream guard.
+`_unreachable_edge` keeps working untouched on every path that *releases* the occurrence, because
+each flips `unreachable` back to False through the same flag it already reads — ADR-0024's own
+argument for keying the edge on the flag rather than on any one upstream guard.
+
+**One path is not a release and still flips the flag**, and this slice is what makes it matter: see
+the deviation on the `DeadlineUnreachableCleared` re-arm under *Deliberate deferrals*.
 
 **But `required_a is None` with `unreachable=True` is a combination the coordinator cannot take
 today.** `coordinator.py:706-724` enters the unreachable block and evaluates
@@ -275,8 +280,9 @@ the obvious move is to have the caller distinguish them.
 
 It cannot, and does not need to. `resolve_deadline_urgency` receives two capabilities,
 `solar_available` and `captar_available`; `SmartChargingConfig` carries no `deadline_available`
-field at all, and `CONF_DEADLINE_AVAILABLE` is read only by `time.py` and `sensor.py` off
-`entry.data`. The coordinator is in exactly the engine's position.
+field at all, and `CONF_DEADLINE_AVAILABLE` is read off `entry.data` by `time.py`, `sensor.py` and
+`config_flow.py`'s own step gate — never by the control cycle. The coordinator is in exactly the
+engine's position.
 
 **The release already happens, by reload.** `__init__.py` registers
 `entry.add_update_listener(_async_reload_entry)`, which calls `hass.config_entries.async_reload`.
@@ -373,6 +379,24 @@ names its tier and its exact file.
 
 - **No entity surfaces the pursued occurrence.** `entity-catalog.md` lists none; adding one is a
   `requirement` change, not this slice's.
+- **Known deviation — a SOC-unavailable cycle re-arms the unreachable notification.**
+  `coordinator_cycle.py`'s non-resolvable early return yields `unreachable=False`, which reaches
+  `_unreachable_edge` and fires `DeadlineUnreachableCleared`, re-arming M3. D-5 now has that same
+  cycle *preserve* the pursued occurrence, so the next healthy cycle is held again,
+  `unreachable` goes True, and a **second notification fires for the same occasion** — which R5 and
+  `UC05` both forbid.
+
+  It is newly reachable because of this slice, not newly wrong. On the shipped tree that cycle also
+  clears `_urgency_latched`, so urgency ends outright and a later notice is a legitimately new
+  occasion; the slice keeps the urgency state and not the notification latch. Underneath it is a
+  contradiction that predates both: `UC05` says such a cycle *"neither leaves `Unreachable` nor
+  emits `DeadlineUnreachableCleared`"*, while ADR-0024's exit table has `ev_soc` becoming `None`
+  firing exactly that event — written when that input was assumed always to be a fault cycle, which
+  `is_soc_gated` makes untrue for `Off` and `Power`.
+
+  **The reconciliation is ADR-0024's and `UC05`'s, not this spec's** (#1178). This slice ships the
+  deviation and pins it: T5 asserts that a SOC-unavailable cycle mid-hold does not re-arm the
+  notice, which fails today and is the test that will pass once #1178 lands whichever way it lands.
 - **Known deviation — a sustained SOC-role outage suspends the backstop.** The backstop is the
   engine's (D-4), and the engine is reached only when `deadline_resolvable` is True. D-5 has the
   SOC-unavailable half of that gate preserve the occurrence, which is what `UC05` requires — but it
@@ -380,12 +404,18 @@ names its tier and its exact file.
   the backstop, so a *sustained* outage holds the occurrence beyond the 24-hour bound and, through
   R9's precondition, suppresses the solar-reserve cap for its duration.
 
-  Bounded rather than unbounded: those cycles resolve `urgent=False`, so nothing is delivered at the
-  raised peak limit, and the backstop fires on the first cycle that reaches the engine again. The
-  alternative — evaluating the backstop coordinator-side on a non-resolvable cycle — would put R5's
-  release logic in two places, which is what D-2 exists to avoid. Recorded because
-  `resolution-rules.md`'s "a hold never outlives one deadline cycle" is stated unconditionally and
-  this is the one case where it does.
+  Bounded, and in the safe direction: those cycles resolve `urgent=False`, so nothing is delivered
+  at the raised peak limit and both clamps run normally — suppressing R9's cap leaves the active SOC
+  limit *higher* than it would otherwise be, which is a cost and solar-optimisation regression, never
+  an over-current or a peak breach. The backstop fires on the first cycle that reaches the engine
+  again.
+
+  The alternative is not merely "R5's release logic in two places". On a SOC-unavailable cycle the
+  SOC release **cannot be evaluated by anyone** — the input does not exist — so a coordinator-side
+  backstop would be releasing on a cycle that established nothing about the deadline, which `UC05`
+  prohibits in terms. The deviation is the analysis layer's own answer. What is imprecise is
+  `resolution-rules.md`'s unconditional "a hold never outlives one deadline cycle", which does not
+  carry `UC05`'s fault-cycle qualifier — a defect there rather than here, raised in #1178.
 - **The baseline calls are not skipped while held.** `system-design.md` §5.1's note says the two
   R5 tests "and the baseline calls that exist only to feed them" are skipped under a hold. T2 does
   the engine half; the Coordinator will still call `mode_desired_current`. It is a query that
@@ -398,9 +428,9 @@ names its tier and its exact file.
   under two readings while clamping on one. That is deliberate and matches R5: C4 is a hard physical
   clamp on this instant (`system-design.md` §2's V6/V7 split), and only the forecast is a forecast.
   Stated here because a reader could otherwise take it for an oversight.
-- **No safety behaviour is silently deferred.** Every clamp, the fault path, and the notification
-  gating are covered above rather than assumed: D-2 pins the release order the current control flow
-  would swallow, D-5 the fault cycle *and* the two halves of the non-resolvable early return, D-6
-  the crash and the payload, D-7 the R18 release. Each of those four is a place where the obvious
-  implementation silently drops a release R5 requires, which is why they are decisions rather than
-  notes.
+- **No safety behaviour is deferred *silently*.** Every clamp, the fault path and the notification
+  gating are decided above or deferred by name here, never assumed: D-2 pins the release order the
+  current control flow would swallow, D-5 the fault cycle *and* the two halves of the non-resolvable
+  early return, D-6 the crash and the payload, D-7 the R18 release. Each is a place where the
+  obvious implementation drops a release R5 requires. The two deviations above are the deferrals,
+  and both carry a test: the suspended backstop, and the notification re-arm (#1178).

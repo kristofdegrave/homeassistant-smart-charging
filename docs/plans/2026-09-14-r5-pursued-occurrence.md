@@ -46,7 +46,7 @@ for the preservation rule ("once an occurrence is pursued it stays pursued until
 
 **Tier:** plain pytest · `tests/engines/test_deadline.py`
 
-**Failing tests**, four, and the order is the point (D-2):
+**Failing tests**, five, and the order is the point (D-2):
 
 1. `pursued_occurrence` at or before `now`, energy still needed → `urgent=True`,
    `unreachable=True`, `required_a is None`, *whatever* `baseline_desired_a` and
@@ -136,6 +136,14 @@ test passes on the fault path and proves nothing.
 **Failing test.** A held cycle reaches the unreachable block with `required_a is None` and does not
 raise, and the `DeadlineUnreachableNotified` it fires carries `self._config.max_current` (D-6). A
 second test asserts the notice fires **once** per occasion while held, and re-arms on release.
+
+**A third test, for the deviation** (see *Deliberate deferrals*): a SOC-unavailable cycle mid-hold
+on `Power` must **not** re-arm the notice, so no second `DeadlineUnreachableNotified` fires when the
+reading returns and the hold is still in effect. This fails against the shipped behaviour, where
+the non-resolvable early return's `unreachable=False` fires `DeadlineUnreachableCleared`. Land it
+**xfail** with #1178 named as the reason: the reconciliation between `UC05` and ADR-0024's exit
+table is theirs to make, and this test is what turns green when it lands — whichever way it lands,
+since both readings agree a single occasion gets one notice.
 
 **Implementation.** Guard `math.isinf(required.required_a)` against `None`
 (`coordinator.py:706-724`) and supply the payload. Without this, T2's own case 1 crashes the cycle
@@ -244,6 +252,11 @@ site fail open silently, and this field decides a forecast. That makes the test 
 `tests/test_coordinator_cycle.py` part of this commit; move them here rather than in a follow-up,
 and say in the test which of the two production sites is exercised.
 
+The dry-run site passes `0.0`, with the comment its `baseline_w=0.0` neighbour already carries: a
+placeholder is sound there **only** because that ctx never reaches `_apply_peak_clamp` or
+`_escalated_maximum_permitted_rate_a`. State the guarantee at the site rather than leaving the
+reader to infer it from the neighbour.
+
 **Mutation checks**, two — point the peak bound back at `ctx.baseline_w`, then the C4 bound back at
 `ctx.net_w`, and confirm the test fails each time on its own.
 
@@ -277,10 +290,14 @@ session and never preserved across a restart").
   reaches it any more — the raw readings belong to the clamps and the readout.
 - **The prose this slice falsifies is updated, not just the code.** `engines/deadline.py:121-123`
   and `:196-223` (the `urgency_latched` explanation, and "a missed-deadline hold clearing (issue
-  #1006)"), `coordinator.py:204-212` ("once #1006 lands"), `const.py:22-26` (which enumerates one
-  saturated-and-capped case and gains a second at T5), and `project-plan.md`'s Phase-2 status row
-  (`:101`) alongside its E4 and M1 status lines, all describe a model this slice replaces. A grep
-  for `urgency_latched` catches none of them.
+  #1006)"), `deadline.py:140-142` (the result field comments — `required_a`'s "None when no
+  deadline is resolved" is false while held, and `urgent`'s "a latch not yet cleared"),
+  `coordinator.py:731-738` (the latch comment block, which also states the fault-cycle rule the new
+  field inherits), `coordinator_cycle.py:62` (`net_w`'s "coordinator.py's separate `smoothed_net_w`"
+  — no longer separate), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
+  a second at T5), and `project-plan.md`'s Phase-2 status row (`:101`) alongside its E4 and M1 status
+  lines, all describe a model this slice replaces. A grep for `urgency_latched` catches none of them,
+  which is why this bullet is a list and not a grep.
 - The UC05 end-to-end tests pass on **probed** values — assert the actual `required_a`, `urgent` and
   pursued occurrence, never infer from a green run; the accidental-latch-from-a-setup-cycle failure
   is the reason this line is here.
