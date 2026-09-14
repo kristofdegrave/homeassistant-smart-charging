@@ -20,9 +20,14 @@ reviewer is dispatched over one tree: `docs/analysis/**`. That tree also holds d
 belonging to neither label — `control-cycle.md`, `resolution-rules.md`, `entity-catalog.md`,
 `system-overview.md` — so a per-label bar would leave those with no bar at all, and the shared
 core (glossary-first, the 6Cs, requirement-ID accuracy, what-not-how, not restating mechanism)
-would be written twice and drift. One file, addressed by both rows. It has to sit in one of the
-two directories; `uc` holds it because the bulk of the type-specific items below are the
-use-case ones, and `../requirement/done.md` routes here.
+would be written twice and drift. One file, addressed by both rows.
+
+It sits in a **label directory** rather than a neutral one — a `work-types/analysis/` or
+`_shared/` would have read better — because this tree is keyed by context label: the directory
+name *is* the label, so renaming a label is a directory move, and a directory that is not a
+label name breaks the invariant `ci-pipeline.md`'s **Label vocabulary sync** relies on to
+enumerate what a rename touches. Given that constraint it goes in `uc/`, the larger of the two
+type-specific halves, and `../requirement/done.md` routes here.
 
 So sections 1–4 apply to **every** analysis document, and section 5's three subsections apply
 to the kind of document actually changed. A document matching none of the three is judged on
@@ -118,9 +123,16 @@ issue for that gap is filed as part of this PR and referenced in the body — a 
 never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow** section routes to.
 A gap found and left unfiled is **Major**.
 
-Both sides sample rather than sweep, at their own cap — the author's is in `implement.md`, the
-reviewer's in its own checklist — and each says which items it took. Sampling is expected; a
-silent sweep is not.
+**Scope of that Major.** It is assertable only against evidence the judge actually holds. The
+author always holds the PR body, so it always binds the self-check. A reviewer who was not
+given the PR body cannot tell a missing filing from an unseen one, and reports **Minor** saying
+the gap is Major unless such an issue has been filed; the reviewer's own checklist states this
+from its side.
+
+Both sides sample rather than sweep, and each says which items it took. The reviewer's cap is
+in its own checklist; a work file may set the author's — `uc/implement.md` does, at five
+items — or leave the count to the diff, and either way the lookup stays targeted per item.
+Sampling is expected; a silent sweep is not.
 
 ## 5. Per-document-kind items
 

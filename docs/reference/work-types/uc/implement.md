@@ -46,13 +46,14 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
   assertions than one requirement edit touches criteria. The cap is this step's own: it is
   deliberately not derived from what any other artifact does, so it neither follows nor
   constrains them. It is a fixed lookup count either way, never a sweep.
-- **State the finding in the PR body**, per item you took: either the code already satisfies
-  it — name the file and the function that does — or it does not. Behaviour the code does
-  not implement at all is this second case, not an exemption from it. Where it does not,
-  **file a `specs` child issue for that gap as part of this PR** and reference it in the
-  body — a `specs` issue, never a task issue, for the reason `CLAUDE.md`'s **Contribution
-  workflow** section routes to; its **Tracker mechanics** section routes to the filing
+- **State the finding, and file what it turns up** — the bar's items 4.2, *The finding is
+  stated*, and 4.3, *A gap is filed*, state both and judge them. What that means while
+  drafting: write each finding into the PR body as you take the item, rather than
+  reconstructing the set afterwards, and open the `specs` child issue in the same session so
+  the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes to the filing
   commands.
+- **Done when** the bar's 4.2 and 4.3 hold for every item you took — the PR body names which
+  of the two cases applies to each, and names the `specs` issue wherever it is the second.
 
 ## Template (section order)
 

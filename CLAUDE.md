@@ -191,8 +191,8 @@ not a fourth column: each row's own work skill and reviewer agent say which one 
 when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
-untrusted issue content outside `docs/**` (minus the work-type tree, which instructs future
-drafts and is excluded from every drafter's allow-list), `custom_components/**` and
+untrusted issue content outside the per-label `docs/` trees each doc drafter is confined to,
+`custom_components/**` and
 `tests/**`, so CI refuses to draft `workflow` issues
 ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a local session hands the drafting to the
 human partner. Its review is still automated. What a `workflow` author reads instead is in
@@ -290,7 +290,10 @@ additions:
   the propagation step); the completion bar carries what must be true of the finished
   document — the 6Cs pass, the glossary-first check, cross-document consistency, requirement
   coverage — and both the author's self-check and the reviewer's criteria are that one file. It
-  is one bar serving both rows, for the reason stated under the table.
+  is one bar serving both rows, for the reason stated under the table, and it is written to
+  cover this whole tree: a change touching only a document neither row owns — a mechanism
+  document, or the glossary — is judged by that same bar, which carries a section for that kind
+  of document.
 - **Never reference PR numbers or issue tracking statuses** (e.g. "PR #30, still open",
   "issue #29, resolved", "has landed") inside the document body. These are ephemeral
   repo-management facts that rot as PRs merge and issues close and don't belong in a document

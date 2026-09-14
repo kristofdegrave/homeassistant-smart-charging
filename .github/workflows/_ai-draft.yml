@@ -121,18 +121,18 @@ jobs:
           # stays, unavoidably: the action needs it before the worker starts, so the worker
           # cannot resolve it from the table. It duplicates the table's Work model column and
           # must move with it.
-          # add_paths is where that containment is spelled out. A doc label's drafter gets
-          # only the tree its draft actually writes, and nothing else under docs/: `adr`
-          # writes the record and the ADL index (docs/adl/**), `uc` and `requirement` write
-          # the analysis layer (docs/analysis/**). Narrowing to the tree — rather than
-          # subtracting the work-type tree from docs/** — is what does the work, because the
-          # files a drafter must never be able to write are not only its own work file. Every
-          # instruction to a future run under docs/ is one: any label's work file or
-          # completion bar, and the reference documents the pipeline and its reviewers read as
-          # criteria. While that content sat in .claude/, the allow-list excluded all of it
-          # mechanically; under docs/ only a per-label tree does. `specs` is still on the
-          # wider form and should be narrowed to docs/plans/** by the slice that moves its
-          # work file.
+          # add_paths is where that containment is spelled out. The target shape — reached by
+          # every doc label except `specs` so far — is that a drafter gets only the tree its
+          # draft actually writes and nothing else under docs/: `adr` the record and the ADL
+          # index (docs/adl/**), `uc` and `requirement` the analysis layer
+          # (docs/analysis/**). `specs` is the exception still on the wider docs/** form, and
+          # should be narrowed to docs/plans/** by the slice that moves its work file.
+          # Narrowing to the tree — rather than subtracting the work-type tree from docs/** —
+          # is what does the work, because the files a drafter must never be able to write are
+          # not only its own work file. Every instruction to a future run under docs/ is one:
+          # any label's work file or completion bar, and the reference documents the pipeline
+          # and its reviewers read as criteria. While that content sat in .claude/, the
+          # allow-list excluded all of it mechanically; under docs/ only a per-label tree does.
           case "$present" in
             uc)          artifact="use-case";                                          model=opus;   add_paths="docs/analysis/**";                          commit_prefix=docs;;
             requirement) artifact="requirement or constraint";                         model=opus;   add_paths="docs/analysis/**";                          commit_prefix=docs;;
@@ -142,7 +142,7 @@ jobs:
             testing)     artifact="test suite";                                        model=sonnet; add_paths="tests/**";                                   commit_prefix=test;;
             workflow)
               emit proceed false
-              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author (no safe add-paths containment for untrusted issue content outside docs/** less the work-type tree, custom_components/**, or tests/**). Draft it manually; the review step is still automated."
+              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author (no safe add-paths containment for untrusted issue content outside the per-label docs/ trees, custom_components/**, or tests/**). Draft it manually; the review step is still automated."
               exit 0
               ;;
             *)

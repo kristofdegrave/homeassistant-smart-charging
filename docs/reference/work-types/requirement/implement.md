@@ -42,12 +42,14 @@ This is how you settle whether the change touches shipped behaviour, which is th
 - **The search.** Per in-scope item, search `custom_components/` for the behaviour it
   constrains — the entity it names, the clamp, the lookup, the default. This is a targeted
   lookup per item, never a sweep of the codebase.
-- **State the finding in the PR body**: either the code already satisfies every such item —
-  naming the file and the function that does — or it does not. Behaviour the code does not
-  implement at all is this second case, not an exemption from it. Where it does not, **file a
-  `specs` child issue for that gap as part of this PR** and reference it in the body — a
-  `specs` issue, never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow**
-  section routes to; its **Tracker mechanics** section routes to the filing commands.
+- **State the finding, and file what it turns up** — the bar's items 4.2, *The finding is
+  stated*, and 4.3, *A gap is filed*, state both and judge them. What that means while
+  drafting: write each finding into the PR body as you take the item, rather than
+  reconstructing the set afterwards, and open the `specs` child issue in the same session so
+  the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes to the filing
+  commands.
+- **Done when** the bar's 4.2 and 4.3 hold for every item you took — the PR body names which
+  of the two cases applies to each, and names the `specs` issue wherever it is the second.
 
 ## Requirement format
 

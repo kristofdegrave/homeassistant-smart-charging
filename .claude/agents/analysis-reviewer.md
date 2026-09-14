@@ -18,7 +18,9 @@ Always read, in `docs/analysis/`:
 - `control-cycle.md`, `resolution-rules.md`, `entity-catalog.md` — the mechanism docs the file may reference.
 - Any sibling use-cases in `use-cases/` the file relates to.
 
-If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for the template and coverage table.
+If the caller names a plan/design doc, read it for its coverage table. The template a document
+is judged against is not taken from there — the bar names it, by the same route the author
+drafted against.
 
 ## Review checklist
 
@@ -41,14 +43,15 @@ how much of it you may check. For each in-scope item, run **one** targeted `Grep
 default, the bound, the event name, the precedence rule it names — and open at most one file,
 the best match. **Stop after three items**: say the set was sampled and name the three you
 took. Six tool calls is the most this check may cost a review, because a review of this tree
-runs on the lighter turn ceiling and a truncated review is re-run from cold. Where nothing is
-in scope, say so in one line and move on. This is one lookup per changed item, never a sweep of
-the codebase, and the read-first list above does not grow for it.
+runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first
+list above does not grow for this check.
 
-**(B) Severity for that item depends on the evidence you were given**, and this overrides the
-severity the bar states. Given the PR body and no reference to a filed `specs` issue for the
-gap, report **Major**; *not* given the PR body, report **Minor** and say the gap is Major
-unless such an issue has been filed for it. Never report Major on evidence you were not given —
+**(B) What you can assert about that item depends on the evidence you were given.** The bar
+states the scope of its own Major here; this is the reviewer's side of it. Given the PR body
+and no reference to a filed `specs` issue for the gap, that Major is assertable — report it.
+*Not* given the PR body, you cannot tell a missing filing from an unseen one: report **Minor**
+and say the gap is Major unless such an issue has been filed for it. Never report Major on
+evidence you were not given —
 the code for a new requirement or a new use-case legitimately does not exist yet, and this
 check must not turn every analysis PR into a review cycle.
 
