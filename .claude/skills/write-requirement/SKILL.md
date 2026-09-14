@@ -5,70 +5,16 @@ description: Use when adding or changing a requirement (Rnn / NFnn), constraint 
 
 # Write a requirement
 
-Add or change a requirement, non-functional requirement, constraint, or glossary term in the Smart
-Charging analysis layer. Every requirement describes **what** the system must do, never **how**.
+A requirement, constraint or glossary term describes **what** the system must do, never
+**how**.
 
-Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
-review → fix/resolve → merge) — no exceptions, including typo-level or pure-wording edits.
-This skill covers only what's specific to a requirement — don't re-derive the universal steps
-here.
+`CLAUDE.md`'s **Model selection** table names the files in the `requirement` row. Read and
+follow both of the ones its *How the work is done* column names: the **work file** carries the
+format, the rules and the propagation step; the **completion bar** carries what must be true
+before the draft is reviewable. The same bar is what the review applies, so satisfying it is
+not a separate exercise from passing review.
 
-## Requirement-specific additions to the workflow
-
-- **Step 1 (draft)**: the requirement in `requirements.md` (or the constraint row / glossary
-  term). Before step 3's review, self-check per `CLAUDE.md`'s "Review protocol for analysis
-  documents" (6Cs + glossary-first).
-- **Propagate**, before step 3's review — a new/changed requirement usually ripples: update
-  the glossary, the mechanism docs (`control-cycle.md` / `resolution-rules.md`), and
-  `entity-catalog.md` (new `sc_` entities, with defaults matching the requirement) so the
-  whole analysis layer stays consistent.
-- **Propagate past the analysis layer**, same step — the documents are not the last stop, and a
-  requirement the code contradicts is not consistent. This is how you settle whether the change
-  touches shipped behaviour, which is the question `CLAUDE.md`'s **Contribution workflow**
-  section's `needs-approval` gate turns on. Search `custom_components/` for the behaviour each
-  added or changed acceptance criterion **or constraint row** constrains (the entity it names,
-  the clamp, the lookup, the default), and **state the finding in the PR body**: either the code
-  already satisfies every such criterion — name the file and the function that does it — or it
-  does not. Where it does not, **file a `specs` child issue for that gap as part of this PR**
-  and reference it in the body — a `specs` issue, not a task issue, for the reason that section
-  routes to; `CLAUDE.md`'s **Tracker mechanics** section routes to the filing commands.
-  Behaviour the code does not implement at all is this same second case, not an exemption from
-  it. Done when the PR body says which of the two cases holds, and names the `specs` issue if it
-  is the second.
-
-## Requirement format
-
-```
-### Rnn — <short title>
-
-**Priority:** Must | Should | Could | Won't   (MoSCoW)
-**What:** One sentence — what the system must do, not how.
-
-**Acceptance criteria:**
-
-- [ ] SMART, testable statements (specific, measurable, with the configurable default in parentheses).
-```
-
-- **Constraints (Cnn)** are hard rules that must never be violated, regardless of mode; they live in
-  the constraints table, one row each, and are enforced as invariants (see `control-cycle.md`).
-- **Glossary terms** define *meaning* only; the `sc_` entity *binding* (id, unit, default) lives in
-  `entity-catalog.md`. Never restate a definition — link to the glossary term.
-
-## Rules
-
-- **What, not how** — no implementation, no HA/Python detail.
-- **MoSCoW priority on every requirement.**
-- **SMART acceptance criteria** — measurable and testable; state the configurable default and range.
-- **Every requirement has exactly one home** — a use-case, a mechanism doc, `resolution-rules.md`,
-  or the constraints table. Check the design doc's coverage table; don't create a second home.
-- Give every configurable parameter a concrete default (avoid "no default specified").
-
-## Common mistakes
-
-- Adding a term to a requirement without defining it in the glossary first.
-- Leaving ripples unpropagated (requirement added but no `entity-catalog.md` row / no clamp in
-  `control-cycle.md`).
-- Propagating to the documents only — merging a criterion the shipped code contradicts, with
-  nothing filed to close the gap.
-- Acceptance criteria that describe *how* (a mechanism) instead of an observable *what*.
-- Duplicating a requirement's home in two documents.
+The lifecycle around the draft — issue, worktree, PR, review, fix, merge — is the contribution
+workflow's, routed from `CLAUDE.md`'s **Contribution workflow** section, and it has no
+exceptions for a small or pure-wording edit. The work file states only what is specific to a
+requirement.

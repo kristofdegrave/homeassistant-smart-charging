@@ -98,8 +98,8 @@ runs on.
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
 | `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
-| `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
-| `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
+| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
+| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
@@ -114,10 +114,28 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
-**A *How the work is done* cell that names more than one file labels each role.** `work file <path>; entry point
-<path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
-by name through. Where a row also splits on *which* file the change touches — `documentation`
-does — each branch is its own sentence, so `;` never has to mean two things in one cell.
+**A cell that names more than one file labels each role**, in either column. Four roles exist:
+the **work file** holds how the artifact is written; the **completion bar** holds what must be
+true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
+file by name through; the **checklist** holds what only a reviewer can check — how to read the
+change, and the checks about the change rather than the artifact. Where a row also splits on
+*which* file the change touches — `documentation` does — each branch is its own sentence, so
+`;` never has to mean two things in one cell.
+
+**The completion bar is one file named in both columns, and that is deliberate.** It is the
+only per-type fact with two readers: the author self-checks against it before requesting
+review, and the reviewer applies it as criteria. Naming it twice duplicates a *route*, not a
+rule — the alternative is the author and the reviewer each holding their own wording of the
+same bar, which is the drift this split exists to remove. A row whose type has no separate bar
+simply names none, and its work file carries what "done" means.
+
+**Two rows may share one bar.** `uc` and `requirement` do: they share a reviewer, and that
+reviewer is dispatched over one tree that also holds documents belonging to neither label, so a
+bar per label would leave those with none. Each row still names a path in its own label's
+directory, so the row stays self-contained and label-keyed; the `requirement` one routes to the
+shared file rather than restating it. A shared reviewer alone does not earn this: the argument
+is that the reviewed tree is wider than either label, so splitting the bar would leave part of
+it unjudged.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
@@ -265,17 +283,13 @@ New or changed documents under `docs/analysis/**` follow the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
-- **Step 1 (draft)**: draft against the applicable template.
-- **6Cs self-check**, done before step 3's fresh-agent review: Clarity, Concision,
-  Completeness, Consistency, Correctness, Concreteness. Confirm every domain term used
-  already exists in the `system-overview.md` glossary; if not, **add it to the glossary
-  first**.
-- **Step 3's reviewer** is `analysis-reviewer`, checking:
-  - **Cross-document consistency** — consistent with all other analysis documents
-    (system-overview, requirements, mechanism docs, other use-cases). Terms match the
-    glossary; requirement IDs match what the document references.
-  - **Requirement coverage** — the document satisfies every requirement it claims, and every
-    requirement is reachable from at least one document.
+- **Step 1 (draft)** and **step 3's review**: the `uc` and `requirement` rows of the **Model
+  selection** table above name the files, and they are their only home — don't restate them
+  here. Each row's work file carries how that artifact is written (the template, the numbering,
+  the propagation step); the completion bar carries what must be true of the finished
+  document — the 6Cs pass, the glossary-first check, cross-document consistency, requirement
+  coverage — and both the author's self-check and the reviewer's criteria are that one file. It
+  is one bar serving both rows, for the reason stated under the table.
 - **Never reference PR numbers or issue tracking statuses** (e.g. "PR #30, still open",
   "issue #29, resolved", "has landed") inside the document body. These are ephemeral
   repo-management facts that rot as PRs merge and issues close and don't belong in a document

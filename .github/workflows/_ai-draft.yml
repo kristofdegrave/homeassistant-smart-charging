@@ -121,18 +121,21 @@ jobs:
           # stays, unavoidably: the action needs it before the worker starts, so the worker
           # cannot resolve it from the table. It duplicates the table's Work model column and
           # must move with it.
-          # add_paths is where that containment is spelled out, and the work-type tree is
-          # excluded from every doc label's: a work file instructs every future draft of its
-          # type, so a drafter acting on an untrusted issue body must never be able to write
-          # one — and what matters is not whose work file it is, so no drafter of any type
-          # gets the tree. While that content sat in .claude/, the allow-list excluded it
-          # mechanically; under docs/ it has to be excluded explicitly. `adr` is narrower
-          # still, at docs/adl/**, because an ADR draft writes only the record and the ADL
-          # index; the other doc labels should each be narrowed to their own tree by the slice
-          # that moves their work file.
+          # add_paths is where that containment is spelled out. A doc label's drafter gets
+          # only the tree its draft actually writes, and nothing else under docs/: `adr`
+          # writes the record and the ADL index (docs/adl/**), `uc` and `requirement` write
+          # the analysis layer (docs/analysis/**). Narrowing to the tree — rather than
+          # subtracting the work-type tree from docs/** — is what does the work, because the
+          # files a drafter must never be able to write are not only its own work file. Every
+          # instruction to a future run under docs/ is one: any label's work file or
+          # completion bar, and the reference documents the pipeline and its reviewers read as
+          # criteria. While that content sat in .claude/, the allow-list excluded all of it
+          # mechanically; under docs/ only a per-label tree does. `specs` is still on the
+          # wider form and should be narrowed to docs/plans/** by the slice that moves its
+          # work file.
           case "$present" in
-            uc)          artifact="use-case";                                          model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';   commit_prefix=docs;;
-            requirement) artifact="requirement or constraint";                         model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';   commit_prefix=docs;;
+            uc)          artifact="use-case";                                          model=opus;   add_paths="docs/analysis/**";                          commit_prefix=docs;;
+            requirement) artifact="requirement or constraint";                         model=opus;   add_paths="docs/analysis/**";                          commit_prefix=docs;;
             adr)         artifact="Architecture Decision Record (ADR)";                 model=opus;   add_paths="docs/adl/**";                              commit_prefix=docs;;
             specs)       artifact="implementation spec (design + TDD plan)";            model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';   commit_prefix=docs;;
             development) artifact="implementation task (code + tests)";                model=sonnet; add_paths=$'custom_components/**\ntests/**';            commit_prefix=feat;;
