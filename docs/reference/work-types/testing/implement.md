@@ -23,13 +23,10 @@ artifact as one written under a `testing` issue, and is judged against the same 
 
 ## Choose the harness first (ADR-0009)
 
-- **Plain pytest** — `tests/modes/`, `tests/engines/`: pure logic that imports **no**
-  `homeassistant.*`. Fast, no runtime. This is where mode/engine behaviour, clamp math, and the
-  resolution rules are verified.
-- **HA harness** (`pytest-homeassistant-custom-component` + `MockConfigEntry`) —
-  `tests/adapters/`, `tests/test_coordinator.py`, entity/platform tests,
-  `tests/test_config_flow.py`, `tests/test_init.py`: anything HA-coupled (entity state,
-  config-entry lifecycle, registration, services).
+The directory-to-harness mapping is the bar's item 1, *Harness split*, which states it and
+judges it — read it there rather than from a summary. What that means before the first line:
+settle which layer the unit is in, because a test written in the wrong harness is rewritten
+rather than adjusted.
 
 Before writing an HA-harness test, read the **Testing Requirements** section of the
 `ha-integration-knowledge` skill — in particular its rule that tests exercise the integration
@@ -69,9 +66,6 @@ harness above, then:
 
 ## Rules
 
-- **Harness by layer, no exceptions** — the bar's item 1, *Harness split*, states it and
-  judges it. What that means while writing: settle the layer before the first line, because a
-  test written in the wrong harness is rewritten rather than adjusted.
 - **One behaviour per test** — the bar's item 3, *Traceability and structure*, states it and
   judges it. What that means while writing: if you're tempted to test a second behaviour (a
   second `# Act`, or asserts about an unrelated outcome), split it into another test rather than
@@ -82,13 +76,16 @@ harness above, then:
 
 ## Common mistakes
 
-- A `modes/`/`engines/` test that imports `homeassistant.*` (wrong harness).
-- Missing one of an adapter role's mandated cases.
-- Clamp-math tests with no worked example (just "it returns a number").
-- Vacuous asserts or asserting on a mock's return value — green against no implementation.
-- Test names that describe mechanics (`test_function_returns`) instead of the behaviour they
-  trace to — use Should-When-Then, not the function's name.
-- A test body with no Arrange / Act / Assert structure, or with more than one action in `# Act`
-  (asserting several behaviours at once) so a failure no longer points at a single scenario.
+Mistakes in how the work is done. The defects themselves are enumerated once, in the bar, so
+none of them is restated here:
+
+- Reaching for the HA harness to dodge a design signal. A piece that cannot be tested with plain
+  pytest belongs in an adapter/coordinator/entity — moving the test is not the fix.
+- Writing the mandated cases from memory instead of from the bar's item 2 and ADR-0040. The unit
+  case in particular has a trigger, a per-class discharge and exclusions that a summary loses.
+- Naming the test after the body you just wrote rather than the behaviour you meant to pin —
+  which is why the name comes first.
+- Running red only after the implementation exists, so "it fails without the code" is inferred
+  rather than observed.
 - Writing against this file alone and never opening `done.md` — the bar is where most of what a
   review will say already is.

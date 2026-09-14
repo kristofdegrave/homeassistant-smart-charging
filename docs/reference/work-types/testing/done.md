@@ -3,11 +3,10 @@
 **Who reads this.** Both sides of the review, which is why it is its own file rather than a
 section of either one:
 
-- **The author**, as the self-check before requesting review. `definition-of-done.md` sends
-  the author here: where a row names a completion bar, that file is what "done" means for the
-  artifact. Unlike a document type, though, it does **not** stand in for that file's
-  builds/lints/tests checklist — a `testing` change touches `tests/`, and that checklist is
-  stated there to be the floor for exactly those trees. Both apply, in full.
+- **The author**, as the self-check before requesting review — `definition-of-done.md` sends
+  the author to a row's completion bar, and this is the `testing` row's. It **adds to** that
+  document's builds/lints/tests checklist rather than standing in for it, which is the case that
+  document states for a change touching `tests/`. Both apply, in full.
 - **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
   carries, so the two sides judge the same suite against the same bar.
 
@@ -22,14 +21,18 @@ and this is the bar for both.
 
 ## The bar
 
-**(1) Harness split (ADR-0009).**
-- Pure logic (`tests/modes/`, `tests/engines/`) uses **plain pytest** and imports no
-  `homeassistant.*`. A pure-logic test that pulls in the HA harness is **Major** — it defeats
-  the package boundary that makes the logic HA-free.
-- Adapters, coordinator, entities, and config flow use the **HA harness**
-  (`pytest-homeassistant-custom-component` + `MockConfigEntry`). One of them tested with plain
-  pytest where it needs a real (mocked) HA runtime is **Major** — the test either bypasses the
-  wiring it claims to cover or re-implements it.
+**(1) Harness split (ADR-0009).** The directory-to-harness mapping is stated here, once, and
+both sides read it from here:
+- **Plain pytest** — `tests/modes/`, `tests/engines/`: pure logic, importing no
+  `homeassistant.*`. Fast, no runtime; this is where mode/engine behaviour, clamp math and the
+  resolution rules are verified. A test in these directories that pulls in the HA harness is
+  **Major** — it defeats the package boundary that makes the logic HA-free.
+- **HA harness** (`pytest-homeassistant-custom-component` + `MockConfigEntry`) —
+  `tests/adapters/`, `tests/test_coordinator.py`, entity/platform tests,
+  `tests/test_config_flow.py`, `tests/test_init.py`: anything HA-coupled (entity state,
+  config-entry lifecycle, registration, services). One of these tested with plain pytest where it
+  needs a real (mocked) HA runtime is **Major** — the test either bypasses the wiring it claims
+  to cover or re-implements it.
 
 **(2) Mandated coverage.** Each miss below is **Major**; name the role, branch or path missed.
 - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
@@ -48,10 +51,12 @@ and this is the bar for both.
 - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
 
 **(3) Traceability and structure.** Coverage is checkable from the test names alone, and a
-failure points at a single scenario. Each miss below is **Minor per occurrence**, and **Major
-where it is suite-wide** — a suite that misses one of these throughout defeats this item's own
-purpose rather than blemishing it, and a bar that only ever calls it Minor lets that through as
-clean.
+failure points at a single scenario. Severity is decided against **the changed tests**, which
+are all a reviewer sees: a miss that is an exception among them is **Minor per occurrence**; a
+miss that is the *pattern* of them — so that following the change's own example reproduces it —
+is **Major**. The split is there because a bar that only ever says Minor routes a suite-wide
+miss through as clean, and a suite-wide miss defeats this item's purpose rather than blemishing
+it.
 - Each name is in **Should-When-Then** form — `test_should_<expected behaviour>_when_<condition>`
   — and traces to the requirement / UC / ADR criterion it verifies. A name describing mechanics
   rather than behaviour (`test_function_returns`) is a miss: coverage is no longer readable from

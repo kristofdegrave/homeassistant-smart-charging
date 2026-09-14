@@ -10,9 +10,9 @@ mandates. This is usually reached from inside a development task's TDD loop, but
 alone when back-filling or expanding coverage.
 
 `CLAUDE.md`'s **Model selection** table names the files in the `testing` row. Read and follow
-both of the ones its *How the work is done* column names: the **work file** carries the harness
-split, how each test is named and structured, and the rules; the **completion bar** carries what
-must be true before the suite is reviewable, including the mandated cases it has to contain. The
+the two its *How the work is done* column labels **work file** and **completion bar**: the work
+file carries how each test is chosen, named and structured; the completion bar carries what must
+be true before the suite is reviewable, including the harness mapping and the mandated cases. The
 same bar is what the review applies, so satisfying it is not a separate exercise from passing
 review.
 
