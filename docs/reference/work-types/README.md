@@ -41,9 +41,14 @@ one is the copy that shrinks.
 | `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — `CLAUDE.md`'s **Model selection** section says why one file serves both. |
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
-`review.md` **does not exist for any label yet.** That material still sits in the reviewer agent
-definitions under `.claude/agents/`; the pass that moves it is the one that makes the reviewer
-agents generic, and it is that pass which adds these files.
+`review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
+`requirement` and `specs` today, `requirement/review.md` being a pointer to `uc/`'s the way its
+`done.md` is. For the rest, that material still sits in the reviewer agent definitions under
+`.claude/agents/`, and the pass that migrates each remaining label is the one that adds its
+file. What a generic reviewer holds instead — the output contract, the anchoring rules and how
+a checklist is resolved — sits with whoever applies the checklist: `.claude/agents/reviewer.md`
+locally, and CI's own review-workflow prompt, which has no agent to spawn and self-applies the
+file instead.
 
 ## When a label branches
 

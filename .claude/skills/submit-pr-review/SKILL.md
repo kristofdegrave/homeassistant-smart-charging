@@ -79,11 +79,10 @@ comment — the review must be posted.
 
 - **CI**: `_ai-review.yml`'s prompt references this skill and supplies the repo, PR number,
   head SHA, and base SHA. It runs as the workflow bot, so it uses CI mode (with the marker).
-- **Locally**: the `review` skill runs the pass. Every reviewer agent `CLAUDE.md`'s
-  **Model selection** table names is read-only — they return findings, they do not post — so
-  once they have all returned, the main session posts their findings here as **one** review in
-  local mode (round marker, no verdict marker). One pass is one review, however many agents
-  ran. The PR always exists by then, which step 2 of the doc `CLAUDE.md`'s
+- **Locally**: the `review` skill runs the pass. Every reviewer it spawns is read-only —
+  they return findings, they do not post — so once they have all returned, the main session
+  posts their findings here as **one** review in local mode (round marker, no verdict marker).
+  One pass is one review, however many reviewers ran. The PR always exists by then, which step 2 of the doc `CLAUDE.md`'s
   **Contribution workflow** section routes to guarantees.
   Anchor each finding that carries a file path + new-version line as an inline comment; put
   the rest in the body. If there is no PR (an uncommitted local draft), report the findings in

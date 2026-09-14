@@ -10,7 +10,7 @@ identity (see that doc's **Git identity** section).
 `needs-draft`, `needs-review`, and `needs-work` exist to invoke these jobs — nothing else. A
 **Claude session must never self-apply one on its own initiative** to hand its own review/fix
 work to CI instead of doing it in-session; interactive review and fix always happen locally,
-per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh `*-reviewer`
+per [contribution-workflow.md](contribution-workflow.md) steps 3–6: a fresh reviewer
 subagent posts findings via `submit-pr-review`, then `resolve-review-thread` closes out each
 thread that got fixed. This does *not* forbid the pipeline's actual, intended human triggers
 below — a maintainer applying `needs-draft` to start the pipeline, or manually re-adding
@@ -44,9 +44,28 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
 `adr`, `development`, `documentation`, `requirement`, `specs`, `testing` and `uc`), and then
-fixing any cross-directory route into it, of which there are two: `requirement/done.md` routes
-to the shared completion bar in `uc/`, and `development/done.md` routes to `testing/`'s bar for
-the `tests/**` half of a development change. The shape of that tree — the roles a label's
+fixing every cross-directory reference the move breaks. **Find them by rule, not from a
+list**: every **relative-path** reference that leaves a label's own directory for another
+label's — `../<label>/…`, whether it is a markdown link or a bare path in prose, and in
+**either** direction, since a label's directory is referred to as often as it refers out.
+`grep -rn '\.\./' docs/reference/work-types/` enumerates the candidates in one command;
+renaming a label means fixing every hit naming it, on both sides.
+
+No count is stated here on purpose. This sentence is a sync obligation — it exists for the
+case where someone forgets to update a list — so a hand-maintained list inside it is the
+defect it is meant to prevent, and it has drifted every time one has been tried. The rule
+also survives the labels still to migrate, each of which adds more such references.
+
+Three things the rule deliberately excludes, so a rename executor does not chase them.
+A reference that leaves the tree entirely (`../../../adl/…`) does not name a label and
+survives the move. A reference that stays **inside** one label's own directory — between
+`documentation/`'s two per-branch subdirectories, or from one of them back up to the file that
+routed there — moves with the directory it sits in. And a route
+by **label name** through the *Model selection* table rather than by path — `development`'s
+bar sending the `tests/**` half to the `testing` row, and the work files that name a row —
+carries no `../` at all: the table named just above is where a rename fixes those.
+
+The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
 artifact gets — is [work-types/README.md](work-types/README.md)'s; what belongs here is only
 that the label is the directory name, so a rename moves a directory. Adding a label means
