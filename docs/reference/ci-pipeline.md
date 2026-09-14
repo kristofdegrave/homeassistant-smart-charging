@@ -140,9 +140,10 @@ in branch protection's required checks on `main`.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict on a **docs-only** diff adds
   `needs-work`, which runs `address-review-remarks`, commits as `github-actions[bot]`
   (`docs: address AI review remarks (#<pr>)`), and re-adds `needs-review`. It can only commit
-  under `docs/` (its commit step is `git add docs`-only), so a diff touching **anything**
-  outside `docs/**` (`.github/`, `.claude/`, `custom_components/`, `tests/`) never reaches it
-  automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
+  under `docs/`, and not `docs/reference/work-types/**` — the tree it reads as its own
+  instructions, excluded from its commit step so one fix run cannot rewrite what the next one
+  obeys. So a diff touching **anything** outside that set (`.github/`, `.claude/`,
+  `custom_components/`, `tests/`, or a work file) never reaches it automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
   `needs-approval` with a comment saying why, rather than spending fix cycles that could not
   commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
   to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
