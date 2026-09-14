@@ -143,8 +143,8 @@ in branch protection's required checks on `main`.
   under `docs/`, and not `docs/reference/work-types/**` — the tree it reads as its own
   instructions, excluded from its commit step so one fix run cannot rewrite what the next one
   obeys. So a diff touching **anything** outside that set (`.github/`, `.claude/`,
-  `custom_components/`, `tests/`, or a work file) never reaches it automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
-  `needs-approval` with a comment saying why, rather than spending fix cycles that could not
+  `custom_components/`, `tests/`, or a work file) never reaches it automatically:
+  `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to `needs-approval` with a comment saying why, rather than spending fix cycles that could not
   commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
   to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
   job ever sees a non-docs PR. That bound no longer means "documents only", though: the
