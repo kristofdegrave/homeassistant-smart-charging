@@ -128,8 +128,10 @@ def resolve_next_occurrence(
     payload -- but it is reachable, not impossible.
 
     R5's missed-deadline hold -- the one documented case that keeps pursuing the occurrence
-    that has just elapsed -- is deliberately not modelled here; it is a separate, stateful
-    mechanism (issue #1006) and cannot be inferred from these two readings alone.
+    that has just elapsed -- is deliberately not modelled here: this function always resolves
+    the NEXT occurrence, and the hold is read off the pursued occurrence that
+    `resolve_required_current` carries, which cannot be inferred from these two readings
+    alone.
     """
     if deadline_today is not None:
         today_at = datetime.combine(now.date(), deadline_today, tzinfo=now.tzinfo)
@@ -146,8 +148,14 @@ def resolve_next_occurrence(
 class RequiredCurrentResult:
     """Result of resolving the current required to meet a departure deadline."""
 
-    required_a: float | None  # None when no deadline is resolved (urgency never applies)
-    urgent: bool  # slack test fired, or a latch not yet cleared by the handback test
+    # None when no deadline is resolved (urgency never applies), and also while a
+    # missed-deadline hold is in effect -- the time remaining to a past occurrence is not
+    # positive, so there is nothing to compute (resolution-rules.md, 'Missed-deadline hold').
+    required_a: float | None
+    # Slack test fired, an occurrence not yet released by the handback test, or a
+    # missed-deadline hold in effect -- the third is urgency seen after the occurrence it
+    # chases has passed, not a case of its own.
+    urgent: bool
     unreachable: bool  # required_a > escalated_maximum_permitted_rate_a
     # The occurrence urgency is chasing, for the Manager to thread back in next cycle -- None
     # when none is. The default is load-bearing: `RequiredCurrentResult` is constructed at two
@@ -234,9 +242,11 @@ def resolve_required_current(
     margin -- so it is a strict subset of urgency by construction, and UC05's
     Normal -> Urgent -> Unreachable ordering holds without a rule of its own.
 
-    Urgency's remaining clear conditions live with the caller, not here: a disconnect, and a
-    missed-deadline hold clearing (issue #1006). "No deadline" is handled below, since this
-    function already sees it.
+    Urgency's one remaining clear condition lives with the caller, not here: a disconnect.
+    "No deadline" is handled below, since this function already sees it, and so is the
+    missed-deadline hold -- which is not a second mechanism but a reading of
+    `pursued_occurrence` at a moment after that occurrence has passed, released by state of
+    charge reaching the active SOC limit or by the backstop below.
     """
     # ORDER IS THE DECISION HERE, not an implementation detail: two releases the analysis
     # requires are destroyed by a hold short-circuit placed naively (resolution-rules.md's
@@ -263,21 +273,34 @@ def resolve_required_current(
         )
         if backstop_fired:
             # Releasing the pursued occurrence ends the hold and urgency together -- they were
-            # never two things -- and from here the ordinary resolution governs again
-            # (resolution-rules.md, 'Missed-deadline hold'). Dropping it rather than returning
-            # early is what lets the slack test judge the NEW occurrence on this same cycle:
-            # a fresh deadline genuinely at risk should engage, not wait a cycle.
-            pursued_occurrence = None
-        else:
-            # No required current is computed while the hold lasts -- the time remaining is not
-            # positive, so neither test can run -- and the deadline is unreachable by
-            # definition, time having run out on it.
+            # never two things -- "and from the NEXT cycle the required current above governs
+            # normally again" (resolution-rules.md, 'Missed-deadline hold'). Both halves of
+            # that sentence matter: the release cycle itself returns to UC05's `Normal` with
+            # `urgent` and `unreachable` both False, which is what the state table's backstop
+            # exit requires -- `-> Normal (DeadlineUnreachableCleared + DeadlineUrgencyReverted)`.
+            #
+            # Deliberately NOT a fall-through into the ordinary path. Re-deriving `urgent` from
+            # the slack test on the NEW occurrence here would, whenever that test holds, leave
+            # `unreachable` True on every cycle and never pass through `Normal` -- so the
+            # coordinator's `_unreachable_edge`, which keys on this flag alone (ADR-0024),
+            # would never fire `DeadlineUnreachableCleared` and the next occasion would go
+            # unnotified. The new occurrence is judged from the next cycle instead.
             return RequiredCurrentResult(
                 required_a=None,
-                urgent=True,
-                unreachable=True,
-                pursued_occurrence=pursued_occurrence,
+                urgent=False,
+                unreachable=False,
+                pursued_occurrence=None,
             )
+
+        # No required current is computed while the hold lasts -- the time remaining is not
+        # positive, so neither test can run -- and the deadline is unreachable by definition,
+        # time having run out on it.
+        return RequiredCurrentResult(
+            required_a=None,
+            urgent=True,
+            unreachable=True,
+            pursued_occurrence=pursued_occurrence,
+        )
 
     # 3. Only now: R14's "no deadline" is one of urgency's own release conditions, so the
     #    occurrence is dropped rather than threaded through (resolution-rules.md's release
@@ -320,7 +343,9 @@ def resolve_required_current(
     # strictly after `now`, so re-deriving this from `deadline_at` each cycle would make a
     # missed-deadline hold unreachable in production (resolution-rules.md, 'It is anchored to
     # the occurrence already missed').
-    successor = (pursued_occurrence or deadline_at) if urgent else None
+    successor = (
+        (pursued_occurrence if pursued_occurrence is not None else deadline_at) if urgent else None
+    )
 
     return RequiredCurrentResult(
         required_a=required_a,
