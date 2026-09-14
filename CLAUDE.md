@@ -32,9 +32,10 @@ docs/design/
   project-plan.md      — implementation task breakdown derived mechanically from system-design.md
 ```
 
-Use-cases and mechanism documents validate this decomposition — they never drive it. See
-`docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale and the
-`write-system-design` / `write-project-design` skills for the cycle.
+See `docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale, and the
+`documentation` row of the **Model selection** table below for the cycle — its work files and
+completion bars own how each of these two documents is written and what "finished" means for
+it, including the Method's own discipline about what may drive a decomposition.
 
 ```text
 docs/adl/
@@ -101,7 +102,7 @@ runs on.
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
+| `documentation` | For `docs/design/system-design.md`: work file `docs/reference/work-types/documentation/implement-system-design.md`; completion bar `docs/reference/work-types/documentation/done-system-design.md`; entry point `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: work file `docs/reference/work-types/documentation/implement-project-plan.md`; completion bar `docs/reference/work-types/documentation/done-project-plan.md`; entry point `.claude/skills/write-project-design/SKILL.md`. | opus | For `docs/design/system-design.md`: completion bar `docs/reference/work-types/documentation/done-system-design.md`. For `docs/design/project-plan.md`: completion bar `docs/reference/work-types/documentation/done-project-plan.md`. Either way, checklist `.claude/agents/system-design-reviewer.md`. | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
@@ -136,6 +137,12 @@ directory, so the row stays self-contained and label-keyed; the `requirement` on
 shared file rather than restating it. A shared reviewer alone does not earn this: the argument
 is that the reviewed tree is wider than either label, so splitting the bar would leave part of
 it unjudged.
+
+**One row may name two bars.** `documentation` does: the row splits on which
+`docs/design/` file the change touches, and the reviewed tree holds exactly those two files, so
+a bar per branch leaves nothing in it unjudged — the condition the shared-bar case above turns
+on, met from the other side. Each branch is a sentence in each column, and the branches' bars
+state disjoint criteria rather than one bar with an "if" in every item.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
