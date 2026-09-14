@@ -112,7 +112,8 @@ in branch protection's required checks on `main`.
   are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because no
   safe path containment exists for untrusted issue content outside
   `docs/**` (less the work-type tree)/`custom_components/**`/`tests/**`; `documentation` simply
-  isn't wired in yet). A human authors both drafts by hand. The review step is still automated for `workflow`, since
+  isn't wired in yet). A human authors both drafts by hand. The review step is still automated
+  for `workflow`, since
   routing reaches it through the changed paths and not only through the issue's context label —
   but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter
   nor `_ai-review.yml`'s diff enumeration, so a PR touching only that tree gets no AI review at
