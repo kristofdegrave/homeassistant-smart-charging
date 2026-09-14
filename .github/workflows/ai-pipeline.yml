@@ -20,10 +20,10 @@ name: AI documentation pipeline
 # `Plan: docs/plans/<file>.md#T<task-number>` line in the issue body — see _ai-draft.yml's header
 # comment for the full containment story. `workflow` (CI/skill/agent changes) is deliberately
 # never auto-drafted — only its review is wired (see _ai-review.yml / workflow-reviewer.md).
-# Review picks its checklist from the changed file paths, not the label — this is also why a
-# human-authored `development`/`testing` PR (touching custom_components/ or tests/) already gets
-# reviewed by code-reviewer/test-reviewer today, independent of whether it came through the
-# drafter above or was authored by hand.
+# Review picks its checklists from CLAUDE.md's Model selection table, which routes on the
+# changed file paths and on the linked issue's label — the path half is why a human-authored
+# `development`/`testing` PR (touching custom_components/ or tests/) gets reviewed today,
+# independent of whether it came through the drafter above or was authored by hand.
 # Run .github/setup-labels.sh once so every label exists (gh --add-label won't create them).
 #
 # Guards on every AI job: exact label + actor allow-list. Applying a label needs Triage+, so
