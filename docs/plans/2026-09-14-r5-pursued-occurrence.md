@@ -162,7 +162,12 @@ the pursued occurrence lies in the past); ADR-0024 for the re-arm.
 
 ## T6 — R14's "no deadline" does not release a hold, and R18's absence needs no code
 
-**Tier:** plain pytest · `tests/test_coordinator_cycle.py`
+**Tier:** HA harness · `tests/test_coordinator.py`
+
+**The file changed, not the tier.** This entry named `tests/test_coordinator_cycle.py`, which is
+plain pytest — and both assertions below need a running entry: one is explicitly end-to-end, the
+other reloads the config entry. Neither can live in that file, so the file moves to the harness one
+the rest of this slice's coordinator assertions use. The assertions themselves are unchanged.
 
 **Failing test**, one: held, the deadline **resolves to "no deadline"** (R14) → **still held**. This
 is T2 case 3 asserted end to end, and it is the direction the coordinator can get wrong on its own.
@@ -176,7 +181,15 @@ once.
 
 ## T7 — The following occurrence, relative to the pursued one
 
-**Tier:** plain pytest · `tests/test_coordinator_cycle.py`
+**Tier:** per file (ADR-0009) — **HA harness** · `tests/test_coordinator.py` for both failing tests
+below; **plain pytest** · `tests/test_coordinator_cycle.py` for the `DeadlineUrgencyInputs` field
+and its forwarding.
+
+**The harness half's file changed, not its tier.** This entry named
+`tests/test_coordinator_cycle.py` alone, which is plain pytest. Both tests below turn on a value
+built coordinator-side — `resolve_deadline_for` is a closure defined at `coordinator.py:395` inside
+an async coordinator method — so from the pure tier they could only assert that a field is
+forwarded, and the defect D-4 exists to prevent would be unreachable. The assertions are unchanged.
 
 **Failing tests**, two:
 
@@ -226,8 +239,10 @@ the urgency call at `:661`.
 
 ## T10 — Both escalated bounds on smoothed readings
 
-**Tier:** HA harness · `tests/test_coordinator.py`, `tests/test_captar_end_to_end.py`,
-`tests/test_deadline_soc_management_end_to_end.py` (the UC05 path the split changes)
+**Tier:** per file (ADR-0009) — **HA harness** · `tests/test_coordinator.py`,
+`tests/test_captar_end_to_end.py`, `tests/test_deadline_soc_management_end_to_end.py` (the UC05
+path the split changes); **plain pytest** · `tests/test_coordinator_cycle.py` for the
+`CycleContext` constructions this task pulls into its own commit (below).
 
 **Failing test.** A cycle where the smoothed and raw readings *differ* — a single-cycle spike, so
 the smoothing window and the debounced raw value disagree — asserts, in one test:

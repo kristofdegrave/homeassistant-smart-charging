@@ -418,8 +418,9 @@ def resolve_solar_reserve_active(
 `engines/deadline.py` and `engines/soc_target.py` are pure — **plain pytest**, in
 `tests/engines/test_deadline.py` and `tests/engines/test_soc_target.py`, no HA harness. The
 coordinator threading, the `CycleContext` field, the R18 release, the notification payload and the
-two-baseline split are HA-coupled — **HA harness**, in `tests/test_coordinator.py` and
-`tests/test_deadline_soc_management_end_to_end.py`. Each task names its tier and its exact file.
+two-baseline split are HA-coupled — **HA harness**, in `tests/test_coordinator.py`,
+`tests/test_deadline_soc_management_end_to_end.py`, `tests/test_notifications_end_to_end.py` (T5)
+and `tests/test_captar_end_to_end.py` (T10). Each task names its tier and its exact file.
 
 `tests/test_coordinator_cycle.py` is a **third** placement and belongs to the first group, not the
 second: it is plain pytest over `coordinator_cycle.py`'s pure units — its own module docstring says
