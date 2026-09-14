@@ -17,9 +17,10 @@ test does not hold, `None`. A second test threads a non-`None` occurrence in acr
 handback clears and asserts `None` comes back out.
 
 **Implementation.** Add `pursued_occurrence: datetime | None` as a parameter and a result field,
-**both defaulting to `None`** — the result field's default is what keeps the three construction sites
-outside the engine (`coordinator.py:225`, `coordinator_cycle.py:613`, `engines/deadline.py:226`)
-compiling on this commit (D-1, D-8). **Keep `urgency_latched` accepted** and derive the effective
+**both defaulting to `None`** — the result field's default is what keeps the other three
+construction sites compiling on this commit (D-1, D-8): `coordinator.py:225` and
+`coordinator_cycle.py:613` outside the engine, and `engines/deadline.py:226` — the `deadline_at is
+None` early return — inside it. Only `engines/deadline.py:257`, the normal return, sets the field. **Keep `urgency_latched` accepted** and derive the effective
 latch as `pursued_occurrence is not None or urgency_latched`, so `coordinator_cycle.py:663` keeps
 working untouched and the HA suite stays green. The slack test, the handback and their precedence are
 otherwise unchanged.
@@ -56,6 +57,11 @@ for the preservation rule ("once an occurrence is pursued it stays pursued until
    `deadline.py:225-226` returns `urgent=False` on that input today. The hold branch sits **above**
    that early return.
 4. The occurrence strictly after `now` → the ordinary path, unchanged.
+5. **Pursued occurrence in the *future*, `deadline_at is None` → released.** The ordinary "no
+   deadline" release (`requirements.md` R5, `resolution-rules.md`), which is *not* the case case 3
+   protects. The early return yields it for free through the new field's default — pin it anyway,
+   because an implementation that threaded the parameter through that return would keep a future
+   occurrence pursued for ever and every other case here would still pass.
 
 **Implementation.** The energy computation first, then the hold branch, then the early return
 (D-2). No field, no flag.
@@ -128,10 +134,8 @@ test passes on the fault path and proves nothing.
 **Tier:** HA harness · `tests/test_coordinator.py`, `tests/test_notifications_end_to_end.py`
 
 **Failing test.** A held cycle reaches the unreachable block with `required_a is None` and does not
-raise, and the `DeadlineUnreachableNotified` it fires carries `self._config.max_current` — the same
-value the existing `float('inf')` saturation caps to at `coordinator.py:722-724`, and *not* the
-[maximum permitted rate], which is the clamped delivered value (D-6). A second test asserts the
-notice fires **once** per occasion while held, and re-arms on release.
+raise, and the `DeadlineUnreachableNotified` it fires carries `self._config.max_current` (D-6). A
+second test asserts the notice fires **once** per occasion while held, and re-arms on release.
 
 **Implementation.** Guard `math.isinf(required.required_a)` against `None`
 (`coordinator.py:706-724`) and supply the payload. Without this, T2's own case 1 crashes the cycle
@@ -147,11 +151,9 @@ the pursued occurrence lies in the past); ADR-0024 for the re-arm.
 **Failing test**, one: held, the deadline **resolves to "no deadline"** (R14) → **still held**. This
 is T2 case 3 asserted end to end, and it is the direction the coordinator can get wrong on its own.
 
-**No implementation for R18** (D-7). Withdrawing the deadline capability is a reconfigure that
-updates `entry.data`, which reloads the entry through `__init__.py`'s update listener and re-creates
-the coordinator with `_pursued_occurrence` at `None` — R5's "never preserved across a restart" rule
-already producing the release. **Assert that** rather than building a second mechanism: a
-reload-mid-hold test that the occurrence does not survive it, which also covers T11's first case.
+**No implementation for R18** — D-7 says why. What this task adds is the assertion: a reload
+mid-hold, and the occurrence does not survive it. That is also T11's restart case, covered here
+once.
 
 **Anchors:** `requirements.md` R18 and R5's AC on restart; `resolution-rules.md`'s release list;
 `UC05`'s `Unreachable` row.
@@ -169,9 +171,10 @@ reload-mid-hold test that the occurrence does not survive it, which also covers 
 2. An installation whose following day resolves to "no deadline" passes `None`, making T3's case 3
    reachable end to end.
 
-**Implementation.** Build it from `resolve_deadline_for` (`coordinator.py:408/418`) for the day after
-the pursued occurrence — the same R14 table both existing occurrence resolutions use — and pass it
-through.
+**Implementation.** Build it from `resolve_deadline_for` (defined at `coordinator.py:395`, returned
+at `:418`) for the day after the pursued occurrence — the same R14 table both existing occurrence
+resolutions use. Carry it as a new `DeadlineUrgencyInputs` field (`coordinator_cycle.py:538-565`)
+and forward it at `:645-664`.
 
 **Anchors:** `requirements.md` R14; `resolution-rules.md`'s departure-deadline lookup.
 
@@ -196,9 +199,11 @@ existing cases stay as they are.
 released by the urgency call: the reserve cap must read *held* for that cycle and *not held* on the
 next. That assertion pins the ordering, not the value.
 
-**Implementation.** Wire the sixth argument through `resolve_solar_reserve_gate`
-(`coordinator_cycle.py:496`) from the **threaded-in** occurrence, read before the urgency call
-updates it (D-2).
+**Implementation.** Add the sixth argument to `resolve_solar_reserve_gate`
+(`coordinator_cycle.py:496`) **and pass it at its call site**, `coordinator.py:410-417` inside
+`_resolve_deadline_and_reserve` — the parameter alone leaves the task half-built. It is read from
+the **threaded-in** occurrence (D-2); the ordering that needs is free, since `:410` runs well before
+the urgency call at `:661`.
 
 **Anchors:** `resolution-rules.md`'s R9 condition; `system-design.md` §5.1's opening note.
 
@@ -219,16 +224,25 @@ One test, because the defect it guards against is the operands collapsing back o
 per consumer would still pass with them collapsed. **Size the spike so a run with only the peak
 bound moved still fails** — otherwise the C4 half is untested.
 
+**The fixture must declare the CapTar capability and must not be `Power` with the R17 opt-out set.**
+The peak bound is appended only when `_peak_clamp_would_run()` (`coordinator.py:1233`), so on any
+other fixture that bound is never composed, the peak assertion is vacuous, and the sizing
+instruction above has no reachable state to describe. **Add a second, smaller case** on a
+CapTar-absent fixture: the rate is C1/C4 only, and its C4 bound is still smoothed.
+
 **Implementation.** `smoothed_net_w` carried on `CycleContext`, with
 `smoothed_baseline_w = smoothed_net_w - charger_w` beside it, both read by
 `_escalated_maximum_permitted_rate_a` only: `peak_headroom_a(baseline_w=smoothed_baseline_w)` and
 `ceiling_headroom_a(net_w=smoothed_net_w)`, `charger_w` unchanged since R10 smooths net grid power
 alone. Do not derive either from `ctx.surplus_w`.
 
-**Both construction sites.** `CycleContext` is built twice. The second, at `coordinator.py:1382`
-(the baseline dry-run), has a docstring warning that a placeholder there is exactly the `#990`
-hazard — give the field the same treatment that docstring prescribes for its neighbours, and say in
-the test which one is exercised.
+**Both construction sites, and no default.** `CycleContext` is built twice in
+`custom_components/`: `coordinator.py:579` and `:1382`, the baseline dry-run, whose docstring warns
+that a placeholder there is the `#990` hazard. `smoothed_net_w` is added as a **required** field —
+no default — for the reason that docstring gives: a permissive default lets a forgotten construction
+site fail open silently, and this field decides a forecast. That makes the test constructions in
+`tests/test_coordinator_cycle.py` part of this commit; move them here rather than in a follow-up,
+and say in the test which of the two production sites is exercised.
 
 **Mutation checks**, two — point the peak bound back at `ctx.baseline_w`, then the C4 bound back at
 `ctx.net_w`, and confirm the test fails each time on its own.
@@ -263,8 +277,10 @@ session and never preserved across a restart").
   reaches it any more — the raw readings belong to the clamps and the readout.
 - **The prose this slice falsifies is updated, not just the code.** `engines/deadline.py:121-123`
   and `:196-223` (the `urgency_latched` explanation, and "a missed-deadline hold clearing (issue
-  #1006)"), `coordinator.py:204-212` ("once #1006 lands"), and `project-plan.md`'s E4 and M1 status
-  lines all describe a model this slice replaces. A grep for `urgency_latched` catches none of them.
+  #1006)"), `coordinator.py:204-212` ("once #1006 lands"), `const.py:22-26` (which enumerates one
+  saturated-and-capped case and gains a second at T5), and `project-plan.md`'s Phase-2 status row
+  (`:101`) alongside its E4 and M1 status lines, all describe a model this slice replaces. A grep
+  for `urgency_latched` catches none of them.
 - The UC05 end-to-end tests pass on **probed** values — assert the actual `required_a`, `urgent` and
   pursued occurrence, never infer from a green run; the accidental-latch-from-a-setup-cycle failure
   is the reason this line is here.

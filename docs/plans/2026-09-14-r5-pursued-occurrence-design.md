@@ -52,10 +52,14 @@ untouched — a success criterion below.
 3. Every release condition `resolution-rules.md` lists for a hold is reachable, including the two
    the engine's current control flow would swallow (D-2).
 4. The backstop releases per `resolution-rules.md`'s bound, including on an installation where the
-   following occurrence never resolves — the 24-hour arm is what makes the release always reachable.
-5. **Both** of the escalated rate's resolved bounds — peak headroom and C4 ceiling headroom — are
-   computed from smoothed readings; the R3 clamp, the C4 clamp and the `peak_headroom` readout still
-   compute from raw, and a test pins that the two can differ.
+   following occurrence never resolves — the 24-hour arm is what makes the release reachable
+   without one. It is evaluated on every cycle that reaches the engine; the deferral below bounds
+   the one case that does not.
+5. Every **baseline-dependent** bound of the escalated rate is computed from smoothed readings —
+   the C4 ceiling headroom always, and the peak headroom wherever it is composed at all (it is
+   absent under R18 and R17, exactly as the clamp is). The R3 clamp, the C4 clamp and
+   `sensor.smart_charging_peak_headroom_a` still compute from raw, and a test pins that the two can
+   differ.
 6. ADR-0006's call-order spy test passes unchanged.
 7. **Every commit is green.** T1's parameter is additive and the boolean is removed in T4, so the HA
    suite never goes red between commits (D-8).
@@ -128,9 +132,16 @@ The one thing #1154 says this spec must resolve rather than assume. Two question
 they resolve differently.
 
 **Which bounds move.** Both — and this is an **inference, not a stated rule**.
-`_escalated_maximum_permitted_rate_a` is
-`min(max_current, ceiling_headroom_a(ctx.net_w, ctx.charger_w), peak_headroom_a(ctx.baseline_w))`.
-The analysis scopes the smoothing to the *household baseline*, which is the **peak** bound's
+
+`_escalated_maximum_permitted_rate_a(ctx, *, peak_operand_kw)` composes
+`min(max_current, ceiling_headroom_a(ctx.net_w, ctx.charger_w))` and appends
+`peak_headroom_a(ctx.baseline_w, …)` **only when `self._peak_clamp_would_run()`**
+(`coordinator.py:1233`). So the rate has three bounds at most and often two: the peak bound is
+absent with the CapTar capability absent (R18) and under `Power`'s R17 opt-out, which is the same
+carve-out the clamp takes. C1's `max_current` is config and reads nothing.
+
+That leaves **two baseline-dependent bounds where both exist, and one where the peak bound does
+not.** The analysis scopes the smoothing to the *household baseline*, which is the peak bound's
 operand, and in the same breath names C4's ceiling among the raw readers. So the text can be read
 either way.
 
@@ -156,7 +167,9 @@ cuts against it:
   (`requirements.md` R3).
 - R10's exemption criterion attributes them to R3 and separates them from the smoothing window:
   *"R3 applies **its own** deferrals to the household baseline it solves around, stated in R3 and
-  authoritative there; they are not this window."*
+  authoritative there; they are not this window … and neither is ever substituted for this window in
+  either direction."* (The elided clause is the breaching-increase bound, which the paragraph below
+  addresses directly rather than relies on.)
 - R5's own AC and the `escalated maximum permitted rate` entry use the bare glossary term. The
   raw-versus-smoothed contrast is drawn in the `maximum permitted rate` entry — *"this one is what
   the clamp actually delivered, fitted to a raw reading, while that one is a forecast fitted to a
@@ -220,9 +233,10 @@ two conditions with **opposite** answers:
   (`UC05`). Returns the occurrence **threaded in**, unchanged.
 
 It is tempting to assume the SOC half never gets here because the fault early-return fires first. It
-does not. That return is gated on `is_soc_gated` (`coordinator.py:534-538`), which is **False for
-`Off` and `Power`** — `coordinator.py:525-532` says so: *"outside that gate a missing reading just
-means deadline urgency can't be computed this cycle, not a fault."* So `Manual`+`Off`, and `Auto`
+does not. That return is gated on `is_soc_gated` (`coordinator.py:534-538`), and `is_soc_gated` is
+**False** on `_OffModeHandler` and `_PowerModeHandler` (`coordinator_cycle.py:233`, `:254`). The
+coordinator states the consequence without enumerating the modes: *"outside that gate a missing
+reading just means deadline urgency can't be computed this cycle (below), not a fault."* So `Manual`+`Off`, and `Auto`
 without the CapTar capability whose urgency row escalates to `Power`, both reach this line with a
 missing SOC reading and a live hold. Collapsing the two halves releases it on a cycle that
 established nothing.
@@ -267,9 +281,13 @@ field at all, and `CONF_DEADLINE_AVAILABLE` is read only by `time.py` and `senso
 **The release already happens, by reload.** `__init__.py` registers
 `entry.add_update_listener(_async_reload_entry)`, which calls `hass.config_entries.async_reload`.
 Withdrawing the capability is a reconfigure that updates `entry.data`, so the entry reloads, the
-coordinator is re-created, and `_pursued_occurrence` starts at `None` — R5's own *"scoped to the
-current connected session and never preserved across a restart"* rule producing exactly the release
-R5 asks for.
+coordinator is re-created, and `_pursued_occurrence` starts at `None` — the *"scoped to the current
+connected session and never preserved across a restart"* rule (`system-overview.md`'s `pursued
+occurrence` entry, restated in `UC05`; R5's AC says the same in its own words) producing exactly the
+release R5 asks for.
+
+The reload has two triggers, not one: the reconfigure branch calls
+`async_update_reload_and_abort(entry, data=…)` directly, *and* the data update reaches the listener.
 
 So this slice adds no plumbing for R18, and the engine's `deadline_at is None` path keeps meaning
 R14's case only, which is what D-2 already requires. Specifying a capability parameter here would
@@ -297,7 +315,7 @@ between is green.
 | `smoothed_net_w` on `CycleContext`, **both** construction sites | `coordinator.py`, `coordinator_cycle.py` | **M1** |
 | `_escalated_maximum_permitted_rate_a` reads both smoothed operands | `coordinator.py` | **M1** calling **E5** and **E6** |
 | `following_occurrence` from the pursued occurrence's following day | `coordinator.py`, `coordinator_cycle.py` | **M1** calling **E4** |
-| The R18 release, ahead of the engine call | `coordinator_cycle.py` | **M1** |
+| R18's release | — **no code**; the entry reload already makes it (D-7) | — |
 | The unreachable-block guard and the notification payload | `coordinator.py` | **M1** calling **M3** |
 | R9's precondition wired from the threaded-in value | `coordinator_cycle.py` | **M1** calling **E3** |
 
@@ -324,8 +342,11 @@ class RequiredCurrentResult:
     urgent: bool
     unreachable: bool
     pursued_occurrence: datetime | None = None  # the successor M1 threads back in
-    # The default is load-bearing, not decoration: `RequiredCurrentResult` is constructed at three
-    # sites outside the engine, and without it T1's commit turns the HA suite red (D-8).
+    # The default is load-bearing, not decoration. `RequiredCurrentResult` is constructed at four
+    # sites: two OUTSIDE the engine (`coordinator.py:225`, `coordinator_cycle.py:613`) and two
+    # inside it (`engines/deadline.py:226`, the `deadline_at is None` early return, and `:257`, the
+    # normal return). Only the normal return sets the field; without the default the other three
+    # stop compiling and T1's commit turns the HA suite red (D-8).
 
 
 def resolve_solar_reserve_active(
@@ -352,6 +373,19 @@ names its tier and its exact file.
 
 - **No entity surfaces the pursued occurrence.** `entity-catalog.md` lists none; adding one is a
   `requirement` change, not this slice's.
+- **Known deviation — a sustained SOC-role outage suspends the backstop.** The backstop is the
+  engine's (D-4), and the engine is reached only when `deadline_resolvable` is True. D-5 has the
+  SOC-unavailable half of that gate preserve the occurrence, which is what `UC05` requires — but it
+  means a `Power`/`Off` cycle with the SOC role unavailable evaluates neither the SOC release nor
+  the backstop, so a *sustained* outage holds the occurrence beyond the 24-hour bound and, through
+  R9's precondition, suppresses the solar-reserve cap for its duration.
+
+  Bounded rather than unbounded: those cycles resolve `urgent=False`, so nothing is delivered at the
+  raised peak limit, and the backstop fires on the first cycle that reaches the engine again. The
+  alternative — evaluating the backstop coordinator-side on a non-resolvable cycle — would put R5's
+  release logic in two places, which is what D-2 exists to avoid. Recorded because
+  `resolution-rules.md`'s "a hold never outlives one deadline cycle" is stated unconditionally and
+  this is the one case where it does.
 - **The baseline calls are not skipped while held.** `system-design.md` §5.1's note says the two
   R5 tests "and the baseline calls that exist only to feed them" are skipped under a hold. T2 does
   the engine half; the Coordinator will still call `mode_desired_current`. It is a query that
