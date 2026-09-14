@@ -30,12 +30,12 @@ default 10 s). The cycle carries no decision state between firings; a handful of
 accumulators do persist across cycles — e.g. the rolling smoothing window, the monthly peak
 demand together with its own separate 15-minute window (R21), the rapid-cycling
 timers, the has-charged flag and restart-debounce timer (R11), the step-up/reserve context
-and the [pursued occurrence](system-overview.md#ubiquitous-language) both threaded in step 4 (R5),
-the last accepted [household
+(R7/R8, R9) and the [pursued occurrence](system-overview.md#ubiquitous-language) (R5,
+`resolution-rules.md`; the value a [missed-deadline
+hold](system-overview.md#ubiquitous-language) is read from rather than separately tracked), both
+threaded in step 4, and the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
-charger currents that R3's deferral cases key on, and the
-[pursued occurrence](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`), from which
-a missed-deadline hold is read rather than separately tracked — each
+charger currents that R3's deferral cases key on — each
 homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
