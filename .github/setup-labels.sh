@@ -23,7 +23,7 @@ actual=$(mktemp)
 
 # `${#3}` counts characters under a UTF-8 locale and bytes under LC_ALL=C, and every
 # description below contains an em dash — so the two readings differ by two per em dash. Both
-# stay covered as long as the margins do (the longest description here is 95), and the
+# stay covered as long as the margins do (the longest description here is 96), and the
 # verification pass at the bottom is the backstop for anything the API refuses regardless.
 # A refused description stops the run where it stands, leaving the labels before it already
 # written; that is harmless, since re-running after fixing the line applies the rest.
@@ -47,7 +47,7 @@ label needs-draft    0e8a16 "Issue: with one context label, trigger the CI draft
 label needs-review   fbca04 "PR: trigger the fresh AI review"
 label needs-work     d93f0b "PR: trigger the AI fix pass to address review remarks"
 label needs-approval b60205 "PR: no automated review/fix work is pending — a maintainer must decide"
-label needs-decision e4e669 "PR: review exited with findings still open — a maintainer must decide how to proceed"
+label needs-decision e4e669 "PR: review left findings open and no automatic fix follows — a maintainer decides how to proceed"
 
 # --- Context / artifact-type labels ------------------------------------------------------
 label uc          1d76db "Use-case analysis document"

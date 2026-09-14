@@ -14,8 +14,9 @@ name: AI review (reusable)
 #                                       automatic fix cycles)
 # `needs-decision` goes on every review that exited with findings still open and no automatic
 # fix following — the cap and the non-docs hand-off alike — so such a PR is distinguishable
-# from a clean one in a list view. Only a `clean` verdict removes it again; a run with no
-# verdict leaves it in place.
+# from a clean one in a list view. Once on, it persists until a `clean` verdict removes it: a
+# fix cycle a maintainer grants by re-adding `needs-work`, or a run with no verdict, leaves it
+# in place.
 # Submitted human review comments without an `ai-fix-ack` thread reply count as remarks, so
 # maintainer feedback enters the same loop instead of being silently skipped.
 #

@@ -10,8 +10,9 @@ name: AI documentation pipeline
 #
 # Labels
 #   Action/state : needs-draft (issue), needs-review, needs-work, needs-approval (PR),
-#                  needs-decision (PR — alongside needs-approval whenever a review exits with
-#                  findings still open, so such a PR is distinguishable from a clean one)
+#                  needs-decision (PR — alongside needs-approval when a review exits with findings
+#                  still open and no automatic fix following, so such a PR is distinguishable
+#                  from a clean one)
 #   Context/type : uc | requirement | adr | specs | development | testing | workflow |
 #                  documentation   (the last two are never auto-drafted; see below)
 #     `adr` is also load-bearing in the draft job's concurrency group expression below (keys
