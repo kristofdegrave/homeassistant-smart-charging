@@ -33,9 +33,10 @@ docs/design/
 ```
 
 See `docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale, and the
-`documentation` row of the **Model selection** table below for the cycle — its work files and
-completion bars own how each of these two documents is written and what "finished" means for
-it, including the Method's own discipline about what may drive a decomposition.
+`documentation` row of the **Model selection** table below for the cycle — its work file and
+completion bar, which route onward, own how each of these two documents is written and what
+"finished" means for it, including the Method's own discipline about what may drive a
+decomposition.
 
 ```text
 docs/adl/
@@ -121,12 +122,19 @@ true of the finished artifact; the **entry point** is the skill a run or CI reac
 file by name through; the **checklist** holds what only a reviewer can check — how to read the
 change, and the checks about the change rather than the artifact.
 
+**A role may be named more than once in one cell** where the work type genuinely has more than
+one of that thing — and only the **entry point** does today. `documentation` is reached by two
+skills, one per document, and both lead to the same work file, so the cell names both and no
+rule for choosing between them is needed: whichever fires has already selected itself by its own
+`description`.
+
 **No row branches in the *How the work is done* column.** A work type whose work splits between
 two artifacts names one work file and one completion bar like every other row, and those files
-route onward inside `docs/reference/work-types/` — `documentation` is the case, and
-`work-types/README.md` describes the shape. What a row may still split by is a **tree**, in the
-review column, where the split is what the union routing below is for and so cannot move into a
-file.
+route onward inside `docs/reference/work-types/` — `documentation` is the case. What a row may
+still split by is a **tree**, in the review column, where the split is what the union routing
+below is for and so cannot move into a file. (`work-types/README.md` describes that tree's
+shape. Nothing in this table resolves through it: a row names its files literally, and this
+pointer is for a reader wanting the shape, never a step in reaching a file.)
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting

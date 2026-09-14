@@ -62,8 +62,13 @@ docs/reference/work-types/<label>/<branch>/<role>.md
 The level a file sits at is what says who it binds:
 
 - a file at the **label's own level** applies to every branch — and, for a role that is split,
-  it is where the branch condition and the route to each branch's file live;
+  it is where the routes to each branch's file live;
 - a file **inside a branch directory** applies to that branch only.
+
+Where the split needs spelling out — which artifact sends a change down which branch, and why
+the role is split at all — that belongs at the label's own level too, stated in **one** of those
+files with the others routing to it rather than repeating it. `documentation` states it in its
+`done.md`, the file both the author and the reviewer read.
 
 That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic: one
 role can be shared across a label's branches while another is split, and the level a file sits

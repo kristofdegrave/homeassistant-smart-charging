@@ -7,7 +7,7 @@ work file it routes, because the label's two documents are judged against disjoi
 
 ## Which bar applies
 
-By which document under `docs/design/` the change touches. **This is the label's branch
+By which of the documents under `docs/design/` the change touches. **This is the label's branch
 condition, and this file is its only home** — the work file beside this one routes here for it,
 and so does anything else that needs it:
 
