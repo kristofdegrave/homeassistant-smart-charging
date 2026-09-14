@@ -1,15 +1,6 @@
 # Work type: `adr` — the completion bar
 
-**Who reads this.** Both sides of the review, which is why it is its own file rather than a
-section of either one:
-
-- **The author**, as the self-check before requesting review — this is what
-  `definition-of-done.md` means by an artifact's own completion bar, standing in for the
-  builds/lints/tests checklist that doesn't apply to a document.
-- **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
-  carries, so the two sides judge the same ADR against the same bar.
-
-It states *what must be true of a finished ADR*. How the ADR is written — numbering, the
+This file states *what must be true of a finished ADR*. How the ADR is written — numbering, the
 template, the drafting order, supersession mechanics — is `implement.md`. How a review is
 conducted — what to read first, how to anchor findings, the output format, and the checks that
 are about the *change* rather than the record — belongs with the reviewer.

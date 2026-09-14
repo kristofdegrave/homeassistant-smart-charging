@@ -1,9 +1,8 @@
 # Work type: `documentation` — the completion bar
 
 This file is the `documentation` row's completion bar in `CLAUDE.md`'s **Model selection**
-table. Like every completion bar it is read by both sides — the author, as the self-check before
-requesting review, and the reviewer, as the bulk of the review criteria — and like this label's
-work file it routes, because the label's two documents are judged against disjoint criteria.
+table. Like this label's work file it routes rather than instructs, because the label's two
+documents are judged against disjoint criteria.
 
 ## Which bar applies
 

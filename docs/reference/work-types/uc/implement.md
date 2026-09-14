@@ -5,15 +5,10 @@ methodology. Use-cases capture **goal-oriented behaviour** in Given/When/Then; t
 the shared mechanism documents rather than restating them.
 
 This file is the `uc` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
-**how a use-case is written** and nothing else. Two things deliberately sit elsewhere:
+**how a use-case is written** and nothing else.
 
-- The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here. It applies with no exceptions, including
-  to a typo-level or pure-wording edit.
-- *What must be true of a finished use-case* is the completion bar, `done.md`, named alongside
-  this file in the same row and again in that row's review column. The author checks it before
-  requesting review and the reviewer applies it, so it is written once for both. That file is
-  shared with the `requirement` row, because one reviewer covers the whole analysis tree.
+The completion bar beside this file, `done.md`, is shared with the `requirement` row, because
+one reviewer covers the whole analysis tree.
 
 ## Drafting a use-case
 

@@ -8,14 +8,8 @@ HA-harness split — and the extension of its mandated coverage in
 1:1 (`tests/` matches `custom_components/smart_charging/`).
 
 This file is the `testing` row's work file in `CLAUDE.md`'s **Model selection** table. It
-carries **how a test suite is written** and nothing else. Two things deliberately sit
-elsewhere:
-
-- The lifecycle around the work — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here.
-- *What must be true of a finished test suite* is the completion bar, `done.md`, named
-  alongside this file in the same row and again in that row's review column. The author checks
-  it before requesting review and the reviewer applies it, so it is written once for both.
+carries **how a test suite is written** and nothing else; the completion bar beside it,
+`done.md`, carries what must be true of the finished suite.
 
 It is also what the `development` work file routes its TDD loop to when that loop reaches the test it is
 about to write, and the bar goes with it: a test written inside a development task is the same
