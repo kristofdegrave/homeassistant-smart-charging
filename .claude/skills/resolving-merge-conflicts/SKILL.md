@@ -106,10 +106,10 @@ Leave no markers behind: grep the tree for `<<<<<<<`, `=======` and `>>>>>>>` be
 
 ## Step 4 — run the checks
 
-A merge breaks things neither side broke alone. Run the full completion bar for what the merged
+A merge breaks things neither side broke alone. Run the full Definition of Done for what the merged
 tree now touches — the paired lint and format checks, and the suite in the harness matched to
 the change — as defined by the doc that `CLAUDE.md`'s **Contribution workflow** section names as
-the completion bar; that doc also states which harness covers what, so match the suite to the
+the Definition of Done; that doc also states which harness covers what, so match the suite to the
 merged tree rather than guessing. Do not shortcut to "the tests near my conflict": the ones that
 catch a bad resolution are usually elsewhere.
 

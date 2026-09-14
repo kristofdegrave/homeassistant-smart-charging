@@ -97,7 +97,7 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
@@ -114,10 +114,20 @@ keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and 
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
 
-**A *How the work is done* cell that names more than one file labels each role.** `work file <path>; entry point
-<path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
-by name through. Where a row also splits on *which* file the change touches — `documentation`
-does — each branch is its own sentence, so `;` never has to mean two things in one cell.
+**A cell that names more than one file labels each role**, in either column. Four roles exist:
+the **work file** holds how the artifact is written; the **completion bar** holds what must be
+true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
+file by name through; the **checklist** holds what only a reviewer can check — how to read the
+change, and the checks about the change rather than the artifact. Where a row also splits on
+*which* file the change touches — `documentation` does — each branch is its own sentence, so
+`;` never has to mean two things in one cell.
+
+**The completion bar is one file named in both columns, and that is deliberate.** It is the
+only per-type fact with two readers: the author self-checks against it before requesting
+review, and the reviewer applies it as criteria. Naming it twice duplicates a *route*, not a
+rule — the alternative is the author and the reviewer each holding their own wording of the
+same bar, which is the drift this split exists to remove. A row whose type has no separate bar
+simply names none, and its work file carries what "done" means.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
@@ -224,9 +234,10 @@ stay with the human partner.
 Two related references sit just outside this lifecycle: the stages either side of it
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
 routing, spec, slicing into sub-issues, and verifying a shipped slice live) and the
-completion bar an author self-checks before opening the PR
+**Definition of Done** an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
-commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
+commit message conventions) — the project-wide floor, distinct from a row's per-type
+*completion bar*, which that document routes to. The artifact-specific sections below (analysis docs, ADRs) layer
 their own template/quality-check steps on top of these; they never replace them.
 
 Committing and pushing on a task branch is standing-authorized; the destructive git commands
@@ -342,9 +353,11 @@ Use the `write-adr` skill for the full cycle. Follows the
 additions:
 
 - **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
-  above names the work file, which carries the template, the numbering and never-renumber
-  rules, the immutability rule, and the reviewer to use. That file is their only home; don't
-  restate them here.
+  above names the files, and they are their only home — don't restate them here. The work file
+  carries how an ADR is written (the template, the numbering and never-renumber rules, the
+  immutability rule); the completion bar carries what must be true of the finished record, and
+  both the author's self-check and the reviewer's criteria are that one file. The worthiness
+  test above is reached from the bar rather than repeated in it.
 - No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
   above; the rule applies equally here.
 

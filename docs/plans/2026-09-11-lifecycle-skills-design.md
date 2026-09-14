@@ -70,47 +70,40 @@ loads.
 
 ## The work-types table
 
-Lives in `CLAUDE.md`. One row per context label.
+**Lives in `CLAUDE.md`, which is authoritative, and is deliberately not reproduced here.** An
+earlier draft of this document carried a full copy of the proposed table; it drifted the first
+time a row changed, so what follows is the *design* of the table — the properties a row must
+have — and nothing that has to move when a row does.
 
-| Context label | How the work is done | Work model | How it is reviewed | Review model |
-|---|---|---|---|---|
-| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
-| `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
-| `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
-| `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
-| `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
-| `workflow` | none — human-authored; CI refuses to draft it and `implement` stops on this label (reason under the table) | — | `.claude/agents/workflow-reviewer.md` | opus |
-| *(no context label)* | none | — | by changed path: `docs/adl/**` → `adr-reviewer`, `docs/analysis/**` → `analysis-reviewer`, `docs/plans/**` → `impl-spec-reviewer`, `docs/design/**` → `system-design-reviewer`, `custom_components/**` → `code-reviewer`, `tests/**` → `test-reviewer`, `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`, `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**`, `CLAUDE.md` → `workflow-reviewer`. This is CI's own path→agent mapping plus one deliberate addition, `docs/design/**`, which CI does not route today although the reviewer exists; phase 2 closes that gap on CI's side. `docs/postmortems/**` keeps its own rule from `CLAUDE.md`'s Document structure: a plain fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also edits `CLAUDE.md` or the pipeline. | opus |
-
-Rules that sit under the table, carried over from the *Model selection* section it replaces:
+One row per context label, five columns: the label, how the work is done, the work model, how
+it is reviewed, the review model. The properties:
 
 - **Reviewers always run on Opus**, so the review-model column reads opus in every row today.
-  The column exists anyway: it makes a row self-contained, it is the only per-type home for
-  that value once phase 2 replaces the seven agents with one generic reviewer, and a row that
-  ever deviates has to argue for it here. Three places must keep matching: this column, every
-  `*-reviewer` frontmatter's `model: opus`, and CI's `_ai-review.yml` `model` input default —
-  because CI self-applies the reviewer prompt and never reads that frontmatter.
-- **A review column may name more than one agent.** Each is applied to the changed files under
-  its tree, the same rule CI already uses ("a PR can touch more than one tree — apply each
-  checklist to its matching files"). A `development` PR therefore gets both `code-reviewer`
-  and `test-reviewer`, locally as in CI.
+  The column exists anyway: it makes a row self-contained, and it is the only per-type home for
+  that value once phase 2 replaces the seven agents with one generic reviewer.
+- **Either file column may name more than one file**, each labelled with its role. On the review
+  side that includes more than one agent, applied to the changed files under its own tree — the
+  rule CI already uses. `CLAUDE.md`'s cell grammar owns the role vocabulary.
 - **A row is self-contained.** A lifecycle skill needs nothing outside the row and the PR's
-  changed paths to know what to delegate to. The `documentation` row splits on which
-  `docs/design/` file the change touches, not on the issue body.
+  changed paths to know what to delegate to — so a row that has to split, like `documentation`,
+  splits on which file the change touches rather than on the issue body.
 - **The `workflow` row has no work file on purpose.** CI refuses to draft `workflow` issues
   because there is no safe path containment for untrusted issue content outside `docs/**`,
   `custom_components/**` and `tests/**`; a local `implement` mirrors that refusal and hands
   the drafting to the human partner. Its review is still automated.
+- **The no-label row routes by changed path**, mirroring CI's own path→agent mapping plus one
+  deliberate addition, `docs/design/**`, which CI does not route today although the reviewer
+  exists; phase 2 closes that gap on CI's side.
 
 Once the table exists, the **bare mapping** "step 3's reviewer is X" in each work skill is a
-duplicate and is removed. What stays is the rationale those lines carry today — what the
-reviewer checks, `write-adr`'s warning not to use `analysis-reviewer`, `develop-task`'s rule
-to receive findings with `receiving-code-review`, `write-project-design`'s note that the
+duplicate and is removed. What stays is the rationale those lines carry today — `develop-task`'s
+rule to receive findings with `receiving-code-review`, `write-project-design`'s note that the
 reviewer re-reads `system-design.md` — because none of that is in the table. Where the
 reviewer is named mid-sentence (`write-use-case`, `write-requirement`), the sentence is
-reworded to point at the table rather than deleted.
+reworded to point at the table rather than deleted. Where such a line only warned *against* a
+reviewer the no-label row's path map already rules out, it goes: `write-adr`'s warning not to
+use `analysis-reviewer` was one, and it was dropped when the `adr` checklists split rather than
+carried into the new tree.
 
 ---
 
@@ -226,16 +219,17 @@ per-label tree with one generic reviewer the natural end state:
 ```text
 docs/reference/work-types/
   adr/implement.md          ← the write-adr body (moved; the skill stays as the entry point)
-  adr/review.md             ← today's adr-reviewer checklist
-  uc/implement.md, uc/review.md
-  requirement/implement.md, requirement/review.md   (review.md a pointer to uc/review.md, or the reverse)
+  adr/done.md               ← the per-type completion bar, read by the author AND the reviewer
+  adr/review.md             ← what is left of adr-reviewer once the bar is factored out
+  uc/implement.md, uc/done.md, uc/review.md
+  requirement/…             (its done.md and review.md may be pointers to uc/'s, or the reverse)
   specs/…
-  documentation/implement.md, documentation/review.md
-  development/implement.md, development/review.md   (review.md covers custom_components/ and tests/)
+  documentation/implement.md, documentation/done.md, documentation/review.md
+  development/…             (review.md covers custom_components/ and tests/)
   testing/…
   workflow/implement.md     ← pointer to ai-authoring.md, for reading only;
                               the generic implement still refuses to draft this label
-  workflow/review.md
+  workflow/done.md, workflow/review.md
 .claude/skills/implement/SKILL.md      generic; reads <label>/implement.md
 .claude/skills/review/SKILL.md         generic; spawns the one agent below per tree
 .claude/skills/fix/SKILL.md            generic; re-authors with <label>/implement.md
@@ -247,6 +241,44 @@ derive from the label. This layout mirrors CI's self-applied "checklist in file 
 and it trims the description index every run carries before it reads anything: fifteen
 per-type files under `.claude/` become three skills and one agent there. What that is and is
 not worth is set out below.
+
+### Three documents per label, not one or two
+
+Settled while the first label moved, because seven more copy the shape. The set is
+`implement.md` (how the artifact is written), `done.md` (what must be true of the finished
+artifact) and `review.md` (what only a reviewer can check — how to read the change, and the
+checks about the *change* rather than the artifact). `CLAUDE.md`'s table names `done.md` in
+both columns; the other two appear in one each.
+
+**Why `done.md` is a file and not a section of `implement.md` with a stated audience** — the
+question left open when the split was proposed:
+
+- It has two readers with no file in common. The author reaches it from `implement.md`; the
+  reviewer from its own checklist. A section inside `implement.md` would put the reviewer inside
+  the author's recipe — the coupling *Why reference files, not per-type skills* above already
+  rejected when it rejected one combined file per label, for the same reason: review
+  independence requires the reviewer never to run inline with the author's recipe.
+- The duplication is not hypothetical and had already drifted. Before the split, the `adr`
+  work file's Self-check bullets and `adr-reviewer.md`'s checklist items stated the same facts
+  in different words, and only the reviewer's copy carried the blast-radius severities. Almost
+  the whole of that agent's checklist had a mirror in the work file.
+- So the split is not added structure — it is where the cut already was. What is genuinely
+  reviewer-only turns out to be small (the read-list, severities and output format, plus the
+  immutability check, which is about the change rather than the record), and it is the bar that
+  is bulky. Merging the bar into either neighbour re-creates the drift.
+
+Two consequences the remaining labels inherit:
+
+- **The bar is where a per-type completion rule lives.** `definition-of-done.md` routes to it,
+  which gives that document the per-type extension point it did not have. The rule "an ADR's
+  Status is `Accepted` before `needs-approval`" is the first thing to land there.
+- **The worthiness test moves out of `implement.md` into the bar.** "Should this artifact exist
+  at all" is not answered while drafting; it is settled when the issue is filed and re-answered
+  by the reviewer. The bar routes to `CLAUDE.md` for the test itself rather than restating it.
+
+Not an ADR: this is the internal shape of a decomposition this document already owns
+(decision 4), it binds no product code and no trust boundary, and it is reversible by moving
+text between three files in one tree.
 
 ### Why the move is worth doing
 
