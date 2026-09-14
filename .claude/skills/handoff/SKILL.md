@@ -9,8 +9,8 @@ disable-model-invocation: true
 
 Write one Markdown document that lets a fresh agent resume this work without the scrollback.
 The repo's own boundaries make this routine: `contribution-workflow.md`'s **stop and report**
-rule pauses an interactive session after every committed artifact, and each task runs in its
-own worktree.
+rule pauses an interactive session once an issue's chain reaches approval or the review cap,
+and each task runs in its own worktree.
 
 ## Where it goes
 
@@ -51,7 +51,7 @@ Name skills, not procedures — the skill carries its own instructions.
   maps: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
   with
   `resolve-review-thread` for the threads, and `finalize-pr-review` hands a clean pass to
-  `needs-approval`. `address-review-remarks` is CI's entry for step 5, not the local one.
+  `needs-approval`. `address-review-remarks` is CI's entry for step 3, not the local one.
 
 ## Rules
 

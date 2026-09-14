@@ -1,11 +1,11 @@
 ---
 name: fix
-description: Use in an interactive session to run this project's review-fix step (step 5 of its contribution workflow) on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
+description: Use in an interactive session to run this project's review-fix step (step 3 of its contribution workflow) on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for step 3 is the address-review-remarks skill, never this one.
 ---
 
 # Fix review findings
 
-Step 5 of the interactive lifecycle, type-agnostic. Model-invocable on purpose, so "/fix #N"
+Step 3 of the interactive lifecycle, type-agnostic. Model-invocable on purpose, so "/fix #N"
 and "address the review" both reach it. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns the step.
 
@@ -42,7 +42,7 @@ Then once, for the run:
 5. Post the one summary (§5) — its content is §5's; its transport comes from `CLAUDE.md`'s
    **Tracker mechanics** section, which is the reason a comment body goes in a file.
 
-Stop there and hand on to step 3; `CLAUDE.md`'s **Contribution workflow** section names the
+Stop there and hand on to step 2; `CLAUDE.md`'s **Contribution workflow** section names the
 skill that runs it. The loop is the human partner's to run, and a
 fresh agent owns the next pass — don't re-review your own fixes in this session.
 

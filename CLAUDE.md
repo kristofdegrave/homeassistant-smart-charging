@@ -281,10 +281,12 @@ whichever matches who's acting:
   as the actor, in [docs/reference/ci-pipeline.md](docs/reference/ci-pipeline.md). An
   interactive session never self-applies those trigger labels — see that doc.
 
-An interactive session runs the step ranges through their own skills: steps 1–2 `implement`,
-3–4 `review`, 5 `fix` (with `resolve-review-thread`), 7 `finalize-pr-review`; step 0 is
-`file-task-issue`. Step 8's manual comments are handled like step 5; step 6's loop and step 9
-stay with the human partner.
+Each step of that doc names the skill an interactive session runs it through. The chain runs
+**unattended** from the step it is entered at until a clean pass or the review cap — no
+check-in between steps — and a step skill invoked directly (`/implement #N`, `/review #N`)
+enters the chain at that step. Only the clean-up step is the human's to invoke, after the
+merge. The doc's own rules (its **Rule A**, **Rule B** and **Rounds and the cap** sections)
+state this once; nothing else restates it.
 
 Two related references sit just outside this lifecycle: the stages either side of it
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
@@ -331,7 +333,7 @@ New or changed documents under `docs/analysis/**` follow the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
-- **Step 1 (draft)** and **step 3's review**: the `uc` and `requirement` rows of the **Model
+- **Step 1's draft** and **step 2's review**: the `uc` and `requirement` rows of the **Model
   selection** table above name the files, and they are their only home — don't restate them
   here. Each row's work file carries how that artifact is written (the template, the numbering,
   the propagation step); the completion bar carries what must be true of the finished
@@ -405,7 +407,7 @@ be superseded to say so, rather than the conflict being left implicit.
 An ADR follows the [Contribution workflow](docs/reference/contribution-workflow.md), with these
 artifact-specific additions:
 
-- **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
+- **Step 1's draft** and **step 2's review**: the `adr` row of the **Model selection** table
   above names the files, and they are their only home — don't restate them here. The work file
   carries how an ADR is written (the template, the numbering and never-renumber rules, the
   immutability rule); the completion bar carries what must be true of the finished record, and

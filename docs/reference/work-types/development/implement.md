@@ -57,7 +57,7 @@ contribution workflow names (use the `verification-before-completion` skill). Th
 *Runtime check recorded*, is the one most often skipped: the observation is made while the
 behaviour is in front of you, not reconstructed afterwards.
 
-**Step 3's review**: receive the reviewer's findings with the `receiving-code-review` skill —
+**Step 2's review**: receive the reviewer's findings with the `receiving-code-review` skill —
 verify, don't perform.
 
 ## Rules

@@ -17,7 +17,7 @@ one reviewer covers the whole analysis tree.
   branch/issue numbering the contribution workflow handles.
 - **Step 1 (draft)**: against the template below, then self-check against `done.md` before
   requesting review.
-- **Update `docs/analysis/entity-catalog.md`**, before step 3's review — for every `sc_` entity
+- **Update `docs/analysis/entity-catalog.md`**, before step 2's review — for every `sc_` entity
   the use-case touches, add this UC to the entity's *Read by* and/or *Written by* column. This
   is the last content step inside the analysis layer, and the bar judges the result.
 - **Propagate past the analysis layer**, same step. The procedure is below; what the finished

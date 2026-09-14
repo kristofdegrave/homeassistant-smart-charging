@@ -32,8 +32,8 @@ completion bar's item 1, not while drafting.
 - **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered options**
   (every option seriously evaluated, each with Pro/Con — not just the chosen one), Decision,
   Consequences.
-- **Step 2 (PR)**: one PR per ADR — see **Rules** below.
-- **Cross-check against existing ADRs and design docs**, before step 3: does this decision
+- **The PR (closing step 1)**: one PR per ADR — see **Rules** below.
+- **Cross-check against existing ADRs and design docs**, before step 2's review: does this decision
   contradict an existing `Accepted` ADR? The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, defines what the finished pair has to
   look like and judges it. What that means while drafting: go and look, before you have written
   a Decision that assumes nothing conflicts — the check is cheap then and expensive afterwards,

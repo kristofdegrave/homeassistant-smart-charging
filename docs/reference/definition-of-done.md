@@ -2,9 +2,9 @@
 
 ## Definition of Done (self-check before opening the PR)
 
-Before pushing and opening the PR ([contribution-workflow.md](contribution-workflow.md) step
-2), self-check against a baseline Definition of Done — this is the author's own review,
-distinct from step 3's fresh external reviewer:
+Before pushing and opening the PR (the close of [contribution-workflow.md](contribution-workflow.md)
+step 1), self-check against a baseline Definition of Done — this is the author's own review,
+distinct from step 2's fresh external reviewer:
 
 - **Scope**: built what the issue actually asked, no more and no less (see
   [contribution-workflow.md](contribution-workflow.md)'s **Parallel work and forward

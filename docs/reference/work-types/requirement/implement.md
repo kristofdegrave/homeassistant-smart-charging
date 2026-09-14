@@ -16,7 +16,7 @@ because one reviewer covers the whole analysis tree.
 - **Step 1 (draft)**: the requirement in `docs/analysis/requirements.md` — or the constraint
   row, or the glossary term — in the format below, then self-check against `done.md` before
   requesting review.
-- **Propagate inside the analysis layer**, before step 3's review — the bar's 5.2 item
+- **Propagate inside the analysis layer**, before step 2's review — the bar's 5.2 item
   *Ripples are propagated* names the targets and judges the result. What that means while
   drafting: do it in the same sitting as the requirement itself, while you still know which
   documents you touched. A ripple deferred to a follow-up is the one that gets lost.
