@@ -102,7 +102,7 @@ runs on.
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md` for `custom_components/**` (its preamble routes `tests/**` to the `testing` row's bar); entry point `.claude/skills/develop-task/SKILL.md` | sonnet | completion bar `docs/reference/work-types/development/done.md` and checklist `.claude/agents/code-reviewer.md` for `custom_components/**`; checklist `.claude/agents/test-reviewer.md` for `tests/**` | opus |
+| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `.claude/agents/code-reviewer.md`. For `tests/**`: checklist `.claude/agents/test-reviewer.md`. | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
@@ -119,8 +119,8 @@ the **work file** holds how the artifact is written; the **completion bar** hold
 true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
 file by name through; the **checklist** holds what only a reviewer can check — how to read the
 change, and the checks about the change rather than the artifact. Where a row also splits on
-*which* file the change touches — `documentation` does — each branch is its own sentence, so
-`;` never has to mean two things in one cell.
+*which* file or tree the change touches, each branch is its own sentence, so `;` never has to
+mean two things in one cell.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting

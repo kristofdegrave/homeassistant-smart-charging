@@ -86,22 +86,28 @@ one that only makes the code harder to read is **Minor**.
 runtime behaviour carries a **Runtime check** section in the PR description recording what was
 driven and what was observed. `definition-of-done.md` owns what counts as observable, what the
 section must contain, and the honest cannot-be-driven-yet form; read it there rather than from a
-summary, and judge the section **against the diff rather than by its presence** — observations
-that don't cover the behaviour this diff changes, and a bare number pasted where a unit or a
-precision changed, are the same miss as no section at all. A miss is **Major**, which is the
+summary, and judge the section **against the diff rather than by its presence** — a section
+whose observations don't cover the behaviour this diff changes is the same miss as no section at
+all. A miss is **Major**, which is the
 severity that document states and the reason the check is reviewer-read rather than CI-gated: a
 mechanical presence check is satisfied by an empty heading.
 
-Two cases are not a finding and must not be reported as one: a change with no PR yet, and a PR
+Three cases are not a finding and must not be reported as one: a change with no PR yet; a PR
 opened by the CI pipeline's bot account — that document states the second and why no fix cycle
-can produce it. In both, state what the Runtime check will have to record and leave it there.
+can produce it; and a section in the honest cannot-be-driven-yet form, which is judged on
+**whether the substitute it names is adequate**, said so in the review, rather than counted as
+an absence. In the first two, state what the Runtime check will have to record and leave it
+there.
 
 **The one overlap with the `testing` bar, stated once.** A diff that changes how an adapter
 **reads or converts a source entity's unit** trips this item, through the computation that
 produces an owned entity's state, and also trips the `testing` bar's mandated fifth, unit case
 on the adapter class defining that read. Where **both** are missing, that is one defect with two
-symptoms: it is raised **once, as the coverage miss**, with the absent or inadequate runtime
-evidence named inside that finding, and this item raises nothing further. The tests are the
+symptoms: it is raised **once within this review, as the coverage miss**, with the absent or
+inadequate runtime evidence named inside that finding, and this item raises nothing further.
+This binds the review that holds both bars; it arranges no suppression across two separately
+dispatched reviewers, and nothing here asks one to stay silent about the other's tree. The
+tests are the
 durable fix — a state pasted into a PR body proves the value once, where the mandated cases keep
 proving it. Where that coverage is present, this item applies on its own as usual. A change to an
 **owned** entity's own unit is not this overlap — the fifth-case rule does not reach the entities
