@@ -73,16 +73,22 @@ Check those before drafting, not just the headline definition.
   belong to the same ADR's PR, not a separate one.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences to
   reflect a change of mind — write a new ADR that supersedes it. This file is the only home
-  for the rule; a fix run reaches it through the `adr` row, so it never needs restating
-  elsewhere. Two guards, because the rule is easy to over-apply:
-  - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`.
+  for the **author and fix side** of the rule; a fix run reaches it through the `adr` row, so
+  it never needs restating in a skill. The reviewer's side of it lives with the reviewer — in
+  the `adr` row's review file and in CI's review prompt — and is not a duplicate of this.
+  Two guards, because the rule is easy to over-apply:
+  - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`,
+    where `<base>` is the base commit the caller gives you (CI's prompt supplies it; locally,
+    resolve the PR's base). A bare branch name may not resolve in a fresh checkout.
     Every ADR is drafted with `Status: Accepted` in its own PR, so a working-tree read makes an
     ADR still being drafted look immutable. If the file doesn't exist on the base, or its
     Status there isn't already `Accepted`, normal fixes apply. If the base **cannot be read at
     all** — no base ref fetched, the command unavailable — do not fall back to the working
-    tree: record the finding as **Skipped**, saying the base read failed, and leave the file
-    alone. That is the loud failure of the two; a wrong Skipped entry is one a human reads and
-    reverses, where a wrong edit rewrites an accepted decision with nothing to notice it.
+    tree: treat the record as Accepted, which by the next guard means only a finding arguing
+    the *decision* is wrong becomes **Skipped** — write-up findings are still fixed normally.
+    Say in the summary that the base read failed. That is the loud failure of the two; a wrong
+    Skipped entry is one a human reads and reverses, where a wrong edit rewrites an accepted
+    decision with nothing to notice it.
   - **Only the *decision* is immutable, not the write-up.** A finding about a missing Con, a
     Decision that doesn't reference its options, or a Consequence that doesn't follow is fixed
     normally. Only a finding arguing an already-Accepted *decision* is wrong becomes a

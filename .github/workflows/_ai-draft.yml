@@ -117,13 +117,17 @@ jobs:
           # on an untrusted issue body write and commit the file instructing every future ADR
           # draft. While that content sat in .claude/, the allow-list excluded it mechanically.
           # An ADR draft writes only the record and the ADL index, both under docs/adl/. The
-          # other doc labels keep docs/** until their own work files move, and each should be
-          # narrowed the same way in the slice that moves it.
+          # The other doc labels keep docs/** until their own work files move, and each should
+          # be narrowed the same way in the slice that moves it — but docs/** covers the
+          # work-type tree too, so narrowing only `adr` would leave the very file that slice
+          # protected writable by three other drafters acting on untrusted issue bodies. What
+          # matters is not whose work file it is: no drafter of any type has business writing
+          # one. Excluded from all three until each is narrowed to its own tree.
           case "$present" in
-            uc)          skill=write-use-case;    artifact="use-case";                                          model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
-            requirement) skill=write-requirement; artifact="requirement or constraint";                         model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
+            uc)          skill=write-use-case;    artifact="use-case";                                          model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';                                 commit_prefix=docs;;
+            requirement) skill=write-requirement; artifact="requirement or constraint";                         model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';                                 commit_prefix=docs;;
             adr)         skill=write-adr;         artifact="Architecture Decision Record (ADR)";                 model=opus;   add_paths="docs/adl/**";                                 commit_prefix=docs;;
-            specs)       skill=write-impl-spec;   artifact="implementation spec (design + TDD plan)";            model=opus;   add_paths="docs/**";                                 commit_prefix=docs;;
+            specs)       skill=write-impl-spec;   artifact="implementation spec (design + TDD plan)";            model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';                                 commit_prefix=docs;;
             development) skill=develop-task;      artifact="implementation task (code + tests)";                model=sonnet; add_paths=$'custom_components/**\ntests/**';         commit_prefix=feat;;
             testing)     skill=write-tests;       artifact="test suite";                                        model=sonnet; add_paths="tests/**";                                 commit_prefix=test;;
             workflow)

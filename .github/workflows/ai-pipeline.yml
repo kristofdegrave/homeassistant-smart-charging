@@ -146,3 +146,4 @@ jobs:
     with:
       pr_number: ${{ github.event.pull_request.number }}
       head_ref: ${{ github.event.pull_request.head.ref }}
+      base_sha: ${{ github.event.pull_request.base.sha }}

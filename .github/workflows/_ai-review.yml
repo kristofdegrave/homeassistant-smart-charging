@@ -470,8 +470,9 @@ jobs:
           remarks_count=$(echo "$reviews" \
             | jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
-          # _ai-fix.yml only knows how to author docs/** (it `git add docs`-only stages, and its
-          # prompt only follows doc-authoring skills like write-use-case/write-adr) — it cannot
+          # _ai-fix.yml only knows how to author docs/** (it stages only docs/, excluding the
+          # work-type tree, and its prompt dispatches through the Model selection table to that
+          # row's authoring file, all of which are doc-authoring) — it cannot
           # fix .github/workflows, .claude/skills, .claude/agents, .github/ISSUE_TEMPLATE,
           # custom_components, or tests. Auto-routing those to needs-work would silently no-op
           # through the fix cycles instead of ever changing anything, so any non-docs path in the
