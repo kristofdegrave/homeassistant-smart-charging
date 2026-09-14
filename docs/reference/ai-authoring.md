@@ -6,10 +6,14 @@ prompts (`.github/workflows/_ai-*.yml`). **Work-type documents**
 (`docs/reference/work-types/<label>/`) hold content moved out of a skill, so everything here
 binds them **except** the two routing sections: they do not travel between repositories, which
 is the premise both rules rest on, so they name this project's paths and tracker commands
-directly. Every other rule applies unchanged — the content did not stop being an instruction to
-a run by moving. The checklist that governs one is therefore the **skill** checklist, minus its
-two frontmatter-only items (the `description` and the invocation choice), a work-type document
-having no frontmatter. Author and reviewer build against the same list.
+directly. Every other rule binds it — the content did not stop being an instruction to a run by
+moving. The checklist that governs one is therefore the **skill** checklist, minus four of its
+items: the two that read frontmatter (the `description`'s trigger precision and the invocation
+choice), a work-type document having none; and the two that exist only to enforce the routing
+sections carved out above (nothing project-dependent stated inline, tracker commands routed).
+Applying those two literally would flag a work file for naming a `docs/` path or a tracker
+command, which is exactly what the carve-out permits. Author and reviewer build against the
+same list.
 
 This reference exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,

@@ -75,7 +75,8 @@ Always read:
 
 **(4) Authoring checklist (per artifact type)**
 - Apply the matching checklist section (skill / agent / CI worker prompt) of the authoring
-  reference above to the changed file(s).
+  reference above to the changed file(s) — or, for a work-type document, the skill checklist as
+  that reference scopes it.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
 - The context-label vocabulary's values and the CI-side sync obligation — every pipeline place

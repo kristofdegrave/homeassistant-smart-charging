@@ -139,7 +139,7 @@ jobs:
             testing)     artifact="test suite";                                        model=sonnet; add_paths="tests/**";                                   commit_prefix=test;;
             workflow)
               emit proceed false
-              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author (no safe add-paths containment for untrusted issue content outside docs/**, custom_components/**, or tests/**). Draft it manually; the review step is still automated."
+              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author (no safe add-paths containment for untrusted issue content outside docs/** less the work-type tree, custom_components/**, or tests/**). Draft it manually; the review step is still automated."
               exit 0
               ;;
             *)

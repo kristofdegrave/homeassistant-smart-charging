@@ -39,8 +39,8 @@ three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml`
 too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
 that label on every issue filed through the form. Two more places carry the same vocabulary
 without being part of the pipeline's own configuration — though both are read by the workers at
-run time, which is what makes them expensive to change: `CLAUDE.md`'s **Model selection**
-table, one row per context label,
+run time, which is what makes *renaming* a label expensive here rather than merely tedious:
+`CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
 `adr`). Adding a label means updating those eight — the work-types directory only where the
