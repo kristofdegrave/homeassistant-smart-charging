@@ -6,9 +6,10 @@ template/quality-check steps on top of this; they never replace it.
 
 Two related references cover the phases just outside this lifecycle: the stages either side of
 it ([idea-to-issues.md](idea-to-issues.md) — idea, routing, spec, slicing into issues, and
-verifying a shipped slice on the real installation) and the completion bar an author checks
-*before* step 2 below ([definition-of-done.md](definition-of-done.md), also covering commit
-message conventions).
+verifying a shipped slice on the real installation) and the **Definition of Done** an author
+checks *before* step 2 below ([definition-of-done.md](definition-of-done.md), also covering
+commit message conventions) — the project-wide floor, distinct from a row's per-type
+*completion bar*, which that document routes to.
 
 0. **Open a GitHub issue first.** Every task gets an issue before work starts — no exception
    for small or typo-level changes. Correct context label + Size/Estimate fields (see

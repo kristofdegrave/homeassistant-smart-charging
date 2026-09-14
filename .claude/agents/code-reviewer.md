@@ -113,7 +113,7 @@ Read conditionally:
   the same Major finding — a value without its unit is exactly what a unit defect hides behind.
   A section that honestly states the behavior could not be driven before merge and names what
   was substituted is not a finding; say whether the substitute is adequate.
-- The completion bar this applies is the one `CLAUDE.md`'s **Contribution workflow** section
+- The Definition of Done this applies is the one `CLAUDE.md`'s **Contribution workflow** section
   names as the author's self-check before opening the PR. That document owns what counts as
   observable and what the section must contain — the trigger list above is a summary to decide
   *whether* to look, and where the two differ that document wins, so read it whenever the
