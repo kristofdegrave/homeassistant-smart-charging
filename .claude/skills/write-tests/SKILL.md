@@ -6,7 +6,8 @@ description: Use when authoring or expanding a test suite for the Smart Charging
 # Write tests
 
 A test suite is authored in the harness its layer requires and covers the cases this project
-mandates.
+mandates. This is usually reached from inside a development task's TDD loop, but it also stands
+alone when back-filling or expanding coverage.
 
 `CLAUDE.md`'s **Model selection** table names the files in the `testing` row. Read and follow
 both of the ones its *How the work is done* column names: the **work file** carries the harness

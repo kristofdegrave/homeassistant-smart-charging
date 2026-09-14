@@ -17,9 +17,9 @@ elsewhere:
   alongside this file in the same row and again in that row's review column. The author checks
   it before requesting review and the reviewer applies it, so it is written once for both.
 
-It is also what `develop-task`'s TDD loop follows when that loop reaches the test it is about
-to write: the `development` row names no test work file of its own, and a test written there is
-the same artifact judged against the same bar.
+It is also what `develop-task` routes its TDD loop to when that loop reaches the test it is
+about to write, and the bar goes with it: a test written inside a development task is the same
+artifact as one written under a `testing` issue, and is judged against the same bar.
 
 ## Choose the harness first (ADR-0009)
 
@@ -69,16 +69,16 @@ harness above, then:
 
 ## Rules
 
-- **Harness by layer, no exceptions.** Pure logic → plain pytest (no HA import); HA-coupled → HA
-  harness. A pure-logic test that imports `homeassistant` defeats the package boundary that
-  makes the logic HA-free.
-- **One behaviour per test.** A test verifies exactly one behaviour: one action in `# Act`, and
-  every assertion under `# Assert` checks that same behaviour. If you're tempted to test a
-  second behaviour (a second `# Act`, or asserts about an unrelated outcome), split it into
-  another test. This keeps each Should-When-Then name honest and a failure pointing at a single
-  cause.
-- **Mock at the boundary.** Don't mock so deep the wiring the test claims to cover is bypassed,
-  and don't let a fixture silently pin a value that makes the assertion trivially true.
+- **Harness by layer, no exceptions** — the bar's item 1, *Harness split*, states it and
+  judges it. What that means while writing: settle the layer before the first line, because a
+  test written in the wrong harness is rewritten rather than adjusted.
+- **One behaviour per test** — the bar's item 3, *Traceability and structure*, states it and
+  judges it. What that means while writing: if you're tempted to test a second behaviour (a
+  second `# Act`, or asserts about an unrelated outcome), split it into another test rather than
+  widening this one.
+- **Mock at the boundary** — the bar's item 4, *Test honesty*, states it and judges it. What
+  that means while writing: mock the HA boundary the unit talks to, not the collaborator whose
+  wiring the test is supposed to prove.
 
 ## Common mistakes
 

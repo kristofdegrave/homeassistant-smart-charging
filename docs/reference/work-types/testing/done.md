@@ -3,10 +3,11 @@
 **Who reads this.** Both sides of the review, which is why it is its own file rather than a
 section of either one:
 
-- **The author**, as the self-check before requesting review — this is what
-  `definition-of-done.md` means by an artifact's own completion bar. It sits **alongside** that
-  document's mechanical gates for a change that carries code (ruff, the suite green, coverage
-  matching the change), never instead of them.
+- **The author**, as the self-check before requesting review. `definition-of-done.md` sends
+  the author here: where a row names a completion bar, that file is what "done" means for the
+  artifact. Unlike a document type, though, it does **not** stand in for that file's
+  builds/lints/tests checklist — a `testing` change touches `tests/`, and that checklist is
+  stated there to be the floor for exactly those trees. Both apply, in full.
 - **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
   carries, so the two sides judge the same suite against the same bar.
 
@@ -47,15 +48,18 @@ and this is the bar for both.
 - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
 
 **(3) Traceability and structure.** Coverage is checkable from the test names alone, and a
-failure points at a single scenario.
+failure points at a single scenario. Each miss below is **Minor per occurrence**, and **Major
+where it is suite-wide** — a suite that misses one of these throughout defeats this item's own
+purpose rather than blemishing it, and a bar that only ever calls it Minor lets that through as
+clean.
 - Each name is in **Should-When-Then** form — `test_should_<expected behaviour>_when_<condition>`
   — and traces to the requirement / UC / ADR criterion it verifies. A name describing mechanics
-  rather than behaviour (`test_function_returns`) is **Minor**.
-- Each body is blocked into **Arrange / Act / Assert** with those comments. A missing structure
-  is **Minor**.
+  rather than behaviour (`test_function_returns`) is a miss: coverage is no longer readable from
+  the names, which disables the half of the review that reads it there.
+- Each body is blocked into **Arrange / Act / Assert** with those comments.
 - Exactly one behaviour per test: one action in `# Act`, every assertion under `# Assert`
-  checking that same behaviour. A test bundling two behaviours is **Minor** — its name can no
-  longer be honest about what failed.
+  checking that same behaviour. A test bundling two behaviours can no longer be honest, in its
+  name, about what failed.
 
 **(4) Test honesty.** Each test genuinely **fails without the implementation** — no vacuous
 asserts, no asserting on a mock's own return value, no fixture silently pinning a value that

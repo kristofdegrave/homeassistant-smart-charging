@@ -35,12 +35,14 @@ self-checked against the same file. Read it and apply every item as a review cri
 severity it states. You are not applying a second, differently-worded standard.
 
 **Resolve the bar from the `testing` row whatever dispatched you.** The bar belongs to the
-artifact, not to the label: `tests/**` files reviewed as part of a `development` change are the
-same artifact and get the same bar, even though that row names no completion bar of its own.
-So a dispatching row that names none tells you nothing about whether a bar applies — go to the
-`testing` row and apply what it names. If that file genuinely cannot be read, say so plainly in
-your summary and review against this definition alone, rather than reporting a bar you could not
-read as satisfied.
+artifact, not to the label — the bar itself says so — so `tests/**` files reviewed as part of a
+`development` change get the same one. A dispatching row that names no completion bar therefore
+tells you nothing about whether a bar applies: go to the `testing` row and apply what it names.
+
+If that file genuinely cannot be read, you have no criteria — this definition holds none. Say so
+plainly at the top of your summary, report what you could still judge, and end on **address
+items first**, never a clean recommendation (in CI, that is a `remarks`-class result). A review
+that could not read the bar is not a review that found nothing wrong.
 
 ## Output
 
