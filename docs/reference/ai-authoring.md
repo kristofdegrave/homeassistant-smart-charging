@@ -192,7 +192,11 @@ meeting one does not have to re-derive it:
   naming a path is simply correct because the document does not travel, and leave under
   `.claude/` only a generic reviewer that resolves which document to read. This bullet
   governs a reviewer agent that still carries its own read-list; for one that does not, there
-  is nothing left to split.
+  is nothing left to split. The dispatchability claim above is bounded the same way: it holds
+  for an agent reached by **description matching**, which is what needs the tree in the
+  `description`. A generic reviewer is reached by **explicit dispatch** instead — the caller
+  names the checklist, resolved from `CLAUDE.md`'s **Model selection** table — so it can say
+  nothing about what it reviews and still be dispatched to review it.
 - **A skill whose whole purpose is one artifact type this project defines** — the `write-*`
   family, each written for a document type that exists only because this project defines it,
   and `develop-task`, written for a task as this project's implementation plans define one —

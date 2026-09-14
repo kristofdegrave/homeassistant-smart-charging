@@ -32,9 +32,11 @@ docs/design/
   project-plan.md      — implementation task breakdown derived mechanically from system-design.md
 ```
 
-Use-cases and mechanism documents validate this decomposition — they never drive it. See
-`docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale and the
-`write-system-design` / `write-project-design` skills for the cycle.
+See `docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale, and the
+`documentation` row of the **Model selection** table below for the cycle — its work file and
+completion bar, which route onward, own how each of these two documents is written and what
+"finished" means for it, including the Method's own discipline about what may drive a
+decomposition.
 
 ```text
 docs/adl/
@@ -102,8 +104,8 @@ runs on.
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
-| `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
+| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `.claude/agents/system-design-reviewer.md` | opus |
+| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `.claude/agents/code-reviewer.md`. For `tests/**`: checklist `.claude/agents/test-reviewer.md`. | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
@@ -119,9 +121,23 @@ never reads that frontmatter.
 the **work file** holds how the artifact is written; the **completion bar** holds what must be
 true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
 file by name through; the **checklist** holds what only a reviewer can check — how to read the
-change, and the checks about the change rather than the artifact. Where a row also splits on
-*which* file the change touches — `documentation` does — each branch is its own sentence, so
-`;` never has to mean two things in one cell.
+change, and the checks about the change rather than the artifact.
+
+**A role may be named more than once in one cell** where the work type genuinely has more than
+one of that thing — and only the **entry point** does today. `documentation` is reached by two
+skills, one per document, and both lead to the same work file, so the cell names both and no
+rule for choosing between them is needed: whichever fires has already selected itself by its own
+`description`.
+
+**No row branches in the *How the work is done* column.** A work type whose work splits between
+two artifacts names one work file and one completion bar like every other row, and those files
+route onward inside `docs/reference/work-types/` — `documentation` is the case. What a row may
+still split by is a **tree**, in the review column, where the split is what the union routing
+below is for and so cannot move into a file — `development` is the case, and each tree is its
+own sentence, so `;` never has to mean two things in one cell. A sentence may also state a
+named file's scope, as `development`'s work column does for its bar. (`work-types/README.md`
+describes that tree's shape. Nothing in this table resolves through it: a row names its files
+literally, and this pointer is for a reader wanting the shape, never a step in reaching a file.)
 
 **The checklist is a file; `.claude/agents/reviewer.md` is who applies it.** That agent holds
 nothing type-specific — only the untrusted-data rule, how to resolve a checklist and a bar from
@@ -130,12 +146,17 @@ review shares. So a row names a `docs/reference/work-types/<label>/review.md` an
 agent is spawned against it. A row not yet migrated still names its own `*-reviewer` agent
 definition instead, which carries both halves; the path map below is mixed for the duration
 for the same reason. Either way the column names the file, and whoever dispatches follows what
-it says rather than a reviewer they know of from elsewhere.
+it says rather than a reviewer they know of from elsewhere. Locally that agent is spawned
+against the file; CI has no agent to spawn and its own worker self-applies the same file, so
+"who applies it" varies while the file does not.
 
-**A checklist is selected by the tree under review, not by the row that dispatched it.** The
-row is how the tree is resolved, not what the criteria belong to — so files under one tree get
-that tree's checklist and bar whichever row's dispatch reached them, and a checklist shared by
-two rows (`uc` and `requirement`) is one file with the other row pointing at it.
+**Where a review is scoped to a tree's files, the criteria come from that tree.** The
+criteria belong to the artifact, not to the label that dispatched the reviewer — so a tree's
+files get that tree's checklist and bar whichever row reached them, and a checklist shared by
+two rows (`uc` and `requirement`) is one file with the other row pointing at it. This says
+nothing about *which* reviewers run, and it does not narrow a label-selected reviewer's
+whole-change scope: that reviewer has no tree of its own, which is exactly what makes it an
+addition, and the union rule below governs it unchanged.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
@@ -150,13 +171,15 @@ bar per label would leave those with none. Each row still names a path in its ow
 directory, so the row stays self-contained and label-keyed; the `requirement` one routes to the
 shared file rather than restating it. A shared reviewer alone does not earn this: the argument
 is that the reviewed tree is wider than either label, so splitting the bar would leave part of
-it unjudged.
+it unjudged. The converse — one work type needing more than one bar, because its artifacts are
+judged on disjoint criteria — is settled inside its own completion bar and never in the row:
+`documentation`'s bar routes to one per document.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
-know what to delegate to. The `documentation` row in particular splits on which
-`docs/design/` file the change touches, not on the issue body. Reviewer dispatch additionally
-resolves the linked issue's label, per the union rule below — that is the one input outside
-the row, and it only ever adds a reviewer.
+know what to delegate to — a row names its files outright, and where a work type splits further
+that is settled inside those files rather than by anything a run has to resolve here. Reviewer
+dispatch additionally resolves the linked issue's label, per the union rule below — that is the
+one input outside the row, and it only ever adds a reviewer.
 
 **A review column may name more than one agent.** Each is applied to the changed files under
 its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
@@ -223,9 +246,10 @@ so they are routed from here rather than restated. Its review is still automated
 `CLAUDE.md` → `workflow-reviewer`. The map is **mixed while the reviewer collapse runs**: a
 migrated tree names its checklist file, applied by the generic `reviewer` agent, and an
 unmigrated one still names the `*-reviewer` agent definition that carries its own. Each entry
-resolves on its own, so every intermediate state is reviewable. `docs/analysis/**` names the
-`uc` checklist because that tree is wider than either label sharing it — `requirement`'s file
-points at the same one. This list **is** CI's mapping — the review worker resolves it from
+resolves on its own, so every intermediate state is reviewable, and the end state it runs
+toward is the target layout in `docs/plans/2026-09-11-lifecycle-skills-design.md` — every
+entry naming a checklist file. `docs/analysis/**` names the `uc` checklist because that tree
+is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
 here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
 rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
 diff enumeration, so the reviewer is reachable in principle and unreached in practice.

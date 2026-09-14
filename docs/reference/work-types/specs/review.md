@@ -7,8 +7,10 @@ finished spec is [`done.md`](done.md) beside this file, and how one is written i
 [`implement.md`](implement.md); neither is restated here.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
-not here either. They are the same for every review and live in the generic `reviewer` agent
-definition, which reaches this file through `CLAUDE.md`'s **Model selection** table.
+not here either. They are the same for every review and live with whoever applies this
+checklist — the generic `reviewer` agent definition locally, the review workflow's own prompt
+in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
+way, through `CLAUDE.md`'s **Model selection** table.
 
 An implementation spec translates an approved slice of the system design into a concrete,
 test-driven build sequence. It **derives** from the architecture — it never re-decomposes it

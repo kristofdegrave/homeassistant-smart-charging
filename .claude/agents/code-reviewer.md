@@ -14,114 +14,55 @@ project's structural ADRs, and test quality. **You never edit files — you only
 Always read:
 - The changed files under `custom_components/smart_charging/` and their mirrored tests under
   `tests/` (use `git diff` context the caller gives you, or read the files whole).
-- The implementation-plan task the change realizes (under `docs/plans/`) — the change's spec.
-- The behavior the change implements, in `docs/analysis/` (`control-cycle.md`,
-  `resolution-rules.md`, `requirements.md`, the relevant use-case) — the authoritative "what".
-- The accepted ADRs the change touches under `docs/adl/`.
-- The **Quick review checklist** at the end of the `python-anti-patterns` skill — the
-  general-Python bar every change is held to, on top of checklist (4) below.
-- The **PR description** — checklist (6) is judged against it. Take it from the caller when the
-  caller supplies it; fetch it yourself when your tool grant reaches the tracker (the command is
-  in the reference `CLAUDE.md`'s **Tracker mechanics** section names). Only when you have no body
-  and no way to reach one, say so and say that (6) could not be judged — never report a missing
-  section you were never handed.
+- The implementation-plan task the change realizes — the change's spec. The `specs` row of
+  `CLAUDE.md`'s **Model selection** table names the artifact and the tree it lives in.
+- The behavior the change implements, in this project's analysis documents — the authoritative
+  "what". `CLAUDE.md`'s **Document structure** section names them and says which holds what.
+- The accepted ADRs the change touches. Locate them per `CLAUDE.md`'s **Architecture Decision
+  Records (ADRs)** section.
+- The **PR description** — the bar's Runtime-check item is judged against it. Take it from the
+  caller when the caller supplies it; fetch it yourself when your tool grant reaches the tracker
+  (the command is in the reference `CLAUDE.md`'s **Tracker mechanics** section names). Only when
+  you have no body and no way to reach one, say so and say that the item could not be judged —
+  never report a missing section you were never handed.
 
 Read conditionally:
-- The `async-python-patterns` skill — **only when the diff touches async code**. That skill's
-  **When this file applies** section is the single statement of which files those are; don't
-  re-derive it here. A diff confined to `modes/`/`engines/` skips it.
 - The `ha-integration-knowledge` skill — when the diff touches HA platform surface (entity
   classes, config flow, `manifest.json`, services).
-- ADR-0040, which extends ADR-0009's mandated coverage with the fifth, unit case — when the diff
-  touches or wires an adapter that reads a numeric role. Locate it by number per `CLAUDE.md`'s
-  **Architecture Decision Records (ADRs)** section.
+
+The bars below name further material — two Python skills and an ADR extending the mandated
+adapter coverage — at the item that needs it. Read each when its item applies; don't fan out
+across the tree ahead of that.
 
 ## Review checklist
 
-**(1) Correctness against the spec**
-- The code does what its plan task and the cited analysis behavior specify — walk the acceptance
-  criteria / worked examples and confirm the code produces them. Flag off-by-one, wrong operand,
-  sign, or boundary errors with a concrete failing input.
+**The completion bar for the code is the bulk of your checklist, and it is not restated here.**
+`CLAUDE.md`'s **Model selection** table names it in the `development` row — in that row's *How
+it is reviewed* column and again in its *How the work is done* column, because the author
+self-checked against the same file. Read it and apply every item as a review criterion, at the
+severity it states. You are not applying a second, differently-worded standard.
 
-**(2) Structural ADR compliance (the ones this project cannot regress)**
-- **Engine purity (ADR-0006/0009/0010):** nothing under `modes/` or `engines/` imports
-  `homeassistant.*` or calls another engine; stateful engines take state as a parameter, never hold
-  HA state. **Flag any `import homeassistant` under `modes/`/`engines/` as Critical.**
-- **Adapter isolation (ADR-0003):** all HA-entity I/O goes through an adapter; no logic layer reads
-  a raw `entity_id` directly. A role returning `None` is the fault signal, not a guessed default.
-- **Two distinct clamps (ADR-0006):** the grid-safety clamp is a separate call site from the peak
-  clamp, with no shared opt-out. **Flag any merge of the two into one conditional as Critical.**
-- **Fault path (ADR-0007):** every adapter `None`/exception funnels to force-0 A + `Fault`; grid
-  voltage `None` is the one exception (NF4 nominal fallback), never routed to the fault path.
-- **Config data/options split (ADR-0005):** mappings/translation/thresholds in data; tunables
-  (control interval) in options; an options change reloads the entry.
-- **Native naming + layout (ADR-0004/0002/0010):** owned entities use the `smart_charging_` native
-  names; files sit in the ADR-mandated package (`adapters/`, `modes/`, `engines/`, platform files
-  and `coordinator.py`/`entity.py` at root).
+**The test files in the change are judged by the `testing` row's bar, not by a standard of your
+own.** The bar belongs to the artifact, not to the label that dispatched you — that bar
+says so itself, and it is the same one `test-reviewer` applies. Resolve it from the `testing`
+row of the same table and apply every item at the severity stated there. The `development` bar
+deliberately states nothing about test quality beyond the route, so a test defect you see is
+reported against the `testing` bar's item that names it.
 
-**(3) Test quality (ADR-0009/0040)**
-- Correct harness: plain pytest for pure `modes/`/`engines/` logic; HA harness for adapters,
-  coordinator, entities, config flow.
-- Mandated coverage present: adapter roles cover present / absent / unavailable / (status) unmapped;
-  a numeric role whose catalogued unit column names a unit also carries the fifth case — its expected
-  unit set stated, plus a foreign-unit and an absent-unit case on the adapter class defining its read
-  (ADR-0040, extending ADR-0009, is the authority on the trigger, the per-class discharge, and
-  the docstring a case pinning "used as-is" must carry);
-  engines cover their behavioral rows and worked examples; the coordinator covers happy / gating /
-  clamp / fault.
-- **This check owns one overlap with (6).** A diff that changes how an adapter **reads or converts
-  a source entity's unit** trips (6) as well, through "the computation that produces it". Where
-  such a diff also leaves the fifth-case coverage missing on the class defining that read, that is
-  one defect with two symptoms: report it once here as Major, naming any absent or inadequate
-  runtime evidence inside that finding — that half is empty when the section is adequate — and
-  raise nothing under (6) for it. The tests are the durable fix — a state
-  pasted into a PR body proves the value once, where the mandated cases keep proving it. A change
-  to an **owned** entity's own unit is not this overlap — ADR-0040 does not reach the entities this
-  integration publishes — and stays (6)'s alone however the role's coverage stands.
-- Test names trace to the requirement / UC / ADR criterion they verify. Tests genuinely fail without
-  the implementation (no vacuous asserts, no over-mocking that hides a wiring bug).
+**You read the change's tests even where the table dispatched you for the code tree.** A row's
+tree qualifier says which checklist a changed tree is *guaranteed*, not what a reviewer may
+read — and a code change's wiring is often only visible in the tests that exercise it. So you
+hold both bars within one review. Where a test reviewer was dispatched over the same files,
+expect overlap: a finding raised twice is the accepted cost, a finding raised by neither is not.
 
-**(4) Code health**
-- DRY / YAGNI; matches surrounding style and idioms; no dead code, no speculative generality, no
-  commented-out blocks. Logging follows the once-per-outage rule (ADR-0007), not per-cycle spam.
-- **No magic strings/numbers:** a fixed set of states/phases/modes compared or assigned as bare
-  string literals (e.g. a dataclass field like `phase: str` checked against `"idle"`/`"charging"`)
-  belongs in an enum (`enum.StrEnum` when the value must still compare/serialize as a plain str) or
-  a named constant — never repeated literals. Exception: a value that must round-trip through HA
-  config-entry storage or `vol.In(...)` as a bare str can use module-level string constants instead
-  of an enum (see `const.py`'s `ROUND_UP`/`ROUND_DOWN`/`ROUND_NEAREST`) — flag repeated
-  bare literals either way, just not the choice of constants over enum in that specific case.
+Where the two bars meet — a change to how an adapter reads or converts a source entity's unit,
+whose mandated unit coverage is also missing — the `development` bar's overlap paragraph, after
+its Runtime-check item, states which one carries the finding. Report it once, as it says.
 
-**(5) Safety not weakened**
-- No clamp, floor/cap, or fault behavior is loosened, short-circuited, or made skippable beyond what
-  the ADRs allow.
-
-**(6) Runtime check recorded when the change is observable at runtime**
-- When the diff changes what someone can see from the *running* integration — an owned entity's
-  state value **or the computation that produces it**, its unit of measurement, display
-  precision, device class, state class, availability or displayed name; whether it appears at
-  all; the dashboard; a notification; or the current commanded to the charger — the PR
-  description must carry a **Runtime check** section recording what was driven and what was
-  observed: a pasted entity state **including its unit**, or a dashboard screenshot. **A diff
-  touching any of those with no such section is Major.** The one exception is the overlap
-  checklist (3) owns, and it applies to this bullet and the next alike: a diff changing how an
-  adapter reads or converts a **source** entity's unit, whose fifth-case coverage is also
-  missing, is reported once under (3), not twice. A change to an **owned** entity's own unit is
-  not that overlap and is reported here.
-- Judge the section against the diff, not by its presence. Observations that don't cover the
-  behavior this diff changes, or a bare number pasted where a unit or a precision changed, are
-  the same Major finding — a value without its unit is exactly what a unit defect hides behind.
-  A section that honestly states the behavior could not be driven before merge and names what
-  was substituted is not a finding; say whether the substitute is adequate.
-- The Definition of Done this applies is the one `CLAUDE.md`'s **Contribution workflow** section
-  names as the author's self-check before opening the PR. That document owns what counts as
-  observable and what the section must contain — the trigger list above is a summary to decide
-  *whether* to look, and where the two differ that document wins, so read it whenever the
-  section's adequacy is in question. It is deliberately reviewer-checked rather than CI-gated:
-  you are the check. Two cases are not Major and must not be reported as one: a change with no
-  PR yet, and a PR **opened by the CI pipeline's own bot account**, whose body is fixed by the
-  pipeline and whose workers have no running installation to drive. In both, state what the
-  Runtime check will have to record and leave it to the human who approves the merge.
+If either file genuinely cannot be read, you have no criteria for that half — this definition
+holds none. Say so plainly at the top of your summary, report what you could still judge, and end
+on **address items first**, never a clean recommendation (in CI, that is a `remarks`-class
+result). A review that could not read the bar is not a review that found nothing wrong.
 
 ## Output
 

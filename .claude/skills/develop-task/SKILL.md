@@ -5,85 +5,18 @@ description: Use when implementing one task from a Smart Charging implementation
 
 # Develop one implementation-plan task (TDD)
 
-Turn one task from an approved implementation plan (`docs/plans/<slice>.md`) into working,
-test-covered code under `custom_components/smart_charging/`, test-first. The plan owns *what* to
-build and *in what order*; this skill is *how* one task gets built and verified. **Development work
-runs on Sonnet** (per CLAUDE.md's model-selection rule).
+One task from an approved implementation plan becomes working, test-covered code, written
+test-first.
 
-Follows this project's contribution workflow, defined in `CLAUDE.md` (issue → worktree → PR →
-review → fix/resolve → merge). This skill covers only what's specific to a development task —
-don't re-derive the universal steps here.
+`CLAUDE.md`'s **Model selection** table names the files in the `development` row. Read and follow
+the two its *How the work is done* column labels **work file** and **completion bar**: the work
+file carries the reads, the TDD loop, the structural discipline and the rules; the completion bar
+carries what must be true of the finished code before it is reviewable. The same bar is what the
+review applies, so satisfying it is not a separate exercise from passing review.
 
-## Before you start
+The tests this loop writes are judged by the **`testing` row's** completion bar rather than this
+row's — the work file and the bar both route there, and the bar states why.
 
-- The task must come from an **approved** implementation plan produced by `write-impl-spec` — never
-  write `custom_components/` code without that plan in place.
-- Work the tasks in the plan's order; a task can be built only once every task it depends on exists
-  or is stubbed (the plan states its `Depends on`).
-
-## Task-specific additions to the workflow
-
-- **Step 1 (do the work)**: read the task's plan section, the **ADR it cites**, and the
-  **analysis behavior** it realizes (`control-cycle.md`, `resolution-rules.md`,
-  `requirements.md`, the relevant use-case) — the plan's formulas/thresholds are **test
-  anchors** attributed to those docs; reproduce them, don't reinvent. Also read the
-  **`ha-integration-knowledge` skill** — the Home Assistant platform reference (entity
-  platforms, config-flow conventions, quality scale, thin-wrapper rule) — before writing
-  anything that touches HA APIs. Then TDD one behavior at a time (use the
-  `test-driven-development` skill):
-  - Write the failing test against the files `CLAUDE.md`'s **Model selection** table names in
-    the `testing` row — its work file for the harness split, the naming and the structure, and
-    its completion bar for what the finished tests have to satisfy. Tests written here are the
-    same artifact as tests written under a `testing` issue, and the reviewer applies that same
-    bar to them, so this is not a second standard.
-  - Run it; confirm it **fails for the right reason** (red).
-  - Write the **minimal** implementation to pass (green). Match the surrounding code's idioms.
-  - Refactor while green. Commit.
-- **Honor the structural ADRs** as you code:
-  - Engine purity: nothing under `modes/`/`engines/` imports `homeassistant.*` or calls another
-    engine; stateful engines take state as a parameter.
-  - Adapters isolate all HA I/O (ADR-0003); a role returning `None` is the fault signal.
-  - Two distinct clamp call sites, no shared opt-out (ADR-0006); fault → force 0 A + `Fault`, grid
-    voltage `None` → nominal, not a fault (ADR-0007).
-  - Native entity naming (ADR-0004); config data/options split (ADR-0005); package layout
-    (ADR-0002/0010).
-- **Pre-commit self-check**: run the **Quick review checklist** at the end of the
-  `python-anti-patterns` skill over the diff before each commit. If the change touches async
-  code, also run `async-python-patterns`' checklist — that skill's **When this file applies**
-  section states exactly which files count.
-- **Definition of Done** (use `verification-before-completion`): per `CLAUDE.md`'s
-  Contribution workflow section — read it before starting. Covers ruff/pytest green, coverage
-  matches the change, runtime-verified not just test-verified.
-- **Step 3's review**: receive the reviewer's findings with the `receiving-code-review`
-  skill — verify, don't perform.
-
-## Rules
-
-- **Test-first, always.** No implementation line before a failing test that demands it.
-- **Minimal + DRY + YAGNI.** Build only what the task needs; reuse existing helpers; match
-  surrounding style.
-- **Cite behavior, don't restate it.** The analysis docs own the rules; reproduce them as test
-  anchors attributed to their source.
-- **Never regress a safety invariant.** Clamps, floor/cap, and the fault path stay intact and
-  un-merged.
-- **No magic strings/numbers, written that way the first time.** Reach for an enum
-  (`enum.StrEnum` when the value must still compare/serialize as a plain `str`) or a named
-  constant the first time a literal value is compared/assigned more than once — don't wait for
-  `code-reviewer` to flag it. Exception: a value that must round-trip through HA config-entry
-  storage/`vol.In(...)` stays a plain string constant, not an enum.
-- **Plan inconsistency → truthful, task-scoped implementation, surfaced.** If a task's literal
-  instruction conflicts with the plan's own ordering or would require an untruthful declaration
-  (e.g. advertising a capability a later task hasn't built yet) or scope creep into another
-  task's files, don't silently follow the literal text or paper over it. Implement the minimal
-  truthful version scoped to this task, record which later task owns the deferred piece, and
-  flag the deviation instead of deciding silently.
-- **Frequent commits**, one behavior each.
-
-## Common mistakes
-
-- Writing implementation before the red test (or a test that passes without the code).
-- Importing `homeassistant.*` into a `modes/`/`engines/` module.
-- Merging the two clamp call sites into one conditional (ADR-0006).
-- A fault path that guesses/holds a value instead of forcing 0 A (ADR-0007).
-- Testing pure logic through the HA harness, or an HA-coupled unit with plain pytest (ADR-0009).
-- Claiming "done" without running `ruff`/`pytest` and driving the runtime behavior.
+The lifecycle around the work — issue, worktree, PR, review, fix, merge — is the contribution
+workflow's, routed from `CLAUDE.md`'s **Contribution workflow** section. The work file states
+only what is specific to a development task.

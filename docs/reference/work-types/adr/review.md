@@ -7,8 +7,10 @@ finished ADR is [`done.md`](done.md) beside this file, and how one is written is
 [`implement.md`](implement.md); neither is restated here.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
-not here either. They are the same for every review and live in the generic `reviewer` agent
-definition, which reaches this file through `CLAUDE.md`'s **Model selection** table.
+not here either. They are the same for every review and live with whoever applies this
+checklist — the generic `reviewer` agent definition locally, the review workflow's own prompt
+in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
+way, through `CLAUDE.md`'s **Model selection** table.
 
 ## What to read first
 
@@ -45,7 +47,7 @@ Consequences — as opposed to adding a Status supersession line, or fixing a ty
 rewrite of an accepted one.
 
 Judge it from the diff, never from the file as it now stands. The bar's item 10 states the
-drafting convention that makes that inference wrong: under it, every ADR reads `Accepted` from
+drafting convention that makes a working-tree read wrong: under it, every ADR reads `Accepted` from
 its first draft, so a working-tree read makes a record still being drafted look immutable and
 turns every legitimate draft revision into a false Critical.
 
