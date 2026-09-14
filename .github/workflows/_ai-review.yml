@@ -274,12 +274,12 @@ jobs:
           # per the table; this sizing heuristic deliberately does not.)
           # custom_components/tests/.github/.claude reading is structurally more turn-hungry
           # than a single doc tree, same distinction _ai-draft.yml draws for its own baselines
-          # (that set also covers workflow-reviewer's wider read list — CLAUDE.md,
+          # (that set also covers the workflow checklist's wider read list — CLAUDE.md,
           # ai-authoring.md, ai-pipeline.yml — for a .github/.claude-shaped
           # change). .github/ISSUE_TEMPLATE is grouped with that heavier tier for the same
           # tree-shape reason (a structured form tree, not prose) even though it also routes to
-          # workflow-reviewer; .github/setup-labels.sh and docs/reference/CLAUDE.md route there
-          # too but stay on the lighter doc-prose tier below.
+          # the workflow checklist; .github/setup-labels.sh and docs/reference/CLAUDE.md route
+          # there too but stay on the lighter doc-prose tier below.
           # A detection failure (git error) must not silently pick the lighter tier, since that's
           # the truncation-prone direction — capture output first and default to the heavier tier
           # with a warning if the command itself failed.
@@ -529,7 +529,7 @@ jobs:
             `CONFIRMED: <reason>` or `DISMISSED: <reason>` — under a dedicated **SkillSpector
             findings** section; silence on a finding is not the same as having checked it. A
             `CONFIRMED` finding folds into the applicable Critical/Major/Minor/Nit severity for
-            that file next to `workflow-reviewer`'s own findings — the scan report's own
+            that file next to the checklist's own findings — the scan report's own
             severity label is not authoritative, your verified judgment is.
 
             For any changed file under `docs/adl/`: before treating its Status as fixed/settled,
