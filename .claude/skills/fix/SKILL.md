@@ -14,23 +14,15 @@ type, and none of it is restated here. Read it there for: locating findings from
 (its §1), the severity-based fix policy and what becomes a **Skipped** entry (§2), the
 one-per-run summary and the markers it must and must not carry (§5), and the local
 commit-and-push half (§6). Its §4 — the reply call and the `ai-fix-ack` marker — is reached
-through `resolve-review-thread`, not from here, so one thread gets one reply. Its §3, the
-hard-coded use-case/ADR/analysis cases, is the one part this skill replaces.
+through `resolve-review-thread`, not from here, so one thread gets one reply. Its §3 — dispatch
+on the linked issue's context label, re-author with that row's work file, and the branch for a
+row that names none — is where that dispatch lives; this skill does not restate it.
 
-## Dispatch on the context label
+## The one thing this skill adds to the dispatch
 
-Take the context label from the PR's linked issue and look it up in `CLAUDE.md`'s
-**Model selection** table. Where the row names no work file — and two do not — there is
-nothing to re-author with: fix what the finding states, keep the severity policy, and say in
-the summary that no work file governed the change. **Fixing is re-authoring**: apply the row's
-*How the work is done*
-file in full, the way the original author did — its template, rules and self-checks define
-what a correct fix looks like. The row's *Work model* column says which model it wants; only
-the human partner can switch it.
-
-Where the work file carries a rule about changing an already-merged artifact, that rule beats
-the finding, **including its own guards on when it applies** — `write-adr`'s Accepted-ADR
-immutability is the one to know, and reading it means reading the two conditions it attaches.
+§3 says which file to re-author with. It cannot say which **model** to do it on, because CI
+picks its own and only a local run has the choice: the row's *Work model* column says which
+model it wants, so name it, and leave switching to the human partner.
 
 ## Then
 
