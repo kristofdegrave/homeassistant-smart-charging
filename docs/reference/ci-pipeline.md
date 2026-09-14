@@ -141,10 +141,11 @@ in branch protection's required checks on `main`.
   one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
   `T5`) or the run fails. **The file describing the artifact is not named in the workflow**: the
   worker reads `CLAUDE.md`'s **Model selection** table row for the label and follows whatever
-  its *How the work is done* column names — a work-type document, a skill, or a document
-  entered through one. That is what lets a work type move out of `.claude/` without this
-  workflow changing; a missing row, or a named file that does not exist, stops the run rather
-  than drafting from memory. Runs that file's *content* steps only (draft, self-checks) —
+  its *How the work is done* column names — one or more of a work-type document, a completion
+  bar, a skill, or a document entered through one. That is what lets a work type move out of
+  `.claude/`, and change how many files it is split into, without this workflow changing; a
+  missing row, or a named file that does not exist, stops the run rather than drafting from
+  memory. Runs that file's *content* steps only (draft, self-checks) —
   never its review/commit/report steps, since the workflow owns those. Opens the PR with
   `Closes #<issue-number>` and its own, coarser commit-prefix mapping (`_ai-draft.yml`'s
   `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for `development`,
@@ -173,8 +174,9 @@ in branch protection's required checks on `main`.
   off. The staged set is a superset of the paths that arm it, so base routing can never name a
   file that has no base copy. A file the PR *adds* under a watched tree arms the guard and has
   no base copy, which is correct: it is not something the base standard can route to. As with the drafter, the table
-  column may name an agent definition or a work-type review document; the worker follows what
-  it says, so a checklist can move without this workflow changing. Unacknowledged human inline
+  column may name one or more of an agent definition, a work-type review document and a
+  completion bar; the worker follows what it says, so a checklist can move, or split, without
+  this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
   remarks too — the CI equivalent of step 8.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict on a **docs-only** diff adds

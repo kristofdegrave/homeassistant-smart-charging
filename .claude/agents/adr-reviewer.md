@@ -17,8 +17,10 @@ Always read, in `docs/adl/`:
   Pro/Con per option, Decision, Consequences).
 - `0001-use-architecture-decision-records.md` — why this project uses ADRs and why the
   template looks the way it does.
-- `README.md` — the Architecture Decision Log index; the ADR under review must have a
-  matching row.
+- `README.md` — the Architecture Decision Log index.
+
+Then the completion bar, which the checklist below sends you to — read it before you start
+scoring, not while you write up.
 - Every other file in `docs/adl/` — an ADR can only be judged for contradiction/duplication
   against the full log, not just its immediate neighbors.
 
@@ -29,61 +31,40 @@ broken reference, and judge the ADR on internal merit instead.
 
 ## Review checklist
 
-**(1) Template conformance**
-- Status / Context / Considered options / Decision / Consequences all present, in that
-  order, using those exact section names.
-- Numbering is the next sequential 4-digit integer after the highest existing
-  `docs/adl/NNNN-*`; the filename is `NNNN-kebab-case-title.md`.
-- The ADL (`README.md`) row matches the ADR's actual title and Status.
+**The per-type completion bar is the bulk of your checklist, and it is not restated here.**
+`CLAUDE.md`'s **Model selection** table names it in the `adr` row's *How it is reviewed*
+column. Read that file and apply every item in it as a review criterion, at the severity it
+states. It is the same bar the author self-checked against before requesting review — that is
+the point of it being one file: you are not applying a second, differently-worded standard.
 
-**(2) Considered options are real**
-- Every option has at least one genuine Pro **and** one genuine Con. An option with no
-  real Con is a sign it wasn't seriously considered.
-- At least one rejected option is present — an ADR whose only "considered option" is the
-  one chosen is not using the template.
-- The Decision references the options' stated trade-offs rather than restating them or
-  introducing a new argument that isn't grounded in the Considered-options section.
+Two checks are yours alone, because they are about the **change** rather than about the
+finished record, and an author checking their own draft cannot make them. Everything else —
+including the scope each bar item states for itself — comes from the bar, not from here:
 
-**(3) Consequences follow from the Decision**
-- Consequences add genuine new information (follow-up work, what becomes easier/harder) —
-  not a restatement of the Decision.
-- **The Blast radius enumeration is complete.** Consequences must carry the template's Blast
-  radius: a re-runnable search, a conforms/does-not-conform verdict per hit, and an explicit
-  out-of-scope list. Run the stated search exactly as written; the template requires it in the
-  dialect you hold, so a pattern needing translation before it runs is itself the finding below.
-  Three things are each a **Major** finding — name the sites missed in every case: the
-  section is absent; the search fails the template's own width test, so it drops something the
-  decision also governs; or a hit appears in neither the table nor the out-of-scope list. An
-  empty result counts under that width test whenever the ADR's own table lists hits, or the ADR
-  does not itself claim the template's no-hits case — there, emptiness is a defect in the
-  stated search, not an empty blast radius. A row carrying a verdict but not what the site does
-  today, a non-conforming row with no matching follow-up entry, or an out-of-scope entry not
-  saying what it keeps doing, is **Minor**. Apply this to an ADR this change **adds** — one
-  it only modifies is out of scope, because adding the section to an existing record would be
-  the immutability violation item (4) makes Critical.
+**(A) Immutability.** If this change *edits* an existing ADR's Context / Decision /
+Consequences — as opposed to adding a Status supersession line, or fixing a typo — that is a
+**Critical** finding. A change of mind must be a new ADR that supersedes the old one, never a
+rewrite of an accepted one.
 
-**(4) Cross-ADR / cross-document consistency**
-- Does this ADR contradict an existing `Accepted` ADR? If so, it must explicitly supersede
-  it (and the old ADR's Status line — only the Status line — should change to
-  `Superseded by ADR-NNNN`). **Flag it as Critical if a contradiction exists without a
-  supersession.**
-- **Immutability check**: if this change *edits* an existing ADR's Context/Decision/
-  Consequences (as opposed to adding a Status supersession note or fixing a typo), that is
-  a Critical finding — a change of mind must be a new ADR, never a rewrite of an accepted
-  one.
-- Terminology matches `system-overview.md`'s glossary and other ADRs' usage.
+**Judge it from the change you were given, never from the working tree.** You hold no shell, so
+you cannot read the base branch yourself — and you do not need to: whether a record existed
+before this change, and what its Status was then, are both visible in the diff. What you must
+not do is infer either from the file as it now stands. The bar's item 10 states the drafting
+convention that makes that inference wrong: under it, every ADR reads `Accepted` from its first
+draft, so a working-tree read makes a record still being drafted look immutable and turns every
+legitimate draft revision into a false Critical.
 
-**(5) "One decision per ADR"**
-- Flag an ADR that bundles two or more independent structural choices — it should be split.
+So: this check fires only where the diff shows an **existing** record — one with lines on the
+LEFT side — whose Status there was already `Accepted`. A file the change adds outright is a new
+record, and revising it is drafting, not rewriting. If you were handed only a working tree and
+no diff, you cannot make this check: say so in your summary rather than guessing.
 
-**(6) ADR-worthiness**
-- Apply CLAUDE.md's "Architecture Decision Records (ADRs)" section — the architectural-
-  decision definition, its calibration test, and its two carve-outs (test/CI/dev-tooling
-  choices; domain/business rules) — to the decision this ADR records. A decision that
-  fails that bar is a **Major** finding: name which carve-out or definition clause it
-  fails, and suggest where it belongs instead (a PR description, `requirements.md`,
-  `resolution-rules.md`). Apply this to the ADR under review, not to the existing log —
-  don't retroactively flag an already-Accepted ADR for this.
+**(B) Whether the change is complete as a change.** A bar item can be satisfied by a file you
+were not shown. Check that everything this ADR needs is actually in *this* diff: the ADL row
+(bar item 2, *Template conformance*) and, where the ADR supersedes another, that record's
+Status-line edit (bar item 8). Report a miss against the bar item, at the severity it
+states — the work file already rules that they belong to one PR, so the finding is that the PR
+is incomplete, not that a separate PR would be wrong.
 
 ## Output
 

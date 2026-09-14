@@ -48,17 +48,19 @@ Fixing is re-authoring — work with the same context the original author had:
 
 - **Apply the work file in full.** Take the context label from the PR's **linked issue** —
   not the PR itself, which carries none — and look its row up in `CLAUDE.md`'s **Model
-  selection** table. Apply the file its *How the work is done* column names: its template,
-  rules, self-checks and common-mistakes list are what define a correct fix, and none of that
-  is restated here.
+  selection** table. Apply **every** file its *How the work is done* column names — how the
+  artifact is written, and the completion bar the finished artifact has to meet. Their
+  template, rules, bar items and common-mistakes list are what define a correct fix, and none
+  of that is restated here. The bar is also what the review applied, so a fix that satisfies
+  the finding but leaves a bar item failing is not finished.
 - **Where the row names no work file, or there is no linked issue or no context label**, there
   is nothing to re-author with. Fix what the finding states, keep the severity policy of
   section 2, and say in the summary that no work file governed the change.
 - **A work file's rule about changing an already-merged artifact overrides the finding**,
   including the conditions that file attaches to when the rule applies. Such a finding becomes
   a **Skipped** entry in the summary, recorded with why, rather than an edit.
-- **Self-checks are the work file's**, including whether a general one this project applies to
-  its documents is replaced by a type-specific one.
+- **Self-checks are the work-type files' own**, including whether a general one this project
+  applies to its documents is replaced by a type-specific one.
 
 ## 4. Acknowledge every human comment in its thread
 
