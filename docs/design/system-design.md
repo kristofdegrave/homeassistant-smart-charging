@@ -218,13 +218,16 @@ Profile→SOC-Target edge, unlike R9's top-up decline, which stays inside Profil
 mode-selection outcome (declining to match row 4 of the table above), not a call to another
 engine.
 
-**Capability gating (R18) has two realizations, only one of which is the Engine.** At *runtime* the
+**Capability gating (R18) has three realizations, only one of which is the Engine.** At *runtime* the
 Coordinator calls the Capability-Gate Engine to constrain `Auto`'s mode-selection and to gate
 solar-dependent behaviors. But the **manual mode selector's option list** (`select.smart_charging_mode`
 offering only available modes, per `entity-catalog.md`) is not a runtime Client→Engine call — Clients may
 only call Managers (rule 1). It is fixed when the owned selector entity is *created*, at setup and
-on reload, from the declared capabilities in config-entry **data** (ADR-0005/0008). The same
-capability facts drive both; the entity-definition path avoids a forbidden Client→Engine edge.
+on reload, from the declared capabilities in config-entry **data** (ADR-0005/0008). The third is
+the config flow's own **capability-gated step set** (UC12, [§6](#6-use-case-validation)): it gates
+on the declarations it is itself capturing, in the same run, so there is no resolved capability set
+to ask an Engine about yet. The same capability facts drive all three; neither Client-side path
+takes a forbidden Client→Engine edge.
 
 ### Resource Access — encapsulates *how* one resource is reached (no policy)
 
@@ -402,7 +405,8 @@ that lives in the mode/coordinator).
 One sequence per major workflow, showing the Manager orchestrating Engines and Resource Access
 in the order the corresponding flow document specifies. The two use cases realized by a Client
 alone — UC11 and UC12 ([§6](#6-use-case-validation)) — get none: with no Manager there is no
-orchestration to sequence, and their single edge to the Store is already drawn in
+orchestration to sequence, and the edges they do have — the Store for both, plus the
+dashboard's read-only adapter read-backs for UC11 — are already drawn in
 [§4](#4-static-architecture).
 
 ### 5.1 Control cycle (realizes UC01–UC04, and UC05–UC07 in passing)
@@ -508,7 +512,7 @@ The pursued occurrence threaded in from the prior cycle is one of the Coordinato
 carried values, alongside the solar step-up. It is a point in time rather than a flag, and it is
 the only one R5 needs: a missed-deadline hold is that same value read after the occurrence it
 names has passed; `control-cycle.md`'s Trigger section
-lists the carried values that have a rule or use-case of their own, this one among them. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
+names it among the values the cycle carries. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
 
 ### 5.2 Vehicle charge-limit sync (UC09)
