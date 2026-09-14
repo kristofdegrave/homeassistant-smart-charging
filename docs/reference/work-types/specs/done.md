@@ -80,7 +80,7 @@ a closed one — an ADR outside it that the slice touches is judged by the same 
 
 **(5) TDD plan quality.** Tasks are bite-sized (a failing test → minimal impl → green →
 commit), each naming **exact file paths** and a concrete failing test — a task missing either
-is **Major**, since `develop-task` consumes it literally. Each task names its **test boundary
+is **Major**, since the `development` work file consumes it literally. Each task names its **test boundary
 per ADR-0009**: plain pytest for `modes/`/`engines/` (no HA import), HA harness
 (`pytest-homeassistant-custom-component` + `MockConfigEntry`) for adapters, coordinator,
 entities, and the config flow. A missing boundary, a pure-logic task routed through the HA

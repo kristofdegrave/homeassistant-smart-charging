@@ -100,13 +100,13 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `docs/reference/work-types/adr/review.md` | opus |
-| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
-| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
-| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
-| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `docs/reference/work-types/documentation/review.md` | opus |
-| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `docs/reference/work-types/development/review.md`. For `tests/**`: completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md`. | opus |
-| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `docs/reference/work-types/adr/review.md` | opus |
+| `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
+| `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
+| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
+| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `docs/reference/work-types/documentation/review.md` | opus |
+| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `docs/reference/work-types/development/review.md`. For `tests/**`: completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md`. | opus |
+| `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `docs/reference/work-types/testing/review.md` | opus |
 | `workflow` | none — human-authored (see below) | — | checklist `docs/reference/work-types/workflow/review.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
@@ -117,17 +117,16 @@ keep matching: this column, every reviewer agent definition's frontmatter `model
 CI's `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and
 never reads that frontmatter.
 
-**A cell that names more than one file labels each role**, in either column. Four roles exist:
+**A cell that names more than one file labels each role**, in either column. Three roles exist:
 the **work file** holds how the artifact is written; the **completion bar** holds what must be
-true of the finished artifact; the **entry point** is the skill a run or CI reaches the work
-file by name through; the **checklist** holds what only a reviewer can check — how to read the
-change, and the checks about the change rather than the artifact.
+true of the finished artifact; the **checklist** holds what only a reviewer can check — how to
+read the change, and the checks about the change rather than the artifact.
 
-**A role may be named more than once in one cell** where the work type genuinely has more than
-one of that thing — and only the **entry point** does today. `documentation` is reached by two
-skills, one per document, and both lead to the same work file, so the cell names both and no
-rule for choosing between them is needed: whichever fires has already selected itself by its own
-`description`.
+**No row names an entry point.** How a run reaches the work file is the same for every work
+type, so it is not a per-row fact — **Contribution workflow** below routes to both actors'
+entries, an interactive session's and CI's, and each resolves the row itself. That leaves the
+row self-contained in the only sense that matters: it says what to follow, and is read by
+whatever followed it there.
 
 **No row branches in the *How the work is done* column.** A work type whose work splits between
 two artifacts names one work file and one completion bar like every other row, and those files
@@ -228,8 +227,8 @@ that also edits a workflow file gets the `workflow` checklist on that file rathe
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
 `.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
-not a fourth column: each row's own work file or skill, and its checklist and bar, say which
-one to read and when, so nothing here repeats a rule those files own.
+not a fourth column: each row's own work file, and its checklist and bar, say which one to
+read and when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** A drafted label is contained by the tree
 its drafts write, and `workflow` changes land in the files that instruct future runs, so there
@@ -403,9 +402,8 @@ Consequences state a forward-looking bar for future decisions in a category one 
 carve-outs above now excludes, this carve-out governs going forward and that ADR should
 be superseded to say so, rather than the conflict being left implicit.
 
-Use the `write-adr` skill for the full cycle. Follows the
-[Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
-additions:
+An ADR follows the [Contribution workflow](docs/reference/contribution-workflow.md), with these
+artifact-specific additions:
 
 - **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
   above names the files, and they are their only home — don't restate them here. The work file

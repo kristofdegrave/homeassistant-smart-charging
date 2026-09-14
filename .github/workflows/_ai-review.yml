@@ -458,10 +458,8 @@ jobs:
             nothing to look at.
 
             Follow whatever file each column names, and every file it names — a column may
-            name more than one, each labelled with its role. It may name an agent definition, a
-            work-type review document, a completion bar the finished artifact has to meet, or a
-            document entered through one — take what the column
-            actually says rather than a file you know of from elsewhere.
+            name more than one, each labelled with its role. Take what the column actually says
+            rather than a file you know of from elsewhere.
 
             TWO THINGS THAT MUST NOT PASS SILENTLY, because everything above is read from the
             PR's own merge ref — except where the guard below applies — and a PR can therefore

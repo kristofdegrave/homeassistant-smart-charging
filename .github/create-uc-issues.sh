@@ -28,7 +28,7 @@ $notes
 
 ## Authoring contract (for the runner)
 
-- Follow the **write-use-case** skill and the template in \`docs/plans/2026-06-25-use-cases-design.md\`.
+- Write it as the \`uc\` row of \`CLAUDE.md\`'s Model selection table prescribes — that row's work file owns the template and the rules.
 - Every domain term must already be in the \`system-overview.md\` glossary — add it there first if not.
 - Reference (do not restate) \`control-cycle.md\` and \`resolution-rules.md\`.
 - Update \`entity-catalog.md\`'s Read by / Written by columns for every entity touched.

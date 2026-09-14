@@ -50,8 +50,8 @@ Step 1 of the contribution workflow, in order:
    the build produced rather than from what the slice promised, and nothing downstream can tell
    those two apart.
 
-Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write the
-code.
+Once approved and merged, the `development` work type consumes the plan task-by-task to write
+the code.
 
 ## Cap both plan documents
 
@@ -62,7 +62,7 @@ the tasks, and neither carries what another doc already owns. Cut, when a draft 
 first two bullets in either document, the third in the TDD plan, where the task entries live:
 
 - **A restated formula or threshold.** Cite the owning analysis doc and the R-number instead,
-  as a test anchor. `develop-task` already sends the author to `control-cycle.md`,
+  as a test anchor. The `development` work file already sends the author to `control-cycle.md`,
   `resolution-rules.md`, `requirements.md` and the use-case for the rule itself, so the plan's
   copy is only a further version to keep in sync.
 - **Restated ADR rationale.** Name the ADR and what it obliges this slice to do; the *why*
@@ -116,8 +116,8 @@ section.
   review to discover the order is wrong.
 - **Respect the test boundary.** Pure logic → plain pytest; HA-coupled → HA harness. Name it
   per task.
-- **No `custom_components/` code here.** The spec is a planning artifact; code is written by
-  `develop-task` against the approved plan.
+- **No `custom_components/` code here.** The spec is a planning artifact; code is written by the
+  `development` work type against the approved plan.
 
 ## Common mistakes
 

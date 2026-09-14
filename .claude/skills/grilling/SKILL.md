@@ -46,7 +46,7 @@ understanding.
 
 This technique targets large, branch-heavy decisions — e.g. `work-idea`'s brainstorming gate.
 For a single, narrowly-scoped question, the built-in `brainstorming` skill's one-question dialogue
-(used, for example, by `write-impl-spec`'s own scoping step) is a lighter fit; use whichever the
+(used, for example, by the `specs` work file's own scoping step) is a lighter fit; use whichever the
 referencing skill names.
 
 This is interactive-only: if you find yourself invoked with no human able to answer (e.g. inside

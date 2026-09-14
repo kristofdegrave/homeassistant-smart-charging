@@ -8,9 +8,11 @@ body:
       value: |
         This form applies the `uc` context label. Add `needs-draft` yourself afterwards
         to trigger the AI documentation pipeline: the runner drafts
-        `docs/analysis/use-cases/<slug>.md` following the `write-use-case` skill, updates
-        the entity-catalog, and opens a PR that Closes this issue (`needs-review` then
-        runs the fresh review; a human gives final manual approval and merges).
+        `docs/analysis/use-cases/<slug>.md` as the `uc` row of CLAUDE.md's Model selection
+        table prescribes, updates the entity-catalog, and opens a PR that Closes this issue
+        (`needs-review` then runs the fresh review; a human gives final manual approval and
+        merges). To draft it in a local session instead, run `/implement` on this issue once
+        it exists.
 
         Leave `needs-draft` off if you just want to file the idea without drafting it yet.
   - type: input
@@ -78,8 +80,9 @@ body:
       value: |
         ---
         **Authoring contract (for the runner):**
-        - Follow the `write-use-case` skill and the template in
-          `docs/plans/2026-06-25-use-cases-design.md`.
+        - Write it as the `uc` row of CLAUDE.md's Model selection table prescribes — that
+          row's work file owns the template and the rules, and its completion bar owns what
+          a finished use-case must satisfy.
         - Every domain term must already be in the `system-overview.md` glossary — add it
           there first if not.
         - Reference (do not restate) `control-cycle.md` and `resolution-rules.md`.
