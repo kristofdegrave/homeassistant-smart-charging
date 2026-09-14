@@ -497,11 +497,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         # ADR-0030/ADR-0032: an optional external monthly-peak reading (DSO/smart-meter),
         # merged with the internally-tracked value into the clamp's operand. Never gated on
-        # captar_available -- _apply_peak_clamp itself carries no capability gate, so a higher
-        # operand affects every mode, not just Captar. monthly_peak_kw itself keeps meaning
-        # only the internally-tracked peak (D-6): it is never overwritten with the merged
-        # value, so a live spike this integration observes between external-sensor refreshes
-        # is not discarded.
+        # captar_available -- R21 AC (tracking runs every cycle regardless of which capabilities
+        # are declared) requires the value to still be tracked and surfaced for observability
+        # even when the CapTar capability is absent, though `_peak_clamp_would_run`'s own gate
+        # (R3 AC1, issue #1018) means no charging decision ends up consulting it in that case.
+        # monthly_peak_kw itself keeps meaning only the internally-tracked peak (D-6): it is
+        # never overwritten with the merged value, so a live spike this integration observes
+        # between external-sensor refreshes is not discarded.
         external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)
         peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)
         # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
@@ -749,9 +751,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # entity-catalog.md:153/control-cycle.md step 5 -- the same target and (issue #990:
         # debounced) baseline the R3 clamp itself holds. Since issue #1078 this shares
         # `apply_peak_clamp`'s own arithmetic through `peak_headroom_a` rather than restating
-        # it, so the readout cannot drift from the clamp it reports on; reading it here instead
-        # of returning it from `_apply_peak_clamp` still avoids changing that control-path
-        # signature for a display-only need.
+        # it, so the readout cannot drift from the clamp it reports on while the clamp runs at
+        # all; with the CapTar capability absent (R3 AC1, issue #1018) the clamp does not run,
+        # yet this readout still resolves and is surfaced (R21's own AC), simply consulted by
+        # no charging decision in that case. Reading it here instead of returning it from
+        # `_apply_peak_clamp` still avoids changing that control-path signature for a
+        # display-only need.
         peak_headroom = peak_headroom_a(
             baseline_w=ctx.baseline_w,
             voltage=voltage,
@@ -1089,8 +1094,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return desired
 
     def _apply_peak_clamp(self, ctx: CycleContext, desired: float) -> float:
-        """R3 peak clamp (E5) -- skippable only for Power via its own R17 opt-out (design doc
-        Sec 7). `desired` here is the already-computed mode request from `_dispatch_mode` --
+        """R3 peak clamp (E5) -- never engages at all with the CapTar capability absent (R3
+        AC1, R18), and, while the capability is present, skippable only for Power via its own
+        R17 opt-out (design doc Sec 7); both are `_peak_clamp_would_run`'s job. `desired` here
+        is the already-computed mode request from `_dispatch_mode` --
         apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
         disconnect/Off/SOC-gated branches (all `desired = 0.0`) can never trip force_stop this
         cycle, regardless of headroom. A separate named call from the C4 grid-ceiling clamp
@@ -1146,10 +1153,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
 
     def _peak_clamp_would_run(self) -> bool:
-        """R17: whether R3's peak clamp applies to the mode currently active.
+        """R3 AC1/R17: whether R3's peak clamp applies to the mode currently active.
 
-        `Power` alone may disable peak protection (R17, C3's second carve-out); every other mode
-        is bound by it. Shared by `_apply_peak_clamp`, which is the behaviour, and
+        Gated on `captar_available` first (R3 AC1, R18): with the CapTar capability absent, no
+        peak-protection clamp ever engages in any mode -- net import is bounded only by the grid
+        supply ceiling (C4). `Power` alone may additionally disable peak protection while the
+        capability IS present (R17, C3's second carve-out); every other mode is bound by it in
+        that case. Shared by `_apply_peak_clamp`, which is the behaviour, and
         `_escalated_maximum_permitted_rate_a`, which predicts it -- a predictor that disagreed
         with the thing it predicts is worse than no predictor.
 
@@ -1157,15 +1167,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         so reads the mode being dispatched, while the escalated-rate helper runs before it and
         reads the mode from the *previous* cycle. The two only disagree for `Power` with the
         opt-out off, which `Auto` never selects from its baseline rows -- reachable only on a
-        CapTar-absent installation (R18), where `Auto`'s urgency row escalates to `Power`, and
-        for one cycle after a profile switch away from a `Power` session. Fixing #1018 removes
-        the first from reach. Passing the mode in as a parameter would close it properly; that is
-        deliberately not done here, because the mode urgency *would* dispatch is resolved by the
-        very call this rate is an input to.
-
-        Deliberately not also gating on `captar_available` (R3 AC1, R18): `_apply_peak_clamp`
-        does not, and this predicate exists to say what that clamp *does*. See issue #1018.
+        CapTar-absent installation (R18), where `Auto`'s urgency row escalates to `Power`; but
+        with the capability absent the `captar_available` gate above already returns `False`
+        before the mode is even consulted, so the two agree in that case regardless. The
+        remaining disagreement window is one cycle after a profile switch away from a `Power`
+        session while the capability IS present. Passing the mode in as a parameter would close
+        it properly; that is deliberately not done here, because the mode urgency *would*
+        dispatch is resolved by the very call this rate is an input to.
         """
+        if not self._config.captar_available:
+            return False
         return not (self.active_mode == MODE_POWER and not self._config.power_respect_peak)
 
     def _escalated_maximum_permitted_rate_a(
@@ -1202,16 +1213,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         The glossary names two cases in which the peak clamp does not run at all and only C1/C4
         bound the rate: `Power` with its own R17 peak-protection opt-out disabled, and the CapTar
-        capability being absent (R18). `_peak_clamp_would_run` handles the first, mirroring
-        `_apply_peak_clamp`'s own early return -- without it, a `Power` session with the opt-out
-        off and a household baseline near the maximum peak would floor this rate to 0 A and make
-        every required current both urgent and unreachable, which is #1078's own symptom in
-        miniature.
-
-        The second case is deliberately NOT handled, because `_apply_peak_clamp` does not handle
-        it either: it carries no `captar_available` gate today, contrary to R3 AC1. That
-        divergence is issue #1018, and gating here alone would put this rate out of step with the
-        very clamp it exists to predict. Whoever fixes #1018 must change both.
+        capability being absent (R3 AC1, R18). `_peak_clamp_would_run` handles both, mirroring
+        `_apply_peak_clamp`'s own early return -- without the first, a `Power` session with the
+        opt-out off and a household baseline near the maximum peak would floor this rate to 0 A
+        and make every required current both urgent and unreachable, which is #1078's own
+        symptom in miniature; without the second, a non-CapTar installation's escalated rate
+        would be floored by a clamp that (per R3 AC1) never engages for it at all.
         """
         bounds = [
             self._config.max_current,

@@ -98,7 +98,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's missed-deadline hold designed, not built; E8 partial — R11's cooldown/hold gating designed, not built |
 | **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow; Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
@@ -226,13 +226,15 @@ it is wired to its callers).
 
 ### Phase 2 — Engines
 
-> All Engines are **pure functions of their inputs** and perform **no I/O and call no other Engine**
-> (§4 rule 4). Stateful Engines (E7, E8, and the E5 Tracker) take their cross-cycle state as a
-> **parameter** threaded by the Manager. Every Engine is unit-tested with **plain pytest** (ADR-0009)
+> All Engines perform **no I/O and call no other Engine** (§4 rule 4) — that is the purity this
+> guard is about. Whether an Engine is *stateful* in system-design §3's signature-test sense is a
+> separate, per-Engine fact recorded on its roster row there and on its task below; the ones that
+> are take their cross-cycle state as a **parameter** threaded by the Manager rather than holding
+> it. Every Engine is unit-tested with **plain pytest** (ADR-0009)
 > — no HA harness. The per-Engine "integration checkpoint" is therefore realized in M1/M2/M3, where
 > the Manager feeds real inputs; noted per task.
 
-**E1 — Charging-Mode Engines (`Off`, `Solar`, `SolarOnly`, `Captar`, `Power`)**
+**E1 — Charging-Mode Engines (`Off`, `Solar`, `SolarOnly`, `Captar`, `Power`)** *(stateful for `Solar`/`SolarOnly`/`Captar`; `Power` pure; `Off` has no module)*
 - **Service:** Engine, V2. Home: `modes/` (ADR-0002 — no new ADR).
 - **Status:** shipped — `modes/solar.py`, `modes/solar_only.py`, `modes/captar.py`,
   `modes/power.py` (plus the shared `_amp_step.py`/`_phase.py`/`_mode_state.py` helpers); tests
@@ -262,7 +264,7 @@ it is wired to its callers).
   0 A for the rest of the session, which would leave R5's handback unable to fire.
 - **Integration checkpoint:** ⎔ M1 dispatches to the active mode and gets a desired current.
 
-**E2 — Profile Engines (`Manual`, `Auto`)**
+**E2 — Profile Engines (`Manual`, `Auto`)** *(pure)*
 - **Service:** Engine, V3. Home: `profiles/` (ADR-0002).
 - **Status:** shipped — `profiles/manual.py`, `profiles/auto.py`, and `profiles/policy.py`; tests
   under `tests/profiles/`. ADR-0017 (Accepted) settled the shape the two profiles take: a
@@ -288,7 +290,7 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1 obtains the active mode; owned selector option-list (C2) uses the
   same capability facts via the entity-definition path.
 
-**E3 — SOC-Target Engine**
+**E3 — SOC-Target Engine** *(stateful)*
 - **Service:** Engine, V4 (cross-cutting). **ADR gate: G-ADR-0010** (package home — resolved).
 - **Status:** shipped — `engines/soc_target.py`; tests in `tests/engines/test_soc_target.py`. The
   Coordinator-side gating around it (which cycle's flags feed the step-up/cap rows) lives in
@@ -309,7 +311,7 @@ it is wired to its callers).
   the Coordinator-threaded step-up/reserve context the resolution composes
   (ADR-0011; system-design §5.2/§5.3).
 
-**E4 — Deadline Engine**
+**E4 — Deadline Engine** *(stateful)*
 - **Service:** Engine, V5 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. E4
   partial — the missed-deadline hold's engage/clear policy is designed, per system-design §3, but
@@ -333,9 +335,9 @@ it is wired to its callers).
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's
   lead-time window once that reminder is built (project-plan §M3).
 
-**E5 — Billing-Protection Engine + Peak-Demand Tracker**
-- **Service:** Engine, V6 — a pure Engine (Billing-Protection) plus a **stateful** Engine (Peak-Demand
-  Tracker). **ADR gate: G-ADR-0010** (resolved).
+**E5 — Billing-Protection Engine + Peak-Demand Tracker** *(both stateful)*
+- **Service:** Engine, V6 — two **stateful** Engines: Billing-Protection (R3's breach timer and the
+  baseline debouncer) plus the Peak-Demand Tracker. **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/billing_protection.py` and `engines/peak_demand_tracker.py`; tests
   in `tests/engines/test_billing_protection.py` and `tests/engines/test_peak_demand_tracker.py`.
   The Tracker's monthly bookkeeping state is owned by `coordinator_cycle.py`'s `PeakDemandState`
@@ -364,7 +366,7 @@ it is wired to its callers).
   M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
 
-**E6 — Grid-Safety Engine**
+**E6 — Grid-Safety Engine** *(pure)*
 - **Service:** Engine, V7 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/grid_safety.py`; tests in `tests/engines/test_grid_safety.py`.
 - **Builds:** the **C4 headroom as a value**, for callers needing what C4 would allow without
@@ -391,19 +393,23 @@ it is wired to its callers).
   fallback (voltage `None` does **not** enter the fault path).
 - **Integration checkpoint:** ⎔ M1 threads the smoothing state in/out each cycle.
 
-**E8 — Cycle-Invariant Engine** *(stateful)*
+**E8 — Cycle-Invariant Engine** *(pure today — R11's cooldown/hold is deferred and its timers live in M1; stateful once that lands)*
 - **Service:** Engine, V9 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/cycle_invariant.py`; tests in
-  `tests/engines/test_cycle_invariant.py`.
-- **Builds:** final current after R11 cooldown/hold gating and the C1 floor/cap; also the terminus of
-  ADR-0007's fault path (an adapter `None`/exception routes here → force stop). State (R11 timers)
-  threaded by M1; switching mode resets the incoming mode's timers (R11, wired at M1).
-- **Depends on:** ADR-0010; timer state from M1.
-- **Testable on its own:** plain pytest — cooldown/hold gating given state, C1 floor/cap, fault → 0 A.
+  `tests/engines/test_cycle_invariant.py`. E8 partial — R11's cooldown/hold gating is designed,
+  per system-design §3, but not built: the shipped engine exposes only the C1 floor/cap, and R11's
+  timers currently live in M1. That is why its kind marker reads *pure today*.
+- **Builds:** the C1 floor/cap, and the terminus of ADR-0007's fault path (an adapter
+  `None`/exception routes here → force stop). R11's cooldown/hold gating belongs here too once
+  built, taking the timer state as a threaded parameter — until then M1 owns those timers outright,
+  and switching mode resets the incoming mode's timers there (R11).
+- **Depends on:** ADR-0010; and, once R11's gating is built, timer state threaded in by M1.
+- **Testable on its own:** plain pytest — C1 floor/cap, fault → 0 A; and, once R11's gating is
+  built, cooldown/hold gating given the threaded timer state.
 - **Integration checkpoint:** ⎔ M1's `set_active_mode` resets timers; fault input forces stop + Fault
   sensor (via Store).
 
-**E9 — Capability-Gate Engine**
+**E9 — Capability-Gate Engine** *(pure)*
 - **Service:** Engine, V10 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/capability_gate.py`; tests in
   `tests/engines/test_capability_gate.py`.
@@ -415,8 +421,8 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1 passes available modes to E2 (`Auto`); C2 reuses the same facts.
 
 > **⎔ Phase 2 checkpoint:** every Engine unit-tested in isolation with plain pytest; no Engine
-> imports `homeassistant.*` or another Engine (the ADR-0009/ADR-0006 purity guard). Stateful Engines
-> accept and return their state as parameters. *Met:* the purity half is enforced as an executable
+> imports `homeassistant.*` or another Engine (the ADR-0009/ADR-0006 purity guard). Whichever
+> Engines are stateful accept and return their state as parameters rather than holding it. *Met:* the purity half is enforced as an executable
 > check in `tests/test_engine_purity.py` rather than by review alone.
 
 ### Phase 3 — Managers
@@ -449,8 +455,8 @@ it is wired to its callers).
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
   clamp (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1 are each called twice
-  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads all stateful-Engine state, plus the two decision flags the Deadline Engine
-  decides and M1 carries across cycles (R5's urgency latch and missed-deadline hold); writes diagnostics
+  per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's urgency
+  latch, and the missed-deadline hold once built); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
   bus for a consuming Manager are the ones that ship: `ActiveSocLimitChanged` (→ M2) and
@@ -723,8 +729,8 @@ from the retired functional sequence.
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
   `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks and all six
-  Client tasks have shipped, as have all nine Engine tasks — E4 partially, its missed-deadline
-  hold being designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
+  Client tasks have shipped, as have all nine Engine tasks — two of them partially: E4's
+  missed-deadline hold and E8's R11 cooldown/hold gating are both designed but not built. Of the three Manager tasks, M1 and M2 have shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Two checkpoints are only partially met and are marked as such: the Phase 3
