@@ -365,8 +365,9 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   (ADR-0011), the single cross-cycle change signal [UC09](use-cases/UC09-sync-charge-limit-with-car.md)
   consumes to sync the vehicle. If a future use-case needs the resolved departure deadline
   materialized likewise, it would add the row and its references then. The
-  [missed-deadline hold](system-overview.md#ubiquitous-language) and the deadline-urgency latch
-  (R5, `resolution-rules.md`) are
+  [pursued occurrence](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — which
+  carries deadline urgency and, read after that occurrence has passed, the
+  [missed-deadline hold](system-overview.md#ubiquitous-language) — is
   likewise **deliberately not materialized**, even though [UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)
   reads the hold across a use-case boundary: both are coordinator-internal session state with no configuration
   input and no consumer outside the resolution rules, and — unlike the plug-in reminder's de-dup

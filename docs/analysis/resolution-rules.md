@@ -14,11 +14,13 @@ changes what a citation elsewhere refers to. (`docs/design/` and `docs/adl/` sti
 by ordinal as of this writing; ADR bodies are immutable and cannot be updated retroactively, and
 the design docs are a separate reconciliation pass.) The required-current rule is a shared formula
 instead, since it has no priority order to evaluate. Every rule is re-evaluated every control cycle, so a change in conditions
-changes the result on the next cycle. Three of the inputs these rules read are not values observable
+changes the result on the next cycle. Two of the inputs these rules read are not values observable
 *this* cycle but flags the coordinator threads across cycles for the current connected session:
 whether a [solar step-up](system-overview.md#ubiquitous-language) is in effect (R7/R8), whether
-[deadline urgency](system-overview.md#ubiquitous-language) is latched on (R5), and whether a
-[missed-deadline hold](system-overview.md#ubiquitous-language) is in effect (R5). All three are
+which occurrence
+[deadline urgency](system-overview.md#ubiquitous-language) is pursuing, if any (R5) — from which
+whether a [missed-deadline hold](system-overview.md#ubiquitous-language) is in effect follows,
+that being the same value read after the occurrence it names has passed. Both are
 called out where the rule that reads them is defined.
 
 ---
@@ -176,7 +178,15 @@ urgency comes to be in effect.
   deadline urgency were engaged — that is, with the effective peak limit at the maximum peak
   (the effective-peak-limit rule's *Urgency raise* row, below). It is computed every cycle from
   the household baseline and the peak/ceiling bounds alone, **whether or not urgency is actually
-  in effect**, so the engage test below does not move the moment it fires. Comparing against the
+  in effect**, so the engage test below does not move the moment it fires. The household baseline
+  it reads is the **smoothed** one (R10), not the instantaneous reading: this rate is a forecast of
+  what urgency could sustain over the remaining window, and one cycle of household load is not
+  evidence about that. The split is the one the System already draws — R3's clamp and C4's ceiling
+  read [raw values](system-overview.md#ubiquitous-language) so a real breach cannot persist for a
+  smoothing window, while decisions that must not chase transients read smoothed ones. Delivery
+  under urgency is still clamped on raw readings; only this forecast is smoothed. Without it a
+  single spike can shrink the rate far enough to engage urgency and, against an `Auto` baseline of
+  `Off` that can never hand back, hold the maximum peak for the rest of the session. Comparing against the
   rate currently in force instead would be self-cancelling: engaging urgency raises that rate,
   which would immediately make the deadline look comfortable again, reverting and re-escalating
   every cycle.
@@ -215,9 +225,11 @@ best-effort rather than a guarantee.
 
 ### Clearing urgency: the handback test (R5)
 
-Once engaged, urgency **latches**: it stays in effect across cycles rather than being re-derived
-from the slack test, which charging at the escalated rate would otherwise falsify within one
-cycle (the gap closes faster than the window does). It **clears** when any of these holds:
+Once engaged, the occurrence under judgement becomes the [pursued
+occurrence](system-overview.md#ubiquitous-language) and is **held** across cycles rather than
+re-derived from the slack test, which charging at the escalated rate would otherwise falsify within
+one cycle (the gap closes faster than the window does). Urgency is in effect for exactly as long as
+there is a pursued occurrence. It is **released** when any of these holds:
 
 - the baseline mode's own [desired charger current](system-overview.md#ubiquitous-language) is at
   or above the required current, **on a cycle on which the slack test above does not itself hold**
@@ -248,12 +260,12 @@ cycle (the gap closes faster than the window does). It **clears** when any of th
   handback holds trivially for any baseline);
 - the car disconnects; the departure deadline resolves to "no deadline"; or the deadline
   capability becomes absent (R18);
-- a [missed-deadline hold](system-overview.md#ubiquitous-language) clears (below). Neither test
-  runs while a hold is in effect, so the latch that occurrence set would otherwise never be handed
-  back. Three of the hold's four clear conditions are already urgency clears in their own right;
-  the fourth — the backstop, the *following* occurrence elapsing — is not, and without this the
-  latch would outlive the hold indefinitely against a baseline of `Off`, defeating the backstop's
-  own "a hold never outlives one deadline cycle".
+- the occurrence **following** the pursued one has itself elapsed — the backstop, so a
+  [missed-deadline hold](system-overview.md#ubiquitous-language) never outlives one deadline cycle.
+  This is the only release that a hold does not share with ordinary urgency, and it exists because
+  neither test runs while the pursued occurrence lies in the past: without it, an `Off` baseline
+  that can never hand back would keep the occurrence pursued indefinitely. Note there is no
+  separate hold flag to keep in step with this one — see the hold's own section below.
 
 **The slack test takes precedence over the handback where both hold on the same cycle**, and they
 genuinely can: a [desired charger current](system-overview.md#ubiquitous-language) is what a mode
@@ -280,37 +292,45 @@ consumer that asks "is deadline urgency in effect" therefore needs no special ca
 ### Missed-deadline hold (R5)
 
 A departure time is a **target, not a cutoff** — the driver may leave a little later than planned —
-so the System does not stop trying the moment a deadline is missed. The hold **engages** at the
-moment the resolved departure deadline elapses while, on that same cycle:
+so the System does not stop trying the moment a deadline is missed.
 
-1. the car is connected and its state of charge is still **below** the active SOC limit as resolved
-   for that cycle, **and**
-2. deadline urgency was in effect on the last cycle before that moment — the `Urgent` or
-   `Unreachable` state of [UC05](use-cases/UC05-guarantee-ready-by-departure.md) — on that
-   occurrence's *own* merits, i.e. because the slack test engaged urgency for it and no handback
-   had yet cleared it, not because a previous hold was pinning urgency on.
+**The hold is not a condition the System tracks; it is a reading of the [pursued
+occurrence](system-overview.md#ubiquitous-language).** The System is in a missed-deadline hold
+exactly when the pursued occurrence lies in the past. Nothing engages it and nothing has to be kept
+in step with urgency, because it *is* urgency — seen at a moment after the occurrence it is chasing.
 
-While it holds, the deadline is **unreachable by definition** — time has run out on it — so urgency
-is in effect and the System is pinned to `Unreachable`, with exactly that state's own behaviour: the
-effective-peak-limit rule takes its *Urgency raise* row, `Auto` mode-selection takes its *Deadline
-urgency* row, and delivery is
-whatever those levers yield, bounded above by the [maximum permitted
-rate](system-overview.md#ubiquitous-language). **No required current is computed while the hold is in
-effect**, and neither the slack test nor the handback test runs, so the following occurrence's
-longer time remaining cannot end the hold by making the deadline look comfortable again.
+Everything the hold has to guarantee follows from that, rather than from rules of its own:
+
+- **It is anchored to the occurrence already missed.** The pursued occurrence is that occurrence.
+  The departure-deadline rule rolling forward cannot move it, and that later occurrence resolving
+  to "no deadline" cannot end it.
+- **No required current is computed while it lasts.** The time remaining to a past occurrence is
+  not positive, so the formula above yields nothing to compare — which is also why neither the
+  slack test nor the handback test can run, and why the following occurrence's longer window cannot
+  make the deadline look comfortable again.
+- **The deadline is unreachable by definition**, so the System is pinned to
+  [UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s `Unreachable` state with exactly that
+  state's behaviour: the effective-peak-limit rule takes its *Urgency raise* row, `Auto`
+  mode-selection takes its *Deadline urgency* row, and delivery is whatever those levers yield,
+  bounded above by the [maximum permitted rate](system-overview.md#ubiquitous-language).
+- **A car that connects after a deadline has already elapsed is never held.** It never pursued that
+  occurrence: the ordinary rule resolves the *next* one (R14), and a pursued occurrence is only ever
+  set by the slack test firing on the occurrence it was judging.
 
 It **clears** when the car's state of charge is at or above the active SOC limit, when the car
 disconnects, when the deadline capability becomes absent (R18), or — as a backstop — when the
 *following* occurrence itself elapses, so a hold never outlives one deadline cycle. Nothing else the
-departure-deadline rule resolves clears it: the hold is anchored to the occurrence already missed,
-not to the next one, so it survives that next occurrence resolving to "no deadline" or to a different
-time. From the cycle after it clears, the required current above governs normally again, and the urgency latch clears with it (see that rule's clear list above).
+departure-deadline rule resolves ends it: the pursued occurrence *is* the occurrence already missed,
+so it survives a later occurrence resolving to "no deadline" or to a different time. Releasing the
+pursued occurrence ends the hold and urgency together — they were never two things — and from the
+next cycle the required current above governs normally again.
 
 - **Evaluation order, so the hold and the cap above are not circular.** The hold is updated once per
   cycle, *after* the active SOC limit has been resolved for that cycle (so condition 1 reads the
   resolved value) and *before* the mode and peak decisions that consume urgency
   (`control-cycle.md`, step 4). The active-SOC-limit table's *Solar-reserve cap* row therefore reads the hold as it
-  stood entering the cycle: on the very cycle a hold engages the cap may still have been in force,
+  stood entering the cycle: on the very cycle the pursued occurrence first lies in the past the cap
+  may still have been in force,
   and it lifts from the next cycle onward — the same one-cycle settling any other precondition
   lapsing has ([UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)).
 - **A car that connects only after a deadline has already elapsed is never held.** Condition 2 fails
@@ -320,14 +340,15 @@ time. From the cycle after it clears, the required current above governs normall
 - **The hold excludes the solar-reserve cap** (the active-SOC-limit table's *Solar-reserve cap* row above, R9): the
   cap would otherwise lower the active SOC limit out from under a session the driver is waiting on.
   The mirror-image consequence is deliberate and worth naming: if the cap *was* in force when the
-  hold engages, the active SOC limit rises back to what it resolves to without the cap, extending the
-  target the hold then pursues. That is R9's own priority rule doing what it already does when a
+  hold begins, the active SOC limit rises back to what it resolves to without the cap, extending the
+  target the System then pursues. That is R9's own priority rule doing what it already does when a
   deadline appears for tomorrow (R7/R9), not urgency's levers raising the limit — those never do
   (R5).
-- **A baseline mode that requests little or no current still latches the hold.** Under `Manual` with
-  `Off`, or a solar mode after dark, urgency engages once the slack test fires and then cannot hand
-  back — a 0 A baseline never reaches the required current — while nothing is actually charging; the
-  hold then engages at the deadline and holds the effective peak limit at the maximum peak to no
+- **A baseline mode that requests little or no current keeps the occurrence pursued.** Under
+  `Manual` with `Off`, or a solar mode after dark, urgency engages once the slack test fires and
+  then cannot hand back — a 0 A baseline never reaches the required current — while nothing is
+  actually charging; once the deadline passes the System is in a hold by definition, holding the
+  effective peak limit at the maximum peak to no
   benefit, since `Manual` has no second lever
   ([UC05](use-cases/UC05-guarantee-ready-by-departure.md), 3b). The clear-at-the-following-occurrence
   backstop above bounds this rather than special-casing it: the user's own mode choice is not
@@ -446,9 +467,9 @@ against, and the mode this row reverts to.
   the deadline — the next cycle falls through to *Solar session* or *Overnight top-up*, returning
   to a solar mode (or `Off`) once grid charging for the deadline is no longer required (R16), and
   emits `DeadlineUrgencyReverted` (see UC05). Two properties of the required-current rule keep this
-  stable rather than reverting the cycle after it engages: urgency latches, so the slack test is
-  not re-asked once it has fired; and the handback compares against the non-escalated baseline
-  rather than `Captar`'s own (already-maximum) desired current.
+  stable rather than reverting the cycle after it engages: the occurrence stays pursued, so the
+  slack test is not re-asked once it has fired; and the handback compares against the non-escalated
+  baseline rather than `Captar`'s own (already-maximum) desired current.
 - **Reserve:** while `Auto`'s own solar-reserve conditions hold (R9), `Auto` both lowers the
   active SOC limit (R7's *Solar-reserve cap* row) *and* declines to match *Overnight top-up*, so it does not start baseline grid
   charging overnight either — two separate effects of the same `Auto` decision, not a rule that
