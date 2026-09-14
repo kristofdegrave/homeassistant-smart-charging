@@ -43,11 +43,11 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`, `requirement`, `testing` and `uc`), and then fixing any cross-directory route into it,
-of which there is one: `requirement/done.md` routes to the shared completion bar in `uc/`.
-Adding a label means updating those eight — the work-types directory only where the new label
-gets a work file, which is not a given; renaming one additionally means updating any form that
-stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
+`adr`, `requirement`, `specs`, `testing` and `uc`), and then fixing any cross-directory route
+into it, of which there is one: `requirement/done.md` routes to the shared completion bar in
+`uc/`. Adding a label means updating those eight — the work-types directory only where the new
+label gets a work file, which is not a given; renaming one additionally means updating any form
+that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
 simply stops matching — so that one is checked, not assumed.
 
 All three workers read the table rather than carrying their own copy of the work-file and
@@ -112,10 +112,12 @@ in branch protection's required checks on `main`.
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label — a
   context label alone never triggers anything; only an *action* label (`needs-draft` on an
   issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` and `documentation`
-  are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because no
-  safe path containment exists for untrusted issue content outside
-  the per-label `docs/` trees/`custom_components/**`/`tests/**`; `documentation` simply
-  isn't wired in yet). A human authors both drafts by hand. The review step is still automated
+  are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because a
+  drafted label is contained by an allow-list of the trees its drafts actually write — one tree
+  for each doc label — and that list never reaches the files instructing future drafts. A
+  `workflow` change **is** those instructing files — `.github/`, `.claude/`, `CLAUDE.md` — so
+  no allow-list can contain one; `documentation` simply isn't wired in yet). A human authors
+  both drafts by hand. The review step is still automated
   for `workflow`, since
   routing reaches it through the changed paths and not only through the issue's context label —
   but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter

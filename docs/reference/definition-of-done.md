@@ -94,9 +94,11 @@ on a branch. Every vertical slice therefore also gets a **verify-live** pass onc
 deployed, run by the author of the merged slice ([idea-to-issues.md](idea-to-issues.md)'s
 **Verify live** stage places it in the wider flow):
 
-- **The checklist comes from the spec, not from memory** — the entity ids to observe and the
-  values, with units, expected of them, fixed before the slice was built. Every spec defines
-  this list, one per slice; producing it is part of writing the spec (`write-impl-spec`).
+- **The checklist comes from the spec, not from memory** — fixed before the slice was built.
+  That every spec carries one, and what each item has to name, is an item of the `specs`
+  completion bar ([work-types/specs/done.md](work-types/specs/done.md), named in that row of
+  `CLAUDE.md`'s **Model selection** table) — so a missing or unusable checklist is a finding
+  against the spec, caught when the spec is reviewed rather than when this pass is run.
 - **The result is a comment on the epic**: the observed value for each item on that list, plus
   a log excerpt or dashboard screenshot. Where the work has no epic — a single-artifact idea,
   or a one-slice fix — the comment goes on the task issue instead.

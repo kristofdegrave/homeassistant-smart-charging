@@ -100,7 +100,7 @@ runs on.
 | `adr` | work file `docs/reference/work-types/adr/implement.md`; completion bar `docs/reference/work-types/adr/done.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | completion bar `docs/reference/work-types/adr/done.md`; checklist `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
-| `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
+| `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
@@ -190,13 +190,13 @@ PR that also edits a workflow file gets `workflow-reviewer` on that file rather 
 not a fourth column: each row's own work file or skill, and its reviewer agent, say which one
 to read and when, so nothing here repeats a rule those files own.
 
-**The `workflow` row has no work file on purpose.** There is no safe path containment for
-untrusted issue content outside the `docs/` trees each doc drafter's allow-list confines it to,
-`custom_components/**` and
-`tests/**`, so CI refuses to draft `workflow` issues
-([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a local session hands the drafting to the
-human partner. Its review is still automated. What a `workflow` author reads instead is in
-**Authoring AI artifacts** below.
+**The `workflow` row has no work file on purpose.** A drafted label is contained by the tree
+its drafts write, and `workflow` changes land in the files that instruct future runs, so there
+is no tree to contain one in — CI therefore refuses to draft `workflow` issues and a local
+session hands the drafting to the human partner. The containment rule and the tree each label
+gets are [ci-pipeline.md](docs/reference/ci-pipeline.md)'s; they narrow as work types migrate,
+so they are routed from here rather than restated. Its review is still automated. What a
+`workflow` author reads instead is in **Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
 `docs/adl/**` → `adr-reviewer`;
