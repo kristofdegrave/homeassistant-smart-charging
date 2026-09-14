@@ -33,9 +33,10 @@ broken reference, and judge the ADR on internal merit instead.
 
 **The per-type completion bar is the bulk of your checklist, and it is not restated here.**
 `CLAUDE.md`'s **Model selection** table names it in the `adr` row's *How it is reviewed*
-column. Read that file and apply every item in it as a review criterion, at the severity it
-states. It is the same bar the author self-checked against before requesting review — that is
-the point of it being one file: you are not applying a second, differently-worded standard.
+column. Read **the bar** and apply every item in it as a review criterion, at the severity
+that item states. It is the same bar the author self-checked against before requesting
+review — that is the point of it being one file: you are not applying a second,
+differently-worded standard.
 
 Two checks are yours alone, because they are about the **change** rather than about the
 finished record, and an author checking their own draft cannot make them. Everything else —

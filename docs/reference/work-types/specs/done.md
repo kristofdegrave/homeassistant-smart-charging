@@ -4,9 +4,8 @@
 section of either one:
 
 - **The author**, as the self-check before requesting review — this is what
-  [definition-of-done.md](../../definition-of-done.md) means by an artifact's own completion
-  bar, standing in for the builds/lints/tests checklist that doesn't apply to a planning
-  document.
+  `definition-of-done.md` means by an artifact's own completion bar, standing in for the
+  builds/lints/tests checklist that doesn't apply to a planning document.
 - **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
   carries, so the two sides judge the same spec against the same bar.
 
@@ -95,12 +94,11 @@ behavior dropped for an MVP — is called out in the spec as a known deviation; 
 
 **(7) The slice's Verify-live checklist is present and usable.** This is the only home for the
 per-type completion rule it states: **every spec defines the checklist for its own slice**, in
-the design doc, fixed before the code is written —
-[definition-of-done.md](../../definition-of-done.md)'s **Verify live** stage is run against it
-after deployment and has no other source. An absent checklist is **Major**: without it the
-pass is run from memory, which is exactly what that stage exists to prevent. An item naming no
-concrete entity id, or an expected value carried without its unit, is **Minor** — a bare number
-hides the unit and precision defects the pass is looking for.
+the design doc, fixed before the code is written — `definition-of-done.md`'s **Verify live**
+stage is run against it after deployment and has no other source. An absent checklist is
+**Major**: without it the pass is run from memory, which is exactly what that stage exists to
+prevent. An item naming no concrete entity id, or an expected value carried without its unit,
+is **Minor** — a bare number hides the unit and precision defects the pass is looking for.
 
 **(8) Terminology and identifiers match.** Every domain term is already in the
 `docs/analysis/system-overview.md` glossary, and entity ids match `docs/analysis/entity-catalog.md`

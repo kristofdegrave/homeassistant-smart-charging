@@ -44,12 +44,11 @@ Step 1 of the contribution workflow, in order:
    (failing test → minimal impl → green → commit), each naming exact file paths, the ADR it
    honors, and its test boundary per ADR-0009. Name the integration checkpoints.
 5. **Write the slice's Verify-live checklist** into the design doc. The bar's item 7, *The
-   slice's Verify-live checklist is present and usable*, defines what it must contain and
-   judges it. What that means while drafting: write it **now**, before the code exists. That
-   is the whole of the timing rule — a checklist written after deployment is written from what
-   the build produced rather than from what the slice promised, and
-   [definition-of-done.md](../../definition-of-done.md)'s **Verify live** stage, which is run
-   against it once the slice ships, has no other source to fall back on.
+   slice's Verify-live checklist is present and usable*, defines what it must contain, says
+   why it has to exist, and judges it. What that means while drafting: write it **now**, and
+   know what the timing buys — a checklist written once the build exists is written from what
+   the build produced rather than from what the slice promised, and nothing downstream can tell
+   those two apart.
 
 Once approved and merged, the `develop-task` skill consumes the plan task-by-task to write the
 code.
@@ -96,9 +95,10 @@ deletion here. Different actors, different actions, so neither is a duplicate of
 what they share is the one classification both start from, which the bar states as the
 criterion and this file states as the procedure.
 
-**A long plan is not the defect.** A slice whose decisions and task list genuinely run long is a
-correct plan at its natural length, and trimming detail the build needs is a regression. The
-test is never the line count — it is whether a line says something no other doc says.
+**A long plan is not the defect** — the bar's item 3 states that and judges by it. What it
+means here is a single instruction: the test above is the *only* reason to remove a line.
+Trimming to make the document look shorter is a regression, not an application of this
+section.
 
 ## Rules
 

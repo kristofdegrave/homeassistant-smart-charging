@@ -182,13 +182,13 @@ PR that also edits a workflow file gets `workflow-reviewer` on that file rather 
 not a fourth column: each row's own work skill and reviewer agent say which one to read and
 when, so nothing here repeats a rule those files own.
 
-**The `workflow` row has no work file on purpose.** There is no safe path containment for
-untrusted issue content outside `docs/**` (minus the work-type tree, which instructs future
-drafts and is excluded from every drafter's allow-list), `custom_components/**` and
-`tests/**`, so CI refuses to draft `workflow` issues
-([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a local session hands the drafting to the
-human partner. Its review is still automated. What a `workflow` author reads instead is in
-**Authoring AI artifacts** below.
+**The `workflow` row has no work file on purpose.** A drafted label is contained by the tree
+its drafts write, and `workflow` changes land in the files that instruct future runs, so there
+is no tree to contain one in — CI therefore refuses to draft `workflow` issues and a local
+session hands the drafting to the human partner. The containment rule and the tree each label
+gets are [ci-pipeline.md](docs/reference/ci-pipeline.md)'s; they narrow as work types migrate,
+so they are routed from here rather than restated. Its review is still automated. What a
+`workflow` author reads instead is in **Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
 `docs/adl/**` → `adr-reviewer`;

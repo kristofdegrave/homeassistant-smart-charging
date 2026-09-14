@@ -146,7 +146,7 @@ jobs:
             testing)     artifact="test suite";                                        model=sonnet; add_paths="tests/**";                                   commit_prefix=test;;
             workflow)
               emit proceed false
-              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author. Every drafted label is confined to the one tree its drafts write; \`workflow\` changes land in the files that instruct future runs (.github/, .claude/, CLAUDE.md), so there is no such tree to confine one to. Draft it manually; the review step is still automated."
+              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author. Every drafted label is confined to an allow-list of the trees its drafts actually write, narrowed to a single tree wherever that label's work type has been migrated, and that list never reaches the files instructing future drafts — the work-type tree is excluded explicitly where the list is doc-wide, and out of range where it has been narrowed. A \`workflow\` change IS those instructing files (.github/, .claude/, CLAUDE.md), so no allow-list can contain one. Draft it manually; the review step is still automated."
               exit 0
               ;;
             *)
