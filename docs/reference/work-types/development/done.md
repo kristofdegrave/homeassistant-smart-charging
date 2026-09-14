@@ -1,19 +1,9 @@
 # Work type: `development` — the completion bar
 
-**Who reads this.** Both sides of the review, which is why it is its own file rather than a
-section of either one:
-
-- **The author**, as the self-check before requesting review — `definition-of-done.md` sends the
-  author to a row's completion bar, and this is the `development` row's. That document states
-  how its builds/lints/tests checklist and a bar meet for a change touching
-  `custom_components/`/`tests/`; both apply, in full, on the terms it states there.
-- **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
-  carries, so the two sides judge the same change against the same bar.
-
-It states *what must be true of the finished **code***. How the code is written — the reads, the
-TDD loop, the order the work happens in — is `implement.md`. How a review is conducted — what to
-read first, how to anchor findings, the output format, and the checks that are about the
-*review* rather than the change — belongs with the reviewer.
+This file states *what must be true of the finished **code***. How the code is written — the
+reads, the TDD loop, the order the work happens in — is `implement.md`. How a review is
+conducted — what to read first, how to anchor findings, the output format, and the checks that
+are about the *review* rather than the change — belongs with the reviewer.
 
 **The tests are judged by the `testing` row's bar, not by this one.** A `development` change
 produces two artifacts in two trees, and the bar belongs to the artifact rather than to the

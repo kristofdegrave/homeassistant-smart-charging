@@ -6,15 +6,11 @@ Capture an architectural decision as a numbered, immutable Architecture Decision
 at all, and why the template looks the way it does.
 
 This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
-**how an ADR is written** and nothing else. Two things deliberately sit elsewhere:
+**how an ADR is written** and nothing else.
 
-- The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here.
-- *What must be true of a finished ADR* is the completion bar, `done.md`, named alongside this
-  file in the same row and again in that row's review column. The author checks it before
-  requesting review and the reviewer applies it, so it is written once for both. That includes
-  the worthiness test — whether this decision should be an ADR at all is answered when the issue
-  is filed and re-answered by the reviewer, not while drafting.
+The worthiness test is not part of how an ADR is written: whether this decision should be an
+ADR at all is answered when the issue is filed, and re-answered by the reviewer against the
+completion bar's item 1, not while drafting.
 
 ## Drafting an ADR
 

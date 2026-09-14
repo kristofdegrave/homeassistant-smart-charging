@@ -5,16 +5,10 @@ test-covered code under `custom_components/smart_charging/`, **test-first**. The
 to build and *in what order*; this file is *how* one task gets built.
 
 This file is the `development` row's work file in `CLAUDE.md`'s **Model selection** table. It
-carries **how a development task is built** and nothing else. Three things deliberately sit
-elsewhere:
+carries **how a development task is built** and nothing else.
 
-- The lifecycle around the work — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here.
-- *What must be true of the finished code* is the completion bar, `done.md`, named alongside
-  this file in the same row and again in that row's review column. The author checks it before
-  requesting review and the reviewer applies it, so it is written once for both.
-- *What must be true of the finished tests* is the **`testing` row's** completion bar, not this
-  row's — `done.md`'s preamble states that split and why; the loop below is where you reach it.
+*What must be true of the finished tests* is the **`testing` row's** completion bar, not this
+row's — `done.md`'s preamble states that split and why; the loop below is where you reach it.
 
 ## Before you start
 

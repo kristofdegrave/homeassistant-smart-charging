@@ -9,15 +9,8 @@ This file is the `documentation` work type's work file for a change touching
 `docs/design/system-design.md`, reached from the label's own `implement.md` one level up, which
 is what the row names. A change touching `docs/design/project-plan.md` has its own work file and
 its own bar, in the sibling `project-plan/` directory.
-It carries **how the system design is written** and nothing else. Two things deliberately sit
-elsewhere:
-
-- The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here.
-- *What must be true of a finished system design* is the completion bar,
-  [`done.md`](done.md) beside this file, which the label's own `done.md` routes to for this
-  branch. The author checks it before requesting review and the reviewer applies it, so it is
-  written once for both.
+It carries **how the system design is written** and nothing else; the completion bar beside
+it, `done.md`, carries what must be true of the finished design.
 
 **The core discipline of the Method: use cases validate the decomposition, they never drive
 it.** The bar's item 1, *Volatility, not function, drives the decomposition*, states it and

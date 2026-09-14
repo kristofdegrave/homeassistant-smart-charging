@@ -1,19 +1,9 @@
 # Work type: `testing` — the completion bar
 
-**Who reads this.** Both sides of the review, which is why it is its own file rather than a
-section of either one:
-
-- **The author**, as the self-check before requesting review — `definition-of-done.md` sends
-  the author to a row's completion bar, and this is the `testing` row's. It **adds to** that
-  document's builds/lints/tests checklist rather than standing in for it, which is the case that
-  document states for a change touching `tests/`. Both apply, in full.
-- **The reviewer**, as the bulk of the review criteria. Each item states the severity a miss
-  carries, so the two sides judge the same suite against the same bar.
-
-It states *what must be true of a finished test suite*. How the tests are written — choosing the
-harness, naming, structuring, the order the work happens in — is `implement.md`. How a review is
-conducted — what to read first, how to anchor findings, the output format — belongs with the
-reviewer.
+This file states *what must be true of a finished test suite*. How the tests are written —
+choosing the harness, naming, structuring, the order the work happens in — is `implement.md`.
+How a review is conducted — what to read first, how to anchor findings, the output format —
+belongs with the reviewer.
 
 **Which change dispatched the review does not change which bar applies.** Tests written inside a
 `development` task's TDD loop are the same artifact as tests written under a `testing` issue,
