@@ -267,7 +267,7 @@ narrowed or extended here.
   pattern: other artifacts reference it instead of duplicating the payload rules. (Drift is the
   main cost; the read cost is per use, not per cold session — see item 2 above.)
 - **Scope the read.** Tell a run *which* file to read, so it doesn't fan out across `docs/`.
-  The review worker already does this — one checklist per changed path, not all six.
+  The review worker already does this — one checklist per changed path, never all of them.
 - **Keep stable files stable.** Prompt caching only pays off when the cached prefix does
   not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
   `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill

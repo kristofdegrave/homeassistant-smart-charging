@@ -51,13 +51,14 @@ simply stops matching — so that one is checked, not assumed.
 All three workers read the table rather than carrying their own copy of the work-file and
 checklist mappings — the drafter and the fix worker for the *How the work is done* column, the
 reviewer for *How it is reviewed* — so the row is the selection itself rather than a mirror of
-one kept in sync by hand. That is what makes a label edit cheap and a **table** edit expensive:
-it now reaches every worker at once.
+one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
+cell — and changing the table's own shape expensive, since it now reaches every worker at once.
+Adding or renaming a label is a third thing again, and not cheap: see the eight places above.
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
 Adding a tree still means editing all three, and `docs/design/**` is the standing proof — it is
-in the row and in neither of the other two.
+in the *no context label* row and in neither of the other two.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
@@ -110,8 +111,8 @@ in branch protection's required checks on `main`.
   issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` and `documentation`
   are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because no
   safe path containment exists for untrusted issue content outside
-  `docs/**`/`custom_components/**`/`tests/**`; `documentation` simply isn't wired in yet). A
-  human authors both drafts by hand. The review step is still automated for `workflow`, since
+  `docs/**` (less the work-type tree)/`custom_components/**`/`tests/**`; `documentation` simply
+  isn't wired in yet). A human authors both drafts by hand. The review step is still automated for `workflow`, since
   routing reaches it through the changed paths and not only through the issue's context label —
   but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter
   nor `_ai-review.yml`'s diff enumeration, so a PR touching only that tree gets no AI review at
