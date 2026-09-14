@@ -4,8 +4,8 @@ This document applies Juval Löwy's IDesign Method (volatility-based decompositi
 Charging integration. It derives the **static architecture** (the services and the allowed call
 directions between them) and the **dynamic architecture** (how those services collaborate to
 realize each use case) from the drafted analysis: `system-overview.md`, `requirements.md`,
-`control-cycle.md`, `resolution-rules.md`, `entity-catalog.md`, and the eleven use-cases
-(`use-cases/UC01`–`UC11`).
+`control-cycle.md`, `resolution-rules.md`, `entity-catalog.md`, and the twelve use-cases
+(`use-cases/UC01`–`UC12`).
 
 The core discipline of the Method governs everything below: **the use cases validate the
 decomposition; they never drive it.** Services encapsulate *areas of volatility* — what is likely
@@ -95,7 +95,7 @@ pair (V6, V11, V12). Every service is classified as one of the five Method roles
 | **Control-interval timer** | Fires the control cycle every [control interval](../analysis/system-overview.md#ubiquitous-language) | `control-cycle.md` trigger |
 | **Owned control entities** | The user sets [active profile](../analysis/system-overview.md#ubiquitous-language)/[mode](../analysis/system-overview.md#ubiquitous-language), default SOC limit, [Power target current](../analysis/system-overview.md#ubiquitous-language), departure times, [home-day flag](../analysis/system-overview.md#ubiquitous-language) (ADR-0004), through the Store like the dashboard and config flow below | R16, R6, R17, R14, R13 |
 | **Runtime dashboard** | Observes charging status + every runtime-classified entity and edits them in place — **UC11** | R19 |
-| **Install-time config flow / options flow** | Maps adapter roles, declares capabilities, sets install-time thresholds (data); tunes options anytime | R18, R19, R20, ADR-0003/0005 |
+| **Install-time config flow / options flow** | Maps adapter roles, declares capabilities, sets install-time thresholds (data); tunes options anytime, through a capability-gated set of topic steps — **UC12** | R18, R19, R20, ADR-0003/0005 |
 | **External event sources** | Charger connect/disconnect transitions; a user-made vehicle charge-limit change; a mobile-app notification action. The first two are external states the consuming Manager observes through the `charger_status`/`vehicle_charge_limit` adapter roles, never a minted domain event (ADR-0011) | UC08, UC09, UC10 |
 
 The owned control entities, the config flow, and the dashboard are all Clients, not Managers: they
@@ -155,7 +155,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 | **Profile Engines** (`Manual`, `Auto`) | V3 · pure | Which mode is active, given observable conditions passed in — one profile-specific mode-selection table: `Manual` → the user's own selection, no rules table; `Auto` → the full `resolution-rules.md` Auto mode-selection table (row 2 escalates to `Captar`/`Power` under deadline urgency, R5; row 4 declines to match while the reserve cap holds, R9) |
 | **SOC-Target Engine** | V4 · stateful (`SolarStepUpState` — `stepped_pct` ratchets, it is not a flag) | The single [active SOC limit](../analysis/system-overview.md#ubiquitous-language) (reserve cap → step-up → default) and its lifecycle transitions (R7/R8/R9) |
 | **Deadline Engine** | V5 · stateful (R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language) — one value, from which a missed-deadline hold is read rather than separately tracked) | Resolved departure deadline, required current, whether urgency is in effect, whether the deadline is unreachable even so, and what it is willing to spend (R5/R14/R15). R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language) is V5 too and lives here, threaded in and out by the Coordinator — one occurrence rather than a window or running total, which changes how much there is to reason about but not its kind (see the note below the table). A [missed-deadline hold](../analysis/system-overview.md#ubiquitous-language) needs no policy of its own: it is that occurrence read after it has passed. While it holds, this Engine computes no required current, pins urgency and reports the deadline unreachable (R5) |
-| **Billing-Protection Engine** | V6 · stateful (`PeakBreachTracker`'s R3 breach timer; `BaselineDebouncer`) | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `peak_headroom` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
+| **Billing-Protection Engine** | V6 · stateful (`PeakBreachTracker`'s R3 breach timer; `BaselineDebouncer`) | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `sensor.smart_charging_peak_headroom_a` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
 | **Peak-Demand Tracker** | V6 · stateful (the running monthly peak and its month marker) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 · pure | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
 | **Signal-Conditioning Engine** | V8 · stateful (the R10 smoothing window) | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4) |
@@ -329,6 +329,7 @@ flowchart TD
     Store --> Persist
 
     Coord -. DeadlineUnreachableNotified .-> NM
+    Coord -. DeadlineUnreachableCleared .-> NM
     Coord -. ActiveSocLimitChanged .-> VLM
 ```
 
@@ -364,9 +365,17 @@ flowchart TD
    re-derive it by observing the adapter iff the trigger is an external HA state the consumer
    already reaches through Resource Access.** That leaves exactly **two** genuine Manager→Manager
    edges as of ADRs 0001–0019 (see [§8.2](#82-adrs-written-after-this-design-0010-0019)'s scope
-   note; ADR-0024 later adds a third, paired with the first below), both event-based:
+   note), to which ADR-0024 later adds a third, paired with the first; all three are event-based
+   and all three are drawn above:
    - `DeadlineUnreachableNotified` (UC05) — the Coordinator (via the Deadline Engine's
-     determination) publishes it; the Notification Manager subscribes to deliver R5's notice.
+     determination) publishes it; the Notification Manager subscribes to deliver R5's notice. It
+     re-fires on every cycle the condition holds, which is what makes the paired clear below
+     necessary.
+   - `DeadlineUnreachableCleared` (UC05, ADR-0024) — the paired clearing edge: the Coordinator
+     publishes it on every exit from UC05's `Unreachable` state, and the Notification Manager
+     subscribes to re-arm R5's notice so it is delivered once **per occasion** rather than once
+     per run. It adds no new pair of Managers and no new direction — only the onset edge's
+     boundary — which is why rule 5 counts it as a third edge and not a third pair.
    - `ActiveSocLimitChanged` (UC09) — the Coordinator publishes it when the resolved [active SOC
      limit](../analysis/system-overview.md#ubiquitous-language) changes between cycles; the
      Vehicle-Limit Manager subscribes to write the new value to the vehicle. It fires on the owned
@@ -389,7 +398,10 @@ that lives in the mode/coordinator).
 ## 5. Dynamic architecture
 
 One sequence per major workflow, showing the Manager orchestrating Engines and Resource Access
-in the order the corresponding flow document specifies.
+in the order the corresponding flow document specifies. The two use cases realized by a Client
+alone — UC11 and UC12 ([§6](#6-use-case-validation)) — get none: with no Manager there is no
+orchestration to sequence, and their single edge to the Store is already drawn in
+[§4](#4-static-architecture).
 
 ### 5.1 Control cycle (realizes UC01–UC04, and UC05–UC07 in passing)
 
@@ -543,7 +555,7 @@ sequenceDiagram
     participant S as Config/state store
     participant R as Notification access
 
-    Trg->>N: reminder tick · prompt time · DeadlineUnreachableNotified (UC05)
+    Trg->>N: reminder tick · prompt time · DeadlineUnreachableNotified /<br/>DeadlineUnreachableCleared (UC05)
     N->>S: read owned config (prompt enable/time, reminder lead time) + home-day flag
     S-->>N: config + flag state
     N->>A: read car_home, charger_status, SOC, solar_forecast, home_day_external
@@ -558,8 +570,10 @@ sequenceDiagram
         N->>R: send actionable home-day prompt
         R-->>N: response (yes → set home-day flag, no/timeout → leave unset)
         N->>S: write home-day flag on "yes" (owned entity)
-    else R5 delivery
+    else R5 delivery (DeadlineUnreachableNotified, latch armed → once per occasion)
         N->>R: send deadline-unreachable notice
+    else R5 re-arm (DeadlineUnreachableCleared, ADR-0024)
+        Note over N: re-arm the once-per-occasion latch; nothing is sent
     end
 ```
 
@@ -614,9 +628,11 @@ allowed call directions. A use case crossing several services is the expected, h
 | **UC09** Charge-limit sync | Vehicle-Limit Manager | `ActiveSocLimitChanged` (or an adapter-observed vehicle-limit/disconnect change)→VLM→{Store(resolved active SOC limit, default-limit write), Adapters(`vehicle_charge_limit`, `car_home`, status)}. ✅ |
 | **UC10** Plug-in reminder | Notification Manager | Trigger→NM→{Adapters, Deadline, Store(owned config + resolved active SOC limit), Notification access}. ✅ |
 | **UC11** Dashboard | Client (no service) | Dashboard→Store (owned/runtime entities) + Adapter read-backs; edits flow to the same entities other UCs consume. ✅ correctly owns no Manager/Engine |
+| **UC12** Guided config flow | Client (no service) | Config/options flow→Store (config-entry **data**, **options**, and adapter-role mappings — ADR-0005; the change triggers a reload, ADR-0008). Its capability-gated step set (R18) reads the declarations the flow itself captures, so it calls no Capability-Gate Engine — that Engine gates *runtime* mode availability, not this flow's steps. ✅ correctly owns no Manager/Engine |
 
 No use case maps one-to-one onto a single **Engine**. The three that own no service (UC05–UC07) and
-the one that is a pure Client (UC11) confirm the decomposition is volatility-driven, not functional.
+the two that are pure Clients (UC11, UC12) confirm the decomposition is volatility-driven, not
+functional.
 The one mapping to watch is **UC09 ↔ Vehicle-Limit Manager**: UC09 is the only use case realized by
 a single Manager whose orchestration is essentially that one use case (it reuses the shared Store
 and adapters — and the SOC-Target edge remains available to it — but adds no second consumer).
@@ -649,7 +665,8 @@ Every requirement is reachable from at least one service:
 - **R12/R13** → Notification Manager (+ home-day flag as owned state). **R16** → Profile Engines
   (its mode-selection table also realizes R5's escalation row and R9's top-up-decline half; R8's
   step-up and R9's cap-lowering half are both realized entirely in SOC-Target Engine, above).
-- **R18** → Capability-Gate Engine. **R19** → dashboard + config-flow Clients over the Store.
+- **R18** → Capability-Gate Engine. **R19/R20** → dashboard + config-flow Clients over the Store
+  — R19 the runtime dashboard (UC11), R20 the guided install/reconfigure/options flow (UC12).
 - **NF3** → Resource-Access (adapter) layer. Fault handling (ADR-0007) → Coordinator routing a
   `None`/exception into the Cycle-Invariant stop path **and** setting the owned Fault/OK status
   sensor through the Store.
@@ -703,10 +720,10 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 | 0012 | Coordinator internal decomposition (`CycleContext`, `ModeHandler`, `PeakDemandState`, `SocGateResolver`) | **Below this design's altitude; consistent** | Organizes code *inside* the Charging Coordinator Manager; it adds no service, moves no boundary, and preserves ADR-0006's ten-step order — the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence is unchanged. Its extracted units are pure and HA-free, and firing `ActiveSocLimitChanged` stays on the Coordinator side, both of which restate this design's Manager-does-the-I/O rule. |
 | 0013 | Stable, locale-independent `object_id`s for owned entities | **Reinforces ADR-0004's row** | Pins each owned entity's `entity_id` to its `entity-catalog.md` suffix rather than a translated display name, so the literal ids this document cites throughout (`number.smart_charging_soc_limit_override`, `sensor.smart_charging_monthly_peak_kw`, `sensor.smart_charging_active_soc_limit`, …) hold in every HA locale. A naming decision inside V13/V14, not a boundary change. |
 | 0014 | Setter-method encapsulation for the coordinator's writable fields | **Superseded (by ADR-0016, then ADR-0018)** | Recorded for completeness only. Its held-reference-plus-setter shape is not this design's Client→Store routing; the resolution is ADR-0018's row below. |
-| 0015 | Package home for the Managers beyond the Coordinator (`managers/`) | **Extends ADR-0002; consistent** | Gives this design's three-Manager layer a file mapping: `managers/vehicle_limit.py` (M2) and `managers/notification_manager.py` (M3), with `coordinator.py`/`coordinator_cycle.py` (M1) grandfathered at the package root. The package exists precisely to make [§4](#4-static-architecture) rule 5's no-Manager→Manager rule checkable; unlike `engines/` it carries no purity guarantee, which matches this design's Managers-do-the-I/O rule. No Manager is added or removed. |
+| 0015 | Package home for the Managers beyond the Coordinator (`managers/`) | **Extends ADR-0002; consistent** | Gives this design's three-Manager layer a file mapping: `managers/vehicle_limit.py` (the Vehicle-Limit Manager) and `managers/notification_manager.py` (the Notification Manager), with `coordinator.py`/`coordinator_cycle.py` (the Charging Coordinator) grandfathered at the package root. The package exists precisely to make [§4](#4-static-architecture) rule 5's no-Manager→Manager rule checkable; unlike `engines/` it carries no purity guarantee, which matches this design's Managers-do-the-I/O rule. No Manager is added or removed. |
 | 0016 | Entity-to-coordinator writes via HA events | **Superseded (by ADR-0018); the divergence it created is closed** | It decided owned control entities push an inward event to the Coordinator — the opposite of [§4](#4-static-architecture) rule 1, which reserves `Client → Manager` for genuine trigger sources and routes owned control entities through the Store only. ADR-0018 supersedes it in full on exactly that ground, so no divergence from this design remains. |
 | 0017 | Mode-selection policy Protocol and registry for `profiles/` | **Confirms V2/V3 and the §3 split; consistent** | Structures `Manual`/`Auto` as registry-keyed `ModeSelectionPolicy` instances inside `profiles/`. It decides only what [§3](#3-service-catalog) already assigns to the Profile Engines — mode selection — and explicitly leaves R8's step-up and R9's cap-lowering inside the SOC-Target Engine, gated by the plain input flags this design describes. It adds no Profile→Engine edge, so rule 4 is untouched. |
-| 0018 | Entity-to-coordinator access via RA3's Store (pull read, Manager-initiated write) | **Formalizes this design's own mechanism; supersedes 0016/0014** | Adopts exactly what the static diagram (`Owned --> Store`), rule 1, and the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence already show: the Coordinator reads all eight owned control-entity values through the Store each cycle, and a Manager writing an owned entity on the user's behalf writes through the same Store. It accepts the one-cycle-latency consequence this design already accepted, leaves ADR-0006's step order intact (the read step gains a source), and confirms M2/M3 Store writes are Resource Access, not cross-Manager coordination under rule 5. |
+| 0018 | Entity-to-coordinator access via RA3's Store (pull read, Manager-initiated write) | **Formalizes this design's own mechanism; supersedes 0016/0014** | Adopts exactly what the static diagram (`Owned --> Store`), rule 1, and the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence already show: the Coordinator reads all eight owned control-entity values through the Store each cycle, and a Manager writing an owned entity on the user's behalf writes through the same Store. It accepts the one-cycle-latency consequence this design already accepted, leaves ADR-0006's step order intact (the read step gains a source), and confirms the Vehicle-Limit and Notification Managers' Store writes are Resource Access, not cross-Manager coordination under rule 5. |
 | 0019 | Package home for the RA3 Store (`adapters/store.py`) | **Extends ADR-0002/0010/0015; consistent** | Cites this document's own V1/V11/V13 grouping as decisive: the Store is Resource Access, so it joins the hardware roles and `adapters/notify.py` in `adapters/`. It relaxes ADR-0002/0003's "one class per role sharing the `Adapter` protocol" wording if the Store's method surface differs — a fact about one class, not about the layer this design draws. |
 
 ADRs 0020 and later post-date this reconciliation and are not covered here.
