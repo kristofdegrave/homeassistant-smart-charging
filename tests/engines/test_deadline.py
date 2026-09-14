@@ -683,3 +683,134 @@ def test_no_deadline_clears_a_latch_that_was_already_set():
     assert result.required_a is None
     assert result.urgent is False
     assert result.unreachable is False
+
+
+# --- R5 pursued occurrence (issue #1187, T1) ----------------------------------------------
+#
+# The occurrence deadline urgency is chasing, threaded in and out by the Coordinator. It
+# replaces `urgency_latched` as R5's urgency state: the glossary defines urgency as being in
+# effect exactly when there is a pursued occurrence, and the missed-deadline hold is read off
+# it rather than tracked beside it (requirements.md R5; resolution-rules.md, 'Missed-deadline
+# hold').
+
+# The occurrence the slack-test cases below are judging, once pursued.
+SLACK_PURSUED = SLACK_DEADLINE_AT
+
+
+def test_should_pursue_the_judged_occurrence_when_the_slack_test_engages_urgency():
+    """resolution-rules.md, 'Clearing urgency': the occurrence under judgement becomes the
+    pursued occurrence when the slack test fires on it."""
+    # Arrange -- 12.0 A required against a 14.0 A escalated rate: 12.0 > 11.2, so the slack
+    # test fires on this cycle and nothing is pursued entering it.
+
+    # Act
+    result = resolve_required_current(
+        **SLACK_KWARGS,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=14.0,
+        pursued_occurrence=None,
+    )
+
+    # Assert
+    assert result.pursued_occurrence == SLACK_PURSUED
+
+
+def test_should_pursue_nothing_when_the_slack_test_does_not_engage_urgency():
+    """Urgency is in effect for exactly as long as there is a pursued occurrence
+    (requirements.md R5), so an ample-slack cycle must leave none."""
+    # Arrange -- 12.0 A required against a 32.0 A escalated rate: 12.0 <= 25.6, ample slack.
+
+    # Act
+    result = resolve_required_current(
+        **SLACK_KWARGS,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        pursued_occurrence=None,
+    )
+
+    # Assert
+    assert result.pursued_occurrence is None
+
+
+def test_should_release_the_pursued_occurrence_when_the_handback_clears_urgency():
+    """Releasing the pursued occurrence ends the hold and urgency together -- they were never
+    two things (resolution-rules.md, 'Missed-deadline hold')."""
+    # Arrange -- the baseline wants exactly the required current on a cycle whose slack test
+    # does not hold, which is the handback.
+
+    # Act
+    result = resolve_required_current(
+        **SLACK_KWARGS,
+        baseline_desired_a=12.0,
+        escalated_maximum_permitted_rate_a=32.0,
+        pursued_occurrence=SLACK_PURSUED,
+    )
+
+    # Assert
+    assert result.urgent is False
+    assert result.pursued_occurrence is None
+
+
+def test_should_keep_the_original_occurrence_when_the_deadline_rolls_forward_to_the_next_one():
+    """THE RULE THAT MAKES A HOLD REACHABLE AT ALL.
+
+    `resolve_next_occurrence` always yields an occurrence strictly after `now`, so an
+    implementation that re-anchored the pursued occurrence to `deadline_at` every cycle could
+    never leave one in the past and the missed-deadline hold would be unreachable in
+    production. The pursued occurrence is anchored to the occurrence already being chased:
+    'the departure-deadline rule rolling forward cannot move it' (resolution-rules.md,
+    'Missed-deadline hold'; requirements.md R5).
+    """
+    # Arrange -- 17:00 on the 21st: the pursued 16:00 occurrence has elapsed and R14 has
+    # rolled forward to the 22nd. 30 kWh over 23 h is 1304.3 W, 5.2 A at 250 V, and the slack
+    # test fires against a 5.0 A rate (5.2 > 4.0), so urgency persists across the roll.
+    now = datetime(2026, 7, 21, 17, 0)
+    next_occurrence = datetime(2026, 7, 22, 16, 0)
+
+    # Act
+    result = resolve_required_current(
+        deadline_at=next_occurrence,
+        now=now,
+        soc=50.0,
+        active_soc_limit=80.0,
+        ev_battery_capacity_kwh=100.0,
+        voltage=250.0,
+        baseline_desired_a=0.0,
+        escalated_maximum_permitted_rate_a=5.0,
+        pursued_occurrence=SLACK_PURSUED,
+    )
+
+    # Assert
+    assert result.urgent is True
+    assert result.pursued_occurrence == SLACK_PURSUED
+
+
+@pytest.mark.parametrize(
+    ("escalated_rate_a", "baseline_desired_a", "pursued_occurrence"),
+    [
+        (32.0, 0.0, None),  # ample slack, nothing pursued -- stays normal
+        (14.0, 0.0, None),  # slack test fires -- engages
+        (32.0, 0.0, SLACK_PURSUED),  # pursued, slack would not re-fire -- held
+        (32.0, 12.0, SLACK_PURSUED),  # handback -- released
+        (14.0, 32.0, SLACK_PURSUED),  # slack wins over handback -- held
+        (11.0, 0.0, None),  # unreachable -- engages
+    ],
+)
+def test_should_report_urgency_exactly_when_an_occurrence_is_pursued(
+    escalated_rate_a: float, baseline_desired_a: float, pursued_occurrence: datetime | None
+):
+    """The glossary's own relation: urgency is in effect exactly when there is a pursued
+    occurrence (system-overview.md, 'urgency' and 'pursued occurrence'). Rendered once, here,
+    so the two cannot drift -- every downstream consumer reads `urgent`."""
+    # Arrange -- the full set of slack/handback branches the engine can take.
+
+    # Act
+    result = resolve_required_current(
+        **SLACK_KWARGS,
+        baseline_desired_a=baseline_desired_a,
+        escalated_maximum_permitted_rate_a=escalated_rate_a,
+        pursued_occurrence=pursued_occurrence,
+    )
+
+    # Assert
+    assert result.urgent == (result.pursued_occurrence is not None)

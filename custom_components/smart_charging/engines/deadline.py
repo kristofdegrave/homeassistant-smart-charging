@@ -140,6 +140,11 @@ class RequiredCurrentResult:
     required_a: float | None  # None when no deadline is resolved (urgency never applies)
     urgent: bool  # slack test fired, or a latch not yet cleared by the handback test
     unreachable: bool  # required_a > escalated_maximum_permitted_rate_a
+    # The occurrence urgency is chasing, for the Manager to thread back in next cycle -- None
+    # when none is. The default is load-bearing: `RequiredCurrentResult` is constructed at two
+    # sites OUTSIDE this engine (coordinator.py, coordinator_cycle.py) which do not set it, so
+    # without the default this commit would not compile there.
+    pursued_occurrence: datetime | None = None
 
 
 def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
@@ -169,7 +174,8 @@ def resolve_required_current(
     voltage: float,
     baseline_desired_a: float,
     escalated_maximum_permitted_rate_a: float,
-    urgency_latched: bool,
+    urgency_latched: bool = False,
+    pursued_occurrence: datetime | None = None,
 ) -> RequiredCurrentResult:
     """R5/R15's required-current formula (resolution-rules.md 'Required current for the
     departure deadline'):
@@ -223,6 +229,8 @@ def resolve_required_current(
     function already sees it.
     """
     if deadline_at is None:
+        # R14's "no deadline" is one of urgency's own release conditions, so the occurrence is
+        # dropped rather than threaded through (resolution-rules.md's release list).
         return RequiredCurrentResult(required_a=None, urgent=False, unreachable=False)
 
     remaining_hours = _absolute_hours_between(deadline_at, now)
@@ -247,15 +255,25 @@ def resolve_required_current(
     slack_test_holds = required_a > escalated_maximum_permitted_rate_a / (
         1 + DEADLINE_URGENCY_MARGIN
     )
-    if urgency_latched:
+    # `urgency_latched` is the pre-#1187 spelling of the same state, still accepted so the
+    # Coordinator keeps working until it moves onto the occurrence.
+    latched = pursued_occurrence is not None or urgency_latched
+    if latched:
         # Precedence: the handback only clears on a cycle the slack test would not re-engage.
         handback = baseline_desired_a >= required_a and not slack_test_holds
         urgent = not handback
     else:
         urgent = slack_test_holds
 
+    # Preserved, never re-anchored: `resolve_next_occurrence` always yields an occurrence
+    # strictly after `now`, so re-deriving this from `deadline_at` each cycle would make a
+    # missed-deadline hold unreachable in production (resolution-rules.md, 'It is anchored to
+    # the occurrence already missed').
+    successor = (pursued_occurrence or deadline_at) if urgent else None
+
     return RequiredCurrentResult(
         required_a=required_a,
         urgent=urgent,
         unreachable=required_a > escalated_maximum_permitted_rate_a,
+        pursued_occurrence=successor,
     )
