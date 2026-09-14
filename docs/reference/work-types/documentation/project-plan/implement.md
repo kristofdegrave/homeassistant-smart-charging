@@ -9,15 +9,7 @@ This file is the `documentation` work type's work file for a change touching
 `docs/design/project-plan.md`, reached from the label's own `implement.md` one level up, which is
 what the row names. A change touching `docs/design/system-design.md` has its own work file and
 its own bar, in the sibling `system-design/` directory.
-It carries **how the project plan is written** and nothing else. Two things
-deliberately sit elsewhere:
-
-- The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
-  contribution workflow and is not re-derived here.
-- *What must be true of a finished project plan* is the completion bar,
-  [`done.md`](done.md) beside this file, which the label's own `done.md` routes to for this
-  branch. The author checks it before requesting review and the reviewer applies it, so it is
-  written once for both.
+It carries **how the project plan is written** and nothing else.
 
 **An approved `system-design.md` must exist first.** This work consumes that document; it does
 not decompose services itself. The bar's item 1, *Derived, not designed*, states it and judges
