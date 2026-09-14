@@ -21,8 +21,8 @@ name: AI draft (reusable)
 # to .github/workflows, .claude/skills, .claude/agents from untrusted issue content has no safe
 # add-paths containment the way docs/**, custom_components/**, or tests/** do (there's no single
 # tree a CI/skill/agent change is confined to), so a human always authors the first draft; only
-# the review step (workflow-reviewer.md) is automated for this type. It explains that and
-# clears the trigger the same way an unrecognized label does.
+# the review step (its checklist, docs/reference/work-types/workflow/review.md) is automated for
+# this type. It explains that and clears the trigger the same way an unrecognized label does.
 
 on:
   workflow_call:

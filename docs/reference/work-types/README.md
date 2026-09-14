@@ -23,10 +23,15 @@ So `adr/implement.md`, `uc/done.md`. The label is the directory name, which is w
 renaming a label a directory move rather than an edit — `ci-pipeline.md`'s **Label vocabulary
 sync** owns that obligation and the rest of what a rename touches.
 
-Not every label has a directory. A label gets one when its work type has content worth writing
-down; `workflow` deliberately has none (no automated drafting, human-authored), and a label may
-have a work file without a completion bar or vice versa. The row is what says which files
-exist, so an absent file is a fact about the row, not a gap in this tree.
+Not every label has a directory, and a label that has one need not hold all three roles. A
+label gets a directory when its work type has content worth writing down, and each role file
+appears when that role has content of its own: a label may have a work file without a
+completion bar or vice versa. `workflow` is the extreme case and a deliberate one — it is never
+drafted from an issue, so it has **no work file and no completion bar**, and its directory holds
+`review.md` alone. Do not manufacture the other two for symmetry: `CLAUDE.md`'s **Model
+selection** section argues why that label has no drafted work, and a placeholder work file would
+contradict it. The row is what says which files exist, so an absent file is a fact about the
+row, not a gap in this tree.
 
 ## The three roles
 
@@ -42,10 +47,11 @@ one is the copy that shrinks.
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
 `review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
-`requirement` and `specs` today, `requirement/review.md` being a pointer to `uc/`'s the way its
-`done.md` is. For the rest, that material still sits in the reviewer agent definitions under
-`.claude/agents/`, and the pass that migrates each remaining label is the one that adds its
-file. What a generic reviewer holds instead — the output contract, the anchoring rules and how
+`requirement`, `specs`, `documentation` and `workflow` today, `requirement/review.md` being a
+pointer to `uc/`'s the way its `done.md` is. For the rest, that material still sits in the
+reviewer agent definitions under `.claude/agents/`, and the pass that migrates each remaining
+label is the one that adds its file. A label whose directory holds `review.md` and nothing else
+is migrated, not half-built — see the paragraph above. What a generic reviewer holds instead — the output contract, the anchoring rules and how
 a checklist is resolved — sits with whoever applies the checklist: `.claude/agents/reviewer.md`
 locally, and CI's own review-workflow prompt, which has no agent to spawn and self-applies the
 file instead.
@@ -78,7 +84,7 @@ files with the others routing to it rather than repeating it. `documentation` st
 That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic: one
 role can be shared across a label's branches while another is split, and the level a file sits
 at is the whole of how that is expressed. A shared role is simply one file at the label's own
-level with no branch copies beneath it — which is what `review.md` will be for `documentation`,
+level with no branch copies beneath it — which is what `review.md` is for `documentation`,
 whose reviewer covers both branches. **Which** of a label's roles are split is that label's own
 question, settled in its files rather than here; this document says only where a file of each
 kind goes.

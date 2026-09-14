@@ -71,7 +71,7 @@ Two rules that apply elsewhere deliberately do **not** apply here:
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
 inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
-actually touches (`workflow-reviewer` when it also edits `CLAUDE.md` or the pipeline).
+actually touches (the `workflow` checklist when it also edits `CLAUDE.md` or the pipeline).
 `docs/postmortems/**` is deliberately **not** in `ai-pipeline.yml`'s path filter or
 `_ai-review.yml`'s diff enumeration: the reviewer checklists are all written against
 artifacts that assert behaviour, and none fits a narrative document. A post-mortem-only PR
@@ -104,10 +104,10 @@ runs on.
 | `uc` | work file `docs/reference/work-types/uc/implement.md`; completion bar `docs/reference/work-types/uc/done.md`; entry point `.claude/skills/write-use-case/SKILL.md` | opus | completion bar `docs/reference/work-types/uc/done.md`; checklist `docs/reference/work-types/uc/review.md` | opus |
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `docs/reference/work-types/requirement/review.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `docs/reference/work-types/specs/review.md` | opus |
-| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `.claude/agents/system-design-reviewer.md` | opus |
+| `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `docs/reference/work-types/documentation/review.md` | opus |
 | `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `.claude/agents/code-reviewer.md`. For `tests/**`: checklist `.claude/agents/test-reviewer.md`. | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
-| `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
+| `workflow` | none — human-authored (see below) | — | checklist `docs/reference/work-types/workflow/review.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
 
 **Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
@@ -220,8 +220,8 @@ transferred issue, a number that never existed, a failed lookup — is treated e
 reference at all, so the path half still stands alone rather than the run aborting. The label
 row is the addition: it brings the checklist written for this kind of work even when the change
 landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets the `specs`
-checklist for the file and `workflow-reviewer` for the subject, and a `development` PR that
-also edits a workflow file gets `workflow-reviewer` on that file rather than nothing.
+checklist for the file and the `workflow` checklist for the subject, and a `development` PR
+that also edits a workflow file gets the `workflow` checklist on that file rather than nothing.
 
 **The `development` and `testing` rows share three language references** —
 `.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
@@ -234,29 +234,34 @@ its drafts write, and `workflow` changes land in the files that instruct future 
 is no tree to contain one in — CI therefore refuses to draft `workflow` issues and a local
 session hands the drafting to the human partner. The containment rule and the tree each label
 gets are [ci-pipeline.md](docs/reference/ci-pipeline.md)'s; they narrow as work types migrate,
-so they are routed from here rather than restated. Its review is still automated. What a
-`workflow` author reads instead is in **Authoring AI artifacts** below.
+so they are routed from here rather than restated. Its review is still automated, and its
+checklist is the one file in its `docs/reference/work-types/workflow/` directory: with no bar
+beside it, that file carries the whole of the criteria rather than only what a bar cannot.
+What a `workflow` author reads instead is in **Authoring AI artifacts** below.
 
 **The no-label row routes by changed path**, for every PR and not only an unlabelled one:
 `docs/adl/**` → `docs/reference/work-types/adr/review.md`;
 `docs/analysis/**` → `docs/reference/work-types/uc/review.md`;
 `docs/plans/**` → `docs/reference/work-types/specs/review.md`;
-`docs/design/**` → `system-design-reviewer`; `custom_components/**` → `code-reviewer`;
+`docs/design/**` → `docs/reference/work-types/documentation/review.md`;
+`custom_components/**` → `code-reviewer`;
 `tests/**` → `test-reviewer`; `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
-`CLAUDE.md` → `workflow-reviewer`. The map is **mixed while the reviewer collapse runs**: a
-migrated tree names its checklist file, applied by the generic `reviewer` agent, and an
-unmigrated one still names the `*-reviewer` agent definition that carries its own. Each entry
-resolves on its own, so every intermediate state is reviewable, and the end state it runs
-toward is the target layout in `docs/plans/2026-09-11-lifecycle-skills-design.md` — every
-entry naming a checklist file. `docs/analysis/**` names the `uc` checklist because that tree
+`CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. The map is **mixed while the
+reviewer collapse runs**: a migrated tree names its checklist file, applied by the generic
+`reviewer` agent, and an unmigrated one still names the `*-reviewer` agent definition that
+carries its own. Only the two code trees — `custom_components/**` and `tests/**` — are still on
+the second footing; when they migrate, this paragraph goes rather than being reworded, since a
+map with nothing mixed in it needs no note saying so. Each entry resolves on its own, so every
+intermediate state is reviewable, and the end state it runs toward is the target layout in
+`docs/plans/2026-09-11-lifecycle-skills-design.md` — every entry naming a checklist file. `docs/analysis/**` names the `uc` checklist because that tree
 is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
 here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
 rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
 diff enumeration, so the reviewer is reachable in principle and unreached in practice.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
-fresh-agent pass weighted to quotation accuracy, `workflow-reviewer` only when the PR also
-edits `CLAUDE.md` or the pipeline.
+fresh-agent pass weighted to quotation accuracy, the `workflow` checklist only when the PR
+also edits `CLAUDE.md` or the pipeline.
 
 Adding or renaming a context label means updating this table too — see
 [ci-pipeline.md](docs/reference/ci-pipeline.md)'s **Label vocabulary sync** for every other

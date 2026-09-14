@@ -241,14 +241,22 @@ docs/reference/work-types/
                              one reviewer covers both branches)
   development/…             (review.md covers custom_components/ and tests/)
   testing/…
-  workflow/implement.md     ← pointer to ai-authoring.md, for reading only;
-                              the generic implement still refuses to draft this label
-  workflow/done.md, workflow/review.md
+  workflow/review.md        ← only this; see the note below the sketch
 .claude/skills/implement/SKILL.md      generic; reads <label>/implement.md
 .claude/skills/review/SKILL.md         generic; spawns the one agent below per tree
 .claude/skills/fix/SKILL.md            generic; re-authors with <label>/implement.md
 .claude/agents/reviewer.md             generic: fresh, read-only, opus; reads <label>/review.md
 ```
+
+**Correction to the sketch, recorded where the sketch is read.** This layout originally gave
+`workflow` an `implement.md` pointing at `ai-authoring.md` and a `done.md`, for symmetry with
+every other label. That is not what was built, and it should not be: `CLAUDE.md`'s **Model
+selection** section argues that `workflow` has no drafted work at all, because a `workflow`
+change *is* the files that instruct future runs and so has no tree an allow-list could contain
+it in. A work file for a label nothing drafts would contradict that, and a completion bar with
+no drafting step behind it has no author to self-check against it. `workflow`'s directory
+therefore holds `review.md` alone, and `work-types/README.md` states that asymmetry as
+deliberate rather than pending.
 
 The `CLAUDE.md` table then shrinks to label, the two model columns and irregular-row notes, because the paths
 derive from the label. This layout mirrors CI's self-applied "checklist in file X" exactly,
@@ -482,7 +490,7 @@ the slices**, not after phase 1 stabilises. Everything else below keeps its phas
 - `_ai-draft.yml`'s label `case` and `_ai-review.yml`'s path→agent mapping read the table (or
   a machine-readable rendering of it). Note this is partly **new coverage**, not only
   de-duplication: CI has no `documentation` row today and no `docs/design/**` review rule, so
-  `system-design-reviewer` is currently unreachable from CI. `_ai-draft.yml` also carries
+  the `documentation` review checklist is currently unreachable from CI. `_ai-draft.yml` also carries
   `add_paths` and `commit_prefix`, which the table does not; those either join the table or
   stay CI-owned, decided in that phase.
 - The per-label tree and generic reviewer agent from *Target layout*, with
