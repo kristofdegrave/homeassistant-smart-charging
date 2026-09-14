@@ -53,3 +53,10 @@ and item 4 is a reading of the test against the implementation rather than a run
 Where a `development` change is under review alongside this one, the single place the two bars
 meet is stated once, in that row's own completion bar, and is decided in the review that holds
 both. This file adds nothing to it and must not restate it.
+
+It also needs no route to it, and the reason is an assumption worth stating rather than
+leaving to be rediscovered: that overlap is triggered by an adapter change, adapters are
+product code under the tree the path map routes to the `development` checklist, and the path
+half of that routing can never be skipped or steered. So the overlap cannot fire on a review
+that reached this file alone. Move adapters out of that tree and the assumption goes with
+them — this file would then need the route it does without today.
