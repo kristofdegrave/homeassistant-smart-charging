@@ -7,7 +7,7 @@ description: Use in an interactive session to run contribution-workflow steps 1-
 
 Steps 1–2 of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns every parameter — branch scheme, base, issue reference,
-board moves, and the completion bar. This skill owns only the order and the dispatch.
+board moves, and the Definition of Done. This skill owns only the order and the dispatch.
 
 Model-invocable on purpose, so "start work on #N" reaches it; the description carries the
 interactive-only wording precisely because it sits in every run's index.
@@ -38,7 +38,9 @@ Stop instead of dispatching when:
 2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
    task it names is already identified.
 3. Worktree, branch and board **Status** per step 1.
-4. Follow the work file. Its steps, self-checks and stop conditions govern.
+4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
+   completion bar, that file is the self-check before step 5 — the same one the reviewer will
+   apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per step 2.
 
 Stop there and hand on to step 3, which the `review` skill runs. Don't review the work in
