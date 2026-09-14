@@ -104,7 +104,7 @@ runs on.
 | `requirement` | work file `docs/reference/work-types/requirement/implement.md`; completion bar `docs/reference/work-types/requirement/done.md`; entry point `.claude/skills/write-requirement/SKILL.md` | opus | completion bar `docs/reference/work-types/requirement/done.md`; checklist `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | work file `docs/reference/work-types/specs/implement.md`; completion bar `docs/reference/work-types/specs/done.md`; entry point `.claude/skills/write-impl-spec/SKILL.md` | opus | completion bar `docs/reference/work-types/specs/done.md`; checklist `.claude/agents/impl-spec-reviewer.md` | opus |
 | `documentation` | work file `docs/reference/work-types/documentation/implement.md`; completion bar `docs/reference/work-types/documentation/done.md`; entry points `.claude/skills/write-system-design/SKILL.md` and `.claude/skills/write-project-design/SKILL.md` | opus | completion bar `docs/reference/work-types/documentation/done.md`; checklist `.claude/agents/system-design-reviewer.md` | opus |
-| `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
+| `development` | work file `docs/reference/work-types/development/implement.md`; completion bar `docs/reference/work-types/development/done.md`; entry point `.claude/skills/develop-task/SKILL.md`. The bar covers `custom_components/**` only — its preamble routes `tests/**` to the `testing` row's bar. | sonnet | For `custom_components/**`: completion bar `docs/reference/work-types/development/done.md`; checklist `.claude/agents/code-reviewer.md`. For `tests/**`: checklist `.claude/agents/test-reviewer.md`. | opus |
 | `testing` | work file `docs/reference/work-types/testing/implement.md`; completion bar `docs/reference/work-types/testing/done.md`; entry point `.claude/skills/write-tests/SKILL.md` | sonnet | completion bar `docs/reference/work-types/testing/done.md`; checklist `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
 | *(no context label)* | none | — | by changed path — applied to every PR, labelled or not (see below) | opus |
@@ -132,9 +132,11 @@ rule for choosing between them is needed: whichever fires has already selected i
 two artifacts names one work file and one completion bar like every other row, and those files
 route onward inside `docs/reference/work-types/` — `documentation` is the case. What a row may
 still split by is a **tree**, in the review column, where the split is what the union routing
-below is for and so cannot move into a file. (`work-types/README.md` describes that tree's
-shape. Nothing in this table resolves through it: a row names its files literally, and this
-pointer is for a reader wanting the shape, never a step in reaching a file.)
+below is for and so cannot move into a file — `development` is the case, and each tree is its
+own sentence, so `;` never has to mean two things in one cell. A sentence may also state a
+named file's scope, as `development`'s work column does for its bar. (`work-types/README.md`
+describes that tree's shape. Nothing in this table resolves through it: a row names its files
+literally, and this pointer is for a reader wanting the shape, never a step in reaching a file.)
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting
