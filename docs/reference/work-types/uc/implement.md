@@ -7,10 +7,8 @@ the shared mechanism documents rather than restating them.
 This file is the `uc` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
 **how a use-case is written** and nothing else.
 
-The lifecycle around the draft — `CLAUDE.md`'s **Contribution workflow** — applies with no
-exceptions, including to a typo-level or pure-wording edit. The completion bar beside this file,
-`done.md`, is shared with the `requirement` row, because one reviewer covers the whole analysis
-tree.
+The completion bar beside this file, `done.md`, is shared with the `requirement` row, because
+one reviewer covers the whole analysis tree.
 
 ## Drafting a use-case
 

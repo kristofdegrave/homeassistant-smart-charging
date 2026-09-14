@@ -8,10 +8,8 @@ never **how**.
 This file is the `requirement` row's work file in `CLAUDE.md`'s **Model selection** table. It
 carries **how a requirement is written** and nothing else.
 
-The lifecycle around the draft — `CLAUDE.md`'s **Contribution workflow** — applies with no
-exceptions, including to a typo-level or pure-wording edit. The completion bar is shared with the
-`uc` row, because one reviewer covers the whole analysis tree: `done.md` beside this file routes
-to `../uc/done.md` rather than carrying the bar itself.
+The completion bar is shared with the `uc` row — `done.md` beside this file routes to it —
+because one reviewer covers the whole analysis tree.
 
 ## Drafting a requirement
 
