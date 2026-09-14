@@ -120,7 +120,7 @@ true of the finished artifact; the **entry point** is the skill a run or CI reac
 file by name through; the **checklist** holds what only a reviewer can check — how to read the
 change, and the checks about the change rather than the artifact. Where a row also splits on
 *which* file or tree the change touches, each branch is its own sentence, so `;` never has to
-mean two things in one cell.
+mean two things in one cell; a sentence may also state a named file's scope.
 
 **The completion bar is one file named in both columns, and that is deliberate.** It is the
 only per-type fact with two readers: the author self-checks against it before requesting

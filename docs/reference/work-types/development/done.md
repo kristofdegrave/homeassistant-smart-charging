@@ -85,19 +85,20 @@ one that only makes the code harder to read is **Minor**.
 **(6) Runtime check recorded when the change is observable at runtime.** A change to observable
 runtime behaviour carries a **Runtime check** section in the PR description recording what was
 driven and what was observed. `definition-of-done.md` owns what counts as observable, what the
-section must contain, and the honest cannot-be-driven-yet form; read it there rather than from a
-summary, and judge the section **against the diff rather than by its presence** — a section
-whose observations don't cover the behaviour this diff changes is the same miss as no section at
-all. A miss is **Major**, which is the
-severity that document states and the reason the check is reviewer-read rather than CI-gated: a
-mechanical presence check is satisfied by an empty heading.
+section must contain, how it is judged against the diff rather than by its presence, and the
+honest cannot-be-driven-yet form; read it there rather than from a summary. A miss is **Major**,
+which is the severity that document states and the reason the check is reviewer-read rather than
+CI-gated: a mechanical presence check is satisfied by an empty heading.
 
-Three cases are not a finding and must not be reported as one: a change with no PR yet; a PR
+Two cases are not a finding and must not be reported as one: a change with no PR yet, and a PR
 opened by the CI pipeline's bot account — that document states the second and why no fix cycle
-can produce it; and a section in the honest cannot-be-driven-yet form, which is judged on
-**whether the substitute it names is adequate**, said so in the review, rather than counted as
-an absence. In the first two, state what the Runtime check will have to record and leave it
-there.
+can produce it. In both, state what the Runtime check will have to record and leave it there.
+
+A third case is **judged, not excused**: a section in the honest cannot-be-driven-yet form. That
+the behaviour could not be driven is not itself the finding — judge the substitute it names, say
+so in the review either way, and report an inadequate substitute at this item's severity. What
+is excused is the absence of drivable evidence, never the content of the section standing in
+for it.
 
 **The one overlap with the `testing` bar, stated once.** A diff that changes how an adapter
 **reads or converts a source entity's unit** trips this item, through the computation that

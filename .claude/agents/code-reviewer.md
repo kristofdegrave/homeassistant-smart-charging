@@ -49,9 +49,15 @@ row of the same table and apply every item at the severity stated there. The `de
 deliberately states nothing about test quality beyond the route, so a test defect you see is
 reported against the `testing` bar's item that names it.
 
+**You read the change's tests even where the table dispatched you for the code tree.** A row's
+tree qualifier says which checklist a changed tree is *guaranteed*, not what a reviewer may
+read — and a code change's wiring is often only visible in the tests that exercise it. So you
+hold both bars within one review. Where a test reviewer was dispatched over the same files,
+expect overlap: a finding raised twice is the accepted cost, a finding raised by neither is not.
+
 Where the two bars meet — a change to how an adapter reads or converts a source entity's unit,
-whose mandated unit coverage is also missing — the `development` bar's Runtime-check item states
-which one carries the finding. Report it once, as it says.
+whose mandated unit coverage is also missing — the `development` bar's overlap paragraph, after
+its Runtime-check item, states which one carries the finding. Report it once, as it says.
 
 If either file genuinely cannot be read, you have no criteria for that half — this definition
 holds none. Say so plainly at the top of your summary, report what you could still judge, and end

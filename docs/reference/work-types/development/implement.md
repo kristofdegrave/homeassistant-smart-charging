@@ -14,9 +14,7 @@ elsewhere:
   this file in the same row and again in that row's review column. The author checks it before
   requesting review and the reviewer applies it, so it is written once for both.
 - *What must be true of the finished tests* is the **`testing` row's** completion bar, not this
-  row's. A test written inside this TDD loop is the same artifact as one written under a
-  `testing` issue, so it is written against that row's work file and judged against that row's
-  bar. `done.md`'s preamble states that split once; the loop below is where you reach it.
+  row's — `done.md`'s preamble states that split and why; the loop below is where you reach it.
 
 ## Before you start
 
