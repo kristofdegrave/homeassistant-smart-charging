@@ -226,16 +226,17 @@ per-label tree with one generic reviewer the natural end state:
 ```text
 docs/reference/work-types/
   adr/implement.md          ← the write-adr body (moved; the skill stays as the entry point)
-  adr/review.md             ← today's adr-reviewer checklist
-  uc/implement.md, uc/review.md
-  requirement/implement.md, requirement/review.md   (review.md a pointer to uc/review.md, or the reverse)
+  adr/done.md               ← the per-type completion bar, read by the author AND the reviewer
+  adr/review.md             ← what is left of adr-reviewer once the bar is factored out
+  uc/implement.md, uc/done.md, uc/review.md
+  requirement/…             (its done.md and review.md may be pointers to uc/'s, or the reverse)
   specs/…
-  documentation/implement.md, documentation/review.md
-  development/implement.md, development/review.md   (review.md covers custom_components/ and tests/)
+  documentation/implement.md, documentation/done.md, documentation/review.md
+  development/…             (review.md covers custom_components/ and tests/)
   testing/…
   workflow/implement.md     ← pointer to ai-authoring.md, for reading only;
                               the generic implement still refuses to draft this label
-  workflow/review.md
+  workflow/done.md, workflow/review.md
 .claude/skills/implement/SKILL.md      generic; reads <label>/implement.md
 .claude/skills/review/SKILL.md         generic; spawns the one agent below per tree
 .claude/skills/fix/SKILL.md            generic; re-authors with <label>/implement.md
@@ -247,6 +248,44 @@ derive from the label. This layout mirrors CI's self-applied "checklist in file 
 and it trims the description index every run carries before it reads anything: fifteen
 per-type files under `.claude/` become three skills and one agent there. What that is and is
 not worth is set out below.
+
+### Three documents per label, not one or two
+
+Settled while the first label moved, because seven more copy the shape. The set is
+`implement.md` (how the artifact is written), `done.md` (what must be true of the finished
+artifact) and `review.md` (what only a reviewer can check — how to read the change, and the
+checks about the *change* rather than the artifact). `CLAUDE.md`'s table names `done.md` in
+both columns; the other two appear in one each.
+
+**Why `done.md` is a file and not a section of `implement.md` with a stated audience** — the
+question left open when the split was proposed:
+
+- It has two readers with no file in common. The author reaches it from `implement.md`; the
+  reviewer from its own checklist. A section inside `implement.md` would put the reviewer inside
+  the author's recipe — the coupling *Why reference files, not per-type skills* above already
+  rejected when it rejected one combined file per label, for the same reason: review
+  independence requires the reviewer never to run inline with the author's recipe.
+- The duplication is not hypothetical and had already drifted. Before the split, the `adr`
+  work file's Self-check bullets and `adr-reviewer.md`'s checklist items stated the same facts
+  in different words, and only the reviewer's copy carried the blast-radius severities. Almost
+  the whole of that agent's checklist had a mirror in the work file.
+- So the split is not added structure — it is where the cut already was. What is genuinely
+  reviewer-only turns out to be small (the read-list, severities and output format, plus the
+  immutability check, which is about the change rather than the record), and it is the bar that
+  is bulky. Merging the bar into either neighbour re-creates the drift.
+
+Two consequences the remaining labels inherit:
+
+- **The bar is where a per-type completion rule lives.** `definition-of-done.md` routes to it,
+  which gives that document the per-type extension point it did not have. The rule "an ADR's
+  Status is `Accepted` before `needs-approval`" is the first thing to land there.
+- **The worthiness test moves out of `implement.md` into the bar.** "Should this artifact exist
+  at all" is not answered while drafting; it is settled when the issue is filed and re-answered
+  by the reviewer. The bar routes to `CLAUDE.md` for the test itself rather than restating it.
+
+Not an ADR: this is the internal shape of a decomposition this document already owns
+(decision 4), it binds no product code and no trust boundary, and it is reversible by moving
+text between three files in one tree.
 
 ### Why the move is worth doing
 

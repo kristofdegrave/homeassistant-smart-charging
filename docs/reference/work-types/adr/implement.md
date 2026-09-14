@@ -5,19 +5,18 @@ Capture an architectural decision as a numbered, immutable Architecture Decision
 [ADR-0001](../../../adl/0001-use-architecture-decision-records.md) — the decision to use ADRs
 at all, and why the template looks the way it does.
 
-This file is the `adr` row's *How the work is done* column in `CLAUDE.md`'s **Model selection**
-table. It carries only what is specific to an ADR; the lifecycle around it — issue, worktree,
-PR, review, fix, merge — belongs to the contribution workflow and is not re-derived here.
+This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
+**how an ADR is written** and nothing else. Two things deliberately sit elsewhere:
 
-## Is this decision ADR-worthy?
+- The lifecycle around the draft — issue, worktree, PR, review, fix, merge — belongs to the
+  contribution workflow and is not re-derived here.
+- *What must be true of a finished ADR* is the completion bar, `done.md`, named alongside this
+  file in the same row and again in that row's review column. The author checks it before
+  requesting review and the reviewer applies it, so it is written once for both. That includes
+  the worthiness test — whether this decision should be an ADR at all is answered when the issue
+  is filed and re-answered by the reviewer, not while drafting.
 
-See `CLAUDE.md`'s **Architecture Decision Records (ADRs)** section for the worthiness test
-(structure that's expensive to reverse or materially constrains future options — vs. a variable
-name or log message with no lasting structural consequence), its calibration test for
-borderline cases, and its two carve-outs (test/CI/dev-tooling choices; domain/business rules).
-Check those before drafting, not just the headline definition.
-
-## ADR-specific additions to the workflow
+## Drafting an ADR
 
 - **Numbering** (part of step 1, before drafting): next sequential integer after the highest
   existing `docs/adl/NNNN-*`, zero-padded to 4 digits. Never reuse or renumber; a superseded
@@ -36,46 +35,28 @@ Check those before drafting, not just the headline definition.
   (every option seriously evaluated, each with Pro/Con — not just the chosen one), Decision,
   Consequences.
 - **Step 2 (PR)**: one PR per ADR — see **Rules** below.
-- **Self-check**, before step 3's review (no 6Cs pass — that check is for behavioral
-  requirements/use-cases; an ADR's correctness is judged by whether its options and trade-offs
-  are real, not by Clarity/Concision/etc.):
-  - Context states the forces at play without presupposing the answer.
-  - Every considered option has at least one genuine Pro and one genuine Con — an option with
-    no real Con is a sign it wasn't seriously considered, or a real Con is being hidden.
-  - Decision references the options' trade-offs rather than restating them.
-  - Consequences names concrete follow-up (issues to open, docs to update), not just restating
-    the decision, and carries the **Blast radius** enumeration `docs/adl/template.md`
-    specifies — the reviewer re-runs its search and will raise a finding if a governed site is
-    missing from it.
-  - `docs/adl/README.md` (the ADL) has a new row for this ADR, and the number matches the
-    numbering step above — the reviewer checks both and will raise a finding if either is
-    missing.
 - **Cross-check against existing ADRs and design docs**, before step 3: does this decision
   contradict an existing `Accepted` ADR? If so, this record supersedes it: set the new ADR's
   Status normally, and edit the *old* ADR's Status line only, to `Superseded by ADR-NNNN` —
   never rewrite the old ADR's Context/Decision/Consequences.
-- **What the review checks**: template conformance, that every option has a genuine Pro and
-  Con, that the Decision references those trade-offs, that Consequences actually follow, and
-  cross-ADR consistency including the immutability rule. The reviewer itself comes from the
-  `adr` row — not `analysis-reviewer`, which is scoped to `docs/analysis/**` and does not cover
-  `docs/adl/**`.
 
 ## Rules
 
-- **One problem, one decision per ADR.** Each ADR addresses exactly one problem and records
-  exactly one decision. If a design doc bundles several architectural choices, split them into
-  separate ADRs rather than one ADR with multiple unrelated decisions.
+- **One problem, one decision per ADR** — the bar's item 7 states it and judges it. What that
+  means while drafting: a design doc that bundles several architectural choices produces
+  several ADRs, not one ADR carrying several decisions.
 - **One PR per ADR.** No PR contains more than one ADR, or an ADR plus unrelated non-ADR work,
   even if they're closely related — file a separate issue and open a separate PR per ADR so
   each decision gets its own review. This doesn't cap an ADR at one PR outright: a genuine
   follow-up on the same ADR still follows the workflow doc's multi-PR convention for that
-  issue. The ADL row (see the Self-check bullet above) and any supersession Status-line edit
+  issue. The ADL row (the bar's item 2) and any supersession Status-line edit
   belong to the same ADR's PR, not a separate one.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences to
   reflect a change of mind — write a new ADR that supersedes it. This file is the only home
   for the **author and fix side** of the rule; a fix run reaches it through the `adr` row, so
   it never needs restating in a skill. The reviewer's side of it lives with the reviewer — in
-  the `adr` row's review file and in CI's review prompt — and is not a duplicate of this.
+  the files the `adr` row's review column names and in CI's review prompt — and is not a
+  duplicate of this.
   Two guards, because the rule is easy to over-apply:
   - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`,
     where `<base>` is the base commit the caller gives you (CI's prompt supplies it; locally,
@@ -93,16 +74,17 @@ Check those before drafting, not just the headline definition.
     Decision that doesn't reference its options, or a Consequence that doesn't follow is fixed
     normally. Only a finding arguing an already-Accepted *decision* is wrong becomes a
     **Skipped** entry, recorded as a candidate for a superseding ADR.
-- **List the rejected options for real.** An ADR whose only "considered option" is the one that
-  was chosen isn't using the template — go back and name what else was on the table, even if
-  it's just "do nothing" / "keep the status quo".
+- **List the rejected options for real** — the bar's item 4 states it and judges it. What that
+  means while drafting: if you reach the Considered options section with only the option you
+  chose, stop and name what else was on the table, even if it is just "do nothing" / "keep the
+  status quo".
 - **Reference, don't restate.** If a decision depends on a requirement or use-case, cite it
   (`R7`, `UC03`) rather than re-deriving it.
 
 ## Common mistakes
 
 - Skipping the issue-first step for a decision nobody has discussed yet.
-- An option with no genuine Con (usually means the alternative wasn't actually explored).
 - Editing an old ADR's Decision text instead of writing a new ADR that supersedes it.
-- Bundling two independent structural choices into one ADR.
 - Bundling two ADRs, or an ADR plus unrelated work, into one PR.
+- Drafting against this file alone and never opening `done.md` — the bar is where most of what
+  a review will say already is.

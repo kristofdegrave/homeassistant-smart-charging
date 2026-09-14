@@ -38,7 +38,9 @@ Stop instead of dispatching when:
 2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
    task it names is already identified.
 3. Worktree, branch and board **Status** per step 1.
-4. Follow the work file. Its steps, self-checks and stop conditions govern.
+4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
+   completion bar, that file is the self-check before step 5 — the same one the reviewer will
+   apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per step 2.
 
 Stop there and hand on to step 3, which the `review` skill runs. Don't review the work in
