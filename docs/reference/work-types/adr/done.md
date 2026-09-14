@@ -56,7 +56,7 @@ restating the decision (**Minor**).
 `docs/adl/template.md` specifies: a re-runnable search, a conforms/does-not-conform verdict per
 hit, and an explicit out-of-scope list. Run the stated search exactly as written; the template
 requires it in the dialect you hold, so a pattern needing translation before it runs is itself
-the finding below. Each of these is **Major**, and names the sites missed:
+the finding below. Each of these is **Major**; name the sites missed in every case:
 - the section is absent;
 - the search fails the template's own width test, so it drops something the decision also
   governs;
@@ -83,8 +83,8 @@ one, it says so explicitly and the old ADR's **Status line only** reads
 **(9) Terminology matches.** Domain terms match the glossary in
 `docs/analysis/system-overview.md` and the usage in other ADRs — **Minor**.
 
-**(10) Status is `Accepted` before `needs-approval`.** An ADR is drafted with
-`Status: Accepted` in its own PR and stays that way; if a review round left it at anything else,
-the Status line is set to `Accepted` once the pass is clean and before the PR is labelled
-`needs-approval`. A PR handed to the human partner with a non-`Accepted` Status is **Major** —
+**(10) Status is `Accepted` before `needs-approval`.** This is the only home for the drafting
+convention it rests on: **an ADR carries `Status: Accepted` from its first draft, in its own
+PR**, and stays that way. If a review round left it at anything else, the Status line is set to
+`Accepted` once the pass is clean and before the PR is labelled `needs-approval`. A PR handed to the human partner with a non-`Accepted` Status is **Major** —
 the ADL row (item 2) would then be recording a decision the log says was never taken.

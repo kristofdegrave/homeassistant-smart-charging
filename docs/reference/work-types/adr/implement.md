@@ -1,7 +1,7 @@
 # Work type: `adr` — how the work is done
 
-Capture an architectural decision as a numbered, immutable Architecture Decision Record
-(`docs/adl/NNNN-kebab-case-title.md`), per
+Capture an architectural decision as a numbered, immutable Architecture Decision Record under
+`docs/adl/`, per
 [ADR-0001](../../../adl/0001-use-architecture-decision-records.md) — the decision to use ADRs
 at all, and why the template looks the way it does.
 
@@ -18,9 +18,11 @@ This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** tabl
 
 ## Drafting an ADR
 
-- **Numbering** (part of step 1, before drafting): next sequential integer after the highest
-  existing `docs/adl/NNNN-*`, zero-padded to 4 digits. Never reuse or renumber; a superseded
-  ADR keeps its number.
+- **Numbering** (part of step 1, before drafting): the bar's item 2, *Template conformance*,
+  defines the number and the filename and judges them. What that means while drafting: resolve
+  the number *before* the branch exists, since the branch is named after it — and never reuse
+  or renumber one. A superseded ADR keeps its number, which is why the highest existing number
+  is the only safe thing to count from.
 - **Branch naming exception** (the general rule this overrides is in the contribution workflow,
   which lets a context label's own work file override the number segment when that file states
   the exception and its reason — this is that statement): an ADR
@@ -36,21 +38,23 @@ This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** tabl
   Consequences.
 - **Step 2 (PR)**: one PR per ADR — see **Rules** below.
 - **Cross-check against existing ADRs and design docs**, before step 3: does this decision
-  contradict an existing `Accepted` ADR? If so, this record supersedes it: set the new ADR's
-  Status normally, and edit the *old* ADR's Status line only, to `Superseded by ADR-NNNN` —
-  never rewrite the old ADR's Context/Decision/Consequences.
+  contradict an existing `Accepted` ADR? The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, defines what the finished pair has to
+  look like and judges it. What that means while drafting: go and look, before you have written
+  a Decision that assumes nothing conflicts — the check is cheap then and expensive afterwards,
+  and it is the step most often skipped.
 
 ## Rules
 
-- **One problem, one decision per ADR** — the bar's item 7 states it and judges it. What that
+- **One problem, one decision per ADR** — the bar's item 7, *One problem, one decision*, states it and judges it. What that
   means while drafting: a design doc that bundles several architectural choices produces
   several ADRs, not one ADR carrying several decisions.
 - **One PR per ADR.** No PR contains more than one ADR, or an ADR plus unrelated non-ADR work,
   even if they're closely related — file a separate issue and open a separate PR per ADR so
   each decision gets its own review. This doesn't cap an ADR at one PR outright: a genuine
   follow-up on the same ADR still follows the workflow doc's multi-PR convention for that
-  issue. The ADL row (the bar's item 2) and any supersession Status-line edit
-  belong to the same ADR's PR, not a separate one.
+  issue. The ADL row (the bar's item 2, *Template conformance*) and any supersession Status-line edit
+  belong to the same ADR's PR, not a separate one. The bar's item 2, *Template conformance*,
+  is where the ADL row itself is judged.
 - **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences to
   reflect a change of mind — write a new ADR that supersedes it. This file is the only home
   for the **author and fix side** of the rule; a fix run reaches it through the `adr` row, so
@@ -61,8 +65,9 @@ This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** tabl
   - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`,
     where `<base>` is the base commit the caller gives you (CI's prompt supplies it; locally,
     resolve the PR's base). A bare branch name may not resolve in a fresh checkout.
-    Every ADR is drafted with `Status: Accepted` in its own PR, so a working-tree read makes an
-    ADR still being drafted look immutable. If the file doesn't exist on the base, or its
+    The reason is the drafting convention stated in the bar's item 10, *Status is `Accepted`
+    before `needs-approval`*: under it, a working-tree read makes an ADR still being drafted
+    look immutable. If the file doesn't exist on the base, or its
     Status there isn't already `Accepted`, normal fixes apply. If the base **cannot be read at
     all** — no base ref fetched, the command unavailable — do not fall back to the working
     tree: treat the record as Accepted, which by the next guard means only a finding arguing
@@ -74,7 +79,7 @@ This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** tabl
     Decision that doesn't reference its options, or a Consequence that doesn't follow is fixed
     normally. Only a finding arguing an already-Accepted *decision* is wrong becomes a
     **Skipped** entry, recorded as a candidate for a superseding ADR.
-- **List the rejected options for real** — the bar's item 4 states it and judges it. What that
+- **List the rejected options for real** — the bar's item 4, *The considered options are real*, states it and judges it. What that
   means while drafting: if you reach the Considered options section with only the option you
   chose, stop and name what else was on the table, even if it is just "do nothing" / "keep the
   status quo".

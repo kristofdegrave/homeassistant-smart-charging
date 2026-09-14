@@ -232,9 +232,10 @@ stay with the human partner.
 Two related references sit just outside this lifecycle: the stages either side of it
 ([docs/reference/idea-to-issues.md](docs/reference/idea-to-issues.md) — idea, two-track
 routing, spec, slicing into sub-issues, and verifying a shipped slice live) and the
-completion bar an author self-checks before opening the PR
+**Definition of Done** an author self-checks before opening the PR
 ([docs/reference/definition-of-done.md](docs/reference/definition-of-done.md), also covering
-commit message conventions). The artifact-specific sections below (analysis docs, ADRs) layer
+commit message conventions) — the project-wide floor, distinct from a row's per-type
+*completion bar*, which that document routes to. The artifact-specific sections below (analysis docs, ADRs) layer
 their own template/quality-check steps on top of these; they never replace them.
 
 Committing and pushing on a task branch is standing-authorized; the destructive git commands

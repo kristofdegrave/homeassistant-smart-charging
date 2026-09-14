@@ -167,8 +167,9 @@ in branch protection's required checks on `main`.
   off. The staged set is a superset of the paths that arm it, so base routing can never name a
   file that has no base copy. A file the PR *adds* under a watched tree arms the guard and has
   no base copy, which is correct: it is not something the base standard can route to. As with the drafter, the table
-  column may name an agent definition or a work-type review document; the worker follows what
-  it says, so a checklist can move without this workflow changing. Unacknowledged human inline
+  column may name one or more of an agent definition, a work-type review document and a
+  completion bar; the worker follows what it says, so a checklist can move, or split, without
+  this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
   remarks too — the CI equivalent of step 8.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict on a **docs-only** diff adds

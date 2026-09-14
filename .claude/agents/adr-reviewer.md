@@ -34,8 +34,9 @@ column. Read that file and apply every item in it as a review criterion, at the 
 states. It is the same bar the author self-checked against before requesting review — that is
 the point of it being one file: you are not applying a second, differently-worded standard.
 
-Three checks are yours alone, because they are about the **change** rather than about the
-finished record, and an author checking their own draft cannot make them:
+Two checks are yours alone, because they are about the **change** rather than about the
+finished record, and an author checking their own draft cannot make them. Everything else —
+including the scope each bar item states for itself — comes from the bar, not from here:
 
 **(A) Immutability.** If this change *edits* an existing ADR's Context / Decision /
 Consequences — as opposed to adding a Status supersession line, or fixing a typo — that is a
@@ -43,21 +44,18 @@ Consequences — as opposed to adding a Status supersession line, or fixing a ty
 rewrite of an accepted one.
 
 Read "already Accepted" from the **base branch**, not the working tree: `git show <base>:<path>`
-where `<base>` is the base commit you were given. Every ADR is drafted with `Status: Accepted`
-in its own PR, so a working-tree read makes an ADR still being drafted look immutable and turns
-every legitimate draft revision into a false Critical. If the file does not exist on the base,
+where `<base>` is the base commit you were given. The bar's item 10 states the drafting convention this
+rests on; under it, a working-tree read makes an ADR still being drafted look immutable and
+turns every legitimate draft revision into a false Critical. If the file does not exist on the base,
 or its Status there is not already `Accepted`, this check does not fire. If the base cannot be
 read at all, say so in your summary rather than falling back to the working tree.
 
-**(B) Scope of the bar's blast-radius and worthiness items.** Both apply to an ADR this change
-**adds**. An ADR the change only *modifies* is out of scope for the blast-radius item — adding
-that section to an existing record would itself be the immutability violation in (A) — and an
-already-Accepted ADR is never retroactively flagged for worthiness.
-
-**(C) Whether the change is complete as a change.** The ADL row, the supersession Status-line
-edit on the superseded record, and the ADR itself belong to this one PR. A PR carrying the ADR
-without its ADL row, or a supersession without the old record's Status line updated, is
-incomplete — report it against the bar's items 2 and 8.
+**(B) Whether the change is complete as a change.** A bar item can be satisfied by a file you
+were not shown. Check that everything this ADR needs is actually in *this* diff: the ADL row
+(bar item 2, *Template conformance*) and, where the ADR supersedes another, that record's
+Status-line edit (bar item 8). Report a miss against the bar item, at the severity it
+states — the work file already rules that they belong to one PR, so the finding is that the PR
+is incomplete, not that a separate PR would be wrong.
 
 ## Output
 
