@@ -18,6 +18,9 @@ Always read, in `docs/analysis/`:
 - `control-cycle.md`, `resolution-rules.md`, `entity-catalog.md` — the mechanism docs the file may reference.
 - Any sibling use-cases in `use-cases/` the file relates to.
 
+Then the completion bar, which the checklist below sends you to — read it before you start
+scoring, not while you write up.
+
 If the caller names a plan/design doc, read it for its coverage table. The template a document
 is judged against is not taken from there — the bar names it, by the same route the author
 drafted against.
@@ -34,8 +37,9 @@ not applying a second, differently-worded standard.
 
 Three things are yours alone, because they are about the **review** or the **change** rather
 than about the finished document, and an author checking their own draft cannot make them.
-Everything else — including the scope each bar item states for itself — comes from the bar, not
-from here:
+Everything else comes from the bar, not from here — including the scope each bar item states
+for itself, except where a bar item hands part of that scope to this checklist and says so.
+The Code-backing item does exactly that, and (B) is the receiving end:
 
 **(A) Your budget for the bar's Code-backing item.** The bar says what is in scope; this says
 how much of it you may check. For each in-scope item, run **one** targeted `Grep` over
@@ -46,8 +50,9 @@ took. Six tool calls is the most this check may cost a review, because a review 
 runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first
 list above does not grow for this check.
 
-**(B) What you can assert about that item depends on the evidence you were given.** The bar
-states the scope of its own Major here; this is the reviewer's side of it. Given the PR body
+**(B) What you can assert about that item depends on the evidence you were given.** This is the
+half of the bar's *Scope of that Major* the bar hands here, and it is stated once — here.
+Given the PR body
 and no reference to a filed `specs` issue for the gap, that Major is assertable — report it.
 *Not* given the PR body, you cannot tell a missing filing from an unseen one: report **Minor**
 and say the gap is Major unless such an issue has been filed for it. Never report Major on

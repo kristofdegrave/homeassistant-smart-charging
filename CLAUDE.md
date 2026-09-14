@@ -191,7 +191,7 @@ not a fourth column: each row's own work skill and reviewer agent say which one 
 when, so nothing here repeats a rule those files own.
 
 **The `workflow` row has no work file on purpose.** There is no safe path containment for
-untrusted issue content outside the per-label `docs/` trees each doc drafter is confined to,
+untrusted issue content outside the `docs/` trees each doc drafter's allow-list confines it to,
 `custom_components/**` and
 `tests/**`, so CI refuses to draft `workflow` issues
 ([ci-pipeline.md](docs/reference/ci-pipeline.md)) and a local session hands the drafting to the

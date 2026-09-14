@@ -46,14 +46,9 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
   assertions than one requirement edit touches criteria. The cap is this step's own: it is
   deliberately not derived from what any other artifact does, so it neither follows nor
   constrains them. It is a fixed lookup count either way, never a sweep.
-- **State the finding, and file what it turns up** — the bar's items 4.2, *The finding is
-  stated*, and 4.3, *A gap is filed*, state both and judge them. What that means while
-  drafting: write each finding into the PR body as you take the item, rather than
-  reconstructing the set afterwards, and open the `specs` child issue in the same session so
-  the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes to the filing
-  commands.
-- **Done when** the bar's 4.2 and 4.3 hold for every item you took — the PR body names which
-  of the two cases applies to each, and names the `specs` issue wherever it is the second.
+- **State the finding, file what it turns up, and you are done** — the bar's items 4.2, *The
+  finding is stated*, and 4.3, *A gap is filed*, state both, carry the drafting order, and
+  judge the result. Done when both hold for every item you took.
 
 ## Template (section order)
 
@@ -76,12 +71,15 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
   dispatch → clamp → set; peak clamp R3, grid ceiling clamp C4, rapid-cycling R11) and
   `docs/analysis/resolution-rules.md` (active SOC limit R7, departure deadline R14, effective
   peak limit, Auto mode-selection R16) — do not restate them.
-- **Mode use-cases (UC01–UC04) MUST carry a `stateDiagram-v2` + State model subsection**: states,
-  transition conditions (thresholds/timers), and the set-point rule. Re-derive the archived
-  `docs/archive/process-flow.md` machines against the *current* requirements (archive is a
-  checklist, not a source of truth). UC08/UC10 carry a lighter state model; others may omit it.
-- **Deadline logic is UC05's** (`«extend»`). A charging UC says "Extended by UC05 when the deadline
-  is at risk" rather than restating urgency escalation.
+- **Mode use-cases carry a `stateDiagram-v2` + State model subsection** — the bar's 5.1 states
+  which use-cases, what the model has to agree with, and the severities. What that means while
+  drafting: re-derive the archived `docs/archive/process-flow.md` machines against the
+  *current* requirements. The archive is a checklist of states worth considering, not a source
+  of truth, and copying it forward is how a state model ends up disagreeing with its own
+  scenarios.
+- **Deadline logic is UC05's** (`«extend»`) — the bar's 5.1 item *Deadline escalation is
+  referenced, not restated* judges it. What that means while drafting: write "Extended by UC05
+  when the deadline is at risk" and move on, rather than re-deriving urgency escalation.
 - One statement per line; always name the subject (Actor or System); active voice; verifiable
   pre/postconditions.
 

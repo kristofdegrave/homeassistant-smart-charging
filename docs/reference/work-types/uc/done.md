@@ -123,22 +123,36 @@ issue for that gap is filed as part of this PR and referenced in the body — a 
 never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow** section routes to.
 A gap found and left unfiled is **Major**.
 
+**While drafting**, both items are discharged as you go rather than reconstructed at the end:
+write each finding into the PR body as you take the item, and open the `specs` issue in the
+same session so the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes
+to the filing commands. This is the one piece of drafting order the bar carries, because both
+work files would otherwise hold the same copy of it.
+
+**On the CI drafting path**, neither item is dischargeable as written, and that is a property
+of the path rather than a lapse: the pipeline's drafter has no shell, so it cannot file an
+issue, and it does not write the PR body — the workflow supplies that from a fixed template.
+There, the item is discharged by recording the finding **in the draft itself**, as an open
+question for the reviewer, which is the substitution that path already makes for any step
+needing a human. The obligation is not waived; it transfers to whoever takes the draft
+forward, and an open question of that shape reads as the item discharged rather than missed.
+
 **Scope of that Major.** It is assertable only against evidence the judge actually holds. The
-author always holds the PR body, so it always binds the self-check. A reviewer who was not
-given the PR body cannot tell a missing filing from an unseen one, and reports **Minor** saying
-the gap is Major unless such an issue has been filed; the reviewer's own checklist states this
-from its side.
+author always holds the PR body, so it binds the self-check unconditionally. A reviewer may
+not, and the reviewer's own checklist — the one this row's *How it is reviewed* column names
+alongside this file — owns which evidence makes it assertable and what to report otherwise.
+That hand-off is deliberate: only the reviewer knows what it was given.
 
 Both sides sample rather than sweep, and each says which items it took. The reviewer's cap is
-in its own checklist; a work file may set the author's — `uc/implement.md` does, at five
-items — or leave the count to the diff, and either way the lookup stays targeted per item.
-Sampling is expected; a silent sweep is not.
+in its own checklist; a work file may set the author's — the `uc` one does — or leave the count
+to the diff, and either way the lookup stays targeted per item. Sampling is expected; a silent
+sweep is not.
 
 ## 5. Per-document-kind items
 
 ### 5.1 A use-case (`docs/analysis/use-cases/UCnn-*.md`)
 
-- **Section order matches the template** in `implement.md` — **Minor**, **Major** where a
+- **Section order matches the template** in the `uc` work file beside this one — **Minor**, **Major** where a
   section required for this kind of use-case is absent altogether.
 - **Preconditions and postconditions are testable state**, not actions — **Minor**.
 - **Main, alternate and exception flows are all present and in Given/When/Then**, with

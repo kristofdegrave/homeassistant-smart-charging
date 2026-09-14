@@ -22,11 +22,10 @@ elsewhere:
 - **Step 1 (draft)**: the requirement in `docs/analysis/requirements.md` — or the constraint
   row, or the glossary term — in the format below, then self-check against `done.md` before
   requesting review.
-- **Propagate inside the analysis layer**, before step 3's review. A new or changed requirement
-  usually ripples: update the glossary, the mechanism documents
-  (`docs/analysis/control-cycle.md` / `docs/analysis/resolution-rules.md`) and
-  `docs/analysis/entity-catalog.md` (new `sc_` entities, with defaults matching the
-  requirement), so the whole analysis layer stays consistent.
+- **Propagate inside the analysis layer**, before step 3's review — the bar's 5.2 item
+  *Ripples are propagated* names the targets and judges the result. What that means while
+  drafting: do it in the same sitting as the requirement itself, while you still know which
+  documents you touched. A ripple deferred to a follow-up is the one that gets lost.
 - **Propagate past the analysis layer**, same step. The procedure is below; what the finished
   PR has to show for it is the bar's *Code backing* item.
 
@@ -42,16 +41,15 @@ This is how you settle whether the change touches shipped behaviour, which is th
 - **The search.** Per in-scope item, search `custom_components/` for the behaviour it
   constrains — the entity it names, the clamp, the lookup, the default. This is a targeted
   lookup per item, never a sweep of the codebase.
-- **State the finding, and file what it turns up** — the bar's items 4.2, *The finding is
-  stated*, and 4.3, *A gap is filed*, state both and judge them. What that means while
-  drafting: write each finding into the PR body as you take the item, rather than
-  reconstructing the set afterwards, and open the `specs` child issue in the same session so
-  the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes to the filing
-  commands.
-- **Done when** the bar's 4.2 and 4.3 hold for every item you took — the PR body names which
-  of the two cases applies to each, and names the `specs` issue wherever it is the second.
+- **State the finding, file what it turns up, and you are done** — the bar's items 4.2, *The
+  finding is stated*, and 4.3, *A gap is filed*, state both, carry the drafting order, and
+  judge the result. Done when both hold for every item you took.
 
 ## Requirement format
+
+The shape an author types. What must be true of the result — that the priority is there, that
+the criteria are SMART, that every configurable parameter carries a default — is the bar's 5.2,
+which names this block and judges conformance to it.
 
 ```
 ### Rnn — <short title>
@@ -61,25 +59,30 @@ This is how you settle whether the change touches shipped behaviour, which is th
 
 **Acceptance criteria:**
 
-- [ ] SMART, testable statements (specific, measurable, with the configurable default in parentheses).
+- [ ] <one SMART, testable statement>
 ```
 
-- **Constraints (`Cnn`)** are hard rules that must never be violated, regardless of mode; they
-  live in the constraints table, one row each, and are enforced as invariants (see
-  `docs/analysis/control-cycle.md`).
-- **Glossary terms** define *meaning* only; the `sc_` entity *binding* (id, unit, default) lives
-  in `docs/analysis/entity-catalog.md`. Never restate a definition — link to the glossary term.
+- **Constraints (`Cnn`)** — the bar's 5.2 item *A constraint (`Cnn`) is a hard rule that holds
+  regardless of mode* states what one is and judges it. What that means while drafting: decide
+  which of the two you are writing before you type a heading, because a constraint is a row of
+  the constraints table and never a `### Cnn` section of its own.
+- **Glossary terms** — the bar's 5.2 item *A glossary term defines meaning only* states the
+  split from the `sc_` binding and judges it. What that means while drafting: write the meaning
+  into `docs/analysis/system-overview.md` first and the binding into
+  `docs/analysis/entity-catalog.md` second, so the entity row has a term to point at.
 
 ## Rules
 
-- **What, not how** — no implementation, no HA/Python detail.
-- **MoSCoW priority on every requirement.**
-- **SMART acceptance criteria** — measurable and testable; state the configurable default and
-  range.
-- **Every requirement has exactly one home** — a use-case, a mechanism document,
-  `docs/analysis/resolution-rules.md`, or the constraints table. Check the design document's
-  coverage table; don't create a second home.
-- Give every configurable parameter a concrete default (avoid "no default specified").
+The rules a finished requirement is judged by are the bar's, at the severity each miss lands
+at, and are not repeated here. Two of them have a drafting order this file owns:
+
+- **Where a requirement lives** — the bar's 2.2, *Every requirement has exactly one home*,
+  states it and judges it. What that means while drafting: check the design document's coverage
+  table *before* writing, since a second home is nearly free to avoid and expensive to unpick.
+- **What, not how** — the rule itself is `CLAUDE.md`'s **Requirements standard**, and the bar's
+  5.2 judges the criterion-level form of it. What that means while drafting: if you cannot
+  state the criterion without naming a module, a service call or a data structure, the *what*
+  hasn't been found yet.
 
 ## Common mistakes
 
