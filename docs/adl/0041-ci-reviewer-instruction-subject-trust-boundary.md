@@ -164,12 +164,23 @@ nothing in CI will say so. So:
   still drift.
 
 **A property of the pair of workers, recorded because it is load-bearing and written nowhere
-else.** The fix worker has no base-staging guard of its own, and does not need one: the set of
-instruction sources it trusts is exactly the set a fix-reachable PR cannot modify. `CLAUDE.md`
-and `.claude/**` are outside `docs/`, so a diff touching them routes to `needs-approval` rather
-than `needs-work`; `docs/reference/work-types/**` routes there too, via the review worker's
-`uncommittable_docs` check. A change to either of those routing rules re-opens this question
-for the fix worker, and would need this record revisited.
+else.** The fix worker has no base-staging guard of its own, and does not need one on the path
+it is built for: the set of instruction sources it trusts is exactly the set an *automatically
+routed* fix-reachable PR cannot modify. `CLAUDE.md` and `.claude/**` are outside `docs/`, so a
+diff touching them routes to `needs-approval` rather than `needs-work`;
+`docs/reference/work-types/**` routes there too, via the review worker's `uncommittable_docs`
+check. A change to either of those routing rules re-opens this question for the fix worker, and
+would need this record revisited.
+
+One path escapes that routing, and is accepted here rather than closed: a maintainer may
+manually re-label a mixed-tree PR `needs-work` to get one fix pass over its `docs/` part. On
+that path a PR touching `CLAUDE.md` or `.claude/**` does reach the fix worker, which reads
+those trees as instructions with no base staging. What bounds it is not the routing but the
+commit step and the human — the run commits only under `docs/` minus the work-type tree, so
+the reach of following a rewritten instruction is the `docs/` part of a diff a maintainer
+deliberately sent there, and the manual re-label is itself the human read. That is a weaker
+guarantee than the automatic path's, and the reason the sentence above is scoped to automatic
+routing rather than to the worker.
 
 **Follow-up this creates:**
 
@@ -178,10 +189,14 @@ for the fix worker, and would need this record revisited.
   base-branch copies when the diff touches the trees they come from, with the arming decided by
   the workflow from changed paths rather than by the model. The rule generalises past this one
   workflow and currently exists only inside it.
-- The two standards a checklist routes to outside the watched roots — `docs/adl/template.md`
+- The two standards under `docs/adl/` that a checklist routes to — `docs/adl/template.md`
   and `docs/adl/0009-testing-strategy.md` — are read from the checkout, and the staging step's
-  comment defers the question of widening the boundary to cover them to this record. This ADR
-  does not widen it: `docs/adl/template.md` is the sharpest case precisely because a
+  comment defers the question of widening the boundary to cover them to this record. They are
+  not the only unstaged standards: a checklist also routes to `docs/analysis/**`,
+  `docs/design/**` and the accepted-ADR log as a whole, every one of them outside the watched
+  roots and read from the merge ref. This ADR widens the boundary for none of them, and the
+  `docs/adl/` pair is named separately only because the staging comment names it. Widening is
+  deferred rather than rejected: `docs/adl/template.md` is the sharpest case precisely because a
   template-only PR routes to `adr-reviewer` and never arms the guard at all, so covering it is
   a different decision — arming on the tree a standard lives in, rather than on the trees the
   instructions themselves come from — and belongs in its own record. Until then, they are a
@@ -206,13 +221,30 @@ surprise:
 
 **Blast radius** — every site this decision governs today, and whether each conforms.
 
-The search: `grep -rnE 'anthropics/claude-code-action|base-checklists|_ai-\*\.yml'
-.github/workflows/ docs/reference/ CLAUDE.md`. The first alternative is the action that runs a
-model against a prompt, which is what makes a workflow an instruction consumer at all — keying
-on `_ai-review.yml`, or on the word "guard", would name only the file that already implements
-the boundary and would miss both sibling workers and any future one under a different name. The
-second and third catch the places that describe the boundary, or the worker class as a class,
-in prose — the copies that can drift away from the implementation. It returns six files.
+This decision governs two populations — the workers that consume instructions and the prose
+that describes the boundary, and the instruction sources the standing constraint above binds —
+so the search has two parts. Both are repo-rooted and runnable as written by a reader holding
+nothing but `Grep`/`Glob`.
+
+1. **Consumers and prose copies** — the `Grep` pattern
+   `anthropics/claude-code-action|base-checklists|_ai-\*\.yml` over the repository root. The
+   first alternative is the action that runs a model against a prompt, which is what makes a
+   workflow an instruction consumer at all — keying on `_ai-review.yml`, or on the word
+   "guard", would name only the file that already implements the boundary and would miss both
+   sibling workers and any future one under a different name. The second and third catch the
+   places that describe the boundary, or the worker class as a class, in prose — the copies
+   that can drift away from the implementation. It returns **seven** files, one of which is
+   this record.
+2. **Instruction sources** — `Glob` for `.claude/agents/*.md`, `.claude/skills/*/SKILL.md` and
+   `docs/reference/work-types/**/*.md`. No content pattern can enumerate these, and a wider
+   one would not be a fix: a checklist, a skill a worker prompt reads as instruction, and a
+   work-type document are identified by where they sit and by what routes to them, never by a
+   string they contain — none of the seven reviewer checklists matches any alternative in part
+   1. Since the constraint this ADR places on them is itself a location rule, location is both
+   the search and the test. It returns **35** files.
+
+Verdicts below are file-level. Where a Site cell names a section in parentheses, that names the
+passage the row is *about* in a long file; it does not narrow what the verdict covers.
 
 | Site | What it does today | Conforms? |
 |---|---|---|
@@ -220,12 +252,15 @@ in prose — the copies that can drift away from the implementation. It returns 
 | `.github/workflows/_ai-draft.yml` | Runs from an issue against a checkout of the default branch; resolves its work file from `CLAUDE.md`'s table, which on that checkout is the merged copy | **Yes**, trivially — no PR ref is in play, so instruction and subject cannot be the same PR-controlled tree |
 | `.github/workflows/_ai-fix.yml` | Checks out the PR head and resolves its instructions from `CLAUDE.md`, `.claude/**` and the work-type tree — all PR-controlled — with no base staging | **Yes**, by routing rather than by staging: a PR that can edit any of those never reaches this worker, per the property recorded above |
 | `docs/reference/ci-pipeline.md` (**Review** bullet) | Prose copy of the watched set, the path-computed trigger, the staging verification, the fail-toward-ON behaviour, and the note's non-verdict status | **Yes** — and it is the copy this decision obliges a future change to the set to update |
-| `docs/reference/ai-authoring.md` (**Checklist — authoring a CI worker prompt/config**) | Covers checklist selection, tool grants, turn ceilings, loop caps, untrusted PR content and third-party report containment; says nothing about where a worker's own instructions are read from | **No** — the checklist line is named as follow-up above |
+| `docs/reference/ai-authoring.md` — four hits; three name the worker class while carving it out of a rule of their own, the fourth heads **Checklist — authoring a CI worker prompt/config**, which is where a provenance rule for workers would belong | Covers checklist selection, tool grants, turn ceilings, loop caps, untrusted PR content and third-party report containment; says nothing about where a worker's own instructions are read from | **No** — the checklist line is named as follow-up above |
 | `CLAUDE.md` (**Authoring AI artifacts**) | Routes CI worker prompts to `ai-authoring.md` and states no provenance rule of its own | **Yes** — the routing is correct; the rule belongs in the file it routes to |
+| The 35 files part 2 returns: `.claude/agents/*.md` (7), `.claude/skills/*/SKILL.md` (27), `docs/reference/work-types/adr/implement.md` (1) | Every reviewer checklist, every skill a worker prompt can read as instruction — `submit-pr-review` among them, named as a base-staged source by the review prompt — and the one work-type document that exists today | **Yes**, by location, for all 35 — each sits under `.claude/` or `docs/reference/`, both watched, so each is staged and resolved from its base copy on a guard-ON run. This grouped row *is* the standing constraint above, checked: it holds for every such file today, and nothing in CI would say so if a future one landed outside those roots |
 
-**Out of scope.** `.github/workflows/ai-pipeline.yml` is matched by none of the three patterns
-and is not governed here: it triggers the workers and passes SHAs, and reads no instruction of
-its own — it keeps doing exactly that. The two `docs/adl/` standards and the two structural
-gaps named under *What this does not close* are likewise matched by no pattern; they keep
-being read from the checkout and from the merge ref respectively, and are named above as a
-known gap and as limits so that their absence from this table is stated rather than silent.
+**Out of scope.** `.github/workflows/ai-pipeline.yml` is matched by neither part and is not
+governed here: it triggers the workers and passes SHAs, and reads no instruction of its own —
+it keeps doing exactly that. This record is part 1's seventh hit and is the decision rather
+than a site it governs. The unstaged standards named under *Follow-up* — the two under
+`docs/adl/`, plus `docs/analysis/**` and `docs/design/**` — and the two structural gaps named
+under *What this does not close* are likewise matched by neither part; they keep being read
+from the checkout and from the merge ref respectively, and are named above as a known gap and
+as limits so that their absence from this table is stated rather than silent.
