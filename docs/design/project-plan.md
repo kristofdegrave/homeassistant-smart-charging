@@ -29,8 +29,8 @@ the architecture, not who does each task.
   to its owning doc — not as a restatement that this plan owns. If an anchor and its source doc ever
   disagree, the source doc wins.
 - If executing this plan reveals a gap in `system-design.md`, the gap is fixed **there first**
-  (re-running the `write-system-design` review cycle), then this plan resumes — the derivation must
-  stay mechanical.
+  (re-running that document's own review cycle, which the `documentation` row of `CLAUDE.md`'s
+  **Model selection** table names), then this plan resumes — the derivation must stay mechanical.
 - **This is a planning artifact — no `custom_components/` code is written as part of it.** Approved
   tasks feed `writing-plans`/`test-driven-development` for the actual implementation.
 - **Status markers are a record, not a change to the derivation.** Every task below carries a

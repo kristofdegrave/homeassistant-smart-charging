@@ -758,7 +758,8 @@ ADRs 0020 and later post-date this reconciliation and are not covered here.
   vocabulary, ADR-0018's Store) are reflected in [§4](#4-static-architecture) and
   [§5](#5-dynamic-architecture) above.
 
-Once approved, `write-project-design` consumes this document to produce the implementation task
-breakdown (`docs/design/project-plan.md`), and the pre-existing scaffolding plan
+Once approved, this document is consumed to produce the implementation task breakdown
+(`docs/design/project-plan.md`) — how that breakdown is written is reached through the
+`documentation` row of `CLAUDE.md`'s **Model selection** table — and the pre-existing scaffolding plan
 (`docs/plans/2026-07-04-smart-charging-scaffolding.md`, authored before this phase) is reconciled
 against that breakdown.
