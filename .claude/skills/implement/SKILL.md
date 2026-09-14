@@ -7,7 +7,7 @@ description: Use in an interactive session to run contribution-workflow steps 1-
 
 Steps 1–2 of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns every parameter — branch scheme, base, issue reference,
-board moves, and the completion bar. This skill owns only the order and the dispatch.
+board moves, and the Definition of Done. This skill owns only the order and the dispatch.
 
 Model-invocable on purpose, so "start work on #N" reaches it; the description carries the
 interactive-only wording precisely because it sits in every run's index.

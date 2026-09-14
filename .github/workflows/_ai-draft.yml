@@ -463,8 +463,8 @@ jobs:
             or a file it names does not exist, write nothing and say so — the workflow
             reports a no-diff draft, which is the right outcome. Do not draft from memory, and
             do not write a stub in order to have produced something. CI overrides to that file's cycle:
-            - Do the content steps only (draft, the self-check against the bar,
-              glossary/entity-catalog updates).
+            - Do the content steps only (draft, its self-checks — the self-check against the
+              completion bar where the row names one — glossary/entity-catalog updates).
             - Skip its review, commit, and stop-and-report steps — the workflow opens the
               PR and the `needs-review` label runs the fresh review.
             - If it has an interactive scoping/brainstorming step, do NOT try to ask the

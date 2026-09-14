@@ -18,6 +18,9 @@ Always read, in `docs/adl/`:
 - `0001-use-architecture-decision-records.md` — why this project uses ADRs and why the
   template looks the way it does.
 - `README.md` — the Architecture Decision Log index.
+
+Then the completion bar, which the checklist below sends you to — read it before you start
+scoring, not while you write up.
 - Every other file in `docs/adl/` — an ADR can only be judged for contradiction/duplication
   against the full log, not just its immediate neighbors.
 
@@ -43,12 +46,18 @@ Consequences — as opposed to adding a Status supersession line, or fixing a ty
 **Critical** finding. A change of mind must be a new ADR that supersedes the old one, never a
 rewrite of an accepted one.
 
-Read "already Accepted" from the **base branch**, not the working tree: `git show <base>:<path>`
-where `<base>` is the base commit you were given. The bar's item 10 states the drafting convention this
-rests on; under it, a working-tree read makes an ADR still being drafted look immutable and
-turns every legitimate draft revision into a false Critical. If the file does not exist on the base,
-or its Status there is not already `Accepted`, this check does not fire. If the base cannot be
-read at all, say so in your summary rather than falling back to the working tree.
+**Judge it from the change you were given, never from the working tree.** You hold no shell, so
+you cannot read the base branch yourself — and you do not need to: whether a record existed
+before this change, and what its Status was then, are both visible in the diff. What you must
+not do is infer either from the file as it now stands. The bar's item 10 states the drafting
+convention that makes that inference wrong: under it, every ADR reads `Accepted` from its first
+draft, so a working-tree read makes a record still being drafted look immutable and turns every
+legitimate draft revision into a false Critical.
+
+So: this check fires only where the diff shows an **existing** record — one with lines on the
+LEFT side — whose Status there was already `Accepted`. A file the change adds outright is a new
+record, and revising it is drafting, not rewriting. If you were handed only a working tree and
+no diff, you cannot make this check: say so in your summary rather than guessing.
 
 **(B) Whether the change is complete as a change.** A bar item can be satisfied by a file you
 were not shown. Check that everything this ADR needs is actually in *this* diff: the ADL row
