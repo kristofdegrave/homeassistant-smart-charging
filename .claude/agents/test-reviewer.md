@@ -36,8 +36,10 @@ severity it states. You are not applying a second, differently-worded standard.
 
 **Resolve the bar from the `testing` row whatever dispatched you.** The bar belongs to the
 artifact, not to the label — the bar itself says so — so `tests/**` files reviewed as part of a
-`development` change get the same one. A dispatching row that names no completion bar therefore
-tells you nothing about whether a bar applies: go to the `testing` row and apply what it names.
+`development` change get the same one. What the dispatching row names tells you nothing about
+which bar the tests get — the `development` row names a completion bar for its **code** half,
+scoped to that tree in the row itself and saying so in its own preamble, and a row naming none
+at all says no less. Either way: go to the `testing` row and apply what it names.
 
 If that file genuinely cannot be read, you have no criteria — this definition holds none. Say so
 plainly at the top of your summary, report what you could still judge, and end on **address
