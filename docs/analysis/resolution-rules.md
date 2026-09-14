@@ -179,10 +179,13 @@ urgency comes to be in effect.
   (the effective-peak-limit rule's *Urgency raise* row, below). It is computed every cycle from
   the household baseline and the peak/ceiling bounds alone, **whether or not urgency is actually
   in effect**, so the engage test below does not move the moment it fires. The household baseline
-  it reads is the **smoothed** one (R10), not the instantaneous reading: this rate is a forecast of
-  what urgency could sustain over the remaining window, and one cycle of household load is not
-  evidence about that. The split is the one the System already draws — R3's clamp and C4's ceiling
-  read [raw values](system-overview.md#ubiquitous-language) so a real breach cannot persist for a
+  it reads is the **smoothed** one (R10), not the instantaneous reading, and undeferred — R3's two
+  deferral cases belong to its clamp, not to this forecast. Every bound of the rate that depends
+  on that baseline is fitted to that same reading, the C4 ceiling headroom as much as the peak
+  headroom; R5 is authoritative for both. This rate is a forecast of what urgency could sustain
+  over the remaining window, and one cycle of household load is not evidence about that. The
+  split is the one the System already draws — R3's clamp and C4's ceiling clamp read
+  [raw values](system-overview.md#ubiquitous-language) so a real breach cannot persist for a
   smoothing window, while decisions that must not chase transients read smoothed ones. Delivery
   under urgency is still clamped on raw readings; only this forecast is smoothed. Without it a
   single spike can shrink the rate far enough to engage urgency and, against an `Auto` baseline of
