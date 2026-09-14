@@ -139,7 +139,8 @@ named file's scope, as `development`'s work column does for its bar. (`work-type
 describes that tree's shape. Nothing in this table resolves through it: a row names its files
 literally, and this pointer is for a reader wanting the shape, never a step in reaching a file.)
 
-**The checklist is a file; `.claude/agents/reviewer.md` is who applies it.** That agent holds
+**The checklist is a file; who applies it varies — `.claude/agents/reviewer.md` locally, CI's
+own review worker there.** That agent holds
 nothing type-specific — only the untrusted-data rule, how to resolve a checklist and a bar from
 this table, what to do when one cannot be read, and the output and anchoring contract every
 review shares. So a row names a `docs/reference/work-types/<label>/review.md` and the generic

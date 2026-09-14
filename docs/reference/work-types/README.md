@@ -46,7 +46,9 @@ one is the copy that shrinks.
 `done.md` is. For the rest, that material still sits in the reviewer agent definitions under
 `.claude/agents/`, and the pass that migrates each remaining label is the one that adds its
 file. What a generic reviewer holds instead — the output contract, the anchoring rules and how
-a checklist is resolved — is `.claude/agents/reviewer.md`.
+a checklist is resolved — sits with whoever applies the checklist: `.claude/agents/reviewer.md`
+locally, and CI's own review-workflow prompt, which has no agent to spawn and self-applies the
+file instead.
 
 ## When a label branches
 
