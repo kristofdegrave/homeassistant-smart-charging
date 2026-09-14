@@ -172,6 +172,7 @@ compute from the same issue. If extra work on the same issue needs a second, sep
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 
-A context label's own skill may override the number segment when there's a concrete reason
-to key the branch off the artifact's own identity instead of the issue's — state the
-exception and its reason in that skill, don't leave it implicit here.
+A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
+its row — may override the number segment when there's a concrete reason to key the branch off
+the artifact's own identity instead of the issue's. State the exception and its reason in that
+file, don't leave it implicit here.

@@ -37,23 +37,29 @@ places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-
 names `development` and `testing` (see **The docs-only close guard** below) — and, for the
 three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
 too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
-that label on every issue filed through the form. A seventh place sits outside the pipeline but
-carries the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label.
-Adding a label means updating those seven; renaming one additionally means updating any form
-that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case` simply
-stops matching — so that one is checked, not assumed.
+that label on every issue filed through the form. Two more places sit outside the pipeline and
+carry the same vocabulary: `CLAUDE.md`'s **Model selection** table, one row per context label,
+and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
+a label means moving a directory, not editing a line, for each label that has one (today,
+`adr`). Adding a label means updating those eight — the work-types directory only where the
+new label gets a work file, which is not a given; renaming one additionally means updating any
+form that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
+simply stops matching — so that one is checked, not assumed. That table's *no context label* row
+separately mirrors `_ai-review.yml`'s path→agent routing, so adding a tree there means
+updating the row too — until CI reads the table directly, the two are kept in sync by hand.
 
-Both workers read the table rather than carrying their own copy of the work-file and checklist mappings, so the
-row is the *checklist selection* rather than a mirror of it — but it is not the whole routing:
-`ai-pipeline.yml`'s path filter decides whether a job runs at all, and `_ai-review.yml`'s diff
-enumeration decides which files a checklist can see. Adding a tree still means editing all
-three, and `docs/design/**` is the standing proof — it is in the row and in neither of the
-other two.
+Both workers read the table rather than carrying their own copy of the work-file and checklist
+mappings, so the row is the *checklist selection* rather than a mirror of it — but it is not
+the whole routing: `ai-pipeline.yml`'s path filter decides whether a job runs at all, and
+`_ai-review.yml`'s diff enumeration decides which files a checklist can see. Adding a tree
+still means editing all three, and `docs/design/**` is the standing proof — it is in the row
+and in neither of the other two.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other six. They are not context labels
+places — `.github/setup-labels.sh` — and in none of the other seven, including
+`docs/reference/work-types/<label>/`, which a kind label never gets. They are not context labels
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
 renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
 `context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,
@@ -167,13 +173,16 @@ in branch protection's required checks on `main`.
 - **Fix** (`_ai-fix.yml`, ≈ step 5): a `remarks` verdict on a **docs-only** diff adds
   `needs-work`, which runs `address-review-remarks`, commits as `github-actions[bot]`
   (`docs: address AI review remarks (#<pr>)`), and re-adds `needs-review`. It can only commit
-  under `docs/` (its commit step is `git add docs`-only), so a diff touching **anything**
-  outside `docs/**` (`.github/`, `.claude/`, `custom_components/`, `tests/`) never reaches it
-  automatically: `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to
-  `needs-approval` with a comment saying why, rather than spending fix cycles that could not
+  under `docs/`, and not `docs/reference/work-types/**` — the tree it reads as its own
+  instructions, excluded from its commit step so one fix run cannot rewrite what the next one
+  obeys. So a diff touching **anything** outside that set (`.github/`, `.claude/`,
+  `custom_components/`, `tests/`, or a work file) never reaches it automatically:
+  `_ai-review.yml`'s `non_docs_changed` guard routes that PR straight to `needs-approval` with a comment saying why, rather than spending fix cycles that could not
   commit anything. A human applies those changes by hand — or re-adds `needs-work` manually
   to get one fix pass over the `docs/` part of a mixed diff, which is the only way the fix
-  job ever sees a non-docs PR.
+  job ever sees a non-docs PR. That bound no longer means "documents only", though: the
+  work-type tree puts files that *instruct* a drafter under `docs/`, which is why the per-type
+  allow-list is pulled ahead of the rest of the CI change.
 - **Loop cap** (docs-only diffs — the only ones that reach the fix job automatically): **2**
   automatic fix cycles, because CI runs fully unsupervised with no human watching in real time.
   A 3rd `remarks` verdict goes straight to `needs-approval` with a comment asking a human to

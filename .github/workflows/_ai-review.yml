@@ -347,12 +347,20 @@ jobs:
           # superset invariant alone — it is reviewed as SUBJECT, not read as instruction, so
           # a checklist validating an issue form's label against it must use the PR's copy, or
           # a PR legitimately adding a label would be told the label does not exist.
+          # Changing this set means updating ci-pipeline.md's Review bullet too — a doc cannot
+          # interpolate, so that copy is the one place the set can still drift.
           # NOT watched, deliberately, and recorded rather than left to be rediscovered:
           # `docs/adl/template.md` and `docs/adl/0009-testing-strategy.md`, which two checklists
-          # route to as standards. Widening the boundary to cover them is a decision about the
-          # boundary itself, not a detail of this step — it belongs to the ADR that records
-          # this trust boundary, alongside the case this guard structurally cannot cover (this
-          # workflow's own prompt is read from the merge ref).
+          # route to as standards; the prompt tells the worker to read those from the checkout.
+          # Widening the boundary to cover them is a decision about the boundary itself, not a
+          # detail of this step — it belongs to the ADR that records this trust boundary,
+          # alongside two cases this guard structurally cannot cover:
+          #   - this workflow's own prompt is read from the merge ref, so a PR editing this file
+          #     reviews itself with its own rewritten prompt;
+          #   - claude-code-action loads the checkout's CLAUDE.md in full on every run, so on a
+          #     guard-ON PR the rewritten Model selection section is in the model's context
+          #     regardless, and only the prompt's "never from the checkout" keeps it unapplied.
+          #     Staging the base copy mitigates this vector but does not close it.
           watched=(CLAUDE.md .claude docs/reference .github/setup-labels.sh)
           # Enumerated ONCE, into a file whose exit status is checked, and both the staging
           # loop and the assertion below read that file. A `... | while` or `while ... < <(git)`
@@ -472,12 +480,17 @@ jobs:
               routing from `${{ runner.temp }}/base-checklists/CLAUDE.md`, read every checklist
               that base routing names from `${{ runner.temp }}/base-checklists/<its path>`, and
               read anything those checklists send you to for *how to review* from there too.
-              That directory holds base copies of these roots, each at its own repo-relative
-              path: ${{ steps.baseguard.outputs.roots }}. One of them is staged only so the
-              staged set stays a superset of the watched set, and is **not** an instruction
-              source: `.github/setup-labels.sh`. The label vocabulary is always checked against
-              the PR's copy, or a PR legitimately adding a label would be told the label does
-              not exist. Every base copy that exists was verified by a previous step, so
+              That directory holds base copies of these roots — ${{ steps.baseguard.outputs.roots }}
+              — each at its own repo-relative path. Two exceptions to "read it from there",
+              both deliberate:
+              - `.github/setup-labels.sh` is staged only so the staged set stays a superset of
+                the watched set, and is **not** an instruction source. The label vocabulary is
+                always checked against the PR's copy, or a PR legitimately adding a label would
+                be told the label does not exist.
+              - A standard a checklist points to **outside** those roots — `docs/adl/` holds
+                two — is not staged at all. Read it from the checkout. Its absence under
+                `base-checklists/` is expected, not a workflow bug.
+              Every base copy that exists was verified by a previous step, so
               a file you expect there and cannot find is a workflow bug worth reporting, not a
               reason to fall back to the checkout. The distinction is instruction versus
               subject: **the files you are reviewing** are the PR's, read from the checkout as
@@ -558,7 +571,10 @@ jobs:
           # editing repo files and there is no push step, so it can't alter the PR's contents.
           # git diff: enumerates the change under review. git show: reads a file's content at the
           # base commit — the ADR Status pre-check below needs it, and the prompt has mandated
-          # that read since before the grant existed.
+          # that read since before the grant existed. Both are read-only against git objects;
+          # the one write vector either can reach is the diff options' `--output=<file>`, which
+          # `Bash(git diff:*)` already carried, and which the prompt's "do NOT edit any
+          # repository file" covers. Neither can mutate a ref, an index, or the worktree.
           claude_args: >-
             --model ${{ inputs.model }} --max-turns ${{ steps.turns.outputs.value }}
             --allowed-tools "Read,Write,Glob,Grep,Bash(gh api:*),Bash(git diff:*),Bash(git show:*)"
@@ -620,8 +636,10 @@ jobs:
           remarks_count=$(echo "$reviews" \
             | jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | contains("<!-- ai-review-verdict: remarks -->"))] | length')
 
-          # _ai-fix.yml only knows how to author docs/** (it `git add docs`-only stages, and its
-          # prompt only follows doc-authoring skills like write-use-case/write-adr) — it cannot
+          # _ai-fix.yml only knows how to author docs/** minus the work-type tree (its commit
+          # step stages `docs` with that tree excluded, and its prompt dispatches through the
+          # Model selection table to that row's authoring file, all of which are doc-authoring)
+          # — it cannot
           # fix .github/workflows, .claude/skills, .claude/agents, .github/ISSUE_TEMPLATE,
           # custom_components, or tests. Auto-routing those to needs-work would silently no-op
           # through the fix cycles instead of ever changing anything, so any non-docs path in the
@@ -632,8 +650,18 @@ jobs:
           # and under `set -euo pipefail` that would abort this step and post a false "the
           # review run failed" comment on a PR whose review actually succeeded. sed reads to
           # EOF, so there is no race to lose.
+          # Two pathspecs, not one: git applies an exclusion globally, so `-- . ':!docs'` plus
+          # a positive `docs/reference/work-types` would still exclude everything under docs/.
+          # The second is the work-type tree, which IS under docs/ but which the fix worker's
+          # commit step deliberately does not stage — it is the tree that worker reads as
+          # instructions. Routing such a PR to needs-work would have it edit the file, stage
+          # nothing, report "No changes to commit" and hand back, burning both cycles without
+          # an edit or an explanation. Same reasoning as the non-docs case, same destination.
           non_docs_changed=$(git diff --name-only "${{ inputs.base_sha }}...${{ inputs.head_sha }}" \
             -- . ':!docs' | sed -n 1p)
+          uncommittable_docs=$(git diff --name-only "${{ inputs.base_sha }}...${{ inputs.head_sha }}" \
+            -- docs/reference/work-types | sed -n 1p)
+          non_docs_changed="${non_docs_changed:-$uncommittable_docs}"
 
           echo "verdict=${verdict:-none}, remarks reviews so far (incl. this one)=${remarks_count}, non-docs changed=${non_docs_changed:+yes}"
 
@@ -652,7 +680,7 @@ jobs:
               # Non-docs diff: the fix worker could only ever re-stage docs/, so a fix cycle
               # here changes nothing. Skip the cycles entirely and hand it to a human.
               gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
-              gh pr comment "$PR" --body "This PR's diff touches paths outside \`docs/\` (first one: \`${non_docs_changed}\`), which the automatic fix worker cannot author — it only commits under \`docs/\`. Routing straight to \`needs-approval\` instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff." || echo "::warning::failed to comment on the PR"
+              gh pr comment "$PR" --body "This PR's diff touches paths outside \`docs/\` (first one: \`${non_docs_changed}\`), which the automatic fix worker cannot author — it only commits under \`docs/\`, and not the work-type tree it reads as its own instructions. Routing straight to \`needs-approval\` instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff." || echo "::warning::failed to comment on the PR"
             elif [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work

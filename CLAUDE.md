@@ -97,11 +97,11 @@ runs on.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | `docs/design/system-design.md` → `.claude/skills/write-system-design/SKILL.md`; `docs/design/project-plan.md` → `.claude/skills/write-project-design/SKILL.md` | opus | `.claude/agents/system-design-reviewer.md` | opus |
+| `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored (see below) | — | `.claude/agents/workflow-reviewer.md` | opus |
@@ -113,6 +113,11 @@ a row self-contained, and a row that ever deviates has to argue for it here. Thr
 keep matching: this column, every `*-reviewer` frontmatter's `model: opus`, and CI's
 `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and never
 reads that frontmatter.
+
+**A *How the work is done* cell that names more than one file labels each role.** `work file <path>; entry point
+<path>` — the work file holds the content, the entry point is the skill a run or CI reaches it
+by name through. Where a row also splits on *which* file the change touches — `documentation`
+does — each branch is its own sentence, so `;` never has to mean two things in one cell.
 
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to. The `documentation` row in particular splits on which
@@ -334,12 +339,10 @@ Use the `write-adr` skill for the full cycle. Follows the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
-- **Step 1 (draft)**: draft against `docs/adl/template.md`, numbering sequentially and
-  listing every option seriously considered, not just the chosen one. Never renumber; a
-  decision that changes is superseded by a new ADR, never edited in place.
-- **Step 3's reviewer** is `adr-reviewer`, checking the ADR against existing ADRs (no silent
-  contradictions — supersede, don't edit, a prior decision) and against the analysis/design
-  docs it touches.
+- **Step 1 (draft)** and **step 3's review**: the `adr` row of the **Model selection** table
+  above names the work file, which carries the template, the numbering and never-renumber
+  rules, the immutability rule, and the reviewer to use. That file is their only home; don't
+  restate them here.
 - No tracking refs (PR numbers, issue status) in the ADR body — see the analysis-doc section
   above; the rule applies equally here.
 

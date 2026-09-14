@@ -39,9 +39,11 @@ adopted.
 
 **Scope of this design: the local, interactive session.** CI must follow the same design,
 but is deliberately left to a later phase (see *Phasing*) so that the local shape is settled
-first. Where a local change would alter CI behaviour as a side effect — because CI loads the
-same skill files — this design says so and sequences it into that later phase rather than
-letting it happen implicitly.
+first. That sequencing once extended to a blanket rule — a local change that would alter CI
+behaviour got deferred to the later phase — which has since been **retired** (see *Phasing*).
+The rule now is narrower: a CI change lands in the slice that needs it, argued on its own
+merits and named in that slice, never as an unremarked side effect of editing a file CI also
+loads.
 
 ---
 
@@ -57,6 +59,10 @@ letting it happen implicitly.
 4. **Target layout, reached in a later phase**: one directory per label,
    `work-types/<label>/implement.md` + `review.md`, with a single generic reviewer agent. That
    move touches the same CI files as the CI follow-up and is done together with it.
+
+   *Decisions 3 and 4 were amended in practice — see* **Deviation: per-label slices ahead of
+   CI** *under* Phasing. *The work files began moving before the CI change, which turned out to
+   be possible without touching either worker.*
 5. **The loop (step 6) stays with the human partner.** Each skill ends by naming the next one;
    nothing chains autonomously.
 
@@ -68,11 +74,11 @@ Lives in `CLAUDE.md`. One row per context label.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
 |---|---|---|---|---|
-| `adr` | `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
+| `adr` | work file `docs/reference/work-types/adr/implement.md`; entry point `.claude/skills/write-adr/SKILL.md` | opus | `.claude/agents/adr-reviewer.md` | opus |
 | `uc` | `.claude/skills/write-use-case/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `requirement` | `.claude/skills/write-requirement/SKILL.md` | opus | `.claude/agents/analysis-reviewer.md` | opus |
 | `specs` | `.claude/skills/write-impl-spec/SKILL.md` | opus | `.claude/agents/impl-spec-reviewer.md` | opus |
-| `documentation` | `docs/design/system-design.md` → `.claude/skills/write-system-design/SKILL.md`; `docs/design/project-plan.md` → `.claude/skills/write-project-design/SKILL.md` | opus | `.claude/agents/system-design-reviewer.md` | opus |
+| `documentation` | For `docs/design/system-design.md`: `.claude/skills/write-system-design/SKILL.md`. For `docs/design/project-plan.md`: `.claude/skills/write-project-design/SKILL.md`. | opus | `.claude/agents/system-design-reviewer.md` | opus |
 | `development` | `.claude/skills/develop-task/SKILL.md` | sonnet | `.claude/agents/code-reviewer.md` for `custom_components/**`; `.claude/agents/test-reviewer.md` for `tests/**` | opus |
 | `testing` | `.claude/skills/write-tests/SKILL.md` | sonnet | `.claude/agents/test-reviewer.md` | opus |
 | `workflow` | none — human-authored; CI refuses to draft it and `implement` stops on this label (reason under the table) | — | `.claude/agents/workflow-reviewer.md` | opus |
@@ -117,13 +123,17 @@ between its draft, review and fix workers.
 |---|---|---|---|
 | 1–2 | `implement` | new | `/implement #N`. Read the issue; look its context label up in the table. No context label, or `idea`: stop and point at `work-idea` / `file-task-issue`. `workflow`: stop, per the table rule. Otherwise: worktree from fresh `origin/main` per the workflow doc, board Status → `In progress`, delegate the actual work to the row's work file, Definition of Done self-check, push, PR against `main` with `Closes #N`, board Status → `In review`. End by naming `review` as the next step. |
 | 3–4 | `review` | new | `/review #N` on a PR. Look the linked issue's label up; do the behind-`origin/main` check; for each agent the row names, spawn it fresh (never inline) on the changed files under its tree; post findings via `submit-pr-review` in local mode. Owns the **local round cap** (below). On a clean pass, hand to `finalize-pr-review`; on remarks, name `fix` as the next step. |
-| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, the human-comment acknowledgement and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2, 4, 5 and 6 (the last for the local commit-and-push half) remain their single source and `fix` cites them. What `fix` adds is the dispatch — "re-author with the work file from the table row" instead of `address-review-remarks`' hard-coded use-case/ADR/analysis cases — and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
+| 5 | `fix` | new | `/fix #N` on a PR. Type-agnostic step 5 for the local session. Locating findings, the severity-based fix policy, the human-comment acknowledgement and the per-finding summary are **not restated**: `address-review-remarks` sections 1, 2, 4, 5 and 6 (the last for the local commit-and-push half) remain their single source and `fix` cites them. The dispatch — "re-author with the work file from the table row" — now lives in `address-review-remarks` section 3 itself, so both entry points share one copy; what `fix` adds is the *Work model* column (CI picks its own) and the per-finding call to `resolve-review-thread`. Ends by naming `review` as the next step. |
 | 5 (mechanic) | `resolve-review-thread` | new, small | **As shipped this splits into two passes, deliberately differing from the row below: reply per finding, then resolve once for the run after the fixes are pushed — resolving as each finding is addressed would close threads over work a failed push never landed.** Reply in its thread with what was done or why not, then resolve the thread **only if actually fixed**; disputed or partial threads stay open. Owns the GraphQL resolve mutation and the "outdated is not resolved" rule, moved out of `finalize-pr-review` (which CI never invokes, so the move changes nothing in CI). For the reply itself it **cites** `address-review-remarks` section 4 — the REST call and the `ai-fix-ack` marker stay where they are, untouched. The marker's rule is applied exactly as both consumers define it: on every reply to a comment whose author login does not end in `[bot]`. A locally posted review is authored by the maintainer's own identity, so **replies to locally posted findings carry `ai-fix-ack` too** — otherwise a later CI `needs-review` would count every local finding as unaddressed human feedback and burn both fix cycles. Replies to CI-bot findings carry no marker; those threads are tracked by resolution. |
 | 7 | `finalize-pr-review` | trimmed | Keeps "confirm nothing Critical/Major remains", `needs-approval`, and the stranded-stack check; points to `resolve-review-thread` for the mechanic it used to carry. Its frontmatter `description`, which today advertises "resolves the inline threads that were actually fixed", is rewritten so it stops firing on the step `resolve-review-thread` now owns. |
 
-`address-review-remarks` is **not changed in this phase**. It stays CI's step-5 entry and the
-local entry for analysis docs and ADRs, exactly as today. See *Phasing* for why, and for how it
-and `fix` converge.
+`address-review-remarks` **is changed in this phase.** The original plan froze it, and every
+other skill CI loads by name, so phase 1 could be argued safe on "nothing CI depends on
+changes". That constraint has been **retired by decision**: it existed to let the layout be
+shaped without having to reason about CI at the same time, and the layout is now shaped. Its
+section 3 becomes the type-agnostic dispatch — the linked issue's context label, that row's
+work file, and the branch for a row naming none — and `fix` cites it rather than carrying a
+second copy. CI changes now land with the slice that needs them, argued on their own merits.
 
 Step 0 (file the issue) stays with `file-task-issue`. Step 6 (the loop) and steps 8–9 (manual
 comments, merge, worktree cleanup) stay with the human partner and the workflow doc.
@@ -140,8 +150,9 @@ omission is easy to fill in wrongly:
   reaches a worker at all under a restrictive `--allowed-tools` is not verifiable from this
   repo — which is why this design takes the conservative branch regardless.
   A type-agnostic `fix` that CI could select by description matching would widen CI's blast
-  radius with no CI file touched — the same argument that keeps `address-review-remarks`
-  untouched in this phase. So `implement`, `review` and `fix` each say in their description
+  radius with no CI file touched — a widening no CI file records, which is the part that makes
+  it unreviewable rather than merely early.
+  So `implement`, `review` and `fix` each say in their description
   that they are for the interactive session only and name CI's entry for that step
   (`_ai-draft.yml`'s prompt, `_ai-review.yml`'s prompt, `address-review-remarks`
   respectively). `implement` in particular must never run in CI: the Claude draft worker
@@ -214,7 +225,7 @@ per-label tree with one generic reviewer the natural end state:
 
 ```text
 docs/reference/work-types/
-  adr/implement.md          ← today's write-adr SKILL.md body
+  adr/implement.md          ← the write-adr body (moved; the skill stays as the entry point)
   adr/review.md             ← today's adr-reviewer checklist
   uc/implement.md, uc/review.md
   requirement/implement.md, requirement/review.md   (review.md a pointer to uc/review.md, or the reverse)
@@ -236,6 +247,35 @@ derive from the label. This layout mirrors CI's self-applied "checklist in file 
 and it trims the description index every run carries before it reads anything: fifteen
 per-type files under `.claude/` become three skills and one agent there. What that is and is
 not worth is set out below.
+
+### Why the move is worth doing
+
+The reason recorded first was the context saving below. That is real but small, and #1064
+established the figure was overstated — fifteen descriptions collapsing to four, not fifteen
+files ceasing to load. The stronger reason is structural, and it is about *where a fact is
+allowed to live*.
+
+`ai-authoring.md`'s routing rules exist because **artifacts travel**: a skill or agent moves
+between repositories while `CLAUDE.md` is rewritten per repository, so an artifact that names
+this project's paths lands in the next repository lying. A `work-types/<label>/implement.md`
+file does **not** travel. It is project documentation, in this project's docs tree, about this
+project's conventions — so it may name project paths freely, because there is no other
+repository for it to be wrong in.
+
+So the move relocates every project-specific fact from a tree where naming it is constrained
+to one where naming it is simply correct. What is left under `.claude/` is generic: a runner
+that resolves a label to a work file, and a reviewer that resolves one to a checklist. The
+constraint stops being something each artifact has to be checked against and becomes a
+property of where the file sits.
+
+Two things this reasoning does **not** claim, because both are tempting and both are wrong:
+
+- It does not convert a pile of violations. `ai-authoring.md` already records that the rule is
+  "near-vacuous" for the `write-*` family — the artifact type a skill produces, the tree it
+  writes into and the template it drafts against are its subject matter and stay named. Those
+  paths are conformant today. The move changes where they live, not whether they were allowed.
+- It does not make the per-type content shorter. The same instructions are the same length in
+  the new tree; only their address changes.
 
 ### What the saving actually is
 
@@ -276,6 +316,54 @@ name; moving them without touching `_ai-draft.yml` and `_ai-review.yml` breaks b
 and keeping the old files alongside as pointers would be the duplication this design exists to
 remove. The table's file columns are written so the migration only re-points them.
 
+### Deviation: per-label slices ahead of CI
+
+That blocker turned out to be avoidable, and the work files began moving in phase 1, one label
+at a time, with `.github/` untouched. Recorded here because it is the most-replicated decision
+in the strand and the paragraph above says the opposite.
+
+What resolves it is that **the skill keeps its name and directory and becomes the entry
+point**. CI follows `write-adr` by name exactly as before; the skill routes to the `adr` row of
+the table; the row names the work file. Nothing CI references by path or by skill name is
+renamed, so no worker needs re-pointing. One worker edit is still required, and it is the
+containment half of the slice: **narrow that label's `add_paths` in `_ai-draft.yml` to the tree
+its draft actually writes** — `docs/adl/**` for `adr`. Until the move, `add_paths` excluded the
+instructing file mechanically because it lived in `.claude/`; afterwards a `docs/**`-wide
+allow-list would let a drafter acting on an untrusted issue body commit the file that instructs
+every future draft of that type. A slice that skips this step re-opens that hole.
+
+The "old files alongside as pointers would be the duplication this design exists to remove"
+objection does not apply to that shape either: the shim holds no per-type content to duplicate.
+It states what the artifact is, routes to the row, and stops — the duplication the objection
+guards against is the same *instructions* living in two files, which is exactly what a content
+move prevents.
+
+Two consequences worth stating, since the remaining labels inherit them:
+
+- **A slice is not risk-free, and is not documentation-only.** The slice PR itself touches
+  `.claude/` and `CLAUDE.md`. And once a work file exists, a later PR editing *only* work files
+  **is** docs-only — which routes it to `needs-work` and puts it in reach of the fix worker's
+  unrestricted `Write,Edit` and its `git add docs` staging, so that worker can rewrite the file
+  instructing the drafter on the strength of a review comment. The manual merge gate still
+  holds, so this is not an approval bypass; it is a self-modifying-instructions path that did
+  not exist while the content sat in `.claude/`, where the review worker deliberately sends
+  such a PR to a human instead. Eight work files inside the auto-fix tree is a materially
+  different exposure from one, so the `_ai-fix.yml` per-type allow-list below is no longer only
+  a precondition for a type-agnostic fix skill — it is what bounds this, and belongs before the
+  bulk of the slices rather than after.
+- A slice needs no *file-level* coordination with the CI change beyond two worker edits it
+  makes itself, so the two never conflict. The first is per-slice: narrowing that label's
+  `add_paths` (above). The second was paid once, by the first slice — `_ai-fix.yml`'s prompt
+  now dispatches through the table instead of naming artifact types, so the remaining slices
+  need no edit there at all. What the bullet above adds is a *sequencing* constraint on
+  one part
+  of that change — the `_ai-fix.yml` per-type allow-list is what bounds the exposure the work
+  files create, so it is pulled out of phase 2's "starts once phase 1 has stabilised" and
+  belongs before the bulk of the slices. The rest of the CI change keeps its phase-2 slot.
+- The shims are not permanent. Once the workers resolve their files from the table rather than
+  by skill name, the entry points can go, and the table's *How the work is done* column drops
+  back to one path per row.
+
 ---
 
 ## Phasing
@@ -299,7 +387,8 @@ remove. The table's file columns are written so the migration only re-points the
   GraphQL mechanic") and `ci-pipeline.md`'s interactive-flow summary ("then
   `finalize-pr-review` resolves what got fixed"). Both are wrong the day the move lands
   otherwise.
-- `address-review-remarks` untouched, including its section 4.
+- `address-review-remarks` section 4 untouched — the reply call and the `ai-fix-ack` marker
+  stay where they are. Section 3 is the part that moves; see above.
 
 **How much the pipeline actually runs.** Measured 2026-09-11 by enumerating every one of the
 873 `ai-pipeline.yml` runs and reading the jobs of all 22 that were not skipped: `draft` 11
@@ -316,10 +405,19 @@ representative of any future window is the part this cannot tell you. It is a mo
 per-run cost for phase 2 to act on, and the number to re-measure when phase 2 is scoped rather
 than a reason to defer it.
 
+**Pulled ahead of phase 2 — `_ai-fix.yml`'s per-type path allow-list.** It was a phase-2
+bullet while it was only a precondition for a type-agnostic fix skill. The work-type slices
+change that: each one puts a file that instructs a drafter inside the tree the fix worker
+stages, so the allow-list is now the bound on that exposure and belongs **before the bulk of
+the slices**, not after phase 1 stabilises. Everything else below keeps its phase-2 slot.
+
 **Phase 2 — CI follows, and the layout moves (one coordinated strand):**
 
-- `_ai-fix.yml` gains a real per-type path allow-list (staging scoped by the row's trees, not
-  the current post-hoc `git add docs`). Only then can the CI step-5 skill be type-agnostic:
+- `_ai-fix.yml` gains a real per-type path allow-list
+  **(pulled ahead — see above)** (staging scoped by the row's trees, not
+  the current post-hoc `git add docs`). Its section 3 is already type-agnostic; what the
+  allow-list still gates is folding `fix` itself into CI, or letting CI select a skill by
+  description match, because either would widen the blast radius with no CI file recording it:
   today the fix worker's `Write,Edit` grant is unrestricted and its blast radius is bounded
   only by `address-review-remarks`' docs-only scope plus that post-hoc staging — neither of
   which is a per-type allow-list. Widening that skill in phase 1 would
@@ -344,14 +442,18 @@ than a reason to defer it.
 - The per-label tree and generic reviewer agent from *Target layout*, with
   `docs/reference/ci-pipeline.md`'s sync list re-pointed at the new paths.
 
-Phase 2 does not start until the phase-1 skills have been used for a while and stabilised.
+Phase 2 — apart from the `_ai-fix.yml` allow-list pulled ahead above — does not start until
+the phase-1 skills have been used for a while and stabilised.
 
 ---
 
 ## Non-goals
 
-- No CI behaviour change in phase 1 — including no change to any skill file CI loads by name
-  in a way that alters what CI does (`address-review-remarks`, `submit-pr-review`'s CI mode).
+- **No longer a non-goal:** phase 1 originally changed no CI behaviour and no skill CI loads
+  by name. Retired by decision (see above). What replaces it is narrower and still binding: a
+  CI change lands **in the slice that needs it**, argued on its own merits, never as a
+  side effect — today that is the `_ai-fix.yml` allow-list pulled ahead above, each slice
+  narrowing its own label's `add_paths`, and `address-review-remarks` section 3.
 - No autonomous chaining of skills; the stop-and-report rule in the workflow doc is unchanged.
 - No second state machine. Readiness and progress remain the project board's Status field plus
   `needs-approval`.
