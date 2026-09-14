@@ -43,9 +43,11 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`, `specs` and `testing`). Adding a label means updating those eight — the work-types
-directory only where the new label gets a work file, which is not a given; renaming one
-additionally means updating any form that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
+`adr`, `requirement`, `specs`, `testing` and `uc`), and then fixing any cross-directory route
+into it, of which there is one: `requirement/done.md` routes to the shared completion bar in
+`uc/`. Adding a label means updating those eight — the work-types directory only where the new
+label gets a work file, which is not a given; renaming one additionally means updating any form
+that stamps it. A rename that misses `close-guard.yml` fails open silently — its `case`
 simply stops matching — so that one is checked, not assumed.
 
 All three workers read the table rather than carrying their own copy of the work-file and
@@ -86,8 +88,8 @@ documents that name the label in passing.
 which closes a `development`/`testing` issue: a documentation-only diff cannot implement code,
 so closing a code task with one marks the work done while it is still outstanding. It is the
 one **hard** gate on the documentation-to-code link; the two prompt-level checks that back it
-up sit in `write-requirement`'s propagate step and `analysis-reviewer`'s Requirement-coverage
-checklist.
+up sit in the `requirement` work type's propagate step and the Code-backing item of the
+completion bar its row names.
 
 It is deliberately not part of the AI pipeline this document otherwise describes. A checklist
 item in `_ai-review.yml` would be a model's judgement on a PR that reached `needs-review` and
@@ -111,13 +113,11 @@ in branch protection's required checks on `main`.
   context label alone never triggers anything; only an *action* label (`needs-draft` on an
   issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` and `documentation`
   are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because a
-  drafted label is contained by an allow-list of the trees its drafts actually write, narrowed
-  to a single tree wherever that label's work type has been migrated, and that list never
-  reaches the files instructing future drafts: the work-type tree is excluded explicitly where
-  the list is doc-wide and out of range where it has been narrowed. A `workflow` change **is**
-  those instructing files — `.github/`, `.claude/`, `CLAUDE.md` — so no allow-list can
-  contain one; `documentation` simply isn't wired in yet). A human authors both drafts by
-  hand. The review step is still automated
+  drafted label is contained by an allow-list of the trees its drafts actually write — one tree
+  for each doc label — and that list never reaches the files instructing future drafts. A
+  `workflow` change **is** those instructing files — `.github/`, `.claude/`, `CLAUDE.md` — so
+  no allow-list can contain one; `documentation` simply isn't wired in yet). A human authors
+  both drafts by hand. The review step is still automated
   for `workflow`, since
   routing reaches it through the changed paths and not only through the issue's context label —
   but not for `documentation`: `docs/design/**` is in neither `ai-pipeline.yml`'s path filter

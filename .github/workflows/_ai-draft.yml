@@ -121,32 +121,30 @@ jobs:
           # stays, unavoidably: the action needs it before the worker starts, so the worker
           # cannot resolve it from the table. It duplicates the table's Work model column and
           # must move with it.
-          # add_paths is where that containment is spelled out, and the work-type tree is
-          # excluded from every doc label's: a work file instructs every future draft of its
-          # type, so a drafter acting on an untrusted issue body must never be able to write
-          # one — and what matters is not whose work file it is, so no drafter of any type
-          # gets the tree. While that content sat in .claude/, the allow-list excluded it
-          # mechanically; under docs/ it has to be excluded explicitly. That exclusion is a
-          # floor, not the containment itself: docs/reference/ holds other instructions to
-          # future runs (the authoring rules a reviewer self-applies, this pipeline's own
-          # reference, the contribution workflow), so a docs/**-wide drafter can still write
-          # the files that govern it. Narrowing each label to the single tree its drafts
-          # actually write is what closes that — `adr` at docs/adl/**, because an ADR draft
-          # writes only the record and the ADL index, and `specs` at docs/plans/**, the only
-          # tree a per-slice design and its TDD plan land in. Neither then carries the
-          # work-types exclusion, because neither tree contains it. The remaining doc
-          # labels should each be narrowed the same way by the slice that moves their work
-          # file.
+          # add_paths is where that containment is spelled out, and narrowing each label to
+          # the tree its drafts actually write — rather than subtracting the work-type tree
+          # from docs/** — is what does the work. The files a drafter must never be able to
+          # write are not only its own work file: every instruction to a future run under
+          # docs/ is one, including any label's work file or completion bar and the reference
+          # documents the pipeline and its reviewers read as criteria (the authoring rules,
+          # this pipeline's own reference, the contribution workflow). Subtracting the
+          # work-type tree left all of those reachable, which is why it was a floor and never
+          # the containment. Every doc label now has its own tree — `adr` the record and the
+          # ADL index (docs/adl/**), `uc` and `requirement` the analysis layer
+          # (docs/analysis/**), `specs` the per-slice design and TDD plan (docs/plans/**) —
+          # so no arm carries the work-types exclusion any more: none of those trees contains
+          # it. The `:!` rendering below is what remains of that mechanism; nothing uses it
+          # today.
           case "$present" in
-            uc)          artifact="use-case";                                          model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';   commit_prefix=docs;;
-            requirement) artifact="requirement or constraint";                         model=opus;   add_paths=$'docs/**\n:!docs/reference/work-types/**';   commit_prefix=docs;;
+            uc)          artifact="use-case";                                          model=opus;   add_paths="docs/analysis/**";                          commit_prefix=docs;;
+            requirement) artifact="requirement or constraint";                         model=opus;   add_paths="docs/analysis/**";                          commit_prefix=docs;;
             adr)         artifact="Architecture Decision Record (ADR)";                 model=opus;   add_paths="docs/adl/**";                              commit_prefix=docs;;
             specs)       artifact="implementation spec (design + TDD plan)";            model=opus;   add_paths="docs/plans/**";                            commit_prefix=docs;;
             development) artifact="implementation task (code + tests)";                model=sonnet; add_paths=$'custom_components/**\ntests/**';            commit_prefix=feat;;
             testing)     artifact="test suite";                                        model=sonnet; add_paths="tests/**";                                   commit_prefix=test;;
             workflow)
               emit proceed false
-              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author. Every drafted label is confined to an allow-list of the trees its drafts actually write, narrowed to a single tree wherever that label's work type has been migrated, and that list never reaches the files instructing future drafts — the work-type tree is excluded explicitly where the list is doc-wide, and out of range where it has been narrowed. A \`workflow\` change IS those instructing files (.github/, .claude/, CLAUDE.md), so no allow-list can contain one. Draft it manually; the review step is still automated."
+              emit reason "Drafting for \`workflow\` is intentionally not automated — CI/skill/agent changes need a human author. Every drafted label is confined to an allow-list of the trees its drafts actually write — one tree for each doc label — and that list never reaches the files instructing future drafts. A \`workflow\` change IS those instructing files (.github/, .claude/, CLAUDE.md), so no allow-list can contain one. Draft it manually; the review step is still automated."
               exit 0
               ;;
             *)

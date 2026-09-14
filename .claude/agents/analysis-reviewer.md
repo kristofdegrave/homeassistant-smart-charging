@@ -18,58 +18,53 @@ Always read, in `docs/analysis/`:
 - `control-cycle.md`, `resolution-rules.md`, `entity-catalog.md` — the mechanism docs the file may reference.
 - Any sibling use-cases in `use-cases/` the file relates to.
 
-If the caller names a plan/design doc (e.g. under `docs/plans/`), read it for the template and coverage table.
+Then the completion bar, which the checklist below sends you to — read it before you start
+scoring, not while you write up.
+
+If the caller names a plan/design doc, read it for its coverage table. The template a document
+is judged against is not taken from there — the bar names it, by the same route the author
+drafted against.
 
 ## Review checklist
 
-**(1) Cross-document consistency**
-- Every domain term used is defined in the `system-overview.md` glossary. **Flag any term not in the glossary.**
-- Every requirement ID referenced exists in `requirements.md` and is used correctly.
-- Relationships to other docs (mechanism docs, other use-cases) are accurate and not overclaimed.
-- Entity ids match `entity-catalog.md` exactly; no invented ids.
+**The per-type completion bar is the bulk of your checklist, and it is not restated here.**
+`CLAUDE.md`'s **Model selection** table names it in the `uc` and `requirement` rows' *How it is
+reviewed* column — one file serving both rows, since one reviewer covers this whole tree. Read
+it and apply every item in it as a review criterion, at the severity it states, taking the
+per-document-kind section that matches each changed document. It is the same bar the author
+self-checked against before requesting review — that is the point of it being one file: you are
+not applying a second, differently-worded standard.
 
-**(2) Requirement coverage**
-- The document satisfies every requirement it claims, and each claim is actually supported by its content.
-- Nothing it describes contradicts another analysis document.
-- No requirement is mis-homed (a use-case satisfies reqs; it should not restate mechanism/resolution logic).
-- **Code backing — for changed behavioural assertions only.** In scope are the items this change
-  *adds or alters*, and nothing else: read them off the diff, or, when you were given no diff,
-  off the list the caller names. Two kinds qualify — an **acceptance criterion or constraint
-  row** of `requirements.md`, and a **use-case's own behavioural assertions**: a Given/When/Then
-  step in its main, alternate or exception flows, a trigger, a state-model state or transition,
-  a domain event it says the System produces, and a pre- or postcondition asserting behaviour no
-  other in-scope item covers. A use-case *restating a requirement* is not
-  one of them — a requirement's home is `requirements.md`, and restating one elsewhere does not
-  change it — and neither is any change asserting no behaviour: wording, formatting, a glossary
-  entry, a renumbering, a diagram redrawn to match steps already in the diff, a
-  requirements-satisfied line. A use-case's *Scope / level* and *Relationships* lines are in
-  scope wherever they do assert behaviour — the mechanism that realizes the use-case, the event
-  it subscribes to, the logic it never touches — and out of scope where they only navigate.
-  Where nothing is in scope, say so in one line and move on. For each item that is, run **one**
-  targeted `Grep` over `custom_components/` for the behaviour it
-  asserts (the entity id, the adapter role, the default, the bound, the event name, the
-  precedence rule it names) and open at most one file, the best match. **Stop after three
-  items** — say the set was sampled and name the three you took; six tool calls is the most this
-  check may cost a review, because a `docs/analysis/` review runs on the lighter turn ceiling
-  and a truncated review is re-run from cold. Widening the unit to use-cases did not widen that
-  budget: the same three-item, six-call cap now covers both kinds. Where no code implements an
-  item, or the code implements something measurably different (a different default, bound, unit
-  or ordering), a filed `specs` issue discharges it — the condition is the one `CLAUDE.md`'s
-  **Contribution workflow** section routes to. **Severity depends on whether you can check
-  that**: given the PR body and no such reference, report **Major**; not given the PR body,
-  report **Minor** and say the gap is Major unless a `specs` issue has been filed for it. Never
-  report Major on evidence you were not given — the code for a new requirement or a new use-case
-  legitimately does not exist yet, and this check must not turn every analysis PR into a review
-  cycle. This is one lookup per changed item, capped at three; it is never a sweep of the
-  codebase, and the read-first list above does not grow.
+Three things are yours alone, because they are about the **review** or the **change** rather
+than about the finished document, and an author checking their own draft cannot make them.
+Everything else comes from the bar, not from here — including the scope each bar item states
+for itself, except where a bar item hands part of that scope to this checklist and says so.
+The Code-backing item does exactly that, and (B) is the receiving end:
 
-**(3) Document quality**
-- **"What, not how"** — no code/HA implementation detail (Python modules, timer helpers, persistence). Entity ids that are part of the ubiquitous language are fine.
-- No duplication of `control-cycle.md` or `resolution-rules.md` content — the doc should *reference* shared mechanism/lookups, not restate them.
-- **For a use-case:** testable pre/postconditions; Given/When/Then scenarios for main, alternate, and exception flows; alternate flows numbered to the step they branch from; the `entity-catalog.md` *Read by* / *Written by* columns reflect every entity it touches.
-- **For a mode use-case (UC01–UC04):** a `stateDiagram-v2` whose states and transitions match the Given/When/Then scenarios and the State model subsection; the set-point rule is stated.
-- **For a flow/mechanism doc:** follows the standard (Purpose → Trigger → Domain events → Mermaid → Steps → Edge cases → Requirements satisfied); domain events are past-tense PascalCase and correspond to steps; Mermaid is valid syntax.
-- Markdown table style is consistent; internal links/anchors resolve.
+**(A) Your budget for the bar's Code-backing item.** The bar says what is in scope; this says
+how much of it you may check. For each in-scope item, run **one** targeted `Grep` over
+`custom_components/` for the behaviour it asserts — the entity id, the adapter role, the
+default, the bound, the event name, the precedence rule it names — and open at most one file,
+the best match. **Stop after three items**: say the set was sampled and name the three you
+took. Six tool calls is the most this check may cost a review, because a review of this tree
+runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first
+list above does not grow for this check.
+
+**(B) What you can assert about that item depends on the evidence you were given.** This is the
+half of the bar's *Scope of that Major* the bar hands here, and it is stated once — here.
+Given the PR body
+and no reference to a filed `specs` issue for the gap, that Major is assertable — report it.
+*Not* given the PR body, you cannot tell a missing filing from an unseen one: report **Minor**
+and say the gap is Major unless such an issue has been filed for it. Never report Major on
+evidence you were not given —
+the code for a new requirement or a new use-case legitimately does not exist yet, and this
+check must not turn every analysis PR into a review cycle.
+
+**(C) Whether the change is complete as a change.** A bar item can be satisfied by a file you
+were not shown. Check that everything this document needs is actually in *this* diff — most
+often the `entity-catalog.md` *Read by* / *Written by* update, and the glossary entry for a
+term the document introduces. Report a miss against the bar item, at the severity it states;
+the finding is that the PR is incomplete, not that a separate PR would be wrong.
 
 ## Output
 
