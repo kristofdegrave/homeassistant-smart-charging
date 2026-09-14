@@ -329,7 +329,8 @@ it is wired to its callers).
   query), and that E1's desired current — all as data.
 - **Testable on its own:** plain pytest — deadline resolution across sources; R5's slack test
   against the escalated rate ÷ 1.25; the handback test and the slack test's precedence over it;
-  the urgency latch; R5 unreachable determination against the same rate with no margin; and,
+  the pursued occurrence surviving a cycle whose slack test would not re-engage; R5 unreachable
+  determination against the same rate with no margin; and,
   once the hold is built, a hold in effect skipping both tests while still pinning urgency.
 - **Integration checkpoint:** ⎔ M1 (urgency + required current); the `DeadlineUnreachableNotified`
   publish is M1's, subscribed by M3 (ADR-0011). M3 would also consume this Engine for UC10's

@@ -34,7 +34,8 @@ and the [pursued occurrence](system-overview.md#ubiquitous-language) both thread
 the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
 charger currents that R3's deferral cases key on, and the
-[missed-deadline hold](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`) — each
+[pursued occurrence](system-overview.md#ubiquitous-language) (R5, `resolution-rules.md`), from which
+a missed-deadline hold is read rather than separately tracked — each
 homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
@@ -306,4 +307,4 @@ the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, st
 change-detected to emit `ActiveSocLimitChanged`. **R5** (departure deadline guarantee) is homed in
 `resolution-rules.md` and [UC05](use-cases/UC05-guarantee-ready-by-departure.md); this document
 supplies the peak clamp (step 5) that realizes its `Manual` lever, unchanged from normal operation,
-and fixes where in the cycle the missed-deadline hold is updated (step 4) — not what it means.
+and fixes where in the cycle the pursued occurrence is updated (step 4) — not what it means.

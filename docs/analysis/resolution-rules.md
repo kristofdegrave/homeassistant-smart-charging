@@ -258,10 +258,13 @@ there is a pursued occurrence. It is **released** when any of these holds:
   by state of charge reaching the active SOC limit.
 - state of charge is at or above the active SOC limit (the required current is then zero, so the
   handback holds trivially for any baseline);
-- the car disconnects; the departure deadline resolves to "no deadline"; or the deadline
+- the car disconnects; the departure deadline resolves to "no deadline" (a later occurrence resolving that way never ends a missed-deadline hold, which is anchored to the occurrence already pursued — see the hold below); or the deadline
   capability becomes absent (R18);
-- the occurrence **following** the pursued one has itself elapsed — the backstop, so a
+- the occurrence **following** the pursued one elapses, or 24 hours pass since the pursued occurrence, whichever comes first — the backstop, so a
   [missed-deadline hold](system-overview.md#ubiquitous-language) never outlives one deadline cycle.
+  The 24-hour bound is not belt-and-braces: R14 lets any day resolve to "no deadline", so a
+  following occurrence does not always exist, and waiting only for one would leave the guarantee
+  conditional on there being a deadline tomorrow.
   This is the only release that a hold does not share with ordinary urgency, and it exists because
   neither test runs while the pursued occurrence lies in the past: without it, an `Off` baseline
   that can never hand back would keep the occurrence pursued indefinitely. Note there is no
@@ -273,7 +276,7 @@ genuinely can: a [desired charger current](system-overview.md#ubiquitous-languag
 deliver — a baseline `Captar` desiring 32 A satisfies the handback against a required current of
 20 A on a cycle whose escalated rate is only 15 A, while the slack test plainly holds. Letting the
 handback win there would clear urgency, re-engage it next cycle, and alternate
-`DeadlineUrgencyReverted`/`DeadlineUrgencyEngaged` indefinitely — the churn the latch exists to
+`DeadlineUrgencyReverted`/`DeadlineUrgencyEngaged` indefinitely — the churn holding the pursued occurrence exists to
 prevent. One consequence is worth naming: since a required current above the escalated rate implies
 the slack test holds, the handback can never clear urgency straight out of
 [UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s `Unreachable` state. The deadline must
@@ -318,25 +321,22 @@ Everything the hold has to guarantee follows from that, rather than from rules o
   set by the slack test firing on the occurrence it was judging.
 
 It **clears** when the car's state of charge is at or above the active SOC limit, when the car
-disconnects, when the deadline capability becomes absent (R18), or — as a backstop — when the
-*following* occurrence itself elapses, so a hold never outlives one deadline cycle. Nothing else the
+disconnects, when the deadline capability becomes absent (R18), or — as the backstop stated in the
+release list above — when the *following* occurrence elapses or 24 hours pass since the pursued
+occurrence, whichever comes first, so a hold never outlives one deadline cycle. Nothing else the
 departure-deadline rule resolves ends it: the pursued occurrence *is* the occurrence already missed,
 so it survives a later occurrence resolving to "no deadline" or to a different time. Releasing the
 pursued occurrence ends the hold and urgency together — they were never two things — and from the
 next cycle the required current above governs normally again.
 
-- **Evaluation order, so the hold and the cap above are not circular.** The hold is updated once per
-  cycle, *after* the active SOC limit has been resolved for that cycle (so condition 1 reads the
-  resolved value) and *before* the mode and peak decisions that consume urgency
+- **Evaluation order, so the hold and the cap above are not circular.** The pursued occurrence is updated once per
+  cycle, *after* the active SOC limit has been resolved for that cycle (so the release conditions
+  read the resolved value) and *before* the mode and peak decisions that consume urgency
   (`control-cycle.md`, step 4). The active-SOC-limit table's *Solar-reserve cap* row therefore reads the hold as it
   stood entering the cycle: on the very cycle the pursued occurrence first lies in the past the cap
   may still have been in force,
   and it lifts from the next cycle onward — the same one-cycle settling any other precondition
   lapsing has ([UC07](use-cases/UC07-reserve-capacity-for-tomorrow.md)).
-- **A car that connects only after a deadline has already elapsed is never held.** Condition 2 fails
-  — urgency never engaged for that occurrence — so a session begun at, say, 08:00 with a 06:00
-  deadline behind it resolves forward to tomorrow's occurrence by the ordinary rule (R14) and starts
-  from `Normal`, exactly as before.
 - **The hold excludes the solar-reserve cap** (the active-SOC-limit table's *Solar-reserve cap* row above, R9): the
   cap would otherwise lower the active SOC limit out from under a session the driver is waiting on.
   The mirror-image consequence is deliberate and worth naming: if the cap *was* in force when the
