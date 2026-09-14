@@ -349,9 +349,11 @@ it is wired to its callers).
   `max(external, internal)` per cycle rather than folding one into the other's state.
 - **Builds:** effective peak limit; the **peak headroom under a given limit as a value** — the
   in-force limit for the `peak_headroom` readout, the raised limit for R5's escalated maximum
-  permitted rate — which performs no clamp and advances no breach timer; and the R3 peak clamp
-  that fits a request to that headroom, skippable **only** by `Power`'s R17 opt-out
-  (C3); and the Tracker accumulating monthly peak demand from net import, reset monthly, surfaced as
+  permitted rate — which performs no clamp and advances no breach timer. The two are fitted to
+  different readings: the readout to a raw one, R5's to the smoothed baseline, since that one
+  forecasts what urgency could sustain rather than bounding this instant (R5). Also the R3 peak
+  clamp that fits a request to that headroom, skipped where the CapTar capability is absent
+  (R18) or `Power`'s R17 opt-out is set (C3) — two conditions, not one; and the Tracker accumulating monthly peak demand from net import, reset monthly, surfaced as
   `sensor.smart_charging_monthly_peak_kw`. Test anchors include headroom under a *raised* limit
   leaving the breach timer untouched, which is what separates the headroom operation from the
   clamp. The clamp solves from the baseline actually flowing
@@ -360,11 +362,14 @@ it is wired to its callers).
 - **Depends on:** ADR-0010; the Tracker's running state is threaded by M1 (never HA-held in the
   Engine). The Tracker's *write* to `sensor.smart_charging_monthly_peak_kw` is M1's via the Store, not the Engine's.
 - **Testable on its own:** plain pytest — effective-limit resolution, baseline-solved clamp math with
-  worked examples, urgency-driven limit raise (UC05), the grace-period tracker, and the `Power`+R17
-  skip.
+  worked examples, urgency-driven limit raise (UC05), headroom answered under a raw and a
+  smoothed baseline, the grace-period tracker, and both skip conditions — `Power`+R17 and an
+  absent CapTar capability (R18).
 - **Integration checkpoint:** ⎔ M1 calls E5's **headroom** twice — once for the `peak_headroom`
-  readout under the in-force limit, once for R5's escalated rate under the raised one — and its
-  **clamp** once on the control path, the only one of the three that may advance the breach timer.
+  readout under the in-force limit, once for R5's escalated rate under the raised one — on
+  *different baselines*, the readout and the clamp on the raw household baseline and R5's rate
+  on the smoothed one (above). Its **clamp** runs once on the control path, the only one of the
+  three calls that may advance the breach timer.
   M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
 
