@@ -193,7 +193,6 @@ def resolve_required_current(
     voltage: float,
     baseline_desired_a: float,
     escalated_maximum_permitted_rate_a: float,
-    urgency_latched: bool = False,
     pursued_occurrence: datetime | None = None,
     following_occurrence: datetime | None = None,
 ) -> RequiredCurrentResult:
@@ -220,8 +219,8 @@ def resolve_required_current(
     normalised.
 
     Urgency is ENTERED by the slack test and LEFT by the handback test -- they are not each
-    other's inverse, which is why `urgency_latched` (whether urgency was in effect entering this
-    cycle) is an input rather than something this function could re-derive:
+    other's inverse, which is why `pursued_occurrence` (the occurrence urgency was chasing
+    entering this cycle) is an input rather than something this function could re-derive:
 
         slack test:  required_a > escalated_maximum_permitted_rate_a / (1 + margin)
         handback:    baseline_desired_a >= required_a, on a cycle whose slack test does not hold
@@ -237,8 +236,9 @@ def resolve_required_current(
     could ever deliver. Letting the handback win there would clear urgency and re-engage it the
     next cycle, for ever.
 
-    The latch is why charging at the escalated rate does not revert urgency: it closes the gap
-    faster than the clock closes the window, so the slack test is falsified within one cycle.
+    Holding the occurrence is why charging at the escalated rate does not revert urgency: it
+    closes the gap faster than the clock closes the window, so the slack test is falsified
+    within one cycle.
 
     `unreachable` = required_a > escalated_maximum_permitted_rate_a, the same comparison with no
     margin -- so it is a strict subset of urgency by construction, and UC05's
@@ -338,10 +338,7 @@ def resolve_required_current(
     slack_test_holds = required_a > escalated_maximum_permitted_rate_a / (
         1 + DEADLINE_URGENCY_MARGIN
     )
-    # `urgency_latched` is the pre-#1187 spelling of the same state, still accepted so the
-    # Coordinator keeps working until it moves onto the occurrence.
-    latched = pursued_occurrence is not None or urgency_latched
-    if latched:
+    if pursued_occurrence is not None:
         # Precedence: the handback only clears on a cycle the slack test would not re-engage.
         handback = baseline_desired_a >= required_a and not slack_test_holds
         urgent = not handback
