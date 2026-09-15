@@ -21,18 +21,17 @@ interactive-only wording precisely because it sits in every run's index.
    once; this item is that rule's one procedure, and the `fix` skill's first step reuses its
    human-item test rather than restating it:
    - Read three listings, all routed by `CLAUDE.md`'s **Tracker mechanics** section: the PR's
-     label events, its reviews and its issue comments — every item, with author and time, as a
-     stream rather than a post read-back.
+     label events, its reviews, its issue comments and its review-thread replies — every item,
+     with author and time, as a stream rather than a post read-back.
    - Find the most recent reset event as the rule defines it. The markers it excludes are the
-     ones this repo's skills emit: `<!-- local-review-round -->` (`submit-pr-review`, local
-     mode), the `<!-- ai-fix-` family (`address-review-remarks`), and
+     ones this repo's skills emit: the local round marker (the value `submit-pr-review`'s §4
+     defines), the `<!-- ai-fix-` family (`address-review-remarks`), and
      `<!-- local-review-escalated -->` (this skill's escalation, below).
    - Rounds so far = marker-carrying reviews posted after that event (all of them when there
-     is none); the cap is **read from the doc routed above**, never from memory. If the count
-     was reset by a granted round — the latest reset event is the escalation comment — and an
-     exit label is still on, take both exit labels off before the pass (**Exit labels** names
-     this as the review step's first act of a granted round; commands and read-back per
-     **Tracker mechanics**).
+     is none); the cap is **read from the doc routed above**, never from memory. If an exit
+     label is still on and the count was reset — by either kind of reset event — take both
+     exit labels off before the pass (**Exit labels** names this as the review step's first
+     act after a reset; commands and read-back per **Tracker mechanics**).
    This pass is therefore either round N of the cap with passes to spare, or the **last pass
    the cap allows** — the exit below depends on which.
 2. **Check the branch isn't behind `origin/main`** per the review step, and merge it in first if it is

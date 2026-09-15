@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # Clean up after a merge
 
-The last step of the interactive lifecycle, and the only one a human invokes: the merge it
+The last step of the interactive lifecycle, and the only step the session never invokes
+itself: the merge it
 follows is manual, so nothing in the session can know it happened until the human partner says
 so. `CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step and
 every rule below — what closes the issue, which issue a PR names, what a merged spec owes.

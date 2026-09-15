@@ -95,8 +95,9 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
   itself the reset event. A grant is an instruction given to the session, never inferred from
   a thread.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
-  kinds: the escalation comment posted at the cap, and a **human item** — a review or PR
-  comment by an author whose login does not end in `[bot]`, whose body carries none of the
+  kinds: the escalation comment posted at the cap, and a **human item** — a review, PR
+  comment or review-thread reply by an author whose login does not end in `[bot]`, whose body
+  carries none of the
   session's own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
   a marked item is the session's footprint under the developer's own account, **Git
   identity** below), posted while an exit label was on: after its `labeled` event and before
@@ -119,9 +120,10 @@ closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a granted round: both labels come off before the next work starts — the
-`fix` skill's first step when a human item re-opened the PR, and the review step's first act of
-a granted round, since a grant given in-session posts nothing — and the next pass's exit
-re-applies whichever is then correct.
+`fix` skill's first step when it runs after a human item, and the review step's first act
+whenever a reset event of either kind precedes its pass and a label is still on (a grant given
+in-session posts nothing, and a human item may reach the review step directly) — and the next
+pass's exit re-applies whichever is then correct.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).

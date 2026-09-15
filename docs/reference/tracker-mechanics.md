@@ -346,18 +346,22 @@ Each line is one label change, oldest first:
 `{"event":"labeled","label":"needs-approval","at":"<timestamp>","by":"<login>"}`. A label was
 **on** at a given moment when its most recent event before that moment is `labeled`.
 
-The other side of the comparison is every review and every issue comment, with author and
-time — as a stream, not the post read-backs elsewhere in this file, which keep only the latest
-item by design:
+The other side of the comparison is every review, every issue comment and every review-thread
+reply, with author and time — as a stream, not the post read-backs elsewhere in this file,
+which keep only the latest item by design:
 
 ```sh
 gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews \
   --paginate --jq '.[] | {id, user: .user.login, at: .submitted_at, body}'
 gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
   --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
+  --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
 ```
 
-`--paginate` is mandatory for the reason *Commenting* above gives, and the filter must stream
+The third stream is the inline review-thread replies — where a maintainer most often disputes
+mid-loop, and where the session's own `ai-fix-ack` replies live, so the marker test applies to
+it as to the other two. `--paginate` is mandatory for the reason *Commenting* above gives, and the filter must stream
 (`.[] | …`) rather than index into one page. A bot's login ends in `[bot]`; timestamps are
 ISO 8601 in UTC and compare correctly as strings.
 

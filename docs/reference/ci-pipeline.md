@@ -1,7 +1,7 @@
 # CI pipeline (`.github/workflows/ai-pipeline.yml` + `_ai-*.yml`)
 
 The automated, label-driven equivalent of
-[contribution-workflow.md](contribution-workflow.md)'s six steps — same lifecycle, a different
+[contribution-workflow.md](contribution-workflow.md)'s chain — the same lifecycle, a different
 actor. Commits here are made as `github-actions[bot]`, not the interactive session's own
 identity (see that doc's **Git identity** section).
 
@@ -174,7 +174,7 @@ in branch protection's required checks on `main`.
   quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
-- **Draft** (`_ai-draft.yml`, ≈ the file-the-issue and implement steps): resolves the model and branch
+- **Draft** (`_ai-draft.yml`, ≈ the **File the issue** and implement steps): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
   `max_turns` tier is driven by the issue's project-board **Size** field (set per

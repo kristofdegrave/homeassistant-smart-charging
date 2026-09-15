@@ -26,8 +26,8 @@ model it wants, so name it, and leave switching to the human partner.
 
 ## Before any fix: stale exit labels
 
-Read the PR's label events, reviews and issue comments (`CLAUDE.md`'s **Tracker mechanics**
-section routes to all three). If `needs-approval` or `needs-decision` is on and a **human
+Read the PR's label events, reviews, issue comments and review-thread replies (`CLAUDE.md`'s
+**Tracker mechanics** section routes to all four). If `needs-approval` or `needs-decision` is on and a **human
 item** — as the contribution workflow's **Rounds and the cap** defines it, decided the way the
 `review` skill's *Count the rounds* item decides it — is newer than that label's `labeled`
 event, take both labels off: the human has said work is pending, so the labels are false — the
