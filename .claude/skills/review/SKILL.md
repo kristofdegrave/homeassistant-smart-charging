@@ -6,8 +6,9 @@ description: Use in an interactive session to run this project's contribution wo
 # Review a PR
 
 The review step of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
-section routes to the doc that owns every parameter — the behind-`origin/main` rule, the loop
-cap, what a clean pass means. This skill owns the order, the dispatch, and the round count.
+section routes to the doc that owns every parameter — that a pass runs against current
+`origin/main`, the loop cap, what a clean pass means. This skill owns the order, the dispatch,
+the merge-first mechanics and the round count.
 
 Model-invocable on purpose, so "review this PR" reaches it; the description carries the
 interactive-only wording precisely because it sits in every run's index.

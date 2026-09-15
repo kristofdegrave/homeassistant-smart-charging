@@ -33,8 +33,9 @@ Stop instead of dispatching when:
 
 1. **Read the work file first, and resolve anything it needs before the branch exists** —
    against a fetched `origin/main`, not a stale checkout, since a work file may derive its
-   branch name from something already merged there. The implement step's branch-naming note grants one
-   override, the number segment; nothing else about that step is the work file's to override.
+   branch name from something already merged there. The doc's **Branch naming** note (under its
+   **Issue conventions**) grants one override, the number segment; nothing else about the
+   implement step is the work file's to override.
 2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
    task it names is already identified.
 3. Worktree, branch and board **Status** per the implement step.

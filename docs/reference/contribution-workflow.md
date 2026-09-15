@@ -16,7 +16,7 @@ covering commit message conventions) — the project-wide floor, distinct from a
 
 ## The chain
 
-0. **Every unit of work has an issue before work starts.** If none exists yet, file one first
+0. **File the issue.** Every unit of work has an issue before work starts. If none exists yet, file one first
    (`file-task-issue`) — no exception for small or typo-level changes. Correct context label +
    Size/Estimate fields (see **Issue conventions** below). Board **Status** defaults to
    `Backlog`.
@@ -36,8 +36,9 @@ covering commit message conventions) — the project-wide floor, distinct from a
    on its thread, or a reply saying why not, and its thread is closed out per **Thread
    discipline** below. Human PR comments, at any
    point, are findings like any other. Loop until a pass is clean, up to the cap (**Rounds
-   and the cap** below). Still Critical or Major open at the cap → stop and escalate to
-   the human partner.
+   and the cap** below). Still Critical or Major open at the cap → stop: the exit labels go
+   on and one escalation comment hands the disagreement to the human partner (**Exit labels**
+   below).
 4. **Approval** (`finalize-pr-review`). A clean pass → `needs-approval` (**Exit labels**
    below). Board **Status** stays `In review`. Merge is the human's, always.
 5. **Clean up** (`cleanup`, invoked by the human after the merge). Verify the change is on
@@ -77,8 +78,9 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
   Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
   so the final round needs no further pass to confirm it.
 - **At the cap** with a Critical or Major finding still open, the loop stops instead of
-  reviewing again: the exit labels go on (**Exit labels** below) and one escalation comment
-  hands the disagreement to the human, who has **two decisions**: merge as is, accepting the
+  reviewing again: the session, at the fix step's stop, puts the exit labels on (**Exit
+  labels** below) and posts one escalation comment handing the disagreement to the human, who
+  has **two decisions**: merge as is, accepting the
   open findings, or **grant another round**. A grant is an instruction given to the session,
   never inferred from a thread.
 - **Rounds are counted from the most recent reset event**: the escalation comment posted
@@ -89,10 +91,14 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 ## Exit labels
 
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. A clean pass applies `needs-approval` alone; the cap applies `needs-decision`
-**alongside** `needs-approval`, so a capped PR is distinguishable from a clean one in any list
-view while `needs-approval` keeps its single meaning. Neither replaces manual merge approval
-(**Merge and issue closing** below).
+human decides**. Each exit has one actor. The **approval step** applies `needs-approval` alone
+after a clean pass, removing a stale `needs-decision` if one is present. The **fix step's stop
+at the cap** applies `needs-decision` **alongside** `needs-approval` and posts the one
+escalation comment **Rounds and the cap** describes — the session performs that stop itself;
+a dedicated skill for it is a follow-on, and until it exists this naming is what permits the
+session to label. So a capped PR is distinguishable from a clean one in any list view while
+`needs-approval` keeps its single meaning. No other step or skill applies either label, and
+neither replaces manual merge approval (**Merge and issue closing** below).
 
 A human review or PR comment posted **after** either label makes it false: the label comes off
 (in step 3, before the fix), and the next pass's exit re-applies whichever is then correct.

@@ -101,12 +101,13 @@ places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, whi
 `github.event.label.name` against a trigger label by string and — like `close-guard.yml`'s
 `case` block above — fail open silently on a rename, every job simply never firing; `_ai-review.yml`'s
 verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
-`needs-approval`, the interactive skill that applies it by command — reached through
-`CLAUDE.md`'s **Contribution workflow** section, which is where the lifecycle's clean exit is
-mapped to the skill that runs it, so a rename is checked there rather than assumed from here.
-`needs-decision` is CI's alone: `_ai-review.yml`'s verdict routing is the only place that
-applies it (the interactive cap exit: see **Pipeline steps** below). Adding or renaming one
-means updating that set, and the **Pipeline steps** below where the label's meaning is stated.
+the two exit labels, the interactive lifecycle's two exits — reached through `CLAUDE.md`'s
+**Contribution workflow** section, whose doc names in its **Exit labels** section which step
+applies which label (the approval step applies `needs-approval`; the stop at the interactive
+cap applies `needs-decision` alongside it) — so a rename is checked there rather than assumed
+from here. On the CI side, `_ai-review.yml`'s verdict routing is the only place that applies
+either. Adding or renaming one means updating that set, and the **Pipeline steps** below where
+the label's meaning is stated.
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
 places — `.github/setup-labels.sh` — and in none of the other seven, including
@@ -175,7 +176,7 @@ in branch protection's required checks on `main`.
   quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
-- **Draft** (`_ai-draft.yml`, ≈ the file-an-issue and implement steps): resolves the model and branch
+- **Draft** (`_ai-draft.yml`, ≈ the file-the-issue and implement steps): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
   `max_turns` tier is driven by the issue's project-board **Size** field (set per
@@ -246,7 +247,7 @@ in branch protection's required checks on `main`.
   grant one more cycle. The interactive session caps its own loop
   separately ([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**): the two count
   different populations and never interact, so neither is the other's bound. What the
-  interactive cap exit labels is that doc's cap step's own business, not this file's.
+  interactive cap exit labels is that doc's **Exit labels** section's own business, not this file's.
 - **Clean / cap-out** (≈ the approval step): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required. The

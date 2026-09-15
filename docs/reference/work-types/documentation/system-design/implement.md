@@ -21,7 +21,7 @@ wearing this method's vocabulary.
 
 ## Drafting the system design
 
-**Step 1 (do the work)**, in order:
+**The implement step (do the work)**, in order:
 
 1. **Enumerate the behaviour already drafted** — the use cases under
    `docs/analysis/use-cases/`, and `control-cycle.md`. List them; do not start
