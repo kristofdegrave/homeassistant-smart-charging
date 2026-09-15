@@ -153,7 +153,15 @@ join the reviewer's list.
   'read the docs'" bar — which is why the heading is required and `CLAUDE.md` alone is not
   enough. What it costs is the onward hop only: `CLAUDE.md` itself is already loaded on every
   run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
-  route every artifact inherits from a single edit.
+  route every artifact inherits from a single edit. **Headings are the API, at two levels**,
+  and this is the convention's only statement: the pointer is written `` `CLAUDE.md`'s
+  **Topic** ``, naming a **topic** — an entry of `CLAUDE.md`'s routing table, or one of its own
+  `##` headings — and never a heading of the document the topic routes to. In that document a
+  `##` is a topic and every `###` beneath it is one rule; a rule is addressed through its
+  topic's entry (*the `###`-level rule under `CLAUDE.md`'s **Topic***), so a rule can move
+  between documents or split without any pointer changing. `resolving-merge-conflicts` writes
+  `` `CLAUDE.md`'s **Issue conventions** `` for the branch-naming rule rather than naming the
+  workflow document's own heading — that is the shape.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
   resource list** — with the one exception of its own subject matter, defined after this
   list. Write "this project" where a name is tempting; route the path and the list.

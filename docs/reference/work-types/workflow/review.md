@@ -3,8 +3,8 @@
 **Who reads this.** The reviewer only — a fresh, read-only Opus agent, never the session that
 wrote the change. This directory holds **only** this file: `workflow` has no work file and no
 completion bar, because its work is never drafted from an issue and a human authors it by hand.
-`CLAUDE.md`'s **Model selection** section argues why, and `work-types/README.md` records the
-asymmetry as deliberate. The consequence for you is that there is no bar to fall back on: this
+The document `CLAUDE.md`'s **Model selection** section routes to argues why, and
+`work-types/README.md` records the asymmetry as deliberate. The consequence for you is that there is no bar to fall back on: this
 file is the whole of the criteria for a `workflow` review, which is why it carries a full
 checklist where other labels' review documents carry only what their bar cannot.
 
@@ -109,6 +109,13 @@ Always read:
   (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
   behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
   is a Major finding.
+- Every pointer a changed skill or agent definition writes to project material is in the
+  `` `CLAUDE.md`'s **Topic** `` form, and the topic resolves — to an entry of `CLAUDE.md`'s
+  routing table or one of its `##` headings; a rule reached that way sits as a `###` under the
+  topic's `##` in the document the entry names. A pointer naming the owning document's heading
+  directly, or a topic that resolves to nothing, is a Minor finding — Major where it is the
+  only route to something the artifact must read. The convention itself is stated once, in
+  `docs/reference/ai-authoring.md`; this item is the check, not a second statement.
 - If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
   interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
   itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive

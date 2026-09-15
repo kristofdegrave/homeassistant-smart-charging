@@ -176,7 +176,7 @@ in branch protection's required checks on `main`.
   spawns no AI job and a PR touching it alongside other trees has its post-mortem invisible to
   the CI reviewer. That is deliberate — every one of the reviewer checklists is written against
   an artifact that asserts behaviour, and none fits a narrative document whose review is about
-  quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
+  quotation accuracy (see `CLAUDE.md`'s **Post-mortems** topic). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
 - **Draft** (`_ai-draft.yml`, ≈ the **File the issue** and implement steps): resolves the model and branch

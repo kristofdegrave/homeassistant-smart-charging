@@ -11,9 +11,9 @@ Clarity/Concision/etc.
 
 ## The bar
 
-**(1) It should be an ADR at all.** The decision meets the worthiness test in `CLAUDE.md`'s
-**Architecture Decision Records (ADRs)** section — the architectural-decision definition, its
-calibration test for borderline cases, and its two carve-outs (test/CI/dev-tooling choices;
+**(1) It should be an ADR at all.** The decision meets the worthiness test in the
+**Architecture Decision Records (ADRs)** topic below — the architectural-decision definition,
+its calibration test for borderline cases, and its two carve-outs (test/CI/dev-tooling choices;
 domain/business rules). A decision that fails that bar is **Major**: name which carve-out or
 definition clause it fails, and where it belongs instead (a PR description,
 `docs/analysis/requirements.md`, `docs/analysis/resolution-rules.md`). This applies to the ADR
@@ -79,3 +79,83 @@ convention it rests on: **an ADR carries `Status: Accepted` from its first draft
 PR**, and stays that way. If a review round left it at anything else, the Status line is set to
 `Accepted` once the pass is clean and before the PR is labelled `needs-approval`. A PR handed to the human partner with a non-`Accepted` Status is **Major** —
 the ADL row (item 2) would then be recording a decision the log says was never taken.
+
+## Architecture Decision Records (ADRs)
+
+When a decision is an ADR at all — the test the bar's item 1 applies. It is reached from
+`CLAUDE.md`'s routing table under this heading, so an issue form, a reviewer or a skill that
+asks "is this architectural?" lands here.
+
+### Every architectural decision is captured before the work that depends on it
+
+**Every architectural decision must be captured as an ADR before the work that depends on it is committed.** See `docs/adl/0001-use-architecture-decision-records.md` for the rationale and template choice.
+
+### What an architectural decision is
+
+An **architectural decision** is a choice about structure that would be expensive to
+reverse or that materially constrains future options — e.g. how integration entities
+map to hardware, where a boundary/abstraction layer sits, the shape of a config-entry
+schema, which library or protocol to depend on, a change to the coordinator/control-loop
+structure. It is **not** an ADR-worthy decision to pick a variable name, a log message,
+or a one-off implementation detail with no lasting structural consequence — when in
+doubt, ask whether a future contributor would benefit from knowing *why*, not just
+*what*.
+
+### The calibration test and the two carve-outs
+
+For a borderline case, a calibration test: would reversing or swapping this choice touch
+more than one module, or a contract other code depends on? It supplements, not
+overrides, the categories above — a *product-code* choice there (e.g. a library the
+shipped integration depends on, a config-entry schema shape) stays architectural even
+when well encapsulated; the two carve-outs below narrow that for their own categories.
+Serious deliberation alone isn't proof either way — weigh it against the reach test and
+the *why*-a-future-contributor-benefits question. Two recurring categories:
+
+- **Test, CI, or dev-tooling choices** (a benchmarking library, a measurement helper, a
+  lint tool) are not architectural unless the *product* code itself takes a structural
+  dependency on them — a library used only inside `tests/` belongs in a PR description,
+  not an ADR. What this carve-out excludes is **which tool or library a script happens to
+  call**. It does not extend to the *structure* of the test and automation apparatus
+  itself, which stays ADR-worthy even though no product code depends on it. Exactly two
+  things sit on that side, and nothing else does:
+  - the **CI/automation pipeline's own structure** — trust boundaries, job topology,
+    review-loop caps;
+  - the **test-tier taxonomy** — which tier a test belongs in, what a passing suite is
+    allowed to mean, and where a contributor is expected to put a new test (see ADR-0009
+    and ADR-0037).
+
+  The line between the two halves is **who is bound by the choice**, not which directory
+  the code implementing it sits in: a taxonomy binds every future test and every future
+  reviewer, while a measurement library binds nothing beyond the files that import it.
+  So a test-only fixture or simulator's *internals* fall on the library side of that line
+  however elaborate they get, while the tier it belongs to falls on the taxonomy side.
+- **Domain/business rules** (a formula, a precedence order, which values are surfaced) —
+  even when seriously debated — are not architectural; they belong in
+  `docs/analysis/requirements.md` or `docs/analysis/resolution-rules.md`, not an ADR.
+  Surfacing, renaming, or mirroring an existing config value or computed reading as an
+  entity is not, on its own, a structural boundary change and doesn't escape this
+  carve-out.
+
+### The bar applies to new decisions; supersede, never edit in place
+
+This tightened bar applies to new decisions; it does not retroactively make an existing
+Accepted ADR non-architectural — supersede it instead if a past decision no longer holds
+(per `docs/adl/template.md`), never edit it in place to remove it. If an Accepted ADR's
+Consequences state a forward-looking bar for future decisions in a category one of the
+carve-outs above now excludes, this carve-out governs going forward and that ADR should
+be superseded to say so, rather than the conflict being left implicit.
+
+### How an ADR moves through the contribution workflow
+
+An ADR follows the contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with
+these artifact-specific additions:
+
+- **The implement step's draft** and **the review step's review**: the `adr` row of
+  `CLAUDE.md`'s **Model selection** table names the files, and they are their only home —
+  don't restate them here. The work file carries how an ADR is written (the template, the
+  numbering and never-renumber rules, the immutability rule); the completion bar carries what
+  must be true of the finished record, and both the author's self-check and the reviewer's
+  criteria are that one file. The worthiness test is the topic above, reached from the bar's
+  item 1 rather than repeated in it.
+- No tracking refs (PR numbers, issue status) in the ADR body — see `CLAUDE.md`'s **Review
+  protocol for analysis documents** topic; the rule applies equally here.
