@@ -93,6 +93,13 @@ Always read:
   skill checklist as that reference scopes it.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
+- A work-type core file (any `.md` under `docs/reference/work-types/`, branch files included,
+  outside an `overlays/` directory) names no stack skill and
+  spells no stack token — the method check refuses both, and `work-types/README.md`'s **Stack
+  overlays** says where such material goes. An overlay that restates a method rule rather than
+  extending one is the one-source-of-truth finding above, hidden in a file the method cannot
+  see; a core file that reads *the stack overlay names it* with no overlay entry that does is
+  a broken route — Major, since the rule then has no home.
 - The context-label vocabulary's values are
   `docs/reference/contribution-workflow.md`'s and the CI-side sync obligation — every pipeline
   place that vocabulary is baked into and must move together — is

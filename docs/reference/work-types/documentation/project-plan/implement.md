@@ -41,7 +41,8 @@ step collapses into a single sequenced, independently-testable task list — the
    on and the integration checkpoint that proves it's wired correctly with its callers.
 
 The approved task list is what the per-slice implementation specs and the implementation work
-under `custom_components/` are then derived from.
+— in the product-code tree the `development` work type's stack overlay names — are then
+derived from.
 
 ## Rules
 

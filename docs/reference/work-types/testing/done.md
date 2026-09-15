@@ -11,34 +11,13 @@ and this is the bar for both.
 
 ## The bar
 
-**(1) Harness split (ADR-0009).** The directory-to-harness mapping is stated here, once, and
-both sides read it from here:
-- **Plain pytest** — `tests/modes/`, `tests/engines/`: pure logic, importing no
-  `homeassistant.*`. Fast, no runtime; this is where mode/engine behaviour, clamp math and the
-  resolution rules are verified. A test in these directories that pulls in the HA harness is
-  **Major** — it defeats the package boundary that makes the logic HA-free.
-- **HA harness** (`pytest-homeassistant-custom-component` + `MockConfigEntry`) —
-  `tests/adapters/`, `tests/test_coordinator.py`, entity/platform tests,
-  `tests/test_config_flow.py`, `tests/test_init.py`: anything HA-coupled (entity state,
-  config-entry lifecycle, registration, services). One of these tested with plain pytest where it
-  needs a real (mocked) HA runtime is **Major** — the test either bypasses the wiring it claims
-  to cover or re-implements it.
+**(1) Harness split.** The directory-to-harness mapping is stated once, in the stack overlay
+under this item, and both sides read it from there — together with the severity a test written
+in the wrong harness carries, and why.
 
-**(2) Mandated coverage.** Each miss below is **Major**; name the role, branch or path missed.
-- **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
-  unmapped raw state. ADR-0009 requires all four.
-- **Every numeric role whose catalogued unit column names a unit:** the fifth mandated case —
-  the role states its expected unit set, and the adapter class that defines its read carries a
-  foreign-unit case and an absent-unit case. ADR-0040, which extends ADR-0009, is the authority
-  on the trigger, the per-class discharge and the exclusions — read it before judging a role in
-  or out, and before judging a pinned behaviour adequate. It also requires a docstring on a case
-  pinning "used as-is", and is the authority on what that docstring must say.
-- **Engines:** each behavioural row / branch, plus **worked examples** for the clamp math
-  (grid-safety, floor/cap) and the NF4 voltage fallback. A clamp test asserting only that a
-  number came back is a missing worked example, not a present one.
-- **Coordinator:** happy path, status-gating-to-zero, clamp applied, and the fault path
-  (required adapter `None` → 0 A + `Fault`; grid voltage `None` → not a fault).
-- **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
+**(2) Mandated coverage.** Each miss is **Major**; name the role, branch or path missed. The
+cases, and the authorities that mandate them, are enumerated in the stack overlay under this
+item.
 
 **(3) Traceability and structure.** Coverage is checkable from the test names alone, and a
 failure points at a single scenario. Severity is decided against **the changed tests**, which
@@ -60,6 +39,13 @@ it.
 asserts, no asserting on a mock's own return value, no fixture silently pinning a value that
 makes the assertion trivially true. A test that would pass against an empty implementation is
 **Major**: it isn't testing anything, and a suite containing it reports a coverage it does not
-have. Mocking is at the HA boundary, not so deep it hides the wiring the test claims to cover —
-**Major** where the bypassed wiring is what the test's own name claims to verify, **Minor**
-where the over-deep mock merely makes the test brittle.
+have. Mocking is at the boundary — the stack overlay names it — not so deep it hides the wiring
+the test claims to cover — **Major** where the bypassed wiring is what the test's own name
+claims to verify, **Minor** where the over-deep mock merely makes the test brittle.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type:
+`overlays/<stack>.md` beside this file, its **Done** section read with this file as part of the
+same bar. What an overlay is, what a file reading `none` means and what may not live in this file
+are this tree's `README.md`'s **Stack overlays**.

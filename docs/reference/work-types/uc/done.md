@@ -60,9 +60,9 @@ this is the most common form 2.2 takes.
 
 ## 3. Writing quality
 
-**(3.1) What, not how.** No implementation detail — Python modules, HA services, timer helpers,
-persistence. Entity ids that are part of the ubiquitous language are fine. **Major** for a
-mechanism smuggled into a *what*; **Minor** for an incidental implementation aside.
+**(3.1) What, not how.** No implementation detail — modules, platform services, timer
+helpers, persistence. Entity ids that are part of the ubiquitous language are fine. **Major**
+for a mechanism smuggled into a *what*; **Minor** for an incidental implementation aside.
 
 **(3.2) The 6Cs pass.** Clarity, Concision, Completeness, Consistency, Correctness,
 Concreteness, per `CLAUDE.md`'s **Requirements standard**. A miss is **Minor** unless it makes

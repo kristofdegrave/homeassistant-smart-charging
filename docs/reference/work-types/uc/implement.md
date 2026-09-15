@@ -32,9 +32,10 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
 - **What is in scope** is the *Code backing* item of `done.md` — it defines the behavioural
   assertions a use-case makes, which changes assert none, and how *Scope / level* and
   *Relationships* split. Read them off the diff; do not re-derive the list here.
-- **The search, capped.** Per in-scope item, run **one** targeted search of
-  `custom_components/` for the thing it names — the entity id, the adapter role, the domain
-  event name, the threshold, the ordering — and open at most one file, the best match.
+- **The search, capped.** Per in-scope item, run **one** targeted search of the product-code
+  tree for the thing the item names — the entity id, the adapter role, the domain event name,
+  the threshold, the ordering — and open at most one file, the best match. The tree itself is
+  the one the `development` work type's stack overlay names.
   **Stop after five items**; where the diff has more — a brand-new use-case, whose diff is
   the whole document, always will — say the set was sampled and name the five you took. Five
   suits a drafting session's turn budget, and one use-case edit routinely touches more
@@ -58,8 +59,8 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 
 ## Rules
 
-- **What, not how.** Describe observable behaviour. No Python, HA services, timer helpers, or
-  persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
+- **What, not how.** Describe observable behaviour. No modules, platform services, timer
+  helpers, or persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
   ("the active SOC limit", "charger status") — the `sc_` binding lives in
   `docs/analysis/entity-catalog.md`.
 - **Don't duplicate mechanism.** Reference `docs/analysis/control-cycle.md` (read → smooth →
@@ -77,6 +78,12 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
   when the deadline is at risk" and move on, rather than re-deriving urgency escalation.
 - One statement per line; always name the subject (Actor or System); active voice; verifiable
   pre/postconditions.
+
+### Skills
+
+The method skills this work file uses, by step: `research` when a fact a use-case rests on is
+external, cited from the document by linking the issue comment; `receiving-code-review` in the
+review step. This work type names no stack skill.
 
 ## Diagram types
 

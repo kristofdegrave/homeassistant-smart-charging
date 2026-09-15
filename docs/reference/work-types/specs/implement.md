@@ -108,10 +108,16 @@ section.
   slice is ordinarily gated on and judges compliance with them. What that means while
   drafting: open each gate in the plan **before** the task it blocks, rather than leaving the
   review to discover the order is wrong.
-- **Respect the test boundary.** Pure logic → plain pytest; HA-coupled → HA harness. Name it
-  per task.
-- **No `custom_components/` code here.** The spec is a planning artifact; code is written by the
+- **Respect the test boundary.** Name it per task; the boundaries themselves are the
+  `testing` row's — its bar's item 1, *Harness split*, and the stack overlay it routes to.
+- **No product code here.** The spec is a planning artifact; code is written by the
   `development` work type against the approved plan.
+
+### Skills
+
+The method skills this work file uses, by step: `brainstorming` for scoping the slice (step 2);
+`writing-plans` for deriving the TDD plan (step 4); `research` when a decision the spec makes is
+blocked on an external fact; `receiving-code-review` in the review step. This work type names no stack skill.
 
 ## Common mistakes
 
@@ -122,7 +128,7 @@ section.
   undocumented rule, and cutting it loses the only copy. Report it and fix the owning doc.
 - Restating an ADR's rationale, or narrating a task the task entry already describes.
 - A task with no exact file path, no failing test, or no stated test boundary.
-- Routing pure-logic tests through the HA harness (or vice versa).
+- Routing a task's tests through the harness that is not its layer's.
 - A silent deferral of a mandated safety behavior (a clamp, the fault path) — state it as a
   known deviation, out loud.
 - Leaving the Verify-live checklist to be written after deployment, when the slice can no

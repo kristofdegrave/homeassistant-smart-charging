@@ -127,13 +127,16 @@ that also edits a workflow file gets the `workflow` checklist on that file rathe
 
 ## Two rows that differ from the rest
 
-### The `development` and `testing` rows share three language references
+### The `development` and `testing` rows lean on their stack overlays
 
-**The `development` and `testing` rows share three language references** —
-`.claude/skills/ha-integration-knowledge/` (the Home Assistant platform reference),
-`.claude/skills/python-anti-patterns/` and `.claude/skills/async-python-patterns/`. They are
-not a fourth column: each row's own work file, and its checklist and bar, say which one to
-read and when, so nothing here repeats a rule those files own.
+**The `development` and `testing` rows lean on their stack overlays** more than any other row:
+the platform reference and the language checklists their work rests on are stack skills, and
+a method row never names one. Every work type with a slot applies its overlays the same way
+(the shape is `docs/reference/work-types/README.md`'s **Stack overlays**); what sets these two
+rows apart is that their overlays carry the skills the work cannot be done without, and say
+when each is read. They are not a fourth column: the overlay is part of the same work file,
+bar and checklist the row already names, so the dispatch does not change and nothing here
+repeats a rule those files own.
 
 ### The `workflow` row has no work file on purpose
 

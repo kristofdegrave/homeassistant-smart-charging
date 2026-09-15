@@ -22,21 +22,14 @@ the label. Which row reached these files tells you nothing about which checklist
 
 Always read:
 
-- The test files under review in `tests/` and the code under
-  `custom_components/smart_charging/` they exercise.
-- `docs/adl/0009-testing-strategy.md` — the authoritative plain-pytest vs HA-harness split.
-- ADR-0040, which extends ADR-0009's mandated coverage with the fifth, unit case — where the
-  change touches or wires an adapter that reads a numeric role. Locate it by number per
-  `CLAUDE.md`'s **Architecture Decision Records (ADRs)** section.
+- The test files under review and the code they exercise — the trees the stack overlay names.
+- The authorities the bar's items 1 and 2 rest on — the stack overlay names them under its
+  **Review** section, and says which of them is conditional on what the change touches.
 - The behaviour the tests claim to verify, in `docs/analysis/`: `requirements.md`, the relevant
   use-case, `control-cycle.md`, `resolution-rules.md`.
 
-Read conditionally:
-
-- The **Testing Requirements** section of the `ha-integration-knowledge` skill — where the
-  change includes HA-harness tests (`tests/adapters/`, `tests/test_coordinator.py`, entity/
-  platform, config-flow, `tests/test_init.py`). Skip it for a change confined to
-  `tests/modes/` or `tests/engines/`.
+Read conditionally: what the stack overlays' **Review** sections name, on the condition each
+states.
 
 Then [`done.md`](done.md), the completion bar, before you start scoring rather than while you
 write up.
@@ -60,3 +53,10 @@ product code under the tree the path map routes to the `development` checklist, 
 half of that routing can never be skipped or steered. So the overlap cannot fire on a review
 that reached this file alone. Move adapters out of that tree and the assumption goes with
 them — this file would then need the route it does without today.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type:
+`overlays/<stack>.md` beside this file, its **Review** section read with this file as part of the
+same checklist. What an overlay is, what a file reading `none` means and what may not live in this
+file are this tree's `README.md`'s **Stack overlays**.

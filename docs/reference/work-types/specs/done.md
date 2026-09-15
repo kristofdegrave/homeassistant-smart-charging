@@ -59,24 +59,23 @@ the ADR gate for each gated task (e.g. engines package home, cross-Manager event
 task that depends on it — a gate opened after the task it blocks, or not identified at all, is
 **Major**. A task that contradicts an accepted ADR is **Major**, and **Critical** where the
 contradicted rule is a safety behaviour (a single merged clamp instead of the two ADR-0006
-requires, a fault path that guesses a value instead of forcing 0 A). An engine reaching Home
-Assistant directly, against ADR-0003, is **Major**.
+requires, a fault path that guesses a value instead of forcing 0 A). An engine reaching the
+platform directly, against ADR-0003, is **Major**.
 
 The records a slice is ordinarily gated on, and the list to read the spec against rather than
-the whole log: adapters (0003), package layout (0002/0010), config split (0005),
-coordinator/two-clamps (0006), fault-on-`None` (0007), testing split (0009), native naming
-(0004). This is the enumeration, for both the author and the reviewer; `implement.md`'s
-*Honor the ADRs* rule points here rather than keeping a second copy. It is the usual set, not
-a closed one — an ADR outside it that the slice touches is judged by the same item.
+the whole log: adapters (0003), package layout (0002/0010), config split (0005), two clamps
+(0006), fault-on-`None` (0007), testing split (0009), native naming (0004). This is the
+enumeration, for both the author and the reviewer; `implement.md`'s *Honor the ADRs* rule
+points here rather than keeping a second copy. It is the usual set, not a closed one — an ADR
+outside it that the slice touches is judged by the same item.
 
 **(5) TDD plan quality.** Tasks are bite-sized (a failing test → minimal impl → green →
 commit), each naming **exact file paths** and a concrete failing test — a task missing either
-is **Major**, since the `development` work file consumes it literally. Each task names its **test boundary
-per ADR-0009**: plain pytest for `modes/`/`engines/` (no HA import), HA harness
-(`pytest-homeassistant-custom-component` + `MockConfigEntry`) for adapters, coordinator,
-entities, and the config flow. A missing boundary, a pure-logic task routed through the HA
-harness, or an HA-coupled task tested with plain pytest is **Major**. Integration checkpoints
-are named where a task is wired to its callers — missing ones are **Minor**.
+is **Major**, since the `development` work file consumes it literally. Each task names its
+**test boundary** per the `testing` row's bar, item 1, *Harness split*, and the stack overlay
+it routes to. A missing boundary, or a task routed through the harness that is not its
+layer's, is **Major**. Integration checkpoints are named where a task is wired to its
+callers — missing ones are **Minor**.
 
 **(6) Scope honesty.** Deferrals are explicit, and nothing in scope silently pulls in an
 out-of-scope service (**Major**). A safety-relevant omission — a mandated clamp or fault

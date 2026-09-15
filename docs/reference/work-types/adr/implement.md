@@ -82,6 +82,12 @@ completion bar's item 1, not while drafting.
 - **Reference, don't restate.** If a decision depends on a requirement or use-case, cite it
   (`R7`, `UC03`) rather than re-deriving it.
 
+### Skills
+
+The method skills this work file uses, by step: `research` for the facts an ADR's Context rests
+on, cited from the record by linking the issue comment; `receiving-code-review` in the review
+step. This work type names no stack skill.
+
 ## Common mistakes
 
 - Skipping the issue-first step for a decision nobody has discussed yet.
