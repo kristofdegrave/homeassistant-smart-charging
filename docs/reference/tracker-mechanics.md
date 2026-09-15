@@ -223,7 +223,7 @@ gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues --
 
 bid=$(gh api repos/$REPO/issues/<blocker> --jq .id)
 gh api -X POST repos/$REPO/issues/<n>/dependencies/blocked_by -F issue_id=$bid
-gh api repos/$REPO/issues/<n>/dependencies/blocked_by --jq '[.[].number]'
+gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<n>/dependencies/blocked_by --jq '.[].number'
 ```
 
 Reading the edges the other way round, and with state — from a child to its parent, and a
