@@ -19,15 +19,11 @@ table: the row's *How the work is done* column names the work file(s) to follow,
 *Work model* column the model — say which model the row wants, since only the human partner
 can switch it.
 
-Stop instead of dispatching when:
-
-| The issue | Stop, and say why |
-|---|---|
-| has no context label, but a `bug`/`enhancement` kind label | the claim is verified before anything is designed, and it gains a context label once the fixing artifact is known. `diagnosing-bugs` owns that gate for a reported defect. |
-| has no label at all | it needs one before work starts — `file-task-issue` |
-| carries more than one context label | it should be split; CI refuses these outright |
-| is labelled `idea` | not scoped yet — `work-idea` decomposes it into labelled issues first |
-| is labelled `workflow` | human-authored by design, per the table's own row — there is no safe path containment for untrusted issue content outside the trees CI drafts into. Hand it to the human partner; don't run the rest of this skill. |
+Dispatch stops when the lookup yields no work file: the issue has no context label, carries
+more than one, or carries one whose row names none. Say which case it is and stop. What such an
+issue needs before work starts, and which skill supplies it, is stated by the documents
+`CLAUDE.md`'s **Contribution workflow** and **Issue conventions** topics route to, and, for a
+row without a work file, by `CLAUDE.md`'s **Model selection** section.
 
 ## Then, in order
 
