@@ -219,7 +219,7 @@ number:
 ```sh
 sid=$(gh api repos/$REPO/issues/<child> --jq .id)
 gh api -X POST repos/$REPO/issues/<epic>/sub_issues -F sub_issue_id=$sid
-gh api repos/$REPO/issues/<epic>/sub_issues --jq '[.[].number]'
+gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues --jq '.[].number'
 
 bid=$(gh api repos/$REPO/issues/<blocker> --jq .id)
 gh api -X POST repos/$REPO/issues/<n>/dependencies/blocked_by -F issue_id=$bid

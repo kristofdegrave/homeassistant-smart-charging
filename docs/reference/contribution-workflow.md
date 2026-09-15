@@ -189,10 +189,10 @@ itself — file the `development`/`testing` task issues per [idea-to-product.md]
 picked up. Filing them is part of finishing the spec issue, inside step 4; implementing them is
 a new issue and a new chain.
 
-**An epic is closed by the human partner, never by a PR or by `cleanup`** — its gate is the
-last slice verified live, per [idea-to-product.md](idea-to-product.md)'s **Close** stage, and
-that observation is the human's. The gate has two conditions — every child closed, the last
-slice verified live — and step 4 establishes the first, never the second: `cleanup` reads the
+**An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
+[idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
+two conditions, step 4 establishes the first — every child closed — and never the second,
+which is an observation on the real installation and the human's: `cleanup` reads the
 epic's open-children count after the linked issue is *done* and any task issues a merged spec
 owes are filed, and reports it; what the report says at zero is the skill's own step. It never
 closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
