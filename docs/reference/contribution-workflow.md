@@ -30,7 +30,9 @@ routes to.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
      `origin/main` (**Base `main` and stacking** below).
    - Board **Status** → the *in progress* column when writing actually starts, not at filing
-     time.
+     time. The issue's epic, if it has one, moves there with it unless it already is — the
+     child's start is the epic's start (**Project board** below; the parent read is
+     [tracker-mechanics.md](tracker-mechanics.md)'s **Parent/sub-issue and blocked-by edges**).
    - Self-check against the [Definition of Done](definition-of-done.md); then push and open
      the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`
      and `Part of`** below).
@@ -58,6 +60,8 @@ routes to.
    - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
      the *done* column.
    - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
+   - Then the issue's epic, if it has one: report its open-children count — after the filing
+     above, which may have added children (**Merge and issue closing** below).
 
 ## Rule A — author/reviewer separation
 
@@ -185,6 +189,16 @@ itself — file the `development`/`testing` task issues per [idea-to-product.md]
 picked up. Filing them is part of finishing the spec issue, inside step 4; implementing them is
 a new issue and a new chain.
 
+**An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
+[idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
+two conditions, step 4 establishes the first — every child closed — and never the second,
+which is an observation on the real installation and the human's: `cleanup` reads the
+epic's open-children count after the linked issue is *done* and any task issues a merged spec
+owes are filed, and reports it; what the report says at zero is the skill's own step. It never
+closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
+sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
+cannot.
+
 Once merged, the task's worktree is removed as part of step 4 — the reason the step exists is
 that a worktree left behind is a stale checkout waiting for a bulk sweep nobody schedules.
 
@@ -207,6 +221,13 @@ project — including any column that plays none — is [profile.md](profile.md)
 board**. The rule here is only that the chain moves an item **backlog → in progress → in
 review → done** and through no other column: a column that later gains a defined meaning is
 inserted explicitly into step 0/1 here rather than left implicit.
+
+**An epic's Status follows its children** and takes the shorter path **backlog → in progress
+→ done**: the session running step 1 moves it to *in progress* when its first child goes
+there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
+it to *done* with the same hand that closes it, which step 4's open-children report is there
+to prompt (**Merge and issue closing** above). A child starting under an epic already *in
+progress* changes nothing.
 
 ## Parallel work and forward dependencies
 

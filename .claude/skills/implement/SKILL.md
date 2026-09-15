@@ -44,8 +44,9 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per the implement step.
 
-The implement step ends with the PR open and its issue in the *in review* column; report that
-and stop. What
+The implement step ends with the PR open, its issue in the *in review* column and — where the
+issue has an epic — that epic in *in progress* or beyond, as the step's board rule asks; report
+that and stop. What
 runs next is the workflow's to say, not this skill's. The work is judged in a spawned reviewer
 agent, never in this session, and the next issue is not started off the back of this one.
 

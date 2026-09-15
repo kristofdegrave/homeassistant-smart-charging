@@ -440,7 +440,9 @@ the merged slice against the running installation.
 
 When every child is closed and its slice verified live, close the epic with a summary of what
 shipped. The originating idea issue is already closed — that happened at **Ticket**, once the
-strand was fully captured.
+strand was fully captured. The first condition is surfaced, not watched for, by the `cleanup`
+run that follows the last child's merge; the second, verify live, and the close itself stay
+the human partner's.
 
 ### Artifact: the closed epic, with its summary
 
