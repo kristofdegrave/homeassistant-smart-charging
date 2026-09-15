@@ -119,11 +119,12 @@ skill applies either label, and neither replaces manual merge approval (**Merge 
 closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
-false, and so does a granted round: both labels come off before the next work starts — the
-`fix` skill's first step when it runs after a human item, and the review step's first act
-whenever a reset event of either kind precedes its pass and a label is still on (a grant given
-in-session posts nothing, and a human item may reach the review step directly) — and the next
-pass's exit re-applies whichever is then correct.
+false, and so does a granted round: both labels come off no later than the review step's
+next pass — the `fix` skill's first step removes them when a human item precedes it, and the
+review step's first act removes them whenever a reset event of either kind precedes its pass
+and a label is still on (a grant given in-session posts nothing, so only the review step sees
+it; a human item may reach the review step directly) — and that pass's exit re-applies
+whichever is then correct.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).

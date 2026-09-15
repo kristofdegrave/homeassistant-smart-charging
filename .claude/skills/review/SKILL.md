@@ -88,8 +88,13 @@ these, from the pass's own result and the count above:
   both forms and the read-back per `CLAUDE.md`'s **Tracker mechanics** section. Confirm the
   PR is based on `main`, not an unmerged work branch (the PR read-back that section carries
   shows the base); a stacked PR is retargeted to `main` now, since squash-merging the branch
-  below would strand it. Board **Status** stays `In review`; the label is a signal for the
-  human's decision, never a self-approval. Report: clean, `needs-approval` applied.
+  below would strand it. Two more cautions before the label goes on: a base branch that has
+  already reached `main` by its own squash-merge leaves this PR's diff showing stale content —
+  check the diff is this PR's alone; and a related PR's "merged" status is not proof its
+  artifact landed — verify with `git ls-tree origin/main <path>` after a fetch, read by output
+  as the `cleanup` skill's step 2 does. Board **Status** stays `In review`; the label is a
+  signal for the human's decision, never a self-approval. Report: clean, `needs-approval`
+  applied.
 - **Critical or Major open, and this was the last pass the cap allows**: apply both exit
   labels, then post one escalation comment, body via a file per **Tracker mechanics**: the
   open Critical and Major findings by thread, what each round tried, where author and

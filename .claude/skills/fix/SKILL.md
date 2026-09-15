@@ -32,8 +32,9 @@ item** — as the contribution workflow's **Rounds and the cap** defines it, dec
 `review` skill's *Count the rounds* item decides it — is newer than that label's `labeled`
 event, take both labels off: the human has said work is pending, so the labels are false — the
 **Exit labels** section (routed from `CLAUDE.md`'s **Contribution workflow** section) names
-this skill's first step as the actor. Removal tolerates an absent label; read the label set
-back per **Tracker mechanics**. Nothing in this skill puts them back; the next pass's exit does.
+this skill's first step as the actor. Take both off, whichever is present — the remove form,
+its behaviour on an absent label and the read-back are **Tracker mechanics**'. Nothing in this
+skill puts them back; the next pass's exit does.
 
 ## Then
 
