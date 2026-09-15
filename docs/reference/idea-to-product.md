@@ -347,7 +347,8 @@ decision the design surfaced has its ADR first (the **ADR** stage's gate).
 One design document and one TDD plan per build slice, both under `docs/plans/`, both
 **derived** from the approved slice of `project-plan.md` and from the analysis documents — a
 spec never introduces behaviour they do not already state. The `specs` row's work file carries
-the drafting order, the cap on both documents and the slice's Verify-live checklist; its bar
+the drafting order, the cap on both documents and the shape of a task entry — a vertical slice
+as **Ticket** above defines one, with its blocked-by tasks and its Verify-live list; its bar
 carries what a finished spec must show.
 
 ### Artifact: the slice's design and TDD plan, under `docs/plans/`
@@ -359,8 +360,10 @@ Two documents per slice; the `specs` row names how each is written.
 A `development`/`testing` issue needs the anchored `Plan:` line, so none can exist before the
 plan does (**Ticket** above). Filing them, one per task in build order, is part of finishing
 the spec issue — the rule is [contribution-workflow.md](contribution-workflow.md)'s **Merge
-and issue closing**, run by the chain's clean-up step. The **Implementation** stage starts
-from those issues and from nothing else.
+and issue closing**, run by the chain's clean-up step. Each is a sub-issue of the epic, blocked
+by the issue of every task its entry's **Blocked by** line names: the edges are read off the
+plan, never inferred from it. The **Implementation** stage starts from those issues and from
+nothing else.
 
 ### Skills
 
