@@ -28,8 +28,8 @@ model it wants, so name it, and leave switching to the human partner.
 
 First, the exit labels. Read the PR's label events, reviews and issue comments (`CLAUDE.md`'s
 **Tracker mechanics** section routes to all three). If `needs-approval` or `needs-decision` is
-on and a review or issue comment by an author whose login does not end in `[bot]` is newer than
-that label's `labeled` event, take both labels off: the human has said work is pending, so the
+on and a **human item** — as the `review` skill's *Count the rounds* item defines it — is newer
+than that label's `labeled` event, take both labels off: the human has said work is pending, so the
 labels are false — the **Exit labels** section (routed from `CLAUDE.md`'s **Contribution
 workflow** section) names this skill's first step as the actor. Removal tolerates an absent
 label; read the label set back per **Tracker mechanics**. Nothing below the cap puts them back;

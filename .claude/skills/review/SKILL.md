@@ -23,15 +23,19 @@ interactive-only wording precisely because it sits in every run's index.
      label events, its reviews and its issue comments — every item, with author and time, as a
      stream rather than a post read-back.
    - The most recent **reset event** is the later of: an issue comment whose last line is
-     `<!-- local-review-escalated -->` (the cap stop's escalation), and a review or issue
-     comment by an author whose login does not end in `[bot]` posted while an exit label
-     (`needs-approval` or `needs-decision`) was on — after a `labeled` event for it and before
-     any later `unlabeled` event for it. Nothing else resets the count. No reset event → the
-     window starts at the PR's first review.
-   - Rounds so far = marker-carrying reviews posted after that event.
+     `<!-- local-review-escalated -->` (the cap stop's escalation), and a **human item** — a
+     review or issue comment by an author whose login does not end in `[bot]` and whose body
+     carries none of the local markers (`<!-- local-review-round -->`, `<!-- ai-fix-` or
+     `<!-- local-review-escalated -->`; a marked item is the session's own footprint under
+     the maintainer's identity) — posted while an exit label (`needs-approval` or
+     `needs-decision`) was on: after a `labeled` event for it and before any later
+     `unlabeled` event for it. Nothing else resets the count.
+   - Rounds so far = marker-carrying reviews posted after that event; with no reset event,
+     every marker-carrying review on the PR — the first pass is round 1.
    Apply the rule with the cap **read from the doc routed above**, never from memory. At the
-   cap, report the count and stop: whether a Critical or Major finding is still open is the
-   fix step's stop to decide, and that stop performs the exit — this skill never labels.
+   cap, report the count and stop — the report is this step's cap signal, not a label:
+   whether a Critical or Major finding is still open is the fix step's stop to decide, and
+   that stop performs the exit.
 2. **Check the branch isn't behind `origin/main`** per the review step, and merge it in first if it is
    (`resolving-merge-conflicts` if that conflicts). A rule that landed since the branch was cut
    is invisible to a review run against the branch alone.

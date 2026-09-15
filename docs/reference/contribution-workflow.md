@@ -37,9 +37,9 @@ covering commit message conventions) — the project-wide floor, distinct from a
    - Fresh reviewer agents, never inline (**Rule A** below), one per checklist `CLAUDE.md`'s
      **Model selection** table resolves for the change.
    - All findings go to the PR as one native review before anything is fixed.
-3. **Fix, then re-review** (`fix`, then `review` again).
-   - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
-     close per **Thread discipline** below.
+3. **Fix** (`fix`, then `review` again).
+   - Fix, then re-review: every finding gets a fix and a reply on its thread, or a reply
+     saying why not; threads close per **Thread discipline** below.
    - Human PR comments, at any point, are findings like any other.
    - Loop until a pass is clean, up to the cap (**Rounds and the cap** below).
    - Still Critical or Major open at the cap → stop: the exit labels go on and one escalation
@@ -89,8 +89,8 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
   reviewing again: the session, at the fix step's stop, puts the exit labels on (**Exit
   labels** below) and posts one escalation comment handing the disagreement to the human, who
   has **two decisions**: merge as is, accepting the
-  open findings, or **grant another round** — a fresh count of two passes, since the
-  escalation comment is itself the reset event. A grant is an instruction given to the
+  open findings, or **grant another round** — a fresh count, since the escalation comment
+  is itself the reset event. A grant is an instruction given to the
   session, never inferred from a thread.
 - **Rounds are counted from the most recent reset event**: the escalation comment posted
   at the cap, or a human review or PR comment posted while an exit label was on. No reset
