@@ -17,13 +17,23 @@ interactive-only wording precisely because it sits in every run's index.
 
 1. **Count the rounds.** One pass posts **one** review, however many agents it ran — so a
    round is a native review carrying the local round marker `submit-pr-review`'s local mode
-   defines. List the PR's reviews with their bodies and count the ones carrying it
-   (`CLAUDE.md`'s **Tracker mechanics** section routes to the listing command). Whatever
-   shape that recipe has, the count needs **every** review's body: select bodies rather than
-   ids, and keep no filter that returns only the latest one — a recipe written as a post
-   read-back has one. Apply the **Rounds and the cap** rule with the cap **read from the doc
-   routed above**, never from memory: at the cap with a Critical or Major finding still open,
-   stop and escalate to the human partner rather than reviewing again.
+   defines. The count is windowed by the **Rounds and the cap** rule's reset events, and this
+   is that rule's one procedure — the fix step's cap stop routes here rather than counting:
+   - List the PR's reviews (body, submission time) and its issue comments (body, author,
+     creation time); `CLAUDE.md`'s **Tracker mechanics** section routes to both listings.
+     Paginate, and select bodies rather than ids — a recipe written as a post read-back keeps
+     only the latest item.
+   - The most recent **reset event** is the later of: an issue comment whose last line is
+     `<!-- local-review-escalated -->` (the cap stop's escalation), and a review or comment
+     by an author whose login does not end in `[bot]`, carrying neither the round marker nor an
+     `ai-fix-` marker, posted later than every marker-carrying review and every
+     `ai-fix-summary` comment before it — that is, posted while no automated work was pending,
+     which is when an exit label is on. No reset event → the window starts at the PR's first
+     review.
+   - Rounds so far = marker-carrying reviews posted after that event.
+   Apply the rule with the cap **read from the doc routed above**, never from memory. At the
+   cap with a Critical or Major finding still open, report the cap and stop — the fix step's
+   stop performs the exit; this skill never labels.
 2. **Check the branch isn't behind `origin/main`** per the review step, and merge it in first if it is
    (`resolving-merge-conflicts` if that conflicts). A rule that landed since the branch was cut
    is invisible to a review run against the branch alone.

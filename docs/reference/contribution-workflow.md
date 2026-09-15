@@ -16,34 +16,42 @@ covering commit message conventions) — the project-wide floor, distinct from a
 
 ## The chain
 
-0. **File the issue.** Every unit of work has an issue before work starts. If none exists yet, file one first
-   (`file-task-issue`) — no exception for small or typo-level changes. Correct context label +
-   Size/Estimate fields (see **Issue conventions** below). Board **Status** defaults to
-   `Backlog`.
-1. **Implement** (`implement`). Isolated `git worktree`, always, even for a one-line fix —
-   it removes the shared-checkout risk of a concurrent session switching branches underneath
-   you. Branch `<context-label>/<issue-number>` (see **Issue conventions** below) from an
-   up-to-date `origin/main`, never a stale local `main`. Board **Status** → `In progress` when
-   writing actually starts, not at filing time. Self-check against the
-   [Definition of Done](definition-of-done.md), then push and open a PR against `main` — never
-   another branch — referencing the issue with `Closes #N` or `Part of #N` (see **Base `main`
-   and stacking** and **`Closes` and `Part of`** below). Board **Status** → `In review`.
-2. **Review** (`review`). Count the rounds first (**Rounds and the cap** below), then run
-   the pass against current `origin/main`. Fresh reviewer agents, never inline (**Rule A**
-   below), one per checklist `CLAUDE.md`'s **Model selection** table resolves for the
-   change. All findings go to the PR as one native review before anything is fixed.
-3. **Fix, then re-review** (`fix`, then `review` again). Every finding gets a fix and a reply
-   on its thread, or a reply saying why not, and its thread is closed out per **Thread
-   discipline** below. Human PR comments, at any
-   point, are findings like any other. Loop until a pass is clean, up to the cap (**Rounds
-   and the cap** below). Still Critical or Major open at the cap → stop: the exit labels go
-   on and one escalation comment hands the disagreement to the human partner (**Exit labels**
-   below).
-4. **Approval** (`finalize-pr-review`). A clean pass → `needs-approval` (**Exit labels**
-   below). Board **Status** stays `In review`. Merge is the human's, always.
-5. **Clean up** (`cleanup`, invoked by the human after the merge). Verify the change is on
-   `origin/main`, remove the task's worktree, board **Status** → `Done`. A merged `specs` PR:
-   file its task issues (**Merge and issue closing** below).
+0. **File the issue** (`file-task-issue`).
+   - Every unit of work has an issue before work starts — no exception for small or
+     typo-level changes.
+   - If none exists yet, file one first, per **Issue conventions** below (context label, board
+     fields). Board **Status** starts at `Backlog` (**Project board** below).
+1. **Implement** (`implement`).
+   - Isolated `git worktree`, always, even for a one-line fix — a concurrent session switching
+     branches underneath you is the risk it removes.
+   - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
+     `origin/main` (**Base `main` and stacking** below).
+   - Board **Status** → `In progress` when writing actually starts, not at filing time.
+   - Self-check against the [Definition of Done](definition-of-done.md); then push and open
+     the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`
+     and `Part of`** below).
+   - Board **Status** → `In review`.
+2. **Review** (`review`).
+   - Count the rounds first (**Rounds and the cap** below).
+   - Run the pass against current `origin/main`.
+   - Fresh reviewer agents, never inline (**Rule A** below), one per checklist `CLAUDE.md`'s
+     **Model selection** table resolves for the change.
+   - All findings go to the PR as one native review before anything is fixed.
+3. **Fix, then re-review** (`fix`, then `review` again).
+   - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
+     close per **Thread discipline** below.
+   - Human PR comments, at any point, are findings like any other.
+   - Loop until a pass is clean, up to the cap (**Rounds and the cap** below).
+   - Still Critical or Major open at the cap → stop: the exit labels go on and one escalation
+     comment hands the disagreement to the human partner (**Exit labels** below).
+4. **Approval** (`finalize-pr-review`).
+   - A clean pass → `needs-approval` (**Exit labels** below).
+   - Board **Status** stays `In review`. Merge is the human's, always (**Merge and issue
+     closing** below).
+5. **Clean up** (`cleanup`, invoked by the human after the merge).
+   - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
+     `Done`.
+   - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
 
 ## Rule A — author/reviewer separation
 
@@ -115,8 +123,11 @@ go-signal — an interactive session never self-applies them ([ci-pipeline.md](c
   over work that is not on the branch.
 - **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
   resolved explicitly.
+- **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
+  gets an issue instead (`file-task-issue`, context label per the artifact it belongs to,
+  linked to the PR); the reply names the issue, and the thread is then resolved.
 
-These four are the rule; `resolve-review-thread` applies them per thread, and
+These five are the rule; `resolve-review-thread` applies them per thread, and
 [tracker-mechanics.md](tracker-mechanics.md) holds the commands.
 
 ## Base `main` and stacking

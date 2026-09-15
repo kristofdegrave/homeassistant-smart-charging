@@ -62,7 +62,7 @@ reference.
   routing/cycle-count signal; a local review carrying it would be miscounted as an automatic
   fix cycle. A review without the CI marker reads as ordinary human feedback, which the
   `address-review-remarks` skill already picks up via its human-comment / `ai-fix-ack` path;
-  the local marker exists only for the interactive round count the `review` skill keeps. CI
+  the local marker exists only for the interactive round count the review step keeps. CI
   never greps for it, and it counts a population CI's own cap never sees.
 
 ## 5. Submit — and recover from a 422

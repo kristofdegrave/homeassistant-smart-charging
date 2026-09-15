@@ -258,8 +258,14 @@ read-back is not optional:
 gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '[.labels[].name]'
 ```
 
+Removing one is the same command with `--remove-label <label>`. It exits 0 and prints the PR
+URL whether or not the label was present, so it is safe on the common path where it is
+absent — and, like every `gh pr edit`, it needs the read-back above to prove anything.
+
 (An issue path serves a PR too — a PR is an issue for the labels API.) REST fallback, which
-returns the resulting label set directly, so it is its own read-back:
+returns the resulting label set directly, so it is its own read-back — except that the
+`DELETE` returns **404 `Label does not exist`** when the label is absent, so a caller that
+does not know whether it is on must treat 404 as success:
 
 ```sh
 gh api -X POST   repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/labels -f "labels[]=<label>" --jq '[.[].name]'

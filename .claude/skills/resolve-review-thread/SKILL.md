@@ -34,8 +34,10 @@ resolve
 mutation, and the failure modes that make a resolve look like it worked when it didn't. Read
 them there; this skill owns only *which* threads may be resolved.
 
-- **Resolve only what was actually fixed.** A disputed, deferred or partially addressed
-  thread stays open, with the reply saying why, and the summary saying which.
+- **Resolve only what was actually fixed — or filed.** A thread whose request was outside the
+  PR's scope resolves once the reply names the issue filed for it. A disputed, deferred or
+  partially addressed thread stays open, with the reply saying why, and the summary saying
+  which.
 - **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
   resolved explicitly.
 - **Read the state back.** A resolve that reports success has not necessarily landed — the

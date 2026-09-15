@@ -27,18 +27,18 @@ model it wants, so name it, and leave switching to the human partner.
 ## Before any fix: the cap stop
 
 The fix step is where the loop ends when it cannot converge, so check that first. Count the
-rounds the way the review step does — native reviews carrying the local round marker, counted
-from the most recent reset event — against the cap read from **Rounds and the cap** (routed
-from `CLAUDE.md`'s **Contribution workflow** section), never from memory. At the cap with a
-Critical or Major finding still open, do not fix. Instead:
+rounds exactly as the `review` skill's *Count the rounds* item does — that is the one
+procedure for the **Rounds and the cap** rule (routed from `CLAUDE.md`'s **Contribution
+workflow** section), and this skill adds nothing to it. At the cap with a Critical or Major
+finding still open, do not fix. Instead:
 
-1. Apply `needs-decision` alongside `needs-approval`; `CLAUDE.md`'s **Tracker mechanics**
-   section routes to the label commands and the read-back.
+1. Put both exit labels on — `needs-approval` and `needs-decision`; `CLAUDE.md`'s **Tracker
+   mechanics** section routes to the label commands and the read-back.
 2. Post one escalation comment, body via a file per **Tracker mechanics**: the open Critical
    and Major findings by thread, what each round tried, where author and reviewer disagree,
    and the human's two decisions — merge as is, or grant another round. Its last line is the
-   escalation marker `<!-- local-review-escalated -->`, which the round count treats as a
-   reset event.
+   escalation marker `<!-- local-review-escalated -->`, which the `review` skill's count reads
+   as a reset event.
 3. Stop and report. A grant is an instruction from the human, never inferred from a thread.
 
 Below the cap, or with nothing Critical or Major open, continue.
@@ -48,7 +48,11 @@ Below the cap, or with nothing Critical or Major open, continue.
 Per finding:
 
 1. Apply the fix policy (§2), re-authoring with the work file rather than patching around it.
-2. Reply in its thread via `resolve-review-thread`, saying what was done or why not.
+   A finding whose request is outside the PR's scope is filed, not fixed — `file-task-issue`,
+   per the contribution workflow's **Thread discipline** (routed from `CLAUDE.md`'s
+   **Contribution workflow** section).
+2. Reply in its thread via `resolve-review-thread`, saying what was done, which issue was
+   filed, or why not.
 
 Then once, for the run:
 
@@ -76,7 +80,7 @@ judged by a spawned reviewer agent, never by this session.
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** They are CI's triggers
   and the human partner's go-signal, not a way to hand over work this session should do; the
   **Contribution workflow** section states the rule and routes to the detail.
-- **The exit labels are applied only by the step the contribution workflow's **Exit labels**
-  section names for each exit** (routed from `CLAUDE.md`'s **Contribution workflow** section).
-  For the cap that is this skill's stop above — and nothing else here: a fix below the cap
-  applies no label.
+- **The exit labels are applied only by the step the contribution workflow names for each
+  exit** — its **Exit labels** section, routed from `CLAUDE.md`'s **Contribution workflow**
+  section. For the cap that is this skill's stop above, and nothing else here: a fix below
+  the cap applies no label.
