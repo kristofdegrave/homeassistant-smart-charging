@@ -1,0 +1,252 @@
+# Project profile — every value the method's scripts and commands read about THIS project.
+#
+# The method (docs/reference/**, .claude/skills/**, .claude/agents/**, the work-type files) is
+# written to travel between repositories; this file is the part that does not. A value spelled
+# here is spelled nowhere else under docs/reference/** or .claude/**: those files name the key
+# (for example `board.fields.size.id`) and whoever runs the command resolves it here. Project
+# facts that carry a *why* — git identity, merge strategy, what a board column means — are
+# prose, in docs/reference/profile.md; this file holds only what a script or a command needs
+# verbatim.
+#
+# Readers today: .github/setup-labels.sh (`labels`), .github/profile-env.sh (shell variables
+# for the recipes in docs/reference/tracker-mechanics.md). The CI workers still carry their
+# own copies of the label set and the path map; making them read this file is its own issue.
+
+repo:
+  owner: kristofdegrave
+  name: homeassistant-smart-charging
+
+board:
+  # GitHub Projects (v2) board "EMS": its number under the owner, and its node id.
+  number: 1
+  name: EMS
+  project_id: PVT_kwHOABQtm84Bd8mI
+  # Node ids are stable in practice but not guaranteed. Re-derive with
+  #   gh project field-list <board.number> --owner <repo.owner> --format json
+  # if an edit is rejected, and update them here — nowhere else.
+  fields:
+    size:
+      id: PVTSSF_lAHOABQtm84Bd8mIzhYaY9g
+      type: single_select
+      options:
+        XS: "eff732af"
+        S: "9592a5a3"
+        M: "9728cbdc"
+        L: "c53df028"
+        XL: "7b141a16"
+    estimate:
+      id: PVTF_lAHOABQtm84Bd8mIzhYaY9k
+      type: number # story points; a plain number field, any positive integer
+    status:
+      id: PVTSSF_lAHOABQtm84Bd8mIzhYaYzw
+      type: single_select
+      # Listed in the board's column order. What each column means, and which are unused, is
+      # docs/reference/profile.md's **Project board**.
+      options:
+        Backlog: "f75ad846"
+        Ready: "08afe404"
+        In progress: "47fc9ee4"
+        In review: "4cc61d42"
+        Done: "98236657"
+
+# The label set, exactly as .github/setup-labels.sh writes it. Each entry is name, colour
+# (six hex digits, no `#`) and description. A description must stay under GitHub's
+# 100-character cap and contain no tab or backslash: the script's read-back compares it
+# through jq's @tsv, which escapes both, and a mismatch there can never be cleared by
+# re-running. What each group means is docs/reference/contribution-workflow.md's
+# **Issue conventions**; the CI-side places the context vocabulary is also baked into are
+# docs/reference/ci-pipeline.md's **Label vocabulary sync**.
+labels:
+  pretriage:
+    - name: idea
+      color: f2a101
+      description: "Not yet scoped — work it with the work-idea skill before adding needs-draft"
+  action:
+    - name: needs-draft
+      color: 0e8a16
+      description: "Issue: with one context label, trigger the CI drafter"
+    - name: needs-review
+      color: fbca04
+      description: "PR: trigger the fresh AI review"
+    - name: needs-work
+      color: d93f0b
+      description: "PR: trigger the AI fix pass to address review remarks"
+    - name: needs-approval
+      color: b60205
+      description: "PR: no automated review/fix work is pending — a maintainer must decide"
+    - name: needs-decision
+      color: e4e669
+      description: "PR: review left findings open and no automatic fix follows — a maintainer decides how to proceed"
+  # One per enabled work type — `work_types.enabled` below is this list's names.
+  context:
+    - name: uc
+      color: 1d76db
+      description: "Use-case analysis document"
+    - name: requirement
+      color: 0052cc
+      description: "Requirement / constraint / glossary change"
+    - name: adr
+      color: 5319e7
+      description: "Architecture Decision Record"
+    - name: specs
+      color: 006b75
+      description: "Implementation spec (design + TDD plan) work"
+    - name: development
+      color: c5def5
+      description: "Implementation task (code + tests), pinned to a Plan: docs/plans task"
+    - name: testing
+      color: bfd4f2
+      description: "Test-authoring work, pinned to a Plan: docs/plans task"
+    - name: workflow
+      color: e99695
+      description: "CI/skill/agent-authoring change (review only — no auto-drafter)"
+    - name: documentation
+      color: ededed
+      description: "Design-doc change (docs/design/**); review only, not yet wired into the CI drafter's label set"
+  # Orthogonal to the context label, never a substitute. GitHub creates both by default with a
+  # vaguer description; the script's --force rewrites it to the meaning Issue conventions gives
+  # them. Colours are GitHub's own defaults, so re-running never recolours labels already on
+  # open issues.
+  kind:
+    - name: bug
+      color: d73a4a
+      description: "Defect in shipped behaviour — verify the claim first; pair with a context label once known"
+    - name: enhancement
+      color: a2eeef
+      description: "Improvement to already-shipped behaviour — pair with a context label once the artifact is known"
+
+# The work types this project enables, from the method's catalogue. Each names a row of
+# CLAUDE.md's Model selection table and a directory under docs/reference/work-types/.
+work_types:
+  enabled:
+    - adr
+    - uc
+    - requirement
+    - specs
+    - documentation
+    - development
+    - testing
+    - workflow
+
+review:
+  # Review passes allowed per PR before the loop stops and escalates; counted from the most
+  # recent reset event, as docs/reference/contribution-workflow.md's **Rounds and the cap**
+  # defines. That section routes here for the number rather than stating it.
+  cap: 2
+  # Changed path → the work type whose review checklist judges it. This is the no-label row
+  # of CLAUDE.md's Model selection table, and applies to every PR whatever its label.
+  path_map:
+    - work_type: adr
+      paths: ["docs/adl/**"]
+    - work_type: uc
+      paths: ["docs/analysis/**"]
+    - work_type: specs
+      paths: ["docs/plans/**"]
+    - work_type: documentation
+      paths: ["docs/design/**"]
+    - work_type: development
+      paths: ["custom_components/**"]
+    - work_type: testing
+      paths: ["tests/**"]
+    - work_type: workflow
+      paths:
+        - ".github/workflows/**"
+        - ".github/ISSUE_TEMPLATE/**"
+        - ".github/setup-labels.sh"
+        - ".claude/skills/**"
+        - ".claude/agents/**"
+        - ".claude/profile.yml"
+        - "docs/reference/**"
+        - "CLAUDE.md"
+
+# Everything the method or the stack is built on that lives outside this repository, each
+# pinned to the upstream state it was last reconciled with. This is the provenance manifest:
+# the scheduled drift check reads these rows, and a pin is bumped by a decision recorded in
+# the PR that bumps it — never by an automatic re-sync, since several of these are
+# adaptations rather than copies (docs/reference/ai-authoring.md's **Vendored skills are
+# forked on purpose**).
+#
+#   source     GitHub repository the skill came from
+#   path       path of the skill inside that repository
+#   pin        `commit:<sha>` — the last upstream commit touching `path` at reconciliation —
+#              or `sha256:<hash>` where only the installer's content hash of SKILL.md was
+#              recorded (skills-lock.json); no commit is known for those and the hash no
+#              longer matches upstream HEAD, so the first drift run will flag each of them
+#   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
+#              the developer's machine by the plugin named, and not part of this repository
+dependencies:
+  method:
+    # Skills the method's own work files name per step, from the superpowers plugin.
+    - name: brainstorming
+      source: obra/superpowers
+      path: skills/brainstorming
+      pin: commit:b36e0829c6d0
+      installed: user
+    - name: writing-plans
+      source: obra/superpowers
+      path: skills/writing-plans
+      pin: commit:b36e0829c6d0
+      installed: user
+    - name: test-driven-development
+      source: obra/superpowers
+      path: skills/test-driven-development
+      pin: commit:b9e75dddec7a
+      installed: user
+    - name: verification-before-completion
+      source: obra/superpowers
+      path: skills/verification-before-completion
+      pin: commit:3be5aad3dd24
+      installed: user
+    - name: receiving-code-review
+      source: obra/superpowers
+      path: skills/receiving-code-review
+      pin: commit:3fb75974186e
+      installed: user
+    # Skills ported — adapted, not copied — into this repository.
+    - name: grilling
+      source: mattpocock/skills
+      path: skills/productivity/grilling
+      pin: commit:85f83d3fde1d
+      installed: repo
+    - name: grill-me
+      source: mattpocock/skills
+      path: skills/productivity/grill-me
+      pin: commit:fcf0071560d3
+      installed: repo
+    - name: handoff
+      source: mattpocock/skills
+      path: skills/productivity/handoff
+      pin: commit:d28dfdc39bea
+      installed: repo
+    - name: research
+      source: mattpocock/skills
+      path: skills/engineering/research
+      pin: commit:321658273cb1
+      installed: repo
+    # Upstream-intact marketplace install; used by the design documents, not by a stack.
+    - name: domain-driven-design
+      source: wondelai/skills
+      path: domain-driven-design
+      pin: sha256:59c101a9dc2e7b4cb1d20287bd2f0e9e5ef69315b7c25f477dd5cafb414f57cb
+      installed: repo
+  # Stack packages: the Home Assistant and Python skills. Declared here, not part of the
+  # method; copied into .claude/skills/ and pinned per project.
+  stack:
+    - name: ha-integration-knowledge
+      stack: home-assistant
+      source: home-assistant/core
+      path: .claude/skills/ha-integration-knowledge
+      pin: sha256:205f21832aee357842f17afbfe0e57b51c8fa34b7b9ac62ebec4cd529b637158
+      installed: repo
+    - name: async-python-patterns
+      stack: python
+      source: wshobson/agents
+      path: plugins/python-development/skills/async-python-patterns
+      pin: sha256:15eb61c8d5c4870d57044cfb199d0aa028d8e1e73e9bb8cb6122da32c76efb77
+      installed: repo
+    - name: python-anti-patterns
+      stack: python
+      source: wshobson/agents
+      path: plugins/python-development/skills/python-anti-patterns
+      pin: sha256:6aad22ecbc1546927f2d2c6cac7ac793aa8256a6b47ded75d8c628c5fe491259
+      installed: repo

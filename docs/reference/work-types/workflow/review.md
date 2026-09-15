@@ -20,7 +20,8 @@ a different question with the same subject.
 
 A change to this project's AI pipeline itself and the process docs it is driven by — a skill
 (`.claude/skills/`), an agent definition (`.claude/agents/`), a CI workflow
-(`.github/workflows/`), the label vocabulary (`.github/setup-labels.sh`), an issue form
+(`.github/workflows/`), the label vocabulary (`.claude/profile.yml`'s `labels`, which
+`.github/setup-labels.sh` writes to the repository), an issue form
 (`.github/ISSUE_TEMPLATE/`), or the canonical process reference (`docs/reference/`,
 `CLAUDE.md`). The workflow, skill and agent files run with write-scoped credentials
 (`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,
@@ -45,7 +46,8 @@ Always read:
 - If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
   (`.claude/agents/`): `docs/reference/ci-pipeline.md`, for each job's stated scope
   (draft/review/fix are one task each) and the `needs-*` label contract.
-- If a changed file is under `.github/ISSUE_TEMPLATE/`: `.github/setup-labels.sh`, plus
+- If a changed file is under `.github/ISSUE_TEMPLATE/`: `.claude/profile.yml`'s `labels` (the
+  set `.github/setup-labels.sh` writes), plus
   `docs/reference/contribution-workflow.md`'s **Issue conventions** — the canonical
   context-label vocabulary, to check the form's `labels:` value against it — and
   `docs/reference/ci-pipeline.md`'s **Label vocabulary sync**, to check the CI-side files stay
@@ -94,7 +96,7 @@ Always read:
   `docs/reference/ci-pipeline.md`'s. A change to one place that doesn't update the rest is a
   Major finding (silent drift in the vocabulary the whole label-driven pipeline trusts).
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
-  label `.github/setup-labels.sh` defines — one of the canonical context labels above, or the
+  label `.claude/profile.yml`'s `labels` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a
   Major finding); and any process claim the form's body makes (e.g. `adr.yml` pointing at
   `CLAUDE.md`'s ADR section) still matches what that reference currently says.

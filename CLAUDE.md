@@ -248,8 +248,8 @@ What a `workflow` author reads instead is in **Authoring AI artifacts** below.
 `custom_components/**` → `docs/reference/work-types/development/review.md`;
 `tests/**` → `docs/reference/work-types/testing/review.md`;
 `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
-`.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `docs/reference/**` and
-`CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
+`.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `.claude/profile.yml`,
+`docs/reference/**` and `CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
 file, which the generic `reviewer` agent applies. `docs/analysis/**` names the `uc` checklist because that tree
 is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
 here rather than carrying its own copy. An entry reaches a CI review only if its tree is also in
@@ -459,22 +459,11 @@ Preferred Mermaid types: `flowchart TD`, `stateDiagram-v2`, `sequenceDiagram`.
 
 ## Research sources
 
-When an external fact blocks a decision — what Home Assistant does in some case, how a
-dependency behaves, what a device's API returns — these are this project's primary sources,
-highest trust first. The `research` skill carries the generic procedure and routes here for
-the list.
-
-1. **Home Assistant** — `developers.home-assistant.io` for the documented contract, and the
-   `homeassistant` package source at the version pinned in `requirements-test.txt` for what
-   the code actually does.
-2. **Library source** — a dependency's published source at the version the file that pins it
-   names (`requirements-test.txt` for test and dev dependencies; the integration manifest's
-   `requirements` array for anything the shipped integration depends on), not its README. A
-   changelog entry counts only as a pointer to the commit that made the change.
-3. **Device / vendor API docs** — the manufacturer's own specification for a charger,
-   inverter, meter or tariff provider this project integrates with (the hardware is listed in
-   `docs/analysis/system-overview.md`); a captured response from the real device outranks the
-   specification.
+When an external fact blocks a decision — what the platform does in some case, how a
+dependency behaves, what a device's API returns — the primary sources to consult, highest
+trust first, are this project's own and live in
+[docs/reference/profile.md](docs/reference/profile.md)'s **Research sources**. The `research`
+skill carries the generic procedure and routes here; this section only forwards to the list.
 
 ---
 

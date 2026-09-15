@@ -81,9 +81,10 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
-- **The cap is 2 review passes**, counted from the most recent reset event (see below). This
-  line is the **only** statement of the interactive cap — everything that needs the number
-  routes here instead of repeating it.
+- **The cap is `.claude/profile.yml`'s `review.cap`** review passes, counted from the most
+  recent reset event (see below). That key is the **only** statement of the cap's number and
+  this line the only statement of what it counts — everything that needs either routes here
+  instead of repeating it.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
   so the final round needs no further pass to confirm it.
@@ -149,7 +150,8 @@ These five are the rule; `resolve-review-thread` applies them per thread, and
 ## Base `main` and stacking
 
 The PR always bases `main` directly — never another work branch, even if logically stacked on
-a not-yet-merged prior task, because squash merges orphan stacked branches. Branching off a
+a not-yet-merged prior task, because this project's merge strategy — [profile.md](profile.md)'s **Merge strategy** — orphans
+stacked branches. Branching off a
 prior task's branch locally is fine; the PR itself is `--base main` from the start, and the
 new branch is still cut from a fetched `origin/main` — or, when deliberately stacking, from
 the freshly fetched prior branch — never from a stale local `main`.
@@ -164,7 +166,8 @@ the `Closes` reference is the one that names it.
 
 ## Merge and issue closing
 
-**Merge is always manual** (`CODEOWNERS` + branch protection) — never auto-merged or
+**Merge is always manual** (how this project enforces that is [profile.md](profile.md)'s
+**Merge strategy**) — never auto-merged or
 self-approved; `needs-approval` only signals that no automated work is pending. Merging
 auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
 only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
@@ -191,11 +194,12 @@ it.
 
 ## Project board
 
-Status field on the EMS project board (`gh project view 1 --owner kristofdegrave`) has 5
-options: `Backlog`, `Ready`, `In progress`, `In review`, `Done`. `Ready` is unused today (not
-part of this workflow) — the chain above only moves Backlog → In progress → In review → Done. If
-`Ready` gets a defined meaning later (e.g. dependencies/contract resolved and pickable),
-insert it explicitly into step 0/1 here rather than leaving it implicit.
+The board's Status vocabulary and option ids are `.claude/profile.yml`'s
+`board.fields.status`, and what each column means on this project — including the one that is
+unused — is [profile.md](profile.md)'s **Project board**. The rule here is only that the chain
+above moves an item **Backlog → In progress → In review → Done** and through no other column:
+a column that later gains a defined meaning is inserted explicitly into step 0/1 here rather
+than left implicit.
 
 ## Parallel work and forward dependencies
 
@@ -210,8 +214,10 @@ of the producer's logic.
 
 ## Git identity
 
-Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
-separate bot account for the interactive session.
+Whose account the interactive session acts under is [profile.md](profile.md)'s **Repository
+and git identity**. What this chain relies on is only that it is **one account, shared with the
+human partner** — which is why **Rounds and the cap** above tells a human item from the
+session's own footprint by the session's markers, never by author.
 
 ## Issue conventions
 
@@ -219,8 +225,11 @@ separate bot account for the interactive session.
   (implementation spec: design + TDD plan, `docs/plans/**`), `development`/`testing`
   (implementation tasks against an approved plan), `workflow` (CI/skill/agent-authoring
   changes), `documentation` (design-doc changes, `docs/design/**` — reviewed, but not yet
-  wired into automated drafting). Adding or renaming a label: see
-  [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must stay in sync.
+  wired into automated drafting). The label set itself — every name, colour and description,
+  and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
+  `work_types`, and `.github/setup-labels.sh` writes it to the repository from there. Adding or
+  renaming a label: see [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must
+  stay in sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
