@@ -165,7 +165,7 @@ join the reviewer's list.
   addressed through its topic (*the branch-naming rule under `CLAUDE.md`'s **Issue
   conventions***), so a rule can move between documents or split without any pointer
   changing. The target shape of a document reached this way is `##` one topic, `###` one rule
-  beneath it; `idea-to-issues.md`'s parked topics and the `adr` bar's worthiness topic have it,
+  beneath it; the flow document's stages and the `adr` bar's worthiness topic have it,
   while the workflow reference still carries its rules as `##` sections and several routing
   entries name a whole document rather than a heading — the pointer form above is what makes
   reshaping them a change to those documents alone. `implement` writes "the branch-naming rule
@@ -322,7 +322,9 @@ never revised cannot be the thing a blocking gate asks to edit). **2, anchors in
 link and every backticked path in `CLAUDE.md` resolves, an anchored link to a heading of its
 document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
 agreement:** the Model selection table and changed-path map agree with the profile's
-`work_types.enabled`, `labels.context` and `review.path_map`. **4, work-type completeness:**
+`work_types.enabled`, `labels.context` and `review.path_map`; `docs/reference/profile.md`
+exists and has a **Flow** section, and every deviation it states — each `###` there — names
+at least one work type in backticks, every one of them enabled. **4, work-type completeness:**
 every enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its
 row says its work is `none`; every dependency declared `installed: repo` is present; every
 `layer:` a file does carry names a known layer. **5, no profile values in method files:** no

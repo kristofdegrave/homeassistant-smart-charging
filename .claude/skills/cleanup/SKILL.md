@@ -72,9 +72,9 @@ file — a reference is not a dispatch, and none of them runs it.
    workflow** section's doc's rules on the `Closes` reference and on issue closing; apply them
    as written there. What this step adds: it never closes an issue itself, whatever state the
    issue is found in.
-5. **A merged `specs` PR owes its task issues.** That rule, and what is filed when, are the
-   **Contribution workflow** section's doc's and the **Ticket** stage of the stages-either-side
-   doc it routes to. What this step adds: the filing runs through `file-task-issue`, one issue
+5. **A merged `specs` PR owes its task issues.** That rule is the **Contribution workflow**
+   section's doc's; what is filed when is the **Ticket** stage of the flow `CLAUDE.md`'s
+   **Idea-to-product flow** topic routes to. What this step adds: the filing runs through `file-task-issue`, one issue
    per plan task, inside this run — it is filing, not drafting, so it needs no separate go from
    the human partner. Implementing any of them is a new issue and a new chain, and does not
    start here.

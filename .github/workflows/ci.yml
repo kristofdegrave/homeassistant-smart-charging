@@ -100,7 +100,8 @@ jobs:
 
   method:
     # The method check: heading anchors in both directions between CLAUDE.md and the files
-    # that point at it, CLAUDE.md agreeing with .claude/profile.yml, every enabled work type
+    # that point at it, CLAUDE.md agreeing with .claude/profile.yml (the profile document
+    # present, with its flow deviations naming enabled work types), every enabled work type
     # complete, every repo-installed dependency present, no profile value inside a method
     # file. The script's header is the authority on each rule; this is a summary.
     # Repo-wide, unlike `authoring` above: the break comes from editing CLAUDE.md or the
