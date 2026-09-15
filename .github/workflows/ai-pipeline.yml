@@ -59,6 +59,7 @@ on:
     paths:
       - "docs/analysis/**"
       - "docs/adl/**"
+      - "docs/design/**"
       - "docs/plans/**"
       - "docs/reference/**"
       - "CLAUDE.md"

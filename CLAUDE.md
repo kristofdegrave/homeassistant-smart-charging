@@ -252,9 +252,14 @@ What a `workflow` author reads instead is in **Authoring AI artifacts** below.
 `CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
 file, which the generic `reviewer` agent applies. `docs/analysis/**` names the `uc` checklist because that tree
 is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
-here rather than carrying its own copy. One entry, `docs/design/**`, is routed by this
-rule but cannot be seen: it is in neither the pipeline's path filter nor the review worker's
-diff enumeration, so the reviewer is reachable in principle and unreached in practice.
+here rather than carrying its own copy. An entry reaches a CI review only if its tree is also in
+`ai-pipeline.yml`'s path filter, which decides whether a job runs at all, and in
+`_ai-review.yml`'s diff enumeration, which decides what a checklist can see. Those two are
+enumerations beside this one, so adding a tree here means adding it there — and the two
+omissions fail differently. Left out of the **path filter**, no job runs, which silences the
+label half too, since a job that never runs cannot add a reviewer. Left out of the **diff
+enumeration** alone, the job does run, sees nothing under that tree, and can post a clean
+verdict over a change no checklist read — a false clean, and the worse of the two.
 `docs/postmortems/**` keeps its own rule from **Document structure** above: a plain
 fresh-agent pass weighted to quotation accuracy, the `workflow` checklist only when the PR
 also edits `CLAUDE.md` or the pipeline.
