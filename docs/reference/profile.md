@@ -106,8 +106,19 @@ stack skills are declared here and are not part of the method.
 
 ## Flow
 
-**Default.** This project follows the method's idea-to-product flow — today
-[idea-to-issues.md](idea-to-issues.md), reached from `CLAUDE.md`'s **Contribution workflow**
-section — as written, with no stage removed, added or reordered and no gate changed. When that
-document gains its deviation contract, a deviation is stated here as one `###` per deviation
-with its why — never as a copy of the flow.
+The method's default idea-to-product flow is [idea-to-product.md](idea-to-product.md), and
+its first rule is to apply what this section states over the stages it names. This section is
+the **deviation contract**, and it has exactly two shapes. Either it says **Default** — the
+flow as written, no stage removed, added or reordered, no gate changed — and carries no `###`
+at all. Or it carries one `###` per deviation, each heading naming, in backticks, the context
+label of the work type whose stage it changes — ``### The `specs` stage is skipped on the bug
+track``, say — with the why beneath it, and never a copy of the flow, which would drift from
+the method's. **Every backticked span in a deviation heading is read as a work type**, so
+nothing else in the heading is backticked: a kind label, a file or a status goes in plain
+words, or in the why beneath. The method check refuses a deviation heading that names no work
+type, or one this project does not enable — a stage whose work type is not enabled is skipped
+by the flow's own rule and needs no deviation to say so — and it refuses a profile document
+with no `## Flow` section, or no profile document at all, since either has stated neither
+shape.
+
+**Default.** This project follows the flow as written.

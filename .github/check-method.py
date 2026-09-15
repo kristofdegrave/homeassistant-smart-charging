@@ -17,7 +17,10 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
-                        same set; the table's changed-path map equals review.path_map
+                        same set; the table's changed-path map equals review.path_map;
+                        docs/reference/profile.md exists and has a `## Flow` section, and
+                        every flow deviation -- a `###` under it -- names, in backticks, at
+                        least one work type, each of them enabled
   4  work-type          every enabled work type has review.md, and implement.md and done.md
      completeness       unless its row says its work is `none`; every dependency declared
                         `installed: repo` is present; every `layer:` frontmatter, where a
@@ -83,6 +86,9 @@ except ImportError:  # pragma: no cover - reported as an environment error below
     yaml = None
 
 LAYERS = {"method", "project", "stack"}
+# The project's prose profile; its `## Flow` section is the deviation contract check 3 reads.
+PROFILE_DOC = "docs/reference/profile.md"
+FLOW_SECTION = "Flow"
 POINTER_PLACEHOLDER = "Topic"
 POINTER_TREES = (".claude", "docs", ".github/workflows")
 FROZEN_TREES = ("docs/postmortems", "docs/archive")
@@ -336,7 +342,7 @@ def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
                 )
 
 
-def check_profile_agreement(guide: Guide, profile: dict, findings: Findings) -> None:
+def check_profile_agreement(root: Path, guide: Guide, profile: dict, findings: Findings) -> None:
     enabled = list((profile.get("work_types") or {}).get("enabled") or [])
     rows = set(guide.rows)
     for label in sorted(set(enabled) - rows):
@@ -385,6 +391,58 @@ def check_profile_agreement(guide: Guide, profile: dict, findings: Findings) -> 
                 ".claude/profile.yml",
                 f"review.path_map routes to `{work_type}`, which is not enabled",
             )
+    check_flow_deviations(root, enabled, findings)
+
+
+def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) -> None:
+    """The profile document has a `## Flow`, and every `###` under it names enabled work types.
+
+    The section's shape is the flow document's contract: no `###` means the default flow, and
+    each `###` is one deviation whose heading names, in backticks, the work type of the stage
+    it changes -- every backticked span in the heading is read as one. A deviation naming no
+    work type cannot be placed against a stage; one naming a work type the project does not
+    enable describes a stage the flow already skips. A profile document with no `## Flow` at
+    all has stated neither shape, so it is a finding too -- and so is no profile document at
+    all: it is the profile's prose half, the standing `layer: project` case, and the only
+    place the contract can be stated.
+    """
+    path = root / PROFILE_DOC
+    if not path.is_file():
+        findings.add(
+            3, PROFILE_DOC, "the profile document is absent (it carries the flow contract)"
+        )
+        return
+    lines = strip_fences(read_text(path))
+    start = None
+    for i, (_, line) in enumerate(lines):
+        m = HEADING_RE.match(line)
+        if m and len(m.group(1)) == 2 and m.group(2).strip() == FLOW_SECTION:
+            start = i
+            break
+    if start is None:
+        findings.add(3, PROFILE_DOC, f"has no `## {FLOW_SECTION}` section (the flow contract)")
+        return
+    for number, line in lines[start + 1 :]:
+        m = HEADING_RE.match(line)
+        if not m:
+            continue
+        if len(m.group(1)) <= 2:
+            break
+        if len(m.group(1)) != 3:
+            continue
+        where = f"{PROFILE_DOC}:{number}"
+        names = re.findall(r"`([^`]+)`", m.group(2))
+        if not names:
+            findings.add(
+                3, where, f"flow deviation `### {m.group(2)}` names no work type in backticks"
+            )
+        for name in names:
+            if name not in enabled:
+                findings.add(
+                    3,
+                    where,
+                    f"flow deviation names `{name}`, which is not an enabled work type",
+                )
 
 
 def declared_dependencies(profile: dict) -> dict[str, dict]:
@@ -547,7 +605,7 @@ def main(argv: list[str]) -> int:
     findings = Findings()
     check_outward(root, guide, findings)
     check_inward(root, guide, findings)
-    check_profile_agreement(guide, profile, findings)
+    check_profile_agreement(root, guide, profile, findings)
     layers = check_completeness(root, guide, profile, findings)
     check_profile_values(root, profile, layers, findings)
 

@@ -93,7 +93,7 @@ the `development` row of `CLAUDE.md`'s **Model selection** table.
 The Definition of Done above, its Runtime check included, is an author self-check on **one PR,
 before merge** — the author's own claim, about whichever behaviours the author chose to drive,
 on a branch. Every vertical slice therefore also gets a **verify-live** pass once it is
-deployed, run by the author of the merged slice ([idea-to-issues.md](idea-to-issues.md)'s
+deployed, run by the author of the merged slice ([idea-to-product.md](idea-to-product.md)'s
 **Verify live** stage places it in the wider flow):
 
 - **The checklist comes from the spec, not from memory** — fixed before the slice was built.
