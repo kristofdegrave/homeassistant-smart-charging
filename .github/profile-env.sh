@@ -13,9 +13,11 @@
 # (requirements-test.txt pulls it in through homeassistant). `jq` is deliberately not used:
 # it is not on PATH in the Windows/Git Bash setup this project is driven from.
 #
-# Exit 0 with the assignments on stdout; 2 when no usable Python is found or the profile
-# cannot be read, with nothing on stdout — so an `eval` of a failed run assigns nothing
-# rather than half the set.
+# Exit 0 with the assignments on stdout. Any failure — no usable Python, an unreadable
+# profile (both exit 2), or a profile missing a key the reader needs (Python's own exit 1,
+# with the traceback naming the key) — prints nothing on stdout: the whole set is built
+# before the first line is written, so an `eval` of a failed run assigns nothing rather
+# than half the set.
 
 set -euo pipefail
 
@@ -66,10 +68,12 @@ out = {
     "ESTIMATE_FIELD": fields["estimate"]["id"],
     "STATUS_FIELD": fields["status"]["id"],
 }
+# Keys are sanitised as well as values: the documented call site is `eval`, so an option name
+# is executed as part of an assignment, and only [A-Za-z0-9_] may reach it.
 for tier, option_id in fields["size"]["options"].items():
-    out[f"SIZE_{tier}"] = option_id
+    out["SIZE_" + re.sub(r"\W", "_", str(tier))] = option_id
 for column, option_id in fields["status"]["options"].items():
-    out["STATUS_" + re.sub(r"\W", "_", column)] = option_id
+    out["STATUS_" + re.sub(r"\W", "_", str(column))] = option_id
 
 for key, value in out.items():
     print(f"{key}={shlex.quote(str(value))}")

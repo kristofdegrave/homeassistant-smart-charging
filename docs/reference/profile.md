@@ -4,9 +4,12 @@ The facts about *this* project that a person has to know to act on the method, e
 why. `.claude/profile.yml` is the other half: every value a script or a command reads verbatim
 — repository, board and field ids, the label set, enabled work types, the changed-path map, the
 review cap, dependency pins. Nothing here repeats a value the YAML holds; a section names the
-key instead. Together the two files are the whole of what is project-specific in
-`docs/reference/**` and `.claude/**` — the method documents state rules and route here for the
-project they run in, so a method document that spells one of these facts is the defect.
+key instead. Between them the two files own these facts: the repository and tracker, the
+board and its ids, the label set, the enabled work types, the changed-path map, the review cap,
+the dependency pins, the research sources, git identity, merge strategy and flow deviations. A
+method document that spells one of *those* facts is the defect — it states the rule and routes
+here. Stack-specific content (Home Assistant, Python) is a different axis and is not this
+file's: it lives in the stack skills and, in time, in per-stack overlays of the work-type files.
 
 ## Repository and git identity
 
@@ -32,8 +35,8 @@ PR base `main` directly, however the work was branched locally.
 
 ## Project board
 
-The board is the **EMS** project (`profile.yml`'s `board`). Its Status column vocabulary and
-option ids are `board.fields.status`; what the columns mean here:
+The board is `profile.yml`'s `board` (its name, number and node id are there). Its Status
+column vocabulary and option ids are `board.fields.status`; what the columns mean here:
 
 - `Backlog` — filed, not started. Every issue starts here.
 - `Ready` — **unused**. It exists on the board but has no defined meaning in this workflow, so

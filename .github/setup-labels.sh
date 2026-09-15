@@ -13,7 +13,7 @@
 #
 # Prerequisites: `gh` installed and authenticated (gh auth login); a Python with PyYAML on
 # PATH (this repo's test environment has one — requirements-test.txt pulls it in through
-# homeassistant); run from the repo root.
+# homeassistant); run from anywhere inside the checkout.
 # Idempotent: `gh label create --force` updates an existing label instead of erroring.
 # Run once: bash .github/setup-labels.sh
 #
@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-PROFILE="${PROFILE:-.claude/profile.yml}"
+PROFILE="${PROFILE:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/profile.yml}"
 
 expected=$(mktemp)
 actual=$(mktemp)
@@ -51,6 +51,7 @@ if [ -z "$py" ]; then
 fi
 
 PYTHONUTF8=1 "$py" - "$PROFILE" >"$defined" <<'PY'
+import re
 import sys
 
 import yaml
@@ -70,6 +71,12 @@ for group in labels.values():
         for field, value in (("name", name), ("color", color), ("description", description)):
             if "\t" in str(value) or "\n" in str(value):
                 sys.exit(f"error: label {name!r}: {field} contains a tab or newline")
+        # Six lowercase hex digits, checked as text: the verification pass below compares name
+        # and description only, so a wrong colour would never be caught later — and an
+        # all-digit colour left unquoted in the YAML is read by PyYAML (YAML 1.1) as an octal
+        # int, which is exactly the shape this refuses.
+        if not isinstance(color, str) or not re.fullmatch(r"[0-9a-f]{6}", color):
+            sys.exit(f"error: label {name!r}: color {color!r} is not six lowercase hex digits")
         print(f"{name}\t{color}\t{description}")
 PY
 
