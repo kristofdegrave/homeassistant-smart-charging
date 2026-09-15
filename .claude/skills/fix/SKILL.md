@@ -57,5 +57,6 @@ judged by a spawned reviewer agent, never by this session.
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** They are CI's triggers
   and the human partner's go-signal, not a way to hand over work this session should do; the
   **Contribution workflow** section states the rule and routes to the detail.
-- **`needs-approval` is not this skill's to apply** — only `finalize-pr-review`, only after a
-  review pass comes back clean.
+- **The exit labels are not this skill's to apply.** Each is applied only by the step the
+  contribution workflow names for that exit — its **Exit labels** section, routed from
+  `CLAUDE.md`'s **Contribution workflow** section — never by this skill.

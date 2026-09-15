@@ -83,5 +83,6 @@ say, not this skill's:
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** Handing this PR to CI
   instead of reviewing it here is exactly what those labels are not for; the **Contribution
   workflow** section states the rule and routes to the detail.
-- **`needs-approval` is not this skill's to apply** — only `finalize-pr-review`, only after a
-  clean pass.
+- **The exit labels are not this skill's to apply.** Each is applied only by the step the
+  contribution workflow names for that exit — its **Exit labels** section, routed from
+  `CLAUDE.md`'s **Contribution workflow** section — never by this skill.
