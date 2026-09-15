@@ -228,7 +228,9 @@ gh api repos/$REPO/issues/<n>/dependencies/blocked_by --jq '[.[].number]'
 
 Reading the edges the other way round, and with state — from a child to its parent, and a
 parent's children with whether each is still open, which is what the `cleanup` skill's
-readiness check counts. REST, so it stays readable while the GraphQL limiter is tripped:
+open-children count reads. Both are the sub-issues REST API's own reads (*get parent issue*,
+*list sub-issues*), so they stay readable while the GraphQL limiter is tripped; the GraphQL
+`parent` field in the read-back above is the same fact by the other route:
 
 ```sh
 gh api repos/$REPO/issues/<child>/parent --jq '{number, state}'
@@ -236,7 +238,11 @@ gh api repos/$REPO/issues/<epic>/sub_issues --jq '[.[] | {number, state, title}]
 ```
 
 An issue with no parent makes the first call fail with a 404 rather than return an empty
-object — read the exit status, and treat it as "no epic".
+object — and so does an issue that does not exist, so the status alone cannot say which. The
+message can: `No parent issue found` is a readable issue with no parent, and is "no epic";
+`Not Found` is the issue itself, so report it rather than count on. Both messages were read
+off this repository — an epic, which has no parent, returned the first, and a number past the
+tracker's range returned the second.
 
 ## Commenting on a work item
 

@@ -30,7 +30,8 @@ covering commit message conventions) — the project-wide floor, distinct from a
      `origin/main` (**Base `main` and stacking** below).
    - Board **Status** → the *in progress* column when writing actually starts, not at filing
      time. The issue's epic, if it has one, moves there with it unless it already is — the
-     child's start is the epic's start (**Project board** below).
+     child's start is the epic's start (**Project board** below; the parent read is
+     [tracker-mechanics.md](tracker-mechanics.md)'s **Parent/sub-issue and blocked-by edges**).
    - Self-check against the [Definition of Done](definition-of-done.md); then push and open
      the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`
      and `Part of`** below).
@@ -57,9 +58,9 @@ covering commit message conventions) — the project-wide floor, distinct from a
 4. **Clean up** (`cleanup`, triggered by the human stating that the merge happened).
    - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
      the *done* column.
-   - The issue's epic, if it has one: report its open-children count, or that it is ready to
-     close (**Merge and issue closing** below).
    - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
+   - Then the issue's epic, if it has one: report its open-children count — after the filing
+     above, which may have added children (**Merge and issue closing** below).
 
 ## Rule A — author/reviewer separation
 
@@ -190,10 +191,12 @@ a new issue and a new chain.
 **An epic is closed by the human partner, never by a PR or by `cleanup`** — its gate is the
 last slice verified live, per [idea-to-issues.md](idea-to-issues.md)'s **Close** stage, and
 that observation is the human's. What step 4 owes it is the moment: after moving the linked
-issue to *done*, `cleanup` reads the epic's open-children count and reports it — or, when none
-remain, reports the epic as ready to close with a drafted summary of what shipped. Nothing
-watches for the moment otherwise: GitHub does not close a parent whose sub-issues are all
-closed, and a child PR carries `Part of` for its epic precisely so a merge cannot.
+issue to *done* and filing any task issues a merged spec owes, `cleanup` reads the epic's
+open-children count and reports it — and when none remain, says so, names the verify-live gate
+as the one condition left and the human's to judge, and drafts the summary of what shipped for
+the close. It establishes the first condition of the gate, never the second, and never closes.
+Nothing watches for the moment otherwise: GitHub does not close a parent whose sub-issues are
+all closed, and a child PR carries `Part of` for its epic precisely so a merge cannot.
 
 Once merged, the task's worktree is removed as part of step 4 — the reason the step exists is
 that a worktree left behind is a stale checkout waiting for a bulk sweep nobody schedules.
@@ -219,10 +222,11 @@ review → done** and through no other column: a column that later gains a defin
 inserted explicitly into step 0/1 here rather than left implicit.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
-→ done**: it moves to *in progress* when its first child does (step 1), it is never *in
-review* — nothing of its own is reviewed — and it moves to *done* when the human partner
-closes it, which step 4's readiness report is there to prompt (**Merge and issue closing**
-below). A child starting under an epic already *in progress* changes nothing.
+→ done**: the session running step 1 moves it to *in progress* when its first child goes
+there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
+it to *done* with the same hand that closes it, which step 4's open-children report is there
+to prompt (**Merge and issue closing** above). A child starting under an epic already *in
+progress* changes nothing.
 
 ## Parallel work and forward dependencies
 

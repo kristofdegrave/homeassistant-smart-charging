@@ -121,9 +121,9 @@ pre-merge runtime-verified self-check is the **Verify live** bar in
 
 When every child is closed and its slice verified live, close the epic with a summary of what
 shipped. The originating idea issue is already closed — that happened at **Ticket**, once the
-strand was fully captured. The moment is surfaced, not watched for: the `cleanup` run that
-follows the last child's merge reports that no open children remain and drafts the summary;
-the close itself stays the human partner's, since the verify-live gate is theirs to observe.
+strand was fully captured. The first condition is surfaced, not watched for: the `cleanup`
+run that follows the last child's merge reports that no open children remain and drafts the
+summary; the second, verify live, and the close itself stay the human partner's.
 
 ---
 
