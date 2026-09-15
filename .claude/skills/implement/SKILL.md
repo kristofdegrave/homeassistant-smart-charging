@@ -1,11 +1,11 @@
 ---
 name: implement
-description: Use in an interactive session to run this project's contribution workflow's step 1 for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for this step is _ai-draft.yml's own prompt, never this skill.
+description: Use in an interactive session to run this project's contribution workflow's implement step for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for this step is _ai-draft.yml's own prompt, never this skill.
 ---
 
 # Implement an issue
 
-Step 1 of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
+The implement step of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns every parameter — branch scheme, base, issue reference,
 board moves, and the Definition of Done. This skill owns only the order and the dispatch.
 
@@ -33,19 +33,19 @@ Stop instead of dispatching when:
 
 1. **Read the work file first, and resolve anything it needs before the branch exists** —
    against a fetched `origin/main`, not a stale checkout, since a work file may derive its
-   branch name from something already merged there. Step 1's branch-naming note grants one
-   override, the number segment; nothing else about step 1 is the work file's to override.
+   branch name from something already merged there. The implement step's branch-naming note grants one
+   override, the number segment; nothing else about that step is the work file's to override.
 2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
    task it names is already identified.
-3. Worktree, branch and board **Status** per step 1.
+3. Worktree, branch and board **Status** per the implement step.
 4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
    completion bar, that file is the self-check before item 5 below — the same one the reviewer will
    apply, so it is checked now rather than discovered in review.
-5. Definition of Done self-check, then push, PR and board **Status** per step 1.
+5. Definition of Done self-check, then push, PR and board **Status** per the implement step.
 
-Stop there and hand on to step 2, which the `review` skill runs: it judges the work in a
-spawned reviewer agent, never in this session. Don't start the next issue off the back of
-this one.
+The implement step ends with the PR open and its issue In review; report that and stop. What
+runs next is the workflow's to say, not this skill's. The work is judged in a spawned reviewer
+agent, never in this session, and the next issue is not started off the back of this one.
 
 ## Rules
 

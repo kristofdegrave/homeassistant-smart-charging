@@ -82,9 +82,9 @@ comment — the review must be posted.
 - **Locally**: the `review` skill runs the pass. Every reviewer it spawns is read-only —
   they return findings, they do not post — so once they have all returned, the main session
   posts their findings here as **one** review in local mode (round marker, no verdict marker).
-  One pass is one review, however many reviewers ran. The PR always exists by then: step 1
-  of the contribution workflow — the doc `CLAUDE.md`'s **Contribution workflow** section
-  routes to — guarantees it.
+  One pass is one review, however many reviewers ran. The PR always exists by then: the
+  implement step of the contribution workflow — the doc `CLAUDE.md`'s **Contribution
+  workflow** section routes to — guarantees it.
   Anchor each finding that carries a file path + new-version line as an inline comment; put
   the rest in the body. If there is no PR (an uncommitted local draft), report the findings in
   the session instead of posting.

@@ -14,7 +14,7 @@ completion bar's item 1, not while drafting.
 
 ## Drafting an ADR
 
-- **Numbering** (part of step 1, before drafting): the bar's item 2, *Template conformance*,
+- **Numbering** (part of the implement step, before drafting): the bar's item 2, *Template conformance*,
   defines the number and the filename and judges them. What that means while drafting: resolve
   the number *before* the branch exists, since the branch is named after it — and never reuse
   or renumber one. A superseded ADR keeps its number, which is why the highest existing number
@@ -29,11 +29,11 @@ completion bar's item 1, not while drafting.
   worktree/branch, not after; CI does the equivalent in `_ai-draft.yml` right after checkout,
   and refuses (clears `needs-draft`, comments why) rather than clobbering if that branch
   already exists upstream.
-- **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered options**
+- **The implement step (draft)**: against `docs/adl/template.md` — Status, Context, **Considered options**
   (every option seriously evaluated, each with Pro/Con — not just the chosen one), Decision,
   Consequences.
-- **The PR (closing step 1)**: one PR per ADR — see **Rules** below.
-- **Cross-check against existing ADRs and design docs**, before step 2's review: does this decision
+- **The PR (closing the implement step)**: one PR per ADR — see **Rules** below.
+- **Cross-check against existing ADRs and design docs**, before the review step: does this decision
   contradict an existing `Accepted` ADR? The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, defines what the finished pair has to
   look like and judges it. What that means while drafting: go and look, before you have written
   a Decision that assumes nothing conflicts — the check is cheap then and expensive afterwards,

@@ -1,7 +1,7 @@
 # CI pipeline (`.github/workflows/ai-pipeline.yml` + `_ai-*.yml`)
 
 The automated, label-driven equivalent of
-[contribution-workflow.md](contribution-workflow.md)'s steps 0–5 — same lifecycle, a different
+[contribution-workflow.md](contribution-workflow.md)'s six steps — same lifecycle, a different
 actor. Commits here are made as `github-actions[bot]`, not the interactive session's own
 identity (see that doc's **Git identity** section).
 
@@ -10,7 +10,7 @@ identity (see that doc's **Git identity** section).
 `needs-draft`, `needs-review`, and `needs-work` exist to invoke these jobs — nothing else. A
 **Claude session must never self-apply one on its own initiative** to hand its own review/fix
 work to CI instead of doing it in-session; interactive review and fix always happen locally,
-per [contribution-workflow.md](contribution-workflow.md) steps 2–3: a fresh reviewer
+per [contribution-workflow.md](contribution-workflow.md) review and fix steps: a fresh reviewer
 subagent posts findings via `submit-pr-review`, then `resolve-review-thread` closes out each
 thread that got fixed. This does *not* forbid the pipeline's actual, intended human triggers
 below — a maintainer applying `needs-draft` to start the pipeline, or manually re-adding
@@ -158,7 +158,7 @@ in branch protection's required checks on `main`.
   quotation accuracy (see `CLAUDE.md`'s **Document structure** entry). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, add the directory to
   both places and this bullet becomes the record of why it was absent.
-- **Draft** (`_ai-draft.yml`, ≈ steps 0–1): resolves the model and branch
+- **Draft** (`_ai-draft.yml`, ≈ the file-an-issue and implement steps): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
   `max_turns` tier is driven by the issue's project-board **Size** field (set per
@@ -182,7 +182,7 @@ in branch protection's required checks on `main`.
   [commit message conventions](definition-of-done.md) table, since a single draft commit has
   no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI
   commits on the branch, which do follow that table. Then adds `needs-review`.
-- **Review** (`_ai-review.yml`, ≈ step 2): `needs-review` resolves its checklists from
+- **Review** (`_ai-review.yml`, ≈ the review step): `needs-review` resolves its checklists from
   `CLAUDE.md`'s **Model selection** table — the routing rule, both halves of it, lives there
   rather than in the workflow —
   and self-applies each against the files it covers, posting findings via `submit-pr-review`'s
@@ -207,8 +207,8 @@ in branch protection's required checks on `main`.
   completion bar; the worker follows what it says, so a checklist can move, or split, without
   this workflow changing. Unacknowledged human inline
   comments (no `ai-fix-ack` reply) count as
-  remarks too — the CI equivalent of step 3's rule that human PR comments are findings.
-- **Fix** (`_ai-fix.yml`, ≈ step 3): a `remarks` verdict on a **docs-only** diff adds
+  remarks too — the CI equivalent of the fix step's rule that human PR comments are findings.
+- **Fix** (`_ai-fix.yml`, ≈ the fix step): a `remarks` verdict on a **docs-only** diff adds
   `needs-work`, which runs `address-review-remarks`, commits as `github-actions[bot]`
   (`docs: address AI review remarks (#<pr>)`), and re-adds `needs-review`. It can only commit
   under `docs/`, and not `docs/reference/work-types/**` — the tree it reads as its own
@@ -227,8 +227,8 @@ in branch protection's required checks on `main`.
   re-add `needs-work` manually for one more cycle. The interactive session caps its own loop
   separately ([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**): the two count
   different populations and never interact, so neither is the other's bound.
-- **Clean / cap-out** (≈ step 4): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
+- **Clean / cap-out** (≈ the approval step): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required.
-- **Merge** (step 5's precondition, unchanged): always a manual human action regardless of which path
+- **Merge** (the clean-up step's precondition, unchanged): always a manual human action regardless of which path
   drafted or reviewed the PR.

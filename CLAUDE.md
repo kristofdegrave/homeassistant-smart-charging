@@ -332,7 +332,7 @@ New or changed documents under `docs/analysis/**` follow the
 [Contribution workflow](docs/reference/contribution-workflow.md), with these artifact-specific
 additions:
 
-- **Step 1's draft** and **step 2's review**: the `uc` and `requirement` rows of the **Model
+- **The implement step's draft** and **the review step's review**: the `uc` and `requirement` rows of the **Model
   selection** table above name the files, and they are their only home — don't restate them
   here. Each row's work file carries how that artifact is written (the template, the numbering,
   the propagation step); the completion bar carries what must be true of the finished
@@ -406,7 +406,7 @@ be superseded to say so, rather than the conflict being left implicit.
 An ADR follows the [Contribution workflow](docs/reference/contribution-workflow.md), with these
 artifact-specific additions:
 
-- **Step 1's draft** and **step 2's review**: the `adr` row of the **Model selection** table
+- **The implement step's draft** and **the review step's review**: the `adr` row of the **Model selection** table
   above names the files, and they are their only home — don't restate them here. The work file
   carries how an ADR is written (the template, the numbering and never-renumber rules, the
   immutability rule); the completion bar carries what must be true of the finished record, and
