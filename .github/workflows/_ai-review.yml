@@ -6,11 +6,17 @@ name: AI review (reusable)
 # tests/, gets `needs-review`.
 # Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
 #   clean                            -> add `needs-approval` and stop; the maintainer reviews
-#   remarks, any non-docs path       -> add `needs-approval` + a comment saying why, already on
-#                                       the first remarks verdict: _ai-fix.yml can only commit
-#                                       under docs/, so a fix cycle here could change nothing
+#   remarks, any non-docs path       -> add `needs-approval` + `needs-decision` + a comment saying
+#                                       why, already on the first remarks verdict: _ai-fix.yml can
+#                                       only commit under docs/, so a fix cycle could change nothing
 #   remarks, docs-only (cycles 1-2)  -> add `needs-work` (via PAT) so _ai-fix.yml addresses them
-#   remarks, docs-only (3rd time)    -> add `needs-approval` and stop (max 2 automatic fix cycles)
+#   remarks, docs-only (3rd time)    -> add `needs-approval` + `needs-decision` and stop (max 2
+#                                       automatic fix cycles)
+# `needs-decision` goes on every review that exited with findings still open and no automatic
+# fix following — the cap and the non-docs hand-off alike — so such a PR is distinguishable
+# from a clean one in a list view. Once on, it persists until a `clean` verdict removes it: a
+# fix cycle a maintainer grants by re-adding `needs-work`, or a run with no verdict, leaves it
+# in place.
 # Submitted human review comments without an `ai-fix-ack` thread reply count as remarks, so
 # maintainer feedback enters the same loop instead of being silently skipped.
 #
@@ -667,27 +673,37 @@ jobs:
           echo "verdict=${verdict:-none}, remarks reviews so far (incl. this one)=${remarks_count}, non-docs changed=${non_docs_changed:+yes}"
 
           # Removal never needs to trigger anything, so the default token is fine here. Also
-          # clear a prior needs-approval so a stale "reviewed clean"/"cap reached" signal can't
-          # sit alongside the new state (e.g. a clean review followed by a later remarks review).
+          # clear a prior needs-approval so a stale "reviewed clean" signal can't sit alongside
+          # the new state (e.g. a clean review followed by a later remarks review). A stale
+          # needs-decision is NOT cleared here: only a clean verdict may drop the findings-open
+          # signal, and a run that produced no verdict is not a clean verdict.
           gh pr edit "$PR" --remove-label needs-review || true
           gh pr edit "$PR" --remove-label needs-approval || true
 
           if [ "${verdict:-}" = "clean" ]; then
+            # A clean verdict is the one thing that clears needs-decision (e.g. a capped PR
+            # whose granted extra cycle came back clean).
+            gh pr edit "$PR" --remove-label needs-decision || true
             # needs-approval triggers no job, so a failed add here is a labeling hiccup, not a
             # review failure — warn instead of tripping the pipefail "Clean up on failure" path.
             gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
           elif [ "${verdict:-}" = "remarks" ]; then
             if [ -n "$non_docs_changed" ]; then
               # Non-docs diff: the fix worker could only ever re-stage docs/, so a fix cycle
-              # here changes nothing. Skip the cycles entirely and hand it to a human.
+              # here changes nothing. Skip the cycles entirely and hand it to a human — with
+              # needs-decision beside needs-approval, since the findings are still open.
               gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
-              gh pr comment "$PR" --body "This PR's diff touches paths the automatic fix worker cannot author (first one: \`${non_docs_changed}\`) — it only commits under \`docs/\`, and not the work-type tree it reads as its own instructions. Routing straight to \`needs-approval\` instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff." || echo "::warning::failed to comment on the PR"
+              gh pr edit "$PR" --add-label needs-decision || echo "::warning::failed to add needs-decision label"
+              gh pr comment "$PR" --body "This PR's diff touches paths the automatic fix worker cannot author (first one: \`${non_docs_changed}\`) — it only commits under \`docs/\`, and not the work-type tree it reads as its own instructions. Routing straight to \`needs-approval\` plus \`needs-decision\` (the review left findings open) instead of burning fix cycles that could not change anything: the review remarks above need a human. Label \`needs-work\` manually if you still want a fix pass over the doc parts of the diff." || echo "::warning::failed to comment on the PR"
             elif [ "$remarks_count" -le 2 ]; then
               # PAT so the labeled event actually triggers the fix job.
               GH_TOKEN="$WORKFLOW_PAT" gh pr edit "$PR" --add-label needs-work
             else
+              # Cap reached: needs-approval (no automated work pending) plus needs-decision
+              # (findings are still open), so the PR list tells this apart from a clean pass.
               gh pr edit "$PR" --add-label needs-approval || echo "::warning::failed to add needs-approval label"
-              gh pr comment "$PR" --body "Automatic review/fix limit reached (2 cycles) — remaining remarks need a human. Label \`needs-work\` manually to force one more cycle."
+              gh pr edit "$PR" --add-label needs-decision || echo "::warning::failed to add needs-decision label"
+              gh pr comment "$PR" --body "Automatic review/fix limit reached (2 cycles) — labelled \`needs-approval\` plus \`needs-decision\` because remarks are still open. They need a human: merge as is, or label \`needs-work\` manually to grant one more cycle."
             fi
           fi
 
