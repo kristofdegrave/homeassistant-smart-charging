@@ -82,6 +82,12 @@ completion bar's item 1, not while drafting.
 - **Reference, don't restate.** If a decision depends on a requirement or use-case, cite it
   (`R7`, `UC03`) rather than re-deriving it.
 
+### Skills
+
+The method skills this work file uses, by step: `research` for the facts an ADR's Context rests
+on, cited from the record by linking the issue comment; `receiving-code-review` in the review
+step. The stack skills are the overlays' to name.
+
 ## Common mistakes
 
 - Skipping the issue-first step for a decision nobody has discussed yet.
@@ -89,3 +95,12 @@ completion bar's item 1, not while drafting.
 - Bundling two ADRs, or an ADR plus unrelated work, into one PR.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Implement** section read with this file as
+part of the same work file. An overlay adds the stack's material to the rule that names it and
+never restates a rule of this file; one that reads `none` is the stack saying it has nothing to
+add here. The shape, and the rule that no stack material lives in this file, are this tree's
+`README.md`'s.

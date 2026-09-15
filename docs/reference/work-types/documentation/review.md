@@ -60,3 +60,12 @@ items resolve to a defect in the counterpart of the document under review — a 
 be ordered because the design's call directions are ambiguous, a design gap the plan worked
 around. Name the owning document and what it would have to say. Do not propose wording that
 papers over it in the document you were handed.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Review** section read with this file as
+part of the same checklist. An overlay adds the stack's material to the list or check that
+names it and never restates one of this file; one that reads `none` is the stack saying it has
+nothing to add here. The shape, and the rule that no stack material lives in this file, are
+this tree's `README.md`'s.

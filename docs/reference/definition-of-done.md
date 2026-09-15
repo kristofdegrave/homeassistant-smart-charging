@@ -9,11 +9,13 @@ distinct from the review step's fresh external reviewer:
 - **Scope**: built what the issue actually asked, no more and no less (see
   [contribution-workflow.md](contribution-workflow.md)'s **Parallel work and forward
   dependencies** for anything intentionally deferred to a later task).
-- **Builds/lints clean**: no syntax errors; linter passes (`ruff check .` and `ruff format
-  --check .` for `custom_components/`/`tests/` changes — pair both, not just the first).
-- **Tests green**: the relevant suite passes, in the harness matched to what changed
-  (ADR-0009: plain pytest for pure logic, HA harness for adapters/coordinator/entities/config
-  flow).
+- **Builds/lints clean**: no syntax errors; the linter passes — the command, and the pairing
+  rule that goes with it, are the `development` work type's stack overlays' (the row in
+  `CLAUDE.md`'s **Model selection** table names the work file; its **Overlays** section
+  routes on).
+- **Tests green**: the relevant suite passes, in the harness matched to what changed — the
+  `testing` bar's item 1, *Harness split*, and the stack overlay it routes to, state the
+  split.
 - **Test coverage matches the change**: new behavior has a new test that proves it, not just
   reliance on existing tests happening to still pass; edge cases the issue implies are
   covered, not only the happy path.
@@ -25,38 +27,27 @@ Doc/ADR/design artifacts satisfy this with their own self-check instead (6Cs pas
 conformance, cross-document consistency) — the artifact's row in `CLAUDE.md`'s **Model
 selection** table defines what "done" means there. The analysis-doc version is also mirrored in
 `CLAUDE.md`'s **Review protocol for analysis documents** topic. The checklist above is the
-floor for anything touching `custom_components/`/`tests/`.
+floor for anything touching the product-code and test trees.
 
 **A row's completion bar applies wherever the row names one** — not only to those artifacts.
 Where a row names a **completion bar**, that file is what the author self-checks against and
 what the reviewer applies; where it names none, the row's work file carries what "done"
 means. What differs between classes is how the bar meets the checklist above, and a work-type
 file may rely on this: for a doc artifact the bar **stands in for** that checklist, there being
-nothing to build or run; for a change touching `custom_components/`/`tests/` the bar **adds to**
-it, because the checklist is the floor for exactly those trees.
+nothing to build or run; for a change touching the product-code or test trees the bar **adds
+to** it, because the checklist is the floor for exactly those trees.
 
 ### Runtime check (in the PR description)
 
 A PR that changes **observable runtime behaviour** carries a **Runtime check** section in its
 description (any heading level — the level is not load-bearing, the heading text is).
-Observable runtime behaviour is what someone can see from the *running* integration rather
-than from its source or its test output, and a diff changes it when it changes any of:
-
-- an **owned entity's state value**, or the computation that produces it;
-- an owned entity's **unit of measurement**, **display precision**, **device class** or
-  **state class**;
-- the **dashboard** — which tiles or cards appear, their order, titles, or how a value is
-  formatted;
-- a **notification** the integration raises — its text, its trigger condition, or when it
-  clears;
-- the **current commanded to the charger**;
-- whether an owned entity **appears at all** — registry enablement and capability gating —
-  whether it goes **unavailable**, and the **name it displays** (`strings.json`,
-  `translations/`).
-
-A diff changes none of these, and needs no section, when no input exists for which any item on
-that list would come out differently — the usual cases being an internal refactor, a rename
-with no surfaced effect, tests, and documentation.
+Observable runtime behaviour is what someone can see from the *running* system rather than
+from its source or its test output. What that is in this stack — the list a diff is judged
+against — is the `development` work type's stack overlay's, under its bar's item 6, *Runtime
+check recorded*; this document owns the definition and the section's shape, the overlay owns
+the enumeration. A diff changes none of it, and needs no section, when no input exists for
+which any item on that list would come out differently — the usual cases being an internal
+refactor, a rename with no surfaced effect, tests, and documentation.
 
 The section states two things, in as few lines as they take:
 
@@ -83,8 +74,8 @@ doing one of the two is the thing this bar exists to make visible.
 
 This is not a CI gate, deliberately: a mechanical presence check is satisfied by an empty
 heading, and no automated check can tell whether a pasted reading is the one the diff changed.
-The check is the review of the PR's `custom_components/**` half reading the section against
-the diff — a diff that touches anything in the list above with no Runtime check section is a
+The check is the review of the PR's product-code half reading the section against
+the diff — a diff that touches anything in the overlay's list with no Runtime check section is a
 **Major** finding there. That review's checklist and the completion bar it applies are named in
 the `development` row of `CLAUDE.md`'s **Model selection** table.
 

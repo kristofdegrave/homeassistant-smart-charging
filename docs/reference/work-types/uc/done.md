@@ -60,8 +60,8 @@ this is the most common form 2.2 takes.
 
 ## 3. Writing quality
 
-**(3.1) What, not how.** No implementation detail — Python modules, HA services, timer helpers,
-persistence. Entity ids that are part of the ubiquitous language are fine. **Major** for a
+**(3.1) What, not how.** No implementation detail — the forms it takes in this stack are the
+stack overlay's, under this item. Entity ids that are part of the ubiquitous language are fine. **Major** for a
 mechanism smuggled into a *what*; **Minor** for an incidental implementation aside.
 
 **(3.2) The 6Cs pass.** Clarity, Concision, Completeness, Consistency, Correctness,
@@ -192,3 +192,13 @@ sweep is not.
 - **Domain events are past-tense PascalCase and correspond to steps** — **Minor**.
 - **The Mermaid type is one of the preferred three** (`flowchart TD`, `stateDiagram-v2`,
   `sequenceDiagram`) — **Nit**.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Done** section read with this file as part
+of the same bar — by the author self-checking and by the reviewer applying it, and for the
+`requirement` row as much as for this one, since it routes here. An overlay adds the stack's
+material to the item that names it and never restates an item of this file; one that reads
+`none` is the stack saying it has nothing to add here. The shape, and the rule that no stack
+material lives in this file, are this tree's `README.md`'s.

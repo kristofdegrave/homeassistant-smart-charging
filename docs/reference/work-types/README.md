@@ -110,6 +110,51 @@ the contents are shared — no label loses its directory, and nothing moves out 
 Two branches of one label are a different case, not this one — see **When a label branches**
 above.
 
+## Stack overlays
+
+The files above are **method**: they travel between repositories, so nothing in them belongs
+to the platform or the language this project happens to be built on. What does belongs in an
+**overlay**, one file per declared stack beside the core files:
+
+```text
+docs/reference/work-types/<label>/overlays/<stack>.md
+```
+
+`<stack>` is a stack the profile declares — the distinct `stack:` values of
+`.claude/profile.yml`'s `dependencies.stack`, each with an entry under its `stacks` key. An
+overlay is a **stack** file by position — the method check places it in that layer without
+frontmatter — and a stack package installs it; the method never edits one to say so.
+
+**The slot.** A core file that takes overlays ends with a `## Overlays` section, and that
+section is the slot: it says to apply the overlays the declared stacks provide and which
+section of them this file takes. A label has a slot when any of its label-level role files
+carries that section; every enabled label with a work file has one today, and `workflow` —
+review-only and human-authored — has none. The method check refuses a label with a slot that
+lacks a file for a declared stack, an `overlays/` directory on a label with no slot, and an
+overlay named for a stack the profile does not declare.
+
+**The shape of an overlay.** Three `##` sections named for the roles — **Implement**, **Done**,
+**Review** — each read with the core file of that role as one work file, one bar or one
+checklist; a reviewer applying a bar applies the overlay's Done section as part of it, and the
+dispatch is unchanged. Every entry names the core rule or bar item it extends, in the core
+file's own words, so a reader can put the two side by side; an item's severity is the core
+item's unless the overlay's entry states one of its own. An overlay **adds** stack material and
+never restates a method rule — a restated rule is the one-source-of-truth defect above, in a
+file the method cannot see. Where a label branches (**When a label branches**), the overlay
+sits at the label's own level and each entry names the branch it belongs to.
+
+**The `none` marker.** A stack with nothing to add to a work type still provides the file, and
+its whole content is the one word `none`: the slot's rule says what that means, and the check
+reads the file's presence, not its content. An absent file is a gap; a `none` file is a stated
+fact.
+
+**No stack token in a core file.** The method check's check 5 refuses, in any method-layer
+file of this tree, the tokens the profile lists per stack under `stacks.<stack>.tokens` and the
+name of any stack skill. So a core file refers to a stack fact by role — *the product-code
+tree*, *the platform reference*, *the boundary*, *the harness split* — and the overlay states
+it. The token list is the profile's, chosen by hand and stated as such there: a word the method
+uses everywhere in its own right is not on it.
+
 ## What a file in this tree may say
 
 **A file in a label's directory** does not travel between repositories the way a skill or an
@@ -118,7 +163,9 @@ this project's paths, its documents and its tracker commands directly. That refe
 exactly which of its checklist items still apply to such a file and which are carved out — read
 it there rather than inferring the line from examples here, and note that the carve-out it
 grants is scoped to those directories. This README is not one of them: it is an ordinary
-reference document under `docs/reference/`, outside that rule's subject matter altogether.
+reference document under `docs/reference/`, outside that rule's subject matter altogether. An
+overlay under `overlays/` is a stack file, not a method one, and may spell the stack freely;
+**Stack overlays** above is the whole of what binds it.
 
 Two rules bind every file in this tree, in full, this README included:
 

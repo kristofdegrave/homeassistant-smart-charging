@@ -17,12 +17,14 @@ ok_case()   { printf 'ok    %s\n' "$1"; pass=$((pass + 1)); }
 
 # A complete, passing layout: two enabled work types, one review-only; a routing table with a
 # whole-document entry and an anchored one; one authored skill, one declared dependency skill
-# and one user-installed dependency; an agent; method documents placed by the default rule and
-# one project document placed by its `layer:` override.
+# and one user-installed dependency; one declared stack (`widgets`) with a stack skill and its
+# tokens; an agent; method documents placed by the default rule, one project document placed
+# by its `layer:` override, and one overlay placed as stack by position; the work type with a
+# work file carries the `### Skills` rule and the `## Overlays` slot, filled for the stack.
 build_fixture() {
   local d="$1"
   mkdir -p "$d/.claude/skills/step" "$d/.claude/skills/dep-skill" "$d/.claude/skills/stack-skill" "$d/.claude/agents" \
-           "$d/docs/reference/work-types/alpha" "$d/docs/reference/work-types/beta" "$d/src"
+           "$d/docs/reference/work-types/alpha/overlays" "$d/docs/reference/work-types/beta" "$d/src"
   cat > "$d/CLAUDE.md" <<'EOF'
 # Guide
 
@@ -87,6 +89,11 @@ work_types:
   enabled:
     - alpha
     - beta
+stacks:
+  widgets:
+    tokens:
+      - gizmo
+      - Widget Kit
 review:
   interactive_cap: 2
   path_map:
@@ -169,9 +176,29 @@ A project file may spell every one of these.
 
 **Default.** No `###` here means the flow as written.
 EOF
-  for f in alpha/implement.md alpha/done.md alpha/review.md beta/review.md; do
+  for f in alpha/done.md alpha/review.md beta/review.md; do
     printf -- '# %s\n\n## The bar\n\nContent.\n' "$f" > "$d/docs/reference/work-types/$f"
   done
+  cat > "$d/docs/reference/work-types/alpha/implement.md" <<'EOF'
+# alpha/implement.md
+
+## Rules
+
+### Skills
+
+`step`, `dep-skill`, `user-skill` — by step.
+
+## Overlays
+
+Apply the overlays the declared stacks provide: `overlays/<stack>.md`, its Implement section.
+EOF
+  cat > "$d/docs/reference/work-types/alpha/overlays/widgets.md" <<'EOF'
+# alpha — the widgets overlay
+
+## Implement
+
+The gizmo is read first; the Widget Kit is the product-code tree. Stack files spell acme too.
+EOF
 }
 
 new_fixture() {
@@ -222,6 +249,15 @@ case_run "a pointer inside a fenced block is not checked" 0 - \
   "printf '\`\`\`\nSee \`CLAUDE.md\`'\"'\"'s **Nowhere**.\n\`\`\`\n' >> docs/reference/wf.md"
 case_run "a flow deviation naming an enabled work type is accepted" 0 - \
   "printf '\n### The \`alpha\` stage runs before \`beta\`\n\nBecause.\n' >> docs/reference/profile.md"
+case_run "an overlay is stack by position: it may spell tokens and profile values" 0 - \
+  "printf 'gizmo, Widget Kit, acme and PVT_projectnode.\n' >> docs/reference/work-types/alpha/overlays/widgets.md"
+case_run "a none marker satisfies the slot for a stack with nothing to add" 0 - \
+  "printf 'none\n' > docs/reference/work-types/alpha/overlays/widgets.md"
+case_run "a stack token outside the work-type tree is not this check's" 0 - \
+  "printf 'A gizmo is fine in the workflow doc.\n' >> docs/reference/wf.md"
+case_run "one word of a multi-word token is not the token" 0 - \
+  "printf 'A Widget alone, and a Kit alone.\n' >> docs/reference/work-types/alpha/done.md"
+case_run "a review-only work type needs no Skills rule and no slot" 0 - "true"
 
 # --- 1  anchors, outward -------------------------------------------------------------------
 case_run "1: an unresolvable pointer in a skill fails" 1 "**Nowhere**" \
@@ -286,6 +322,20 @@ case_run "4: an unknown layer value fails" 1 "is not one of" \
   "sed -i 's/^layer: method$/layer: stak/' .claude/agents/reviewer.md"
 case_run "4: an unknown layer value on a doc fails" 1 "\`layer: profile\` is not one of" \
   "sed -i '1i ---\nlayer: profile\n---\n' docs/reference/wf.md"
+case_run "4: a slot without an overlay for a declared stack fails" 1 "no widgets.md for declared stack \`widgets\`" \
+  "rm docs/reference/work-types/alpha/overlays/widgets.md"
+case_run "4: an overlays directory under a label with no slot fails" 1 "no \`## Overlays\` slot" \
+  "mkdir docs/reference/work-types/beta/overlays && printf 'none\n' > docs/reference/work-types/beta/overlays/widgets.md"
+case_run "4: an overlay for an undeclared stack fails" 1 "overlay for \`gadgets\`, which is not a declared stack" \
+  "printf 'none\n' > docs/reference/work-types/alpha/overlays/gadgets.md"
+case_run "4: a stack a dependency declares without a stacks entry fails" 1 "declares stack \`gadgets\`, which has no \`stacks\` entry" \
+  "sed -i 's/^      stack: widgets$/      stack: gadgets/' .claude/profile.yml"
+case_run "4: a work file without a Skills rule fails" 1 "work file has no \`### Skills\` rule" \
+  "sed -i 's/^### Skills$/### Tools/' docs/reference/work-types/alpha/implement.md"
+case_run "4: a Skills rule naming a stack skill fails" 1 "names \`stack-skill\`, which is not a method skill" \
+  "sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`stack-skill\`/' docs/reference/work-types/alpha/implement.md"
+case_run "4: a Skills rule naming an unknown skill fails" 1 "names \`nowhere\`, which is not a method skill" \
+  "sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`nowhere\`/' docs/reference/work-types/alpha/implement.md"
 
 # --- 5  no profile values in method files --------------------------------------------------
 case_run "5: the owner in a method doc fails" 1 "profile value repo.owner" \
@@ -296,6 +346,16 @@ case_run "5: a backticked status name in a method file fails" 1 "profile value s
   "printf 'Move it to \`Done\`.\n' >> docs/reference/wf.md"
 case_run "5: a multi-word status name written bare fails" 1 "profile value status \`In progress\`" \
   "printf 'Status -> In progress.\n' >> .claude/agents/reviewer.md"
+case_run "5: a stack token in a core work-type file fails" 1 "alpha/done.md:6: core work-type file spells stack token \`gizmo\` (widgets)" \
+  "printf 'Read the gizmo first.\n' >> docs/reference/work-types/alpha/done.md"
+case_run "5: a stack token in any case, inside backticks, fails" 1 "stack token \`gizmo\`" \
+  "printf 'Read \`GIZMO\` first.\n' >> docs/reference/work-types/alpha/done.md"
+case_run "5: a multi-word stack token across a line wrap fails" 1 "alpha/done.md:6: core work-type file spells stack token \`Widget Kit\`" \
+  "printf 'Use the Widget\nKit here.\n' >> docs/reference/work-types/alpha/done.md"
+case_run "5: a stack skill name in a core work-type file fails" 1 "core work-type file spells stack skill \`stack-skill\`" \
+  "printf 'Read \`stack-skill\` first.\n' >> docs/reference/work-types/alpha/review.md"
+case_run "5: the work-type README is a core file too" 1 "work-types/README.md:1: core work-type file spells stack token" \
+  "printf 'A gizmo.\n' > docs/reference/work-types/README.md"
 
 # --- modes and environment -----------------------------------------------------------------
 dir=$(new_fixture) || dir=""
@@ -315,7 +375,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=48
+EXPECTED=65
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

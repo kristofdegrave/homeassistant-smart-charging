@@ -33,13 +33,14 @@ wearing this method's vocabulary.
    solar-capability presence.) Write each volatility down explicitly with its rationale — the
    bar's item 1 judges that rationale, so an unwritten one is a finding rather than an
    omission.
-3. **Encapsulate each volatility in exactly one service**, classified as one of:
-   - **Client** — a consumer of the system (HA automations/UI/entities).
+3. **Encapsulate each volatility in exactly one service**, classified as one of (the stack
+   overlay gives this stack's examples of the first and the last):
+   - **Client** — a consumer of the system.
    - **Manager** — orchestrates one use case's flow, in a specific order; the "how".
    - **Engine** — reusable business/policy logic scoped to one volatility; never orchestrates.
    - **Resource Access** — encapsulates *how* one specific resource is reached; isolates that
      access volatility from everything above it.
-   - **Resource** — the external thing itself (charger, HA entity state, tariff/captar source).
+   - **Resource** — the external thing itself.
 4. **Static architecture diagram** (Mermaid `flowchart TD`): the service map with allowed call
    directions only — Client → Manager → {Engine, Resource Access} → Resource. State explicitly
    the one allowed pattern (if any) for Manager-to-Manager orchestration; state that Engines

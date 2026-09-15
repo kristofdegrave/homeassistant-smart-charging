@@ -17,3 +17,25 @@ here would make the reviewer open the author's recipe to find out which bar appl
 
 Everything about how either document is written is in the branch file. Nothing is duplicated
 here, and a change that touches both documents follows both.
+
+## Rules
+
+The rules either document is written by are the branch file's. One holds for both branches and
+is stated once, here.
+
+### Skills
+
+The method skills this work type uses, by step: `domain-driven-design` for the strategic-design
+vocabulary the decomposition is argued in; `research` when a fact a design rests on is
+external, cited from the document by linking the issue comment; `receiving-code-review` in the
+review step. The stack skills are the overlays' to name.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Implement** section read with this file
+and the branch file it routes to as one work file. An overlay adds the stack's material to the
+rule that names it — naming the branch where it belongs to one — and never restates a rule of
+those files; one that reads `none` is the stack saying it has nothing to add here. The shape,
+and the rule that no stack material lives in this file or the branch files, are this tree's
+`README.md`'s.

@@ -58,7 +58,9 @@ union of the two:
 
 Each half resolves to a **checklist**, and the checklist is what you hand over: spawn the
 generic `reviewer` agent against it. A review column may also name a completion bar; that is
-criteria the reviewer reads, not a second reviewer to spawn.
+criteria the reviewer reads, not a second reviewer to spawn. The same goes for the stack
+overlays a checklist or bar routes to from its own **Overlays** section: the reviewer reads
+them as part of that same checklist and bar, and the dispatch names nothing extra.
 
 The table states how each half is scoped, and the exception for a tree that carries its own
 reviewer rule; apply it as written. The *Review model* column of each row in play says which

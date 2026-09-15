@@ -13,7 +13,10 @@ board and its ids, the label set, the enabled work types, the changed-path map, 
 the dependency pins, the research sources, git identity, merge strategy and flow deviations. A
 method document that spells one of *those* facts is the defect — it states the rule and routes
 here. Stack-specific content (Home Assistant, Python) is a different axis and is not this
-file's: it lives in the stack skills and, in time, in per-stack overlays of the work-type files.
+file's: it lives in the stack skills and in the per-stack overlays of the work-type files
+(`docs/reference/work-types/<label>/overlays/<stack>.md`). What the profile holds about a stack
+is `profile.yml`'s `stacks`: the declared stacks, each with the tokens the method check keeps
+out of the core work-type files.
 
 ## Repository and git identity
 

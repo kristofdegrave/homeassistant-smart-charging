@@ -22,21 +22,45 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         every flow deviation -- a `###` under it -- names, in backticks, at
                         least one work type, each of them enabled
   4  work-type          every enabled work type has review.md, and implement.md and done.md
-     completeness       unless its row says its work is `none`; every dependency declared
+     completeness       unless its row says its work is `none`; every work file has a
+                        `### Skills` rule naming only method skills -- a skill directory the
+                        profile does not declare as stack, or a declared non-stack
+                        dependency; every work type with an overlay slot (a `## Overlays`
+                        section in a label-level role file) has overlays/<stack>.md for every
+                        declared stack, no label without a slot has an overlays/ directory,
+                        no overlay is named for an undeclared stack, and every stack a
+                        dependency declares has a `stacks` entry; every dependency declared
                         `installed: repo` is present; every `layer:` frontmatter, where a
                         file carries one, names a known layer
   5  no profile values  no value from profile.yml (owner, repository name, board name, node
-     in method files    ids, status column names) appears in a method-layer file
+     in method files    ids, status column names) appears in a method-layer file; no stack
+                        token (profile.yml `stacks.<stack>.tokens`) and no stack skill name
+                        appears in a method-layer file under docs/reference/work-types/
 
 Which layer a file belongs to is a rule, and `layer:` frontmatter is the override for a file
 that deviates from it. The defaults: every document under docs/reference/** and every agent
 under .claude/agents/ is method; every markdown file of a skill under .claude/skills/ is
 method unless the profile's `dependencies` declares the skill, in which case it is a vendored
 dependency and belongs to no layer here (it is never scanned, and never edited to say so).
+A work-type overlay -- docs/reference/work-types/<label>/overlays/<stack>.md -- is stack by
+position: a stack package installs it, and it is never edited to say so either.
 Each file's own frontmatter is what overrides, so a skill's reference file can differ from
 its SKILL.md. `layer: project` on a file --
-docs/reference/profile.md is the standing case -- takes it out of check 5; `layer: stack` is
-reserved for a stack file a project authors itself.
+docs/reference/profile.md is the standing case -- takes it out of check 5; `layer: stack` as
+an override is reserved for a stack file found anywhere but an overlays/ directory.
+
+Why check 5's stack-token half is scoped to the work-type tree and not to every method file:
+the issue that introduced it split that tree into method core plus stack overlays, and the
+tree is where a stack sentence has a home to move to. The rest of the method (the contribution
+workflow, the flow document, the Definition of Done) still spells the stack in places, and
+widening the scan there is its own issue -- a blocking gate must not demand a move with no
+destination. The scope is a stated limit, not a claim the rest is clean.
+
+The token list is the profile's, hand-kept like check 5's key list: matched as whole words in
+any case, with any whitespace (a line wrap included) between the words of a multi-word token,
+inside code spans and fences too -- a stack path in backticks is exactly the thing to catch.
+A word the method uses everywhere in its own right is deliberately not on it, so a stack
+sentence built only from such words passes; that is judgment, and the `workflow` checklist's.
 
 Why the scope of check 1 is wider than the rule that created it: a CI worker prompt is not
 bound by the routing rule, and neither is an ADR, a design document or a plan, but all of them
@@ -89,6 +113,14 @@ LAYERS = {"method", "project", "stack"}
 # The project's prose profile; its `## Flow` section is the deviation contract check 3 reads.
 PROFILE_DOC = "docs/reference/profile.md"
 FLOW_SECTION = "Flow"
+WORK_TYPES = "docs/reference/work-types"
+OVERLAYS_DIR = "overlays"
+# The overlay slot a core role file carries, and the rule a work file carries.
+OVERLAYS_SECTION = "Overlays"
+SKILLS_RULE = "Skills"
+ROLE_FILES = ("implement.md", "done.md", "review.md")
+# The dependency group whose skills are stack, not method; every other group is method-side.
+STACK_GROUP = "stack"
 POINTER_PLACEHOLDER = "Topic"
 POINTER_TREES = (".claude", "docs", ".github/workflows")
 FROZEN_TREES = ("docs/postmortems", "docs/archive")
@@ -446,13 +478,137 @@ def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) ->
 
 
 def declared_dependencies(profile: dict) -> dict[str, dict]:
+    """{name: entry} for every declared dependency; each entry gains its group under `_group`."""
     deps = profile.get("dependencies") or {}
     out: dict[str, dict] = {}
-    for group in deps.values() if isinstance(deps, dict) else []:
-        for entry in group or []:
+    for group, entries in deps.items() if isinstance(deps, dict) else []:
+        for entry in entries or []:
             if isinstance(entry, dict) and entry.get("name"):
-                out[str(entry["name"])] = entry
+                out[str(entry["name"])] = {**entry, "_group": str(group)}
     return out
+
+
+def stack_dependencies(deps: dict[str, dict]) -> dict[str, dict]:
+    return {name: e for name, e in deps.items() if e.get("_group") == STACK_GROUP}
+
+
+def declared_stacks(profile: dict) -> dict[str, list[str]]:
+    """{stack: tokens} for every stack the profile declares under `stacks`."""
+    out: dict[str, list[str]] = {}
+    stacks = profile.get("stacks") or {}
+    for name, spec in stacks.items() if isinstance(stacks, dict) else []:
+        tokens = (spec or {}).get("tokens") or [] if isinstance(spec, dict) else []
+        out[str(name)] = [str(t) for t in tokens if str(t).strip()]
+    return out
+
+
+def is_overlay(root: Path, path: Path) -> bool:
+    """docs/reference/work-types/<label>/overlays/<stack>.md -- stack by position."""
+    parts = Path(rel(root, path)).parts
+    prefix = Path(WORK_TYPES).parts
+    return (
+        len(parts) == len(prefix) + 3
+        and parts[: len(prefix)] == prefix
+        and parts[-2] == OVERLAYS_DIR
+        and path.suffix == ".md"
+    )
+
+
+def has_heading(text: str, level: int, title: str) -> bool:
+    return any(lv == level and h.strip() == title for lv, _, h in headings(text))
+
+
+def rule_body(text: str, title: str) -> str:
+    """The lines of one `###` rule, from its heading to the next heading of level 3 or above."""
+    lines = strip_fences(text)
+    start = None
+    for i, (_, line) in enumerate(lines):
+        m = HEADING_RE.match(line)
+        if m and len(m.group(1)) == 3 and m.group(2).strip() == title:
+            start = i
+            break
+    if start is None:
+        return ""
+    body = []
+    for _, line in lines[start + 1 :]:
+        m = HEADING_RE.match(line)
+        if m and len(m.group(1)) <= 3:
+            break
+        body.append(line)
+    return "\n".join(body)
+
+
+def check_work_type_shape(
+    root: Path, guide: Guide, profile: dict, deps: dict[str, dict], findings: Findings
+) -> None:
+    """The Skills rule in every work file; the overlay slot and the files that fill it."""
+    enabled = list((profile.get("work_types") or {}).get("enabled") or [])
+    stacks = declared_stacks(profile)
+    stack_deps = stack_dependencies(deps)
+    for name, entry in sorted(stack_deps.items()):
+        stack = entry.get("stack")
+        if stack is not None and str(stack) not in stacks:
+            findings.add(
+                4,
+                ".claude/profile.yml",
+                f"dependency `{name}` declares stack `{stack}`, which has no `stacks` entry",
+            )
+    method_skills = {name for name, e in deps.items() if e.get("_group") != STACK_GROUP}
+    skills_dir = root / ".claude/skills"
+    if skills_dir.is_dir():
+        method_skills |= {
+            p.name for p in skills_dir.iterdir() if p.is_dir() and p.name not in stack_deps
+        }
+    for label in enabled:
+        directory = root / WORK_TYPES / label
+        row = guide.rows.get(label)
+        review_only = bool(row) and row[1].lower().startswith("none")
+        work_file = directory / "implement.md"
+        if not review_only and work_file.is_file():
+            text = read_text(work_file)
+            where = f"{WORK_TYPES}/{label}/implement.md"
+            if not has_heading(text, 3, SKILLS_RULE):
+                findings.add(4, where, f"work file has no `### {SKILLS_RULE}` rule")
+            else:
+                for skill in re.findall(r"`([^`]+)`", rule_body(text, SKILLS_RULE)):
+                    if skill not in method_skills:
+                        findings.add(
+                            4,
+                            where,
+                            f"`### {SKILLS_RULE}` names `{skill}`, which is not a method skill "
+                            "or a declared method dependency",
+                        )
+        slot = any(
+            (directory / role).is_file()
+            and has_heading(read_text(directory / role), 2, OVERLAYS_SECTION)
+            for role in ROLE_FILES
+        )
+        overlays = directory / OVERLAYS_DIR
+        present = (
+            {p.stem for p in overlays.iterdir() if p.is_file() and p.suffix == ".md"}
+            if overlays.is_dir()
+            else set()
+        )
+        where = f"{WORK_TYPES}/{label}/{OVERLAYS_DIR}/"
+        if slot:
+            for stack in sorted(set(stacks) - present):
+                findings.add(
+                    4,
+                    where,
+                    f"work type `{label}` has an overlay slot but no {stack}.md for declared "
+                    f"stack `{stack}` (a file reading `none` states that the stack adds nothing)",
+                )
+        elif overlays.is_dir():
+            findings.add(
+                4,
+                where,
+                f"work type `{label}` has an {OVERLAYS_DIR}/ directory but no `## "
+                f"{OVERLAYS_SECTION}` slot in any of its role files",
+            )
+        for stack in sorted(present - set(stacks)):
+            findings.add(
+                4, f"{where}{stack}.md", f"overlay for `{stack}`, which is not a declared stack"
+            )
 
 
 def resolve_layer(
@@ -511,7 +667,9 @@ def check_completeness(
     for path in walk(root, ".claude/agents", (".md",)):
         resolve_layer(root, path, "method", findings, layers)
     for path in walk(root, "docs/reference", (".md",)):
-        resolve_layer(root, path, "method", findings, layers)
+        default = "stack" if is_overlay(root, path) else "method"
+        resolve_layer(root, path, default, findings, layers)
+    check_work_type_shape(root, guide, profile, deps, findings)
     return layers
 
 
@@ -545,10 +703,30 @@ def profile_values(profile: dict) -> list[tuple[str, re.Pattern[str]]]:
     return values
 
 
+def stack_tokens(profile: dict) -> list[tuple[str, re.Pattern[str]]]:
+    """(label, pattern) for every stack token and stack skill name a core file must not spell.
+
+    Whole words, any case; a multi-word token matches across any whitespace, a line wrap
+    included, which is why check 5 runs these over the file's text rather than line by line.
+    """
+    out: list[tuple[str, re.Pattern[str]]] = []
+    for stack, tokens in declared_stacks(profile).items():
+        for token in tokens:
+            words = [re.escape(w) for w in token.split()]
+            pattern = r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)"
+            out.append((f"stack token `{token}` ({stack})", re.compile(pattern, re.IGNORECASE)))
+    for name in sorted(stack_dependencies(declared_dependencies(profile))):
+        out.append(
+            (f"stack skill `{name}`", re.compile(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])"))
+        )
+    return out
+
+
 def check_profile_values(
     root: Path, profile: dict, layers: dict[str, str], findings: Findings
 ) -> None:
     values = profile_values(profile)
+    tokens = stack_tokens(profile)
     for where, layer in sorted(layers.items()):
         if layer != "method":
             continue
@@ -559,6 +737,12 @@ def check_profile_values(
                     findings.add(
                         5, f"{where}:{number}", f"method file spells profile value {label}"
                     )
+        if not where.startswith(WORK_TYPES + "/"):
+            continue
+        for label, pattern in tokens:
+            for m in pattern.finditer(text):
+                number = text.count("\n", 0, m.start()) + 1
+                findings.add(5, f"{where}:{number}", f"core work-type file spells {label}")
 
 
 # --- entry point ----------------------------------------------------------------------------
@@ -614,7 +798,7 @@ def main(argv: list[str]) -> int:
         2: "anchors, inward",
         3: "profile agreement",
         4: "work-type completeness",
-        5: "no profile values in method files",
+        5: "no profile or stack values in method files",
     }
     if not findings.items:
         print(

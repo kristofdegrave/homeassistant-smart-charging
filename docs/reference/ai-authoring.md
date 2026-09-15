@@ -305,11 +305,14 @@ vendored dependency that belongs to no layer of this project's and is never edit
 that is what keeps an upstream-intact skill intact. A file that deviates from its tree's
 default says so in YAML frontmatter, `layer: project` or `layer: stack` (`layer: method` is
 legal and redundant), and nothing else carries the key: `docs/reference/profile.md` is the
-standing case, a project file inside a method tree. The layer records what an installer would
-copy and what the check below scans — not a claim that the content is already portable: the
-work-type files are method by rule while their stack-specific sentences still await their
-overlays. `CLAUDE.md` and `.claude/profile.yml` carry no frontmatter; the first is rewritten
-per repository and the second is the profile by path.
+standing case, a project file inside a method tree. One more position rule: a work-type
+overlay, `docs/reference/work-types/<label>/overlays/<stack>.md`, is **stack** by where it sits
+— a stack package installs it, and the method never edits it to say so — which is why
+`layer: stack` as an override is reserved for a stack file found anywhere else. The layer
+records what an installer would copy and what the check below scans: the work-type core files
+are method, and their stack-specific sentences sit in the overlays beside them, where the check
+requires them to be. `CLAUDE.md` and `.claude/profile.yml` carry no frontmatter; the first is
+rewritten per repository and the second is the profile by path.
 
 ### The method check reads it
 
@@ -326,10 +329,15 @@ agreement:** the Model selection table and changed-path map agree with the profi
 exists and has a **Flow** section, and every deviation it states — each `###` there — names
 at least one work type in backticks, every one of them enabled. **4, work-type completeness:**
 every enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its
-row says its work is `none`; every dependency declared `installed: repo` is present; every
-`layer:` a file does carry names a known layer. **5, no profile values in method files:** no
-value the profile holds — owner, repository name, board name, node ids, a status column
-name — appears in a method-layer file. Status names are
+row says its work is `none`; every work type with a work file has a `### Skills` rule in it
+naming only method skills and declared method dependencies; every work type with an overlay
+slot has an `overlays/<stack>.md` for every declared stack, and no overlay exists for a stack
+the profile does not declare or under a label with no slot; every dependency declared
+`installed: repo` is present; every `layer:` a file does carry names a known layer. **5, no
+profile values in method files:** no value the profile holds — owner, repository name, board
+name, node ids, a status column name — appears in a method-layer file; and no stack token the
+profile lists under `stacks`, nor the name of a stack skill, appears in a method-layer file of
+the work-type tree. Status names are
 matched in the form a command would use them, inside backticks, or as the exact multi-word
 phrase; the word in *Definition of Done* is English. The script's header is the authority on
 each rule's exact shape and its stated limits. It runs blocking in CI and as a warning from

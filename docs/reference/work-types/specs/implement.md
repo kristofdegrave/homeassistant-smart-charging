@@ -104,14 +104,21 @@ section.
   spec and its source ever disagree, the source wins.
 - **Keep both plan documents capped**, per the section above: decisions, structure and tasks —
   no restated formula, no restated ADR rationale, no narrative that repeats its own task.
-- **Honor the ADRs.** The bar's item 4, *ADR compliance and gates*, enumerates the records a
-  slice is ordinarily gated on and judges compliance with them. What that means while
-  drafting: open each gate in the plan **before** the task it blocks, rather than leaving the
-  review to discover the order is wrong.
-- **Respect the test boundary.** Pure logic → plain pytest; HA-coupled → HA harness. Name it
-  per task.
-- **No `custom_components/` code here.** The spec is a planning artifact; code is written by the
+- **Honor the ADRs.** The bar's item 4, *ADR compliance and gates*, judges compliance, and the
+  stack overlay enumerates under it the records a slice is ordinarily gated on. What that
+  means while drafting: open each gate in the plan **before** the task it blocks, rather than
+  leaving the review to discover the order is wrong.
+- **Respect the test boundary.** Name it per task; the boundaries themselves are the stack
+  overlay's, under this rule.
+- **No product code here.** The spec is a planning artifact; code is written by the
   `development` work type against the approved plan.
+
+### Skills
+
+The method skills this work file uses, by step: `brainstorming` for scoping the slice (step 2);
+`writing-plans` for deriving the TDD plan (step 4); `research` when a decision the spec makes is
+blocked on an external fact; `receiving-code-review` in the review step. The stack skills are
+the overlays' to name.
 
 ## Common mistakes
 
@@ -122,10 +129,19 @@ section.
   undocumented rule, and cutting it loses the only copy. Report it and fix the owning doc.
 - Restating an ADR's rationale, or narrating a task the task entry already describes.
 - A task with no exact file path, no failing test, or no stated test boundary.
-- Routing pure-logic tests through the HA harness (or vice versa).
 - A silent deferral of a mandated safety behavior (a clamp, the fault path) — state it as a
   known deviation, out loud.
 - Leaving the Verify-live checklist to be written after deployment, when the slice can no
   longer be judged against what it promised.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
+- The stack overlays add the mistakes that belong to the stack's test boundaries.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Implement** section read with this file as
+part of the same work file. An overlay adds the stack's material to the rule that names it and
+never restates a rule of this file; one that reads `none` is the stack saying it has nothing to
+add here. The shape, and the rule that no stack material lives in this file, are this tree's
+`README.md`'s.

@@ -12,9 +12,9 @@ checklist — the generic `reviewer` agent definition locally, the review workfl
 in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
 way, through `CLAUDE.md`'s **Model selection** table.
 
-**This checklist covers `custom_components/**`, the tree the path map selects it for, and
-nothing else.** A `development` change produces two artifacts in two trees, and the criteria
-belong to the artifact rather than to the label that dispatched the review — which is why the
+**This checklist covers the product-code tree the path map selects it for, and nothing
+else.** A `development` change produces two artifacts in two trees, and the criteria belong to
+the artifact rather than to the label that dispatched the review — which is why the
 `development` row names the `testing` row's checklist and bar for its `tests/**` half, and why
 a code-only change resolves this file alone. So a test defect is reported against the item the
 `testing` bar names for it, never against an item here.
@@ -23,8 +23,8 @@ a code-only change resolves this file alone. So a test defect is reported agains
 
 Always read:
 
-- The changed files under `custom_components/smart_charging/` and their mirrored tests under
-  `tests/` — from the diff the caller gives you, or the files whole.
+- The changed product-code files and their mirrored tests — the trees the stack overlay
+  names — from the diff the caller gives you, or the files whole.
 - The implementation-plan task the change realizes — the change's spec. The `specs` row of
   `CLAUDE.md`'s **Model selection** table names the artifact and the tree it lives in.
 - The behaviour the change implements, in this project's analysis documents — the
@@ -39,14 +39,12 @@ Always read:
   and say that the item could not be judged; never report a missing section you were never
   handed, and never treat the two cases that item excludes as findings.
 
-Read conditionally:
-
-- The `ha-integration-knowledge` skill — where the diff touches HA platform surface (entity
-  classes, config flow, `manifest.json`, services).
+Read conditionally: what the stack overlays' **Review** sections name, on the condition each
+states.
 
 Then [`done.md`](done.md), the completion bar, before you start scoring rather than while you
-write up. It names further material at the item that needs it — two Python skills at its
-item 5. Read each when its item applies; don't fan out across the tree ahead of that.
+write up. It names further material at the item that needs it — the overlays do, at their
+items. Read each when its item applies; don't fan out across the tree ahead of that.
 
 ## The checks that are yours alone
 
@@ -69,3 +67,12 @@ This is also what makes [`done.md`](done.md)'s overlap paragraph — the one aft
 decidable, and decidable here rather than anywhere else: it binds the review that holds both
 bars, and a review holding both is a review that read the tests. Apply it as that paragraph
 states it; nothing about it is restated here.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Review** section read with this file as
+part of the same checklist. An overlay adds the stack's material to the list or check that
+names it and never restates one of this file; one that reads `none` is the stack saying it has
+nothing to add here. The shape, and the rule that no stack material lives in this file, are
+this tree's `README.md`'s.

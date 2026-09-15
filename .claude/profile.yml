@@ -137,6 +137,44 @@ work_types:
     - testing
     - workflow
 
+# The stacks this project is built on: one entry per distinct `stack:` value of
+# `dependencies.stack` below, keyed by that value. Each names, under `tokens`, the words that
+# mark a sentence as this stack's. The method check (.github/check-method.py, check 5) refuses
+# any of them — and the name of any stack skill — in a method-layer file under
+# docs/reference/work-types/, so such a sentence has to live in the stack's overlay,
+# docs/reference/work-types/<label>/overlays/<stack>.md, which check 4 requires for every work
+# type that has an overlay slot. Matched as whole words in any case, a multi-word token across a
+# line wrap too. A hand-kept choice, like check 5's list of profile keys: a word the method uses
+# everywhere in its own right (`entity`, `adapter`, `harness`, `boundary`) is deliberately not
+# here, and a new stack-specific word is not refused until it is added.
+stacks:
+  home-assistant:
+    tokens:
+      - Home Assistant
+      - HA
+      - homeassistant
+      - hass
+      - custom_components
+      - coordinator
+      - config entry
+      - config-entry
+      - config flow
+      - config-flow
+      - entity_id
+      - MockConfigEntry
+      - pytest-homeassistant-custom-component
+      - manifest.json
+      - strings.json
+  python:
+    tokens:
+      - Python
+      - pytest
+      - ruff
+      - async
+      - asyncio
+      - StrEnum
+      - vol.In
+
 review:
   # Review passes an interactive session may run per PR before the loop stops and escalates;
   # counted from the most recent reset event, as docs/reference/contribution-workflow.md's
@@ -215,6 +253,11 @@ dependencies:
       source: obra/superpowers
       path: skills/test-driven-development
       pin: commit:b9e75dddec7a
+      installed: user
+    - name: systematic-debugging
+      source: obra/superpowers
+      path: skills/systematic-debugging
+      pin: commit:c8921b515656
       installed: user
     - name: verification-before-completion
       source: obra/superpowers

@@ -32,9 +32,9 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
 - **What is in scope** is the *Code backing* item of `done.md` — it defines the behavioural
   assertions a use-case makes, which changes assert none, and how *Scope / level* and
   *Relationships* split. Read them off the diff; do not re-derive the list here.
-- **The search, capped.** Per in-scope item, run **one** targeted search of
-  `custom_components/` for the thing it names — the entity id, the adapter role, the domain
-  event name, the threshold, the ordering — and open at most one file, the best match.
+- **The search, capped.** Per in-scope item, run **one** targeted search of the product code —
+  the stack overlay names the tree — for the thing it names — the entity id, the adapter role,
+  the domain event name, the threshold, the ordering — and open at most one file, the best match.
   **Stop after five items**; where the diff has more — a brand-new use-case, whose diff is
   the whole document, always will — say the set was sampled and name the five you took. Five
   suits a drafting session's turn budget, and one use-case edit routinely touches more
@@ -58,8 +58,8 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 
 ## Rules
 
-- **What, not how.** Describe observable behaviour. No Python, HA services, timer helpers, or
-  persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
+- **What, not how.** Describe observable behaviour. No implementation detail — the stack
+  overlay names the forms it takes. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
   ("the active SOC limit", "charger status") — the `sc_` binding lives in
   `docs/analysis/entity-catalog.md`.
 - **Don't duplicate mechanism.** Reference `docs/analysis/control-cycle.md` (read → smooth →
@@ -78,6 +78,12 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 - One statement per line; always name the subject (Actor or System); active voice; verifiable
   pre/postconditions.
 
+### Skills
+
+The method skills this work file uses, by step: `research` when a fact a use-case rests on is
+external, cited from the document by linking the issue comment; `receiving-code-review` in the
+review step. The stack skills are the overlays' to name.
+
 ## Diagram types
 
 `stateDiagram-v2` for stateful modes · `flowchart TD` for decision logic · `sequenceDiagram` for
@@ -93,3 +99,12 @@ actor-driven prompts/notifications.
 - A mode UC whose `stateDiagram-v2` states don't match its Given/When/Then scenarios.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Implement** section read with this file as
+part of the same work file. An overlay adds the stack's material to the rule that names it and
+never restates a rule of this file; one that reads `none` is the stack saying it has nothing to
+add here. The shape, and the rule that no stack material lives in this file, are this tree's
+`README.md`'s.

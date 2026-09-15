@@ -32,9 +32,9 @@ This is how you settle whether the change touches shipped behaviour, which is th
 - **What is in scope** is the *Code backing* item of `done.md` — for this work type, every
   acceptance criterion and constraint row the change adds or alters. Read them off the diff; do
   not re-derive the list here.
-- **The search.** Per in-scope item, search `custom_components/` for the behaviour it
-  constrains — the entity it names, the clamp, the lookup, the default. This is a targeted
-  lookup per item, never a sweep of the codebase.
+- **The search.** Per in-scope item, search the product code — the stack overlay names the
+  tree — for the behaviour it constrains — the entity it names, the clamp, the lookup, the
+  default. This is a targeted lookup per item, never a sweep of the codebase.
 - **State the finding, file what it turns up, and you are done** — the bar's items 4.2, *The
   finding is stated*, and 4.3, *A gap is filed*, state both, carry the drafting order, and
   judge the result. Done when both hold for every item you took.
@@ -78,6 +78,12 @@ at, and are not repeated here. Two of them have a drafting order this file owns:
   state the criterion without naming a module, a service call or a data structure, the *what*
   hasn't been found yet.
 
+### Skills
+
+The method skills this work file uses, by step: `research` when a fact a requirement rests on
+is external, cited from the document by linking the issue comment; `receiving-code-review` in
+the review step. The stack skills are the overlays' to name.
+
 ## Common mistakes
 
 - Adding a term to a requirement without defining it in the glossary first.
@@ -89,3 +95,13 @@ at, and are not repeated here. Two of them have a drafting order this file owns:
 - Duplicating a requirement's home in two documents.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
+
+## Overlays
+
+**Apply the overlays** the profile's declared stacks provide for this work type: one file per
+stack at `overlays/<stack>.md` beside this one, its **Implement** section read with this file as
+part of the same work file. The bar and the checklist this row routes to are the `uc` row's,
+and their overlays are the `uc` directory's. An overlay adds the stack's material to the rule
+that names it and never restates a rule of this file; one that reads `none` is the stack saying
+it has nothing to add here. The shape, and the rule that no stack material lives in this file,
+are this tree's `README.md`'s.
