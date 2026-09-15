@@ -89,12 +89,14 @@ and the two stack packages (Home Assistant, Python) are declared in `profile.yml
 section is the provenance manifest: a pin moves only by a decision recorded in the PR that
 moves it, because several of these skills are deliberate adaptations of their upstream
 ([ai-authoring.md](ai-authoring.md)'s **Vendored skills are forked on purpose**). Which of them
-are method and which are stack is the layering the epic that introduced this file settled; the
-stack skills are declared here and not part of the method.
+are method and which are stack follows the three-layer split this file exists for — method
+(travels everywhere), profile (this project), stack packages (Home Assistant, Python) — so the
+stack skills are declared here and are not part of the method.
 
 ## Flow
 
-**Default.** This project follows the method's idea-to-product flow as written, with no stage
-removed, added or reordered and no gate changed. When the flow document gains its
-deviation contract, a deviation is stated here as one `###` per deviation with its why — never
-as a copy of the flow.
+**Default.** This project follows the method's idea-to-product flow — today
+[idea-to-issues.md](idea-to-issues.md), reached from `CLAUDE.md`'s **Contribution workflow**
+section — as written, with no stage removed, added or reordered and no gate changed. When that
+document gains its deviation contract, a deviation is stated here as one `###` per deviation
+with its why — never as a copy of the flow.

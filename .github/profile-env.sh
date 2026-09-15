@@ -21,6 +21,11 @@ set -euo pipefail
 
 PROFILE="${PROFILE:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.claude/profile.yml}"
 
+if [ ! -r "$PROFILE" ]; then
+  echo "profile-env: cannot read $PROFILE" >&2
+  exit 2
+fi
+
 py=""
 for candidate in python3 python; do
   if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import yaml' >/dev/null 2>&1; then

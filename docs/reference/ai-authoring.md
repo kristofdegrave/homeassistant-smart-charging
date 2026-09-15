@@ -375,7 +375,9 @@ Two consequences:
   every CI worker prompt names. The installer's second copy under `.agents/skills/` was an
   unreferenced byte-identical duplicate and has been removed; don't reintroduce it.
 - **A re-sync from upstream would revert that work.** The `computedHash` entries in
-  `skills-lock.json` describe where a skill came from, not what it must still contain. Before
+  `skills-lock.json` describe where a skill came from, not what it must still contain — and
+  the same four hashes are declared as pins in `.claude/profile.yml`'s `dependencies`, the
+  copy the method reads; the two move together, in the same PR. Before
   re-pulling any of the four, check whether the local copy has diverged — for the two rewritten
   ones, re-apply the trim rather than accepting the upstream text.
 

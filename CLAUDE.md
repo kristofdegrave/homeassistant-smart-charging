@@ -255,8 +255,10 @@ is wider than either label sharing it — `requirement`'s file points at the sam
 here rather than carrying its own copy. An entry reaches a CI review only if its tree is also in
 `ai-pipeline.yml`'s path filter, which decides whether a job runs at all, and in
 `_ai-review.yml`'s diff enumeration, which decides what a checklist can see. Those two are
-enumerations beside this one, so adding a tree here means adding it there — and the two
-omissions fail differently. Left out of the **path filter**, no job runs, which silences the
+enumerations beside this one, and `.claude/profile.yml`'s `review.path_map` is a third — the
+same set, held for the CI workers that will one day read it there instead of here — so adding
+a tree here means adding it in all three of them. Of the two CI omissions, each fails
+differently. Left out of the **path filter**, no job runs, which silences the
 label half too, since a job that never runs cannot add a reviewer. Left out of the **diff
 enumeration** alone, the job does run, sees nothing under that tree, and can post a clean
 verdict over a change no checklist read — a false clean, and the worse of the two.

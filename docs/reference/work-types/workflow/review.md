@@ -20,8 +20,10 @@ a different question with the same subject.
 
 A change to this project's AI pipeline itself and the process docs it is driven by — a skill
 (`.claude/skills/`), an agent definition (`.claude/agents/`), a CI workflow
-(`.github/workflows/`), the label vocabulary (`.claude/profile.yml`'s `labels`, which
-`.github/setup-labels.sh` writes to the repository), an issue form
+(`.github/workflows/`), the project profile and the two scripts that read it
+(`.claude/profile.yml`; `.github/setup-labels.sh`, which writes its `labels` to the
+repository; `.github/profile-env.sh`, which prints its tracker values for the reference's
+recipes), an issue form
 (`.github/ISSUE_TEMPLATE/`), or the canonical process reference (`docs/reference/`,
 `CLAUDE.md`). The workflow, skill and agent files run with write-scoped credentials
 (`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,

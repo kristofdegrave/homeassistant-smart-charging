@@ -77,7 +77,9 @@ labels:
     - name: needs-decision
       color: e4e669
       description: "PR: review left findings open and no automatic fix follows — a maintainer decides how to proceed"
-  # One per enabled work type — `work_types.enabled` below is this list's names.
+  # One per enabled work type — `work_types.enabled` below is this list's names, kept as a
+  # separate key because a label is a tracker fact and a work type a method fact. Nothing
+  # verifies they agree yet; the method check planned as its own issue does.
   context:
     - name: uc
       color: 1d76db
@@ -129,12 +131,16 @@ work_types:
     - workflow
 
 review:
-  # Review passes allowed per PR before the loop stops and escalates; counted from the most
-  # recent reset event, as docs/reference/contribution-workflow.md's **Rounds and the cap**
-  # defines. That section routes here for the number rather than stating it.
-  cap: 2
+  # Review passes an interactive session may run per PR before the loop stops and escalates;
+  # counted from the most recent reset event, as docs/reference/contribution-workflow.md's
+  # **Rounds and the cap** defines. That section routes here for the number rather than
+  # stating it. CI's own loop cap is _ai-review.yml's and is not this key.
+  interactive_cap: 2
   # Changed path → the work type whose review checklist judges it. This is the no-label row
-  # of CLAUDE.md's Model selection table, and applies to every PR whatever its label.
+  # of CLAUDE.md's Model selection table, and applies to every PR whatever its label. It is
+  # one of four enumerations of the same set — that row, ai-pipeline.yml's path filter and
+  # _ai-review.yml's diff enumeration are the others — and nothing reads this copy yet, so
+  # adding a tree means adding it in all four; CLAUDE.md's row states the obligation.
   path_map:
     - work_type: adr
       paths: ["docs/adl/**"]
@@ -161,11 +167,14 @@ review:
         - "CLAUDE.md"
 
 # Everything the method or the stack is built on that lives outside this repository, each
-# pinned to the upstream state it was last reconciled with. This is the provenance manifest:
-# the scheduled drift check reads these rows, and a pin is bumped by a decision recorded in
-# the PR that bumps it — never by an automatic re-sync, since several of these are
+# pinned to the upstream state it was last reconciled with. This is the provenance manifest.
+# No workflow reads it yet: a scheduled drift check that compares each pin with upstream is
+# planned as its own issue and will read these rows. A pin is bumped by a decision recorded
+# in the PR that bumps it — never by an automatic re-sync, since several of these are
 # adaptations rather than copies (docs/reference/ai-authoring.md's **Vendored skills are
-# forked on purpose**).
+# forked on purpose**). The four `sha256:` rows are also in skills-lock.json, the marketplace
+# installer's own record; this file is the one the method reads, and the two move together —
+# a re-install that changes the lockfile's hash changes the pin here in the same PR.
 #
 #   source     GitHub repository the skill came from
 #   path       path of the skill inside that repository

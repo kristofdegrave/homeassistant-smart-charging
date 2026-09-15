@@ -1,7 +1,7 @@
 # Tracker mechanics
 
 The concrete commands for driving this project's tracker — GitHub issues, pull requests,
-review threads, labels, and the EMS project board — in one place, so no artifact has to
+review threads, labels, and the project board — in one place, so no artifact has to
 re-derive them and no agent has to rediscover the failure modes below the hard way.
 
 **Mechanics only: the how, never the when or the why.** Which work gets an issue, what a
@@ -22,11 +22,16 @@ eval "$(bash .github/profile-env.sh)"
 which prints `OWNER`, `REPO_NAME`, `REPO` (`owner/name`), `BOARD`, `PROJECT_ID`,
 `SIZE_FIELD`, `ESTIMATE_FIELD`, `STATUS_FIELD`, one `SIZE_<tier>` per Size option and one
 `STATUS_<Column>` per Status column (`STATUS_In_progress`), every value read from the
-profile. What those values mean on this project is [profile.md](profile.md). Every recipe
-below was run against this project on `gh` 2.95 with those variables set — in the exact form
-written here, not a form it was later edited away from — rather than transcribed from memory,
-**except where a recipe says otherwise about itself**. Re-run one before trusting it if `gh`
-has moved on.
+profile. Then `echo "$REPO"` — the helper prints nothing when it fails, `eval` of nothing
+succeeds, and the first recipe pasted with an unset `$REPO` misfires silently
+(`gh issue create --repo --title …` reads the title as the repo). An empty echo means fix the
+helper first. What those values mean on this project is [profile.md](profile.md).
+
+Every recipe below was run against this project on `gh` 2.95 rather than transcribed from
+memory: the reads in the variable form written here, the writes with the same values spelled
+out literally before the variables replaced them — the substitution is textual, so a recipe
+that ran with the value runs with the variable — **except where a recipe says otherwise about
+itself**. Re-run one before trusting it if `gh` has moved on.
 
 ## The one rule: read the state back
 

@@ -117,8 +117,15 @@ done <"$defined"
 # exact-line match fail. A mismatch is still re-read a few times before it is reported, so a
 # slow write cannot fail the run; only one that survives every attempt is real.
 readback() {
-  gh api -X GET "repos/{owner}/{repo}/labels" -f per_page=100 --paginate \
-    --jq '.[] | [.name, .description] | @tsv' | tr -d '\r' >"$actual"
+  # Called as an `until` condition, where errexit does not fire — so the transport failure is
+  # tested explicitly (pipefail is still in force for the pipeline's status). A `gh api` that
+  # cannot list the labels — auth, rate limit, network — is not a mismatch and must not be
+  # reported as one, or a dead network would read as "every label is wrong".
+  if ! gh api -X GET "repos/{owner}/{repo}/labels" -f per_page=100 --paginate \
+      --jq '.[] | [.name, .description] | @tsv' | tr -d '\r' >"$actual"; then
+    echo "error: could not list the repository's labels (gh api failed); nothing verified." >&2
+    exit 2
+  fi
   status=0
   while IFS= read -r want; do
     grep -Fqx -- "$want" "$actual" || status=1

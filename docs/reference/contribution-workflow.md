@@ -81,7 +81,7 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
-- **The cap is `.claude/profile.yml`'s `review.cap`** review passes, counted from the most
+- **The cap is `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted from the most
   recent reset event (see below). That key is the **only** statement of the cap's number and
   this line the only statement of what it counts — everything that needs either routes here
   instead of repeating it.

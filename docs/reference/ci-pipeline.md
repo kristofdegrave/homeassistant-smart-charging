@@ -87,7 +87,8 @@ Adding or renaming a label is a third thing again, and not cheap: see the eight 
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
-Adding a tree means editing all three. `docs/design/**` was the standing proof of what happens
+`.claude/profile.yml`'s `review.path_map` holds the same set a fourth time, for the workers
+that will read it there instead of here. Adding a tree means editing all four. `docs/design/**` was the standing proof of what happens
 otherwise: it sat in the *no context label* row and in neither of the other two, so a
 `docs/design`-only PR spawned no job — which takes out the **label** half as well as the path
 half, since a job that never runs cannot add a reviewer either. All three now carry it.

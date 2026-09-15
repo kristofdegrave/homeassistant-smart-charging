@@ -2,8 +2,8 @@ name: AI review (reusable)
 
 # Reusable worker for the `review` task — called by ai-pipeline.yml when a doc PR, a PR
 # touching the pipeline itself (.github/workflows, .claude/skills, .claude/agents,
-# .github/setup-labels.sh, .github/profile-env.sh, .claude/profile.yml, .github/ISSUE_TEMPLATE), or a PR touching custom_components/ or
-# tests/, gets `needs-review`.
+# .github/setup-labels.sh, .github/profile-env.sh, .claude/profile.yml,
+# .github/ISSUE_TEMPLATE), or a PR touching custom_components/ or tests/, gets `needs-review`.
 # Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
 #   clean                            -> add `needs-approval` and stop; the maintainer reviews
 #   remarks, any non-docs path       -> add `needs-approval` + `needs-decision` + a comment saying
@@ -361,7 +361,11 @@ jobs:
           # a checklist validating an issue form's label against it must use the PR's copy, or
           # a PR legitimately adding a label would be told the label does not exist.
           # `.claude/profile.yml` — under the watched `.claude` root, and where the label set is
-          # defined — is SUBJECT for the same reason and gets the same exception in the prompt.
+          # defined — is SUBJECT for the same reason and gets the same exception in the prompt,
+          # scoped to its `labels` key. `.github/profile-env.sh` is enumerated for review and in
+          # the path filter but deliberately NOT here: it is a helper nothing reads as
+          # instruction, it defines no vocabulary a checklist validates against, and it arms no
+          # guard — so unlike setup-labels.sh there is no superset invariant to satisfy.
           # Changing this set means updating ci-pipeline.md's Review bullet too — a doc cannot
           # interpolate, so that copy is the one place the set can still drift.
           # NOT watched, deliberately, and recorded rather than left to be rediscovered:
@@ -500,10 +504,13 @@ jobs:
               both deliberate:
               - `.github/setup-labels.sh` is staged only so the staged set stays a superset of
                 the watched set, and `.claude/profile.yml` is staged because it sits under a
-                watched root; **neither is an instruction source**. The label vocabulary —
-                `profile.yml`'s `labels`, which the script writes — is always checked against
-                the PR's copy, or a PR legitimately adding a label would be told the label does
-                not exist.
+                watched root. The **label vocabulary** — `profile.yml`'s `labels`, which the
+                script writes — is the one thing a checklist takes from either file, and it is
+                always checked against the PR's copy, or a PR legitimately adding a label would
+                be told the label does not exist. Nothing else in `profile.yml` is consulted by
+                a review; in particular its `review` section is not a source of routing or of
+                the cap for you — those come from `CLAUDE.md`'s table and the contribution
+                workflow as staged.
               - A standard a checklist points to **outside** those roots — `docs/adl/` holds
                 two — is not staged at all. Read it from the checkout. Its absence under
                 `base-checklists/` is expected, not a workflow bug.
