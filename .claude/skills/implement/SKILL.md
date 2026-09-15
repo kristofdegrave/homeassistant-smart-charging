@@ -1,5 +1,6 @@
 ---
 name: implement
+layer: method
 description: Use in an interactive session to run this project's contribution workflow's implement step for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for this step is _ai-draft.yml's own prompt, never this skill.
 ---
 
@@ -48,7 +49,8 @@ Stop instead of dispatching when:
    apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per the implement step.
 
-The implement step ends with the PR open and its issue In review; report that and stop. What
+The implement step ends with the PR open and its issue in the *in review* column; report that
+and stop. What
 runs next is the workflow's to say, not this skill's. The work is judged in a spawned reviewer
 agent, never in this session, and the next issue is not started off the back of this one.
 

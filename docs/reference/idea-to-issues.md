@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # From idea to result
 
 [contribution-workflow.md](contribution-workflow.md) covers one unit of work, from its issue

@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `documentation` — the completion bar for `project-plan.md`
 
 This file states *what must be true of a finished project plan*. How it is written — the derivation

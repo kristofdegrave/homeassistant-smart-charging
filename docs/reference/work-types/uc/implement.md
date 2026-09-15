@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `uc` — how the work is done
 
 Author a use-case (`docs/analysis/use-cases/UCnn-*.md`) following this project's analysis-first

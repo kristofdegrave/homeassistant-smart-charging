@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `development` — how the work is done
 
 Turn one task from an approved implementation plan (`docs/plans/<slice>.md`) into working,

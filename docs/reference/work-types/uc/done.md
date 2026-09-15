@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work types `uc` and `requirement` — the completion bar
 
 This file states *what must be true of a finished analysis document*. How one is written —

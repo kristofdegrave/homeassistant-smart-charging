@@ -1,5 +1,6 @@
 ---
 name: submit-pr-review
+layer: method
 description: "Use when posting review findings to a pull request in this project — from CI (_ai-review.yml) or from a local pass run by the review skill, once the pass's reviewer agents have returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
 ---
 

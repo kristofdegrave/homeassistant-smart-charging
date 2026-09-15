@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Definition of Done & commit message conventions
 
 ## Definition of Done (self-check before opening the PR)

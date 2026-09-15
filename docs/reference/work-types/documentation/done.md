@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `documentation` — the completion bar
 
 This file is the `documentation` row's completion bar in `CLAUDE.md`'s **Model selection**

@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work-type documents
 
 This tree holds the per-work-type instructions that used to live inside the skills and reviewer

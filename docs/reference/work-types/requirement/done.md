@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `requirement` — the completion bar
 
 The bar for a requirement, constraint or glossary term is the same file as the one for a

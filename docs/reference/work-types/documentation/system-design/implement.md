@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `documentation` — how `system-design.md` is written
 
 Author `docs/design/system-design.md`: a volatility-based service decomposition — static and

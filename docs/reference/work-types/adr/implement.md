@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `adr` — how the work is done
 
 Capture an architectural decision as a numbered, immutable Architecture Decision Record under

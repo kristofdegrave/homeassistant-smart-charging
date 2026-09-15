@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `testing` — how the work is done
 
 Author tests that verify this integration's behaviour in the **correct harness** and cover the

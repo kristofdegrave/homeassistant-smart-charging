@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `development` — the completion bar
 
 This file states *what must be true of the finished **code***. How the code is written — the

@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Authoring AI artifacts
 
 Reference guidance for authoring the artifacts that drive Claude runs in this repo:
@@ -138,7 +142,11 @@ exceptions live in `.github/authoring-rule-allowlist.tsv` — a link that is gen
 matter goes there with a reason, so the exception is reviewed rather than silent. What the
 check cannot see stays with the reviewer: a route written as a bare path, a fact restated
 instead of routed, a route that should exist and does not, the project named, a
-project-specific resource list. Of the link shapes, an anchor, a title, an angle wrapper and a
+project-specific resource list. A second script, `.github/check-method.py` (run through
+`.github/check-method.sh`, by `ci.yml`'s `method` job), enforces the *structure* the routing
+rule produces once it is followed — that every pointer resolves and every route lands — and is
+described under [The layer frontmatter](#the-layer-frontmatter) below, since that frontmatter
+is what tells it which files are the method's. Of the link shapes, an anchor, a title, an angle wrapper and a
 leading `./` or `/` **are** caught; a reference-style link *definition* (`[wf]: docs/…`) is not,
 nor is a link whose target is outside `docs/` — to a README, a lockfile, or a `.txt`. Those two
 join the reviewer's list.
@@ -166,7 +174,12 @@ join the reviewer's list.
   entries name a whole document rather than a heading — the pointer form above is what makes
   reshaping them a change to those documents alone. `implement` writes "the branch-naming rule
   under `` `CLAUDE.md`'s **Issue conventions** ``" rather than naming the workflow document's
-  own heading — that is the shape.
+  own heading — that is the shape. Both directions of this convention are verified: the
+  method check fails a pointer whose topic matches no routing-table entry and no `##` heading
+  of `CLAUDE.md` (by prefix, so *Architecture Decision Records* still reaches *Architecture
+  Decision Records (ADRs)*), and fails a routing-table entry whose document or heading does
+  not exist — so a heading rename in `CLAUDE.md` breaks the build against every artifact
+  pointing at it, rather than breaking those artifacts silently.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
   resource list** — with the one exception of its own subject matter, defined after this
   list. Write "this project" where a name is tempting; route the path and the list.
@@ -283,6 +296,43 @@ it — then fixes or deletes that copy only if the artifact holding it is the on
 scope: as written or changed, never as a sweep** above, and nothing about it is restated,
 narrowed or extended here.
 
+## The layer frontmatter
+
+### Every authored artifact says which layer it belongs to
+
+The process is three layers — a **method** that travels between repositories, a **profile**
+that is this project alone, and **stack packages** declared in the profile — and a file states
+its layer in YAML frontmatter, `layer: method`, `layer: project` or `layer: stack`. It is
+required on every skill under `.claude/skills/` that this project authored, on every agent
+definition under `.claude/agents/`, and on every document under `docs/reference/**`, the
+work-type files included. A vendored skill is the one class that carries none: it is
+identified instead by its entry in `.claude/profile.yml`'s `dependencies`, which is what keeps
+an upstream-intact skill intact, and a skill present under `.claude/skills/` that is neither
+declared there nor layered is a defect. The frontmatter records which layer a file *belongs
+to* — what an installer would copy, and what the check below scans — not a claim that its
+content is already portable: the work-type files are `method` by layer while their
+stack-specific sentences still await their overlays. `CLAUDE.md` and `.claude/profile.yml`
+carry no frontmatter — the first is rewritten per repository and the second is the profile by
+path.
+
+### The method check reads it
+
+`.github/check-method.py` runs five repo-wide checks, each an agreement between files that are
+edited separately: pointers resolve to `CLAUDE.md` (the two directions stated under
+**Headings are the API** above); `CLAUDE.md`'s Model selection table and changed-path map
+agree with the profile's `work_types.enabled`, `labels.context` and `review.path_map`; every
+enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its row
+says its work is `none`; every dependency declared `installed: repo` is present and every
+skill, agent and reference document carries a valid `layer:`; and no value the profile holds —
+owner, repository name, board name, node ids, a status column name — appears in a
+`layer: method` file. Status names are matched in the form a command would use them, inside
+backticks, or as the exact multi-word phrase; the word in *Definition of Done* is English. The script's header is
+the authority on each rule's exact shape and its stated limits. It runs blocking in CI and as a
+warning from the local pre-commit hook, installed once per clone with
+`git config core.hooksPath .github/hooks` — a `workflow` change mid-rename has to stay
+committable, and the PR is where the finding is caught instead. Its fixtures,
+`.github/test-check-method.sh`, break the layout one way per check and run before it in CI.
+
 ## Principles
 
 - **Say what, point to where — one source of truth per fact.** An artifact carries the
@@ -328,6 +378,8 @@ narrowed or extended here.
       one the skill exists to issue — the carve-out is per command, so a skill that drives the
       tracker is not thereby exempt for the commands it issues in passing.
 - [ ] Every step ends on a completion criterion a run can decide, not a judgement word.
+- [ ] The frontmatter carries `layer:` per [The layer frontmatter](#the-layer-frontmatter),
+      unless the skill is a dependency the profile declares.
 - [ ] The invocation choice is justified: model-invoked only where the model or another skill
       must reach it, otherwise `disable-model-invocation: true`.
 - [ ] Examples are the shortest that still teach the pattern; long transcripts are trimmed.
@@ -348,6 +400,7 @@ narrowed or extended here.
       `submit-pr-review`, not copied.
 - [ ] Tool grants are the minimum the checklist actually uses (a read-only reviewer needs no
       write/edit tools).
+- [ ] The frontmatter carries `layer:` per [The layer frontmatter](#the-layer-frontmatter).
 
 ## Checklist — authoring a CI worker prompt/config (`.github/workflows/_ai-*.yml`)
 

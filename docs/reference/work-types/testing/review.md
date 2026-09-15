@@ -1,3 +1,7 @@
+---
+layer: method
+---
+
 # Work type: `testing` — the review checklist
 
 **Who reads this.** The reviewer only — a fresh, read-only Opus agent, never the session that

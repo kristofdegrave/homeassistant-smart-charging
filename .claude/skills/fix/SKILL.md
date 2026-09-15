@@ -1,5 +1,6 @@
 ---
 name: fix
+layer: method
 description: Use in an interactive session to run this project's contribution workflow's fix step on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for the fix step is the address-review-remarks skill, never this one.
 ---
 

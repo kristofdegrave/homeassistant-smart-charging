@@ -1,5 +1,6 @@
 ---
 name: address-review-remarks
+layer: method
 description: "Use when addressing review findings on a pull request — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. CI's entry for the fix step; an interactive session reaches it through the `fix` skill rather than directly."
 ---
 
