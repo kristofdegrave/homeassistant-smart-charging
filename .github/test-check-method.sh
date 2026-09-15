@@ -21,7 +21,7 @@ ok_case()   { printf 'ok    %s\n' "$1"; pass=$((pass + 1)); }
 # one project document placed by its `layer:` override.
 build_fixture() {
   local d="$1"
-  mkdir -p "$d/.claude/skills/step" "$d/.claude/skills/dep-skill" "$d/.claude/agents" \
+  mkdir -p "$d/.claude/skills/step" "$d/.claude/skills/dep-skill" "$d/.claude/skills/stack-skill" "$d/.claude/agents" \
            "$d/docs/reference/work-types/alpha" "$d/docs/reference/work-types/beta" "$d/src"
   cat > "$d/CLAUDE.md" <<'EOF'
 # Guide
@@ -95,6 +95,13 @@ review:
     - work_type: beta
       paths: [".claude/**", "docs/reference/**", "CLAUDE.md"]
 dependencies:
+  stack:
+    - name: stack-skill
+      stack: widgets
+      source: example/stacks
+      path: skills/stack-skill
+      pin: commit:0000000
+      installed: repo
   method:
     - name: dep-skill
       source: example/skills
@@ -125,6 +132,7 @@ description: Vendored upstream skill, no layer frontmatter by design.
 
 Upstream content. Owner acme is named here and that is fine: this is not a method file.
 EOF
+  printf -- '---\nname: stack-skill\n---\n\nA stack package, declared in the stack group; owner acme spelled freely.\n' > "$d/.claude/skills/stack-skill/SKILL.md"
   cat > "$d/.claude/agents/reviewer.md" <<'EOF'
 ---
 name: reviewer
@@ -201,6 +209,11 @@ case_run "a project-layer file may spell profile values" 0 - \
   "printf 'PVT_projectnode and \`In progress\` are fine here.\n' >> docs/reference/profile.md"
 case_run "a layer: project override takes a method-tree doc out of check 5" 0 - \
   "sed -i '1i ---\nlayer: project\n---\n' docs/reference/wf.md && printf 'Owned by acme.\n' >> docs/reference/wf.md"
+case_run "a pointer in a frozen tree is not checked" 0 - \
+  "mkdir -p docs/postmortems && printf 'Then \`CLAUDE.md\`'\"'\"'s **Long Gone** section said so.\n' > docs/postmortems/2020-01-01-x.md"
+case_run "a stack-group dependency is neither layered nor scanned" 0 - "true"
+case_run "a layer: stack override on an authored skill file is accepted" 0 - \
+  "printf -- '---\nlayer: stack\n---\n\nStack notes naming acme.\n' > .claude/skills/step/widgets.md"
 case_run "a pointer inside a fenced block is not checked" 0 - \
   "printf '\`\`\`\nSee \`CLAUDE.md\`'\"'\"'s **Nowhere**.\n\`\`\`\n' >> docs/reference/wf.md"
 
@@ -223,6 +236,8 @@ case_run "2: a routing entry with a missing anchor fails" 1 "no heading in docs/
   "sed -i 's/wf.md#issue-conventions)/wf.md#issue-rules)/' CLAUDE.md"
 case_run "2: a table cell naming a missing file fails" 1 "docs/reference/work-types/alpha/bar.md, which does not exist" \
   "sed -i 's#work-types/alpha/done.md\`; checklist#work-types/alpha/bar.md\`; checklist#' CLAUDE.md"
+case_run "2: a routing-table entry with no link fails" 1 "links to no document" \
+  "sed -i 's#| \[wf.md\](docs/reference/wf.md) — the chain. |#| the chain, in wf.md |#' CLAUDE.md"
 case_run "2: a ### heading under no ## fails" 1 "sits under no \`##\`" \
   "printf -- '---\nlayer: method\n---\n\n# Loose\n\n### Orphan rule\n\nText.\n' > docs/reference/loose.md"
 
@@ -237,6 +252,8 @@ case_run "3: a path the table routes and the profile does not fails" 1 "profile.
   "sed -i 's#paths: \[\"src/\*\*\"\]#paths: [\"lib/**\"]#' .claude/profile.yml"
 case_run "3: a path the profile routes and the table does not fails" 1 "CLAUDE.md's path map does not" \
   "sed -i 's#paths: \[\"src/\*\*\"\]#paths: [\"src/**\", \"lib/**\"]#' .claude/profile.yml"
+case_run "3: a path map entry routing to a work type that is not enabled fails" 1 "which is not enabled" \
+  "sed -i 's#    - work_type: alpha#    - work_type: gamma#' .claude/profile.yml"
 
 # --- 4  work-type completeness -------------------------------------------------------------
 case_run "4: an enabled work type missing its bar fails" 1 "has no done.md" \
@@ -247,6 +264,10 @@ case_run "4: a repo-installed dependency that is absent fails" 1 "declared depen
   "rm -r .claude/skills/dep-skill"
 case_run "4/5: an undeclared skill defaults to method and is scanned" 1 ".claude/skills/rogue/SKILL.md:5: method file spells profile value repo.owner" \
   "mkdir .claude/skills/rogue && printf -- '---\nname: rogue\n---\n\nby acme\n' > .claude/skills/rogue/SKILL.md"
+case_run "4: a skill directory without SKILL.md fails" 1 "skill directory has no SKILL.md" \
+  "mkdir .claude/skills/empty && printf 'notes\n' > .claude/skills/empty/notes.md"
+case_run "4/5: an authored skill's reference file is a method file too" 1 ".claude/skills/step/notes.md:1: method file spells profile value repo.owner" \
+  "printf 'Owned by acme.\n' > .claude/skills/step/notes.md"
 case_run "4: an unknown layer value fails" 1 "is not one of" \
   "sed -i 's/^layer: method$/layer: stak/' .claude/agents/reviewer.md"
 case_run "4: an unknown layer value on a doc fails" 1 "\`layer: profile\` is not one of" \
@@ -280,7 +301,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=36
+EXPECTED=43
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

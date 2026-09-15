@@ -119,8 +119,8 @@ labels:
 
 # The work types this project enables, from the method's catalogue. Each names a row of
 # CLAUDE.md's Model selection table and a directory under docs/reference/work-types/ — the
-# method check (.github/check-method.py) verifies both, and that each directory holds the
-# files its row names.
+# method check (.github/check-method.py) verifies both: one row per entry here, and the
+# directory complete (review.md; implement.md and done.md unless the row says `none`).
 #
 # A dependency below with `installed: repo` must be present under .claude/skills/, and a
 # skill present there that is NOT declared below is the method's own — scanned by the check

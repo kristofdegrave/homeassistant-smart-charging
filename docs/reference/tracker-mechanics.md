@@ -110,8 +110,8 @@ The project id, the three field ids and every option id are `profile.yml`'s `boa
 `board.project_id`, `board.fields.<size|estimate|status>.id`, and
 `board.fields.<size|status>.options`, which is where `$SIZE_M` and `$STATUS_<Column>` above
 come from (`profile-env.sh` emits one variable per option, spaces in a column name becoming
-underscores; which column the chain wants at each step is the contribution workflow's
-**Project board**). Re-derive them with
+underscores; which column the chain wants at each step is
+[contribution-workflow.md](contribution-workflow.md)'s **Project board**). Re-derive them with
 `gh project field-list $BOARD --owner $OWNER --format json` if an edit is rejected — they are
 stable in practice but not guaranteed — and fix them in the profile, the only place they are
 spelled.

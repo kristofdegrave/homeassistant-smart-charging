@@ -3,12 +3,14 @@
 
 Five repo-wide checks, each a structural agreement between files that are edited separately
 and drift silently when one moves without the other. Each check re-derives its set from the
-files on each run rather than from a list kept here; the one enumeration is check 5's choice
-of WHICH profile keys count as values (below), which is a selection, not a copy.
+files on each run rather than from a list kept here. What IS kept here is the scope each
+check runs over (the trees, the role files a work type must hold) and check 5's choice of
+WHICH profile keys count as values (below) -- selections, not copies of anything.
 
   1  anchors, outward   every `CLAUDE.md`'s **Topic** pointer under .claude/**, docs/**
-                        and .github/workflows/** resolves, by prefix, to a `##` heading of
-                        CLAUDE.md or to a **Topic** row of its routing table
+                        (minus the two frozen trees, below) and .github/workflows/**
+                        resolves, by prefix, to a `##` heading of CLAUDE.md or to a **Topic**
+                        row of its routing table
   2  anchors, inward    every link in CLAUDE.md resolves to an existing file and, where it
                         carries a #fragment, to a heading of that file; every repo path
                         CLAUDE.md names in backticks exists; no `###` heading in CLAUDE.md or
@@ -25,18 +27,23 @@ of WHICH profile keys count as values (below), which is a selection, not a copy.
 
 Which layer a file belongs to is a rule, and `layer:` frontmatter is the override for a file
 that deviates from it. The defaults: every document under docs/reference/** and every agent
-under .claude/agents/ is method; every skill under .claude/skills/ is method unless the
-profile's `dependencies` declares it, in which case it is a vendored dependency and belongs to
-no layer here (it is never scanned, and never edited to say so). `layer: project` on a file --
+under .claude/agents/ is method; every markdown file of a skill under .claude/skills/ is
+method unless the profile's `dependencies` declares the skill, in which case it is a vendored
+dependency and belongs to no layer here (it is never scanned, and never edited to say so).
+Each file's own frontmatter is what overrides, so a skill's reference file can differ from
+its SKILL.md. `layer: project` on a file --
 docs/reference/profile.md is the standing case -- takes it out of check 5; `layer: stack` is
 reserved for a stack file a project authors itself.
 
 Why the scope of check 1 is wider than the rule that created it: a CI worker prompt is not
 bound by the routing rule, and neither is an ADR, a design document or a plan, but all of them
 do point at CLAUDE.md sections, so a heading rename would break them exactly as it would
-break a skill. Pointers inside fenced code blocks are skipped, as check 2 skips fenced
-headings; a pointer in an inline code span is not, which is why the placeholder below has to
-be excepted by name.
+break a skill. Two trees under docs/ are left out on purpose: docs/postmortems/** is a
+snapshot of reasoning at a date that is never revised, and docs/archive/** is a previous
+iteration kept for the record -- a blocking gate must never ask for an edit the rules forbid,
+so a pointer left behind there is history, not a break. Pointers inside fenced code blocks
+are skipped, as check 2 skips fenced headings; a pointer in an inline code span is not, which
+is why the placeholder below has to be excepted by name.
 
 The one literal exception, so it is a stated limit rather than a surprise: the pointer form is
 documented as `` `CLAUDE.md`'s **Topic** `` in the authoring reference and the workflow
@@ -78,6 +85,7 @@ except ImportError:  # pragma: no cover - reported as an environment error below
 LAYERS = {"method", "project", "stack"}
 POINTER_PLACEHOLDER = "Topic"
 POINTER_TREES = (".claude", "docs", ".github/workflows")
+FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
 POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
@@ -264,6 +272,8 @@ class Guide:
 def check_outward(root: Path, guide: Guide, findings: Findings) -> None:
     for tree in POINTER_TREES:
         for path in walk(root, tree, (".md", ".yml", ".yaml")):
+            if any(rel(root, path).startswith(frozen + "/") for frozen in FROZEN_TREES):
+                continue
             raw = read_text(path)
             # Fenced blocks are blanked rather than removed so line numbers stay true.
             kept = {number for number, _ in strip_fences(raw)}
@@ -438,7 +448,8 @@ def check_completeness(
             if not skill.is_file():
                 findings.add(4, rel(root, directory) + "/", "skill directory has no SKILL.md")
             elif directory.name not in deps:
-                resolve_layer(root, skill, "method", findings, layers)
+                for path in walk(root, rel(root, directory), (".md",)):
+                    resolve_layer(root, path, "method", findings, layers)
     for path in walk(root, ".claude/agents", (".md",)):
         resolve_layer(root, path, "method", findings, layers)
     for path in walk(root, "docs/reference", (".md",)):

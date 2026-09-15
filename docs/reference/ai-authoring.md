@@ -313,15 +313,21 @@ per repository and the second is the profile by path.
 
 ### The method check reads it
 
-`.github/check-method.py` runs five repo-wide checks, each an agreement between files that are
-edited separately: pointers resolve to `CLAUDE.md` (the two directions stated under
-**Headings are the API** above, scanned across `.claude/**`, `docs/**` and
-`.github/workflows/**`); `CLAUDE.md`'s Model selection table and changed-path map agree with
-the profile's `work_types.enabled`, `labels.context` and `review.path_map`; every enabled work
-type has its `review.md`, and its `implement.md` and `done.md` unless its row says its work is
-`none`; every dependency declared `installed: repo` is present and every `layer:` a file does
-carry names a known layer; and no value the profile holds — owner, repository name, board
-name, node ids, a status column name — appears in a method-layer file. Status names are
+`.github/check-method.py` runs five repo-wide checks, numbered as its error lines number
+them, each an agreement between files that are edited separately. **1, anchors outward:**
+every pointer under `.claude/**`, `docs/**` and `.github/workflows/**` resolves to `CLAUDE.md`
+(the outward direction stated under **Headings are the API** above; the two frozen trees,
+`docs/postmortems/**` and `docs/archive/**`, are left out, since a document the rules say is
+never revised cannot be the thing a blocking gate asks to edit). **2, anchors inward:** every
+link and every backticked path in `CLAUDE.md` resolves, an anchored link to a heading of its
+document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
+agreement:** the Model selection table and changed-path map agree with the profile's
+`work_types.enabled`, `labels.context` and `review.path_map`. **4, work-type completeness:**
+every enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its
+row says its work is `none`; every dependency declared `installed: repo` is present; every
+`layer:` a file does carry names a known layer. **5, no profile values in method files:** no
+value the profile holds — owner, repository name, board name, node ids, a status column
+name — appears in a method-layer file. Status names are
 matched in the form a command would use them, inside backticks, or as the exact multi-word
 phrase; the word in *Definition of Done* is English. The script's header is the authority on
 each rule's exact shape and its stated limits. It runs blocking in CI and as a warning from
