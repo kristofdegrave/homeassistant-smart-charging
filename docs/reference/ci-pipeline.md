@@ -103,9 +103,7 @@ places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, whi
 verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
 the two exit labels, the interactive lifecycle's two exits — reached through `CLAUDE.md`'s
 **Contribution workflow** section, whose doc names in its **Exit labels** section which step
-applies which label (the approval step applies `needs-approval`; the stop at the interactive
-cap applies `needs-decision` alongside it) — so a rename is checked there rather than assumed
-from here. On the CI side, `_ai-review.yml`'s verdict routing is the only place that applies
+applies which label — so a rename is checked there rather than assumed from here. On the CI side, `_ai-review.yml`'s verdict routing is the only place that applies
 either. Adding or renaming one means updating that set, and the **Pipeline steps** below where
 the label's meaning is stated.
 
@@ -246,8 +244,8 @@ in branch protection's required checks on `main`.
   comment giving the human the two decisions: merge as is, or re-add `needs-work` manually to
   grant one more cycle. The interactive session caps its own loop
   separately ([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**): the two count
-  different populations and never interact, so neither is the other's bound. What the
-  interactive cap exit labels is that doc's **Exit labels** section's own business, not this file's.
+  different populations and never interact, so neither is the other's bound. Which labels the
+  interactive cap applies is that doc's **Exit labels** section's own business, not this file's.
 - **Clean / cap-out** (≈ the approval step): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required. The
@@ -260,5 +258,5 @@ in branch protection's required checks on `main`.
   `needs-decision` is cleared only by a `clean` verdict, so a granted extra cycle that comes
   back clean drops it, while a run that produced no verdict at all leaves the findings-open
   signal standing.
-- **Merge** (the clean-up step's precondition, unchanged): always a manual human action regardless of which path
+- **Merge** (the **Clean up** step's precondition, unchanged): always a manual human action regardless of which path
   drafted or reviewed the PR.

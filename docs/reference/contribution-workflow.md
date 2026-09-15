@@ -93,11 +93,10 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
 human decides**. Each exit has one actor. The **approval step** applies `needs-approval` alone
 after a clean pass, removing a stale `needs-decision` if one is present. The **fix step's stop
-at the cap** applies `needs-decision` **alongside** `needs-approval` and posts the one
-escalation comment **Rounds and the cap** describes — the session performs that stop itself;
-a dedicated skill for it is a follow-on, and until it exists this naming is what permits the
-session to label. So a capped PR is distinguishable from a clean one in any list view while
-`needs-approval` keeps its single meaning. No other step or skill applies either label, and
+at the cap** — the `fix` skill's cap stop — applies `needs-decision` **alongside**
+`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a
+capped PR is distinguishable from a clean one in any list view while `needs-approval` keeps
+its single meaning. No other step or skill applies either label, and
 neither replaces manual merge approval (**Merge and issue closing** below).
 
 A human review or PR comment posted **after** either label makes it false: the label comes off

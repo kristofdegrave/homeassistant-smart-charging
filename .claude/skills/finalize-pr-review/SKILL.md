@@ -19,7 +19,11 @@ that skill before this one.
    agent) found no remaining Critical/Major findings requiring a fix, this PR is ready for a
    human decision. If something Critical/Major is still open, stop here — don't apply
    `needs-approval` yet.
-2. **Apply `needs-approval`**: `gh pr edit <PR> --add-label needs-approval`. This signals "no
+2. **Apply `needs-approval` and drop a stale `needs-decision`**:
+   `gh pr edit <PR> --add-label needs-approval --remove-label needs-decision`, then read the
+   label set back (`CLAUDE.md`'s **Tracker mechanics** section routes to the read-back and its
+   REST fallback). A capped PR that came back clean after a granted round otherwise keeps its
+   findings-open signal. `needs-approval` signals "no
    more automated review/fix work is pending, a human must now decide" — it does not replace
    manual merge approval (CODEOWNERS + branch protection still gate the actual merge). The
    linked issue's board Status should already be "In review" (moved when the PR was opened);
@@ -39,6 +43,7 @@ that skill before this one.
 ## Common mistakes
 
 - Applying `needs-approval` while a Critical/Major finding is still open.
+- Leaving `needs-decision` on a PR whose latest pass came back clean.
 - Treating `needs-approval` as itself sufficient to merge — it's a signal for the human
   partner's decision, never a self-approval.
 - Leaving a PR based on another work branch instead of `main`, which strands the change
