@@ -116,8 +116,8 @@ Adding a file must never subtract a reviewer, which a whole-change suppression w
 
 ### Why path routing is the half that cannot be skipped
 
-Path routing is the half that must never be skipped — it is what guarantees no changed tree
-goes unreviewed, and it is also the half that cannot be steered: the label is resolved from the
+Path routing is the half `CLAUDE.md`'s section never lets a run skip because it is what
+guarantees no changed tree goes unreviewed, and it is also the half that cannot be steered: the label is resolved from the
 PR body, which on a fork PR is written by whoever opened it, so the worst a crafted body can do
 is add a reviewer, never remove one. The label
 row is the addition: it brings the checklist written for this kind of work even when the change

@@ -317,7 +317,7 @@ Two rules that apply elsewhere deliberately do **not** apply here:
 
 ### How it is reviewed
 
-**How it is reviewed.** By a fresh-agent review run interactively, weighted toward **quotation
+By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
 inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR

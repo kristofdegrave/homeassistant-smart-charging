@@ -79,7 +79,7 @@ Three cases are not ordinary hunk-merging:
 
 - **The two sides disagree about what the system should do.** In product code, that is not a
   merge decision. Behaviour is owned by the analysis documents that `CLAUDE.md`'s **Document
-  structure** section lists, and specs derive from them rather than design it
+  structure** topic lists, and specs derive from them rather than design it
   (the `specs` work file's *derive, don't design*). Resolve the mechanical part, then stop and
   escalate the disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
@@ -108,7 +108,7 @@ Leave no markers behind: grep the tree for `<<<<<<<`, `=======` and `>>>>>>>` be
 
 A merge breaks things neither side broke alone. Run the full Definition of Done for what the merged
 tree now touches — the paired lint and format checks, and the suite in the harness matched to
-the change — as defined by the doc that `CLAUDE.md`'s **Contribution workflow** section names as
+the change — as defined by the doc that `CLAUDE.md`'s **Contribution workflow** topic names as
 the Definition of Done; that doc also states which harness covers what, so match the suite to the
 merged tree rather than guessing. Do not shortcut to "the tests near my conflict": the ones that
 catch a bad resolution are usually elsewhere.

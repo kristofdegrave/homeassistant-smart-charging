@@ -31,7 +31,8 @@ skill owning the step, not by prose in this file.
 ## Model selection
 
 One row per enabled context label: how the work is done, how it is reviewed, and the model
-each side runs on. Why the table is shaped this way is
+each side runs on. Why the table is shaped this way, and the obligations on whoever edits it
+(review model, path-map enumerations, a label rename), are
 [model-selection.md](docs/reference/model-selection.md); the routing rule a run applies is
 stated under the table.
 

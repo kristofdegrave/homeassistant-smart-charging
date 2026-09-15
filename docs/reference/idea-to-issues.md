@@ -126,8 +126,9 @@ strand was fully captured.
 ---
 
 The topics below govern this project's analysis and design documents — the artifact chain the
-stages above run through. They moved here from `CLAUDE.md` with their content unchanged and are
-reached through its routing table, so each keeps the heading it had there. They are **parked**:
+stages above run through. They moved here from `CLAUDE.md` with their rules unchanged — only
+`###` sub-headings added and relative pointers made explicit — and are reached through its
+routing table, so each keeps the heading it had there. They are **parked**:
 this document is to become the method's default idea-to-product flow, and that rewrite names
 their final home.
 

@@ -148,9 +148,10 @@ join the reviewer's list.
 - **An artifact may name another skill or agent.** They travel together — `.claude/` moves as
   one tree — so a cross-reference between them stays valid wherever the tree is installed, and
   routing it through `CLAUDE.md` would buy nothing.
-- **An artifact may name `CLAUDE.md` and a section heading in it.** A *named section* is a
+- **An artifact may name `CLAUDE.md` and a topic in it.** A *named topic* — a routing-table
+  entry or a `##` heading — is a
   specific target, so it meets *Scope the read* below and the checklists' "name the file, not
-  'read the docs'" bar — which is why the heading is required and `CLAUDE.md` alone is not
+  'read the docs'" bar — which is why the topic is required and `CLAUDE.md` alone is not
   enough. What it costs is the onward hop only: `CLAUDE.md` itself is already loaded on every
   run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
   route every artifact inherits from a single edit. **Headings are the API, at two levels**,
