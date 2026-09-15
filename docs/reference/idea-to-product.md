@@ -362,9 +362,8 @@ Two documents per slice; the `specs` row names how each is written.
 A `development`/`testing` issue needs the anchored `Plan:` line, so none can exist before the
 plan does (**Ticket** above). Filing them, one per task in build order, is part of finishing
 the spec issue — the rule is [contribution-workflow.md](contribution-workflow.md)'s **Merge
-and issue closing**, run by the chain's clean-up step. Each carries a blocked-by edge to the
-issue of every task its entry's **Blocked by** line names: the edges are read off the plan,
-never inferred from it. The **Implementation** stage starts from those issues and from
+and issue closing**, run by the chain's clean-up step. Each carries the blocked-by edges
+**Ticket** reads off the plan. The **Implementation** stage starts from those issues and from
 nothing else.
 
 ### Skills
@@ -435,11 +434,15 @@ Or on the task issue where the work has no epic — the bar says which.
 
 ### Gate: the first slice of a strand is verified live before slice two starts
 
-The bar's own rule; here it is what stops the **Implementation** stage of the next slice.
+The bar's own rule; here it is what stops the **Implementation** stage of the next slice. It
+binds the **first** slice of a strand and no other, which is what keeps it compatible with
+[contribution-workflow.md](contribution-workflow.md)'s **Parallel work and forward
+dependencies**: the strand pauses once, to see its foundation run, and from the second slice on
+the tasks proceed in parallel against pinned contracts as that rule allows.
 
 ### Skills
 
-None of the method's: the checklist comes from the spec, and the pass is run by the author of
+None of the method's: the list comes from the spec, and the pass is run by the author of
 the merged slice against the running installation.
 
 ## 12. Close

@@ -88,12 +88,13 @@ must let that filing invent nothing:
 
 - **Each task is a vertical slice** — the shape the **Ticket** stage of
   [idea-to-product.md](../../idea-to-product.md) gives an epic's children, since each entry
-  becomes one. The decidable test: something about the task is observable on the real
-  installation the day it merges, with no later task landed first. A task that fails it is
-  layer-shaped — an adapter alone, an entity alone, waiting for its counterpart — and is
-  **Major**: it files a child nothing can demo and hands the flow's verify-live gate a list
-  with nothing on it. A task with nothing newly observable — a pure refactor — passes this
-  item, and says `none` in its Verify-live list the way item 7 asks.
+  becomes one. The decidable test: **the task's effect on the installation is complete the day
+  it merges** — nothing it does is waiting on a later task to become visible. A pure refactor
+  passes: its effect is that the observables do not change, and that is as true on merge day as
+  it will ever be, which is why item 7 lets it say `none`. A task fails when the effect it was
+  cut for cannot be seen until its counterpart lands — an adapter whose reading nothing
+  surfaces yet, an entity with nothing behind it — and that is **Major**: it files a child
+  nothing can demo and hands the flow's verify-live gate a list with nothing on it.
 - **Each task declares `Blocked by`**: the ids of the tasks in this plan it cannot start
   before, or `none`. An entry with no such line is **Major** — the filer cannot tell an
   omission from an empty set, and the edge it would have set is the one the flow orders the
