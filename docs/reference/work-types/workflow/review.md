@@ -126,6 +126,21 @@ Always read:
   not this item's to score: the convention, and where that shape is and is not yet reached, is
   stated once in `docs/reference/ai-authoring.md`; this item checks the pointer, not the
   target.
+- The same rule read the other way, and one of the shapes `docs/reference/ai-authoring.md`
+  names as the residue its check cannot decide: a rule or path the diff **states** where
+  another file owns it, with no pointer written at all — so there is no link to catch and no
+  pointer to fail. Where that owner is another skill, agent or prompt, the one-source-of-truth
+  item above governs and its severities are the ones to apply; this item is for the owners it
+  does not name — a reference document, `CLAUDE.md` itself, the profile — and for work-type
+  documents, which it does not name either. Read what the diff adds and ask: is this prose
+  restating something whose home is elsewhere, in place of a `` `CLAUDE.md`'s **Topic** ``
+  pointer to it? Where no topic owns the material yet, the fix is the routing line added to
+  `CLAUDE.md`, never the fact inlined here — an author who found no topic and wrote the fact
+  instead is the case this item exists for. Minor where a pointer to the owner is already
+  there and the inlined copy is redundant beside it; Major where it is the artifact's only
+  statement of the rule, since it then has no owner to be checked against and drifts unseen.
+  Scoped to what the diff writes, per that reference's **Permanent scope: as written or
+  changed, never as a sweep** — a finding raised against untouched prose is out of scope.
 - If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
   interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
   itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive
