@@ -17,7 +17,9 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
-                        same set; the table's changed-path map equals review.path_map
+                        same set; the table's changed-path map equals review.path_map; every
+                        flow deviation -- a `###` under docs/reference/profile.md's `## Flow`
+                        -- names, in backticks, at least one work type, each of them enabled
   4  work-type          every enabled work type has review.md, and implement.md and done.md
      completeness       unless its row says its work is `none`; every dependency declared
                         `installed: repo` is present; every `layer:` frontmatter, where a
@@ -83,6 +85,9 @@ except ImportError:  # pragma: no cover - reported as an environment error below
     yaml = None
 
 LAYERS = {"method", "project", "stack"}
+# The project's prose profile; its `## Flow` section is the deviation contract check 3 reads.
+PROFILE_DOC = "docs/reference/profile.md"
+FLOW_SECTION = "Flow"
 POINTER_PLACEHOLDER = "Topic"
 POINTER_TREES = (".claude", "docs", ".github/workflows")
 FROZEN_TREES = ("docs/postmortems", "docs/archive")
@@ -336,7 +341,9 @@ def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
                 )
 
 
-def check_profile_agreement(guide: Guide, profile: dict, findings: Findings) -> None:
+def check_profile_agreement(
+    root: Path, guide: Guide, profile: dict, findings: Findings
+) -> None:
     enabled = list((profile.get("work_types") or {}).get("enabled") or [])
     rows = set(guide.rows)
     for label in sorted(set(enabled) - rows):
@@ -385,6 +392,45 @@ def check_profile_agreement(guide: Guide, profile: dict, findings: Findings) -> 
                 ".claude/profile.yml",
                 f"review.path_map routes to `{work_type}`, which is not enabled",
             )
+    check_flow_deviations(root, enabled, findings)
+
+
+def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) -> None:
+    """Every `###` under the profile document's `## Flow` names enabled work types only.
+
+    The section's shape is the flow document's contract: no `###` means the default flow, and
+    each `###` is one deviation whose heading names, in backticks, the work type of the stage
+    it changes. A deviation naming no work type cannot be placed against a stage; one naming a
+    work type the project does not enable describes a stage the flow already skips.
+    """
+    path = root / PROFILE_DOC
+    if not path.is_file():
+        return
+    text = read_text(path)
+    flow = section(text, FLOW_SECTION)
+    offset = 0
+    for number, line in strip_fences(text):
+        m = HEADING_RE.match(line)
+        if m and len(m.group(1)) == 2 and m.group(2).strip() == FLOW_SECTION:
+            offset = number
+            break
+    for index, line in enumerate(flow.splitlines(), start=1):
+        m = HEADING_RE.match(line)
+        if not m or len(m.group(1)) != 3:
+            continue
+        where = f"{PROFILE_DOC}:{offset + index}"
+        names = re.findall(r"`([^`]+)`", m.group(2))
+        if not names:
+            findings.add(
+                3, where, f"flow deviation `### {m.group(2)}` names no work type in backticks"
+            )
+        for name in names:
+            if name not in enabled:
+                findings.add(
+                    3,
+                    where,
+                    f"flow deviation names `{name}`, which is not an enabled work type",
+                )
 
 
 def declared_dependencies(profile: dict) -> dict[str, dict]:
@@ -547,7 +593,7 @@ def main(argv: list[str]) -> int:
     findings = Findings()
     check_outward(root, guide, findings)
     check_inward(root, guide, findings)
-    check_profile_agreement(guide, profile, findings)
+    check_profile_agreement(root, guide, profile, findings)
     layers = check_completeness(root, guide, profile, findings)
     check_profile_values(root, profile, layers, findings)
 

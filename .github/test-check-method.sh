@@ -164,6 +164,10 @@ layer: project
 
 Owner acme, repository widget-repo, board BOARD; the `Backlog` column is the *backlog* role.
 A project file may spell every one of these.
+
+## Flow
+
+**Default.** No `###` here means the flow as written.
 EOF
   for f in alpha/implement.md alpha/done.md alpha/review.md beta/review.md; do
     printf -- '# %s\n\n## The bar\n\nContent.\n' "$f" > "$d/docs/reference/work-types/$f"
@@ -216,6 +220,8 @@ case_run "a layer: stack override on an authored skill file is accepted" 0 - \
   "printf -- '---\nlayer: stack\n---\n\nStack notes naming acme.\n' > .claude/skills/step/widgets.md"
 case_run "a pointer inside a fenced block is not checked" 0 - \
   "printf '\`\`\`\nSee \`CLAUDE.md\`'\"'\"'s **Nowhere**.\n\`\`\`\n' >> docs/reference/wf.md"
+case_run "a flow deviation naming an enabled work type is accepted" 0 - \
+  "printf '\n### The \`alpha\` stage runs before \`beta\`\n\nBecause.\n' >> docs/reference/profile.md"
 
 # --- 1  anchors, outward -------------------------------------------------------------------
 case_run "1: an unresolvable pointer in a skill fails" 1 "**Nowhere**" \
@@ -254,6 +260,10 @@ case_run "3: a path the profile routes and the table does not fails" 1 "CLAUDE.m
   "sed -i 's#paths: \[\"src/\*\*\"\]#paths: [\"src/**\", \"lib/**\"]#' .claude/profile.yml"
 case_run "3: a path map entry routing to a work type that is not enabled fails" 1 "which is not enabled" \
   "sed -i 's#    - work_type: alpha#    - work_type: gamma#' .claude/profile.yml"
+case_run "3: a flow deviation naming a work type that is not enabled fails" 1 "flow deviation names \`gamma\`, which is not an enabled work type" \
+  "printf '\n### The \`gamma\` stage is removed\n\nBecause.\n' >> docs/reference/profile.md"
+case_run "3: a flow deviation naming no work type fails" 1 "names no work type in backticks" \
+  "printf '\n### Verify live is skipped\n\nBecause.\n' >> docs/reference/profile.md"
 
 # --- 4  work-type completeness -------------------------------------------------------------
 case_run "4: an enabled work type missing its bar fails" 1 "has no done.md" \
@@ -301,7 +311,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=43
+EXPECTED=46
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

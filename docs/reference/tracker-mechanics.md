@@ -7,7 +7,7 @@ re-derive them and no agent has to rediscover the failure modes below the hard w
 **Mechanics only: the how, never the when or the why.** Which work gets an issue, what a
 label means, when a PR is opened, when `needs-approval` goes on — all of that belongs to
 [contribution-workflow.md](contribution-workflow.md) (the lifecycle),
-[idea-to-issues.md](idea-to-issues.md) (the stages either side of it) and
+[idea-to-product.md](idea-to-product.md) (the stages either side of it) and
 [ci-pipeline.md](ci-pipeline.md) (the label-driven automation). This file assumes the
 decision is already made and answers only "what do I type".
 

@@ -10,8 +10,8 @@ same lifecycle run by CI, with `github-actions[bot]` as the actor, is
 [ci-pipeline.md](ci-pipeline.md).
 
 Two related references cover the phases just outside this lifecycle: the stages either side of
-it ([idea-to-issues.md](idea-to-issues.md) — idea, routing, spec, slicing into issues, and
-verifying a shipped slice on the real installation) and the **Definition of Done** an author
+it ([idea-to-product.md](idea-to-product.md) — the default flow from a captured idea, through
+the artifact chain, to a slice verified on the real installation) and the **Definition of Done** an author
 checks inside step 1, before the PR ([definition-of-done.md](definition-of-done.md), also
 covering commit message conventions) — the project-wide floor, distinct from a row's per-type
 *completion bar*, which that document routes to.
@@ -179,7 +179,7 @@ only used `Part of #N`. Never close the linked issue directly (`gh issue close`)
 fully clean verification-only task — closing is left to that reference, which fires on merge.
 
 **A merged `specs` issue produces task issues, not code.** Its approved plan doesn't implement
-itself — file the `development`/`testing` task issues per [idea-to-issues.md](idea-to-issues.md)'s
+itself — file the `development`/`testing` task issues per [idea-to-product.md](idea-to-product.md)'s
 **Ticket** stage (one per task, each with the anchored `Plan:` line) so the work actually gets
 picked up. Filing them is part of finishing the spec issue, inside step 4; implementing them is
 a new issue and a new chain.
@@ -244,7 +244,7 @@ session's own footprint by the session's markers, never by author.
   minimum-HA declaration is a `bug` whose fix is neither. So an issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
-  [idea-to-issues.md](idea-to-issues.md)'s **Route** owns that track and its verify-first
+  [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
   gate. Neither label substitutes for the other, and neither triggers anything on its own —
   only an action label does. A kind label adds no Model-selection row and no drafter `case`
   entry; see [ci-pipeline.md](ci-pipeline.md).
@@ -253,8 +253,9 @@ session's own footprint by the session's markers, never by author.
   cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
   raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
   its children's estimates.
-- **Epic-first for multi-artifact strands**: see [idea-to-issues.md](idea-to-issues.md) for
-  the full cycle (when to file the epic, what to file immediately vs. defer). The epic is the
+- **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
+  **Ticket** stage for the full cycle (when to file the epic, what to file immediately vs.
+  defer). The epic is the
   **parent issue** and each child is a **native sub-issue** of it; a child that cannot start
   until another finishes carries a **native blocked-by relationship**. Neither is body text —
   `gh` supports both directly, so nobody needs to re-derive them — the commands, and the
@@ -264,8 +265,8 @@ session's own footprint by the session's markers, never by author.
   "Closes #N" (would auto-close the epic).
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
   shipped behaviour also needs a `specs` issue to exist for it — see
-  [idea-to-issues.md](idea-to-issues.md)'s **Spec** stage, which owns that gate and explains
-  why the automatic label cannot enforce it.
+  [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
+  condition and explains why the automatic label cannot enforce it.
 - **Task issues** (`development`/`testing` label) filed against an approved
   `docs/plans/<slice>.md` TDD plan must include an exact, anchored `Plan:` line identifying the
   plan file and task id (nothing else on that line) — see [ci-pipeline.md](ci-pipeline.md) for
