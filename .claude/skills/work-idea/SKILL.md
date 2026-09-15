@@ -57,9 +57,9 @@ only sequences those stages and says which skill performs each. Cite it, never r
 
 ## Rules
 
-- One context label per child issue — the pipeline's draft job already refuses to draft an issue
-  with zero or multiple context labels; don't hand it one. A child on the shipped-behaviour track
-  may legitimately carry only its kind label until the fixing artifact is known.
+- One context label per child issue — or only a kind label, on the shipped-behaviour track,
+  while the fixing artifact is not yet known; the two-axis rule is under
+  `CLAUDE.md`'s **Issue conventions**.
 - Don't skip the `grilling` step to save a round-trip — an idea decomposed without the user's
   buy-in just relocates the ambiguity into the child issues.
 - Don't draft content for a child issue beyond what's needed to scope it (a clear title and a
@@ -67,15 +67,14 @@ only sequences those stages and says which skill performs each. Cite it, never r
 
 ## Common mistakes
 
+The rules of the flow document and of `CLAUDE.md`'s **Issue conventions** are not restated
+here; the ones this cycle trips on most are designing before a shipped-behaviour claim is
+reproduced (step 4), filing a `development`/`testing` child before the plan it must cite is
+approved (step 6), a child with two context labels, and relabelling the idea issue as the epic
+(step 8). The mistakes that are this skill's own:
+
 - Closing the parent idea issue when only part of it was decomposed.
-- Relabeling/reusing the idea issue itself as the epic instead of filing a new, separate epic
-  issue — the epic must stay open tracking children long after the idea issue is closed.
 - Leaving grilled decisions in chat scrollback, or leaving them on the idea issue after an epic
   was filed instead of moving them into the epic body.
-- Designing a fix on the shipped-behaviour track before the claim has been reproduced.
-- Filing `development`/`testing` child issues before an approved plan exists for them to cite
-  in their `Plan:` line.
-- Giving a child issue two context labels (e.g. both `uc` and `requirement`) because the
-  idea touches both — split it into two children instead.
 - Treating this as a green light to start implementing once issues exist — each child still
   needs its own drafting (or manual work) and review cycle.

@@ -40,12 +40,14 @@ order to run through so nothing gets filed half-scoped.
 
 ## Common mistakes
 
-- Two context labels on one issue (e.g. both `uc` and `requirement`) because the work touches
-  both — split into two issues instead.
-- A `Plan:` line with extra text on it ("Plan: docs/plans/foo.md#T3 (blocked on #120)") — the
-  drafter's regex won't resolve it to one task and the run fails.
-- Leaving Size/Estimate unset — `_ai-draft.yml` falls back to the M tier and posts a warning
-  rather than failing, but that's a safety net, not a substitute.
-- Setting Estimate on an epic in addition to Size.
-- Recording epic membership or ordering as body text — a checklist line, or "after #NNN" in
-  prose — instead of the native sub-issue and blocked-by edges.
+The conventions are `CLAUDE.md`'s **Issue conventions**, not this list; the ones this skill's
+users trip on most are one context label per issue, the anchored `Plan:` line with nothing else
+on it, Size and Estimate set, Size alone on an epic, and epic membership and order as native
+edges rather than body text. What a drafter run does when one of them is wrong is the CI side
+of `CLAUDE.md`'s **Contribution workflow**. The mistakes that are this skill's own:
+
+- Forcing a context label onto work that is still fuzzy instead of filing it as an `idea`
+  (item 1).
+- Stopping after the create call — Size/Estimate are a second step (item 2), and an edge not
+  passed as a flag is a second step too (item 4); an issue missing them reads as filed and is
+  not.
