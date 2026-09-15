@@ -43,8 +43,8 @@ Stop instead of dispatching when:
    apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per step 1.
 
-Stop there and hand on to step 2, which the `review` skill runs. Don't review the work in
-this session — step 2 needs a fresh agent — and don't start the next issue off the back of
+Stop there and hand on to step 2, which the `review` skill runs: it judges the work in a
+spawned reviewer agent, never in this session. Don't start the next issue off the back of
 this one.
 
 ## Rules

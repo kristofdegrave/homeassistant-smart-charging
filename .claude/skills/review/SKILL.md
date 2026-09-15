@@ -20,9 +20,9 @@ interactive-only wording precisely because it sits in every run's index.
    (`CLAUDE.md`'s **Tracker mechanics** section routes to the listing command). Whatever
    shape that recipe has, the count needs **every** review's body: select bodies rather than
    ids, and keep no filter that returns only the latest one — a recipe written as a post
-   read-back has one. Apply the **Rounds and the cap** rule with the cap **read from the doc routed above**,
-   never from memory: at the cap with a Critical or Major finding still open, stop and
-   escalate to the human partner rather than reviewing again.
+   read-back has one. Apply the **Rounds and the cap** rule with the cap **read from the doc
+   routed above**, never from memory: at the cap with a Critical or Major finding still open,
+   stop and escalate to the human partner rather than reviewing again.
 2. **Check the branch isn't behind `origin/main`** per step 2, and merge it in first if it is
    (`resolving-merge-conflicts` if that conflicts). A rule that landed since the branch was cut
    is invisible to a review run against the branch alone.

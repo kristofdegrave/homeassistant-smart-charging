@@ -71,7 +71,8 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap is 2 review passes**, counted from the most recent reset event (see below). This
-  line is the **only** statement of the interactive cap — everything that needs the number routes here instead of repeating it.
+  line is the **only** statement of the interactive cap — everything that needs the number
+  routes here instead of repeating it.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
   so the final round needs no further pass to confirm it.

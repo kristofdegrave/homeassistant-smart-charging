@@ -43,8 +43,8 @@ Then once, for the run:
    **Tracker mechanics** section, which is the reason a comment body goes in a file.
 
 Stop there and hand on to step 2; `CLAUDE.md`'s **Contribution workflow** section names the
-skill that runs it. A fresh agent owns the next pass — don't re-review your own fixes in
-this session.
+skill that runs it: the next pass is judged by a spawned reviewer agent, never by this
+session.
 
 ## Rules
 
