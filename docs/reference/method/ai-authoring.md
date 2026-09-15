@@ -305,7 +305,15 @@ vendored dependency that belongs to no layer of this project's and is never edit
 that is what keeps an upstream-intact skill intact. A file that deviates from its tree's
 default says so in YAML frontmatter, `layer: project` or `layer: stack` (`layer: method` is
 legal and redundant), and nothing else carries the key: `docs/reference/profile.md` is the
-standing case, a project file inside a method tree. One more position rule: a work-type
+standing case, a project file inside a method tree.
+
+Where a *new* method document **goes** is a placement rule beside that one, and
+`docs/reference/method/` is the answer: the method reference documents sit there, and
+`docs/reference/` itself keeps only the profile's prose half and the work-type tree. The
+tree-wide default above is deliberately wider than that directory — it makes a misplaced
+method document method-layer anyway, so the check never reads bad placement as a layer claim
+— which is why a method document found at the root of `docs/reference/` is **moved**, not
+relabelled. One more position rule: a work-type
 overlay, `docs/reference/work-types/<label>/overlays/<stack>.md`, is **stack** by where it sits
 — a stack package installs it, and the method never edits it to say so — which is why
 `layer: stack` as an override is reserved for a stack file found anywhere else. The layer
