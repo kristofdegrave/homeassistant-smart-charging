@@ -28,16 +28,16 @@ covering commit message conventions) — the project-wide floor, distinct from a
    [Definition of Done](definition-of-done.md), then push and open a PR against `main` — never
    another branch — referencing the issue with `Closes #N` or `Part of #N` (see **Base `main`
    and stacking** and **`Closes` and `Part of`** below). Board **Status** → `In review`.
-2. **Review** (`review`). Every pass runs against current `origin/main`. Fresh reviewer
-   agents, never inline (**Rule A** below), one per checklist `CLAUDE.md`'s **Model selection**
-   table resolves for the change. All findings go to the PR as one native review before
-   anything is fixed.
+2. **Review** (`review`). Count the rounds first (**Rounds and the cap** below), then run
+   the pass against current `origin/main`. Fresh reviewer agents, never inline (**Rule A**
+   below), one per checklist `CLAUDE.md`'s **Model selection** table resolves for the
+   change. All findings go to the PR as one native review before anything is fixed.
 3. **Fix, then re-review** (`fix`, then `review` again). Every finding gets a fix and a reply
    on its thread, or a reply saying why not, and its thread is closed out per **Thread
    discipline** below. Human PR comments, at any
    point, are findings like any other. Loop until a pass is clean, up to the cap (**Rounds
-   and the cap** below). Still Critical or Major open at the cap →
-   `escalate-pr-review`.
+   and the cap** below). Still Critical or Major open at the cap → stop and escalate to
+   the human partner.
 4. **Approval** (`finalize-pr-review`). A clean pass → `needs-approval` (**Exit labels**
    below). Board **Status** stays `In review`. Merge is the human's, always.
 5. **Clean up** (`cleanup`, invoked by the human after the merge). Verify the change is on
@@ -57,7 +57,8 @@ is gone. A fresh **agent**, not a fresh session.
 
 The chain runs **unattended** from the step it is entered at: implement → review → fix →
 review … → approval or escalation, with no check-in between steps. The session stops at exactly
-two points — a clean pass (step 4) or the cap (`escalate-pr-review` in step 3) — and reports.
+two points — a clean pass (step 4) or the cap, found by step 2's count and ending step 3's
+loop — and reports.
 It never starts the next issue off the back of the one that just finished; that is the control
 on autonomous artifact-chaining, and it is per issue, not per step.
 
@@ -74,12 +75,13 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
   so the final round needs no further pass to confirm it.
-- **At the cap** with a Critical or Major finding still open, the loop stops and
-  `escalate-pr-review` hands the disagreement to the human, who has **two decisions**: merge as
-  is, accepting the open findings, or **grant another round**. A grant is an instruction given
-  to the session, never inferred from a thread.
-- **Rounds are counted from the most recent reset event**: the escalation comment
-  `escalate-pr-review` posts, or a human review posted after an exit label. No reset event
+- **At the cap** with a Critical or Major finding still open, the loop stops instead of
+  reviewing again: the exit labels go on (**Exit labels** below) and one escalation comment
+  hands the disagreement to the human, who has **two decisions**: merge as is, accepting the
+  open findings, or **grant another round**. A grant is an instruction given to the session,
+  never inferred from a thread.
+- **Rounds are counted from the most recent reset event**: the escalation comment posted
+  at the cap, or a human review posted after an exit label. No reset event
   means counting from the PR's first review. A granted round or a human review therefore never
   gets refused by a cap it did not ask for.
 
