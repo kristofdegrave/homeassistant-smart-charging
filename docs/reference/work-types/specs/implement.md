@@ -10,7 +10,8 @@ Two words for two sizes. The spec covers one **build slice** — `project-plan.m
 tasks are the flow's **vertical slices** — the unit one child issue, one PR and one verify-live
 pass are each cut to, as the **Ticket** stage of
 [idea-to-product.md](../../idea-to-product.md) defines it. The task entries below are where
-that shape is written down, which is why they carry the two keys the flow reads off them.
+that shape is written down, which is why each carries the **Blocked by** line and the
+**Verify live** list the flow later reads off it.
 
 This file is the `specs` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
 **how a spec is written** and nothing else.
@@ -39,12 +40,14 @@ The implement step of the contribution workflow, in order:
    bar's item 3, *Each plan document carries only what it alone can say*, lists that cap item
    for item and judges it. What that means while drafting: anything outside the list is a
    **cut candidate**, not yet a copy — *Cap both plan documents* below is the test that
-   decides which it is. The cap's headings answer five questions in order — what problem the
-   slice solves (scope and success criteria), what the solution is (the decisions and the
-   structure they land in), which implementation decisions are settled here (`D-n`), which
-   testing decisions are (the testing approach), and what is out of scope (the deferrals) — so
-   a draft that answers them under those headings is complete, and one that adds a heading
-   beside them has something to place. The testing approach opens by naming the **testing
+   decides which it is. Five questions are the order to draft that list in — what problem the
+   slice solves (its scope and success criteria), what the solution is (the concrete structure
+   the decisions land in, its install-time config, and the table mapping every piece to its
+   named service), which implementation decisions are settled here (the `D-n` entries, and
+   packaging where the slice ships something), which testing decisions are (the testing
+   approach), and what is out of scope (the deferrals). They order the draft; **the bar's list
+   is what completeness is judged by**, item for item, so a draft that answers all five and
+   still skips one of its items is not finished. The testing approach opens by naming the **testing
    seam(s)** the tasks' failing tests drive through: a seam the suite already has over one the
    slice would add, and one seam for the whole slice where one reaches every task. Named up
    front, the seam is what every task's test is then written against; found per task, each
@@ -64,8 +67,8 @@ The implement step of the contribution workflow, in order:
    aloud at a dashboard.
 
 Once approved and merged, the `development` work type consumes the plan task-by-task to write
-the code, and the task issues are filed from the same entries — one issue per task, its
-blocked-by edges read off the entry's **Blocked by** line.
+the code, and the task issues are filed from the same entries, one per task — *The task entry*
+below fixes what each carries.
 
 ## The task entry
 

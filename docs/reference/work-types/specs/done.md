@@ -45,8 +45,9 @@ any safety caveat stated out loud), testing approach, and packaging. The testing
 names the **testing seam(s)** the tasks' failing tests drive through — one that exists over
 one the slice adds, one for the whole slice where one reaches every task; a testing approach
 naming no seam is **Minor**, since each task then finds its own and the suite grows a seam per
-task. The TDD plan carries the task entries, each with the two keys items 5 and 7 judge, its
-**Blocked by** line and its **Verify live** list. Content outside those lists is judged by
+task. The TDD plan carries the task entries, each in the shape `implement.md`'s *The task
+entry* fixes: vertical, its exact files and its failing test, its **Blocked by** line and its
+**Verify live** list. Content outside those lists is judged by
 item 2 where another doc owns it; where no doc does, it is **Minor** — a cut candidate the
 author has to place, not yet a defect.
 
@@ -91,8 +92,8 @@ must let that filing invent nothing:
   installation the day it merges, with no later task landed first. A task that fails it is
   layer-shaped — an adapter alone, an entity alone, waiting for its counterpart — and is
   **Major**: it files a child nothing can demo and hands the flow's verify-live gate a list
-  with nothing on it. A task whose only observable is "unchanged" (a refactor) passes, and
-  says so in its Verify-live list.
+  with nothing on it. A task with nothing newly observable — a pure refactor — passes this
+  item, and says `none` in its Verify-live list the way item 7 asks.
 - **Each task declares `Blocked by`**: the ids of the tasks in this plan it cannot start
   before, or `none`. An entry with no such line is **Major** — the filer cannot tell an
   omission from an empty set, and the edge it would have set is the one the flow orders the

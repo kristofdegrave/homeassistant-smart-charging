@@ -183,7 +183,9 @@ What to file when:
   issue.
 - **`development`/`testing` issues wait for the plan.** They require the anchored `Plan:`
   line, so they cannot be filed until the spec issue's plan is drafted and reviewed. File them
-  then, one per task in the plan's build order — the **Spec** stage's gate below says when.
+  then, one per task in the plan's build order, each blocked by the issues of the tasks its
+  entry's **Blocked by** line names — the edges come off the plan, never from a reading of
+  what looks prerequisite — and the **Spec** stage's gate below says when.
 - **Anything that surfaces later** and belongs to the strand — a bug found mid-implementation,
   a follow-up — is attached as a sub-issue too. Belonging to an epic does not require a
   drafter-facing context label; `file-task-issue` covers which label such a child takes.
@@ -360,9 +362,9 @@ Two documents per slice; the `specs` row names how each is written.
 A `development`/`testing` issue needs the anchored `Plan:` line, so none can exist before the
 plan does (**Ticket** above). Filing them, one per task in build order, is part of finishing
 the spec issue — the rule is [contribution-workflow.md](contribution-workflow.md)'s **Merge
-and issue closing**, run by the chain's clean-up step. Each is a sub-issue of the epic, blocked
-by the issue of every task its entry's **Blocked by** line names: the edges are read off the
-plan, never inferred from it. The **Implementation** stage starts from those issues and from
+and issue closing**, run by the chain's clean-up step. Each carries a blocked-by edge to the
+issue of every task its entry's **Blocked by** line names: the edges are read off the plan,
+never inferred from it. The **Implementation** stage starts from those issues and from
 nothing else.
 
 ### Skills
@@ -420,7 +422,8 @@ topic cites.
 
 A slice is not finished when it merges; it is finished when it has been observed working on
 the real installation — otherwise every later slice is built on a foundation nobody has seen
-run.
+run. The slice is the vertical one **Ticket** above cuts a child issue to; on the plan track
+it is one task entry in the TDD plan, and the list this pass is driven against is that entry's.
 
 What that pass must produce, when it blocks the next slice, and how it differs from the
 pre-merge runtime-verified self-check is the **Verify live** bar in
