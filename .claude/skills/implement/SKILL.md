@@ -38,7 +38,11 @@ Stop instead of dispatching when:
    implement step is the work file's to override.
 2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
    task it names is already identified.
-3. Worktree, branch and board **Status** per the implement step.
+3. Worktree, branch and board **Status** per the implement step. The worktree is cut from the
+   fetched `origin/main`, never a stale local `main`:
+   `git fetch origin && git worktree add -b <branch> <path> origin/main`. When deliberately
+   stacking on a not-yet-merged prior branch, fetch first and name that branch instead of
+   `origin/main`; the PR still bases `main`, per the doc's **Base `main` and stacking**.
 4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
    completion bar, that file is the self-check before item 5 below — the same one the reviewer will
    apply, so it is checked now rather than discovered in review.

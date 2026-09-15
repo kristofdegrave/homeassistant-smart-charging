@@ -330,6 +330,37 @@ it. A deleted path is listed like any other; the read says nothing about *how* a
 only that it did — `.[].status` carries `added`/`removed`/`modified` if a caller needs to tell
 them apart.
 
+## Reading a change request's label events and its review/comment timeline
+
+The contribution workflow's round count and its exit-label rules both turn on one question —
+was a human's review or comment posted while an exit label was on? — and neither the reviews
+listing nor the comments listing can answer it: they carry no label state. The label timeline
+does. It is REST, so the GraphQL limiter cannot refuse it, and an issue path serves a PR too:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/events \
+  --paginate --jq '.[] | select(.event=="labeled" or .event=="unlabeled") | {event, label: .label.name, at: .created_at, by: .actor.login}'
+```
+
+Each line is one label change, oldest first:
+`{"event":"labeled","label":"needs-approval","at":"<timestamp>","by":"<login>"}`. A label was
+**on** at a given moment when its most recent event before that moment is `labeled`.
+
+The other side of the comparison is every review and every issue comment, with author and
+time — as a stream, not the post read-backs elsewhere in this file, which keep only the latest
+item by design:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews \
+  --paginate --jq '.[] | {id, user: .user.login, at: .submitted_at, body}'
+gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+  --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
+```
+
+`--paginate` is mandatory for the reason *Commenting* above gives, and the filter must stream
+(`.[] | …`) rather than index into one page. A bot's login ends in `[bot]`; timestamps are
+ISO 8601 in UTC and compare correctly as strings.
+
 ## Posting a review with inline anchors
 
 The review **payload** — what goes in the body, how findings are grouped, the anchoring rules

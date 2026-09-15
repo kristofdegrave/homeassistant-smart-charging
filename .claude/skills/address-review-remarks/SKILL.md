@@ -44,8 +44,9 @@ stop — do not invent work.
 - A finding whose request is outside the PR's scope is not fixed in this PR. Locally the fix
   step files it as an issue and answers the thread with that issue (the contribution
   workflow's **Thread discipline**, routed from `CLAUDE.md`'s **Contribution workflow**
-  section); in CI, which cannot file issues, reply that it is out of scope and leave the
-  thread open for the human to file. Either way it is a **Skipped** entry in the summary.
+  section); in CI, reply that it is out of scope and leave the thread open for the human to
+  file — the fix worker's outputs are the PR's alone, whatever its tool grant could reach, so
+  it must not file. Either way it is a **Skipped** entry in the summary.
 
 ## 3. Fix with the author's context
 

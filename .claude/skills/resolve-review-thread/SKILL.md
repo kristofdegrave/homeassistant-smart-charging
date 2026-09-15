@@ -25,21 +25,14 @@ wrong:
 
 ## 2. Resolve — only what was actually fixed, and only after the push
 
-Resolving happens once the run's fixes are committed and pushed, never as each finding is
-addressed: a failed push would otherwise leave threads closed over work that is not on the
-branch.
+Which threads may be resolved, and when, is the contribution workflow's **Thread discipline**
+(routed from `CLAUDE.md`'s **Contribution workflow** section): only what was fixed — or filed,
+once the reply names the issue — and only after the push; a disputed, deferred or partially
+addressed thread stays open with the reply saying why, and outdated is not resolved. This skill
+applies those rules per thread; `CLAUDE.md`'s **Tracker mechanics** section routes to the
+commands — the listing query, the resolve mutation and its failure modes — and adds one thing
+the rules leave to this skill:
 
-`CLAUDE.md`'s **Tracker mechanics** section routes to the commands — the listing query, the
-resolve
-mutation, and the failure modes that make a resolve look like it worked when it didn't. Read
-them there; this skill owns only *which* threads may be resolved.
-
-- **Resolve only what was actually fixed — or filed.** A thread whose request was outside the
-  PR's scope resolves once the reply names the issue filed for it. A disputed, deferred or
-  partially addressed thread stays open, with the reply saying why, and the summary saying
-  which.
-- **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
-  resolved explicitly.
 - **Read the state back.** A resolve that reports success has not necessarily landed — the
   mechanics reference says why, and what to re-run.
 

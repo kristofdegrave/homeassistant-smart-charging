@@ -89,12 +89,13 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
   reviewing again: the session, at the fix step's stop, puts the exit labels on (**Exit
   labels** below) and posts one escalation comment handing the disagreement to the human, who
   has **two decisions**: merge as is, accepting the
-  open findings, or **grant another round**. A grant is an instruction given to the session,
-  never inferred from a thread.
+  open findings, or **grant another round** — a fresh count of two passes, since the
+  escalation comment is itself the reset event. A grant is an instruction given to the
+  session, never inferred from a thread.
 - **Rounds are counted from the most recent reset event**: the escalation comment posted
-  at the cap, or a human review posted after an exit label. No reset event
-  means counting from the PR's first review. A granted round or a human review therefore never
-  gets refused by a cap it did not ask for.
+  at the cap, or a human review or PR comment posted while an exit label was on. No reset
+  event means counting from the PR's first review. A granted round or a human review therefore
+  never gets refused by a cap it did not ask for.
 
 ## Exit labels
 
@@ -107,8 +108,9 @@ capped PR is distinguishable from a clean one in any list view while `needs-appr
 its single meaning. No other step or skill applies either label, and
 neither replaces manual merge approval (**Merge and issue closing** below).
 
-A human review or PR comment posted **after** either label makes it false: the label comes off
-(in step 3, before the fix), and the next pass's exit re-applies whichever is then correct.
+A human review or PR comment posted **while** either label is on makes it false: both labels
+come off — the `fix` skill's first step, before any fix — and the next pass's exit re-applies
+whichever is then correct.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).

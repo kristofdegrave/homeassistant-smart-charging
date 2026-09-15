@@ -24,9 +24,18 @@ row that names none — is where that dispatch lives; this skill does not restat
 picks its own and only a local run has the choice: the row's *Work model* column says which
 model it wants, so name it, and leave switching to the human partner.
 
-## Before any fix: the cap stop
+## Before any fix: stale exit labels, then the cap stop
 
-The fix step is where the loop ends when it cannot converge, so check that first. Count the
+First, the exit labels. Read the PR's label events, reviews and issue comments (`CLAUDE.md`'s
+**Tracker mechanics** section routes to all three). If `needs-approval` or `needs-decision` is
+on and a review or issue comment by an author whose login does not end in `[bot]` is newer than
+that label's `labeled` event, take both labels off: the human has said work is pending, so the
+labels are false — the **Exit labels** section (routed from `CLAUDE.md`'s **Contribution
+workflow** section) names this skill's first step as the actor. Removal tolerates an absent
+label; read the label set back per **Tracker mechanics**. Nothing below the cap puts them back;
+the next pass's exit does.
+
+Then the cap. The fix step is where the loop ends when it cannot converge. Count the
 rounds exactly as the `review` skill's *Count the rounds* item does — that is the one
 procedure for the **Rounds and the cap** rule (routed from `CLAUDE.md`'s **Contribution
 workflow** section), and this skill adds nothing to it. At the cap with a Critical or Major
@@ -59,9 +68,8 @@ Then once, for the run:
 3. Commit and push (§6), with the commit prefix this row's work takes — the Definition of Done
    routed from `CLAUDE.md`'s **Contribution workflow** section carries the per-type prefixes.
    §6's own example is `docs:` because that skill is scoped to docs.
-4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`. After
-   the push, never before: a failed push would otherwise leave threads closed over work that
-   is not on the branch.
+4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`, after
+   the push — the contribution workflow's **Thread discipline** owns the order and the reason.
 5. Post the one summary (§5) — its content is §5's; its transport comes from `CLAUDE.md`'s
    **Tracker mechanics** section, which is the reason a comment body goes in a file.
 
@@ -82,5 +90,5 @@ judged by a spawned reviewer agent, never by this session.
   **Contribution workflow** section states the rule and routes to the detail.
 - **The exit labels are applied only by the step the contribution workflow names for each
   exit** — its **Exit labels** section, routed from `CLAUDE.md`'s **Contribution workflow**
-  section. For the cap that is this skill's stop above, and nothing else here: a fix below
-  the cap applies no label.
+  section. For the cap that is this skill's stop above; taking stale ones off is its first
+  step; and nothing else here — a fix below the cap applies no label.

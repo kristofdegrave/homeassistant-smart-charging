@@ -20,10 +20,10 @@ that skill before this one.
    human decision. If something Critical/Major is still open, stop here — don't apply
    `needs-approval` yet.
 2. **Apply `needs-approval`, then drop a stale `needs-decision`** — two operations, so a
-   removal that fails cannot take the add down with it: `gh pr edit <PR> --add-label
-   needs-approval`, then the remove-label form `CLAUDE.md`'s **Tracker mechanics** section
-   routes to (it tolerates the label being absent, which is the common case), then read the
-   label set back the way that section says. A capped PR that came back clean after a granted
+   removal that fails cannot take the add down with it: the add-label form, then the
+   remove-label form, both as `CLAUDE.md`'s **Tracker mechanics** section routes to them (the
+   removal tolerates the label being absent, which is the common case), then read the label
+   set back the way that section says. A capped PR that came back clean after a granted
    round otherwise keeps its findings-open signal. `needs-approval` signals "no
    more automated review/fix work is pending, a human must now decide" — it does not replace
    manual merge approval (CODEOWNERS + branch protection still gate the actual merge). The

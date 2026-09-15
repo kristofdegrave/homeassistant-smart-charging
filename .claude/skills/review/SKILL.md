@@ -19,21 +19,19 @@ interactive-only wording precisely because it sits in every run's index.
    round is a native review carrying the local round marker `submit-pr-review`'s local mode
    defines. The count is windowed by the **Rounds and the cap** rule's reset events, and this
    is that rule's one procedure — the fix step's cap stop routes here rather than counting:
-   - List the PR's reviews (body, submission time) and its issue comments (body, author,
-     creation time); `CLAUDE.md`'s **Tracker mechanics** section routes to both listings.
-     Paginate, and select bodies rather than ids — a recipe written as a post read-back keeps
-     only the latest item.
+   - Read three listings, all routed by `CLAUDE.md`'s **Tracker mechanics** section: the PR's
+     label events, its reviews and its issue comments — every item, with author and time, as a
+     stream rather than a post read-back.
    - The most recent **reset event** is the later of: an issue comment whose last line is
-     `<!-- local-review-escalated -->` (the cap stop's escalation), and a review or comment
-     by an author whose login does not end in `[bot]`, carrying neither the round marker nor an
-     `ai-fix-` marker, posted later than every marker-carrying review and every
-     `ai-fix-summary` comment before it — that is, posted while no automated work was pending,
-     which is when an exit label is on. No reset event → the window starts at the PR's first
-     review.
+     `<!-- local-review-escalated -->` (the cap stop's escalation), and a review or issue
+     comment by an author whose login does not end in `[bot]` posted while an exit label
+     (`needs-approval` or `needs-decision`) was on — after a `labeled` event for it and before
+     any later `unlabeled` event for it. Nothing else resets the count. No reset event → the
+     window starts at the PR's first review.
    - Rounds so far = marker-carrying reviews posted after that event.
    Apply the rule with the cap **read from the doc routed above**, never from memory. At the
-   cap with a Critical or Major finding still open, report the cap and stop — the fix step's
-   stop performs the exit; this skill never labels.
+   cap, report the count and stop: whether a Critical or Major finding is still open is the
+   fix step's stop to decide, and that stop performs the exit — this skill never labels.
 2. **Check the branch isn't behind `origin/main`** per the review step, and merge it in first if it is
    (`resolving-merge-conflicts` if that conflicts). A rule that landed since the branch was cut
    is invisible to a review run against the branch alone.
@@ -56,10 +54,9 @@ union of the two:
    linked issue, an issue with no context label, or a reference that will not resolve,
    contributes nothing here and item 1 above stands alone.
 
-Each half resolves to a **checklist**, and the checklist is what you hand over: where it is a
-work-type review document, spawn the generic `reviewer` agent against it; where it is still a
-`*-reviewer` agent definition, spawn that agent. A review column may also name a completion
-bar; that is criteria the reviewer reads, not a second reviewer to spawn.
+Each half resolves to a **checklist**, and the checklist is what you hand over: spawn the
+generic `reviewer` agent against it. A review column may also name a completion bar; that is
+criteria the reviewer reads, not a second reviewer to spawn.
 
 The table states how each half is scoped, and the exception for a tree that carries its own
 reviewer rule; apply it as written. The *Review model* column of each row in play says which
