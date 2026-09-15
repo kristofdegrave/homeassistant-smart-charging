@@ -25,7 +25,7 @@ which prints `OWNER`, `REPO_NAME`, `REPO` (`owner/name`), `BOARD`, `PROJECT_ID`,
 profile. Then `echo "$REPO"` — the helper prints nothing when it fails, `eval` of nothing
 succeeds, and the first recipe pasted with an unset `$REPO` misfires silently
 (`gh issue create --repo --title …` reads the title as the repo). An empty echo means fix the
-helper first. What those values mean on this project is [profile.md](profile.md).
+helper first. What those values mean on this project is [profile.md](../profile.md).
 
 Every recipe below was run against this project on `gh` 2.95 rather than transcribed from
 memory: the reads in the variable form written here, the writes with the same values spelled

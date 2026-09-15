@@ -55,14 +55,14 @@ case_add() {
   fi
 }
 
-LINK='See [the workflow](../../../docs/reference/contribution-workflow.md) first.'
+LINK='See [the workflow](../../../docs/reference/method/contribution-workflow.md) first.'
 
 # --- a markdown link to project documentation is a route, and is rejected ------------------
 case_add "a link from a skill is rejected" 1 \
-  "docs/reference/contribution-workflow.md" ".claude/skills/demo/SKILL.md" "$LINK"
+  "docs/reference/method/contribution-workflow.md" ".claude/skills/demo/SKILL.md" "$LINK"
 case_add "a link from an agent is rejected" 1 \
-  "docs/reference/ai-authoring.md" ".claude/agents/demo.md" \
-  'Read [the reference](../../docs/reference/ai-authoring.md) for the criteria.'
+  "docs/reference/method/ai-authoring.md" ".claude/agents/demo.md" \
+  'Read [the reference](../../docs/reference/method/ai-authoring.md) for the criteria.'
 case_add "a repo-rooted link is rejected" 1 \
   "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md" \
   'Per [ADR-0009](docs/adl/0009-testing-strategy.md), pick the harness.'
@@ -70,15 +70,15 @@ case_add "two links on one line: the second is reported too" 1 \
   "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md" \
   'narrowed by [A](../../../docs/adl/0037-scenario-timeline-test-tier.md), reading [B](../../../docs/adl/0009-testing-strategy.md)'
 
-case_add "an anchored link is rejected" 1   "docs/reference/contribution-workflow.md" ".claude/skills/demo/SKILL.md"   'See [Step 3](../../../docs/reference/contribution-workflow.md#step-3-review).'
+case_add "an anchored link is rejected" 1   "docs/reference/method/contribution-workflow.md" ".claude/skills/demo/SKILL.md"   'See [Step 3](../../../docs/reference/method/contribution-workflow.md#step-3-review).'
 case_add "a ./-prefixed link is rejected" 1   "docs/adl/0009-testing-strategy.md" ".claude/skills/demo/SKILL.md"   'Per [ADR-0009](./docs/adl/0009-testing-strategy.md), pick the harness.'
 case_add "an angle-wrapped link is rejected" 1 \
   "docs/adl/template.md" ".claude/skills/demo/SKILL.md" \
   'Draft against [the template](<../../../docs/adl/template.md>).'
 case_add "a root-relative link is rejected" 1 \
-  "docs/reference/ci-pipeline.md" ".claude/skills/demo/SKILL.md" \
-  'See [the pipeline](/docs/reference/ci-pipeline.md).'
-case_add "a titled link is rejected" 1   "docs/reference/ai-authoring.md" ".claude/skills/demo/SKILL.md"   'Read [it](../../docs/reference/ai-authoring.md "the reference") first.'
+  "docs/reference/method/ci-pipeline.md" ".claude/skills/demo/SKILL.md" \
+  'See [the pipeline](/docs/reference/method/ci-pipeline.md).'
+case_add "a titled link is rejected" 1   "docs/reference/method/ai-authoring.md" ".claude/skills/demo/SKILL.md"   'Read [it](../../docs/reference/method/ai-authoring.md "the reference") first.'
 
 # --- a bare path is a name, not a route, and is legal --------------------------------------
 # These are the subject-matter cases the rule expressly keeps named: the template a write-*
@@ -100,9 +100,9 @@ case_add "an intra-skill reference link stays legal" 0 - \
 
 # --- scope: only the watched trees, only added lines ---------------------------------------
 case_add "a link outside the watched trees is ignored" 0 - \
-  "docs/reference/some-doc.md" 'Links to [x](../../docs/reference/ci-pipeline.md) freely.'
+  "docs/reference/some-doc.md" 'Links to [x](../../docs/reference/method/ci-pipeline.md) freely.'
 case_add "a link in a workflow file is ignored" 0 - \
-  ".github/workflows/_ai-draft.yml" "# follows [it](../../docs/reference/contribution-workflow.md)"
+  ".github/workflows/_ai-draft.yml" "# follows [it](../../docs/reference/method/contribution-workflow.md)"
 
 # a pre-existing link on an untouched line must not be flagged
 dir=$(new_repo) || { fail_case "untouched pre-existing link" "fixture failed"; dir=""; }
@@ -179,7 +179,7 @@ if [ -n "$dir" ]; then
   commit_all "$dir" seed
   (cd "$dir" && git branch -q base)
   printf '%s\n' "$LINK" >> "$dir/.claude/skills/demo/SKILL.md"
-  printf '.claude/skills/demo/SKILL.md\tdocs/reference/contribution-workflow.md\t# reviewed\n' \
+  printf '.claude/skills/demo/SKILL.md\tdocs/reference/method/contribution-workflow.md\t# reviewed\n' \
     > "$dir/.github/authoring-rule-allowlist.tsv"
   commit_all "$dir" change
   out=$(cd "$dir" && bash "$SCRIPT" base 2>&1); rc=$?

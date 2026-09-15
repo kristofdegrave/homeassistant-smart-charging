@@ -69,7 +69,7 @@ carries no `../` at all: the table named just above is where a rename fixes thos
 
 The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
-artifact gets — is [work-types/README.md](work-types/README.md)'s; what belongs here is only
+artifact gets — is [work-types/README.md](../work-types/README.md)'s; what belongs here is only
 that the label is the directory name, so a rename moves a directory. Adding a label means
 updating those eight — the work-types directory only where the new label gets a file of its
 own, which is not a given and need not be a work file (`workflow`'s directory holds only a

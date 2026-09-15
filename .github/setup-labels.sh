@@ -117,7 +117,7 @@ done <"$defined"
 # A REST read, not `gh label list`: that command is GraphQL, and straight after the writes
 # above it has returned the last label written with a stale description for longer than the
 # retry below waits, so the read-back reported a false mismatch — the same transport split
-# docs/reference/tracker-mechanics.md describes. `{owner}/{repo}` is filled in by `gh` from
+# docs/reference/method/tracker-mechanics.md describes. `{owner}/{repo}` is filled in by `gh` from
 # the checkout, which is why this runs from the repo root. `--paginate` with an explicit page
 # size, or the read silently truncates at 30 and reports false mismatches. `tr -d '\r'`
 # because `gh` on Windows ends its lines with CRLF, and a trailing CR would make every

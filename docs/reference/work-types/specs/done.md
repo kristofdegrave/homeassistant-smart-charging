@@ -86,7 +86,7 @@ Two more, because the task entries are what the task issues are filed from and t
 must let that filing invent nothing:
 
 - **Each task is a vertical slice** — the shape the **Ticket** stage of
-  [idea-to-product.md](../../idea-to-product.md) gives an epic's children, since each entry
+  [idea-to-product.md](../../method/idea-to-product.md) gives an epic's children, since each entry
   becomes one. The decidable test: **the task's effect on the installation is complete the day
   it merges** — nothing it does is waiting on a later task to become visible. A pure refactor
   passes: its effect is that the observables do not change, and that is as true on merge day as

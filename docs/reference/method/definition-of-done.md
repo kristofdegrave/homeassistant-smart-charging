@@ -92,7 +92,7 @@ and against a different standard:
 
 - **The list comes from the spec, not from memory** — fixed before the slice was built. That
   the spec carries one per task, and what each item has to name, is an item of the `specs`
-  completion bar ([work-types/specs/done.md](work-types/specs/done.md), named in that row of
+  completion bar ([work-types/specs/done.md](../work-types/specs/done.md), named in that row of
   `CLAUDE.md`'s **Model selection** table) — so a missing or unusable list is a finding
   against the spec, caught when the spec is reviewed rather than when this pass is run.
 - **The result is a comment on the epic**: the observed value for each item on that list, plus

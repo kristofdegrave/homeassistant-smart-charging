@@ -5,7 +5,7 @@
 #   sh .claude/hooks/test-block-destructive-git.sh
 #
 # The two tables are the block list and the never-block list from the hook's own
-# contract in docs/reference/contribution-workflow.md -- add a case here before
+# contract in docs/reference/method/contribution-workflow.md -- add a case here before
 # changing a matching rule.
 
 HOOK=$(dirname "$0")/block-destructive-git.sh
@@ -122,8 +122,8 @@ run ALLOW 'git diff --stat'
 run ALLOW 'git add .'
 run ALLOW 'git clean -n'
 run ALLOW 'git restore --staged .'
-run ALLOW 'git restore docs/reference/contribution-workflow.md'
-run ALLOW 'git checkout -- docs/reference/contribution-workflow.md'
+run ALLOW 'git restore docs/reference/method/contribution-workflow.md'
+run ALLOW 'git checkout -- docs/reference/method/contribution-workflow.md'
 run ALLOW 'git stash'
 run ALLOW 'git stash pop'
 run ALLOW 'git stash list'

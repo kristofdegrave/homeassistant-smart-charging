@@ -22,14 +22,14 @@ out of the core work-type files.
 
 Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
 separate bot account for the interactive session. The CI pipeline acts as
-`github-actions[bot]` instead ([ci-pipeline.md](ci-pipeline.md)). **Why it matters:** a human
+`github-actions[bot]` instead ([ci-pipeline.md](method/ci-pipeline.md)). **Why it matters:** a human
 item and the session's own footprint are posted under the same login, so
-[contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap** tells them apart
+[contribution-workflow.md](method/contribution-workflow.md)'s **Rounds and the cap** tells them apart
 by the session's markers, never by author.
 
 The repository is `profile.yml`'s `repo`; the tracker is GitHub issues, pull requests, review
 threads and labels on it, driven with the recipes in
-[tracker-mechanics.md](tracker-mechanics.md).
+[tracker-mechanics.md](method/tracker-mechanics.md).
 
 ## Merge strategy
 
@@ -37,7 +37,7 @@ Every PR is **squash-merged, manually**, by the maintainer — `CODEOWNERS` cove
 branch protection on `main` requires that approval, so neither the interactive session nor CI
 can merge. **Why the squash matters:** it rewrites the merged branch into one commit, which
 orphans any branch stacked on it. That is the reason
-[contribution-workflow.md](contribution-workflow.md)'s **Base `main` and stacking** has every
+[contribution-workflow.md](method/contribution-workflow.md)'s **Base `main` and stacking** has every
 PR base `main` directly, however the work was branched locally.
 
 ## Project board
@@ -61,17 +61,17 @@ be stating a profile value, which the method check refuses:
 **Size** (`board.fields.size`) is a five-tier T-shirt estimate of reading-plus-writing effort;
 **Estimate** (`board.fields.estimate`) is story points in a plain number field. Both are board
 fields, not labels, so filing an issue is always two steps
-([tracker-mechanics.md](tracker-mechanics.md)'s **Filing a work item**). The rules for setting
+([tracker-mechanics.md](method/tracker-mechanics.md)'s **Filing a work item**). The rules for setting
 them — sizing sweeps up a tier, epics carrying Size only — are
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**.
+[contribution-workflow.md](method/contribution-workflow.md)'s **Issue conventions**.
 
 ## Labels
 
 The label set — names, colours, descriptions — is `profile.yml`'s `labels`, in four groups
 (pre-triage, action, context, kind), and `.github/setup-labels.sh` writes exactly that set to
 the repository. What a group means and when an issue carries a label from it is
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**; the CI-side places
-the context vocabulary is also baked into are [ci-pipeline.md](ci-pipeline.md)'s **Label
+[contribution-workflow.md](method/contribution-workflow.md)'s **Issue conventions**; the CI-side places
+the context vocabulary is also baked into are [ci-pipeline.md](method/ci-pipeline.md)'s **Label
 vocabulary sync**. The enabled context labels are also the enabled work types
 (`work_types.enabled`) — one directory each under `docs/reference/work-types/` and one row each
 in `CLAUDE.md`'s **Model selection** table.
@@ -102,14 +102,14 @@ and the two stack packages (Home Assistant, Python) are declared in `profile.yml
 `dependencies`, each with its upstream source and the pin it was last reconciled with. That
 section is the provenance manifest: a pin moves only by a decision recorded in the PR that
 moves it, because several of these skills are deliberate adaptations of their upstream
-([ai-authoring.md](ai-authoring.md)'s **Vendored skills are forked on purpose**). Which of them
+([ai-authoring.md](method/ai-authoring.md)'s **Vendored skills are forked on purpose**). Which of them
 are method and which are stack follows the three-layer split this file exists for — method
 (travels everywhere), profile (this project), stack packages (Home Assistant, Python) — so the
 stack skills are declared here and are not part of the method.
 
 ## Flow
 
-The method's default idea-to-product flow is [idea-to-product.md](idea-to-product.md), and
+The method's default idea-to-product flow is [idea-to-product.md](method/idea-to-product.md), and
 its first rule is to apply what this section states over the stages it names. This section is
 the **deviation contract**, and it has exactly two shapes. Either it says **Default** — the
 flow as written, no stage removed, added or reordered, no gate changed — and carries no `###`
