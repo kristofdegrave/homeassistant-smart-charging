@@ -101,11 +101,13 @@ places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, whi
 `github.event.label.name` against a trigger label by string and — like `close-guard.yml`'s
 `case` block above — fail open silently on a rename, every job simply never firing; `_ai-review.yml`'s
 verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
-the two exit labels, the interactive skills that apply them by command — reached through
-`CLAUDE.md`'s **Contribution workflow** section, which is where the lifecycle's exits are
-mapped to the skills that run them, so a rename is checked there rather than assumed from
-here. Adding or renaming one means updating that set, and the **Pipeline steps** below where
-the label's meaning is stated.
+`needs-approval`, the interactive skill that applies it by command — reached through
+`CLAUDE.md`'s **Contribution workflow** section, which is where the lifecycle's clean exit is
+mapped to the skill that runs it, so a rename is checked there rather than assumed from here.
+`needs-decision` is CI's alone: `_ai-review.yml`'s verdict routing is the only place that
+applies it, and what the interactive cap exit labels is the contribution workflow's own
+business (see **Pipeline steps** below). Adding or renaming one means updating that set, and
+the **Pipeline steps** below where the label's meaning is stated.
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
 places — `.github/setup-labels.sh` — and in none of the other seven, including
