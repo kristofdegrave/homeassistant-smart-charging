@@ -69,6 +69,12 @@ only sequences those stages and says which skill performs each. Cite it, never r
 
 ## Common mistakes
 
+The rules of the flow document and of `CLAUDE.md`'s **Issue conventions** are not restated
+here; the ones this cycle trips on most are designing before a shipped-behaviour claim is
+reproduced (step 4), filing a `development`/`testing` child before the plan it must cite is
+approved (step 6), a child with two context labels, and relabelling the idea issue as the
+epic. The mistakes that are this skill's own:
+
 - Closing the parent idea issue when only part of it was decomposed.
 - Relabeling/reusing the idea issue itself as the epic instead of filing a new, separate epic
   issue — the epic must stay open tracking children long after the idea issue is closed.
