@@ -3,10 +3,11 @@
 **Who reads this.** The reviewer only — a fresh, read-only Opus agent, never the session that
 wrote the change. This directory holds **only** this file: `workflow` has no work file and no
 completion bar, because its work is never drafted from an issue and a human authors it by hand.
-The document `CLAUDE.md`'s **Model selection** section routes to argues why, and
-`work-types/README.md` records the asymmetry as deliberate. The consequence for you is that there is no bar to fall back on: this
-file is the whole of the criteria for a `workflow` review, which is why it carries a full
-checklist where other labels' review documents carry only what their bar cannot.
+The document that `CLAUDE.md`'s **Model selection** section routes to argues why, and
+`work-types/README.md` records the asymmetry as deliberate. The consequence for you is that
+there is no bar to fall back on: this file is the whole of the criteria for a `workflow`
+review, which is why it carries a full checklist where other labels' review documents carry
+only what their bar cannot.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
 not here. They are the same for every review and live with whoever applies this checklist — the
@@ -53,8 +54,8 @@ Always read:
   `docs/reference/contribution-workflow.md`'s **Issue conventions** — the canonical
   context-label vocabulary, to check the form's `labels:` value against it — and
   `docs/reference/ci-pipeline.md`'s **Label vocabulary sync**, to check the CI-side files stay
-  in step; and, for `adr.yml`, `CLAUDE.md`'s **Architecture Decision Records** section, since
-  the form points at it.
+  in step; and, for `adr.yml`, the document `CLAUDE.md`'s **Architecture Decision Records
+  (ADRs)** topic routes to, since the form links to it.
 
 ## Review checklist
 
@@ -100,8 +101,9 @@ Always read:
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.claude/profile.yml`'s `labels` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a
-  Major finding); and any process claim the form's body makes (e.g. `adr.yml` pointing at
-  `CLAUDE.md`'s ADR section) still matches what that reference currently says.
+  Major finding); and any process claim the form's body makes (e.g. `adr.yml` linking to the
+  document `CLAUDE.md`'s **Architecture Decision Records (ADRs)** topic routes to) still
+  matches what that reference currently says.
 - The issue-to-merge lifecycle is defined in `CLAUDE.md`'s **Contribution workflow** section;
   `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line only point
   to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,

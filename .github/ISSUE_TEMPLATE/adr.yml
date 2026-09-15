@@ -15,7 +15,7 @@ body:
         structure that would be expensive to reverse or materially constrains future
         options — skip it for a variable name, a log message, or any implementation
         detail with no lasting structural consequence. See
-        [the `adr` completion bar's "Architecture Decision Records (ADRs)" topic](https://github.com/kristofdegrave/homeassistant-smart-charging/blob/main/docs/reference/work-types/adr/done.md#architecture-decision-records-adrs)
+        [the ADR worthiness test](https://github.com/kristofdegrave/homeassistant-smart-charging/blob/main/docs/reference/work-types/adr/done.md#architecture-decision-records-adrs)
         for the full worthiness test, its calibration test for borderline cases, and its
         carve-outs (test/CI/dev-tooling choices; domain/business rules) — an issue that
         fails it will still get caught by the ADR review checklist if you add `needs-draft`, but

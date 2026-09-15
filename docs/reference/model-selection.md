@@ -3,10 +3,11 @@
 `CLAUDE.md`'s **Model selection** section holds the table and the routing rule a run applies
 to it: which files a row resolves to, and how a review's checklists are selected from the
 changed paths and the linked issue's label. This document holds the reasoning behind that
-shape. Nothing here changes what a row resolves to — a row names its files literally, and this
-document is reached from the table's own heading for a reader who wants the *why*, never as a
-step in resolving a file. Every `##` below is a topic and every `###` one rule, so a pointer
-reaches any of them through that section.
+shape, and it is reached from the table's own heading for a reader who wants the *why*. Every
+rule a run applies — which files a row resolves to, which checklists a change gets, how each
+is scoped — is stated in that section and only there; nothing here adds to or narrows it, and
+nothing here is a step in resolving a file. Every `##` below is a topic and every `###` one
+rule, so a pointer reaches any of them through that section.
 
 ## Reviewers and their model
 
@@ -42,7 +43,7 @@ read by whatever followed it there.
 two artifacts names one work file and one completion bar like every other row, and those files
 route onward inside `docs/reference/work-types/` — `documentation` is the case. What a row may
 still split by is a **tree**, in the review column, where the split is what the union routing
-below is for and so cannot move into a file — `development` is the case, and each tree is its
+in `CLAUDE.md`'s **Model selection** section is for and so cannot move into a file — `development` is the case, and each tree is its
 own sentence, so `;` never has to mean two things in one cell. A sentence may also state a
 named file's scope, as `development`'s work column does for its bar. (`work-types/README.md`
 describes that tree's shape. Nothing in this table resolves through it: a row names its files
@@ -65,29 +66,11 @@ against the file; CI has no agent to spawn and its own worker self-applies the s
 **A row is self-contained.** Nothing outside the row and the change's own files is needed to
 know what to delegate to — a row names its files outright, and where a work type splits further
 that is settled inside those files rather than by anything a run has to resolve here. Reviewer
-dispatch additionally resolves the linked issue's label, per the union rule below — that is the
-one input outside the row, and it only ever adds a reviewer.
+dispatch additionally resolves the linked issue's label, per the union rule in `CLAUDE.md`'s
+**Model selection** section — that is the one input outside the row, and it only ever adds a
+reviewer.
 
 ## Bars and checklists
-
-### A review column may name more than one checklist
-
-A `development` PR therefore gets both the `development`
-checklist, over its code, and the `testing` one, over its tests — each applied to the changed
-files under its own tree, as `CLAUDE.md`'s **Model selection** section states.
-
-### Where a review is scoped to a tree's files, the criteria come from that tree
-
-**Where a review is scoped to a tree's files, the criteria come from that tree.** The
-criteria belong to the artifact, not to the label that dispatched the reviewer — so a tree's
-files get that tree's checklist and bar whichever row reached them, and a checklist shared by
-two rows (`uc` and `requirement`) is one file with the other row pointing at it. This says
-nothing about *which* reviewers run, and it does not narrow a label-selected reviewer's
-whole-change scope: that reviewer has no tree of its own, which is exactly what makes it an
-addition, and the union rule below governs it unchanged. `development`'s `tests/**` branch is
-the same rule in its other shape: rather than a file of its own pointing elsewhere, the row
-names the `testing` row's checklist and bar outright for that tree — so the row stays
-self-contained, and `tests/**` has one source of truth however it was reached.
 
 ### The completion bar is one file named in both columns
 
@@ -168,10 +151,10 @@ What a `workflow` author reads instead is in `CLAUDE.md`'s **Authoring AI artifa
 is wider than either label sharing it — `requirement`'s file points at the same one. An entry reaches a CI review only if its tree is also in
 `ai-pipeline.yml`'s path filter, which decides whether a job runs at all, and in
 `_ai-review.yml`'s diff enumeration, which decides what a checklist can see. Those two are
-enumerations beside this one, and `.claude/profile.yml`'s `review.path_map` is a third — the
-same set, held for the CI workers that will one day read it there instead of here — so adding
-a tree here means adding it in all three of them. Of the two CI omissions, each fails
-differently. Left out of the **path filter**, no job runs, which silences the
+enumerations beside the row's list, and `.claude/profile.yml`'s `review.path_map` is a third —
+the same set, held for the CI workers that will one day read it there instead of the row —
+which is why the row states that adding a tree means adding it in all four. Of the two CI
+omissions, each fails differently. Left out of the **path filter**, no job runs, which silences the
 label half too, since a job that never runs cannot add a reviewer. Left out of the **diff
 enumeration** alone, the job does run, sees nothing under that tree, and can post a clean
 verdict over a change no checklist read — a false clean, and the worse of the two.

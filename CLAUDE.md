@@ -58,7 +58,10 @@ stated under the table.
 `.github/setup-labels.sh`, `.github/profile-env.sh`, `.claude/skills/**`, `.claude/agents/**`,
 `.claude/profile.yml`, `docs/reference/**` and `CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
 file, which the generic `reviewer` agent applies. This list **is** CI's mapping — the review
-worker resolves it from here rather than carrying its own copy. `docs/postmortems/**` keeps its
+worker resolves it from here rather than carrying its own copy. The same set is enumerated in
+`ai-pipeline.yml`'s path filter, `_ai-review.yml`'s diff enumeration and `.claude/profile.yml`'s
+`review.path_map`, so adding a tree here means adding it in all four; how each omission fails
+is in the document this section routes to. `docs/postmortems/**` keeps its
 own rule from the **Post-mortems** topic: a plain fresh-agent pass weighted to quotation
 accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md` or the pipeline.
 
@@ -77,7 +80,19 @@ reference at all, so the path half still stands alone rather than the run aborti
 
 **A review column may name more than one checklist.** Each is applied to the changed files
 under its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
-checklist to its matching files.
+checklist to its matching files. A `development` PR therefore gets both the `development`
+checklist, over its code, and the `testing` one, over its tests.
+
+**Where a review is scoped to a tree's files, the criteria come from that tree.** The
+criteria belong to the artifact, not to the label that dispatched the reviewer — so a tree's
+files get that tree's checklist and bar whichever row reached them, and a checklist shared by
+two rows (`uc` and `requirement`) is one file with the other row pointing at it. This says
+nothing about *which* reviewers run, and it does not narrow a label-selected reviewer's
+whole-change scope: that reviewer has no tree of its own, which is exactly what makes it an
+addition, and the union rule above governs it unchanged. `development`'s `tests/**` branch is
+the same rule in its other shape: rather than a file of its own pointing elsewhere, the row
+names the `testing` row's checklist and bar outright for that tree — so the row stays
+self-contained, and `tests/**` has one source of truth however it was reached.
 
 The two halves are scoped differently, and have to be. A path-selected reviewer sees the
 changed files under its own tree. A label-selected one has no tree of its own — that is what
@@ -93,13 +108,15 @@ tree: a PR touching both a post-mortem and a skill still gets the skill reviewed
 ## Routing table
 
 One entry per **topic**. A skill or agent writes `` `CLAUDE.md`'s **Topic** ``; the pointer
-resolves to the entry here, the entry names the `##` heading that owns the topic, and every
-`###` beneath that heading is one rule, addressed through the topic rather than by name. The
-convention is stated once, in the **Authoring AI artifacts** document.
+resolves to the entry here, and the entry names the document — or the `##` heading in it —
+that owns the topic. A rule is addressed through its topic, never by the owning document's
+heading, so the shape beneath an entry can change without any pointer moving; the target shape
+(`##` one topic, `###` one rule) and where it is not yet reached are stated once, in the
+**Authoring AI artifacts** document.
 
 | Topic | Owner |
 |---|---|
-| **Contribution workflow** | [contribution-workflow.md](docs/reference/contribution-workflow.md) — the six-step chain (issue → worktree → PR against `main` → review → fix → clean up) and its rulebook, for an interactive session; the chain runs unattended from the step it is entered at until a clean pass or the review cap, and only **Clean up** is the human's to invoke. [ci-pipeline.md](docs/reference/ci-pipeline.md) — the same lifecycle run by CI, `github-actions[bot]` as the actor. Either side of the lifecycle — idea, routing, spec, slicing into issues, verifying a shipped slice live — is [idea-to-issues.md](docs/reference/idea-to-issues.md); the floor an author self-checks before the PR is the **Definition of Done** topic. |
+| **Contribution workflow** | [contribution-workflow.md](docs/reference/contribution-workflow.md) — the chain (file the issue → implement → review → fix → clean up) and its rulebook, for an interactive session; it runs unattended from the step it is entered at until a clean pass or the review cap, and only **Clean up** is the human's to invoke. [ci-pipeline.md](docs/reference/ci-pipeline.md) — the same lifecycle run by CI. Either side of it — idea, routing, spec, slicing into issues, verifying a shipped slice live — is [idea-to-issues.md](docs/reference/idea-to-issues.md); the floor before the PR is the **Definition of Done** topic. |
 | **Issue conventions** | [contribution-workflow.md#issue-conventions](docs/reference/contribution-workflow.md#issue-conventions) — context and kind labels, board Size/Estimate, the anchored `Plan:` line, epics as native sub-issues, branch naming. |
 | **Definition of Done** | [definition-of-done.md](docs/reference/definition-of-done.md) — the project-wide floor an author self-checks before opening the PR, and commit message conventions; it routes to a row's per-type completion bar. |
 | **Tracker mechanics** | [tracker-mechanics.md](docs/reference/tracker-mechanics.md) — the concrete `gh` commands, with their rate-limit failure modes, REST fallbacks and Windows/Git Bash quirks. Read it before typing one, and again when a call is refused, silently no-ops, or must be trusted without a read-back. Mechanics only: when to file and what a label means are **Contribution workflow** and **Issue conventions**. |

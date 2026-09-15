@@ -24,7 +24,7 @@ distinct from the review step's fresh external reviewer:
 Doc/ADR/design artifacts satisfy this with their own self-check instead (6Cs pass, template
 conformance, cross-document consistency) — the artifact's row in `CLAUDE.md`'s **Model
 selection** table defines what "done" means there. The analysis-doc version is also mirrored in
-`CLAUDE.md`'s artifact-specific section. The checklist above is the floor for anything touching
+`CLAUDE.md`'s **Review protocol for analysis documents** topic. The checklist above is the floor for anything touching
 `custom_components/`/`tests/`.
 
 **A row's completion bar applies wherever the row names one** — not only to those artifacts.

@@ -127,5 +127,5 @@ Stop here and report:
 6. **Any `[DEBUG-…]` probes or throwaway files still in the tree.**
 
 The fix is then ordinary work: file it as a `development` issue and run it through this project's
-contribution workflow, defined in `CLAUDE.md`, with the work file named in that issue's row of
-CLAUDE.md's **Model selection** table.
+contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
+in that issue's row of `CLAUDE.md`'s **Model selection** table.

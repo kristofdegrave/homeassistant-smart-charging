@@ -156,12 +156,16 @@ join the reviewer's list.
   route every artifact inherits from a single edit. **Headings are the API, at two levels**,
   and this is the convention's only statement: the pointer is written `` `CLAUDE.md`'s
   **Topic** ``, naming a **topic** — an entry of `CLAUDE.md`'s routing table, or one of its own
-  `##` headings — and never a heading of the document the topic routes to. In that document a
-  `##` is a topic and every `###` beneath it is one rule; a rule is addressed through its
-  topic's entry (*the `###`-level rule under `CLAUDE.md`'s **Topic***), so a rule can move
-  between documents or split without any pointer changing. `resolving-merge-conflicts` writes
-  `` `CLAUDE.md`'s **Issue conventions** `` for the branch-naming rule rather than naming the
-  workflow document's own heading — that is the shape.
+  `##` headings — and never a heading of the document the topic routes to. A rule is
+  addressed through its topic (*the branch-naming rule under `CLAUDE.md`'s **Issue
+  conventions***), so a rule can move between documents or split without any pointer
+  changing. The target shape of a document reached this way is `##` one topic, `###` one rule
+  beneath it; `idea-to-issues.md`'s parked topics and the `adr` bar's worthiness topic have it,
+  while the workflow reference still carries its rules as `##` sections and several routing
+  entries name a whole document rather than a heading — the pointer form above is what makes
+  reshaping them a change to those documents alone. `implement` writes "the branch-naming rule
+  under `` `CLAUDE.md`'s **Issue conventions** ``" rather than naming the workflow document's
+  own heading — that is the shape.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
   resource list** — with the one exception of its own subject matter, defined after this
   list. Write "this project" where a name is tempting; route the path and the list.
