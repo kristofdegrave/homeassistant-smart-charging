@@ -33,7 +33,8 @@ The context-label vocabulary itself (values and meanings) is documented once, in
 is the CI-side consistency obligation: the same vocabulary is baked into six pipeline
 places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-draft.yml`'s
 `context_labels` variable, its "No context label found" reason string, and its `case` block;
-`.github/setup-labels.sh`'s label definitions; and `close-guard.yml`'s `case` block, which
+`.claude/profile.yml`'s `labels` section, which `.github/setup-labels.sh` writes to the
+repository; and `close-guard.yml`'s `case` block, which
 names `development` and `testing` (see **The docs-only close guard** below) — and, for the
 three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
 too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
@@ -86,7 +87,8 @@ Adding or renaming a label is a third thing again, and not cheap: see the eight 
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
-Adding a tree means editing all three. `docs/design/**` was the standing proof of what happens
+`.claude/profile.yml`'s `review.path_map` holds the same set a fourth time, for the workers
+that will read it there instead of here. Adding a tree means editing all four. `docs/design/**` was the standing proof of what happens
 otherwise: it sat in the *no context label* row and in neither of the other two, so a
 `docs/design`-only PR spawned no job — which takes out the **label** half as well as the path
 half, since a job that never runs cannot add a reviewer either. All three now carry it.
@@ -95,7 +97,7 @@ conventions, which forwards to [contribution-workflow.md](contribution-workflow.
 
 The **action/state labels** (`needs-draft`, `needs-review`, `needs-work`, `needs-approval`,
 `needs-decision`) are not context labels either. They are defined in exactly one of those
-eight places — `.github/setup-labels.sh`; where another of the eight mentions one (an issue
+eight places — `.claude/profile.yml`'s `labels`; where another of the eight mentions one (an issue
 form's guidance text, `_ai-draft.yml`'s reason string, `ai-pipeline.yml`'s Action/state line)
 it is prose telling a human which trigger to add next, never a value a worker matches on, so a
 rename there is a wording fix rather than a sync obligation. What binds instead is the set of
@@ -110,7 +112,7 @@ either. Adding or renaming one means updating that set, and the **Pipeline steps
 the label's meaning is stated.
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.github/setup-labels.sh` — and in none of the other seven, including
+places — `.claude/profile.yml`'s `labels` — and in none of the other seven, including
 `docs/reference/work-types/<label>/`, which a kind label never gets. They are not context labels
 ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
 renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
@@ -123,7 +125,8 @@ unaffected); and a `bug`+`development` issue must still resolve an anchored `Pla
 unpinned fix work fails closed rather than being drafted from free-text issue content. What a
 kind label *does* reach is the doc side: [contribution-workflow.md](contribution-workflow.md)'s
 **Issue conventions** owns the two-axis rule and every other document points at it, so renaming
-one means updating `setup-labels.sh` and that section — and then checking the handful of
+one means updating the profile's `labels` (and re-running `setup-labels.sh`) and that section —
+and then checking the handful of
 documents that name the label in passing.
 
 ## The docs-only close guard

@@ -1,7 +1,7 @@
 # Tracker mechanics
 
 The concrete commands for driving this project's tracker — GitHub issues, pull requests,
-review threads, labels, and the EMS project board — in one place, so no artifact has to
+review threads, labels, and the project board — in one place, so no artifact has to
 re-derive them and no agent has to rediscover the failure modes below the hard way.
 
 **Mechanics only: the how, never the when or the why.** Which work gets an issue, what a
@@ -11,11 +11,27 @@ label means, when a PR is opened, when `needs-approval` goes on — all of that 
 [ci-pipeline.md](ci-pipeline.md) (the label-driven automation). This file assumes the
 decision is already made and answers only "what do I type".
 
-Throughout: the repo is `kristofdegrave/homeassistant-smart-charging`, the board is project
-`1` under owner `kristofdegrave` (**EMS**). Every recipe below was run against them on
-`gh` 2.95 — in the exact form written here, not a form it was later edited away from — rather
-than transcribed from memory, **except where a recipe says otherwise about itself**. Re-run
-one before trusting it if `gh` has moved on.
+Throughout, the project's own values — repository, board, field and option ids — are **never
+spelled here**. They are `.claude/profile.yml`'s (`repo`, `board`), and the recipes name them
+as shell variables; set those once per shell with
+
+```sh
+eval "$(bash .github/profile-env.sh)"
+```
+
+which prints `OWNER`, `REPO_NAME`, `REPO` (`owner/name`), `BOARD`, `PROJECT_ID`,
+`SIZE_FIELD`, `ESTIMATE_FIELD`, `STATUS_FIELD`, one `SIZE_<tier>` per Size option and one
+`STATUS_<Column>` per Status column (`STATUS_In_progress`), every value read from the
+profile. Then `echo "$REPO"` — the helper prints nothing when it fails, `eval` of nothing
+succeeds, and the first recipe pasted with an unset `$REPO` misfires silently
+(`gh issue create --repo --title …` reads the title as the repo). An empty echo means fix the
+helper first. What those values mean on this project is [profile.md](profile.md).
+
+Every recipe below was run against this project on `gh` 2.95 rather than transcribed from
+memory: the reads in the variable form written here, the writes with the same values spelled
+out literally before the variables replaced them — the substitution is textual, so a recipe
+that ran with the value runs with the variable — **except where a recipe says otherwise about
+itself**. Re-run one before trusting it if `gh` has moved on.
 
 ## The one rule: read the state back
 
@@ -70,36 +86,33 @@ the item to the board and edit its fields by raw node id.
 
 ```sh
 # 1. create (see the Windows note below for why the body is a file)
-gh issue create --repo kristofdegrave/homeassistant-smart-charging \
+gh issue create --repo $REPO \
   --title "<title>" --body-file <path> --label <context-label>
 
 # 2. put it on the board; item-add prints the item id you then edit
-gh project item-add 1 --owner kristofdegrave --url <issue-url> --format json
+gh project item-add $BOARD --owner $OWNER --url <issue-url> --format json
 ```
 
 ```sh
 # 3. set the fields, one call each, by node id
-gh project item-edit --project-id PVT_kwHOABQtm84Bd8mI --id <item-id> \
-  --field-id PVTSSF_lAHOABQtm84Bd8mIzhYaY9g --single-select-option-id 9728cbdc   # Size = M
-gh project item-edit --project-id PVT_kwHOABQtm84Bd8mI --id <item-id> \
-  --field-id PVTF_lAHOABQtm84Bd8mIzhYaY9k --number 3                             # Estimate = 3
-gh project item-edit --project-id PVT_kwHOABQtm84Bd8mI --id <item-id> \
-  --field-id PVTSSF_lAHOABQtm84Bd8mIzhYaYzw --single-select-option-id 47fc9ee4    # Status = In progress
+gh project item-edit --project-id $PROJECT_ID --id <item-id> \
+  --field-id $SIZE_FIELD --single-select-option-id $SIZE_M                # Size = M
+gh project item-edit --project-id $PROJECT_ID --id <item-id> \
+  --field-id $ESTIMATE_FIELD --number 3                                  # Estimate = 3
+gh project item-edit --project-id $PROJECT_ID --id <item-id> \
+  --field-id $STATUS_FIELD --single-select-option-id $STATUS_In_progress # Status = In progress
 ```
 
 `--number` is right for Estimate and `--single-select-option-id` for Size and Status: Estimate
 is a plain number field, not a single-select.
 
-Project id: `PVT_kwHOABQtm84Bd8mI`.
-
-| Field | Field id | Option ids |
-|---|---|---|
-| Size | `PVTSSF_lAHOABQtm84Bd8mIzhYaY9g` | XS `eff732af` · S `9592a5a3` · M `9728cbdc` · L `c53df028` · XL `7b141a16` |
-| Estimate | `PVTF_lAHOABQtm84Bd8mIzhYaY9k` | number field |
-| Status | `PVTSSF_lAHOABQtm84Bd8mIzhYaYzw` | Backlog `f75ad846` · Ready `08afe404` · In progress `47fc9ee4` · In review `4cc61d42` · Done `98236657` |
-
-Re-derive these with `gh project field-list 1 --owner kristofdegrave --format json` if an edit
-is rejected — they are stable in practice but not guaranteed.
+The project id, the three field ids and every option id are `profile.yml`'s `board` section —
+`board.project_id`, `board.fields.<size|estimate|status>.id`, and
+`board.fields.<size|status>.options`, which is where `$SIZE_M` and `$STATUS_In_progress` above
+come from (`profile-env.sh` emits one variable per option). Re-derive them with
+`gh project field-list $BOARD --owner $OWNER --format json` if an edit is rejected — they are
+stable in practice but not guaranteed — and fix them in the profile, the only place they are
+spelled.
 
 **Read-back — and the `--limit` trap.** `gh project item-list` defaults to **30** items, and
 the board is far past that. A lookup under the default limit returns *empty rather than
@@ -107,14 +120,14 @@ erroring*, so a missing id reads as "the issue is not on the board" when it simp
 the page. Always pass an explicit high limit:
 
 ```sh
-gh project item-list 1 --owner kristofdegrave --format json --limit 1000 \
+gh project item-list $BOARD --owner $OWNER --format json --limit 1000 \
   --jq '.items[] | select(.content.number==<n>) | {id, size, estimate, status}'
 ```
 
 **REST fallback for the creation step** (the board steps have none):
 
 ```sh
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues --input <payload.json>
+gh api -X POST repos/$REPO/issues --input <payload.json>
 ```
 
 with `{"title": …, "body": …, "labels": [ … ]}`. Using `--input` also keeps the body's UTF-8
@@ -126,7 +139,7 @@ intact.
 REST form is the one to reach for:
 
 ```sh
-gh api -X PATCH repos/kristofdegrave/homeassistant-smart-charging/issues/<n> \
+gh api -X PATCH repos/$REPO/issues/<n> \
   -F body=@<path> --jq '.body'
 ```
 
@@ -135,7 +148,7 @@ The body goes in a file, not inline, for the reason *Windows and Git Bash* below
 hand-escaping it into JSON first. Reach for `--input` here only when the same call is also
 setting `title`, `state` or `labels`. `--jq '.body'` on the PATCH prints the stored body, so
 the call is its own read-back; the independent one is
-`gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '.body'`.
+`gh api repos/$REPO/issues/<n> --jq '.body'`.
 
 ## Finding a work item by its body text
 
@@ -144,7 +157,7 @@ valid values are {open|closed}`. To search across both states, search from the l
 instead, which accepts `all` and takes the same query qualifiers:
 
 ```sh
-gh issue list --repo kristofdegrave/homeassistant-smart-charging --state all \
+gh issue list --repo $REPO --state all \
   --search "<query> in:body" --limit 100 --json number,state,title
 ```
 
@@ -157,7 +170,7 @@ where the state is a query qualifier rather than a flag and so is not constraine
 
 ```sh
 gh api -X GET search/issues -f per_page=100 --paginate \
-  -f q='repo:kristofdegrave/homeassistant-smart-charging <query> in:body' \
+  -f q="repo:$REPO <query> in:body" \
   --jq '.items[] | "\(.number) \(.state) \(.title)"'
 ```
 
@@ -176,15 +189,15 @@ That an epic's membership and ordering use these relationships rather than body 
 both directly. At filing time:
 
 ```sh
-gh issue create --repo kristofdegrave/homeassistant-smart-charging … \
+gh issue create --repo $REPO … \
   --parent <epic-number> --blocked-by <issue-number>
 ```
 
 Afterwards:
 
 ```sh
-gh issue edit <epic>  --repo kristofdegrave/homeassistant-smart-charging --add-sub-issue <child>
-gh issue edit <child> --repo kristofdegrave/homeassistant-smart-charging --add-blocked-by <issue>
+gh issue edit <epic>  --repo $REPO --add-sub-issue <child>
+gh issue edit <child> --repo $REPO --add-blocked-by <issue>
 ```
 
 Read-back. `gh issue view --json parent,blockedBy` nests the dependency list one level deeper
@@ -192,7 +205,7 @@ than the flag name suggests — it is `.blockedBy.nodes[]`, not `.blockedBy[]`, 
 expression written the obvious way fails with *expected an object but got: array*:
 
 ```sh
-gh issue view <n> --repo kristofdegrave/homeassistant-smart-charging \
+gh issue view <n> --repo $REPO \
   --json parent,blockedBy --jq '{parent: .parent.number, blockedBy: [.blockedBy.nodes[].number]}'
 ```
 
@@ -202,34 +215,34 @@ swallowed. Both writes take the sub-issue's / blocker's **database id**, not its
 number:
 
 ```sh
-sid=$(gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<child> --jq .id)
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<epic>/sub_issues -F sub_issue_id=$sid
-gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<epic>/sub_issues --jq '[.[].number]'
+sid=$(gh api repos/$REPO/issues/<child> --jq .id)
+gh api -X POST repos/$REPO/issues/<epic>/sub_issues -F sub_issue_id=$sid
+gh api repos/$REPO/issues/<epic>/sub_issues --jq '[.[].number]'
 
-bid=$(gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<blocker> --jq .id)
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/dependencies/blocked_by -F issue_id=$bid
-gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/dependencies/blocked_by --jq '[.[].number]'
+bid=$(gh api repos/$REPO/issues/<blocker> --jq .id)
+gh api -X POST repos/$REPO/issues/<n>/dependencies/blocked_by -F issue_id=$bid
+gh api repos/$REPO/issues/<n>/dependencies/blocked_by --jq '[.[].number]'
 ```
 
 ## Commenting on a work item
 
 ```sh
-gh issue comment <n> --repo kristofdegrave/homeassistant-smart-charging --body-file <path>
-gh pr comment    <n> --repo kristofdegrave/homeassistant-smart-charging --body-file <path>
+gh issue comment <n> --repo $REPO --body-file <path>
+gh pr comment    <n> --repo $REPO --body-file <path>
 ```
 
 One REST fallback serves both — for the comments API a PR *is* an issue, so the `issues` path
 is correct for a PR number too:
 
 ```sh
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+gh api -X POST repos/$REPO/issues/<n>/comments \
   -F body=@<path>
 ```
 
 Read back with:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+gh api repos/$REPO/issues/<n>/comments \
   --paginate --jq '.[].body' | tail -1
 ```
 
@@ -247,15 +260,15 @@ supplied`. And `--paginate` applies `--jq` per page, so the filter must emit a s
 ## Applying a label
 
 ```sh
-gh issue edit <n> --repo kristofdegrave/homeassistant-smart-charging --add-label <label>
-gh pr edit   <n> --repo kristofdegrave/homeassistant-smart-charging --add-label <label>
+gh issue edit <n> --repo $REPO --add-label <label>
+gh pr edit   <n> --repo $REPO --add-label <label>
 ```
 
 These are the GraphQL commands that **fail silently** under the secondary limiter, so the
 read-back is not optional:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '[.labels[].name]'
+gh api repos/$REPO/issues/<n> --jq '[.labels[].name]'
 ```
 
 Removing one is the same command with `--remove-label <label>`. It exits 0 and prints the PR
@@ -268,8 +281,8 @@ returns the resulting label set directly, so it is its own read-back — except 
 does not know whether it is on must treat 404 as success:
 
 ```sh
-gh api -X POST   repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/labels -f "labels[]=<label>" --jq '[.[].name]'
-gh api -X DELETE repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/labels/<label>               --jq '[.[].name]'
+gh api -X POST   repos/$REPO/issues/<n>/labels -f "labels[]=<label>" --jq '[.[].name]'
+gh api -X DELETE repos/$REPO/issues/<n>/labels/<label>               --jq '[.[].name]'
 ```
 
 These recipes apply an existing label; they never create or rename one. Which labels exist
@@ -280,7 +293,7 @@ conventions**, and the places that vocabulary is baked into are
 ## Opening a change request
 
 ```sh
-gh pr create --repo kristofdegrave/homeassistant-smart-charging \
+gh pr create --repo $REPO \
   --base main --head <branch> --title "<title>" --body-file <path>
 ```
 
@@ -288,14 +301,14 @@ gh pr create --repo kristofdegrave/homeassistant-smart-charging \
 the same PR:
 
 ```sh
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls \
+gh api -X POST repos/$REPO/pulls \
   -f title='<title>' -f head='<branch>' -f base=main -F body=@<path> --jq '.html_url'
 ```
 
 Read back with:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
+gh api repos/$REPO/pulls/<n> \
   --jq '{state, base: .base.ref, head: .head.ref}'
 ```
 
@@ -305,7 +318,7 @@ gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
 both. The fields that decide it are `merged` and `merged_at`:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n> \
+gh api repos/$REPO/pulls/<n> \
   --jq '{state, merged, merged_at}'
 ```
 
@@ -319,7 +332,7 @@ the same API, not from a local diff, since the worktree that made the change may
 the time anyone asks:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/files \
+gh api repos/$REPO/pulls/<n>/files \
   --paginate --jq '.[].filename'
 ```
 
@@ -338,7 +351,7 @@ listing nor the comments listing can answer it: they carry no label state. The l
 does. It is REST, so the GraphQL limiter cannot refuse it, and an issue path serves a PR too:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/events \
+gh api repos/$REPO/issues/<n>/events \
   --paginate --jq '.[] | select(.event=="labeled" or .event=="unlabeled") | {event, label: .label.name, at: .created_at, by: .actor.login}'
 ```
 
@@ -351,11 +364,11 @@ reply, with author and time — as a stream, not the post read-backs elsewhere i
 which keep only the latest item by design:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews \
+gh api repos/$REPO/pulls/<n>/reviews \
   --paginate --jq '.[] | {id, user: .user.login, at: .submitted_at, body}'
-gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+gh api repos/$REPO/issues/<n>/comments \
   --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
+gh api repos/$REPO/pulls/<n>/comments \
   --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
 ```
 
@@ -372,7 +385,7 @@ and the CI verdict marker — is owned by the `submit-pr-review` skill and is no
 The transport is:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews --input <payload.json>
+gh api repos/$REPO/pulls/<n>/reviews --input <payload.json>
 ```
 
 `--input` is mandatory rather than convenient: the payload is JSON with markdown inside it,
@@ -380,7 +393,7 @@ and building it inline mangles exactly the characters review findings are full o
 with:
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews \
+gh api repos/$REPO/pulls/<n>/reviews \
   --paginate --jq '.[] | {id, state}' | tail -1
 ```
 
@@ -390,12 +403,12 @@ Replying is REST and takes the **inline comment's** id, which this lists (with `
 for the reason given under *Commenting* above — a review round easily exceeds one page):
 
 ```sh
-gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
+gh api repos/$REPO/pulls/<n>/comments \
   --paginate --jq '.[] | {id, path, line}'
 ```
 
 ```sh
-gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments/<comment-id>/replies \
+gh api -X POST repos/$REPO/pulls/<n>/comments/<comment-id>/replies \
   -F body=@<path> --jq '.id'
 ```
 
@@ -405,8 +418,9 @@ Resolving has **no REST endpoint at all** — GraphQL only, in two steps. List t
 their ids and current state:
 
 ```sh
-gh api graphql -f query='query { repository(owner:"kristofdegrave", name:"homeassistant-smart-charging") {
-  pullRequest(number:<n>) { reviewThreads(first:100) {
+gh api graphql -F owner="$OWNER" -F name="$REPO_NAME" -F number=<n> \
+  -f query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) {
+  pullRequest(number:$number) { reviewThreads(first:100) {
     pageInfo { hasNextPage endCursor }
     nodes { id isResolved isOutdated
       comments(first:1){ nodes { databaseId path line body } } } } } } }'
@@ -441,7 +455,7 @@ assuming a batch all landed.
   itself and round-trips apostrophes, em-dashes and backticks byte for byte:
 
   ```sh
-  gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+  gh api -X POST repos/$REPO/issues/<n>/comments \
     -F body=@<path> --jq '.body'
   ```
 
