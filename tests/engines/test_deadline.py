@@ -184,7 +184,7 @@ def test_no_deadline_never_urgent():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a is None
     assert result.urgent is False
@@ -202,7 +202,7 @@ def test_required_current_formula_worked_example():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(12.228, abs=0.01)
 
@@ -217,7 +217,7 @@ def test_normal_when_slack_is_ample():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.urgent is False
     assert result.unreachable is False
@@ -230,7 +230,7 @@ def test_urgent_when_slack_test_fires_below_the_escalated_rate():
         **SLACK_KWARGS,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=14.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(12.0)
     assert result.urgent is True
@@ -247,7 +247,7 @@ def test_unreachable_when_required_exceeds_max_rate():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.unreachable is True
 
@@ -262,7 +262,7 @@ def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.unreachable is True  # deadline in the past -> max urgency, not an exception
     assert result.urgent is True  # Unreachable is a subset of Urgent (resolution-rules.md)
@@ -286,7 +286,7 @@ def test_no_urgency_when_soc_already_at_or_above_limit_even_if_deadline_passed()
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == 0.0
     assert result.urgent is False
@@ -300,7 +300,7 @@ def test_boundary_required_equals_slack_threshold_is_not_urgent():
         **SLACK_KWARGS,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=15.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(12.0)
     assert result.urgent is False
@@ -318,7 +318,7 @@ def test_boundary_required_equals_maximum_rate_is_still_reachable():
         voltage=100.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(32.0)
     assert result.urgent is True
@@ -420,7 +420,7 @@ def test_overnight_deadline_is_urgent_only_on_the_real_remaining_window():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=14.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(12.228, abs=0.01)
     assert result.urgent is True
@@ -459,7 +459,7 @@ def test_required_current_counts_the_lost_hour_across_spring_forward():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     # 22.5 kWh over the REAL 7 h = 3214.3 W -> 13.975 A. Over a wall-clock 8 h it would be
     # 12.228 A -- the same figure the same-day worked example produces, which is exactly how
@@ -482,7 +482,7 @@ def test_required_current_counts_the_repeated_hour_across_fall_back():
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(22.5 * 1000 / 9 / 230.0, abs=1e-3)
 
@@ -499,7 +499,7 @@ def test_naive_datetimes_are_left_alone_rather_than_assuming_a_machine_timezone(
         voltage=230.0,
         baseline_desired_a=6.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.required_a == pytest.approx(22.5 * 1000 / 8 / 230.0, abs=1e-3)
 
@@ -566,7 +566,7 @@ def test_mixed_naive_and_aware_raises_rather_than_guessing_a_timezone():
             voltage=230.0,
             baseline_desired_a=6.0,
             escalated_maximum_permitted_rate_a=32.0,
-            urgency_latched=False,
+            pursued_occurrence=None,
         )
 
 
@@ -589,7 +589,7 @@ def test_idle_baseline_with_ample_slack_is_not_urgent():
         **SLACK_KWARGS,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.urgent is False
     assert result.unreachable is False
@@ -603,7 +603,7 @@ def test_latched_urgency_persists_once_charging_has_closed_the_gap():
         **SLACK_KWARGS,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=32.0,  # slack test would NOT fire on this cycle
-        urgency_latched=True,
+        pursued_occurrence=SLACK_DEADLINE_AT,
     )
     assert result.urgent is True
 
@@ -615,7 +615,7 @@ def test_handback_clears_latched_urgency_when_baseline_meets_required():
         **SLACK_KWARGS,
         baseline_desired_a=12.0,  # exactly the required current: '>=' clears
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=True,
+        pursued_occurrence=SLACK_DEADLINE_AT,
     )
     assert result.urgent is False
 
@@ -629,7 +629,7 @@ def test_slack_test_takes_precedence_over_handback():
         **SLACK_KWARGS,
         baseline_desired_a=32.0,  # handback satisfied: 32.0 >= 12.0
         escalated_maximum_permitted_rate_a=14.0,  # but slack test fires: 12.0 > 11.2
-        urgency_latched=True,
+        pursued_occurrence=SLACK_DEADLINE_AT,
     )
     assert result.urgent is True
 
@@ -646,7 +646,7 @@ def test_soc_reaching_the_active_limit_clears_latched_urgency():
         voltage=250.0,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=True,
+        pursued_occurrence=SLACK_DEADLINE_AT,
     )
     assert result.required_a == 0.0
     assert result.urgent is False
@@ -660,7 +660,7 @@ def test_unreachable_is_a_strict_subset_of_urgent_by_construction():
         **SLACK_KWARGS,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=11.0,  # 12.0 > 11.0
-        urgency_latched=False,
+        pursued_occurrence=None,
     )
     assert result.unreachable is True
     assert result.urgent is True
@@ -678,7 +678,7 @@ def test_no_deadline_clears_a_latch_that_was_already_set():
         voltage=250.0,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=True,
+        pursued_occurrence=SLACK_DEADLINE_AT,
     )
     assert result.required_a is None
     assert result.urgent is False

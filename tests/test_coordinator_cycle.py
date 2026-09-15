@@ -867,7 +867,11 @@ def _resolve_deadline_urgency(**overrides):
         # the baseline. 32.0 leaves ample slack by default, so each test that wants urgency now
         # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
+        # The connected half of `deadline_resolvable`, which defaults True above. The two are
+        # separate inputs because they release the pursued occurrence in opposite directions
+        # when the combined predicate is False -- see the split's own tests below.
+        connected=True,
         auto_dispatchable=False,
         solar_available=False,
         captar_available=True,
@@ -1122,15 +1126,16 @@ def test_resolve_deadline_urgency_still_urgent_for_a_genuinely_tight_deadline_to
     assert result.required.required_a != float("inf")
 
 
-def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
-    """`inputs.urgency_latched` reaches `resolve_required_current` (R5, issue #1078).
+def test_resolve_deadline_urgency_threads_the_pursued_occurrence_through_to_the_engine():
+    """`inputs.pursued_occurrence` reaches `resolve_required_current` (R5, issue #1078).
 
     Every other DeadlineUrgencyInputs field has a discriminating test at this tier; this one is
-    the wiring for urgency's latch, so a silent failure to pass it through would make urgency
-    re-derive from the slack test every cycle and duty-cycle the charger.
+    the wiring for urgency's own state, so a silent failure to pass it through would make
+    urgency re-derive from the slack test every cycle and duty-cycle the charger.
 
     Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
-    latch can account for the difference.
+    occurrence can account for the difference. It is the one the deadline below resolves to,
+    and still ahead of `now_dt`, so this is ordinary urgency rather than a missed-deadline hold.
     """
     ample_slack = dict(
         deadline_today=time(11, 0),
@@ -1140,8 +1145,41 @@ def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
         escalated_maximum_permitted_rate_a=32.0,
         mode_desired_current=lambda mode: 0.0,
     )
-    assert _resolve_deadline_urgency(urgency_latched=False, **ample_slack).urgent is False
-    assert _resolve_deadline_urgency(urgency_latched=True, **ample_slack).urgent is True
+    pursued = datetime(2026, 7, 27, 11, 0)
+    assert _resolve_deadline_urgency(pursued_occurrence=None, **ample_slack).urgent is False
+    assert _resolve_deadline_urgency(pursued_occurrence=pursued, **ample_slack).urgent is True
+
+
+def test_resolve_deadline_urgency_releases_the_occurrence_when_the_car_is_disconnected():
+    """A disconnect ends the connected session, so it is a real exit and one of R5's own
+    release conditions (resolution-rules.md's release list; UC05's State model)."""
+    # Arrange / Act -- `deadline_resolvable` False with its CONNECTED half also False.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        connected=False,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 0),
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence is None
+
+
+def test_resolve_deadline_urgency_holds_the_occurrence_when_state_of_charge_is_unavailable():
+    """The other half of the same early return, releasing in the OPPOSITE direction: a cycle on
+    which state of charge is unavailable establishes nothing about the deadline, so "the System
+    holds whichever state it was already in" (UC05's State model; ADR-0024). Collapsing the two
+    halves would release a hold on a cycle that established nothing."""
+    # Arrange / Act -- `deadline_resolvable` False while still connected, which is exactly the
+    # state of charge half failing.
+    pursued = datetime(2026, 7, 27, 9, 0)
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        connected=True,
+        pursued_occurrence=pursued,
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence == pursued
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---
