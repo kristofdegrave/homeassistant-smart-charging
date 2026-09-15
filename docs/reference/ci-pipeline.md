@@ -183,8 +183,10 @@ in branch protection's required checks on `main`.
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
   `max_turns` tier is driven by the issue's project-board **Size** field (set per
-  [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**) — Estimate is
-  planning-only and isn't read by any workflow. `development`/`testing` additionally require a
+  [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**); a Size that is
+  unset, unreadable or not one of the five tiers falls back to the M tier with a workflow
+  warning rather than failing the run — Estimate is planning-only and isn't read by any
+  workflow. `development`/`testing` additionally require a
   resolved `Plan:` line — the exact,
   anchored format (`Plan: docs/plans/<file>.md#T<task-number>`, nothing else on that line: no
   backticks, no trailing `(PR #NNN)`, no surrounding sentence) is the sole scope-pinning
