@@ -30,7 +30,7 @@ recipes), an issue form
 (`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,
 so this checklist weighs security at least as heavily as quality. An issue form carries no
 credentials itself but can still point at load-bearing process semantics (e.g. `adr.yml`
-pointing at `CLAUDE.md`'s ADR section) that must stay in sync with what it references.
+linking to the ADR worthiness test) that must stay in sync with what it references.
 
 ## What to read first
 
@@ -104,20 +104,21 @@ Always read:
   Major finding); and any process claim the form's body makes (e.g. `adr.yml` linking to the
   document `CLAUDE.md`'s **Architecture Decision Records (ADRs)** topic routes to) still
   matches what that reference currently says.
-- The issue-to-merge lifecycle is defined in `CLAUDE.md`'s **Contribution workflow** section;
-  `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line only point
-  to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
+- The issue-to-merge lifecycle is the document `CLAUDE.md`'s **Contribution workflow** topic
+  routes to; `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line
+  only point to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
   cross-check their claims about `_ai-draft.yml`/`_ai-review.yml`/`_ai-fix.yml` behavior
   (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
   behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
   is a Major finding.
 - Every pointer a changed skill or agent definition writes to project material is in the
   `` `CLAUDE.md`'s **Topic** `` form, and the topic resolves — to an entry of `CLAUDE.md`'s
-  routing table or one of its `##` headings; a rule reached that way sits as a `###` under the
-  topic's `##` in the document the entry names. A pointer naming the owning document's heading
+  routing table or one of its `##` headings. A pointer naming the owning document's heading
   directly, or a topic that resolves to nothing, is a Minor finding — Major where it is the
-  only route to something the artifact must read. The convention itself is stated once, in
-  `docs/reference/ai-authoring.md`; this item is the check, not a second statement.
+  only route to something the artifact must read. The heading shape of the routed documents is
+  not this item's to score: the convention, and where that shape is and is not yet reached, is
+  stated once in `docs/reference/ai-authoring.md`; this item checks the pointer, not the
+  target.
 - If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
   interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
   itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive

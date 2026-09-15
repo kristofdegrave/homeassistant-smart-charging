@@ -10,8 +10,8 @@ inline comments — never as a plain issue comment. Findings then render in the 
 tab and land on the exact diff lines.
 
 **Never** use `event: APPROVE` or `event: REQUEST_CHANGES`. The human maintainer is the sole
-merge gate (the merge rule under `CLAUDE.md`'s **Contribution workflow** topic), and a bot cannot request-changes or approve a bot-authored
-PR anyway (GitHub 422). Always `COMMENT`.
+merge gate (the merge rule under `CLAUDE.md`'s **Contribution workflow** topic), and a bot
+cannot request-changes or approve a bot-authored PR anyway (GitHub 422). Always `COMMENT`.
 
 ## 1. Build the review payload
 

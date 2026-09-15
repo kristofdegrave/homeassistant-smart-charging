@@ -52,7 +52,7 @@ covering commit message conventions) — the project-wide floor, distinct from a
    - Human PR comments, at any point, are findings like any other.
    - Then the review step again, until a pass is clean or the cap ends the loop (**Rounds and
      the cap** below).
-4. **Clean up** (`cleanup`, invoked by the human after the merge).
+4. **Clean up** (`cleanup`, triggered by the human stating that the merge happened).
    - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
      `Done`.
    - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
@@ -77,7 +77,9 @@ on autonomous artifact-chaining, and it is per issue, not per step.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
-exception: `cleanup` is invoked by the human, since the session does not watch for the merge.
+exception: `cleanup` is triggered by the human stating that the merge happened, since the
+session does not watch for the merge — no step dispatches it, and the skill itself guards
+against a statement that turns out to be premature.
 
 ## Rounds and the cap
 

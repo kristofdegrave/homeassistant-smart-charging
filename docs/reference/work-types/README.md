@@ -99,10 +99,9 @@ unbranched label's directory.
 ## When two labels share a bar
 
 Two labels may point at **one** `done.md` rather than each having their own. **Whether a given
-pair may is decided by the rule *Two rows may share one bar*, in the document `CLAUDE.md`'s
-**Model selection** section routes to** — that rule earns it, and this document does not repeat
-it: a rule restated here, however carefully attributed,
-is a second copy that drifts.
+pair may is decided by the rule *Two rows may share one bar*** — in the document `CLAUDE.md`'s
+**Model selection** section routes to — and this document does not repeat that rule: a rule
+restated here, however carefully attributed, is a second copy that drifts.
 
 What the shape looks like where it applies: each label still has its own directory with its own
 `done.md` in it, and one of those files is a route to the other rather than a copy of it. Only

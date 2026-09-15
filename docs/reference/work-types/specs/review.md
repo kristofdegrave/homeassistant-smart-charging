@@ -24,7 +24,7 @@ Always read:
   plan if both exist, since the plan must stay consistent with the design.
 
 Then the documents the spec derives from, which is what makes the bar decidable. The
-`CLAUDE.md` sections that own each topic name them: **Document structure**, for the analysis
+`CLAUDE.md` topics that route to each name them: **Document structure**, for the analysis
 documents this project's behaviour lives in (the requirements, the glossary, the control cycle,
 the resolution rules, the entity catalog and the use-cases) and for the design documents that
 own the service catalog and the build order; and **Architecture Decision Records (ADRs)**, for

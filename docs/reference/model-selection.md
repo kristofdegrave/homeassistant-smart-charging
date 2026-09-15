@@ -4,9 +4,12 @@
 to it: which files a row resolves to, and how a review's checklists are selected from the
 changed paths and the linked issue's label. This document holds the reasoning behind that
 shape, and it is reached from the table's own heading for a reader who wants the *why*. Every
-rule a run applies — which files a row resolves to, which checklists a change gets, how each
-is scoped — is stated in that section and only there; nothing here adds to or narrows it, and
-nothing here is a step in resolving a file. Every `##` below is a topic and every `###` one
+rule a **review dispatch** applies — which files a row resolves to, which checklists a change
+gets, how each is scoped — is stated in that section and only there; nothing here adds to or
+narrows it, and nothing here is a step in resolving a file. What this document does carry
+beyond reasoning is the handful of obligations on whoever **edits** the table — keeping the
+review model in step, keeping the path map's enumerations in step, what a label rename
+touches — which a dispatch never applies. Every `##` below is a topic and every `###` one
 rule, so a pointer reaches any of them through that section.
 
 ## Reviewers and their model
@@ -43,8 +46,9 @@ read by whatever followed it there.
 two artifacts names one work file and one completion bar like every other row, and those files
 route onward inside `docs/reference/work-types/` — `documentation` is the case. What a row may
 still split by is a **tree**, in the review column, where the split is what the union routing
-in `CLAUDE.md`'s **Model selection** section is for and so cannot move into a file — `development` is the case, and each tree is its
-own sentence, so `;` never has to mean two things in one cell. A sentence may also state a
+in `CLAUDE.md`'s **Model selection** section is for and so cannot move into a file —
+`development` is the case, and each tree is its own sentence, so `;` never has to mean two
+things in one cell. A sentence may also state a
 named file's scope, as `development`'s work column does for its bar. (`work-types/README.md`
 describes that tree's shape. Nothing in this table resolves through it: a row names its files
 literally, and this pointer is for a reader wanting the shape, never a step in reaching a file.)
