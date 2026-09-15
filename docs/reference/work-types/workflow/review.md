@@ -126,6 +126,22 @@ Always read:
   not this item's to score: the convention, and where that shape is and is not yet reached, is
   stated once in `docs/reference/ai-authoring.md`; this item checks the pointer, not the
   target.
+- That bullet's mirror image: a rule, path or value the diff **states** where another file
+  owns it, with no pointer written at all. This is the shape neither check can see —
+  `.github/check-authoring-rules.sh` finds no link because none was written, and
+  `.github/check-method.py` finds no dangling pointer because none exists. It is also the
+  other side of the one-source-of-truth item above, which scores a fact duplicated *between*
+  artifacts; this one scores a fact that never got a route to its owner at all.
+  Read what a changed skill, agent definition or work-type document adds and ask: is this prose
+  restating something whose home is elsewhere, in place of a `` `CLAUDE.md`'s **Topic** ``
+  pointer to it? Where no topic owns the material yet, the fix is the routing line added to
+  `CLAUDE.md`, never the fact inlined here — an author who found no topic and wrote the fact
+  instead is the case this item exists for. Minor where a pointer to the owner is already
+  there and the inlined copy is redundant beside it; Major where it is the artifact's only
+  statement of the rule, since it then has no owner to be checked against and drifts unseen.
+  Scoped to what the diff writes, per the authoring reference's **Permanent scope: as written
+  or changed, never as a sweep** — untouched prose in the same file is owed nothing here, and
+  a finding raised against it is out of scope.
 - If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
   interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
   itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive
