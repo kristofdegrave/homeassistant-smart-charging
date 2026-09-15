@@ -41,10 +41,9 @@ order to run through so nothing gets filed half-scoped.
 ## Common mistakes
 
 The conventions are `CLAUDE.md`'s **Issue conventions**, not this list; the ones this skill's
-users trip on most are one context label per issue, the anchored `Plan:` line with nothing else
-on it, Size and Estimate set, Size alone on an epic, and epic membership and order as native
-edges rather than body text. What a drafter run does when one of them is wrong is the CI side
-of `CLAUDE.md`'s **Contribution workflow**. The mistakes that are this skill's own:
+users trip on most are the context label, the `Plan:` line, Size and Estimate, and epic edges.
+What a drafter run does when one of them is wrong is the CI side of `CLAUDE.md`'s
+**Contribution workflow**. The mistakes that are this skill's own:
 
 - Forcing a context label onto work that is still fuzzy instead of filing it as an `idea`
   (item 1).
