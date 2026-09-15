@@ -86,7 +86,7 @@ completion bar's item 1, not while drafting.
 
 The method skills this work file uses, by step: `research` for the facts an ADR's Context rests
 on, cited from the record by linking the issue comment; `receiving-code-review` in the review
-step. The stack skills are the overlays' to name.
+step. This work type names no stack skill.
 
 ## Common mistakes
 

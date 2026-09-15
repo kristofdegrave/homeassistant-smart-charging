@@ -133,8 +133,11 @@ carries that section. **A slot exists for a stack rule, never for symmetry**: to
 platform and the language carry rules of their own. A label whose stack material is a path or
 an example does not get a slot — it routes to those two overlays (*the product-code tree the
 `development` overlay names*, *the `testing` bar's harness split*) or states the example in
-platform-neutral words — and `workflow`, review-only and human-authored, has none either. The
-method check refuses every shape that breaks
+platform-neutral words — and `workflow`, review-only and human-authored, has none either. That
+routing puts one obligation on the `development` overlays: **between them they name the
+product-code tree**, in an entry titled *Where the code lives*, whatever else a stack has to
+say — a `development` overlay set reading only `none` leaves those routes pointing at nothing.
+The method check refuses every shape that breaks
 this: a slot without a file for a declared stack, an `overlays/` directory anywhere but at the
 label level of an enabled label with a slot, an overlay named for a stack the profile does not
 declare. The script's header is the authority on the exact list; this paragraph states the

@@ -53,9 +53,9 @@ and says so. The Code-backing item does exactly that, and (B) is the receiving e
 
 **(A) Your budget for the bar's Code-backing item.** The bar says what is in scope; this says
 how much of it you may check. For each in-scope item, run **one** targeted `Grep` over the
-product-code tree — the `development` work type's stack overlay names it — for the behaviour
-it asserts — the entity id, the adapter role, the default, the bound, the event name, the
-precedence rule it names — and open at most one file,
+product-code tree (the one the `development` work type's stack overlay names) for the
+behaviour it asserts — the entity id, the adapter role, the default, the bound, the event
+name, the precedence rule it names — and open at most one file,
 the best match. **Stop after three items**: say the set was sampled and name the three you
 took. Six tool calls is the most this check may cost a review, because a review of this tree
 runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first

@@ -2,8 +2,7 @@
 
 Stack material for the `development` work type, read with the core files beside it as one work
 file, one bar and one checklist — each core file's **Overlays** section says which section below
-it takes. Every entry names the core rule or bar item it extends; what an overlay may and may not
-say is this tree's `README.md`'s **Stack overlays**.
+it takes. What an overlay may and may not say is this tree's `README.md`'s **Stack overlays**.
 
 ## Implement
 
@@ -16,7 +15,7 @@ product code* or *the product-code tree*, this is the tree it means.
 platforms, config-flow conventions, quality scale, thin-wrapper rule) — before writing
 anything that touches HA APIs.
 
-**Honour the structural ADRs as you code** — the work file's *Building the task*. The bar's
+**Honour the structural boundaries as you code** — the work file's *Building the task*. The bar's
 item 2, *Structural ADR compliance*, judges them, and the enumeration is under **Done** below,
 two of them at Critical. What that means while writing: the engine/adapter boundary, the two
 clamp call sites and the fault path are decided *before* the first line, not repaired after a

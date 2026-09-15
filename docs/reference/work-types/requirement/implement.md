@@ -83,7 +83,7 @@ at, and are not repeated here. Two of them have a drafting order this file owns:
 
 The method skills this work file uses, by step: `research` when a fact a requirement rests on
 is external, cited from the document by linking the issue comment; `receiving-code-review` in
-the review step. The stack skills are the overlays' to name.
+the review step. This work type names no stack skill.
 
 ## Common mistakes
 

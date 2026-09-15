@@ -28,4 +28,4 @@ is stated once, here.
 The method skills this work type uses, by step: `domain-driven-design` for the strategic-design
 vocabulary the decomposition is argued in; `research` when a fact a design rests on is
 external, cited from the document by linking the issue comment; `receiving-code-review` in the
-review step. The stack skills are the overlays' to name.
+review step. This work type names no stack skill.

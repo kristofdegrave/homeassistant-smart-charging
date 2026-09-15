@@ -117,8 +117,7 @@ section.
 
 The method skills this work file uses, by step: `brainstorming` for scoping the slice (step 2);
 `writing-plans` for deriving the TDD plan (step 4); `research` when a decision the spec makes is
-blocked on an external fact; `receiving-code-review` in the review step. The stack skills are
-the overlays' to name.
+blocked on an external fact; `receiving-code-review` in the review step. This work type names no stack skill.
 
 ## Common mistakes
 

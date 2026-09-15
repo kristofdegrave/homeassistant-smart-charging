@@ -80,7 +80,6 @@ none of them is restated here:
   rather than observed.
 - Writing against this file alone and never opening `done.md` — the bar is where most of what a
   review will say already is.
-- The stack overlays add the mistakes that belong to the platform's harness.
 
 ## Overlays
 

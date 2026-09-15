@@ -2,16 +2,15 @@
 
 Stack material for the `testing` work type, read with the core files beside it as one work file,
 one bar and one checklist — each core file's **Overlays** section says which section below it
-takes. Every entry names the core rule or bar item it extends; what an overlay may and may not say
-is this tree's `README.md`'s **Stack overlays**.
+takes. What an overlay may and may not say is this tree's `README.md`'s **Stack overlays**.
 
 ## Implement
 
 **The authorities.** Tests are written per
 [ADR-0009](../../../../adl/0009-testing-strategy.md) — the authoritative plain-pytest vs
 HA-harness split — and the extension of its mandated coverage in
-[ADR-0040](../../../../adl/0040-fifth-mandated-adapter-case-unit-set.md). Tests mirror the package
-1:1 (`tests/` matches `custom_components/smart_charging/`).
+[ADR-0040](../../../../adl/0040-fifth-mandated-adapter-case-unit-set.md). Where the tests live,
+mirroring the product code, is the `development` overlay's *Where the code lives*.
 
 **The layers** — the work file's implement step identifies the unit's: pure logic vs HA-coupled.
 

@@ -105,7 +105,6 @@ so none of them is restated here:
   behaviour the change makes observable.
 - Writing against this file alone and never opening `done.md` — the bar is where most of what a
   review will say already is.
-- The stack overlays add the mistakes that belong to the platform and the language.
 
 ## Overlays
 
