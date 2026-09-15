@@ -248,8 +248,8 @@ What a `workflow` author reads instead is in **Authoring AI artifacts** below.
 `custom_components/**` → `docs/reference/work-types/development/review.md`;
 `tests/**` → `docs/reference/work-types/testing/review.md`;
 `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
-`.github/setup-labels.sh`, `.claude/skills/**`, `.claude/agents/**`, `.claude/profile.yml`,
-`docs/reference/**` and `CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
+`.github/setup-labels.sh`, `.github/profile-env.sh`, `.claude/skills/**`, `.claude/agents/**`,
+`.claude/profile.yml`, `docs/reference/**` and `CLAUDE.md` → `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
 file, which the generic `reviewer` agent applies. `docs/analysis/**` names the `uc` checklist because that tree
 is wider than either label sharing it — `requirement`'s file points at the same one. This list **is** CI's mapping — the review worker resolves it from
 here rather than carrying its own copy. An entry reaches a CI review only if its tree is also in

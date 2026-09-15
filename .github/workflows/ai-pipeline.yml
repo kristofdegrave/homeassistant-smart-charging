@@ -68,6 +68,7 @@ on:
       - ".claude/agents/**"
       - ".claude/profile.yml"
       - ".github/setup-labels.sh"
+      - ".github/profile-env.sh"
       - ".github/ISSUE_TEMPLATE/**"
       - "custom_components/**"
       - "tests/**"

@@ -153,6 +153,7 @@ review:
         - ".github/workflows/**"
         - ".github/ISSUE_TEMPLATE/**"
         - ".github/setup-labels.sh"
+        - ".github/profile-env.sh"
         - ".claude/skills/**"
         - ".claude/agents/**"
         - ".claude/profile.yml"
