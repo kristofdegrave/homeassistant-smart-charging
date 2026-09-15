@@ -191,13 +191,13 @@ a new issue and a new chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`** — its gate is the
 last slice verified live, per [idea-to-product.md](idea-to-product.md)'s **Close** stage, and
-that observation is the human's. What step 4 owes it is the moment: after moving the linked
-issue to *done* and filing any task issues a merged spec owes, `cleanup` reads the epic's
-open-children count and reports it — and when none remain, says so, names the verify-live gate
-as the one condition left and the human's to judge, and drafts the summary of what shipped for
-the close. It establishes the first condition of the gate, never the second, and never closes.
-Nothing watches for the moment otherwise: GitHub does not close a parent whose sub-issues are
-all closed, and a child PR carries `Part of` for its epic precisely so a merge cannot.
+that observation is the human's. The gate has two conditions — every child closed, the last
+slice verified live — and step 4 establishes the first, never the second: `cleanup` reads the
+epic's open-children count after the linked issue is *done* and any task issues a merged spec
+owes are filed, and reports it; what the report says at zero is the skill's own step. It never
+closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
+sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
+cannot.
 
 Once merged, the task's worktree is removed as part of step 4 — the reason the step exists is
 that a worktree left behind is a stale checkout waiting for a bulk sweep nobody schedules.

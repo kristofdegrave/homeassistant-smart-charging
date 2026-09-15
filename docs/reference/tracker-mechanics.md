@@ -234,8 +234,14 @@ open-children count reads. Both are the sub-issues REST API's own reads (*get pa
 
 ```sh
 gh api repos/$REPO/issues/<child>/parent --jq '{number, state}'
-gh api repos/$REPO/issues/<epic>/sub_issues --jq '[.[] | {number, state, title}]'
+gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues \
+  --jq '.[] | {number, state, title}'
 ```
+
+The second is a listing, so `--paginate` is mandatory here as everywhere in this file — the
+open-children count it feeds is only as complete as the pages read, and a first page that
+happens to be all closed would report zero over open work; the filter is a stream, one object
+per child, for the per-page reason given under *Commenting*.
 
 An issue with no parent makes the first call fail with a 404 rather than return an empty
 object — and so does an issue that does not exist, so the status alone cannot say which. The

@@ -88,7 +88,8 @@ file — a reference is not a dispatch, and none of them runs it.
    the close — one line per child, from its title — for the human partner to post. The rule
    this step applies — the epic's two-condition gate, whose observation the second is, and why
    the close is never this skill's — is the **Contribution workflow** section's doc's rule on
-   epic closing; what this step adds is only that the open count is the fact it can establish.
+   epic closing; what this step adds is the count as the fact it can establish, and the shape
+   of the report and the drafted summary.
    An issue left open because its PR carried only `Part of` counts as open here — that is the
    count being right, not a defect to work around.
 
@@ -96,7 +97,8 @@ Done when the PR is confirmed merged, every added or deleted path is verified on
 the worktree is gone or its blocker is reported, the linked issue's Status is Done or stated
 why not, for a `specs` PR every plan task has an issue, and the issue's epic is named with its
 open-children count — with the drafted summary when that count is zero — or the issue is
-stated to have none. Report those six facts and stop.
+stated to have none, or the parent read's failure is reported in place of a count. Report
+those six facts and stop.
 
 ## Rules
 
