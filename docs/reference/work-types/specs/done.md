@@ -41,8 +41,13 @@ cases are not restatements at all:
 the slice's scope and success criteria, install-time config, the **concrete decisions** (`D-n`)
 this slice makes and the concrete structure they land in (files, classes, signatures), a table
 **mapping every piece to its named service** in `system-design.md`, deliberate deferrals (with
-any safety caveat stated out loud), testing approach, packaging, and the Verify-live checklist
-of item 7. The TDD plan carries the task entries. Content outside those lists is judged by
+any safety caveat stated out loud), testing approach, and packaging. The testing approach
+names the **testing seam(s)** the tasks' failing tests drive through — one that exists over
+one the slice adds, one for the whole slice where one reaches every task; a testing approach
+naming no seam is **Minor**, since each task then finds its own and the suite grows a seam per
+task. The TDD plan carries the task entries, each in the shape `implement.md`'s *The task
+entry* fixes: vertical, its exact files and its failing test, its **Blocked by** line and its
+**Verify live** list. Content outside those lists is judged by
 item 2 where another doc owns it; where no doc does, it is **Minor** — a cut candidate the
 author has to place, not yet a defect.
 
@@ -77,18 +82,41 @@ it routes to. A missing boundary, or a task routed through the harness that is n
 layer's, is **Major**. Integration checkpoints are named where a task is wired to its
 callers — missing ones are **Minor**.
 
+Two more, because the task entries are what the task issues are filed from and the entries
+must let that filing invent nothing:
+
+- **Each task is a vertical slice** — the shape the **Ticket** stage of
+  [idea-to-product.md](../../idea-to-product.md) gives an epic's children, since each entry
+  becomes one. The decidable test: **the task's effect on the installation is complete the day
+  it merges** — nothing it does is waiting on a later task to become visible. A pure refactor
+  passes: its effect is that the observables do not change, and that is as true on merge day as
+  it will ever be, which is why item 7 lets it say `none`. A task fails when the effect it was
+  cut for cannot be seen until its counterpart lands — an adapter whose reading nothing
+  surfaces yet, an entity with nothing behind it — and that is **Major**: it files a child
+  nothing can demo and hands the flow's verify-live gate a list with nothing on it.
+- **Each task declares `Blocked by`**: the ids of the tasks in this plan it cannot start
+  before, or `none`. An entry with no such line is **Major** — the filer cannot tell an
+  omission from an empty set, and the edge it would have set is the one the flow orders the
+  work by. A line naming an id the plan has no task for, or an issue number, or one that makes
+  a cycle, is **Major** for the same reason. The line agrees with item 1's build order or the
+  finding is item 1's.
+
 **(6) Scope honesty.** Deferrals are explicit, and nothing in scope silently pulls in an
 out-of-scope service (**Major**). A safety-relevant omission — a mandated clamp or fault
 behavior dropped for an MVP — is called out in the spec as a known deviation; a silent one is
 **Critical**.
 
-**(7) The slice's Verify-live checklist is present and usable.** This is the only home for the
-per-type completion rule it states: **every spec defines the checklist for its own slice**, in
-the design doc, fixed before the code is written — `definition-of-done.md`'s **Verify live**
-stage is run against it after deployment and has no other source. An absent checklist is
-**Major**: without it the pass is run from memory, which is exactly what that stage exists to
-prevent. An item naming no concrete entity id, or an expected value carried without its unit,
-is **Minor** — a bare number hides the unit and precision defects the pass is looking for.
+**(7) Every task carries a usable Verify-live list.** This is the only home for the
+per-type completion rule it states: **every task entry defines the list for its own task**,
+fixed before the code is written — `definition-of-done.md`'s **Verify live** pass is run
+against it after the task is deployed and has no other source, and the first task's list is
+the one that pass drives before the second task starts. An absent list on a task that changes
+observable runtime behaviour is **Major**: without it the pass is run from memory, which is
+exactly what that pass exists to prevent. A task with nothing observable says `none` and why in
+one line; an entry with neither a list nor that line is **Major** too, since the pass cannot
+tell it from a forgotten one. An item naming no concrete entity id, or an expected value
+carried without its unit, is **Minor** — a bare number hides the unit and precision defects the
+pass is looking for.
 
 **(8) Terminology and identifiers match.** Every domain term is already in the
 `docs/analysis/system-overview.md` glossary, and entity ids match `docs/analysis/entity-catalog.md`

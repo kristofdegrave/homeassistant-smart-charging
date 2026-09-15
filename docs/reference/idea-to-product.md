@@ -183,7 +183,9 @@ What to file when:
   issue.
 - **`development`/`testing` issues wait for the plan.** They require the anchored `Plan:`
   line, so they cannot be filed until the spec issue's plan is drafted and reviewed. File them
-  then, one per task in the plan's build order — the **Spec** stage's gate below says when.
+  then, one per task in the plan's build order, each blocked by the issues of the tasks its
+  entry's **Blocked by** line names — the edges come off the plan, never from a reading of
+  what looks prerequisite — and the **Spec** stage's gate below says when.
 - **Anything that surfaces later** and belongs to the strand — a bug found mid-implementation,
   a follow-up — is attached as a sub-issue too. Belonging to an epic does not require a
   drafter-facing context label; `file-task-issue` covers which label such a child takes.
@@ -347,7 +349,8 @@ decision the design surfaced has its ADR first (the **ADR** stage's gate).
 One design document and one TDD plan per build slice, both under `docs/plans/`, both
 **derived** from the approved slice of `project-plan.md` and from the analysis documents — a
 spec never introduces behaviour they do not already state. The `specs` row's work file carries
-the drafting order, the cap on both documents and the slice's Verify-live checklist; its bar
+the drafting order, the cap on both documents and the shape of a task entry — a vertical slice
+as **Ticket** above defines one, with its blocked-by tasks and its Verify-live list; its bar
 carries what a finished spec must show.
 
 ### Artifact: the slice's design and TDD plan, under `docs/plans/`
@@ -359,8 +362,9 @@ Two documents per slice; the `specs` row names how each is written.
 A `development`/`testing` issue needs the anchored `Plan:` line, so none can exist before the
 plan does (**Ticket** above). Filing them, one per task in build order, is part of finishing
 the spec issue — the rule is [contribution-workflow.md](contribution-workflow.md)'s **Merge
-and issue closing**, run by the chain's clean-up step. The **Implementation** stage starts
-from those issues and from nothing else.
+and issue closing**, run by the chain's clean-up step. Each carries the blocked-by edges
+**Ticket** reads off the plan. The **Implementation** stage starts from those issues and from
+nothing else.
 
 ### Skills
 
@@ -417,7 +421,8 @@ topic cites.
 
 A slice is not finished when it merges; it is finished when it has been observed working on
 the real installation — otherwise every later slice is built on a foundation nobody has seen
-run.
+run. The slice is the vertical one **Ticket** above cuts a child issue to; on the plan track
+it is one task entry in the TDD plan, and the list this pass is driven against is that entry's.
 
 What that pass must produce, when it blocks the next slice, and how it differs from the
 pre-merge runtime-verified self-check is the **Verify live** bar in
@@ -429,11 +434,15 @@ Or on the task issue where the work has no epic — the bar says which.
 
 ### Gate: the first slice of a strand is verified live before slice two starts
 
-The bar's own rule; here it is what stops the **Implementation** stage of the next slice.
+The bar's own rule; here it is what stops the **Implementation** stage of the next slice. It
+binds the **first** slice of a strand and no other, which is what keeps it compatible with
+[contribution-workflow.md](contribution-workflow.md)'s **Parallel work and forward
+dependencies**: the strand pauses once, to see its foundation run, and from the second slice on
+the tasks proceed in parallel against pinned contracts as that rule allows.
 
 ### Skills
 
-None of the method's: the checklist comes from the spec, and the pass is run by the author of
+None of the method's: the list comes from the spec, and the pass is run by the author of
 the merged slice against the running installation.
 
 ## 12. Close

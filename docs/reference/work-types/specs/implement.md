@@ -6,6 +6,13 @@ decisions it makes) and a **TDD plan** (`docs/plans/YYYY-MM-DD-<slice>.md` — b
 task-by-task build order). Both **derive** from an already-approved slice of
 `docs/design/project-plan.md`; they do not re-decompose the system or invent behavior.
 
+Two words for two sizes. The spec covers one **build slice** — `project-plan.md`'s unit. Its
+tasks are the flow's **vertical slices** — the unit one child issue, one PR and one verify-live
+pass are each cut to, as the **Ticket** stage of
+[idea-to-product.md](../../idea-to-product.md) defines it. The task entries below are where
+that shape is written down, which is why each carries the **Blocked by** line and the
+**Verify live** list the flow later reads off it.
+
 This file is the `specs` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
 **how a spec is written** and nothing else.
 
@@ -33,19 +40,56 @@ The implement step of the contribution workflow, in order:
    bar's item 3, *Each plan document carries only what it alone can say*, lists that cap item
    for item and judges it. What that means while drafting: anything outside the list is a
    **cut candidate**, not yet a copy — *Cap both plan documents* below is the test that
-   decides which it is.
-4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill: bite-sized tasks
-   (failing test → minimal impl → green → commit), each naming exact file paths, the ADR it
-   honors, and its test boundary per ADR-0009. Name the integration checkpoints.
-5. **Write the slice's Verify-live checklist** into the design doc. The bar's item 7, *The
-   slice's Verify-live checklist is present and usable*, defines what it must contain, says
-   why it has to exist, and judges it. What that means while drafting: write it **now**, and
-   know what the timing buys — a checklist written once the build exists is written from what
-   the build produced rather than from what the slice promised, and nothing downstream can tell
-   those two apart.
+   decides which it is. Five questions are the order to draft that list in — what problem the
+   slice solves (its scope and success criteria), what the solution is (the concrete structure
+   the decisions land in, its install-time config, and the table mapping every piece to its
+   named service), which implementation decisions are settled here (the `D-n` entries, and
+   packaging where the slice ships something), which testing decisions are (the testing
+   approach), and what is out of scope (the deferrals). They order the draft; **the bar's list
+   is what completeness is judged by**, item for item, so a draft that answers all five and
+   still skips one of its items is not finished. The testing approach opens by naming the **testing
+   seam(s)** the tasks' failing tests drive through: a seam the suite already has over one the
+   slice would add, and one seam for the whole slice where one reaches every task. Named up
+   front, the seam is what every task's test is then written against; found per task, each
+   task invents its own.
+4. **Derive the TDD plan** (`...-<slice>.md`) with the `writing-plans` skill, one **task
+   entry** per task in the shape *The task entry* below fixes: a vertical slice, bite-sized
+   (failing test → minimal impl → green → commit), naming exact file paths, the ADR it honors,
+   its test boundary per ADR-0009, the tasks it is **blocked by** and its **Verify live**
+   list. Name the integration checkpoints.
+5. **Write each task's Verify-live list** into its entry, before the entry is finished. The
+   bar's item 7, *Every task carries a usable Verify-live list*, defines what an item must
+   name, says why the list has to exist, and judges it. What that means while drafting: write
+   it **now**, and know what the timing buys — a list written once the build exists is written
+   from what the build produced rather than from what the task promised, and nothing downstream
+   can tell those two apart. The first task's list is the one the flow drives on the real
+   installation before the second task starts, so it is the one to write as if it will be read
+   aloud at a dashboard.
 
 Once approved and merged, the `development` work type consumes the plan task-by-task to write
-the code.
+the code, and the task issues are filed from the same entries, one per task — *The task entry*
+below fixes what each carries.
+
+## The task entry
+
+One entry per task, with its heading and these keys — the bar's items 5 and 7 judge each:
+
+- **Vertical.** The task has the shape the **Ticket** stage gives a child issue, because it
+  becomes one. The test to apply while cutting tasks: **something about this task is
+  observable on the installation the day it merges, without a later task landing first.** A
+  task that fails it is layer-shaped and is re-cut along the behaviour instead — one
+  behaviour through adapter, engine, coordinator and entity, whichever it touches, then the
+  next behaviour.
+- **Files and test.** Exact file paths, the concrete failing test, and its test boundary per
+  ADR-0009 — the keys the entries already carried.
+- **Blocked by.** The ids of the tasks this one cannot start before, or `none`, stated
+  either way — an entry that says nothing leaves the filer to guess which it meant. This line
+  is what becomes the child issue's native blocked-by edge; the ids therefore name tasks in
+  this plan, never issues, since none exist yet.
+- **Verify live.** One item per observable: the entity id to watch and the value, **with its
+  unit**, it is expected to show once the task is deployed. A task with nothing observable —
+  a pure refactor, an integration checkpoint whose observables earlier entries already list —
+  says `none` and the reason in one line, so the pass can tell that from a forgotten list.
 
 ## Cap both plan documents
 
@@ -131,7 +175,12 @@ blocked on an external fact; `receiving-code-review` in the review step. This wo
 - Routing a task's tests through the harness that is not its layer's.
 - A silent deferral of a mandated safety behavior (a clamp, the fault path) — state it as a
   known deviation, out loud.
-- Leaving the Verify-live checklist to be written after deployment, when the slice can no
+- Cutting tasks by layer — one per adapter, engine, coordinator, entity — so nothing is
+  observable until the last of them lands; cut by behaviour, each task through every layer.
+- A task entry with no **Blocked by** line, so the filer cannot tell "none" from "forgot".
+- A Verify-live item carrying a bare number, or a "sensor" with no entity id — the unit and the
+  id are what the pass checks.
+- Leaving a task's Verify-live list to be written after deployment, when the task can no
   longer be judged against what it promised.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
