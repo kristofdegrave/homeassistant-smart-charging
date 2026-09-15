@@ -105,9 +105,8 @@ verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs
 `CLAUDE.md`'s **Contribution workflow** section, which is where the lifecycle's clean exit is
 mapped to the skill that runs it, so a rename is checked there rather than assumed from here.
 `needs-decision` is CI's alone: `_ai-review.yml`'s verdict routing is the only place that
-applies it, and what the interactive cap exit labels is the contribution workflow's own
-business (see **Pipeline steps** below). Adding or renaming one means updating that set, and
-the **Pipeline steps** below where the label's meaning is stated.
+applies it (the interactive cap exit: see **Pipeline steps** below). Adding or renaming one
+means updating that set, and the **Pipeline steps** below where the label's meaning is stated.
 
 The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
 places — `.github/setup-labels.sh` — and in none of the other seven, including
@@ -255,7 +254,8 @@ in branch protection's required checks on `main`.
   clean verdict never does. `needs-approval` answers *does this need a human*,
   `needs-decision` answers *did the review leave findings open* — the two states a maintainer
   scanning the PR list most needs to tell apart, and indistinguishable from the first label
-  alone. Every new verdict clears a stale `needs-approval` before applying its own; a stale
+  alone. Every run that reaches the routing step clears a stale `needs-approval` before any
+  verdict is applied — the removal there is unconditional; a stale
   `needs-decision` is cleared only by a `clean` verdict, so a granted extra cycle that comes
   back clean drops it, while a run that produced no verdict at all leaves the findings-open
   signal standing.
