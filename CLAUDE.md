@@ -56,7 +56,8 @@ stated under the table.
 `custom_components/**` → `docs/reference/work-types/development/review.md`;
 `tests/**` → `docs/reference/work-types/testing/review.md`;
 `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
-`.github/setup-labels.sh`, `.github/profile-env.sh`, `.claude/skills/**`, `.claude/agents/**`,
+`.github/setup-labels.sh`, `.github/profile-env.sh`, `.github/check-*`, `.github/test-check-*`,
+`.github/hooks/**`, `.claude/skills/**`, `.claude/agents/**`,
 `.claude/profile.yml`, `docs/reference/**` and `CLAUDE.md` →
 `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
 file, which the generic `reviewer` agent applies. This list **is** CI's mapping — the review

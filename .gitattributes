@@ -5,3 +5,7 @@
 # would block every Bash call. The rule is repo-wide because the same reasoning holds
 # for any script an automation invokes.
 *.sh text eol=lf
+
+# Git hooks are shell scripts without the .sh suffix; git runs them directly, so the same
+# CRLF failure applies (a `bash` shebang is not found).
+.github/hooks/* text eol=lf

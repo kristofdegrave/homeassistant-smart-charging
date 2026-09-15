@@ -98,6 +98,37 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/check-authoring-rules.sh "$BASE_SHA"
 
+  method:
+    # The method check: heading anchors in both directions between CLAUDE.md and the files
+    # that point at it, CLAUDE.md agreeing with .claude/profile.yml, every enabled work type
+    # complete, every repo-installed dependency present, no profile value inside a method
+    # file. The script's header is the authority on each rule; this is a summary.
+    # Repo-wide, unlike `authoring` above: the break comes from editing CLAUDE.md or the
+    # profile, so a PR renaming a heading must fail against skills it never touches. Runs on
+    # push as well, since a merge of two clean PRs can still combine into a broken tree. Not
+    # gated on the `changes` filter, which is about integration code.
+    #
+    # Blocking here, warning-only in the local pre-commit hook (.github/hooks/pre-commit): a
+    # `workflow` change mid-rename must stay committable, and this job is where the finding is
+    # caught instead. Whether it is a *required* status check is branch protection's call,
+    # like `authoring`.
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # PyYAML is the check's one dependency: the profile is YAML, and the runner image does
+      # not promise it.
+      - run: python -m pip install pyyaml==6.0.3
+      # The check's own fixtures run first, for the same reason `authoring` runs its tests
+      # first: they are its only correctness evidence and would otherwise rot silently.
+      - name: Method check self-test
+        run: bash .github/test-check-method.sh
+      - name: Method check (anchors, profile agreement, work-type completeness, layers)
+        run: bash .github/check-method.sh
+
   test:
     needs: changes
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')

@@ -1,3 +1,7 @@
+---
+layer: project
+---
+
 # Project profile
 
 The facts about *this* project that a person has to know to act on the method, each with its
@@ -36,16 +40,20 @@ PR base `main` directly, however the work was branched locally.
 ## Project board
 
 The board is `profile.yml`'s `board` (its name, number and node id are there). Its Status
-column vocabulary and option ids are `board.fields.status`; what the columns mean here:
+column vocabulary and option ids are `board.fields.status`. The contribution workflow's chain
+names columns by **role** only — *backlog*, *in progress*, *in review*, *done* — and this list
+is what maps each role to a column here; a method document that spelled a column name would
+be stating a profile value, which the method check refuses:
 
-- `Backlog` — filed, not started. Every issue starts here.
-- `Ready` — **unused**. It exists on the board but has no defined meaning in this workflow, so
-  nothing moves an item into it. If it gains one later (say, dependencies resolved and
-  pickable), the contribution workflow's chain is where it gets inserted, explicitly.
-- `In progress` — writing has actually started, in a worktree on the issue's branch.
-- `In review` — a PR is open; it stays here through every review/fix round and the human's
-  merge decision.
-- `Done` — merged and cleaned up.
+- `Backlog` — the *backlog* role: filed, not started. Every issue starts here.
+- `Ready` — **plays no role**. It exists on the board but has no defined meaning in this
+  workflow, so nothing moves an item into it. If it gains one later (say, dependencies resolved
+  and pickable), the contribution workflow's chain is where it gets inserted, explicitly.
+- `In progress` — the *in progress* role: writing has actually started, in a worktree on the
+  issue's branch.
+- `In review` — the *in review* role: a PR is open; it stays here through every review/fix
+  round and the human's merge decision.
+- `Done` — the *done* role: merged and cleaned up.
 
 **Size** (`board.fields.size`) is a five-tier T-shirt estimate of reading-plus-writing effort;
 **Estimate** (`board.fields.estimate`) is story points in a plain number field. Both are board

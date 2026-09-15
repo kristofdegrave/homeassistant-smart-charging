@@ -92,7 +92,7 @@ these, from the pass's own result and the count above:
   already reached `main` by its own squash-merge leaves this PR's diff showing stale content —
   check the diff is this PR's alone; and a related PR's "merged" status is not proof its
   artifact landed — verify with `git ls-tree origin/main <path>` after a fetch, read by output
-  as the `cleanup` skill's step 2 does. Board **Status** stays `In review`; the label is a
+  as the `cleanup` skill's step 2 does. Board **Status** stays *in review*; the label is a
   signal for the human's decision, never a self-approval. Report: clean, `needs-approval`
   applied.
 - **Critical or Major open, and this was the last pass the cap allows**: apply both exit

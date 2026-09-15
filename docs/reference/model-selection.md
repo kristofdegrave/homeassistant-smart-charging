@@ -157,14 +157,16 @@ is wider than either label sharing it — `requirement`'s file points at the sam
 `_ai-review.yml`'s diff enumeration, which decides what a checklist can see. Those two are
 enumerations beside the row's list, and `.claude/profile.yml`'s `review.path_map` is a third —
 the same set, held for the CI workers that will one day read it there instead of the row —
-which is why the row states that adding a tree means adding it in all four. Of the two CI
-omissions, each fails differently. Left out of the **path filter**, no job runs, which silences the
+which is why the row states that adding a tree means adding it in all four. The method check
+(`.github/check-method.py`, run by `ci.yml`) holds the row and the profile's copy to each
+other, so those two cannot drift apart unnoticed; the two CI enumerations are still updated
+by hand. Of the two CI omissions, each fails differently. Left out of the **path filter**, no job runs, which silences the
 label half too, since a job that never runs cannot add a reviewer. Left out of the **diff
 enumeration** alone, the job does run, sees nothing under that tree, and can post a clean
 verdict over a change no checklist read — a false clean, and the worse of the two.
 
 ### Adding or renaming a context label
 
-Adding or renaming a context label means updating this table too — see
+Adding or renaming a context label means updating `CLAUDE.md`'s table too — see
 [ci-pipeline.md](ci-pipeline.md)'s **Label vocabulary sync** for every other
 place the same vocabulary is baked in.

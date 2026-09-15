@@ -100,7 +100,7 @@ gh project item-edit --project-id $PROJECT_ID --id <item-id> \
 gh project item-edit --project-id $PROJECT_ID --id <item-id> \
   --field-id $ESTIMATE_FIELD --number 3                                  # Estimate = 3
 gh project item-edit --project-id $PROJECT_ID --id <item-id> \
-  --field-id $STATUS_FIELD --single-select-option-id $STATUS_In_progress # Status = In progress
+  --field-id $STATUS_FIELD --single-select-option-id $STATUS_<Column>    # Status = <Column>
 ```
 
 `--number` is right for Estimate and `--single-select-option-id` for Size and Status: Estimate
@@ -108,8 +108,10 @@ is a plain number field, not a single-select.
 
 The project id, the three field ids and every option id are `profile.yml`'s `board` section —
 `board.project_id`, `board.fields.<size|estimate|status>.id`, and
-`board.fields.<size|status>.options`, which is where `$SIZE_M` and `$STATUS_In_progress` above
-come from (`profile-env.sh` emits one variable per option). Re-derive them with
+`board.fields.<size|status>.options`, which is where `$SIZE_M` and `$STATUS_<Column>` above
+come from (`profile-env.sh` emits one variable per option, spaces in a column name becoming
+underscores; which column the chain wants at each step is
+[contribution-workflow.md](contribution-workflow.md)'s **Project board**). Re-derive them with
 `gh project field-list $BOARD --owner $OWNER --format json` if an edit is rejected — they are
 stable in practice but not guaranteed — and fix them in the profile, the only place they are
 spelled.

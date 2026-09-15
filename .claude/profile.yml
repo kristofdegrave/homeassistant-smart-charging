@@ -78,8 +78,8 @@ labels:
       color: e4e669
       description: "PR: review left findings open and no automatic fix follows — a maintainer decides how to proceed"
   # One per enabled work type — `work_types.enabled` below is this list's names, kept as a
-  # separate key because a label is a tracker fact and a work type a method fact. Nothing
-  # verifies they agree yet; the method check planned as its own issue does.
+  # separate key because a label is a tracker fact and a work type a method fact. The method
+  # check (.github/check-method.py) fails when the two sets differ.
   context:
     - name: uc
       color: 1d76db
@@ -118,7 +118,14 @@ labels:
       description: "Improvement to already-shipped behaviour — pair with a context label once the artifact is known"
 
 # The work types this project enables, from the method's catalogue. Each names a row of
-# CLAUDE.md's Model selection table and a directory under docs/reference/work-types/.
+# CLAUDE.md's Model selection table and a directory under docs/reference/work-types/ — the
+# method check (.github/check-method.py) verifies both: one row per entry here, and the
+# directory complete (review.md; implement.md and done.md unless the row says `none`).
+#
+# A dependency below with `installed: repo` must be present under .claude/skills/, and a
+# skill present there that is NOT declared below is the method's own — scanned by the check
+# as a method file. This list is therefore how a vendored skill is told apart from an authored
+# one; a vendored skill is never edited to say which layer it is.
 work_types:
   enabled:
     - adr
@@ -139,8 +146,10 @@ review:
   # Changed path → the work type whose review checklist judges it. This is the no-label row
   # of CLAUDE.md's Model selection table, and applies to every PR whatever its label. It is
   # one of four enumerations of the same set — that row, ai-pipeline.yml's path filter and
-  # _ai-review.yml's diff enumeration are the others — and nothing reads this copy yet, so
-  # adding a tree means adding it in all four; CLAUDE.md's row states the obligation.
+  # _ai-review.yml's diff enumeration are the others. The method check (.github/check-method.py)
+  # holds this copy and CLAUDE.md's row to each other; the two CI enumerations are still kept
+  # in step by hand, so adding a tree means adding it in all four. CLAUDE.md's row states the
+  # obligation.
   path_map:
     - work_type: adr
       paths: ["docs/adl/**"]
@@ -160,6 +169,11 @@ review:
         - ".github/ISSUE_TEMPLATE/**"
         - ".github/setup-labels.sh"
         - ".github/profile-env.sh"
+        # The two checked-in checks, their fixtures and the git hooks: each is a gate or a
+        # rule's mechanical half, so an edit to one is `workflow` work like the rule itself.
+        - ".github/check-*"
+        - ".github/test-check-*"
+        - ".github/hooks/**"
         - ".claude/skills/**"
         - ".claude/agents/**"
         - ".claude/profile.yml"

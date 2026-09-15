@@ -138,7 +138,11 @@ exceptions live in `.github/authoring-rule-allowlist.tsv` — a link that is gen
 matter goes there with a reason, so the exception is reviewed rather than silent. What the
 check cannot see stays with the reviewer: a route written as a bare path, a fact restated
 instead of routed, a route that should exist and does not, the project named, a
-project-specific resource list. Of the link shapes, an anchor, a title, an angle wrapper and a
+project-specific resource list. A second script, `.github/check-method.py` (run through
+`.github/check-method.sh`, by `ci.yml`'s `method` job), enforces the *structure* the routing
+rule produces once it is followed — that every pointer resolves and every route lands — and is
+described under [The layer frontmatter](#the-layer-frontmatter) below, since that frontmatter
+is what tells it which files are the method's. Of the link shapes, an anchor, a title, an angle wrapper and a
 leading `./` or `/` **are** caught; a reference-style link *definition* (`[wf]: docs/…`) is not,
 nor is a link whose target is outside `docs/` — to a README, a lockfile, or a `.txt`. Those two
 join the reviewer's list.
@@ -166,7 +170,12 @@ join the reviewer's list.
   entries name a whole document rather than a heading — the pointer form above is what makes
   reshaping them a change to those documents alone. `implement` writes "the branch-naming rule
   under `` `CLAUDE.md`'s **Issue conventions** ``" rather than naming the workflow document's
-  own heading — that is the shape.
+  own heading — that is the shape. Both directions of this convention are verified: the
+  method check fails a pointer whose topic matches no routing-table entry and no `##` heading
+  of `CLAUDE.md` (by prefix, so *Architecture Decision Records* still reaches *Architecture
+  Decision Records (ADRs)*), and fails a routing-table entry whose document or heading does
+  not exist — so a heading rename in `CLAUDE.md` breaks the build against every artifact
+  pointing at it, rather than breaking those artifacts silently.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
   resource list** — with the one exception of its own subject matter, defined after this
   list. Write "this project" where a name is tempting; route the path and the list.
@@ -282,6 +291,50 @@ it — then fixes or deletes that copy only if the artifact holding it is the on
 **Scope: the project rule's, unchanged.** It is stated once for both axes in **Permanent
 scope: as written or changed, never as a sweep** above, and nothing about it is restated,
 narrowed or extended here.
+
+## The layer frontmatter
+
+### A file's layer is a rule; `layer:` is the override
+
+The process is three layers — a **method** that travels between repositories, a **profile**
+that is this project alone, and **stack packages** declared in the profile — and which layer a
+file belongs to follows from where it sits. Every document under `docs/reference/**` and every
+agent definition under `.claude/agents/` is method. Every skill under `.claude/skills/` is
+method unless `.claude/profile.yml`'s `dependencies` declares it, in which case it is a
+vendored dependency that belongs to no layer of this project's and is never edited to say so —
+that is what keeps an upstream-intact skill intact. A file that deviates from its tree's
+default says so in YAML frontmatter, `layer: project` or `layer: stack` (`layer: method` is
+legal and redundant), and nothing else carries the key: `docs/reference/profile.md` is the
+standing case, a project file inside a method tree. The layer records what an installer would
+copy and what the check below scans — not a claim that the content is already portable: the
+work-type files are method by rule while their stack-specific sentences still await their
+overlays. `CLAUDE.md` and `.claude/profile.yml` carry no frontmatter; the first is rewritten
+per repository and the second is the profile by path.
+
+### The method check reads it
+
+`.github/check-method.py` runs five repo-wide checks, numbered as its error lines number
+them, each an agreement between files that are edited separately. **1, anchors outward:**
+every pointer under `.claude/**`, `docs/**` and `.github/workflows/**` resolves to `CLAUDE.md`
+(the outward direction stated under **Headings are the API** above; the two frozen trees,
+`docs/postmortems/**` and `docs/archive/**`, are left out, since a document the rules say is
+never revised cannot be the thing a blocking gate asks to edit). **2, anchors inward:** every
+link and every backticked path in `CLAUDE.md` resolves, an anchored link to a heading of its
+document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
+agreement:** the Model selection table and changed-path map agree with the profile's
+`work_types.enabled`, `labels.context` and `review.path_map`. **4, work-type completeness:**
+every enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its
+row says its work is `none`; every dependency declared `installed: repo` is present; every
+`layer:` a file does carry names a known layer. **5, no profile values in method files:** no
+value the profile holds — owner, repository name, board name, node ids, a status column
+name — appears in a method-layer file. Status names are
+matched in the form a command would use them, inside backticks, or as the exact multi-word
+phrase; the word in *Definition of Done* is English. The script's header is the authority on
+each rule's exact shape and its stated limits. It runs blocking in CI and as a warning from
+the local pre-commit hook, installed once per clone with
+`git config core.hooksPath .github/hooks` — a `workflow` change mid-rename has to stay
+committable, and the PR is where the finding is caught instead. Its fixtures,
+`.github/test-check-method.sh`, break the layout one way per check and run before it in CI.
 
 ## Principles
 

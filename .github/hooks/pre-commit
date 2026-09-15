@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Local pre-commit hook: run the method check as a WARNING only.
+#
+# Install once per clone:   git config core.hooksPath .github/hooks
+#
+# Warning and not blocking on purpose: a `workflow` change that renames a heading, moves a
+# work-type file or re-points the routing table is broken halfway through by construction, and
+# it still has to be committable in that state. CI (`ci.yml`'s `method` job) runs the same
+# check blocking on the PR, so the finding is never lost — only deferred to where it belongs.
+#
+# It checks the working tree, not the staged index: a partial commit is judged against what is
+# on disk, which for a warning is the useful answer (it is the tree the next commit will see).
+#
+# Exits 0 whatever the check reports. An environment error (no Python with PyYAML) is printed
+# as one line and also exits 0: a missing local dependency must not stop a commit either.
+
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+out=$(bash "$root/.github/check-method.sh" --warn 2>&1)
+rc=$?
+if [ "$rc" -eq 2 ]; then
+  printf 'pre-commit: method check skipped — %s\n' "$out" >&2
+  exit 0
+fi
+case "$out" in
+  *"warning:"*)
+    printf '%s\n' "$out" >&2
+    printf 'pre-commit: the method check found the above; CI runs it blocking on the PR.\n' >&2
+    ;;
+esac
+exit 0

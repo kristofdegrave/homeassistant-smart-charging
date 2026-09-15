@@ -22,17 +22,18 @@ covering commit message conventions) — the project-wide floor, distinct from a
    - Every unit of work has an issue before work starts — no exception for small or
      typo-level changes.
    - If none exists yet, file one first, per **Issue conventions** below (context label, board
-     fields). Board **Status** starts at `Backlog` (**Project board** below).
+     fields). Board **Status** starts in the *backlog* column (**Project board** below).
 1. **Implement** (`implement`).
    - Isolated `git worktree`, always, even for a one-line fix — a concurrent session switching
      branches underneath you is the risk it removes.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
      `origin/main` (**Base `main` and stacking** below).
-   - Board **Status** → `In progress` when writing actually starts, not at filing time.
+   - Board **Status** → the *in progress* column when writing actually starts, not at filing
+     time.
    - Self-check against the [Definition of Done](definition-of-done.md); then push and open
      the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`
      and `Part of`** below).
-   - Board **Status** → `In review`.
+   - Board **Status** → the *in review* column.
 2. **Review** (`review`).
    - Count the rounds first (**Rounds and the cap** below).
    - Run the pass against current `origin/main`.
@@ -44,7 +45,7 @@ covering commit message conventions) — the project-wide floor, distinct from a
      open on the last pass the cap allows → both exit labels and one escalation comment
      handing the disagreement to the human partner; Critical or Major open with passes left →
      no label, the findings are the fix step's.
-   - Board **Status** stays `In review`. Merge is the human's, always (**Merge and issue
+   - Board **Status** stays *in review*. Merge is the human's, always (**Merge and issue
      closing** below).
 3. **Fix** (`fix`, then `review` again).
    - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
@@ -54,7 +55,7 @@ covering commit message conventions) — the project-wide floor, distinct from a
      the cap** below).
 4. **Clean up** (`cleanup`, triggered by the human stating that the merge happened).
    - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
-     `Done`.
+     the *done* column.
    - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
 
 ## Rule A — author/reviewer separation
@@ -198,12 +199,13 @@ it.
 
 ## Project board
 
-The board's Status vocabulary and option ids are `.claude/profile.yml`'s
-`board.fields.status`, and what each column means on this project — including the one that is
-unused — is [profile.md](profile.md)'s **Project board**. The rule here is only that the chain
-above moves an item **Backlog → In progress → In review → Done** and through no other column:
-a column that later gains a defined meaning is inserted explicitly into step 0/1 here rather
-than left implicit.
+The chain above names four column **roles** — *backlog*, *in progress*, *in review*, *done* —
+and never a column by its name on the board: the board's Status vocabulary and option ids are
+`.claude/profile.yml`'s `board.fields.status`, and which column plays which role on this
+project — including any column that plays none — is [profile.md](profile.md)'s **Project
+board**. The rule here is only that the chain moves an item **backlog → in progress → in
+review → done** and through no other column: a column that later gains a defined meaning is
+inserted explicitly into step 0/1 here rather than left implicit.
 
 ## Parallel work and forward dependencies
 
