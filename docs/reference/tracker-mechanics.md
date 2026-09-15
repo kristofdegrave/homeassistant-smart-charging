@@ -226,6 +226,18 @@ gh api -X POST repos/$REPO/issues/<n>/dependencies/blocked_by -F issue_id=$bid
 gh api repos/$REPO/issues/<n>/dependencies/blocked_by --jq '[.[].number]'
 ```
 
+Reading the edges the other way round, and with state — from a child to its parent, and a
+parent's children with whether each is still open, which is what the `cleanup` skill's
+readiness check counts. REST, so it stays readable while the GraphQL limiter is tripped:
+
+```sh
+gh api repos/$REPO/issues/<child>/parent --jq '{number, state}'
+gh api repos/$REPO/issues/<epic>/sub_issues --jq '[.[] | {number, state, title}]'
+```
+
+An issue with no parent makes the first call fail with a 404 rather than return an empty
+object — read the exit status, and treat it as "no epic".
+
 ## Commenting on a work item
 
 ```sh
