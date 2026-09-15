@@ -53,9 +53,9 @@ and says so. The Code-backing item does exactly that, and (B) is the receiving e
 
 **(A) Your budget for the bar's Code-backing item.** The bar says what is in scope; this says
 how much of it you may check. For each in-scope item, run **one** targeted `Grep` over the
-product code — the stack overlay names the tree — for the behaviour it asserts — the entity
-id, the adapter role, the default, the bound, the event name, the precedence rule it names —
-and open at most one file,
+product-code tree — the `development` work type's stack overlay names it — for the behaviour
+it asserts — the entity id, the adapter role, the default, the bound, the event name, the
+precedence rule it names — and open at most one file,
 the best match. **Stop after three items**: say the set was sampled and name the three you
 took. Six tool calls is the most this check may cost a review, because a review of this tree
 runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first
@@ -75,11 +75,3 @@ were not shown. Check that everything this document needs is actually in *this* 
 often the `entity-catalog.md` *Read by* / *Written by* update, and the glossary entry for a
 term the document introduces. Report a miss against the bar item, at the severity it states;
 the finding is that the PR is incomplete, not that a separate PR would be wrong.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Review** section read with this file as part of the
-same checklist — for the `requirement` row as much as for this one, since it routes here. What an
-overlay is, what a file reading `none` means and what may not live in this file are this tree's
-`README.md`'s **Stack overlays**.

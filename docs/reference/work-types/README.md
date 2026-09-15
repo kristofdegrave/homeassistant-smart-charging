@@ -128,8 +128,13 @@ frontmatter — and a stack package installs it; the method never edits one to s
 **The slot.** A core file that takes overlays ends with a `## Overlays` section, and that
 section is the slot: it says to apply the overlays the declared stacks provide and which
 section of them this file takes. A label has a slot when any of its label-level role files
-carries that section; every enabled label with a work file has one today, and `workflow` —
-review-only and human-authored — has none. The method check refuses every shape that breaks
+carries that section. **A slot exists for a stack rule, never for symmetry**: today
+`development` and `testing` have one, because building and testing the product is where the
+platform and the language carry rules of their own. A label whose stack material is a path or
+an example does not get a slot — it routes to those two overlays (*the product-code tree the
+`development` overlay names*, *the `testing` bar's harness split*) or states the example in
+platform-neutral words — and `workflow`, review-only and human-authored, has none either. The
+method check refuses every shape that breaks
 this: a slot without a file for a declared stack, an `overlays/` directory anywhere but at the
 label level of an enabled label with a slot, an overlay named for a stack the profile does not
 declare. The script's header is the authority on the exact list; this paragraph states the
@@ -154,7 +159,7 @@ fact.
 file of this tree, the tokens the profile lists per stack under `stacks.<stack>.tokens` and the
 name of any stack skill. So a core file refers to a stack fact by role — *the product-code
 tree*, *the platform reference*, *the boundary*, *the harness split* — and the overlay states
-it. The token list is the profile's, chosen by hand and stated as such there: a word the method
+it, whichever label's core file the reference sits in. The token list is the profile's, chosen by hand and stated as such there: a word the method
 uses everywhere in its own right is not on it.
 
 ## What a file in this tree may say

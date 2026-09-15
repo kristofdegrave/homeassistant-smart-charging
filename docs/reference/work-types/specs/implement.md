@@ -104,12 +104,12 @@ section.
   spec and its source ever disagree, the source wins.
 - **Keep both plan documents capped**, per the section above: decisions, structure and tasks —
   no restated formula, no restated ADR rationale, no narrative that repeats its own task.
-- **Honor the ADRs.** The bar's item 4, *ADR compliance and gates*, judges compliance, and the
-  stack overlay enumerates under it the records a slice is ordinarily gated on. What that
-  means while drafting: open each gate in the plan **before** the task it blocks, rather than
-  leaving the review to discover the order is wrong.
-- **Respect the test boundary.** Name it per task; the boundaries themselves are the stack
-  overlay's, under this rule.
+- **Honor the ADRs.** The bar's item 4, *ADR compliance and gates*, enumerates the records a
+  slice is ordinarily gated on and judges compliance with them. What that means while
+  drafting: open each gate in the plan **before** the task it blocks, rather than leaving the
+  review to discover the order is wrong.
+- **Respect the test boundary.** Name it per task; the boundaries themselves are the
+  `testing` row's — its bar's item 1, *Harness split*, and the stack overlay it routes to.
 - **No product code here.** The spec is a planning artifact; code is written by the
   `development` work type against the approved plan.
 
@@ -129,17 +129,10 @@ the overlays' to name.
   undocumented rule, and cutting it loses the only copy. Report it and fix the owning doc.
 - Restating an ADR's rationale, or narrating a task the task entry already describes.
 - A task with no exact file path, no failing test, or no stated test boundary.
+- Routing a task's tests through the harness that is not its layer's.
 - A silent deferral of a mandated safety behavior (a clamp, the fault path) — state it as a
   known deviation, out loud.
 - Leaving the Verify-live checklist to be written after deployment, when the slice can no
   longer be judged against what it promised.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
-- The stack overlays add the mistakes that belong to the stack's test boundaries.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Implement** section read with this file as part of
-the same work file. What an overlay is, what a file reading `none` means and what may not live in
-this file are this tree's `README.md`'s **Stack overlays**.

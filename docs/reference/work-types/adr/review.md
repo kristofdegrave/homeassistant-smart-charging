@@ -61,10 +61,3 @@ were not shown. Check that everything this ADR needs is actually in *this* diff:
 Status-line edit (bar item 8). Report a miss against the bar item, at the severity it
 states — `implement.md` already rules that they belong to one PR, so the finding is that the
 PR is incomplete, not that a separate PR would be wrong.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Review** section read with this file as part of the
-same checklist. What an overlay is, what a file reading `none` means and what may not live in this
-file are this tree's `README.md`'s **Stack overlays**.

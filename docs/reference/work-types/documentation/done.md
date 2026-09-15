@@ -32,10 +32,3 @@ documents and would then cover three; and `CLAUDE.md`'s **Document structure** s
 `docs/design/` block enumerates them. Stop after the first two and the document is silently
 covered by neither existing branch — matched by neither route above and judged by nothing —
 while the shared reviewer goes on asserting there are two.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Done** section read with this file as part of the
-same bar, together with the branch bar it routes to. What an overlay is, what a file reading
-`none` means and what may not live in this file are this tree's `README.md`'s **Stack overlays**.

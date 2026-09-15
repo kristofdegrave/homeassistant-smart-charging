@@ -95,10 +95,3 @@ step. The stack skills are the overlays' to name.
 - Bundling two ADRs, or an ADR plus unrelated work, into one PR.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Implement** section read with this file as part of
-the same work file. What an overlay is, what a file reading `none` means and what may not live in
-this file are this tree's `README.md`'s **Stack overlays**.

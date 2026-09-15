@@ -29,11 +29,3 @@ The method skills this work type uses, by step: `domain-driven-design` for the s
 vocabulary the decomposition is argued in; `research` when a fact a design rests on is
 external, cited from the document by linking the issue comment; `receiving-code-review` in the
 review step. The stack skills are the overlays' to name.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Implement** section read with this file as part of
-the same work file, together with the branch file it routes to. What an overlay is, what a file
-reading `none` means and what may not live in this file are this tree's `README.md`'s **Stack
-overlays**.

@@ -60,10 +60,9 @@ this is the most common form 2.2 takes.
 
 ## 3. Writing quality
 
-**(3.1) What, not how.** No implementation detail — the forms it takes in this stack are the
-stack overlay's, under this item. Entity ids that are part of the ubiquitous language are
-fine. **Major** for a mechanism smuggled into a *what*; **Minor** for an incidental
-implementation aside.
+**(3.1) What, not how.** No implementation detail — modules, platform services, timer
+helpers, persistence. Entity ids that are part of the ubiquitous language are fine. **Major**
+for a mechanism smuggled into a *what*; **Minor** for an incidental implementation aside.
 
 **(3.2) The 6Cs pass.** Clarity, Concision, Completeness, Consistency, Correctness,
 Concreteness, per `CLAUDE.md`'s **Requirements standard**. A miss is **Minor** unless it makes
@@ -193,11 +192,3 @@ sweep is not.
 - **Domain events are past-tense PascalCase and correspond to steps** — **Minor**.
 - **The Mermaid type is one of the preferred three** (`flowchart TD`, `stateDiagram-v2`,
   `sequenceDiagram`) — **Nit**.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Done** section read with this file as part of the
-same bar — for the `requirement` row as much as for this one, since it routes here. What an
-overlay is, what a file reading `none` means and what may not live in this file are this tree's
-`README.md`'s **Stack overlays**.

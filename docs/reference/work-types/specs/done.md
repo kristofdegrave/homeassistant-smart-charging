@@ -59,21 +59,23 @@ the ADR gate for each gated task (e.g. engines package home, cross-Manager event
 task that depends on it — a gate opened after the task it blocks, or not identified at all, is
 **Major**. A task that contradicts an accepted ADR is **Major**, and **Critical** where the
 contradicted rule is a safety behaviour (a single merged clamp instead of the two ADR-0006
-requires, a fault path that guesses a value instead of forcing 0 A). The stack overlay adds,
-under this item, the boundary crossings that are this stack's.
+requires, a fault path that guesses a value instead of forcing 0 A). An engine reaching the
+platform directly, against ADR-0003, is **Major**.
 
-The records a slice is ordinarily gated on — the list to read the spec against rather than the
-whole log — are enumerated in the stack overlay under this item, for both the author and the
-reviewer; `implement.md`'s *Honor the ADRs* rule points there rather than keeping a second
-copy. It is the usual set, not a closed one — an ADR outside it that the slice touches is
-judged by the same item.
+The records a slice is ordinarily gated on, and the list to read the spec against rather than
+the whole log: adapters (0003), package layout (0002/0010), config split (0005), two clamps
+(0006), fault-on-`None` (0007), testing split (0009), native naming (0004). This is the
+enumeration, for both the author and the reviewer; `implement.md`'s *Honor the ADRs* rule
+points here rather than keeping a second copy. It is the usual set, not a closed one — an ADR
+outside it that the slice touches is judged by the same item.
 
 **(5) TDD plan quality.** Tasks are bite-sized (a failing test → minimal impl → green →
 commit), each naming **exact file paths** and a concrete failing test — a task missing either
 is **Major**, since the `development` work file consumes it literally. Each task names its
-**test boundary** — the boundaries, which kind of task falls under each, and the severity of a
-boundary missing or wrongly chosen are the stack overlay's under this item. Integration
-checkpoints are named where a task is wired to its callers — missing ones are **Minor**.
+**test boundary** per the `testing` row's bar, item 1, *Harness split*, and the stack overlay
+it routes to. A missing boundary, or a task routed through the harness that is not its
+layer's, is **Major**. Integration checkpoints are named where a task is wired to its
+callers — missing ones are **Minor**.
 
 **(6) Scope honesty.** Deferrals are explicit, and nothing in scope silently pulls in an
 out-of-scope service (**Major**). A safety-relevant omission — a mandated clamp or fault
@@ -91,10 +93,3 @@ is **Minor** — a bare number hides the unit and precision defects the pass is 
 **(8) Terminology and identifiers match.** Every domain term is already in the
 `docs/analysis/system-overview.md` glossary, and entity ids match `docs/analysis/entity-catalog.md`
 and ADR-0004 native naming — **Minor**.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Done** section read with this file as part of the
-same bar. What an overlay is, what a file reading `none` means and what may not live in this file
-are this tree's `README.md`'s **Stack overlays**.

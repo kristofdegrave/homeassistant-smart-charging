@@ -93,9 +93,10 @@ asks "is this architectural?" lands here.
 ### What an architectural decision is
 
 An **architectural decision** is a choice about structure that would be expensive to
-reverse or that materially constrains future options — e.g. where a boundary/abstraction
-layer sits, which library or protocol to depend on; the stack overlay adds this stack's
-examples under the bar's item 1. It is **not** an ADR-worthy decision to pick a variable name, a log message,
+reverse or that materially constrains future options — e.g. how the system's entities
+map to hardware, where a boundary/abstraction layer sits, the shape of a configuration
+schema, which library or protocol to depend on, a change to the control-loop
+structure. It is **not** an ADR-worthy decision to pick a variable name, a log message,
 or a one-off implementation detail with no lasting structural consequence — when in
 doubt, ask whether a future contributor would benefit from knowing *why*, not just
 *what*.
@@ -105,7 +106,7 @@ doubt, ask whether a future contributor would benefit from knowing *why*, not ju
 For a borderline case, a calibration test: would reversing or swapping this choice touch
 more than one module, or a contract other code depends on? It supplements, not
 overrides, the categories above — a *product-code* choice there (e.g. a library the
-shipped product depends on; the stack overlay adds this stack's) stays architectural even
+shipped product depends on, a configuration schema shape) stays architectural even
 when well encapsulated; the two carve-outs below narrow that for their own categories.
 Serious deliberation alone isn't proof either way — weigh it against the reach test and
 the *why*-a-future-contributor-benefits question. Two recurring categories:
@@ -158,10 +159,3 @@ these artifact-specific additions:
   item 1 rather than repeated in it.
 - No tracking refs (PR numbers, issue status) in the ADR body — see `CLAUDE.md`'s **Review
   protocol for analysis documents** topic; the rule applies equally here.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Done** section read with this file as part of the
-same bar. What an overlay is, what a file reading `none` means and what may not live in this file
-are this tree's `README.md`'s **Stack overlays**.

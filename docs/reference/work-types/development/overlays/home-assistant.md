@@ -8,8 +8,8 @@ say is this tree's `README.md`'s **Stack overlays**.
 ## Implement
 
 **Where the code lives.** The product code is `custom_components/smart_charging/`; tests mirror
-it 1:1 under `tests/`. Wherever a core file of this work type says *the product code* or *the
-product-code tree*, this is the tree it means.
+it 1:1 under `tests/`. Wherever a core work-type file — of this label or another — says *the
+product code* or *the product-code tree*, this is the tree it means.
 
 **The platform reference** — the work file's read-first list, before the TDD loop: the
 **`ha-integration-knowledge` skill** — the Home Assistant platform reference (entity

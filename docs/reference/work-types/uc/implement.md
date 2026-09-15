@@ -32,9 +32,10 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
 - **What is in scope** is the *Code backing* item of `done.md` — it defines the behavioural
   assertions a use-case makes, which changes assert none, and how *Scope / level* and
   *Relationships* split. Read them off the diff; do not re-derive the list here.
-- **The search, capped.** Per in-scope item, run **one** targeted search of the product code —
-  the stack overlay names the tree — for the thing it names — the entity id, the adapter role,
-  the domain event name, the threshold, the ordering — and open at most one file, the best match.
+- **The search, capped.** Per in-scope item, run **one** targeted search of the product-code
+  tree — the `development` work type's stack overlay names it — for the thing it names — the
+  entity id, the adapter role, the domain event name, the threshold, the ordering — and open
+  at most one file, the best match.
   **Stop after five items**; where the diff has more — a brand-new use-case, whose diff is
   the whole document, always will — say the set was sampled and name the five you took. Five
   suits a drafting session's turn budget, and one use-case edit routinely touches more
@@ -58,8 +59,8 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 
 ## Rules
 
-- **What, not how.** Describe observable behaviour. No implementation detail — the stack
-  overlay names the forms it takes. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
+- **What, not how.** Describe observable behaviour. No modules, platform services, timer
+  helpers, or persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
   ("the active SOC limit", "charger status") — the `sc_` binding lives in
   `docs/analysis/entity-catalog.md`.
 - **Don't duplicate mechanism.** Reference `docs/analysis/control-cycle.md` (read → smooth →
@@ -99,10 +100,3 @@ actor-driven prompts/notifications.
 - A mode UC whose `stateDiagram-v2` states don't match its Given/When/Then scenarios.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Implement** section read with this file as part of
-the same work file. What an overlay is, what a file reading `none` means and what may not live in
-this file are this tree's `README.md`'s **Stack overlays**.

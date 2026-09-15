@@ -31,8 +31,8 @@ own the service catalog and the build order; and **Architecture Decision Records
 the accepted records the spec is gated on. Read the ones the spec touches, not the trees whole.
 
 Then [`done.md`](done.md), the completion bar, before you start scoring rather than while you
-write up. Its stack overlay enumerates, under item 4, the records a slice is ordinarily gated
-on, which is what turns "the ones the spec touches" into a list rather than a judgement call.
+write up. It also enumerates the records a slice is ordinarily gated on, which is what turns
+"the ones the spec touches" into a list rather than a judgement call.
 
 ## The checks that are yours alone
 
@@ -53,10 +53,3 @@ resolve to a defect in a document this spec only cites — a behavioural rule no
 states, a conflict between the spec and its source, a service the design doc does not carry.
 Name the owning document and what it would have to say. Do not propose wording for the spec
 that papers over it, and never recommend deleting text the plan holds the only copy of.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Review** section read with this file as part of the
-same checklist. What an overlay is, what a file reading `none` means and what may not live in this
-file are this tree's `README.md`'s **Stack overlays**.

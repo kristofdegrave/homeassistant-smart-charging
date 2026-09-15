@@ -32,9 +32,10 @@ This is how you settle whether the change touches shipped behaviour, which is th
 - **What is in scope** is the *Code backing* item of `done.md` — for this work type, every
   acceptance criterion and constraint row the change adds or alters. Read them off the diff; do
   not re-derive the list here.
-- **The search.** Per in-scope item, search the product code — the stack overlay names the
-  tree — for the behaviour it constrains — the entity it names, the clamp, the lookup, the
-  default. This is a targeted lookup per item, never a sweep of the codebase.
+- **The search.** Per in-scope item, search the product-code tree — the `development` work
+  type's stack overlay names it — for the behaviour it constrains — the entity it names, the
+  clamp, the lookup, the default. This is a targeted lookup per item, never a sweep of the
+  codebase.
 - **State the finding, file what it turns up, and you are done** — the bar's items 4.2, *The
   finding is stated*, and 4.3, *A gap is filed*, state both, carry the drafting order, and
   judge the result. Done when both hold for every item you took.
@@ -95,11 +96,3 @@ the review step. The stack skills are the overlays' to name.
 - Duplicating a requirement's home in two documents.
 - Drafting against this file alone and never opening `done.md` — the bar is where most of what
   a review will say already is.
-
-## Overlays
-
-**Apply the overlays** the profile's declared stacks provide for this work type:
-`overlays/<stack>.md` beside this file, its **Implement** section read with this file as part of
-the same work file; the bar and the checklist this row routes to are the `uc` row's, and so are
-their overlays. What an overlay is, what a file reading `none` means and what may not live in this
-file are this tree's `README.md`'s **Stack overlays**.
