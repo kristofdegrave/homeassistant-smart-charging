@@ -7,15 +7,15 @@ disable-model-invocation: true
 
 # Clean up after a merge
 
-The last step of the interactive lifecycle, and the only one a human invokes: the merge it
+The last step of the interactive lifecycle, and the only step the session never invokes
+itself: the merge it
 follows is manual, so nothing in the session can know it happened until the human partner says
 so. `CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step and
 every rule below — what closes the issue, which issue a PR names, what a merged spec owes.
 
 User-invoked (`disable-model-invocation`), because no skill or chain step ever *invokes* it —
 the invocation is the human partner's statement that the merge happened. Other skills may point
-at a procedure in this file (`finalize-pr-review` does, for step 2's check); a reference is not
-a dispatch, and none of them runs it. The first step below is what makes an early or mistaken
+at a procedure in this file; a reference is not a dispatch, and none of them runs it. The first step below is what makes an early or mistaken
 invocation harmless.
 
 ## Then, in order

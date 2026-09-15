@@ -1,87 +1,183 @@
 # Contribution workflow
 
 Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a design, or
-code. Artifact-specific sections in `CLAUDE.md` (analysis docs, ADRs) layer their own
-template/quality-check steps on top of this; they never replace it.
+code. Five steps, each naming the skill an interactive session runs it through; the rules the
+steps rest on follow the chain. Artifact-specific sections in `CLAUDE.md` (analysis docs,
+ADRs) layer their own template/quality-check steps on top of this; they never replace it. The
+same lifecycle run by CI, with `github-actions[bot]` as the actor, is
+[ci-pipeline.md](ci-pipeline.md).
 
 Two related references cover the phases just outside this lifecycle: the stages either side of
 it ([idea-to-issues.md](idea-to-issues.md) — idea, routing, spec, slicing into issues, and
 verifying a shipped slice on the real installation) and the **Definition of Done** an author
-checks *before* step 2 below ([definition-of-done.md](definition-of-done.md), also covering
-commit message conventions) — the project-wide floor, distinct from a row's per-type
+checks inside step 1, before the PR ([definition-of-done.md](definition-of-done.md), also
+covering commit message conventions) — the project-wide floor, distinct from a row's per-type
 *completion bar*, which that document routes to.
 
-0. **Open a GitHub issue first.** Every task gets an issue before work starts — no exception
-   for small or typo-level changes. Correct context label + Size/Estimate fields (see
-   **Issue conventions** below). Board **Status** defaults to `Backlog`.
-1. **Do the work in an isolated `git worktree`, always.** No exceptions, even a one-line fix —
-   removes the shared-checkout risk of a concurrent session switching branches underneath you.
-   Branch name: `<context-label>/<issue-number>` (see **Issue conventions** below for the
-   full scheme, including the multi-PR suffix). Create the worktree from an up-to-date `main`
-   — `git fetch origin && git worktree add -b <branch> <path> origin/main` (not a stale local
-   `main`) — so the new branch starts from the latest merged work rather than whatever `main`
-   happened to be at the last fetch; the one exception is deliberately stacking on a
-   not-yet-merged prior task's branch per step 2, in which case fetch first and branch off that
-   instead. As soon as you actually start
-   writing/developing (not at issue-filing time), move the issue's board **Status** to
-   `In progress`. Work can be interactive, with intermediate commits. Before step 2, self-check
-   against the [Definition of Done](definition-of-done.md).
-2. **Push and open a PR against `main`.** Always base `main` directly — never another work
-   branch, even if logically stacked on a not-yet-merged prior task
-   (squash merges orphan stacked branches). Branching off a prior task's branch locally is
-   fine; the PR itself is `--base main` from the start. GitHub's diff for a dependent PR
-   temporarily shows the combined stack until the branch below merges — expected, shrinks
-   automatically. PR description references the linked issue with `Closes #<issue-number>` so
-   merging auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>`
-   on every PR except the one that finishes the issue. A task PR normally carries both — `Closes`
-   for its own task issue and `Part of` for the epic — and where anything needs to resolve a PR
-   to one issue, the `Closes` reference is the one that names it. Move the issue's board
-   **Status** to `In review`.
-3. **Review.** Fresh, separate reviewer agent for the artifact type — never inline in the
-   main session. Which agent, and on which model, is CLAUDE.md's model-selection rule: look it
-   up in that file's **Model selection** table, whose review column reads Opus in every row
-   today. Before this, and
-   before every later pass in the loop: check if the
-   branch is behind `origin/main`; if so, merge/rebase `origin/main` in and resolve conflicts
-   (`resolving-merge-conflicts`) before reviewing, so review always runs against current `main`.
-4. **Post findings to the PR before fixing.** Native GitHub PR review with inline comments
-   (`submit-pr-review`, local mode) — never skip straight to "fixed it, see PR body." Applies
-   once the PR exists, which step 2 guarantees is always before review.
-5. **Fix, comment, resolve.** Per finding addressed: fix it and reply on that thread
-   describing what was done; resolve the thread once the round's fixes are pushed.
-   `resolve-review-thread` owns which threads may be resolved, and
-   [tracker-mechanics.md](tracker-mechanics.md) the commands.
-6. **Loop steps 3–5**, capped at **2 rounds** — the first review pass is round 1, so the cap
-   allows two review passes in all — until a pass finds no remaining Critical/Major
-   findings. Still unresolved at the cap → stop and escalate to the human partner with the
-   disagreement instead of continuing; that usually needs a judgment call the loop can't make.
-   This line is the **only** statement of the interactive cap — everything that needs the
-   number routes here instead of repeating it.
-7. **Label `needs-approval`** once a review pass comes back clean — and a pass whose
-   remaining findings are all Minor/Nit counts as clean once they are fixed, the same bar CI
-   applies to its own verdict, so the final round needs no further pass to confirm it. Board **Status** stays
-   `In review` — this only signals no review/fix work is pending, it doesn't replace manual
-   merge approval.
-8. **Manual PR comments**, at any point, are handled like step 5: fix, reply, resolve. Don't
-   close the linked issue directly (`gh issue close`) even on a fully clean verification-only
-   task — closing is left to the `Closes #N` reference from step 2, which fires on merge.
-9. **Merge is always manual** (`CODEOWNERS` + branch protection) — never auto-merged or
-   self-approved. Merging auto-closes the linked issue via step 2's `Closes #N` reference (or
-   leaves it open if the PR only used `Part of #N`) — move its board **Status** to `Done` once
-   that happens. Once merged: verify the change landed on `origin/main`
-   (`git ls-tree origin/main <path>`), then remove the task's worktree
-   (`git worktree remove <path>`) right away if clean — don't wait for a bulk sweep.
+## The chain
+
+0. **File the issue** (`file-task-issue`).
+   - Every unit of work has an issue before work starts — no exception for small or
+     typo-level changes.
+   - If none exists yet, file one first, per **Issue conventions** below (context label, board
+     fields). Board **Status** starts at `Backlog` (**Project board** below).
+1. **Implement** (`implement`).
+   - Isolated `git worktree`, always, even for a one-line fix — a concurrent session switching
+     branches underneath you is the risk it removes.
+   - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
+     `origin/main` (**Base `main` and stacking** below).
+   - Board **Status** → `In progress` when writing actually starts, not at filing time.
+   - Self-check against the [Definition of Done](definition-of-done.md); then push and open
+     the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`
+     and `Part of`** below).
+   - Board **Status** → `In review`.
+2. **Review** (`review`).
+   - Count the rounds first (**Rounds and the cap** below).
+   - Run the pass against current `origin/main`.
+   - Fresh reviewer agents, never inline (**Rule A** below), one per checklist `CLAUDE.md`'s
+     **Model selection** table resolves for the change.
+   - All findings go to the PR as one native review before anything is fixed.
+   - Then the pass's exit, this step's alone (**Exit labels** below): a clean pass →
+     `needs-approval`, with the PR confirmed to be based on `main`; Critical or Major still
+     open on the last pass the cap allows → both exit labels and one escalation comment
+     handing the disagreement to the human partner; Critical or Major open with passes left →
+     no label, the findings are the fix step's.
+   - Board **Status** stays `In review`. Merge is the human's, always (**Merge and issue
+     closing** below).
+3. **Fix** (`fix`, then `review` again).
+   - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
+     close per **Thread discipline** below.
+   - Human PR comments, at any point, are findings like any other.
+   - Then the review step again, until a pass is clean or the cap ends the loop (**Rounds and
+     the cap** below).
+4. **Clean up** (`cleanup`, invoked by the human after the merge).
+   - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
+     `Done`.
+   - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
+
+## Rule A — author/reviewer separation
+
+A change is judged by a **spawned reviewer agent**, never by the session that holds the
+author's context. What corrupts a review is the *reviewer* carrying that context, not the
+session: the session that wrote the work may run step 2, because it only dispatches to agents
+that cannot see what it saw and relays what they return. The moment it judges the work itself
+— screening findings before posting, or "checking the reviewer missed nothing" — the separation
+is gone. A fresh **agent**, not a fresh session.
+
+## Rule B — stop-and-report, per issue
+
+The chain runs **unattended** from the step it is entered at: implement → review → fix →
+review … → a clean pass or the cap, with no check-in between steps. The session stops at exactly
+two points — a clean pass, or the cap with Critical or Major findings still open — both found
+by step 2 at the end of its pass, and reports.
+It never starts the next issue off the back of the one that just finished; that is the control
+on autonomous artifact-chaining, and it is per issue, not per step.
+
+**Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
+or the cap; "only this step" is something the human says explicitly. Step 4 is the one
+exception: `cleanup` is invoked by the human, since the session does not watch for the merge.
+
+## Rounds and the cap
+
+- **One pass posts one review**, however many reviewer agents it ran. The first review pass is
+  round 1.
+- **The cap is 2 review passes**, counted from the most recent reset event (see below). This
+  line is the **only** statement of the interactive cap — everything that needs the number
+  routes here instead of repeating it.
+- **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
+  Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
+  so the final round needs no further pass to confirm it.
+- **At the cap** — the last pass the count allows still has a Critical or Major finding open —
+  the loop stops instead of fixing again: the review step, at the end of that pass, puts the
+  exit labels on (**Exit labels** below) and posts one escalation comment handing the
+  disagreement to the human, who has **two decisions**: merge as is, accepting the open
+  findings, or **grant another round** — a fresh count, since the escalation comment is
+  itself the reset event. A grant is an instruction given to the session, never inferred from
+  a thread.
+- **Rounds are counted from the most recent reset event**, of which there are exactly two
+  kinds: the escalation comment posted at the cap, and a **human item** — a review, PR
+  comment or review-thread reply by an author whose login does not end in `[bot]`, whose body
+  carries none of the
+  session's own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
+  a marked item is the session's footprint under the developer's own account, **Git
+  identity** below), posted while an exit label was on: after its `labeled` event and before
+  any later `unlabeled` one. Nothing else resets the count; no reset event means counting from
+  the PR's first review. This is the rule's only statement — the `review` skill's *Count the
+  rounds* item is its one procedure. A granted round or a human review therefore never gets
+  refused by a cap it did not ask for.
+
+## Exit labels
+
+`needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
+human decides**. Both exits have one actor: the **review step**, at the end of the pass it
+just posted. After a clean pass it applies `needs-approval` alone, removing a stale
+`needs-decision` if one is present. After the last pass the cap allows, with Critical or Major
+still open, it applies `needs-decision` **alongside** `needs-approval` and posts the one
+escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
+clean one in any list view while `needs-approval` keeps its single meaning. No other step or
+skill applies either label, and neither replaces manual merge approval (**Merge and issue
+closing** below).
+
+A human item (**Rounds and the cap** above) posted **while** either label is on makes it
+false, and so does a granted round: both labels come off no later than the review step's
+next pass — the `fix` skill's first step removes them when a human item precedes it, and the
+review step's first act removes them whenever a reset event of either kind precedes its pass
+and a label is still on (a grant given in-session posts nothing, so only the review step sees
+it; a human item may reach the review step directly) — and that pass's exit re-applies
+whichever is then correct.
+
+`needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
+go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).
+
+## Thread discipline
+
+- **Reply always.** Every finding addressed gets a reply on its thread describing what was done,
+  or why not.
+- **Resolve only what was actually fixed.** A disputed, deferred or partially addressed thread
+  stays open, with the reply saying why.
+- **Resolve after the push, never before.** A failed push would otherwise leave threads closed
+  over work that is not on the branch.
+- **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
+  resolved explicitly.
+- **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
+  gets an issue instead (`file-task-issue`, context label per the artifact it belongs to,
+  linked to the PR); the reply names the issue, and the thread is then resolved.
+
+These five are the rule; `resolve-review-thread` applies them per thread, and
+[tracker-mechanics.md](tracker-mechanics.md) holds the commands.
+
+## Base `main` and stacking
+
+The PR always bases `main` directly — never another work branch, even if logically stacked on
+a not-yet-merged prior task, because squash merges orphan stacked branches. Branching off a
+prior task's branch locally is fine; the PR itself is `--base main` from the start, and the
+new branch is still cut from a fetched `origin/main` — or, when deliberately stacking, from
+the freshly fetched prior branch — never from a stale local `main`.
+
+## `Closes` and `Part of`
+
+The PR description references the linked issue with `Closes #<issue-number>` so merging
+auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>` on every PR
+except the one that finishes the issue. A task PR normally carries both — `Closes` for its own
+task issue and `Part of` for the epic — and where anything needs to resolve a PR to one issue,
+the `Closes` reference is the one that names it.
+
+## Merge and issue closing
+
+**Merge is always manual** (`CODEOWNERS` + branch protection) — never auto-merged or
+self-approved; `needs-approval` only signals that no automated work is pending. Merging
+auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
+only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
+fully clean verification-only task — closing is left to that reference, which fires on merge.
 
 **A merged `specs` issue produces task issues, not code.** Its approved plan doesn't implement
 itself — file the `development`/`testing` task issues per [idea-to-issues.md](idea-to-issues.md)'s
-**Ticket** stage (one per task, each with the anchored `Plan:` line) so the work actually gets picked
-up. Filing them is part of finishing the spec issue; implementing them is separate work that
-still waits for the check-in below.
+**Ticket** stage (one per task, each with the anchored `Plan:` line) so the work actually gets
+picked up. Filing them is part of finishing the spec issue, inside step 4; implementing them is
+a new issue and a new chain.
 
-**Stop and report, interactive session only.** After each artifact/task is committed (step 1
-onward), report status and wait for the human partner before starting the next one — this is a
-control on autonomous artifact-chaining, not boilerplate: don't draft/commit a second document
-or task off the back of one that just landed without a check-in.
+Once merged, the task's worktree is removed as part of step 4 — the reason the step exists is
+that a worktree left behind is a stale checkout waiting for a bulk sweep nobody schedules.
 
 ## Commit & push authorization
 
@@ -97,7 +193,7 @@ it.
 
 Status field on the EMS project board (`gh project view 1 --owner kristofdegrave`) has 5
 options: `Backlog`, `Ready`, `In progress`, `In review`, `Done`. `Ready` is unused today (not
-part of this workflow) — steps above only move Backlog → In progress → In review → Done. If
+part of this workflow) — the chain above only moves Backlog → In progress → In review → Done. If
 `Ready` gets a defined meaning later (e.g. dependencies/contract resolved and pickable),
 insert it explicitly into step 0/1 here rather than leaving it implicit.
 

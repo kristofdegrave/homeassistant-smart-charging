@@ -20,7 +20,7 @@ cycle), then resume.
 
 ## Drafting a spec
 
-Step 1 of the contribution workflow, in order:
+The implement step of the contribution workflow, in order:
 
 1. **Identify the slice** from `docs/design/project-plan.md`: which tasks/services it covers,
    in what build order, and which ADR gates apply. List them — this is what the plan's

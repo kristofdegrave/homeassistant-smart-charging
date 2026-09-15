@@ -62,7 +62,7 @@ reference.
   routing/cycle-count signal; a local review carrying it would be miscounted as an automatic
   fix cycle. A review without the CI marker reads as ordinary human feedback, which the
   `address-review-remarks` skill already picks up via its human-comment / `ai-fix-ack` path;
-  the local marker exists only for the interactive round count the `review` skill keeps. CI
+  the local marker exists only for the interactive round count the review step keeps. CI
   never greps for it, and it counts a population CI's own cap never sees.
 
 ## 5. Submit — and recover from a 422
@@ -82,8 +82,9 @@ comment — the review must be posted.
 - **Locally**: the `review` skill runs the pass. Every reviewer it spawns is read-only —
   they return findings, they do not post — so once they have all returned, the main session
   posts their findings here as **one** review in local mode (round marker, no verdict marker).
-  One pass is one review, however many reviewers ran. The PR always exists by then, which step 2 of the doc `CLAUDE.md`'s
-  **Contribution workflow** section routes to guarantees.
+  One pass is one review, however many reviewers ran. The PR always exists by then: the
+  implement step of the contribution workflow — the doc `CLAUDE.md`'s **Contribution
+  workflow** section routes to — guarantees it.
   Anchor each finding that carries a file path + new-version line as an inline comment; put
   the rest in the body. If there is no PR (an uncommitted local draft), report the findings in
   the session instead of posting.

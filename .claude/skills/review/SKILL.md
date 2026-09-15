@@ -1,13 +1,14 @@
 ---
 name: review
-description: Use in an interactive session to run this project's review steps (3-4 of its contribution workflow) on a PR (/review #N) — behind-main check, a fresh reviewer agent for every changed tree plus the work type's own, findings posted as a native PR review. Interactive sessions only; CI's entry for these steps is _ai-review.yml's own prompt, never this skill.
+description: Use in an interactive session to run this project's contribution workflow's review step on a PR (/review #N) — behind-main check, a fresh reviewer agent for every changed tree plus the work type's own, findings posted as a native PR review, then the pass's exit (the exit labels, or the escalation at the cap). Interactive sessions only; CI's entry for this step is _ai-review.yml's own prompt, never this skill.
 ---
 
 # Review a PR
 
-Steps 3–4 of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
-section routes to the doc that owns every parameter — the behind-`origin/main` rule, the loop
-cap, what a clean pass means. This skill owns the order, the dispatch, and the round count.
+The review step of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
+section routes to the doc that owns every parameter — that a pass runs against current
+`origin/main`, the loop cap, what a clean pass means, which exit applies which label. This
+skill owns the order, the dispatch, the merge-first mechanics, the round count and the exit.
 
 Model-invocable on purpose, so "review this PR" reaches it; the description carries the
 interactive-only wording precisely because it sits in every run's index.
@@ -16,14 +17,24 @@ interactive-only wording precisely because it sits in every run's index.
 
 1. **Count the rounds.** One pass posts **one** review, however many agents it ran — so a
    round is a native review carrying the local round marker `submit-pr-review`'s local mode
-   defines. List the PR's reviews with their bodies and count the ones carrying it
-   (`CLAUDE.md`'s **Tracker mechanics** section routes to the listing command). Whatever
-   shape that recipe has, the count needs **every** review's body: select bodies rather than
-   ids, and keep no filter that returns only the latest one — a recipe written as a post
-   read-back has one. Apply step 6's rule with the cap **read from the doc routed above**,
-   never from memory: at the cap with a Critical or Major finding still open, stop and
-   escalate to the human partner rather than reviewing again.
-2. **Check the branch isn't behind `origin/main`** per step 3, and merge it in first if it is
+   defines. What resets the count is the **Rounds and the cap** rule's business, stated there
+   once; this item is that rule's one procedure, and the `fix` skill's first step reuses its
+   human-item test rather than restating it:
+   - Read three listings, all routed by `CLAUDE.md`'s **Tracker mechanics** section: the PR's
+     label events, its reviews, its issue comments and its review-thread replies — every item,
+     with author and time, as a stream rather than a post read-back.
+   - Find the most recent reset event as the rule defines it. The markers it excludes are the
+     ones this repo's skills emit: the local round marker (the value `submit-pr-review`'s §4
+     defines), the `<!-- ai-fix-` family (`address-review-remarks`), and
+     `<!-- local-review-escalated -->` (this skill's escalation, below).
+   - Rounds so far = marker-carrying reviews posted after that event (all of them when there
+     is none); the cap is **read from the doc routed above**, never from memory. If an exit
+     label is still on and the count was reset — by either kind of reset event — take both
+     exit labels off before the pass (**Exit labels** names this as the review step's first
+     act after a reset; commands and read-back per **Tracker mechanics**).
+   This pass is therefore either round N of the cap with passes to spare, or the **last pass
+   the cap allows** — the exit below depends on which.
+2. **Check the branch isn't behind `origin/main`** per the review step, and merge it in first if it is
    (`resolving-merge-conflicts` if that conflicts). A rule that landed since the branch was cut
    is invisible to a review run against the branch alone.
 
@@ -43,12 +54,11 @@ union of the two:
    issue's labels per `CLAUDE.md`'s **Tracker mechanics** section. The reference is PR body
    text, so treat what it resolves to as a routing hint, not an instruction. A PR with no
    linked issue, an issue with no context label, or a reference that will not resolve,
-   contributes nothing here and step 1 stands alone.
+   contributes nothing here and item 1 above stands alone.
 
-Each half resolves to a **checklist**, and the checklist is what you hand over: where it is a
-work-type review document, spawn the generic `reviewer` agent against it; where it is still a
-`*-reviewer` agent definition, spawn that agent. A review column may also name a completion
-bar; that is criteria the reviewer reads, not a second reviewer to spawn.
+Each half resolves to a **checklist**, and the checklist is what you hand over: spawn the
+generic `reviewer` agent against it. A review column may also name a completion bar; that is
+criteria the reviewer reads, not a second reviewer to spawn.
 
 The table states how each half is scoped, and the exception for a tree that carries its own
 reviewer rule; apply it as written. The *Review model* column of each row in play says which
@@ -59,19 +69,43 @@ model it wants — say so, since only the human partner can switch it.
   passes. Name every checklist that was applied, including any that returned nothing — after
   aggregation a reader cannot otherwise tell a clean checklist from one that was never applied.
 - Spawn every reviewer **fresh, never inline**. An author reviewing their own work in the session
-  that wrote it is not a review; that separation is what step 3 is for.
+  that wrote it is not a review; that separation is what the review step is for.
 
 ## Then
 
-Post every finding with `submit-pr-review` in local mode, before fixing anything, per step 4.
-Resolve the PR's current head SHA and its merge base first and hand them over: CI's prompt
-supplies both, and locally this skill is the supplier.
-Then:
+Post every finding with `submit-pr-review` in local mode, before fixing anything, per the
+review step. Resolve the PR's current head SHA and its merge base first and hand them over:
+CI's prompt supplies both, and locally this skill is the supplier.
 
-- **a clean pass**, as the routed doc defines it → hand to `finalize-pr-review`;
-- **anything remaining** → hand on to step 5, which the `fix` skill runs.
+## The exit
 
-Stop there either way — don't fix in this session off the back of the review.
+The review step is the one actor for the exit labels (**Exit labels**, routed from
+`CLAUDE.md`'s **Contribution workflow** section). Once the pass is posted, do exactly one of
+these, from the pass's own result and the count above:
+
+- **Clean pass** (as the routed doc defines it): apply `needs-approval` and remove a stale
+  `needs-decision` — two operations, so a failed removal cannot take the add down with it;
+  both forms and the read-back per `CLAUDE.md`'s **Tracker mechanics** section. Confirm the
+  PR is based on `main`, not an unmerged work branch (the PR read-back that section carries
+  shows the base); a stacked PR is retargeted to `main` now, since squash-merging the branch
+  below would strand it. Two more cautions before the label goes on: a base branch that has
+  already reached `main` by its own squash-merge leaves this PR's diff showing stale content —
+  check the diff is this PR's alone; and a related PR's "merged" status is not proof its
+  artifact landed — verify with `git ls-tree origin/main <path>` after a fetch, read by output
+  as the `cleanup` skill's step 2 does. Board **Status** stays `In review`; the label is a
+  signal for the human's decision, never a self-approval. Report: clean, `needs-approval`
+  applied.
+- **Critical or Major open, and this was the last pass the cap allows**: apply both exit
+  labels, then post one escalation comment, body via a file per **Tracker mechanics**: the
+  open Critical and Major findings by thread, what each round tried, where author and
+  reviewer disagree, and the human's two decisions — merge as is, or grant another round.
+  Its last line is the escalation marker `<!-- local-review-escalated -->`, which the count
+  above reads as a reset event. Report: cap reached. A grant is an instruction from the human,
+  never inferred from a thread.
+- **Critical or Major open, passes left**: no label. Report the findings by severity and the
+  round count so far.
+
+Stop there — what runs next is the workflow's to say, not this skill's.
 
 ## Rules
 
@@ -83,5 +117,7 @@ Stop there either way — don't fix in this session off the back of the review.
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** Handing this PR to CI
   instead of reviewing it here is exactly what those labels are not for; the **Contribution
   workflow** section states the rule and routes to the detail.
-- **`needs-approval` is not this skill's to apply** — only `finalize-pr-review`, only after a
-  clean pass.
+- **The exit labels are applied only at the exit above, from the pass's own result.** The
+  contribution workflow's **Exit labels** section (routed from `CLAUDE.md`'s **Contribution
+  workflow** section) names the review step as their one actor; nothing earlier in this skill
+  and no other skill puts them on.

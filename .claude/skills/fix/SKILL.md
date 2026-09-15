@@ -1,11 +1,11 @@
 ---
 name: fix
-description: Use in an interactive session to run this project's review-fix step (step 5 of its contribution workflow) on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for step 5 is the address-review-remarks skill, never this one.
+description: Use in an interactive session to run this project's contribution workflow's fix step on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for the fix step is the address-review-remarks skill, never this one.
 ---
 
 # Fix review findings
 
-Step 5 of the interactive lifecycle, type-agnostic. Model-invocable on purpose, so "/fix #N"
+The fix step of the interactive lifecycle, type-agnostic. Model-invocable on purpose, so "/fix #N"
 and "address the review" both reach it. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns the step.
 
@@ -24,27 +24,42 @@ row that names none — is where that dispatch lives; this skill does not restat
 picks its own and only a local run has the choice: the row's *Work model* column says which
 model it wants, so name it, and leave switching to the human partner.
 
+## Before any fix: stale exit labels
+
+Read the PR's label events, reviews, issue comments and review-thread replies (`CLAUDE.md`'s
+**Tracker mechanics** section routes to all four). If `needs-approval` or `needs-decision` is on and a **human
+item** — as the contribution workflow's **Rounds and the cap** defines it, decided the way the
+`review` skill's *Count the rounds* item decides it — is newer than that label's `labeled`
+event, take both labels off: the human has said work is pending, so the labels are false — the
+**Exit labels** section (routed from `CLAUDE.md`'s **Contribution workflow** section) names
+this skill's first step as the actor. Take both off, whichever is present — the remove form,
+its behaviour on an absent label and the read-back are **Tracker mechanics**'. Nothing in this
+skill puts them back; the next pass's exit does.
+
 ## Then
 
 Per finding:
 
 1. Apply the fix policy (§2), re-authoring with the work file rather than patching around it.
-2. Reply in its thread via `resolve-review-thread`, saying what was done or why not.
+   A finding whose request is outside the PR's scope is filed, not fixed — `file-task-issue`,
+   per the contribution workflow's **Thread discipline** (routed from `CLAUDE.md`'s
+   **Contribution workflow** section).
+2. Reply in its thread via `resolve-review-thread`, saying what was done, which issue was
+   filed, or why not.
 
 Then once, for the run:
 
 3. Commit and push (§6), with the commit prefix this row's work takes — the Definition of Done
    routed from `CLAUDE.md`'s **Contribution workflow** section carries the per-type prefixes.
    §6's own example is `docs:` because that skill is scoped to docs.
-4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`. After
-   the push, never before: a failed push would otherwise leave threads closed over work that
-   is not on the branch.
+4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`, after
+   the push — the contribution workflow's **Thread discipline** owns the order and the reason.
 5. Post the one summary (§5) — its content is §5's; its transport comes from `CLAUDE.md`'s
    **Tracker mechanics** section, which is the reason a comment body goes in a file.
 
-Stop there and hand on to step 3; `CLAUDE.md`'s **Contribution workflow** section names the
-skill that runs it. The loop is the human partner's to run, and a
-fresh agent owns the next pass — don't re-review your own fixes in this session.
+The fix step ends with the fixes pushed, the threads answered and the summary posted; report
+that and stop. What runs next is the workflow's to say, not this skill's. The next pass is
+judged by a spawned reviewer agent, never by this session.
 
 ## Rules
 
@@ -57,5 +72,7 @@ fresh agent owns the next pass — don't re-review your own fixes in this sessio
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** They are CI's triggers
   and the human partner's go-signal, not a way to hand over work this session should do; the
   **Contribution workflow** section states the rule and routes to the detail.
-- **`needs-approval` is not this skill's to apply** — only `finalize-pr-review`, only after a
-  review pass comes back clean.
+- **This skill never applies an exit label.** The review step does, at its pass's exit — the
+  contribution workflow's **Exit labels** section, routed from `CLAUDE.md`'s **Contribution
+  workflow** section, names it as the one actor. Taking stale ones off is this skill's first
+  step; that is the whole of its label work.

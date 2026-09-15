@@ -33,7 +33,7 @@ adapter/coordinator/entity — that is a design signal, not a reason to reach fo
 
 ## Writing the tests
 
-**Step 1 (do the work)**: identify the unit and its layer — pure logic vs HA-coupled — pick the
+**The implement step (do the work)**: identify the unit and its layer — pure logic vs HA-coupled — pick the
 harness above, then:
 
 - **Name and structure each test as a behaviour spec.** The bar's item 3, *Traceability and

@@ -1,6 +1,6 @@
 ---
 name: address-review-remarks
-description: "Use when addressing review findings on a pull request — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. CI's entry for step 5; an interactive session reaches it through the `fix` skill rather than directly."
+description: "Use when addressing review findings on a pull request — from the AI review loop (a PR comment containing `ai-review-verdict: remarks`) or from a human review. CI's entry for the fix step; an interactive session reaches it through the `fix` skill rather than directly."
 ---
 
 # Address review remarks
@@ -41,6 +41,12 @@ stop — do not invent work.
 - Also fix **Minor**/**Nit** findings when the change is trivial and local.
 - If you disagree with a finding, leave the document unchanged for that finding and record why —
   it becomes a **Skipped** entry in the summary. Never half-apply a fix you think is wrong.
+- A finding whose request is outside the PR's scope is not fixed in this PR. Locally the fix
+  step files it as an issue and answers the thread with that issue (the contribution
+  workflow's **Thread discipline**, routed from `CLAUDE.md`'s **Contribution workflow**
+  section); in CI, reply that it is out of scope and leave the thread open for the human to
+  file — the fix worker's outputs are the PR's alone, whatever its tool grant could reach, so
+  it must not file. Either way it is a **Skipped** entry in the summary.
 
 ## 3. Fix with the author's context
 

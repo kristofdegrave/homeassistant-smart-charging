@@ -1,11 +1,11 @@
 ---
 name: implement
-description: Use in an interactive session to run contribution-workflow steps 1-2 for one Smart Charging issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for these steps is _ai-draft.yml's own prompt, never this skill.
+description: Use in an interactive session to run this project's contribution workflow's implement step for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for this step is _ai-draft.yml's own prompt, never this skill.
 ---
 
 # Implement an issue
 
-Steps 1–2 of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
+The implement step of the interactive lifecycle, type-agnostic. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns every parameter — branch scheme, base, issue reference,
 board moves, and the Definition of Done. This skill owns only the order and the dispatch.
 
@@ -33,19 +33,24 @@ Stop instead of dispatching when:
 
 1. **Read the work file first, and resolve anything it needs before the branch exists** —
    against a fetched `origin/main`, not a stale checkout, since a work file may derive its
-   branch name from something already merged there. Step 1's branch-naming note grants one
-   override, the number segment; nothing else about steps 1–2 is the work file's to override.
+   branch name from something already merged there. The doc's **Branch naming** note (under its
+   **Issue conventions**) grants one override, the number segment; nothing else about the
+   implement step is the work file's to override.
 2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
    task it names is already identified.
-3. Worktree, branch and board **Status** per step 1.
+3. Worktree, branch and board **Status** per the implement step. The worktree is cut from the
+   fetched `origin/main`, never a stale local `main`:
+   `git fetch origin && git worktree add -b <branch> <path> origin/main`. When deliberately
+   stacking on a not-yet-merged prior branch, fetch first and name that branch instead of
+   `origin/main`; the PR still bases `main`, per the doc's **Base `main` and stacking**.
 4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
-   completion bar, that file is the self-check before step 5 — the same one the reviewer will
+   completion bar, that file is the self-check before item 5 below — the same one the reviewer will
    apply, so it is checked now rather than discovered in review.
-5. Definition of Done self-check, then push, PR and board **Status** per step 2.
+5. Definition of Done self-check, then push, PR and board **Status** per the implement step.
 
-Stop there and hand on to step 3, which the `review` skill runs. Don't review the work in
-this session — step 3 needs a fresh agent — and don't start the next issue off the back of
-this one.
+The implement step ends with the PR open and its issue In review; report that and stop. What
+runs next is the workflow's to say, not this skill's. The work is judged in a spawned reviewer
+agent, never in this session, and the next issue is not started off the back of this one.
 
 ## Rules
 
@@ -55,5 +60,6 @@ this one.
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** They are CI's triggers
   and the human partner's go-signal, not a way to hand over work this session should do; the
   **Contribution workflow** section states the rule and routes to the detail.
-- **`needs-approval` is not this skill's to apply** — only `finalize-pr-review`, only after a
-  review pass comes back clean.
+- **The exit labels are not this skill's to apply.** Each is applied only by the step the
+  contribution workflow names for that exit — its **Exit labels** section, routed from
+  `CLAUDE.md`'s **Contribution workflow** section — never by this skill.

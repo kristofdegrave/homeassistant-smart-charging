@@ -23,7 +23,7 @@ step collapses into a single sequenced, independently-testable task list — the
 
 ## Drafting the project plan
 
-**Step 1 (do the work)**, in order:
+**The implement step (do the work)**, in order:
 
 1. **Read the approved `system-design.md`** — the service map, each service's classification
    (Client/Manager/Engine/Resource Access/Resource), and the static diagram's call directions.

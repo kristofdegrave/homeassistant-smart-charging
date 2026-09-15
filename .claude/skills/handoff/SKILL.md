@@ -8,9 +8,9 @@ disable-model-invocation: true
 # Handoff
 
 Write one Markdown document that lets a fresh agent resume this work without the scrollback.
-The repo's own boundaries make this routine: `contribution-workflow.md`'s **stop and report**
-rule pauses an interactive session after every committed artifact, and each task runs in its
-own worktree.
+The repo's own boundaries make this routine: the stop-and-report rule (**Rule B** of the doc
+`CLAUDE.md`'s **Contribution workflow** section routes to) pauses an interactive session once
+an issue's chain reaches approval or the review cap, and each task runs in its own worktree.
 
 ## Where it goes
 
@@ -27,7 +27,7 @@ Six sections, in this order. Keep each to what the next agent cannot reconstruct
    they describe what the next session will focus on: scope the whole document to that.
 2. **State** — issue number, worktree absolute path, branch, PR URL, board Status, and where
    the contribution workflow stopped — `CLAUDE.md`'s **Contribution workflow** section routes
-   to the doc that owns the steps (which numbered step, and which review round against the
+   to the doc that owns the steps (which step, by its name there, and which review round against the
    interactive cap that doc states).
 3. **Decisions** — choices made in conversation that are not yet written down anywhere, each
    with the reason. This is the section that only the scrollback has; everything else can be
@@ -47,11 +47,10 @@ Name skills, not procedures — the skill carries its own instructions.
   those.
 - Before an issue exists: `work-idea` (an `idea` issue), `grilling` (stress-test a decision
   with the human partner), `file-task-issue` (file the issues that fall out).
-- In the review loop, per the step ranges `CLAUDE.md`'s **Contribution workflow** section
-  maps: `review` runs the pass and posts it via `submit-pr-review`, `fix` acts on the findings
-  with
-  `resolve-review-thread` for the threads, and `finalize-pr-review` hands a clean pass to
-  `needs-approval`. `address-review-remarks` is CI's entry for step 5, not the local one.
+- Once an issue has a PR: record which step of the contribution workflow the work is at, and
+  route there — the doc `CLAUDE.md`'s **Contribution workflow** section routes to names the
+  skill each step runs through, so the note does not. `address-review-remarks` is CI's entry
+  for the fix step, not the local one.
 
 ## Rules
 

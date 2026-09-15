@@ -20,7 +20,7 @@ row's — `done.md`'s preamble states that split and why; the loop below is wher
 
 ## Building the task
 
-**Step 1 (do the work)**: read, in this order, before writing anything —
+**The implement step (do the work)**: read, in this order, before writing anything —
 
 - the task's own section of the plan, the **ADR it cites**, and the **analysis behaviour** it
   realises (`docs/analysis/control-cycle.md`, `resolution-rules.md`, `requirements.md`, the
@@ -57,7 +57,7 @@ contribution workflow names (use the `verification-before-completion` skill). Th
 *Runtime check recorded*, is the one most often skipped: the observation is made while the
 behaviour is in front of you, not reconstructed afterwards.
 
-**Step 3's review**: receive the reviewer's findings with the `receiving-code-review` skill —
+**The review step**: receive the reviewer's findings with the `receiving-code-review` skill —
 verify, don't perform.
 
 ## Rules

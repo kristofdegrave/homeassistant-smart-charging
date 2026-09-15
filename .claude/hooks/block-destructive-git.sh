@@ -408,7 +408,7 @@ for seg in $segments; do
       # cd'd into.
       if [ "$control" = 0 ] &&
         git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
-        deny "$seg" "this branch is already pushed, so rebasing it rewrites published history; step 3 of the workflow lets you 'git merge origin/main' instead"
+        deny "$seg" "this branch is already pushed, so rebasing it rewrites published history; the review step of the workflow lets you 'git merge origin/main' instead"
       fi
       ;;
   esac

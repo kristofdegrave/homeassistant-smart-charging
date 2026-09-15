@@ -258,8 +258,14 @@ read-back is not optional:
 gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n> --jq '[.labels[].name]'
 ```
 
+Removing one is the same command with `--remove-label <label>`. It exits 0 and prints the PR
+URL whether or not the label was present, so it is safe on the common path where it is
+absent — and, like every `gh pr edit`, it needs the read-back above to prove anything.
+
 (An issue path serves a PR too — a PR is an issue for the labels API.) REST fallback, which
-returns the resulting label set directly, so it is its own read-back:
+returns the resulting label set directly, so it is its own read-back — except that the
+`DELETE` returns **404 `Label does not exist`** when the label is absent, so a caller that
+does not know whether it is on must treat 404 as success:
 
 ```sh
 gh api -X POST   repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/labels -f "labels[]=<label>" --jq '[.[].name]'
@@ -323,6 +329,41 @@ verified". Like the merge-state read above it is REST, so the GraphQL limiter ca
 it. A deleted path is listed like any other; the read says nothing about *how* a path changed,
 only that it did — `.[].status` carries `added`/`removed`/`modified` if a caller needs to tell
 them apart.
+
+## Reading a change request's label events and its review/comment timeline
+
+The contribution workflow's round count and its exit-label rules both turn on one question —
+was a human's review or comment posted while an exit label was on? — and neither the reviews
+listing nor the comments listing can answer it: they carry no label state. The label timeline
+does. It is REST, so the GraphQL limiter cannot refuse it, and an issue path serves a PR too:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/events \
+  --paginate --jq '.[] | select(.event=="labeled" or .event=="unlabeled") | {event, label: .label.name, at: .created_at, by: .actor.login}'
+```
+
+Each line is one label change, oldest first:
+`{"event":"labeled","label":"needs-approval","at":"<timestamp>","by":"<login>"}`. A label was
+**on** at a given moment when its most recent event before that moment is `labeled`.
+
+The other side of the comparison is every review, every issue comment and every review-thread
+reply, with author and time — as a stream, not the post read-backs elsewhere in this file,
+which keep only the latest item by design:
+
+```sh
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/reviews \
+  --paginate --jq '.[] | {id, user: .user.login, at: .submitted_at, body}'
+gh api repos/kristofdegrave/homeassistant-smart-charging/issues/<n>/comments \
+  --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
+gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/<n>/comments \
+  --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
+```
+
+The third stream is the inline review-thread replies — where a maintainer most often disputes
+mid-loop, and where the session's own `ai-fix-ack` replies live, so the marker test applies to
+it as to the other two. `--paginate` is mandatory for the reason *Commenting* above gives, and the filter must stream
+(`.[] | …`) rather than index into one page. A bot's login ends in `[bot]`; timestamps are
+ISO 8601 in UTC and compare correctly as strings.
 
 ## Posting a review with inline anchors
 
@@ -420,7 +461,7 @@ assuming a batch all landed.
 
 ## Relationship to the review-mechanics skills
 
-`submit-pr-review`, `finalize-pr-review` and `address-review-remarks` carry tracker commands
+`submit-pr-review` and `address-review-remarks` carry tracker commands
 of their own. Which of their commands may be written out rather than routed, and which file
 wins where both spell the same one out, is
 settled by [ai-authoring.md](ai-authoring.md)'s **Tracker-dependent mechanics route through
