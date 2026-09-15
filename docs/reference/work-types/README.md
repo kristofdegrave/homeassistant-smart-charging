@@ -129,9 +129,11 @@ frontmatter — and a stack package installs it; the method never edits one to s
 section is the slot: it says to apply the overlays the declared stacks provide and which
 section of them this file takes. A label has a slot when any of its label-level role files
 carries that section; every enabled label with a work file has one today, and `workflow` —
-review-only and human-authored — has none. The method check refuses a label with a slot that
-lacks a file for a declared stack, an `overlays/` directory on a label with no slot, and an
-overlay named for a stack the profile does not declare.
+review-only and human-authored — has none. The method check refuses every shape that breaks
+this: a slot without a file for a declared stack, an `overlays/` directory anywhere but at the
+label level of an enabled label with a slot, an overlay named for a stack the profile does not
+declare. The script's header is the authority on the exact list; this paragraph states the
+rule.
 
 **The shape of an overlay.** Three `##` sections named for the roles — **Implement**, **Done**,
 **Review** — each read with the core file of that role as one work file, one bar or one

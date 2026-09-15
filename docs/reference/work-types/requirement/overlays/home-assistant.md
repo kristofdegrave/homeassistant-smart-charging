@@ -8,7 +8,7 @@ say is this tree's `README.md`'s **Stack overlays**.
 ## Implement
 
 **The search's tree** — the work file's *Propagating past the analysis layer*: the targeted
-lookup per in-scope item runs over `custom_components/`.
+lookup per in-scope item runs over the tree the `uc` overlay's *The search's tree* names.
 
 ## Done
 

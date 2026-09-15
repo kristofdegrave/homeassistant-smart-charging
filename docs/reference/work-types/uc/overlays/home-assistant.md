@@ -1,4 +1,4 @@
-# Work types `uc` and `requirement` — the `home-assistant` overlay
+# Work type: `uc` — the `home-assistant` overlay
 
 Stack material for the `uc` work type, read with the core files beside it as one work file, one
 bar and one checklist — each core file's **Overlays** section says which section below it takes.

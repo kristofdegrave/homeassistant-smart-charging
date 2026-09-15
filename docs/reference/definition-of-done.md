@@ -44,8 +44,8 @@ description (any heading level — the level is not load-bearing, the heading te
 Observable runtime behaviour is what someone can see from the *running* system rather than
 from its source or its test output. What that is in this stack — the list a diff is judged
 against — is the `development` work type's stack overlay's, under its bar's item 6, *Runtime
-check recorded*; this document owns the definition and the section's shape, the overlay owns
-the enumeration. A diff changes none of it, and needs no section, when no input exists for
+check recorded when the change is observable at runtime*; this document owns the definition
+and the section's shape, the overlay owns the enumeration. A diff changes none of it, and needs no section, when no input exists for
 which any item on that list would come out differently — the usual cases being an internal
 refactor, a rename with no surfaced effect, tests, and documentation.
 

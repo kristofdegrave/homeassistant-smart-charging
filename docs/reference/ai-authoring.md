@@ -331,8 +331,9 @@ at least one work type in backticks, every one of them enabled. **4, work-type c
 every enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its
 row says its work is `none`; every work type with a work file has a `### Skills` rule in it
 naming only method skills and declared method dependencies; every work type with an overlay
-slot has an `overlays/<stack>.md` for every declared stack, and no overlay exists for a stack
-the profile does not declare or under a label with no slot; every dependency declared
+slot has an `overlays/<stack>.md` for every declared stack, every stack a dependency declares
+has a `stacks` entry, and an `overlays/` directory or file sits nowhere the slot rule does not
+put it (the script header enumerates the shapes); every dependency declared
 `installed: repo` is present; every `layer:` a file does carry names a known layer. **5, no
 profile values in method files:** no value the profile holds — owner, repository name, board
 name, node ids, a status column name — appears in a method-layer file; and no stack token the

@@ -93,7 +93,8 @@ Always read:
   skill checklist as that reference scopes it.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- A work-type core file (`docs/reference/work-types/<label>/*.md`) names no stack skill and
+- A work-type core file (any `.md` under `docs/reference/work-types/`, branch files included,
+  outside an `overlays/` directory) names no stack skill and
   spells no stack token — the method check refuses both, and `work-types/README.md`'s **Stack
   overlays** says where such material goes. An overlay that restates a method rule rather than
   extending one is the one-source-of-truth finding above, hidden in a file the method cannot
