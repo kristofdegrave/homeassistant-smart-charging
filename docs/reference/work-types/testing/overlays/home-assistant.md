@@ -1,10 +1,9 @@
 # Work type: `testing` — the `home-assistant` overlay
 
-Stack material for the `testing` work type, read with the core files beside it as one work
-file, one bar and one checklist — each core file's **Overlays** section says which section below
-it takes. Nothing here restates a rule of those files: every entry names the rule or the bar
-item it extends, and the severity is the item's unless the entry states one. The shape of an
-overlay is this tree's `README.md`'s.
+Stack material for the `testing` work type, read with the core files beside it as one work file,
+one bar and one checklist — each core file's **Overlays** section says which section below it
+takes. Every entry names the core rule or bar item it extends; what an overlay may and may not say
+is this tree's `README.md`'s **Stack overlays**.
 
 ## Implement
 
@@ -26,8 +25,8 @@ If you cannot test a piece with plain pytest without importing `homeassistant`, 
 adapter/coordinator/entity — that is a design signal, not a reason to reach for the harness in a
 `modes/`/`engines/` test.
 
-**The boundary.** Where the core files say *the boundary* — the work file's *Mock at the
-boundary* rule and the bar's item 4 — it is the HA boundary the unit talks to.
+**The boundary** the work file's *Mock at the boundary* rule names is the bar's item 4's, and
+is stated once, under **Done** below.
 
 **A common mistake** — the work file's list: reaching for the HA harness to dodge a design
 signal. A piece that cannot be tested with plain
@@ -48,8 +47,7 @@ both sides read it from here:
   needs a real (mocked) HA runtime is **Major** — the test either bypasses the wiring it claims
   to cover or re-implements it.
 
-**Item 2, *Mandated coverage*.** The cases; each miss is **Major**, naming the role, branch or
-path missed:
+**Item 2, *Mandated coverage*.** The cases the item judges:
 - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
   unmapped raw state. ADR-0009 requires all four.
 - **Every numeric role whose catalogued unit column names a unit:** the fifth mandated case —
@@ -64,6 +62,9 @@ path missed:
 - **Coordinator:** happy path, status-gating-to-zero, clamp applied, and the fault path
   (required adapter `None` → 0 A + `Fault`; grid voltage `None` → not a fault).
 - **Config flow:** a full flow creates a valid entry; validation rejects a bad mapping.
+
+**Item 4, *Test honesty* — the boundary.** Where the item and the work file's *Mock at the
+boundary* rule say *the boundary*, it is the HA boundary the unit talks to.
 
 ## Review
 

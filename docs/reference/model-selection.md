@@ -129,14 +129,14 @@ that also edits a workflow file gets the `workflow` checklist on that file rathe
 
 ### The `development` and `testing` rows lean on their stack overlays
 
-**The `development` and `testing` rows lean on their stack overlays** — the platform reference
-and the language checklists their work leans on most are stack skills, and a method row never
-names one. Each row's work file, bar and checklist end with the rule that applies the overlays
-the profile's declared stacks provide for that work type, and the overlays name the stack
-skills and say when each is read (the shape is `docs/reference/work-types/README.md`'s **Stack
-overlays**). They are not a fourth column: the overlay is part of the same work file, bar and
-checklist the row already names, so the dispatch does not change and nothing here repeats a
-rule those files own.
+**The `development` and `testing` rows lean on their stack overlays** more than any other row:
+the platform reference and the language checklists their work rests on are stack skills, and
+a method row never names one. Every work type with a slot applies its overlays the same way
+(the shape is `docs/reference/work-types/README.md`'s **Stack overlays**); what sets these two
+rows apart is that their overlays carry the skills the work cannot be done without, and say
+when each is read. They are not a fourth column: the overlay is part of the same work file,
+bar and checklist the row already names, so the dispatch does not change and nothing here
+repeats a rule those files own.
 
 ### The `workflow` row has no work file on purpose
 

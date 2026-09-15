@@ -53,8 +53,9 @@ and says so. The Code-backing item does exactly that, and (B) is the receiving e
 
 **(A) Your budget for the bar's Code-backing item.** The bar says what is in scope; this says
 how much of it you may check. For each in-scope item, run **one** targeted `Grep` over the
-product code — the stack overlay names the tree — for the behaviour it asserts — the entity id, the adapter role, the
-default, the bound, the event name, the precedence rule it names — and open at most one file,
+product code — the stack overlay names the tree — for the behaviour it asserts — the entity
+id, the adapter role, the default, the bound, the event name, the precedence rule it names —
+and open at most one file,
 the best match. **Stop after three items**: say the set was sampled and name the three you
 took. Six tool calls is the most this check may cost a review, because a review of this tree
 runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first
@@ -77,10 +78,8 @@ the finding is that the PR is incomplete, not that a separate PR would be wrong.
 
 ## Overlays
 
-**Apply the overlays** the profile's declared stacks provide for this work type: one file per
-stack at `overlays/<stack>.md` beside this one, its **Review** section read with this file as
-part of the same checklist — for the `requirement` row as much as for this one, since it routes
-here. An overlay adds the stack's material to the list or check that names it and never
-restates one of this file; one that reads `none` is the stack saying it has nothing to add
-here. The shape, and the rule that no stack material lives in this file, are this tree's
-`README.md`'s.
+**Apply the overlays** the profile's declared stacks provide for this work type:
+`overlays/<stack>.md` beside this file, its **Review** section read with this file as part of the
+same checklist — for the `requirement` row as much as for this one, since it routes here. What an
+overlay is, what a file reading `none` means and what may not live in this file are this tree's
+`README.md`'s **Stack overlays**.

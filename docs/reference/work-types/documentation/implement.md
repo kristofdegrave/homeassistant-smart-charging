@@ -32,10 +32,8 @@ review step. The stack skills are the overlays' to name.
 
 ## Overlays
 
-**Apply the overlays** the profile's declared stacks provide for this work type: one file per
-stack at `overlays/<stack>.md` beside this one, its **Implement** section read with this file
-and the branch file it routes to as one work file. An overlay adds the stack's material to the
-rule that names it — naming the branch where it belongs to one — and never restates a rule of
-those files; one that reads `none` is the stack saying it has nothing to add here. The shape,
-and the rule that no stack material lives in this file or the branch files, are this tree's
-`README.md`'s.
+**Apply the overlays** the profile's declared stacks provide for this work type:
+`overlays/<stack>.md` beside this file, its **Implement** section read with this file as part of
+the same work file, together with the branch file it routes to. What an overlay is, what a file
+reading `none` means and what may not live in this file are this tree's `README.md`'s **Stack
+overlays**.

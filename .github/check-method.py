@@ -31,7 +31,8 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         no overlay is named for an undeclared stack, and every stack a
                         dependency declares has a `stacks` entry; every dependency declared
                         `installed: repo` is present; every `layer:` frontmatter, where a
-                        file carries one, names a known layer
+                        file carries one, names a known layer; no overlays/ directory sits
+                        under a label that is not enabled or under a branch directory
   5  no profile values  no value from profile.yml (owner, repository name, board name, node
      in method files    ids, status column names) appears in a method-layer file; no stack
                         token (profile.yml `stacks.<stack>.tokens`) and no stack skill name
@@ -609,6 +610,25 @@ def check_work_type_shape(
             findings.add(
                 4, f"{where}{stack}.md", f"overlay for `{stack}`, which is not a declared stack"
             )
+    # Overlay directories the loop above cannot see: under a label that is not enabled, and
+    # under a branch directory -- an overlay sits at the label's own level, never deeper.
+    tree = root / WORK_TYPES
+    if tree.is_dir():
+        for label_dir in sorted(p for p in tree.iterdir() if p.is_dir()):
+            if label_dir.name not in enabled and (label_dir / OVERLAYS_DIR).is_dir():
+                findings.add(
+                    4,
+                    f"{WORK_TYPES}/{label_dir.name}/{OVERLAYS_DIR}/",
+                    f"{OVERLAYS_DIR}/ under `{label_dir.name}`, which is not an enabled work type",
+                )
+            for branch in sorted(p for p in label_dir.iterdir() if p.is_dir()):
+                if branch.name != OVERLAYS_DIR and (branch / OVERLAYS_DIR).is_dir():
+                    findings.add(
+                        4,
+                        f"{rel(root, branch)}/{OVERLAYS_DIR}/",
+                        f"{OVERLAYS_DIR}/ under a branch directory; an overlay sits at the "
+                        "label's own level",
+                    )
 
 
 def resolve_layer(

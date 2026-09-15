@@ -336,6 +336,10 @@ case_run "4: a Skills rule naming a stack skill fails" 1 "names \`stack-skill\`,
   "sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`stack-skill\`/' docs/reference/work-types/alpha/implement.md"
 case_run "4: a Skills rule naming an unknown skill fails" 1 "names \`nowhere\`, which is not a method skill" \
   "sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`nowhere\`/' docs/reference/work-types/alpha/implement.md"
+case_run "4: an overlays directory under a label that is not enabled fails" 1 "overlays/ under \`gamma\`, which is not an enabled work type" \
+  "mkdir -p docs/reference/work-types/gamma/overlays && printf 'none\n' > docs/reference/work-types/gamma/overlays/widgets.md"
+case_run "4: an overlays directory under a branch directory fails" 1 "alpha/branch/overlays/: overlays/ under a branch directory" \
+  "mkdir -p docs/reference/work-types/alpha/branch/overlays && printf 'none\n' > docs/reference/work-types/alpha/branch/overlays/widgets.md"
 
 # --- 5  no profile values in method files --------------------------------------------------
 case_run "5: the owner in a method doc fails" 1 "profile value repo.owner" \
@@ -356,6 +360,10 @@ case_run "5: a stack skill name in a core work-type file fails" 1 "core work-typ
   "printf 'Read \`stack-skill\` first.\n' >> docs/reference/work-types/alpha/review.md"
 case_run "5: the work-type README is a core file too" 1 "work-types/README.md:1: core work-type file spells stack token" \
   "printf 'A gizmo.\n' > docs/reference/work-types/README.md"
+case_run "5: a hyphen-adjacent token is still the token" 1 "alpha/done.md:6: core work-type file spells stack token \`gizmo\`" \
+  "printf 'The gizmo-harness split.\n' >> docs/reference/work-types/alpha/done.md"
+case_run "5: a branch file is a core method file, not an overlay" 1 "alpha/branch/done.md:1: core work-type file spells stack token \`gizmo\`" \
+  "mkdir docs/reference/work-types/alpha/branch && printf 'A gizmo.\n' > docs/reference/work-types/alpha/branch/done.md"
 
 # --- modes and environment -----------------------------------------------------------------
 dir=$(new_fixture) || dir=""
@@ -375,7 +383,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=65
+EXPECTED=69
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

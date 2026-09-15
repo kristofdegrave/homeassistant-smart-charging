@@ -1,10 +1,9 @@
 # Work type: `development` — the `home-assistant` overlay
 
-Stack material for the `development` work type, read with the core files beside it as one
-work file, one bar and one checklist — each core file's **Overlays** section says which section
-below it takes. Nothing here restates a rule of those files: every entry names the rule or the
-bar item it extends, and the severity is the item's unless the entry states one. The shape of
-an overlay is this tree's `README.md`'s.
+Stack material for the `development` work type, read with the core files beside it as one work
+file, one bar and one checklist — each core file's **Overlays** section says which section below
+it takes. Every entry names the core rule or bar item it extends; what an overlay may and may not
+say is this tree's `README.md`'s **Stack overlays**.
 
 ## Implement
 
@@ -30,8 +29,8 @@ and moving the import is not the fix.
 
 ## Done
 
-**Item 2, *Structural ADR compliance*** — the boundaries this project cannot regress. Each miss
-names the file and the boundary crossed.
+**Item 2, *Structural ADR compliance*** — the boundaries the item names, with the severity of
+each miss:
 
 - **Engine purity (ADR-0006/0009/0010):** nothing under `modes/` or `engines/` imports
   `homeassistant.*` or calls another engine; a stateful engine takes its state as a parameter
@@ -57,7 +56,8 @@ through HA config-entry storage or `vol.In(...)` as a bare `str` may use module-
 constants instead of an enum (see `const.py`'s `ROUND_UP`/`ROUND_DOWN`/`ROUND_NEAREST`) —
 repeated bare literals are still the finding there, the choice of constant over enum is not.
 
-**Item 6, *Runtime check recorded* — what is observable at runtime.** The Definition of Done
+**Item 6, *Runtime check recorded when the change is observable at runtime* — what is
+observable.** The Definition of Done
 defines observable runtime behaviour and routes here for what it is in this stack: a diff
 changes it when it changes any of
 

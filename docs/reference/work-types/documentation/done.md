@@ -35,10 +35,7 @@ while the shared reviewer goes on asserting there are two.
 
 ## Overlays
 
-**Apply the overlays** the profile's declared stacks provide for this work type: one file per
-stack at `overlays/<stack>.md` beside this one, its **Done** section read with the branch bar
-this file routes to as one bar — by the author self-checking and by the reviewer applying it.
-An overlay adds the stack's material to the item that names it — naming the branch where it
-belongs to one — and never restates an item of those files; one that reads `none` is the stack
-saying it has nothing to add here. The shape, and the rule that no stack material lives in
-this file or the branch files, are this tree's `README.md`'s.
+**Apply the overlays** the profile's declared stacks provide for this work type:
+`overlays/<stack>.md` beside this file, its **Done** section read with this file as part of the
+same bar, together with the branch bar it routes to. What an overlay is, what a file reading
+`none` means and what may not live in this file are this tree's `README.md`'s **Stack overlays**.

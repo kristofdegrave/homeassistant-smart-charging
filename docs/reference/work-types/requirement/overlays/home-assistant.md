@@ -1,10 +1,9 @@
 # Work type: `requirement` — the `home-assistant` overlay
 
-Stack material for the `requirement` work type's own work file, read with it as one work file —
-its **Overlays** section says which section below it takes. The bar and the checklist this row
-routes to are the `uc` row's, and so is their overlay: `../../uc/overlays/home-assistant.md`.
-Nothing here restates a rule of the core file: every entry names the rule it extends. The shape
-of an overlay is this tree's `README.md`'s.
+Stack material for the `requirement` work type, read with the core files beside it as one work
+file, one bar and one checklist — each core file's **Overlays** section says which section below
+it takes. Every entry names the core rule or bar item it extends; what an overlay may and may not
+say is this tree's `README.md`'s **Stack overlays**.
 
 ## Implement
 

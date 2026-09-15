@@ -67,7 +67,7 @@ item 3 validates against.
   fix is to add the term to the glossary first, not to reword the design around it.
 - Every requirement ID referenced exists in `requirements.md` — a reference to an ID that does
   not exist is **Major**, since the design is claiming coverage it cannot have.
-- The service map does not contradict `control-cycle.md`'s control loop or the existing
+- The service map does not contradict `control-cycle.md`'s own loop or the existing
   "adapter role" concept in `system-overview.md`. Where the design changes one of those
   concepts it says so explicitly; a **silent** divergence is **Major**, an explicit one is a
   finding only if the document it changes is not updated in the same change.
