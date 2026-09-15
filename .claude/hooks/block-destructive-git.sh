@@ -1,6 +1,6 @@
 #!/bin/sh
 # PreToolUse(Bash) guard: refuse the destructive git commands that
-# docs/reference/contribution-workflow.md's "Commit & push authorization" section
+# docs/reference/method/contribution-workflow.md's "Commit & push authorization" section
 # excludes from the project's standing commit/push authorization.
 #
 # Contract: reads the PreToolUse payload on stdin; exit 0 with no output allows the
@@ -35,7 +35,7 @@
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
-DOC='docs/reference/contribution-workflow.md, section "Commit & push authorization"'
+DOC='docs/reference/method/contribution-workflow.md, section "Commit & push authorization"'
 
 payload=$(cat)
 

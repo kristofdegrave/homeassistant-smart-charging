@@ -160,7 +160,7 @@ These five are the rule; `resolve-review-thread` applies them per thread, and
 ## Base `main` and stacking
 
 The PR always bases `main` directly — never another work branch, even if logically stacked on
-a not-yet-merged prior task, because this project's merge strategy — [profile.md](profile.md)'s **Merge strategy** — orphans
+a not-yet-merged prior task, because this project's merge strategy — [profile.md](../profile.md)'s **Merge strategy** — orphans
 stacked branches. Branching off a
 prior task's branch locally is fine; the PR itself is `--base main` from the start, and the
 new branch is still cut from a fetched `origin/main` — or, when deliberately stacking, from
@@ -176,7 +176,7 @@ the `Closes` reference is the one that names it.
 
 ## Merge and issue closing
 
-**Merge is always manual** (how this project enforces that is [profile.md](profile.md)'s
+**Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
 **Merge strategy**) — never auto-merged or
 self-approved; `needs-approval` only signals that no automated work is pending. Merging
 auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
@@ -217,7 +217,7 @@ it.
 The chain above names four column **roles** — *backlog*, *in progress*, *in review*, *done* —
 and never a column by its name on the board: the board's Status vocabulary and option ids are
 `.claude/profile.yml`'s `board.fields.status`, and which column plays which role on this
-project — including any column that plays none — is [profile.md](profile.md)'s **Project
+project — including any column that plays none — is [profile.md](../profile.md)'s **Project
 board**. The rule here is only that the chain moves an item **backlog → in progress → in
 review → done** and through no other column: a column that later gains a defined meaning is
 inserted explicitly into step 0/1 here rather than left implicit.
@@ -242,7 +242,7 @@ of the producer's logic.
 
 ## Git identity
 
-Whose account the interactive session acts under is [profile.md](profile.md)'s **Repository
+Whose account the interactive session acts under is [profile.md](../profile.md)'s **Repository
 and git identity**. What this chain relies on is only that it is **one account, shared with the
 human partner** — which is why **Rounds and the cap** above tells a human item from the
 session's own footprint by the session's markers, never by author.

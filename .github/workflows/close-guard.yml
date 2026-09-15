@@ -5,7 +5,7 @@ name: Close guard
 # implement code and closing a code task with one marks the work done while it is still
 # outstanding. Why it is a status check rather than a review-prompt checklist item, why it is its
 # own workflow rather than a job in ci.yml, and the branch-protection step it still needs, are in
-# docs/reference/ci-pipeline.md's "The docs-only close guard" -- the single source for that
+# docs/reference/method/ci-pipeline.md's "The docs-only close guard" -- the single source for that
 # argument; this header does not restate it.
 
 on:
@@ -71,7 +71,7 @@ jobs:
             labels=$(gh api "repos/$REPO/issues/$n" --jq '.labels[].name')
             while IFS= read -r label; do
               # `development` and `testing` are context labels -- see
-              # docs/reference/ci-pipeline.md's "Label vocabulary sync", which lists this block
+              # docs/reference/method/ci-pipeline.md's "Label vocabulary sync", which lists this block
               # among the places a rename has to reach.
               case "$label" in
                 development|testing) offenders="$offenders #$n ($label)" ;;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Print the project profile's tracker values as shell assignments, so the recipes in
-# docs/reference/tracker-mechanics.md can be pasted as written:
+# docs/reference/method/tracker-mechanics.md can be pasted as written:
 #
 #   eval "$(bash .github/profile-env.sh)"
 #
