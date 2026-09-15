@@ -76,8 +76,8 @@ on autonomous artifact-chaining, and it is per issue, not per step.
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
 exception: `cleanup` is triggered by the human stating that the merge happened, since the
-session does not watch for the merge — no step dispatches it, and the skill's first step checks
-the merge before anything is removed.
+session does not watch for the merge — no step dispatches it, and the skill itself guards
+against a statement that turns out to be premature.
 
 ## Rounds and the cap
 
