@@ -18,9 +18,9 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
                         same set; the table's changed-path map equals review.path_map;
-                        docs/reference/profile.md has a `## Flow` section, and every flow
-                        deviation -- a `###` under it -- names, in backticks, at least one
-                        work type, each of them enabled
+                        docs/reference/profile.md exists and has a `## Flow` section, and
+                        every flow deviation -- a `###` under it -- names, in backticks, at
+                        least one work type, each of them enabled
   4  work-type          every enabled work type has review.md, and implement.md and done.md
      completeness       unless its row says its work is `none`; every dependency declared
                         `installed: repo` is present; every `layer:` frontmatter, where a
@@ -402,10 +402,15 @@ def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) ->
     it changes -- every backticked span in the heading is read as one. A deviation naming no
     work type cannot be placed against a stage; one naming a work type the project does not
     enable describes a stage the flow already skips. A profile document with no `## Flow` at
-    all has stated neither shape, so it is a finding too.
+    all has stated neither shape, so it is a finding too -- and so is no profile document at
+    all: it is the profile's prose half, the standing `layer: project` case, and the only
+    place the contract can be stated.
     """
     path = root / PROFILE_DOC
     if not path.is_file():
+        findings.add(
+            3, PROFILE_DOC, "the profile document is absent (it carries the flow contract)"
+        )
         return
     lines = strip_fences(read_text(path))
     start = None

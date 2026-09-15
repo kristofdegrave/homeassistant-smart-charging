@@ -20,9 +20,11 @@ whose work type this project does not enable.
 ### A stage whose work type the profile does not enable is skipped
 
 Each artifact stage below carries the context label of the work type that produces its
-artifact. A stage whose work type is absent from `.claude/profile.yml`'s `work_types.enabled`
-is skipped, with no deviation needed — its gate then holds vacuously, and the next stage's
-gate is the one that has to hold. The stages that carry no work type — Capture, Brainstorm,
+artifact — two labels where two work types write into one tree, as **Analysis** carries `uc`
+and `requirement`. A stage none of whose work types is in `.claude/profile.yml`'s
+`work_types.enabled` is skipped, with no deviation needed — its gate then holds vacuously, and
+the next stage's gate is the one that has to hold; a stage with one of two enabled runs for
+that one alone. The stages that carry no work type — Capture, Brainstorm,
 Route, Ticket, Verify live, Close — are the flow's spine: a project that wants them changed
 changes the method, since a deviation has no work type to name. One enabled work type has no
 stage the other way round: `workflow` work changes the method's own tooling — a skill, a
@@ -70,8 +72,8 @@ Filed with the `idea` label alone — no context label yet, since nothing is sco
 
 ### Gate: the issue exists before anything is discussed
 
-The issue-first rule, stated in `CLAUDE.md`'s own rules; here it means the `idea` issue is the
-first thing that exists, not the epic.
+The issue-first rule under `CLAUDE.md`'s **Rules that hold before anything is chosen**; here
+it means the `idea` issue is the first thing that exists, not the epic.
 
 ### Skills
 
@@ -120,9 +122,10 @@ the stage ends, not carried forward as an assumption.
 
 Every idea goes down exactly one track. The split is whether the behaviour already ships.
 
-**New behaviour** → the artifact chain, from stage 5 onward, as far as the idea reaches: an
-`adr` if a structural decision surfaced (`CLAUDE.md`'s **Architecture Decision Records** topic
-has the bar for that), `requirement` and/or `uc`, design, spec, then the task issues.
+**New behaviour** → the artifact chain, as far as the idea reaches: an `adr` if a structural
+decision surfaced (`CLAUDE.md`'s **Architecture Decision Records** topic has the bar for that
+— and the **ADR** stage is entered the moment one does, **Brainstorm** included, which is why
+it is re-entrant), `requirement` and/or `uc`, design, spec, then the task issues.
 
 **Bug or enhancement against shipped behaviour** (the `bug`/`enhancement` kind label,
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**; no context label
@@ -379,10 +382,9 @@ Each PR closes its task issue and carries `Part of` for the epic.
 
 ### Gate: the Definition of Done, Runtime check included
 
-The floor is `CLAUDE.md`'s **Definition of Done** topic — builds clean, tests green, coverage
-matching the change, runtime-verified with the observation recorded in the PR — plus the
-`development` bar the row names. A task whose diff changes observable runtime behaviour
-carries the Runtime check section; that topic says which diffs do.
+The floor is `CLAUDE.md`'s **Definition of Done** topic, plus the `development` bar the row
+names. A task whose diff changes observable runtime behaviour carries the Runtime check
+section; that topic says which diffs do.
 
 ### Skills
 
@@ -488,11 +490,8 @@ docs/design/
   project-plan.md      — implementation task breakdown derived mechanically from system-design.md
 ```
 
-See `docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale, and the
-`documentation` row of `CLAUDE.md`'s **Model selection** table for the cycle — its work file and
-completion bar, which route onward, own how each of these two documents is written and what
-"finished" means for it, including the Method's own discipline about what may drive a
-decomposition.
+See `docs/plans/2026-07-07-lowy-system-design-method.md` for the rationale; which row owns how
+each is written and what "finished" means for it is the **Design** stage above.
 
 ### The architecture decision log
 

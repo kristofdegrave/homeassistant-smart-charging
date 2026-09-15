@@ -118,6 +118,7 @@ nothing else in the heading is backticked: a kind label, a file or a status goes
 words, or in the why beneath. The method check refuses a deviation heading that names no work
 type, or one this project does not enable — a stage whose work type is not enabled is skipped
 by the flow's own rule and needs no deviation to say so — and it refuses a profile document
-with no `## Flow` section at all, since that has stated neither shape.
+with no `## Flow` section, or no profile document at all, since either has stated neither
+shape.
 
 **Default.** This project follows the flow as written.
