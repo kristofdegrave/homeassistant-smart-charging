@@ -1,7 +1,7 @@
 # Contribution workflow
 
 Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a design, or
-code. Six steps, each naming the skill an interactive session runs it through; the rules the
+code. Five steps, each naming the skill an interactive session runs it through; the rules the
 steps rest on follow the chain. Artifact-specific sections in `CLAUDE.md` (analysis docs,
 ADRs) layer their own template/quality-check steps on top of this; they never replace it. The
 same lifecycle run by CI, with `github-actions[bot]` as the actor, is
@@ -37,18 +37,20 @@ covering commit message conventions) — the project-wide floor, distinct from a
    - Fresh reviewer agents, never inline (**Rule A** below), one per checklist `CLAUDE.md`'s
      **Model selection** table resolves for the change.
    - All findings go to the PR as one native review before anything is fixed.
-3. **Fix** (`fix`, then `review` again).
-   - Fix, then re-review: every finding gets a fix and a reply on its thread, or a reply
-     saying why not; threads close per **Thread discipline** below.
-   - Human PR comments, at any point, are findings like any other.
-   - Loop until a pass is clean, up to the cap (**Rounds and the cap** below).
-   - Still Critical or Major open at the cap → stop: the exit labels go on and one escalation
-     comment hands the disagreement to the human partner (**Exit labels** below).
-4. **Approval** (`finalize-pr-review`).
-   - A clean pass → `needs-approval` (**Exit labels** below).
+   - Then the pass's exit, this step's alone (**Exit labels** below): a clean pass →
+     `needs-approval`, with the PR confirmed to be based on `main`; Critical or Major still
+     open on the last pass the cap allows → both exit labels and one escalation comment
+     handing the disagreement to the human partner; Critical or Major open with passes left →
+     no label, the findings are the fix step's.
    - Board **Status** stays `In review`. Merge is the human's, always (**Merge and issue
      closing** below).
-5. **Clean up** (`cleanup`, invoked by the human after the merge).
+3. **Fix** (`fix`, then `review` again).
+   - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
+     close per **Thread discipline** below.
+   - Human PR comments, at any point, are findings like any other.
+   - Then the review step again, until a pass is clean or the cap ends the loop (**Rounds and
+     the cap** below).
+4. **Clean up** (`cleanup`, invoked by the human after the merge).
    - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
      `Done`.
    - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
@@ -65,14 +67,14 @@ is gone. A fresh **agent**, not a fresh session.
 ## Rule B — stop-and-report, per issue
 
 The chain runs **unattended** from the step it is entered at: implement → review → fix →
-review … → approval or escalation, with no check-in between steps. The session stops at exactly
-two points — a clean pass (step 4) or the cap, found by step 2's count and ending step 3's
-loop — and reports.
+review … → a clean pass or the cap, with no check-in between steps. The session stops at exactly
+two points — a clean pass, or the cap with Critical or Major findings still open — both found
+by step 2 at the end of its pass, and reports.
 It never starts the next issue off the back of the one that just finished; that is the control
 on autonomous artifact-chaining, and it is per issue, not per step.
 
-**Invoking a step skill enters the chain there.** `/implement #N` runs through to approval or
-escalation; "only this step" is something the human says explicitly. Step 5 is the one
+**Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
+or the cap; "only this step" is something the human says explicitly. Step 4 is the one
 exception: `cleanup` is invoked by the human, since the session does not watch for the merge.
 
 ## Rounds and the cap
@@ -85,32 +87,41 @@ exception: `cleanup` is invoked by the human, since the session does not watch f
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
   so the final round needs no further pass to confirm it.
-- **At the cap** with a Critical or Major finding still open, the loop stops instead of
-  reviewing again: the session, at the fix step's stop, puts the exit labels on (**Exit
-  labels** below) and posts one escalation comment handing the disagreement to the human, who
-  has **two decisions**: merge as is, accepting the
-  open findings, or **grant another round** — a fresh count, since the escalation comment
-  is itself the reset event. A grant is an instruction given to the
-  session, never inferred from a thread.
-- **Rounds are counted from the most recent reset event**: the escalation comment posted
-  at the cap, or a human review or PR comment posted while an exit label was on. No reset
-  event means counting from the PR's first review. A granted round or a human review therefore
-  never gets refused by a cap it did not ask for.
+- **At the cap** — the last pass the count allows still has a Critical or Major finding open —
+  the loop stops instead of fixing again: the review step, at the end of that pass, puts the
+  exit labels on (**Exit labels** below) and posts one escalation comment handing the
+  disagreement to the human, who has **two decisions**: merge as is, accepting the open
+  findings, or **grant another round** — a fresh count, since the escalation comment is
+  itself the reset event. A grant is an instruction given to the session, never inferred from
+  a thread.
+- **Rounds are counted from the most recent reset event**, of which there are exactly two
+  kinds: the escalation comment posted at the cap, and a **human item** — a review or PR
+  comment by an author whose login does not end in `[bot]`, whose body carries none of the
+  session's own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
+  a marked item is the session's footprint under the developer's own account, **Git
+  identity** below), posted while an exit label was on: after its `labeled` event and before
+  any later `unlabeled` one. Nothing else resets the count; no reset event means counting from
+  the PR's first review. This is the rule's only statement — the `review` skill's *Count the
+  rounds* item is its one procedure. A granted round or a human review therefore never gets
+  refused by a cap it did not ask for.
 
 ## Exit labels
 
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. Each exit has one actor. The **approval step** applies `needs-approval` alone
-after a clean pass, removing a stale `needs-decision` if one is present. The **fix step's stop
-at the cap** — the `fix` skill's cap stop — applies `needs-decision` **alongside**
-`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a
-capped PR is distinguishable from a clean one in any list view while `needs-approval` keeps
-its single meaning. No other step or skill applies either label, and
-neither replaces manual merge approval (**Merge and issue closing** below).
+human decides**. Both exits have one actor: the **review step**, at the end of the pass it
+just posted. After a clean pass it applies `needs-approval` alone, removing a stale
+`needs-decision` if one is present. After the last pass the cap allows, with Critical or Major
+still open, it applies `needs-decision` **alongside** `needs-approval` and posts the one
+escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
+clean one in any list view while `needs-approval` keeps its single meaning. No other step or
+skill applies either label, and neither replaces manual merge approval (**Merge and issue
+closing** below).
 
-A human review or PR comment posted **while** either label is on makes it false: both labels
-come off — the `fix` skill's first step, before any fix — and the next pass's exit re-applies
-whichever is then correct.
+A human item (**Rounds and the cap** above) posted **while** either label is on makes it
+false, and so does a granted round: both labels come off before the next work starts — the
+`fix` skill's first step when a human item re-opened the PR, and the review step's first act of
+a granted round, since a grant given in-session posts nothing — and the next pass's exit
+re-applies whichever is then correct.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).
@@ -159,10 +170,10 @@ fully clean verification-only task — closing is left to that reference, which 
 **A merged `specs` issue produces task issues, not code.** Its approved plan doesn't implement
 itself — file the `development`/`testing` task issues per [idea-to-issues.md](idea-to-issues.md)'s
 **Ticket** stage (one per task, each with the anchored `Plan:` line) so the work actually gets
-picked up. Filing them is part of finishing the spec issue, inside step 5; implementing them is
+picked up. Filing them is part of finishing the spec issue, inside step 4; implementing them is
 a new issue and a new chain.
 
-Once merged, the task's worktree is removed as part of step 5 — the reason the step exists is
+Once merged, the task's worktree is removed as part of step 4 — the reason the step exists is
 that a worktree left behind is a stale checkout waiting for a bulk sweep nobody schedules.
 
 ## Commit & push authorization

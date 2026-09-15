@@ -24,33 +24,16 @@ row that names none — is where that dispatch lives; this skill does not restat
 picks its own and only a local run has the choice: the row's *Work model* column says which
 model it wants, so name it, and leave switching to the human partner.
 
-## Before any fix: stale exit labels, then the cap stop
+## Before any fix: stale exit labels
 
-First, the exit labels. Read the PR's label events, reviews and issue comments (`CLAUDE.md`'s
-**Tracker mechanics** section routes to all three). If `needs-approval` or `needs-decision` is
-on and a **human item** — as the `review` skill's *Count the rounds* item defines it — is newer
-than that label's `labeled` event, take both labels off: the human has said work is pending, so the
-labels are false — the **Exit labels** section (routed from `CLAUDE.md`'s **Contribution
-workflow** section) names this skill's first step as the actor. Removal tolerates an absent
-label; read the label set back per **Tracker mechanics**. Nothing below the cap puts them back;
-the next pass's exit does.
-
-Then the cap. The fix step is where the loop ends when it cannot converge. Count the
-rounds exactly as the `review` skill's *Count the rounds* item does — that is the one
-procedure for the **Rounds and the cap** rule (routed from `CLAUDE.md`'s **Contribution
-workflow** section), and this skill adds nothing to it. At the cap with a Critical or Major
-finding still open, do not fix. Instead:
-
-1. Put both exit labels on — `needs-approval` and `needs-decision`; `CLAUDE.md`'s **Tracker
-   mechanics** section routes to the label commands and the read-back.
-2. Post one escalation comment, body via a file per **Tracker mechanics**: the open Critical
-   and Major findings by thread, what each round tried, where author and reviewer disagree,
-   and the human's two decisions — merge as is, or grant another round. Its last line is the
-   escalation marker `<!-- local-review-escalated -->`, which the `review` skill's count reads
-   as a reset event.
-3. Stop and report. A grant is an instruction from the human, never inferred from a thread.
-
-Below the cap, or with nothing Critical or Major open, continue.
+Read the PR's label events, reviews and issue comments (`CLAUDE.md`'s **Tracker mechanics**
+section routes to all three). If `needs-approval` or `needs-decision` is on and a **human
+item** — as the contribution workflow's **Rounds and the cap** defines it, decided the way the
+`review` skill's *Count the rounds* item decides it — is newer than that label's `labeled`
+event, take both labels off: the human has said work is pending, so the labels are false — the
+**Exit labels** section (routed from `CLAUDE.md`'s **Contribution workflow** section) names
+this skill's first step as the actor. Removal tolerates an absent label; read the label set
+back per **Tracker mechanics**. Nothing in this skill puts them back; the next pass's exit does.
 
 ## Then
 
@@ -88,7 +71,7 @@ judged by a spawned reviewer agent, never by this session.
 - **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** They are CI's triggers
   and the human partner's go-signal, not a way to hand over work this session should do; the
   **Contribution workflow** section states the rule and routes to the detail.
-- **The exit labels are applied only by the step the contribution workflow names for each
-  exit** — its **Exit labels** section, routed from `CLAUDE.md`'s **Contribution workflow**
-  section. For the cap that is this skill's stop above; taking stale ones off is its first
-  step; and nothing else here — a fix below the cap applies no label.
+- **This skill never applies an exit label.** The review step does, at its pass's exit — the
+  contribution workflow's **Exit labels** section, routed from `CLAUDE.md`'s **Contribution
+  workflow** section, names it as the one actor. Taking stale ones off is this skill's first
+  step; that is the whole of its label work.

@@ -14,8 +14,7 @@ every rule below — what closes the issue, which issue a PR names, what a merge
 
 User-invoked (`disable-model-invocation`), because no skill or chain step ever *invokes* it —
 the invocation is the human partner's statement that the merge happened. Other skills may point
-at a procedure in this file (`finalize-pr-review` does, for step 2's check); a reference is not
-a dispatch, and none of them runs it. The first step below is what makes an early or mistaken
+at a procedure in this file; a reference is not a dispatch, and none of them runs it. The first step below is what makes an early or mistaken
 invocation harmless.
 
 ## Then, in order

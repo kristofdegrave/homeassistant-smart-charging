@@ -102,8 +102,8 @@ places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, whi
 `case` block above — fail open silently on a rename, every job simply never firing; `_ai-review.yml`'s
 verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
 the two exit labels, the interactive lifecycle's two exits — reached through `CLAUDE.md`'s
-**Contribution workflow** section, whose doc names in its **Exit labels** section which step
-applies which label — so a rename is checked there rather than assumed from here. On the CI side, `_ai-review.yml`'s verdict routing is the only place that applies
+**Contribution workflow** section, whose doc names in its **Exit labels** section the one step
+that applies them — so a rename is checked there rather than assumed from here. On the CI side, `_ai-review.yml`'s verdict routing is the only place that applies
 either. Adding or renaming one means updating that set, and the **Pipeline steps** below where
 the label's meaning is stated.
 
@@ -246,7 +246,7 @@ in branch protection's required checks on `main`.
   separately ([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**): the two count
   different populations and never interact, so neither is the other's bound. Which labels the
   interactive cap applies is that doc's **Exit labels** section's own business, not this file's.
-- **Clean / cap-out** (≈ the approval step): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
+- **Clean / cap-out** (≈ the review step's exit): a `clean` verdict, hitting the 2-cycle cap, or a `remarks`
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required. The
   two `remarks` exits — the cap and the non-docs hand-off — also add `needs-decision`; the
