@@ -2,12 +2,13 @@
 """The method check: does the method package still hold together as one structure?
 
 Five repo-wide checks, each a structural agreement between files that are edited separately
-and drift silently when one moves without the other. Every check is stated as a rule the
-script re-derives from the files on each run -- nothing here is a hand-maintained list.
+and drift silently when one moves without the other. Each check re-derives its set from the
+files on each run rather than from a list kept here; the one enumeration is check 5's choice
+of WHICH profile keys count as values (below), which is a selection, not a copy.
 
-  1  anchors, outward   every `CLAUDE.md`'s **Topic** pointer under .claude/**,
-                        docs/reference/** and .github/workflows/** resolves, by prefix, to a
-                        `##` heading of CLAUDE.md or to a **Topic** row of its routing table
+  1  anchors, outward   every `CLAUDE.md`'s **Topic** pointer under .claude/**, docs/**
+                        and .github/workflows/** resolves, by prefix, to a `##` heading of
+                        CLAUDE.md or to a **Topic** row of its routing table
   2  anchors, inward    every link in CLAUDE.md resolves to an existing file and, where it
                         carries a #fragment, to a heading of that file; every repo path
                         CLAUDE.md names in backticks exists; no `###` heading in CLAUDE.md or
@@ -16,20 +17,36 @@ script re-derives from the files on each run -- nothing here is a hand-maintaine
                         work_types.enabled in .claude/profile.yml; labels.context names the
                         same set; the table's changed-path map equals review.path_map
   4  work-type          every enabled work type has review.md, and implement.md and done.md
-     completeness       unless its row says its work is `none`; every declared dependency
-                        installed in the repo is present; every skill present is either a
-                        declared dependency or carries `layer:`; every agent and every
-                        docs/reference/** document carries `layer:`
+     completeness       unless its row says its work is `none`; every dependency declared
+                        `installed: repo` is present; every `layer:` frontmatter, where a
+                        file carries one, names a known layer
   5  no profile values  no value from profile.yml (owner, repository name, board name, node
-     in method files    ids, status column names) appears in a `layer: method` file
+     in method files    ids, status column names) appears in a method-layer file
+
+Which layer a file belongs to is a rule, and `layer:` frontmatter is the override for a file
+that deviates from it. The defaults: every document under docs/reference/** and every agent
+under .claude/agents/ is method; every skill under .claude/skills/ is method unless the
+profile's `dependencies` declares it, in which case it is a vendored dependency and belongs to
+no layer here (it is never scanned, and never edited to say so). `layer: project` on a file --
+docs/reference/profile.md is the standing case -- takes it out of check 5; `layer: stack` is
+reserved for a stack file a project authors itself.
 
 Why the scope of check 1 is wider than the rule that created it: a CI worker prompt is not
-bound by the routing rule, but three of them do point at a CLAUDE.md section, so a heading
-rename would break the pipeline exactly as it would break a skill.
+bound by the routing rule, and neither is an ADR, a design document or a plan, but all of them
+do point at CLAUDE.md sections, so a heading rename would break them exactly as it would
+break a skill. Pointers inside fenced code blocks are skipped, as check 2 skips fenced
+headings; a pointer in an inline code span is not, which is why the placeholder below has to
+be excepted by name.
 
 The one literal exception, so it is a stated limit rather than a surprise: the pointer form is
 documented as `` `CLAUDE.md`'s **Topic** `` in the authoring reference and the workflow
 checklist, and that placeholder is skipped by name in check 1.
+
+Which profile keys check 5 scans for is chosen, not derived: repo.owner, repo.name,
+board.name, board.project_id, every field id and option id under board.fields, and the status
+option names. Walking every scalar in the profile would flag label names, colours and
+descriptions that method files legitimately spell. A new top-level profile key is therefore
+not scanned until it is added here -- the check's one hand-kept list.
 
 How status names are matched in check 5, and why: single words such as `Done` and `Ready` are
 ordinary English (`Definition of Done`), so a status name counts as a profile value only in
@@ -60,8 +77,10 @@ except ImportError:  # pragma: no cover - reported as an environment error below
 
 LAYERS = {"method", "project", "stack"}
 POINTER_PLACEHOLDER = "Topic"
-POINTER_TREES = (".claude", "docs/reference", ".github/workflows")
-POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*]+?)\*\*", re.S)
+POINTER_TREES = (".claude", "docs", ".github/workflows")
+# A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
+# nearby cannot swallow a paragraph as its "topic".
+POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
 LINK_RE = re.compile(r"\[[^\]]*\]\(<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\)")
 BACKTICK_PATH_RE = re.compile(r"`((?:\.?[A-Za-z0-9_-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)`")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
@@ -139,11 +158,17 @@ def section(text: str, heading: str) -> str:
 
 
 def table_rows(text: str) -> list[list[str]]:
-    """Cells of every table body row (header and separator rows dropped)."""
+    """Cells of the body rows of the FIRST table in `text` (header and separator dropped).
+
+    Only the first: a second table in the same section (a legend, an example) must not feed
+    its rows into the one being parsed.
+    """
     rows = []
     for line in text.splitlines():
         m = TABLE_ROW_RE.match(line)
         if not m:
+            if rows:
+                break
             continue
         cells = [c.strip() for c in m.group(1).split("|")]
         if all(re.fullmatch(r":?-{3,}:?", c) for c in cells):
@@ -239,7 +264,12 @@ class Guide:
 def check_outward(root: Path, guide: Guide, findings: Findings) -> None:
     for tree in POINTER_TREES:
         for path in walk(root, tree, (".md", ".yml", ".yaml")):
-            text = read_text(path)
+            raw = read_text(path)
+            # Fenced blocks are blanked rather than removed so line numbers stay true.
+            kept = {number for number, _ in strip_fences(raw)}
+            text = "\n".join(
+                line if number in kept else "" for number, line in enumerate(raw.splitlines(), 1)
+            )
             for m in POINTER_RE.finditer(text):
                 topic = normalise(m.group(1))
                 if topic == POINTER_PLACEHOLDER or guide.resolves(topic):
@@ -357,30 +387,25 @@ def declared_dependencies(profile: dict) -> dict[str, dict]:
     return out
 
 
-def layer_of(path: Path) -> str | None:
-    """The `layer:` value, '' when the frontmatter has none, None when there is no frontmatter."""
-    data = frontmatter(read_text(path))
-    if data is None:
-        return None
-    value = data.get("layer")
-    return str(value) if value is not None else ""
-
-
-def require_layer(root: Path, path: Path, findings: Findings, layers: dict[str, str]) -> None:
-    layer = layer_of(path)
+def resolve_layer(
+    root: Path, path: Path, default: str, findings: Findings, layers: dict[str, str]
+) -> None:
+    """Record the file's layer: the tree's default, unless `layer:` frontmatter overrides it."""
     where = rel(root, path)
-    if not layer:
-        findings.add(4, where, "carries no `layer:` frontmatter (method, project or stack)")
-    elif layer not in LAYERS:
-        findings.add(4, where, f"`layer: {layer}` is not one of {sorted(LAYERS)}")
+    data = frontmatter(read_text(path))
+    value = None if data is None else data.get("layer")
+    if value is None:
+        layers[where] = default
+    elif str(value) not in LAYERS:
+        findings.add(4, where, f"`layer: {value}` is not one of {sorted(LAYERS)}")
     else:
-        layers[where] = layer
+        layers[where] = str(value)
 
 
 def check_completeness(
     root: Path, guide: Guide, profile: dict, findings: Findings
 ) -> dict[str, str]:
-    """Returns {path: layer} for every file that carries a valid layer -- check 5's input."""
+    """Returns {path: layer} for every file the layer rule places -- check 5's input."""
     layers: dict[str, str] = {}
     enabled = list((profile.get("work_types") or {}).get("enabled") or [])
     for label in enabled:
@@ -413,11 +438,11 @@ def check_completeness(
             if not skill.is_file():
                 findings.add(4, rel(root, directory) + "/", "skill directory has no SKILL.md")
             elif directory.name not in deps:
-                require_layer(root, skill, findings, layers)
+                resolve_layer(root, skill, "method", findings, layers)
     for path in walk(root, ".claude/agents", (".md",)):
-        require_layer(root, path, findings, layers)
+        resolve_layer(root, path, "method", findings, layers)
     for path in walk(root, "docs/reference", (".md",)):
-        require_layer(root, path, findings, layers)
+        resolve_layer(root, path, "method", findings, layers)
     return layers
 
 
@@ -524,7 +549,9 @@ def main(argv: list[str]) -> int:
     }
     if not findings.items:
         print(
-            f"check-method: clean ({len(layers)} layered files, {len(guide.rows)} work-type rows)"
+            "check-method: clean "
+            f"({sum(1 for v in layers.values() if v == 'method')} method files, "
+            f"{len(guide.rows)} work-type rows)"
         )
         return 0
     prefix = "warning" if args.warn else "error"

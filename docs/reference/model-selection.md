@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Model selection — why the table is shaped as it is
 
 `CLAUDE.md`'s **Model selection** section holds the table and the routing rule a run applies
@@ -171,6 +167,6 @@ verdict over a change no checklist read — a false clean, and the worse of the 
 
 ### Adding or renaming a context label
 
-Adding or renaming a context label means updating this table too — see
+Adding or renaming a context label means updating `CLAUDE.md`'s table too — see
 [ci-pipeline.md](ci-pipeline.md)'s **Label vocabulary sync** for every other
 place the same vocabulary is baked in.

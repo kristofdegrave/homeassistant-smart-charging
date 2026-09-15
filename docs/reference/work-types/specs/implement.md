@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `specs` — how the work is done
 
 Author the two documents that sit between the architecture and the code for one build slice:

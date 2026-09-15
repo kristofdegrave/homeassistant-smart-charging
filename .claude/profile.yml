@@ -123,9 +123,9 @@ labels:
 # files its row names.
 #
 # A dependency below with `installed: repo` must be present under .claude/skills/, and a
-# skill present there is either one of these dependencies or carries a `layer:` frontmatter —
-# the same check verifies both, so this list is how a vendored skill is told apart from an
-# authored one.
+# skill present there that is NOT declared below is the method's own — scanned by the check
+# as a method file. This list is therefore how a vendored skill is told apart from an authored
+# one; a vendored skill is never edited to say which layer it is.
 work_types:
   enabled:
     - adr
@@ -169,6 +169,11 @@ review:
         - ".github/ISSUE_TEMPLATE/**"
         - ".github/setup-labels.sh"
         - ".github/profile-env.sh"
+        # The two checked-in checks, their fixtures and the git hooks: each is a gate or a
+        # rule's mechanical half, so an edit to one is `workflow` work like the rule itself.
+        - ".github/check-*"
+        - ".github/test-check-*"
+        - ".github/hooks/**"
         - ".claude/skills/**"
         - ".claude/agents/**"
         - ".claude/profile.yml"

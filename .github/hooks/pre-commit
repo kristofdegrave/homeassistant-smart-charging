@@ -8,6 +8,9 @@
 # it still has to be committable in that state. CI (`ci.yml`'s `method` job) runs the same
 # check blocking on the PR, so the finding is never lost — only deferred to where it belongs.
 #
+# It checks the working tree, not the staged index: a partial commit is judged against what is
+# on disk, which for a warning is the useful answer (it is the tree the next commit will see).
+#
 # Exits 0 whatever the check reports. An environment error (no Python with PyYAML) is printed
 # as one line and also exits 0: a missing local dependency must not stop a commit either.
 

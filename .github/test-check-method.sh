@@ -17,7 +17,8 @@ ok_case()   { printf 'ok    %s\n' "$1"; pass=$((pass + 1)); }
 
 # A complete, passing layout: two enabled work types, one review-only; a routing table with a
 # whole-document entry and an anchored one; one authored skill, one declared dependency skill
-# and one user-installed dependency; an agent; three method documents and a project one.
+# and one user-installed dependency; an agent; method documents placed by the default rule and
+# one project document placed by its `layer:` override.
 build_fixture() {
   local d="$1"
   mkdir -p "$d/.claude/skills/step" "$d/.claude/skills/dep-skill" "$d/.claude/agents" \
@@ -109,7 +110,6 @@ EOF
   cat > "$d/.claude/skills/step/SKILL.md" <<'EOF'
 ---
 name: step
-layer: method
 description: A step skill.
 ---
 
@@ -131,14 +131,11 @@ name: reviewer
 layer: method
 tools: Read
 ---
+<!-- layer: method is legal and redundant: the agents tree defaults to it -->
 
 Resolve the checklist from `CLAUDE.md`'s **Model selection** table.
 EOF
   cat > "$d/docs/reference/wf.md" <<'EOF'
----
-layer: method
----
-
 # Contribution workflow
 
 The chain moves an item from the *backlog* column to the *done* column. Prefix pointers
@@ -161,7 +158,7 @@ Owner acme, repository widget-repo, board BOARD; the `Backlog` column is the *ba
 A project file may spell every one of these.
 EOF
   for f in alpha/implement.md alpha/done.md alpha/review.md beta/review.md; do
-    printf -- '---\nlayer: method\n---\n\n# %s\n\n## The bar\n\nContent.\n' "$f" > "$d/docs/reference/work-types/$f"
+    printf -- '# %s\n\n## The bar\n\nContent.\n' "$f" > "$d/docs/reference/work-types/$f"
   done
 }
 
@@ -196,16 +193,22 @@ case_run "a pointer wrapped across lines resolves" 0 - \
   "printf 'See \`CLAUDE.md\`'\"'\"'s **Contribution\n  workflow** topic.\n' >> docs/reference/wf.md"
 case_run "the documented **Topic** placeholder is skipped" 0 - \
   "printf 'Written as \`CLAUDE.md\`'\"'\"'s **Topic**.\n' >> docs/reference/wf.md"
-case_run "a declared dependency needs no layer frontmatter" 0 - "true"
+case_run "a declared dependency is neither layered nor scanned" 0 - "true"
 case_run "a review-only row needs only review.md" 0 - "true"
 case_run "a single-word status name written bare is not a value" 0 - \
   "printf 'Definition of Done; the work is Done when Ready.\n' >> docs/reference/wf.md"
 case_run "a project-layer file may spell profile values" 0 - \
   "printf 'PVT_projectnode and \`In progress\` are fine here.\n' >> docs/reference/profile.md"
+case_run "a layer: project override takes a method-tree doc out of check 5" 0 - \
+  "sed -i '1i ---\nlayer: project\n---\n' docs/reference/wf.md && printf 'Owned by acme.\n' >> docs/reference/wf.md"
+case_run "a pointer inside a fenced block is not checked" 0 - \
+  "printf '\`\`\`\nSee \`CLAUDE.md\`'\"'\"'s **Nowhere**.\n\`\`\`\n' >> docs/reference/wf.md"
 
 # --- 1  anchors, outward -------------------------------------------------------------------
 case_run "1: an unresolvable pointer in a skill fails" 1 "**Nowhere**" \
   "printf 'See \`CLAUDE.md\`'\"'\"'s **Nowhere** section.\n' >> .claude/skills/step/SKILL.md"
+case_run "1: an unresolvable pointer in an ADR fails" 1 "[1 anchors, outward] docs/adl/0001.md" \
+  "mkdir -p docs/adl && printf 'Per \`CLAUDE.md\`'\"'\"'s **Nowhere** topic.\n' > docs/adl/0001.md"
 case_run "1: an unresolvable pointer in a reference doc fails" 1 "[1 anchors, outward] docs/reference/wf.md" \
   "printf 'See \`CLAUDE.md\`'\"'\"'s **Nowhere** section.\n' >> docs/reference/wf.md"
 case_run "1: an unresolvable pointer in a CI workflow fails" 1 ".github/workflows/_ai-x.yml" \
@@ -242,12 +245,12 @@ case_run "4: a review-only work type missing review.md fails" 1 "has no review.m
   "rm docs/reference/work-types/beta/review.md"
 case_run "4: a repo-installed dependency that is absent fails" 1 "declared dependency \`dep-skill\`" \
   "rm -r .claude/skills/dep-skill"
-case_run "4: a skill that is neither layered nor declared fails" 1 "carries no \`layer:\`" \
-  "mkdir .claude/skills/rogue && printf -- '---\nname: rogue\n---\n\nbody\n' > .claude/skills/rogue/SKILL.md"
+case_run "4/5: an undeclared skill defaults to method and is scanned" 1 ".claude/skills/rogue/SKILL.md:5: method file spells profile value repo.owner" \
+  "mkdir .claude/skills/rogue && printf -- '---\nname: rogue\n---\n\nby acme\n' > .claude/skills/rogue/SKILL.md"
 case_run "4: an unknown layer value fails" 1 "is not one of" \
   "sed -i 's/^layer: method$/layer: stak/' .claude/agents/reviewer.md"
-case_run "4: a reference doc without frontmatter fails" 1 "docs/reference/wf.md: carries no \`layer:\`" \
-  "sed -i '1,3d' docs/reference/wf.md"
+case_run "4: an unknown layer value on a doc fails" 1 "\`layer: profile\` is not one of" \
+  "sed -i '1i ---\nlayer: profile\n---\n' docs/reference/wf.md"
 
 # --- 5  no profile values in method files --------------------------------------------------
 case_run "5: the owner in a method doc fails" 1 "profile value repo.owner" \
@@ -277,7 +280,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=33
+EXPECTED=36
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

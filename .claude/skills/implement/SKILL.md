@@ -1,6 +1,5 @@
 ---
 name: implement
-layer: method
 description: Use in an interactive session to run this project's contribution workflow's implement step for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main. Interactive sessions only; CI's entry for this step is _ai-draft.yml's own prompt, never this skill.
 ---
 

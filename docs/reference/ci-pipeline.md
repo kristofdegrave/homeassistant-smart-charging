@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # CI pipeline (`.github/workflows/ai-pipeline.yml` + `_ai-*.yml`)
 
 The automated, label-driven equivalent of

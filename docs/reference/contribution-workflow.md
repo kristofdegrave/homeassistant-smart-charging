@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Contribution workflow
 
 Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a design, or

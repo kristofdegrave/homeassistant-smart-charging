@@ -1,6 +1,5 @@
 ---
 name: file-task-issue
-layer: method
 description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for development/testing issues pinned to a plan) writes the anchored `Plan:` line correctly the first time.
 ---
 

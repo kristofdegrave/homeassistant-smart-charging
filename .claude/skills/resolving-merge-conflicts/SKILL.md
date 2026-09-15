@@ -1,6 +1,5 @@
 ---
 name: resolving-merge-conflicts
-layer: method
 description: Use when a merge or rebase in this repo is already conflicted — `git status` reports unmerged paths, or a file carries conflict markers — most often after merging `origin/main` into a task branch before a review pass. Not for a merge that applied cleanly, not for deciding whether to merge, and not for a test that fails for reasons unrelated to the conflict.
 ---
 

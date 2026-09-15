@@ -1,6 +1,5 @@
 ---
 name: work-idea
-layer: method
 description: Use when picking up a GitHub issue labeled `idea` in the Smart Charging project — brainstorm it interactively until it can be decomposed into one or more properly context-labeled follow-up issues, rather than drafting an artifact directly.
 ---
 

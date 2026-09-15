@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `requirement` — how the work is done
 
 Add or change a requirement (`Rnn` / `NFnn`), a constraint (`Cnn`), or a glossary term in this

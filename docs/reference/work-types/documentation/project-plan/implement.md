@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `documentation` — how `project-plan.md` is written
 
 Author `docs/design/project-plan.md`: the implementation task breakdown, build order, and

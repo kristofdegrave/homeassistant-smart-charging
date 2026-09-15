@@ -1,6 +1,5 @@
 ---
 name: review
-layer: method
 description: Use in an interactive session to run this project's contribution workflow's review step on a PR (/review #N) — behind-main check, a fresh reviewer agent for every changed tree plus the work type's own, findings posted as a native PR review, then the pass's exit (the exit labels, or the escalation at the cap). Interactive sessions only; CI's entry for this step is _ai-review.yml's own prompt, never this skill.
 ---
 

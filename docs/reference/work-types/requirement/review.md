@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `requirement` — the review checklist
 
 The review checklist for a requirement, constraint or glossary term is the same file as the

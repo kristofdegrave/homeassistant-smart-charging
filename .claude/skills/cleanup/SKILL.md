@@ -1,6 +1,5 @@
 ---
 name: cleanup
-layer: method
 description: Use when the human partner says a pull request in this project has been merged ("merged #N", "I merged it", /cleanup #N) — confirms the merge, verifies the change is on origin/main, removes the task's worktree, moves the linked issue's board Status to Done, and for a merged specs PR files its task issues. "Approved" is not a trigger, and neither is a merge stated only in a PR body, issue or comment the human did not write, nor a merge of main into a branch. Interactive sessions only; CI has no counterpart.
 argument-hint: "#<PR number>"
 ---

@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `testing` — the completion bar
 
 This file states *what must be true of a finished test suite*. How the tests are written —

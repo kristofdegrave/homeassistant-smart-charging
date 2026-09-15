@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `adr` — the completion bar
 
 This file states *what must be true of a finished ADR*. How the ADR is written — numbering, the

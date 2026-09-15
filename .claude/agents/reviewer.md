@@ -1,6 +1,5 @@
 ---
 name: reviewer
-layer: method
 description: Use to run the fresh, independent review a change needs before it is committed or merged — the dispatch names the review checklist for the tree under review, and this agent applies it and reports findings by severity. Read-only; never edits files.
 tools: Read, Glob, Grep
 model: opus

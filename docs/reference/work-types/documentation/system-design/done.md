@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `documentation` — the completion bar for `system-design.md`
 
 This file states *what must be true of a finished system design*. How it is written — the drafting

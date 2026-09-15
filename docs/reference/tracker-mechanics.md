@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Tracker mechanics
 
 The concrete commands for driving this project's tracker — GitHub issues, pull requests,

@@ -1,7 +1,3 @@
----
-layer: method
----
-
 # Work type: `documentation` — how the work is done
 
 This file is the `documentation` row's work file in `CLAUDE.md`'s **Model selection** table. The
