@@ -6,7 +6,7 @@ description: Use when a merge or rebase in this repo is already conflicted — `
 # Resolving merge conflicts
 
 Merging `origin/main` into the task branch before **every** review pass is a standing step of
-this project's contribution workflow (defined in `CLAUDE.md`, **Contribution workflow**), so
+this project's contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), so
 conflicts here are routine rather than exceptional. Resolving one wrongly silently reverts work
 that is already merged, and no later check catches that — which is why the procedure is written
 down.
@@ -18,7 +18,7 @@ say), ask the human partner rather than deciding it here.
 ## Step 0 — know which commands you have
 
 Some destructive git commands fall outside the standing commit/push authorization and are
-refused mechanically by a `PreToolUse` guard. `CLAUDE.md`, **Contribution workflow**, names both
+refused mechanically by a `PreToolUse` guard. `CLAUDE.md`'s **Contribution workflow** topic names both
 the authorization and the guard script, and that script is the authority on exactly what it
 refuses and when — read it if a command comes back refused. Two of its decisions shape this
 procedure:
@@ -55,10 +55,10 @@ in this order of usefulness:
 
 1. **The commit message** — its prefix names the kind of work the commit did; the prefix
    vocabulary is in the completion-bar doc's commit-message conventions, reached from
-   `CLAUDE.md`, **Contribution workflow**.
+   `CLAUDE.md`'s **Contribution workflow** topic.
 2. **The anchored `Plan:` line**, where the issue that commit's PR closes carries one — only
    implementation-track issues do. It points at the exact task in an implementation plan, which
-   states what that task was allowed to change. `CLAUDE.md`, **Issue conventions**, gives that
+   states what that task was allowed to change. `CLAUDE.md`'s **Issue conventions** topic gives that
    line's required format and which issues must carry it.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
    whose other children are often the other side of the conflict.
@@ -79,7 +79,7 @@ Three cases are not ordinary hunk-merging:
 
 - **The two sides disagree about what the system should do.** In product code, that is not a
   merge decision. Behaviour is owned by the analysis documents that `CLAUDE.md`'s **Document
-  structure** section lists, and specs derive from them rather than design it
+  structure** topic lists, and specs derive from them rather than design it
   (the `specs` work file's *derive, don't design*). Resolve the mechanical part, then stop and
   escalate the disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
@@ -99,8 +99,8 @@ Three cases are not ordinary hunk-merging:
 - **A conflict that is really a stacked branch.** A PR based on `main` while the local branch
   sits on an unmerged prior branch shows the combined stack in its diff; that shrinks by itself
   once the lower branch merges. It is not a conflict to resolve, and never a reason to rewrite
-  or re-point the lower branch — the branching rule reached from `CLAUDE.md`, **Contribution
-  workflow**, covers this case.
+  or re-point the lower branch — the branching rule reached from `CLAUDE.md`'s **Contribution
+  workflow** topic covers this case.
 
 Leave no markers behind: grep the tree for `<<<<<<<`, `=======` and `>>>>>>>` before moving on.
 
@@ -108,7 +108,7 @@ Leave no markers behind: grep the tree for `<<<<<<<`, `=======` and `>>>>>>>` be
 
 A merge breaks things neither side broke alone. Run the full Definition of Done for what the merged
 tree now touches — the paired lint and format checks, and the suite in the harness matched to
-the change — as defined by the doc that `CLAUDE.md`'s **Contribution workflow** section names as
+the change — as defined by the doc that `CLAUDE.md`'s **Contribution workflow** topic names as
 the Definition of Done; that doc also states which harness covers what, so match the suite to the
 merged tree rather than guessing. Do not shortcut to "the tests near my conflict": the ones that
 catch a bad resolution are usually elsewhere.

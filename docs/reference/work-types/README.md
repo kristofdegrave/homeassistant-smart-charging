@@ -28,9 +28,9 @@ label gets a directory when its work type has content worth writing down, and ea
 appears when that role has content of its own: a label may have a work file without a
 completion bar or vice versa. `workflow` is the extreme case and a deliberate one — it is never
 drafted from an issue, so it has **no work file and no completion bar**, and its directory holds
-`review.md` alone. Do not manufacture the other two for symmetry: `CLAUDE.md`'s **Model
-selection** section argues why that label has no drafted work, and a placeholder work file would
-contradict it. The row is what says which files exist, so an absent file is a fact about the
+`review.md` alone. Do not manufacture the other two for symmetry: the document `CLAUDE.md`'s
+**Model selection** section routes to argues why that label has no drafted work, and a
+placeholder work file would contradict it. The row is what says which files exist, so an absent file is a fact about the
 row, not a gap in this tree.
 
 ## The three roles
@@ -45,7 +45,7 @@ and this line is the copy that shrinks.
 | File | What it holds | Who reads it |
 |---|---|---|
 | `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author, and a CI drafting run. |
-| `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — `CLAUDE.md`'s **Model selection** section says why one file serves both. |
+| `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — the document `CLAUDE.md`'s **Model selection** section routes to says why one file serves both. |
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
 `review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
@@ -99,9 +99,9 @@ unbranched label's directory.
 ## When two labels share a bar
 
 Two labels may point at **one** `done.md` rather than each having their own. **Whether a given
-pair may is `CLAUDE.md`'s Model selection section to decide** — it states the rule that earns
-it, and this document does not repeat it: a rule restated here, however carefully attributed,
-is a second copy that drifts.
+pair may is decided by the rule *Two rows may share one bar*** — in the document `CLAUDE.md`'s
+**Model selection** section routes to — and this document does not repeat that rule: a rule
+restated here, however carefully attributed, is a second copy that drifts.
 
 What the shape looks like where it applies: each label still has its own directory with its own
 `done.md` in it, and one of those files is a route to the other rather than a copy of it. Only

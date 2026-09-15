@@ -148,12 +148,25 @@ join the reviewer's list.
 - **An artifact may name another skill or agent.** They travel together — `.claude/` moves as
   one tree — so a cross-reference between them stays valid wherever the tree is installed, and
   routing it through `CLAUDE.md` would buy nothing.
-- **An artifact may name `CLAUDE.md` and a section heading in it.** A *named section* is a
+- **An artifact may name `CLAUDE.md` and a topic in it.** A *named topic* — a routing-table
+  entry or a `##` heading — is a
   specific target, so it meets *Scope the read* below and the checklists' "name the file, not
-  'read the docs'" bar — which is why the heading is required and `CLAUDE.md` alone is not
+  'read the docs'" bar — which is why the topic is required and `CLAUDE.md` alone is not
   enough. What it costs is the onward hop only: `CLAUDE.md` itself is already loaded on every
   run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
-  route every artifact inherits from a single edit.
+  route every artifact inherits from a single edit. **Headings are the API, at two levels**,
+  and this is the convention's only statement: the pointer is written `` `CLAUDE.md`'s
+  **Topic** ``, naming a **topic** — an entry of `CLAUDE.md`'s routing table, or one of its own
+  `##` headings — and never a heading of the document the topic routes to. A rule is
+  addressed through its topic (*the branch-naming rule under `CLAUDE.md`'s **Issue
+  conventions***), so a rule can move between documents or split without any pointer
+  changing. The target shape of a document reached this way is `##` one topic, `###` one rule
+  beneath it; `idea-to-issues.md`'s parked topics and the `adr` bar's worthiness topic have it,
+  while the workflow reference still carries its rules as `##` sections and several routing
+  entries name a whole document rather than a heading — the pointer form above is what makes
+  reshaping them a change to those documents alone. `implement` writes "the branch-naming rule
+  under `` `CLAUDE.md`'s **Issue conventions** ``" rather than naming the workflow document's
+  own heading — that is the shape.
 - **An artifact may not name a `docs/**` path, the project by name, or a project-specific
   resource list** — with the one exception of its own subject matter, defined after this
   list. Write "this project" where a name is tempting; route the path and the list.

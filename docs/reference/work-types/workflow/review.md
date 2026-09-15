@@ -3,10 +3,11 @@
 **Who reads this.** The reviewer only — a fresh, read-only Opus agent, never the session that
 wrote the change. This directory holds **only** this file: `workflow` has no work file and no
 completion bar, because its work is never drafted from an issue and a human authors it by hand.
-`CLAUDE.md`'s **Model selection** section argues why, and `work-types/README.md` records the
-asymmetry as deliberate. The consequence for you is that there is no bar to fall back on: this
-file is the whole of the criteria for a `workflow` review, which is why it carries a full
-checklist where other labels' review documents carry only what their bar cannot.
+The document that `CLAUDE.md`'s **Model selection** section routes to argues why, and
+`work-types/README.md` records the asymmetry as deliberate. The consequence for you is that
+there is no bar to fall back on: this file is the whole of the criteria for a `workflow`
+review, which is why it carries a full checklist where other labels' review documents carry
+only what their bar cannot.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
 not here. They are the same for every review and live with whoever applies this checklist — the
@@ -29,7 +30,7 @@ recipes), an issue form
 (`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,
 so this checklist weighs security at least as heavily as quality. An issue form carries no
 credentials itself but can still point at load-bearing process semantics (e.g. `adr.yml`
-pointing at `CLAUDE.md`'s ADR section) that must stay in sync with what it references.
+linking to the ADR worthiness test) that must stay in sync with what it references.
 
 ## What to read first
 
@@ -53,8 +54,8 @@ Always read:
   `docs/reference/contribution-workflow.md`'s **Issue conventions** — the canonical
   context-label vocabulary, to check the form's `labels:` value against it — and
   `docs/reference/ci-pipeline.md`'s **Label vocabulary sync**, to check the CI-side files stay
-  in step; and, for `adr.yml`, `CLAUDE.md`'s **Architecture Decision Records** section, since
-  the form points at it.
+  in step; and, for `adr.yml`, the document `CLAUDE.md`'s **Architecture Decision Records
+  (ADRs)** topic routes to, since the form links to it.
 
 ## Review checklist
 
@@ -100,15 +101,24 @@ Always read:
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.claude/profile.yml`'s `labels` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a
-  Major finding); and any process claim the form's body makes (e.g. `adr.yml` pointing at
-  `CLAUDE.md`'s ADR section) still matches what that reference currently says.
-- The issue-to-merge lifecycle is defined in `CLAUDE.md`'s **Contribution workflow** section;
-  `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line only point
-  to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
+  Major finding); and any process claim the form's body makes (e.g. `adr.yml` linking to the
+  document `CLAUDE.md`'s **Architecture Decision Records (ADRs)** topic routes to) still
+  matches what that reference currently says.
+- The issue-to-merge lifecycle is the document `CLAUDE.md`'s **Contribution workflow** topic
+  routes to; `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line
+  only point to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
   cross-check their claims about `_ai-draft.yml`/`_ai-review.yml`/`_ai-fix.yml` behavior
   (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
   behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
   is a Major finding.
+- Every pointer a changed skill or agent definition writes to project material is in the
+  `` `CLAUDE.md`'s **Topic** `` form, and the topic resolves — to an entry of `CLAUDE.md`'s
+  routing table or one of its `##` headings. A pointer naming the owning document's heading
+  directly, or a topic that resolves to nothing, is a Minor finding — Major where it is the
+  only route to something the artifact must read. The heading shape of the routed documents is
+  not this item's to score: the convention, and where that shape is and is not yet reached, is
+  stated once in `docs/reference/ai-authoring.md`; this item checks the pointer, not the
+  target.
 - If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
   interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
   itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive
