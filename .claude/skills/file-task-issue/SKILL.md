@@ -14,9 +14,10 @@ membership (native sub-issues and blocked-by edges) are all defined once, and `C
 **Issue conventions** section routes to wherever that is — start there for what each means and
 when it applies. *Which* issues a strand gets and in what order — the epic, the children that
 are decidable now, the task issues that wait for a plan — is the **Ticket** stage of the flow
-`CLAUDE.md`'s **Idea-to-product flow** topic routes to. The `gh` commands that write them, and the read-backs that confirm they took,
-are routed by `CLAUDE.md`'s **Tracker mechanics** section. This skill adds only the pre-flight
-order to run through so nothing gets filed half-scoped.
+`CLAUDE.md`'s **Idea-to-product flow** topic routes to. The `gh` commands that write them, and
+the read-backs that confirm they took, are routed by `CLAUDE.md`'s **Tracker mechanics**
+section. This skill adds only the pre-flight order to run through so nothing gets filed
+half-scoped.
 
 ## The checklist
 

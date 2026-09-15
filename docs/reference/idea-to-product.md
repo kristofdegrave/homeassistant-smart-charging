@@ -24,7 +24,21 @@ artifact. A stage whose work type is absent from `.claude/profile.yml`'s `work_t
 is skipped, with no deviation needed — its gate then holds vacuously, and the next stage's
 gate is the one that has to hold. The stages that carry no work type — Capture, Brainstorm,
 Route, Ticket, Verify live, Close — are the flow's spine: a project that wants them changed
-changes the method, since a deviation has no work type to name.
+changes the method, since a deviation has no work type to name. One enabled work type has no
+stage the other way round: `workflow` work changes the method's own tooling — a skill, a
+reference document, the pipeline — so it is not a step an idea passes through; a `workflow`
+issue is filed at **Ticket** like any other child and runs the chain, outside the artifact
+chain.
+
+### Where a stage names this project's documents, that is the instance, not the method
+
+The stages are the method's; several of their rules name what this project fills them with —
+the harness seam an ADR of this project assigns at **Route**, the analysis files and their
+order at **Analysis**, every tree under **Document structure**. Those are this project's
+instance of the method's slots, carried here until the stack overlays take them, the way the
+work-type files still carry their stack-specific sentences (`CLAUDE.md`'s **Authoring AI
+artifacts** topic concedes as much for those). A project porting the flow replaces the named
+documents and keeps the stages; a deviation is for a stage, not for a document name.
 
 ### Every artifact stage runs through the contribution workflow
 
@@ -51,6 +65,8 @@ findings, the epic it is split from — is recorded against an issue, so an in-c
 is filed before brainstorming starts.
 
 ### Artifact: one `idea`-labelled issue
+
+Filed with the `idea` label alone — no context label yet, since nothing is scoped.
 
 ### Gate: the issue exists before anything is discussed
 
@@ -88,6 +104,8 @@ outputs to their homes. Two kinds of output, each with its own home:
 
 ### Artifact: the decisions, on the issue
 
+One entry per settled question, plus a `research` comment per question of fact.
+
 ### Gate: every decision written, no question of fact left open
 
 The idea is scoped enough to route and split — not designed in detail; that belongs to each
@@ -117,6 +135,8 @@ fix for a behaviour nobody has seen. Once the fixing artifact is known, the issu
 artifact's context label and re-enters the chain at that artifact's stage.
 
 ### Artifact: the chosen track, written on the issue
+
+And, on the shipped-behaviour track, the reproduction `diagnosing-bugs` leaves behind.
 
 ### Gate: on the shipped-behaviour track, the claim is reproduced
 
@@ -169,6 +189,8 @@ Milestone and priority are not yet standardized. Note urgency in the epic body r
 inventing a scheme ad hoc.
 
 ### Artifact: the epic and every child that is already decidable
+
+Or the single issue, where the idea is one artifact.
 
 ### Gate: every decidable issue is filed, with its edges
 
@@ -327,6 +349,8 @@ carries what a finished spec must show.
 
 ### Artifact: the slice's design and TDD plan, under `docs/plans/`
 
+Two documents per slice; the `specs` row names how each is written.
+
 ### Gate: the plan is merged, and its task issues are filed
 
 A `development`/`testing` issue needs the anchored `Plan:` line, so none can exist before the
@@ -342,14 +366,16 @@ from those issues and from nothing else.
 
 ## 9. Implementation
 
-One plan task per issue: the failing test, the minimal implementation, green, commit — TDD one
-behaviour at a time, against the files the `development` row names. The row's work file carries
-the drafting order, the pre-commit self-check and the stack references it sends the author to;
+One plan task per issue, TDD one behaviour at a time, against the files the `development` row
+names. The row's work file carries the loop itself, the pre-commit self-check and the stack
+references it sends the author to;
 its bar, and the **Definition of Done** the contribution workflow names, carry what a finished
 task must show, the Runtime check included. Stack skills are the work file's to name, never
 this document's.
 
 ### Artifact: the task's code and its tests, one PR per task
+
+Each PR closes its task issue and carries `Part of` for the epic.
 
 ### Gate: the Definition of Done, Runtime check included
 
@@ -372,6 +398,8 @@ has no issues at this stage, and a project that does not enable `testing` skips 
 **Implementation** stage's bar then carrying the tests.
 
 ### Artifact: the task's tests, one PR per task
+
+In the harness the plan task names for them.
 
 ### Gate: the Definition of Done, in the harness matched to what is tested
 
@@ -413,6 +441,8 @@ shipped. The originating idea issue is already closed — that happened at **Tic
 strand was fully captured.
 
 ### Artifact: the closed epic, with its summary
+
+What shipped, in the epic's closing comment; the idea issue was closed at **Ticket**.
 
 ### Gate: every child closed and every slice verified live
 

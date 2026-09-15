@@ -264,6 +264,8 @@ case_run "3: a flow deviation naming a work type that is not enabled fails" 1 "f
   "printf '\n### The \`gamma\` stage is removed\n\nBecause.\n' >> docs/reference/profile.md"
 case_run "3: a flow deviation naming no work type fails" 1 "names no work type in backticks" \
   "printf '\n### Verify live is skipped\n\nBecause.\n' >> docs/reference/profile.md"
+case_run "3: a profile document without a Flow section fails" 1 "has no \`## Flow\` section" \
+  "sed -i '/^## Flow$/,\$d' docs/reference/profile.md"
 
 # --- 4  work-type completeness -------------------------------------------------------------
 case_run "4: an enabled work type missing its bar fails" 1 "has no done.md" \
@@ -311,7 +313,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=46
+EXPECTED=47
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

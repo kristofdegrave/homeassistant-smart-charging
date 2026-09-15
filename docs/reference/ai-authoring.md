@@ -322,8 +322,9 @@ never revised cannot be the thing a blocking gate asks to edit). **2, anchors in
 link and every backticked path in `CLAUDE.md` resolves, an anchored link to a heading of its
 document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
 agreement:** the Model selection table and changed-path map agree with the profile's
-`work_types.enabled`, `labels.context` and `review.path_map`, and every flow deviation
-`docs/reference/profile.md`'s **Flow** states names an enabled work type. **4, work-type completeness:**
+`work_types.enabled`, `labels.context` and `review.path_map`; `docs/reference/profile.md`
+has a **Flow** section, and every deviation it states — each `###` there — names at least
+one work type in backticks, every one of them enabled. **4, work-type completeness:**
 every enabled work type has its `review.md`, and its `implement.md` and `done.md` unless its
 row says its work is `none`; every dependency declared `installed: repo` is present; every
 `layer:` a file does carry names a known layer. **5, no profile values in method files:** no

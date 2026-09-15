@@ -17,9 +17,10 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
-                        same set; the table's changed-path map equals review.path_map; every
-                        flow deviation -- a `###` under docs/reference/profile.md's `## Flow`
-                        -- names, in backticks, at least one work type, each of them enabled
+                        same set; the table's changed-path map equals review.path_map;
+                        docs/reference/profile.md has a `## Flow` section, and every flow
+                        deviation -- a `###` under it -- names, in backticks, at least one
+                        work type, each of them enabled
   4  work-type          every enabled work type has review.md, and implement.md and done.md
      completeness       unless its row says its work is `none`; every dependency declared
                         `installed: repo` is present; every `layer:` frontmatter, where a
@@ -341,9 +342,7 @@ def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
                 )
 
 
-def check_profile_agreement(
-    root: Path, guide: Guide, profile: dict, findings: Findings
-) -> None:
+def check_profile_agreement(root: Path, guide: Guide, profile: dict, findings: Findings) -> None:
     enabled = list((profile.get("work_types") or {}).get("enabled") or [])
     rows = set(guide.rows)
     for label in sorted(set(enabled) - rows):
@@ -396,29 +395,37 @@ def check_profile_agreement(
 
 
 def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) -> None:
-    """Every `###` under the profile document's `## Flow` names enabled work types only.
+    """The profile document has a `## Flow`, and every `###` under it names enabled work types.
 
     The section's shape is the flow document's contract: no `###` means the default flow, and
     each `###` is one deviation whose heading names, in backticks, the work type of the stage
-    it changes. A deviation naming no work type cannot be placed against a stage; one naming a
-    work type the project does not enable describes a stage the flow already skips.
+    it changes -- every backticked span in the heading is read as one. A deviation naming no
+    work type cannot be placed against a stage; one naming a work type the project does not
+    enable describes a stage the flow already skips. A profile document with no `## Flow` at
+    all has stated neither shape, so it is a finding too.
     """
     path = root / PROFILE_DOC
     if not path.is_file():
         return
-    text = read_text(path)
-    flow = section(text, FLOW_SECTION)
-    offset = 0
-    for number, line in strip_fences(text):
+    lines = strip_fences(read_text(path))
+    start = None
+    for i, (_, line) in enumerate(lines):
         m = HEADING_RE.match(line)
         if m and len(m.group(1)) == 2 and m.group(2).strip() == FLOW_SECTION:
-            offset = number
+            start = i
             break
-    for index, line in enumerate(flow.splitlines(), start=1):
+    if start is None:
+        findings.add(3, PROFILE_DOC, f"has no `## {FLOW_SECTION}` section (the flow contract)")
+        return
+    for number, line in lines[start + 1 :]:
         m = HEADING_RE.match(line)
-        if not m or len(m.group(1)) != 3:
+        if not m:
             continue
-        where = f"{PROFILE_DOC}:{offset + index}"
+        if len(m.group(1)) <= 2:
+            break
+        if len(m.group(1)) != 3:
+            continue
+        where = f"{PROFILE_DOC}:{number}"
         names = re.findall(r"`([^`]+)`", m.group(2))
         if not names:
             findings.add(

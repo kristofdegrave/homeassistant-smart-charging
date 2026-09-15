@@ -9,8 +9,8 @@ An `idea` issue can be small or very large, and rarely maps 1:1 to a single arti
 skill turns it into one or more scoped, context-labeled issues that the labeled pipeline can
 then draft — it never drafts an artifact or opens a PR itself.
 
-This is a manual/interactive skill, not a CI-wired one: grilling is a genuine dialogue with a
-human, so it stays a session task rather than a non-interactive drafter.
+This is a manual/interactive skill, not a CI-wired one: the brainstorm is a genuine dialogue
+with a human, so it stays a session task rather than a non-interactive drafter.
 
 The stages this skill walks — the mandatory brainstorm, the two tracks, the verification gate,
 the spec gate, what a child issue is, and when the idea issue closes — are defined once in the
@@ -43,7 +43,7 @@ only sequences those stages and says which skill performs each. Cite it, never r
    Record the answer on the issue either way, so it is not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
    single-artifact idea, an epic plus its children for a multi-artifact strand — moving the
-   grilled decisions wherever the flow document says they end up. `file-task-issue` owns
+   brainstormed decisions wherever the flow document says they end up. `file-task-issue` owns
    attaching a child to its epic, so the epic body never carries a checklist of them; what a
    child is and in what order children are filed is the flow document's. A part still too fuzzy
    to scope keeps the `idea` label and gets worked later — recursion is expected, not an error.
@@ -72,8 +72,8 @@ only sequences those stages and says which skill performs each. Cite it, never r
 - Closing the parent idea issue when only part of it was decomposed.
 - Relabeling/reusing the idea issue itself as the epic instead of filing a new, separate epic
   issue — the epic must stay open tracking children long after the idea issue is closed.
-- Leaving grilled decisions in chat scrollback, or leaving them on the idea issue after an epic
-  was filed instead of moving them into the epic body.
+- Leaving brainstormed decisions in chat scrollback, or leaving them on the idea issue after
+  an epic was filed instead of moving them into the epic body.
 - Designing a fix on the shipped-behaviour track before the claim has been reproduced.
 - Filing `development`/`testing` child issues before an approved plan exists for them to cite
   in their `Plan:` line.

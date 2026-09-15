@@ -11,10 +11,11 @@ same lifecycle run by CI, with `github-actions[bot]` as the actor, is
 
 Two related references cover the phases just outside this lifecycle: the stages either side of
 it ([idea-to-product.md](idea-to-product.md) — the default flow from a captured idea, through
-the artifact chain, to a slice verified on the real installation) and the **Definition of Done** an author
-checks inside step 1, before the PR ([definition-of-done.md](definition-of-done.md), also
-covering commit message conventions) — the project-wide floor, distinct from a row's per-type
-*completion bar*, which that document routes to.
+the artifact chain, to a slice verified on the real installation) and the **Definition of
+Done** an author checks inside step 1, before the PR
+([definition-of-done.md](definition-of-done.md), also covering commit message conventions) —
+the project-wide floor, distinct from a row's per-type *completion bar*, which that document
+routes to.
 
 ## The chain
 
@@ -255,9 +256,9 @@ session's own footprint by the session's markers, never by author.
   its children's estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
   **Ticket** stage for the full cycle (when to file the epic, what to file immediately vs.
-  defer). The epic is the
-  **parent issue** and each child is a **native sub-issue** of it; a child that cannot start
-  until another finishes carries a **native blocked-by relationship**. Neither is body text —
+  defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
+  child that cannot start until another finishes carries a **native blocked-by
+  relationship**. Neither is body text —
   `gh` supports both directly, so nobody needs to re-derive them — the commands, and the
   read-backs that confirm an edge actually landed, are in
   [tracker-mechanics.md](tracker-mechanics.md).
