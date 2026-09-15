@@ -23,7 +23,7 @@ Dispatch stops when the lookup yields no work file: the issue has no context lab
 more than one, or carries one whose row names none. Say which case it is and stop. What such an
 issue needs before work starts, and which skill supplies it, is stated by the documents
 `CLAUDE.md`'s **Contribution workflow** and **Issue conventions** topics route to, and, for a
-row without a work file, by `CLAUDE.md`'s **Model selection** section itself.
+row without a work file, by `CLAUDE.md`'s **Model selection** section.
 
 ## Then, in order
 
