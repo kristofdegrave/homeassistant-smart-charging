@@ -106,6 +106,10 @@ Add the comparison to the checks `ci.yml` already runs.
   check fires only when this repository happens to change: it reddens an unrelated pull request
   over a state its author did not cause, checks the same pins twenty times on a busy day, and
   checks them not at all in a quiet month.
+- What is rejected here is a PR-time check as *the watcher*, and only that. A PR-time check over
+  something a pull request does change — whether the manifest still parses and every pin carries
+  a known scheme — has a local change to run on and is not this option; the chosen option
+  includes exactly that half, and the Decision says why it has to.
 
 ### Option F — Require a resolvable `commit:` pin for every row first
 
@@ -155,10 +159,14 @@ change. Option F's tidier verdict set is rejected on its own Con — it makes th
 the work the check exists to request.
 
 Option G's cost is accepted as the price of watching the one thing here that nothing else can
-watch, and it is paid down where it can be: the check's fixtures are offline and run both at PR
-time and inside the scheduled job, and the check's parse-only `--validate` mode runs on every
-pull request, because one unreadable row aborts the comparison and takes every other row's
-verdict with it.
+watch, and it is paid down where it can be — by taking the half of Option E that Option E's own
+Con does not reject. The check's fixtures are offline and run both at PR time and inside the
+scheduled job, and the check's parse-only `--validate` mode runs on every pull request. Both
+have a local change to run on, which is the whole of what Option E lacked: the fixtures answer
+to the check's own source, and `--validate` to the manifest, and a pull request changes each of
+those. `--validate` earns its place because one unreadable row aborts the comparison and takes
+every other row's verdict with it, so a malformed row must not be able to ship green and
+surface a week later in the job the Con above says nobody watches.
 
 Three properties follow from the reasoning above rather than being separate choices, and are
 recorded because each was reached by discarding a working alternative.
@@ -191,10 +199,13 @@ the act that closes a report, which gives every adoption or non-adoption decisio
 written down — the pull request that bumps it.
 
 **Harder.** Vendoring anything new now carries an obligation: a copy with no manifest row is
-watched by nothing, and nothing says so. A row whose pin scheme cannot be parsed aborts the
-comparison for every other row, which is why the parse-only mode runs at PR time. And the
-weekly job itself is now a thing that can break quietly — the cost the Decision's last
-paragraph pays down rather than removes.
+watched by nothing. That obligation is written down — `docs/reference/method/ai-authoring.md`'s
+**Vendored skills are forked on purpose** states it, and states that answering a report means
+bumping the pin either way — but nothing mechanical refuses an undeclared copy, so the
+obligation is met by an author who knows it or not at all. A row whose pin scheme cannot be
+parsed aborts the comparison for every other row, which is why the parse-only mode runs at PR
+time. And the weekly job itself is now a thing that can break quietly — the cost the Decision's
+last paragraph pays down rather than removes.
 
 **Forecloses.** An automatic re-sync of a vendored copy. This record makes adoption a human
 decision recorded in the pull request that bumps the pin, so a later change that wants the
@@ -221,13 +232,14 @@ is deliberately not a precondition here, per Option F.
          .github
    ```
 
-   …plus five sites listed explicitly in the table below. This is a **hybrid** of the template's
-   two forms, for the reason the template's width test demands: neither form alone reaches
-   everything this decision governs.
+   …plus eight sites listed explicitly in the table below. This is a **hybrid** of the
+   template's two forms, for the reason the template's width test demands: neither form alone
+   reaches everything this decision governs.
 
    The pattern is three arms, and each is load-bearing. **`schedule:`** finds the trigger class
-   this decision introduces — but on its own it returns one file, which proves nothing about the
-   topology that file joins. **The permission keys** find every write grant, not only
+   this decision introduces — but on its own it returns two files, the new job and Dependabot's
+   configuration, which says nothing about the write grants the decision has to be weighed
+   against. **The permission keys** find every write grant, not only
    `issues: write`: a pattern on the new job's own grant would drop precisely the neighbours
    this decision has to be weighed against. **`WORKFLOW_PAT`** is the arm a permissions-only
    pattern would miss entirely — a reusable workflow declares no `permissions:` of its own,
@@ -238,30 +250,47 @@ is deliberately not a precondition here, per Option F.
    The path is `.github` rather than `.github/workflows`, and the difference is one file:
    `.github/dependabot.yml`, which the first arm returns and which is weekly clock-triggered
    automation that opens pull requests here. Narrowing to the workflows directory would have
-   dropped the one configured automation this decision's own Option B is about — the shape of
-   width failure the template warns against, arrived at by path rather than by pattern. What the
-   path still does not reach is the prose and data outside `.github` altogether: those sites
-   carry no workflow syntax at all, no widening of the pattern finds them, and the five are
-   therefore named instead. One consequence worth stating: `docs/adl/` is outside the path, so
-   this record is not a hit of its own search and needs no self-row.
+   dropped the one configured automation this decision's own Option B is about — width failure
+   arrived at by path rather than by pattern.
 
-   The search returns **8 files**; with the five listed sites, **13** are enumerated — **10** in
+   What no widening of *either* reaches is a site the decision governs without being
+   clock-triggered or write-capable itself, because those are the only two things the pattern
+   knows how to recognise. Four categories fall there, eight files in all, and they are listed
+   rather than searched for:
+
+   - **A workflow that merely invokes the check**, under read-only permissions and on no
+     schedule — `ci.yml`. It is inside the search path and returns nothing, which is exactly the
+     miss: a pattern keyed on triggers, permission keys and a PAT name cannot see a `run:` line.
+   - **The check's own scripts and fixtures**, which carry every verdict but no workflow syntax.
+   - **The manifest the check reads**, which is YAML of an unrelated shape.
+   - **The prose that states what this decision obliges** — three documents, none of which
+     names a permission key or a cron expression.
+
+   One consequence worth stating: `docs/adl/` is outside the path, so this record is not a hit of
+   its own search and needs no self-row.
+
+   The search returns **8 files**; with the eight listed sites, **16** are enumerated — **13** in
    the table below and **3** out of scope under 3.
 
-   Three workflows return nothing, and that is a result rather than a gap: `ci.yml`,
-   `close-guard.yml` and `coverage.yml` declare `contents: read` with read-only job scopes, hold
-   no PAT, and run on no schedule. They are not sites this decision governs.
+   Two workflows are genuine non-sites rather than misses: `close-guard.yml` and `coverage.yml`
+   return nothing for the pattern *and* invoke nothing of this decision's — they declare
+   `contents: read` with read-only job scopes, hold no PAT, run on no schedule, and neither
+   mentions the drift check. `ci.yml` looks like a third of them and is not one, which is why it
+   is listed above rather than dismissed here.
 
-2. **Per-hit verdict** (every hit appears here or in 3; the five explicitly listed sites are
+2. **Per-hit verdict** (every hit appears here or in 3; the eight explicitly listed sites are
    marked *listed*).
 
 | Site | What it does today | Verdict |
 | --- | --- | --- |
-| `.github/workflows/upstream-drift.yml` | Weekly cron plus `workflow_dispatch`; `contents: read` at the top and `issues: write` on its one job; opens or splices a single report and applies `workflow` | Conforms — the site this record decides |
+| `.github/workflows/upstream-drift.yml` | Weekly cron plus `workflow_dispatch`; `contents: read` at the top, re-declared on its one job, which adds `issues: write` and nothing else; opens or splices a single report and applies `workflow` | Conforms — the site this record decides |
+| `.github/workflows/ci.yml` *(listed)* | Runs the check's fixtures and its parse-only `--validate` mode at PR time, under `contents: read`, on no schedule | Conforms — it is where the Decision's "paid down where it can be" half actually runs; a `run:` line is invisible to the pattern, which is why it is listed |
 | `.github/check-upstream-drift.py`, `.github/check-upstream-drift.sh` *(listed)* | Hold the comparison, the four verdicts, the marker pair and the splice; the workflow calls them and carries the answer to GitHub | Conform — keeping the logic that can destroy a maintainer's writing where fixtures reach it is this decision's own shape |
 | `.github/test-check-upstream-drift.sh` *(listed)* | The check's fixtures; offline by construction, run at PR time and again inside the scheduled job | Conforms |
 | `.claude/profile.yml` *(listed)* | Carries `dependencies`, now machine-read: 12 `commit:` rows and 4 `sha256:` rows | **Does not conform in those four rows** — each is reported `unresolvable` every run until reconciled to a `commit:` pin, which is the follow-up above; the manifest and its 12 other rows conform |
 | `docs/reference/method/ci-pipeline.md` *(listed)* | States why the job exists, what it may not do, the four verdicts, and how a report is closed | Conforms — it is where the operational detail lives, which is why this record cites rather than repeats it |
+| `docs/reference/method/ai-authoring.md`, **Vendored skills are forked on purpose** *(listed)* | States the two standing obligations this decision creates: a copy brought in from outside gets its `dependencies` row in the same PR or it is left out of the check, and a drift report is answered by bumping the pin whichever way the decision went | Conforms — and it routes to the CI document for the watcher itself rather than restating it |
+| `docs/reference/profile.md`, **Dependencies** *(listed)* | Describes `dependencies` as the provenance manifest and states that a pin moves only by a decision recorded in the PR that moves it | Conforms — the same rule this record's Consequences reach from the watcher's side |
 | `.github/workflows/ai-pipeline.yml` | The autonomous pipeline's entry: `contents`/`issues`/`pull-requests: write` per calling job, every job gated on a `labeled` event whose sender is a named maintainer | Conforms — a human is in its trigger, the property the scheduled job cannot have and compensates for by writing no label that dispatches |
 | `.github/workflows/_ai-draft.yml`, `_ai-fix.yml`, `_ai-review.yml` | Reusable workers. None declares a write grant of its own: the first two declare no `permissions:` at all and inherit the caller's, and `_ai-review.yml` declares only `contents: read` on its `skill-scan` job. All three use `WORKFLOW_PAT` where a label must trigger the next job and for Projects reads | Conform — same trigger property as their caller; named here because the PAT is a write surface no permission key shows |
 
