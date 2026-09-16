@@ -30,15 +30,23 @@ separation the `workflow` review checklist's non-negotiables enforce).
 
 The context-label vocabulary itself (values and meanings) is documented once, in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. What lives here
-is the CI-side consistency obligation: the same vocabulary is baked into six pipeline
-places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-draft.yml`'s
-`context_labels` variable, its "No context label found" reason string, and its `case` block;
-`.claude/profile.yml`'s `labels` section, which `.github/setup-labels.sh` writes to the
-repository; and `close-guard.yml`'s `case` block, which
-names `development` and `testing` (see **The docs-only close guard** below) — and, for the
-three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
-too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
-that label on every issue filed through the form. Two more places carry the same vocabulary
+is the CI-side consistency obligation: the same vocabulary is baked into the pipeline's own
+configuration in several places that must all move together, and they are found **by rule, not
+from a list** —
+
+```sh
+grep -rnE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
+  .github/workflows/ .github/ISSUE_TEMPLATE/ .github/setup-labels.sh .claude/profile.yml
+```
+
+— run with the label being renamed in place of the alternation. Every hit is a place the rename
+has to reach: a worker's `context_labels` variable or `case` block, a reason string a human
+reads, a guard's own `case`, an issue form's `labels:` key that stamps the label on every issue
+filed through it, the profile's `labels` section that `.github/setup-labels.sh` writes to the
+repository, and any later workflow that names a label to apply or to branch on. The grep is the
+obligation; the examples are illustrations of what it turns up, never the set.
+
+Two more places carry the same vocabulary
 without being part of the pipeline's own configuration — though both are read by the workers at
 run time, which is what makes *renaming* a label expensive here rather than merely tedious:
 `CLAUDE.md`'s **Model selection** table, one row per context label,
@@ -176,14 +184,23 @@ issue, so the property is enforced by what it *can* do rather than only by what 
 It applies `workflow` and no other label: a scheduled job able to apply `needs-draft`,
 `needs-review` or `needs-work` would spawn drafting or review work nobody asked for.
 
-**One open report, updated in place.** The report is found by a marker in its body — not by
-its title and not by its label, either of which a maintainer may change while triaging it, and
-each of which would otherwise hide the open report and open a second one. Only the region
-between that marker and its closing pair is the workflow's: a note a maintainer adds around it
-survives the next run, which a wholesale body replacement would both destroy and then read as
-a change every week afterwards. The body is rewritten only when the set of rows actually
-changed, compared on content rather than bytes, so an unchanged week touches nothing and
-notifies nobody. The workflow never closes it: the report ends when a human acts on it, and
+**One open report, updated in place.** The report is found by two conditions, each doing a
+different job. A marker in the body — not the title and not the label, either of which a
+maintainer may change while triaging it, and each of which would otherwise hide the open report
+and open a second one. And the issue's **author**, because that marker is published: it sits in
+this public repository, in the script and in every report, so without an author condition
+anyone able to open an issue could paste it into one and become the report, and the job would
+splice into a stranger's issue and never open the real one. A maintainer cannot change who
+opened an issue, so constraining the author costs nothing the marker match was defending.
+
+Only the region between the marker and its closing pair is the workflow's: a note a maintainer
+adds around it survives the next run, which a wholesale body replacement would both destroy and
+then read as a change every week afterwards. A body whose markers are missing, doubled or
+reversed is **refused** rather than merged optimistically — each of those shapes destroys text
+if it is guessed at, and refusing fails the run loudly instead. The body is rewritten only when
+its content actually changed, compared on content rather than bytes — that is a weaker claim
+than "when the set of rows changed", and deliberately so: an advanced head sha or a moved date
+on a row already listed is a real change to the report. The workflow never closes it: the report ends when a human acts on it, and
 the act is the same either way — **adopt the upstream change, or decide it does not apply, and
 bump the pin in the PR that records the decision**. That PR closes the report through its own
 `Closes` reference, which is what stops the row reappearing. A report closed without a pin
@@ -201,6 +218,12 @@ never diverged — so those rows can be neither confirmed nor refuted, and calli
 reconciliation to a `commit:` pin, and repeat every run until they get one. A lookup that
 *errors* is not a verdict at all: the run fails and writes nothing, rather than opening a
 report whose rows are silently incomplete.
+
+Everything the workflow decides lives in the script, and the workflow itself only calls it and
+carries the answer to GitHub. That is why: the splice and the did-anything-change comparison
+were inline shell in the job until a review observed that the one piece of logic able to
+destroy a maintainer's writing was also the one piece no fixture could reach. Logic in the
+job is logic no test covers, in a job nobody watches.
 
 The check's fixtures (`.github/test-check-upstream-drift.sh`) are offline by construction and
 run twice: in `ci.yml`, so a PR that breaks the check fails on that PR, and again inside the

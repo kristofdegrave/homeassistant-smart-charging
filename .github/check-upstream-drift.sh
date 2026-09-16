@@ -5,10 +5,13 @@
 # the profile is YAML.
 #
 # Usage:  .github/check-upstream-drift.sh [--root DIR] [--out FILE] [--responses FILE]
+#                                         [--validate] [--markers]
+#                                         [--splice --body FILE --report FILE [--out FILE]]
 #
-# Arguments pass straight through; the script's own header states them. Exit codes are the
-# script's: 0 every pin current, 1 something needs a human, 2 usage or environment error -
-# including no usable Python, reported here before the script is reached.
+# Arguments pass straight through; what each mode does is the script's own header. Exit codes
+# are the script's too: 0 every pin current (or, under --splice, a merged body written), 1
+# something needs a human, 2 usage or environment error - including no usable Python, reported
+# here before the script is reached - and 3 for --splice's "nothing changed".
 
 set -euo pipefail
 

@@ -8,13 +8,13 @@ the pin keeps claiming a reconciliation that is no longer true. This script is w
 
 It reads the manifest, asks GitHub what each pinned path looks like upstream today, and writes
 a Markdown report of everything that no longer matches. It never edits a skill and never edits
-the manifest: several of these copies are adaptations rather than copies, so an upstream change
-is a question for a human, not a patch to apply. Acting on the answer -- adopt the change, or
-decide it does not apply -- bumps the pin in the PR that records the decision, which is what
-stops the report reappearing.
+the manifest, and it is not this file's place to say why: that argument belongs to the document
+`CLAUDE.md`'s **Authoring AI artifacts** topic routes to, which owns it. What is stated here is
+only what this script does.
 
   Usage: check-upstream-drift.py [--root DIR] [--out FILE] [--responses FILE]
                                  [--validate] [--markers]
+                                 [--splice --body FILE --report FILE [--out FILE]]
 
   --root       repository root (default: the script's parent directory)
   --out        write the Markdown report here (default: stdout)
@@ -27,10 +27,15 @@ stops the report reappearing.
                malformed row has to fail, rather than a week later in the scheduled job.
   --markers    print the two markers delimiting the generated report, then stop. The workflow
                reads them from here rather than keeping its own copy.
+  --splice     put a fresh report back between the markers in an existing issue body, leaving
+               whatever a maintainer wrote around them untouched, and say whether that changed
+               anything. Refuses a body whose markers are missing, doubled or reversed.
 
   Exit 0  every pin still matches upstream; no report is written
+          (--splice: the merged body differs from the old one and was written)
        1  at least one row needs a human -- the report says which and why
        2  usage or environment error, or a lookup that did not answer
+       3  --splice only: the merged body is the same as the old one; nothing to write
 
 One verdict per row, and the difference between them matters:
 
@@ -147,18 +152,36 @@ def fixture_lookup(responses: dict):
     return lookup
 
 
-def classify(row: dict, lookup, token: str | None) -> dict:
-    """One verdict for one manifest row."""
+def check_pin(row: dict) -> tuple[str, str]:
+    """The pin's scheme and value, or ValueError if it is not one this script understands.
+
+    The single statement of what a usable pin looks like. `classify` and `--validate` both go
+    through it rather than each testing the pin their own way: two independent spellings of one
+    rule is how `--validate` comes to pass a row the scheduled run then aborts on, which is the
+    exact failure `--validate` exists to prevent.
+    """
     pin = str(row["pin"])
     kind, _, value = pin.partition(":")
+    if kind not in ("commit", "sha256") or not value:
+        raise ValueError(f"dependency {row['name']!r} has an unrecognised pin {pin!r}")
+    if kind == "commit" and (len(value) < 7 or not all(c in "0123456789abcdef" for c in value)):
+        # A pin that is not lowercase hex can never match a sha, so it would not fail -- it
+        # would report a permanent, silent false `drifted` for that row.
+        raise ValueError(
+            f"dependency {row['name']!r} has a commit pin that is not a sha prefix: {pin!r}"
+        )
+    return kind, value
+
+
+def classify(row: dict, lookup, token: str | None) -> dict:
+    """One verdict for one manifest row."""
+    kind, value = check_pin(row)
     if kind == "sha256":
         return {
             **row,
             "verdict": "unresolvable",
             "reason": "pin is an installer content hash, which cannot be recomputed here",
         }
-    if kind != "commit" or not value:
-        raise ValueError(f"dependency {row['name']!r} has an unrecognised pin {pin!r}")
     head = lookup(row["source"], row["path"], token)
     if head is None:
         return {
@@ -269,6 +292,73 @@ def report(rows: list[dict], now: str) -> str:
     return "\n".join(out) + "\n"
 
 
+def splice(body: str, report: str) -> str:
+    """Put `report` back between the markers in `body`, leaving everything around them alone.
+
+    The issue belongs to whoever is working it: a note a maintainer writes above or below the
+    generated block has to survive the next run, which replacing the whole body cannot manage.
+
+    A body that is not exactly one opening marker followed by one closing marker is refused,
+    never guessed at. Each degenerate shape destroys text if it is merged optimistically -- an
+    unclosed opening marker swallows everything after it, a reversed pair swallows the middle --
+    and the whole reason the pair exists is to not do that. Refusing is loud; the run fails and
+    the body is left as it is.
+    """
+    lines = body.splitlines()
+    starts = [i for i, line in enumerate(lines) if line.strip() == MARKER]
+    ends = [i for i, line in enumerate(lines) if line.strip() == MARKER_END]
+    # Matched on the whole line, not on a substring: a maintainer quoting the marker in prose
+    # ("we match on <!-- ... -->") is writing about it, not delimiting with it.
+    if len(starts) != 1 or len(ends) != 1:
+        raise ValueError(
+            f"body has {len(starts)} opening and {len(ends)} closing markers; expected one each"
+        )
+    if starts[0] > ends[0]:
+        raise ValueError("body's closing marker precedes its opening marker")
+    before = lines[: starts[0]]
+    after = lines[ends[0] + 1 :]
+    return "\n".join(before + report.splitlines() + after) + "\n"
+
+
+def comparable(text: str) -> str:
+    """The parts of a body that a change in would mean something.
+
+    Three differences are noise, and each would on its own make an unchanged week look like a
+    change: CRs (GitHub normalises issue bodies), trailing blank lines (`--jq .body` emits one
+    the report does not have), and the generated-on date, which moves every run by design.
+    """
+    kept = [line.rstrip("\r") for line in text.splitlines() if not line.startswith("Generated by ")]
+    while kept and not kept[-1].strip():
+        kept.pop()
+    return "\n".join(kept)
+
+
+def run_splice(args) -> int:
+    """--splice: 0 the merged body differs and was written, 3 it is unchanged, 2 refused."""
+    try:
+        with open(args.body, encoding="utf-8") as handle:
+            body = handle.read()
+        with open(args.report, encoding="utf-8") as handle:
+            report = handle.read()
+    except OSError as exc:
+        print(f"check-upstream-drift: {exc}", file=sys.stderr)
+        return 2
+    try:
+        merged = splice(body, report)
+    except ValueError as exc:
+        print(f"check-upstream-drift: refusing to splice -- {exc}", file=sys.stderr)
+        return 2
+    if comparable(merged) == comparable(body):
+        print("check-upstream-drift: the report is unchanged", file=sys.stderr)
+        return 3
+    if args.out:
+        with open(args.out, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(merged)
+    else:
+        sys.stdout.write(merged)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     here = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(add_help=True)
@@ -277,12 +367,21 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--responses")
     parser.add_argument("--markers", action="store_true")
     parser.add_argument("--validate", action="store_true")
+    parser.add_argument("--splice", action="store_true")
+    parser.add_argument("--body")
+    parser.add_argument("--report")
     args = parser.parse_args(argv)
 
     if args.markers:
         print(MARKER)
         print(MARKER_END)
         return 0
+
+    if args.splice:
+        if not args.body or not args.report:
+            print("check-upstream-drift: --splice needs --body and --report", file=sys.stderr)
+            return 2
+        return run_splice(args)
 
     profile_path = os.path.join(args.root, ".claude", "profile.yml")
     try:
@@ -307,11 +406,7 @@ def main(argv: list[str]) -> int:
         try:
             rows = manifest_rows(profile)
             for row in rows:
-                scheme = str(row["pin"]).partition(":")[0]
-                if scheme not in ("commit", "sha256"):
-                    raise ValueError(
-                        f"dependency {row['name']!r} has an unrecognised pin {row['pin']!r}"
-                    )
+                check_pin(row)
         except ValueError as exc:
             print(f"check-upstream-drift: {exc}", file=sys.stderr)
             return 2
