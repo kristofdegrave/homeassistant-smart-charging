@@ -1,0 +1,120 @@
+name: Upstream drift
+
+# Weekly: does anything this project vendors still match the upstream state it is pinned to?
+# The pins are .claude/profile.yml's `dependencies`, the provenance manifest; the comparison
+# and every verdict it can reach are .github/check-upstream-drift.py's, and this workflow only
+# carries the answer to a human. Why it exists, why it may never edit a skill or the manifest,
+# and how a report is closed, are in the document `CLAUDE.md`'s **Contribution workflow** topic
+# routes to for the CI lifecycle -- the single source for that argument; this header does not
+# restate it.
+#
+# Three properties this file must keep, each load-bearing:
+#
+#   1. It writes nothing to the repository. No commit, no branch, no edit to a skill. Our
+#      copies are adaptations, several of which deliberately drop or invert upstream
+#      behaviour, so an upstream change is a question for a human and never a patch to apply.
+#   2. It applies `workflow` and no other label. `needs-draft`/`needs-review`/`needs-work` are
+#      triggers for the AI pipeline; a scheduled job that could apply one would spawn drafting
+#      or review work nobody asked for.
+#   3. One open report at a time, updated in place and only when its content actually changed,
+#      so a stale upstream produces one issue rather than a weekly pile -- and a week that
+#      changes nothing produces no notification at all.
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC. The offset is deliberate: GitHub drops scheduled runs at the top of
+    # popular hours under load, and a weekly check that silently skips is worse than none.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel in progress: a run that is part-way through creating the issue must finish.
+  group: upstream-drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The whole write surface: opening or editing one issue. Deliberately no `contents:
+      # write` and no `pull-requests: write` -- property 1 above is enforced by the token,
+      # not only by the steps.
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # PyYAML is the check's one dependency: the manifest is YAML, and the runner image does
+      # not promise it.
+      - run: python -m pip install pyyaml==6.0.3
+
+      # The fixtures run first, for the same reason ci.yml runs each check's tests first: they
+      # are the check's only correctness evidence, and a scheduled job nobody watches is
+      # exactly where a broken check would rot unnoticed. They never touch the network.
+      - name: Drift check self-test
+        run: bash .github/test-check-upstream-drift.sh
+
+      - name: Compare every pin with upstream
+        id: check
+        env:
+          # Raises the api.github.com rate limit for the cross-repository reads; the token
+          # grants nothing on those repositories beyond what is public.
+          GITHUB_TOKEN: ${{ github.token }}
+          REPORT: ${{ runner.temp }}/drift.md
+        run: |
+          set -uo pipefail
+          bash .github/check-upstream-drift.sh --out "$REPORT"
+          rc=$?
+          case "$rc" in
+            0) echo "report=false" >> "$GITHUB_OUTPUT"; echo "Every pin matches upstream." ;;
+            1) echo "report=true" >> "$GITHUB_OUTPUT" ;;
+            # A lookup that did not answer is not a verdict: fail the run rather than open an
+            # issue whose rows are silently incomplete.
+            *) echo "::error::drift check failed (exit $rc)"; exit "$rc" ;;
+          esac
+
+      - name: Open or update the one drift issue
+        if: steps.check.outputs.report == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REPORT: ${{ runner.temp }}/drift.md
+          EXISTING: ${{ runner.temp }}/existing.md
+          MARKER: "<!-- ai-upstream-drift-report -->"
+          TITLE: "workflow: vendored dependencies have drifted from their pins"
+        run: |
+          set -euo pipefail
+          # Matched on the body marker, not on the title: a human may retitle the issue while
+          # working it, and a second issue opened because the title moved is exactly the pile
+          # property 3 forbids. The explicit high limit is the same trap the tracker recipes
+          # warn about -- `gh issue list` pages silently, and a missed row reads as "no issue
+          # exists" rather than erroring.
+          number=$(gh issue list --repo "$REPO" --state open --label workflow --limit 500 \
+            --json number,body \
+            --jq "[.[] | select(.body | contains(\"$MARKER\"))] | first | .number // empty")
+
+          if [ -z "$number" ]; then
+            url=$(gh issue create --repo "$REPO" --title "$TITLE" --body-file "$REPORT" \
+              --label workflow)
+            echo "Opened $url"
+            exit 0
+          fi
+
+          gh issue view "$number" --repo "$REPO" --json body --jq .body > "$EXISTING"
+          # The generated-on line changes every run and means nothing; comparing with it would
+          # make every week look like a change and re-notify for nothing.
+          if diff -q <(sed '/^Generated by /d' "$EXISTING") \
+                     <(sed '/^Generated by /d' "$REPORT") >/dev/null; then
+            echo "Issue #$number already reports exactly this; left untouched."
+            exit 0
+          fi
+
+          gh issue edit "$number" --repo "$REPO" --body-file "$REPORT"
+          gh issue comment "$number" --repo "$REPO" \
+            --body "The drift report above has been updated: the set of dependencies that no longer match their pins changed since the last run."
+          echo "Updated #$number"

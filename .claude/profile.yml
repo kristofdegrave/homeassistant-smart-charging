@@ -221,21 +221,27 @@ review:
         - "CLAUDE.md"
 
 # Everything the method or the stack is built on that lives outside this repository, each
-# pinned to the upstream state it was last reconciled with. This is the provenance manifest.
-# No workflow reads it yet: a scheduled drift check that compares each pin with upstream is
-# planned as its own issue and will read these rows. A pin is bumped by a decision recorded
-# in the PR that bumps it — never by an automatic re-sync, since several of these are
-# adaptations rather than copies (docs/reference/method/ai-authoring.md's **Vendored skills are
-# forked on purpose**). The four `sha256:` rows are also in skills-lock.json, the marketplace
-# installer's own record; this file is the one the method reads, and the two move together —
-# a re-install that changes the lockfile's hash changes the pin here in the same PR.
+# pinned to the upstream state it was last reconciled with. This is the provenance manifest,
+# and adding a skill from any external source means adding its row in the same PR — an
+# undeclared copy is read as authored, by the method check and by anyone reading the tree.
+# .github/check-upstream-drift.py reads these rows weekly and reports every pin that no longer
+# matches upstream (docs/reference/method/ci-pipeline.md's **The upstream-pin drift check**).
+# A pin is bumped by a decision recorded in the PR that bumps it — never by an automatic
+# re-sync, since several of these are adaptations rather than copies
+# (docs/reference/method/ai-authoring.md's **Vendored skills are forked on purpose**). The four
+# `sha256:` rows are also in skills-lock.json, the marketplace installer's own record; this
+# file is the one the method reads, and the two move together — a re-install that changes the
+# lockfile's hash changes the pin here in the same PR.
 #
 #   source     GitHub repository the skill came from
 #   path       path of the skill inside that repository
 #   pin        `commit:<sha>` — the last upstream commit touching `path` at reconciliation —
 #              or `sha256:<hash>` where only the installer's content hash of SKILL.md was
-#              recorded (skills-lock.json); no commit is known for those and the hash no
-#              longer matches upstream HEAD, so the first drift run will flag each of them
+#              recorded (skills-lock.json). No commit is known for those, and the installer's
+#              hash function is not reproducible from the file: a locally computed sha256 of
+#              the same bytes does not match the lockfile's hash even for a copy that never
+#              diverged. So the drift check can neither confirm nor refute them — it reports
+#              each as unresolvable, every run, until it is reconciled to a `commit:` pin.
 #   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
 #              the developer's machine by the plugin named, and not part of this repository
 dependencies:

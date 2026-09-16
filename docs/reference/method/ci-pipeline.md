@@ -154,6 +154,53 @@ sidebar all count. It is evaluated as of the last push or edit, though: a sideba
 It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
 in branch protection's required checks on `main`.
 
+## The upstream-pin drift check
+
+`.github/workflows/upstream-drift.yml` runs weekly and asks one question: does every
+dependency the profile pins still match the upstream state it was pinned to? The pins are
+`.claude/profile.yml`'s `dependencies` — the provenance manifest, one row per skill this
+project did not write itself, each carrying the source repository, the path inside it, and a
+`pin` recording the upstream state the copy was last reconciled with. The comparison is
+`.github/check-upstream-drift.py`'s; the workflow only carries the answer to a human.
+
+**It exists because nothing else fails.** A vendored skill whose upstream is revised keeps
+working here, and the pin keeps asserting a reconciliation that is no longer true — the silent
+drift class where a source moves, the local reading stays, and no gate notices. Every other
+agreement in this repository is held by a check that runs on the change itself; this one has
+no change to run on, because the change happens in someone else's repository.
+
+**It never edits a skill and never edits the manifest.** These copies are adaptations, not
+mirrors — several deliberately drop or invert upstream behaviour — so an upstream commit is a
+question, not a patch. The workflow's token grants `issues: write` and nothing else, so the
+property is enforced by what it *can* do rather than only by what its steps say. It applies
+`workflow` and no other label: a scheduled job able to apply `needs-draft`, `needs-review` or
+`needs-work` would spawn drafting or review work nobody asked for.
+
+**One open report, updated in place.** The report is found by a marker in its body rather than
+by its title, so retitling it while working it cannot produce a second one, and the body is
+rewritten only when the set of rows actually changed — an unchanged week touches nothing and
+notifies nobody. The workflow never closes it: the report ends when a human acts on it, and
+the act is the same either way — **adopt the upstream change, or decide it does not apply, and
+bump the pin in the PR that records the decision**. That PR closes the report through its own
+`Closes` reference, which is what stops the row reappearing. A report closed without a pin
+bump comes straight back on the next run, correctly.
+
+Four verdicts, and the distinctions are the point. `current` and `drifted` are the ordinary
+pair. `missing` — no commit upstream touches the path at all — is reported rather than passed:
+a renamed or deleted path is the loudest kind of drift and precisely what a naive sha
+comparison reads as "nothing changed". `unresolvable` covers the rows pinned to a `sha256:`
+content hash recorded by the marketplace installer: that hash is not reproducible here — a
+locally computed sha256 of the same bytes does not match a lockfile hash even for a copy that
+never diverged — so those rows can be neither confirmed nor refuted, and calling them
+"drifted" would be a claim the check cannot support. They are reported as needing
+reconciliation to a `commit:` pin, and repeat every run until they get one. A lookup that
+*errors* is not a verdict at all: the run fails and writes nothing, rather than opening a
+report whose rows are silently incomplete.
+
+The check's fixtures (`.github/test-check-upstream-drift.sh`) are offline by construction and
+run twice: in `ci.yml`, so a PR that breaks the check fails on that PR, and again inside the
+scheduled job, since a weekly job nobody watches is exactly where a broken check would rot.
+
 ## Pipeline steps
 
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label — a
