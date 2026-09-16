@@ -94,7 +94,10 @@ Give the check a dedicated file, in prose, next to the skills it describes.
   stack packages, and the `installed: user` rows that are not under `.claude/skills/` at all. A
   second file is a second source of truth for the same fact with nothing holding the two in
   step, so the decision would create an in-repo instance of the very drift it is built to
-  catch.
+  catch. That is not a hypothetical: `skills-lock.json` already carries the same four `sha256:`
+  values, and the manifest has to say in prose that the two move together. One such pairing is
+  the installer's record and unavoidable; a second, authored by this project about facts it
+  already states, would not be.
 
 ### Option E — A PR-time check rather than a scheduled job
 
@@ -226,25 +229,22 @@ is deliberately not a precondition here, per Option F.
 1. **Search.**
 
    ```
-   rg -n -e 'schedule:' \
-         -e '^[[:space:]]*(contents|issues|pull-requests|actions|checks|packages|statuses|deployments|discussions|security-events|id-token):[[:space:]]*write' \
-         -e 'WORKFLOW_PAT' \
-         .github
+   rg -n 'schedule:|^[[:space:]]*(contents|issues|pull-requests|actions|checks|packages|statuses|deployments|discussions|security-events|id-token):[[:space:]]*write|WORKFLOW_PAT' .github
    ```
 
    …plus eight sites listed explicitly in the table below. This is a **hybrid** of the
    template's two forms, for the reason the template's width test demands: neither form alone
    reaches everything this decision governs.
 
-   The pattern is three arms, and each is load-bearing. **`schedule:`** finds the trigger class
-   this decision introduces — but on its own it returns two files, the new job and Dependabot's
-   configuration, which says nothing about the write grants the decision has to be weighed
-   against. **The permission keys** find every write grant, not only
-   `issues: write`: a pattern on the new job's own grant would drop precisely the neighbours
-   this decision has to be weighed against. **`WORKFLOW_PAT`** is the arm a permissions-only
+   One pattern, three alternation branches, and each is load-bearing. **`schedule:`** finds the
+   trigger class this decision introduces — but on its own it returns two files, the new job and
+   Dependabot's configuration, which says nothing about the write grants that trigger class has
+   to be weighed against. **The permission keys** find every write grant, not only
+   `issues: write`: a pattern on the new job's own grant would drop precisely those neighbours.
+   **`WORKFLOW_PAT`** is the branch a permissions-only
    pattern would miss entirely — a reusable workflow declares no `permissions:` of its own,
    inheriting the caller's, and a personal access token is a write-capable credential expressed
-   as no permission key at all. Without that arm the three `_ai-*.yml` workers — where most of
+   as no permission key at all. Without that branch the three `_ai-*.yml` workers — where most of
    this repository's automated writing actually happens — do not appear at all.
 
    The path is `.github` rather than `.github/workflows`, and the difference is one file:
@@ -276,7 +276,13 @@ is deliberately not a precondition here, per Option F.
    return nothing for the pattern *and* invoke nothing of this decision's — they declare
    `contents: read` with read-only job scopes, hold no PAT, run on no schedule, and neither
    mentions the drift check. `ci.yml` looks like a third of them and is not one, which is why it
-   is listed above rather than dismissed here.
+   is listed above rather than dismissed here. One more file inside the path is invisible to the
+   pattern and belongs to none of the four categories: `.github/check-method.py`, with its
+   wrapper `.github/check-method.sh`, is a *second* machine reader of the same manifest — it
+   takes `dependencies` to tell a vendored skill from a method-authored one. It is a non-site all
+   the same, because this decision constrains nothing it does: the two readers share an input,
+   not a rule. Naming it is what keeps the four categories an honest account of the manifest's
+   readers rather than only of this decision's sites.
 
 2. **Per-hit verdict** (every hit appears here or in 3; the eight explicitly listed sites are
    marked *listed*).
