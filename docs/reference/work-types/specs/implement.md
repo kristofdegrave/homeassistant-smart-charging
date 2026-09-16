@@ -174,7 +174,7 @@ blocked on an external fact; `receiving-code-review` in the review step. This wo
 - Routing a task's tests through the harness that is not its layer's.
 - A silent deferral of a mandated safety behavior (a clamp, the fault path) — state it as a
   known deviation, out loud.
-- Cutting tasks by layer — one task per layer of the stack — so nothing is observable until
+- Cutting tasks by layer — one task per architectural layer — so nothing is observable until
   the last of them lands; cut by behaviour, each task through every layer it touches.
 - A task entry with no **Blocked by** line, so the filer cannot tell "none" from "forgot".
 - A Verify-live item carrying a bare number, or a "sensor" with no entity id — the unit and the
