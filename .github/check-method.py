@@ -17,7 +17,9 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
-                        same set; the table's changed-path map equals review.path_map;
+                        same set; the table's changed-path map equals review.path_map; the
+                        commit-prefix table of the document the **Definition of Done** topic
+                        routes to has a row for every one of those labels;
                         docs/reference/profile.md exists and has a `## Flow` section, and
                         every flow deviation -- a `###` under it -- names, in backticks, at
                         least one work type, each of them enabled
@@ -114,6 +116,11 @@ LAYERS = {"method", "project", "stack"}
 # The project's prose profile; its `## Flow` section is the deviation contract check 3 reads.
 PROFILE_DOC = "docs/reference/profile.md"
 FLOW_SECTION = "Flow"
+# The commit-prefix table check 3 reads: the topic whose routing entry names the document, and
+# the section whose first table is keyed by context label. The document itself is never named
+# here -- it is whatever that topic's routing-table entry currently links to.
+DOD_TOPIC = "Definition of Done"
+COMMIT_SECTION = "Commit message conventions"
 WORK_TYPES = "docs/reference/work-types"
 OVERLAYS_DIR = "overlays"
 # The overlay slot a core role file carries, and the rule a work file carries.
@@ -425,6 +432,49 @@ def check_profile_agreement(root: Path, guide: Guide, profile: dict, findings: F
                 f"review.path_map routes to `{work_type}`, which is not enabled",
             )
     check_flow_deviations(root, enabled, findings)
+    check_commit_prefixes(root, guide, enabled, findings)
+
+
+def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings: Findings) -> None:
+    """Every enabled context label is keyed by the commit-prefix table.
+
+    The table claims a prefix per context label, so a label enabled without a row leaves its
+    author in the fall-through row and pointed at the wrong prefix -- the drift this check
+    exists to refuse. Both ends are re-derived: the labels from the profile, the document from
+    whatever the **Definition of Done** topic links to, so moving the file moves the check with
+    it. Two stated limits. One direction only: a row for a label the profile no longer declares
+    is indistinguishable from the fall-through row's own backticked labels -- the key set below
+    absorbs every backticked span in a row's first cell, `docs/plans/**`, `bug` and `enhancement`
+    included -- so a retired label's row is the reviewer's to catch, not this check's. And the
+    topic's owner cell is read for its FIRST link: the cell this one carries holds exactly one,
+    where other routing-table cells hold two, so a cell that ever leads with another document
+    would need the first link that resolves instead.
+    """
+    owner = next((cell for topic, cell in guide.topics if topic.startswith(DOD_TOPIC)), None)
+    if owner is None:
+        return  # check 1 already reports a routing table with no such topic
+    link = LINK_RE.search(owner)
+    if link is None:
+        return  # check 2 already reports a topic that links to no document
+    doc = link.group(1).partition("#")[0]
+    path = root / doc
+    if not path.is_file():
+        return  # check 2 already reports a link target that does not exist
+    text = read_text(path)
+    prefixes = section(text, COMMIT_SECTION)
+    if not prefixes:
+        findings.add(3, doc, f"`## {COMMIT_SECTION}` is absent or empty")
+        return
+    where = f"{doc}:{next(n for _, n, h in headings(text) if h == COMMIT_SECTION)}"
+    keyed: set[str] = set()
+    for cells in table_rows(prefixes):
+        if cells:
+            keyed.update(re.findall(r"`([^`]+)`", cells[0]))
+    if not keyed:
+        findings.add(3, where, f"`## {COMMIT_SECTION}` has no table keyed by context label")
+        return
+    for label in sorted(set(enabled) - keyed):
+        findings.add(3, where, f"context label `{label}` has no commit-prefix row")
 
 
 def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) -> None:

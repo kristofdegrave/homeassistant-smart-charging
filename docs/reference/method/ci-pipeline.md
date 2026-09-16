@@ -55,7 +55,8 @@ issue filed through it, the profile's `labels` section that `.github/setup-label
 the repository, a skill that names the labels it applies, and any later workflow that names a
 label to apply or to branch on.
 
-The same vocabulary is carried outside the pipeline's own configuration too — though both are read by the workers at
+The same vocabulary is carried outside the pipeline's own configuration too — though both are
+read by the workers at
 run time, which is what makes *renaming* a label expensive here rather than merely tedious:
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
@@ -63,7 +64,10 @@ a label means moving a directory, not editing a line, for each label that has on
 labels those are is the profile's `work_types.enabled` crossed with what each directory
 actually holds, and `.github/check-method.py`'s check 4 is what holds the two together — and
 then
-fixing every cross-directory reference the move breaks. **Find them by rule, not from a
+fixing every cross-directory reference the move breaks. A third site is the commit-prefix
+table of the document `CLAUDE.md`'s **Definition of Done** topic routes to, one row per
+context label, which that same script's check 3 holds against the profile; a label added or
+renamed owes a row there too, though no directory moves for it. **Find them by rule, not from a
 list**: every **relative-path** reference that leaves a label's own directory for another
 label's — `../<label>/…`, whether it is a markdown link or a bare path in prose, and in
 **either** direction, since a label's directory is referred to as often as it refers out.
