@@ -556,9 +556,14 @@ class DeadlineUrgencyInputs:
     # limit raised to the maximum peak -- resolved by the coordinator every cycle whether or not
     # urgency is actually in effect, which is what stops the test moving the moment it fires.
     escalated_maximum_permitted_rate_a: float
-    # Whether urgency was in effect entering this cycle. Urgency latches: re-deriving it from
-    # the slack test each cycle would revert it the moment charging closed the gap.
-    urgency_latched: bool
+    # The occurrence urgency was chasing entering this cycle, or None. Urgency is in effect for
+    # exactly as long as there is one, and it is held rather than re-derived from the slack test
+    # each cycle, which would revert it the moment charging closed the gap.
+    pursued_occurrence: datetime | None
+    # The connected half of `deadline_resolvable` above, carried separately because the two
+    # halves release the pursued occurrence in opposite directions -- see the early return in
+    # `resolve_deadline_urgency`. Both are derived once in `_run_cycle`, never re-derived here.
+    connected: bool
     auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
@@ -609,8 +614,26 @@ def resolve_deadline_urgency(
     the two calls.
     """
     if not inputs.deadline_resolvable:
+        # The two halves of `deadline_resolvable` release in OPPOSITE directions, so this
+        # return cannot answer them together (UC05's State model):
+        #
+        # - DISCONNECTED -- a release condition R5 names outright. It ends the connected session
+        #   and the use-case's own precondition, so it is a real exit.
+        # - STATE OF CHARGE UNAVAILABLE -- deliberately NOT an exit. No required current can be
+        #   computed, so the cycle establishes nothing about the deadline and "the System holds
+        #   whichever state it was already in". Collapsing the two would release a hold on a
+        #   cycle that established nothing.
+        #
+        # This is reachable with a live hold: the ev_soc fault gate upstream is itself gated on
+        # `is_soc_gated`, which is False for `Off` and `Power` (below), so those modes arrive
+        # here with a missing reading rather than faulting.
         return DeadlineUrgencyResult(
-            required=RequiredCurrentResult(required_a=None, urgent=False, unreachable=False),
+            required=RequiredCurrentResult(
+                required_a=None,
+                urgent=False,
+                unreachable=False,
+                pursued_occurrence=None if not inputs.connected else inputs.pursued_occurrence,
+            ),
             urgent=False,
             resolved_mode=None,
         )
@@ -660,7 +683,7 @@ def resolve_deadline_urgency(
         # stopped being true when R5's engage condition became a comparison against this rate:
         # it is now the threshold urgency itself turns on, not just the notification's.
         escalated_maximum_permitted_rate_a=inputs.escalated_maximum_permitted_rate_a,
-        urgency_latched=inputs.urgency_latched,
+        pursued_occurrence=inputs.pursued_occurrence,
     )
 
     # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
