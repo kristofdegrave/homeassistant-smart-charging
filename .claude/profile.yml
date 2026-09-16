@@ -14,9 +14,12 @@
 #   grep -rln 'profile\.yml' .github/ .claude/ docs/
 #
 # Every hit is a candidate: some name the file to say what it holds rather than to read it.
-# The CI workers are among the hits and are the case worth knowing — _ai-review.yml reads the
-# `labels` section at run time, while the path map it uses is still its own copy. Which of the
-# two a given worker takes from here is that workflow's to state, not this header's.
+# The CI workers are among the hits and are the case worth knowing. No step of _ai-review.yml
+# reads this file; what it does is tell its review worker to take the label vocabulary — the
+# `labels` section, and nothing else here — from the pull request's own copy. Routing it
+# resolves from CLAUDE.md's Model selection table, and the enumeration it carries its own copy
+# of is its diff enumeration, a different thing from `review.path_map` below. Which parts of
+# this file a given worker reads is that workflow's to state, not this header's.
 
 repo:
   owner: kristofdegrave
@@ -60,7 +63,7 @@ board:
 # 100-character cap and contain no tab or backslash: the script's read-back compares it
 # through jq's @tsv, which escapes both, and a mismatch there can never be cleared by
 # re-running. What each group means is docs/reference/method/contribution-workflow.md's
-# **Issue conventions**; the CI-side places the context vocabulary is also baked into are
+# **Issue conventions**; the places the context vocabulary is also baked into are
 # docs/reference/method/ci-pipeline.md's **Label vocabulary sync**.
 labels:
   pretriage:
@@ -234,10 +237,9 @@ review:
 # matches upstream — the CI document `CLAUDE.md`'s **Contribution workflow** topic routes to
 # owns that check. A pin is bumped by a decision recorded in the PR that bumps it — never by an
 # automatic re-sync, since several of these are adaptations rather than copies; the reference
-# `CLAUDE.md`'s **Authoring AI artifacts** topic routes to owns that rule. The four
-# `sha256:` rows are also in skills-lock.json, the marketplace installer's own record; this
-# file is the one the method reads, and the two move together — a re-install that changes the
-# lockfile's hash changes the pin here in the same PR.
+# `CLAUDE.md`'s **Authoring AI artifacts** topic routes to owns that rule — and, with it, what
+# a `sha256:` row's relationship to skills-lock.json obliges. That reference states it in full;
+# this header does not restate it.
 #
 #   source     GitHub repository the skill came from
 #   path       path of the skill inside that repository
