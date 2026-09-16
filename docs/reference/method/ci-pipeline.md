@@ -30,22 +30,39 @@ separation the `workflow` review checklist's non-negotiables enforce).
 
 The context-label vocabulary itself (values and meanings) is documented once, in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. What lives here
-is the CI-side consistency obligation: the same vocabulary is baked into six pipeline
-places that must all move together — `ai-pipeline.yml`'s header comment; `_ai-draft.yml`'s
-`context_labels` variable, its "No context label found" reason string, and its `case` block;
-`.claude/profile.yml`'s `labels` section, which `.github/setup-labels.sh` writes to the
-repository; and `close-guard.yml`'s `case` block, which
-names `development` and `testing` (see **The docs-only close guard** below) — and, for the
-three labels that have an issue form, that form's `.github/ISSUE_TEMPLATE/*.yml` `labels:` key
-too (`adr.yml` → `adr`, `requirement.yml` → `requirement`, `use-case.yml` → `uc`), which stamps
-that label on every issue filed through the form. Two more places carry the same vocabulary
-without being part of the pipeline's own configuration — though both are read by the workers at
+is the CI-side consistency obligation: the same vocabulary is baked into the pipeline's own
+configuration in several places that must all move together, and they are found **by rule, not
+from a list** —
+
+```sh
+grep -rnE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
+  .github/workflows/ .github/ISSUE_TEMPLATE/ .github/setup-labels.sh \
+  .claude/profile.yml .claude/skills/
+```
+
+— run with the label being renamed in place of the alternation. `.claude/skills/` is in the
+list for the same reason `CLAUDE.md`'s table and `docs/reference/work-types/<label>/` are named
+below: a skill is read by a worker at run time, and a skill's **frontmatter `description`** is
+loaded on every run, so a stale label there is both wrong and expensive.
+
+Every hit is a **candidate**, not an obligation. Most of the labels are also ordinary English
+words in these trees — `workflow` above all, but `development`, `testing`, `documentation`,
+`requirement` and `specs` each run into the hundreds of innocent uses between them — so the
+rule over-includes on purpose and the reader decides per hit whether it is the label or the
+word. What it turns up, by way of illustration and never as the set: a worker's `context_labels` variable or `case` block, a reason string a
+human reads, a guard's own `case`, an issue form's `labels:` key that stamps the label on every
+issue filed through it, the profile's `labels` section that `.github/setup-labels.sh` writes to
+the repository, a skill that names the labels it applies, and any later workflow that names a
+label to apply or to branch on.
+
+The same vocabulary is carried outside the pipeline's own configuration too — though both are read by the workers at
 run time, which is what makes *renaming* a label expensive here rather than merely tedious:
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
-a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`, `development`, `documentation`, `requirement`, `specs`, `testing`, `uc` and `workflow`),
-and then
+a label means moving a directory, not editing a line, for each label that has one — which
+labels those are is the profile's `work_types.enabled` crossed with what each directory
+actually holds, and `.github/check-method.py`'s check 4 is what holds the two together — and
+then
 fixing every cross-directory reference the move breaks. **Find them by rule, not from a
 list**: every **relative-path** reference that leaves a label's own directory for another
 label's — `../<label>/…`, whether it is a markdown link or a bare path in prose, and in
@@ -53,26 +70,37 @@ label's — `../<label>/…`, whether it is a markdown link or a bare path in pr
 `grep -rn '\.\./' docs/reference/work-types/` enumerates the candidates in one command;
 renaming a label means fixing every hit naming it, on both sides.
 
-No count is stated here on purpose. This sentence is a sync obligation — it exists for the
-case where someone forgets to update a list — so a hand-maintained list inside it is the
+No count is stated in either rule on purpose. A rule like these is a sync obligation — it
+exists for the case where someone forgets to update a list — so a hand-maintained list inside it is the
 defect it is meant to prevent, and it has drifted every time one has been tried. The rule
 also survives the labels still to migrate, each of which adds more such references.
 
-Three things the rule deliberately excludes, so a rename executor does not chase them.
+That path rule is not the whole of this tree, because a label is named here in prose as often
+as it is named in a path — `development`'s completion bar names `testing` repeatedly without a
+single `../`. So the tree takes the **same name rule** the pipeline trees take:
+
+```sh
+grep -rniE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
+  docs/reference/work-types/
+```
+
+Every hit is a candidate, on the same terms as before: most of these words are also ordinary
+English, and the reader decides per hit. What the two rules are each for: the path one finds
+the references a *directory move* breaks, which is mechanical; the name one finds the prose a
+*rename* makes wrong, which no path check can see.
+
+Two things both rules deliberately over-report, so a rename executor does not chase them.
 A reference that leaves the tree entirely (`../../../adl/…`) does not name a label and
 survives the move. A reference that stays **inside** one label's own directory — between
 `documentation/`'s two per-branch subdirectories, or from one of them back up to the file that
-routed there — moves with the directory it sits in. And a route
-by **label name** through the *Model selection* table rather than by path — `development`'s
-bar sending the `tests/**` half to the `testing` row, and the work files that name a row —
-carries no `../` at all: the table named just above is where a rename fixes those.
+routed there — moves with the directory it sits in.
 
 The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
 artifact gets — is [work-types/README.md](../work-types/README.md)'s; what belongs here is only
 that the label is the directory name, so a rename moves a directory. Adding a label means
-updating those eight — the work-types directory only where the new label gets a file of its
-own, which is not a given and need not be a work file (`workflow`'s directory holds only a
+updating every place the two rules above turn up — the work-types directory only where the new
+label gets a file of its own, which is not a given and need not be a work file (`workflow`'s directory holds only a
 review checklist); renaming one additionally means updating any form that stamps it. A
 rename that misses `close-guard.yml` fails open silently — its `case` simply stops matching —
 so that one is checked, not assumed.
@@ -83,7 +111,7 @@ reviewer for *How it is reviewed* — so the row is the selection itself rather 
 one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
 cell in either *How* column — and changing the table's own shape expensive, since it now
 reaches every worker at once.
-Adding or renaming a label is a third thing again, and not cheap: see the eight places above.
+Adding or renaming a label is a third thing again, and not cheap: run the two rules above.
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
@@ -91,17 +119,18 @@ runs at all, and `_ai-review.yml`'s diff enumeration decides which files a check
 that will read it there instead of here. Adding a tree means editing all four. `docs/design/**` was the standing proof of what happens
 otherwise: it sat in the *no context label* row and in neither of the other two, so a
 `docs/design`-only PR spawned no job — which takes out the **label** half as well as the path
-half, since a job that never runs cannot add a reviewer either. All three now carry it.
+half, since a job that never runs cannot add a reviewer either. Every one of the four carries
+it now.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **action/state labels** (`needs-draft`, `needs-review`, `needs-work`, `needs-approval`,
-`needs-decision`) are not context labels either. They are defined in exactly one of those
-eight places — `.claude/profile.yml`'s `labels`; where another of the eight mentions one (an issue
-form's guidance text, `_ai-draft.yml`'s reason string, `ai-pipeline.yml`'s Action/state line)
-it is prose telling a human which trigger to add next, never a value a worker matches on, so a
-rename there is a wording fix rather than a sync obligation. What binds instead is the set of
-places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, which compare
+`needs-decision`) are not context labels either. They are defined in exactly one place
+the rule above turns up — `.claude/profile.yml`'s `labels`. The same grep returns many more
+hits, in retry comments and guidance text across the workers; those are prose telling a human
+which trigger to add next, never a value a worker matches on, so a rename there is a wording
+fix rather than a sync obligation. What binds instead is the set of
+places that *match* or *apply* them: `ai-pipeline.yml`'s `if:` guards, which compare
 `github.event.label.name` against a trigger label by string and — like `close-guard.yml`'s
 `case` block above — fail open silently on a rename, every job simply never firing; `_ai-review.yml`'s
 verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
@@ -111,13 +140,14 @@ that applies them — so a rename is checked there rather than assumed from here
 either. Adding or renaming one means updating that set, and the **Pipeline steps** below where
 the label's meaning is stated.
 
-The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.claude/profile.yml`'s `labels` — and in none of the other seven, including
-`docs/reference/work-types/<label>/`, which a kind label never gets. They are not context labels
-([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
-renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
-`context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,
-or `CLAUDE.md`'s **Model selection** table. `_ai-draft.yml` consequently cannot see them, which
+The **kind-of-work labels** (`bug`, `enhancement`) are defined in `.claude/profile.yml`'s
+`labels` and get no `docs/reference/work-types/<label>/` directory, which a kind label never
+gets. They are not context labels
+([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), and no worker
+matches on them — but "the profile and nowhere else" would be wrong, and was: run the same
+greps for `bug` or `enhancement` and they turn up a skill naming the labels it applies, which
+is a real hit and the expensive kind, since a skill's text is read at run time. What renaming
+one does *not* touch is anything a worker branches on. `_ai-draft.yml` cannot see them, which
 is the intended behaviour on all three shapes: a `bug` issue with no context label is refused
 with *No context label found*; a `bug` issue that also carries one routes on that one, exactly
 as if the kind label were absent (so `count` is still 1 and the single-context-label refusal is
@@ -153,6 +183,89 @@ sidebar all count. It is evaluated as of the last push or edit, though: a sideba
 
 It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
 in branch protection's required checks on `main`.
+
+## The upstream-pin drift check
+
+`.github/workflows/upstream-drift.yml` runs weekly and asks one question: does every
+dependency the profile pins still match the upstream state it was pinned to? The pins are
+`.claude/profile.yml`'s `dependencies` — the provenance manifest, one row per skill this
+project did not write itself, each carrying the source repository, the path inside it, and a
+`pin` recording the upstream state the copy was last reconciled with. The comparison is
+`.github/check-upstream-drift.py`'s; the workflow only carries the answer to a human.
+
+**It exists because nothing else fails.** A vendored skill whose upstream is revised keeps
+working here, and the pin keeps asserting a reconciliation that is no longer true — the silent
+drift class where a source moves, the local reading stays, and no gate notices. Every other
+agreement in this repository is held by a check that runs on the change itself; this one has
+no change to run on, because the change happens in someone else's repository.
+
+**It never edits a skill and never edits the manifest.** These copies are adaptations, not
+mirrors — several deliberately drop or invert upstream behaviour — so an upstream commit is a
+question, not a patch. The workflow's token grants no write beyond opening and editing one
+issue, so the property is enforced by what it *can* do rather than only by what its steps say.
+It applies `workflow` and no other label: a scheduled job able to apply `needs-draft`,
+`needs-review` or `needs-work` would spawn drafting or review work nobody asked for.
+
+**One open report, updated in place.** The report is found by two conditions, each doing a
+different job. A marker in the body — not the title and not the label, either of which a
+maintainer may change while triaging it, and each of which would otherwise hide the open report
+and open a second one. And the issue's **author**, because that marker is published: it sits in
+this public repository, in the script and in every report, so without an author condition
+anyone able to open an issue could paste it into one and become the report, and the job would
+splice into a stranger's issue and never open the real one. A maintainer cannot change who
+opened an issue, so constraining the author costs nothing the marker match was defending.
+
+Only the region between the marker and its closing pair is the workflow's: a note a maintainer
+adds around it survives the next run, which a wholesale body replacement would both destroy and
+then read as a change every week afterwards. A body whose markers are missing, doubled or
+reversed is **refused** rather than merged optimistically — each of those shapes destroys text
+if it is guessed at, and refusing fails the run loudly instead. The body is rewritten only when
+its content actually changed, compared on content rather than bytes — that is a weaker claim
+than "when the set of rows changed", and deliberately so: a row already listed whose upstream
+head has moved again is a real change to the report, though the set of rows did not move.
+When it does rewrite, it also posts one short comment, because an edited body notifies nobody
+— that comment is the whole of how a maintainer learns the report moved, which is why the
+rewrite condition being right matters more than it looks. The workflow never closes it: the report ends when a human acts on it, and
+the act is the same either way — **adopt the upstream change, or decide it does not apply, and
+bump the pin in the PR that records the decision**. That PR closes the report through its own
+`Closes` reference, which is what stops the row reappearing. A report closed without a pin
+bump comes straight back on the next run, correctly.
+
+Four verdicts, and the distinctions are the point. `current` and `drifted` are the ordinary
+pair. `missing` — no commit upstream touches the path at all — is reported rather than passed,
+under a heading of its own: a renamed or deleted path is the loudest kind of drift and
+precisely what a naive sha comparison reads as "nothing changed", so it does not share a
+section with the rows that are permanently unverifiable. `unresolvable` covers the rows pinned to a `sha256:`
+content hash recorded by the marketplace installer: that hash is not reproducible here — a
+locally computed sha256 of the same bytes does not match a lockfile hash even for a copy that
+never diverged — so those rows can be neither confirmed nor refuted, and calling them
+"drifted" would be a claim the check cannot support. They are reported as needing
+reconciliation to a `commit:` pin, and repeat every run until they get one. A lookup that
+*errors* is not a verdict at all: the run fails and writes nothing, rather than opening a
+report whose rows are silently incomplete.
+
+Decisions live in the script, and the workflow calls it and carries the answer to GitHub. That
+is why: the splice and the did-anything-change comparison were inline shell in the job until a
+review observed that the one piece of logic able to destroy a maintainer's writing was also the
+one piece no fixture could reach. Logic in the job is logic no test covers, in a job nobody
+watches.
+
+One decision necessarily stays in the job — which issue *is* the report, since finding it means
+querying GitHub — and it is the untested remainder the rule above would otherwise hide. It has
+already been wrong once: the author condition was first written with the REST spelling of the
+bot login against a call served from GraphQL, where the same actor is rendered differently, and
+a condition that matches nothing does not fail but opens a fresh issue every week. The value
+now in the file is the one `gh` actually returns for this repository's own bot-authored items,
+read off a real query rather than reasoned from a doc.
+
+The check's fixtures (`.github/test-check-upstream-drift.sh`) are offline by construction and
+run twice: in `ci.yml`, so a PR that breaks the check fails on that PR, and again inside the
+scheduled job, since a weekly job nobody watches is exactly where a broken check would rot.
+`ci.yml` also runs the check itself in its `--validate` mode — parse the manifest, check every
+pin's scheme, touch no network. That mode exists because one unreadable row aborts the whole
+comparison and so takes every *other* row's verdict down with it; without a PR-time check, a
+malformed row would ship green and surface only as a red scheduled run, in the job that
+argument says nobody watches.
 
 ## Pipeline steps
 

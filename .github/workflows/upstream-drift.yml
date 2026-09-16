@@ -1,0 +1,173 @@
+name: Upstream drift
+
+# Weekly: does anything this project vendors still match the upstream state it is pinned to?
+# The pins are .claude/profile.yml's `dependencies`, the provenance manifest; the comparison
+# and every verdict it can reach are .github/check-upstream-drift.py's, and this workflow only
+# carries the answer to a human. Why it exists, why it may never edit a skill or the manifest,
+# and how a report is closed, are in the document `CLAUDE.md`'s **Contribution workflow** topic
+# routes to for the CI lifecycle -- the single source for that argument; this header does not
+# restate it.
+#
+# Three invariants this file must keep. Why each one holds is in the routed document; what
+# they are is this file's own subject, and every step below is written to one of them:
+#
+#   1. It writes nothing to the repository -- no commit, no branch, no edit to a skill.
+#   2. It applies `workflow` and no other label, `needs-*` least of all.
+#   3. One open report at a time, updated in place and only when its content actually changed.
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC. The offset is deliberate: GitHub drops scheduled runs at the top of
+    # popular hours under load, and a weekly check that silently skips is worse than none.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel in progress: a run that is part-way through creating the issue must finish.
+  group: upstream-drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The whole write surface: opening or editing one issue. Deliberately no `contents:
+      # write` and no `pull-requests: write` -- invariant 1 above is enforced by the token,
+      # not only by the steps.
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # PyYAML is the check's one dependency: the manifest is YAML, and the runner image does
+      # not promise it.
+      - run: python -m pip install pyyaml==6.0.3
+
+      # The fixtures run first, for the same reason ci.yml runs each check's tests first: they
+      # are the check's only correctness evidence, and a scheduled job nobody watches is
+      # exactly where a broken check would rot unnoticed. They never touch the network.
+      - name: Drift check self-test
+        run: bash .github/test-check-upstream-drift.sh
+
+      - name: Compare every pin with upstream
+        id: check
+        env:
+          # Raises the api.github.com rate limit for the cross-repository reads; the token
+          # grants nothing on those repositories beyond what is public.
+          GITHUB_TOKEN: ${{ github.token }}
+          REPORT: ${{ runner.temp }}/drift.md
+        run: |
+          # `set +e` first, and it is load-bearing: a `run:` step with no `shell:` is executed
+          # as `bash -e {0}`, and `set -uo pipefail` does NOT clear errexit. Without this the
+          # step would die on the check's exit 1 -- its documented "something needs a human"
+          # code, and the only code a run with anything to report can return -- so `rc=$?`
+          # would never run and the issue would never be opened.
+          set +e
+          set -uo pipefail
+          bash .github/check-upstream-drift.sh --out "$REPORT"
+          rc=$?
+          case "$rc" in
+            0) echo "report=false" >> "$GITHUB_OUTPUT"; echo "Every pin matches upstream." ;;
+            # Exit 1 is also Python's uncaught-exception code, so the report's existence is
+            # checked rather than inferred: a crash must not reach `gh issue create` with a
+            # --body-file that was never written.
+            1) if [ -s "$REPORT" ]; then
+                 echo "report=true" >> "$GITHUB_OUTPUT"
+               else
+                 echo "::error::drift check exited 1 but wrote no report"
+                 exit 1
+               fi ;;
+            # A lookup that did not answer is not a verdict: fail the run rather than open an
+            # issue whose rows are silently incomplete.
+            *) echo "::error::drift check failed (exit $rc)"; exit "$rc" ;;
+          esac
+
+      - name: Open or update the one drift issue
+        if: steps.check.outputs.report == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REPORT: ${{ runner.temp }}/drift.md
+          EXISTING: ${{ runner.temp }}/existing.md
+          MERGED: ${{ runner.temp }}/merged.md
+          TITLE: "workflow: vendored dependencies have drifted from their pins"
+        run: |
+          set -euo pipefail
+          # The marker comes from the script, never from a second copy here: a copy that fell
+          # out of step would match nothing and open a fresh issue every week, which is exactly
+          # the pile invariant 3 forbids -- and no test would go red, since each copy would
+          # still agree with itself.
+          marker_start=$(bash .github/check-upstream-drift.sh --markers | sed -n 1p)
+
+          # Two conditions, and each is doing a different job.
+          #
+          # The body marker, not the title and not the label: a maintainer triaging the report
+          # may change either, and each change would otherwise hide the open report and open a
+          # second one.
+          #
+          # The author, because the marker is published and this repository is public; why that
+          # follows, and why constraining the author costs nothing the marker match was
+          # defending, are the routed document's.
+          #
+          # `app/github-actions` and not `github-actions[bot]`: this call is served from gh's
+          # GraphQL path, which renders a bot actor with an `app/` prefix, where REST spells the
+          # same actor `github-actions[bot]`. The REST spelling here would match nothing, and a
+          # condition that matches nothing does not fail -- it opens a fresh issue every week,
+          # the pile invariant 3 forbids. Not reasoned from the docs: `gh pr list --json author`
+          # in this repository returns `app/github-actions` for the PRs this same actor opened
+          # (and `app/dependabot` for that one), which is the same command shape and the same
+          # renderer as the call below. The `is_bot` half is belt and braces: it is false for
+          # every human account, so a planted marker cannot pass even if the login rendering
+          # changes again.
+          #
+          # The explicit high limit is the trap the tracker recipes warn about: `gh issue list`
+          # pages silently, and a missed row reads as "no issue exists" rather than erroring --
+          # which here means opening a duplicate report every week. The limit alone is a guess,
+          # so the count is checked against it below rather than trusted.
+          limit=500
+          issues=$(gh issue list --repo "$REPO" --state open --limit "$limit" \
+            --json number,body,author)
+          if [ "$(printf '%s' "$issues" | jq 'length')" -ge "$limit" ]; then
+            echo "::error::$limit open issues returned; the report may be past the page and a duplicate would be opened"
+            exit 2
+          fi
+          number=$(printf '%s' "$issues" \
+            | jq -r "[.[] | select(.author.is_bot == true)
+                         | select(.author.login == \"app/github-actions\")
+                         | select(.body | contains(\"$marker_start\"))] | first | .number // empty")
+
+          if [ -z "$number" ]; then
+            url=$(gh issue create --repo "$REPO" --title "$TITLE" --body-file "$REPORT" \
+              --label workflow)
+            echo "Opened $url"
+            exit 0
+          fi
+
+          gh issue view "$number" --repo "$REPO" --json body --jq .body > "$EXISTING"
+
+          # The merge, and the did-anything-actually-change comparison, both live in the script
+          # where the fixtures reach them. They were inline shell here until a review pointed
+          # out that the one piece of logic able to destroy a maintainer's writing was also the
+          # one piece no test covered -- in a weekly job nobody watches, which is the argument
+          # this file already makes about the Python fixtures above.
+          #   0 the merged body differs and was written; 3 nothing changed; 2 refused.
+          set +e
+          bash .github/check-upstream-drift.sh --splice \
+            --body "$EXISTING" --report "$REPORT" --out "$MERGED"
+          rc=$?
+          set -e
+          case "$rc" in
+            0) ;;
+            3) echo "Issue #$number already reports exactly this; left untouched."; exit 0 ;;
+            *) echo "::error::refused to splice the report into issue #$number"; exit "$rc" ;;
+          esac
+
+          gh issue edit "$number" --repo "$REPO" --body-file "$MERGED"
+          gh issue comment "$number" --repo "$REPO" \
+            --body "The drift report above has been updated. Read it rather than this comment: what changed may be the set of rows, or only a sha, a date or a reason on a row already listed."
+          echo "Updated #$number"

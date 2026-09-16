@@ -8,9 +8,15 @@
 # prose, in docs/reference/profile.md; this file holds only what a script or a command needs
 # verbatim.
 #
-# Readers today: .github/setup-labels.sh (`labels`), .github/profile-env.sh (shell variables
-# for the recipes in docs/reference/method/tracker-mechanics.md). The CI workers still carry their
-# own copies of the label set and the path map; making them read this file is its own issue.
+# Who reads it is not listed here — a list of readers is the kind that rots the moment one is
+# added, and it had. Find them by rule instead:
+#
+#   grep -rln 'profile\.yml' .github/ .claude/ docs/
+#
+# Every hit is a candidate: some name the file to say what it holds rather than to read it.
+# The CI workers are among the hits and are the case worth knowing — _ai-review.yml reads the
+# `labels` section at run time, while the path map it uses is still its own copy. Which of the
+# two a given worker takes from here is that workflow's to state, not this header's.
 
 repo:
   owner: kristofdegrave
@@ -221,21 +227,25 @@ review:
         - "CLAUDE.md"
 
 # Everything the method or the stack is built on that lives outside this repository, each
-# pinned to the upstream state it was last reconciled with. This is the provenance manifest.
-# No workflow reads it yet: a scheduled drift check that compares each pin with upstream is
-# planned as its own issue and will read these rows. A pin is bumped by a decision recorded
-# in the PR that bumps it — never by an automatic re-sync, since several of these are
-# adaptations rather than copies (docs/reference/method/ai-authoring.md's **Vendored skills are
-# forked on purpose**). The four `sha256:` rows are also in skills-lock.json, the marketplace
-# installer's own record; this file is the one the method reads, and the two move together —
-# a re-install that changes the lockfile's hash changes the pin here in the same PR.
+# pinned to the upstream state it was last reconciled with. This is the provenance manifest,
+# and adding a skill from any external source means adding its row in the same PR — an
+# undeclared copy is read as authored, by the method check and by anyone reading the tree.
+# .github/check-upstream-drift.py reads these rows weekly and reports every pin that no longer
+# matches upstream — the CI document `CLAUDE.md`'s **Contribution workflow** topic routes to
+# owns that check. A pin is bumped by a decision recorded in the PR that bumps it — never by an
+# automatic re-sync, since several of these are adaptations rather than copies; the reference
+# `CLAUDE.md`'s **Authoring AI artifacts** topic routes to owns that rule. The four
+# `sha256:` rows are also in skills-lock.json, the marketplace installer's own record; this
+# file is the one the method reads, and the two move together — a re-install that changes the
+# lockfile's hash changes the pin here in the same PR.
 #
 #   source     GitHub repository the skill came from
 #   path       path of the skill inside that repository
 #   pin        `commit:<sha>` — the last upstream commit touching `path` at reconciliation —
 #              or `sha256:<hash>` where only the installer's content hash of SKILL.md was
-#              recorded (skills-lock.json); no commit is known for those and the hash no
-#              longer matches upstream HEAD, so the first drift run will flag each of them
+#              recorded (skills-lock.json); the drift check reports such a row as unresolvable
+#              until it is reconciled to a `commit:` pin, for the reason the CI document routed to
+#              above gives.
 #   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
 #              the developer's machine by the plugin named, and not part of this repository
 dependencies:
@@ -290,6 +300,16 @@ dependencies:
     - name: research
       source: mattpocock/skills
       path: skills/engineering/research
+      pin: commit:321658273cb1
+      installed: repo
+    - name: diagnosing-bugs
+      source: mattpocock/skills
+      path: skills/engineering/diagnosing-bugs
+      pin: commit:321658273cb1
+      installed: repo
+    - name: resolving-merge-conflicts
+      source: mattpocock/skills
+      path: skills/engineering/resolving-merge-conflicts
       pin: commit:321658273cb1
       installed: repo
     # Upstream-intact marketplace install; used by the design documents, not by a stack.

@@ -113,6 +113,11 @@ jobs:
     # `workflow` change mid-rename must stay committable, and this job is where the finding is
     # caught instead. Whether it is a *required* status check is branch protection's call,
     # like `authoring`.
+    #
+    # The job also carries the two PR-time halves of the upstream-drift check: its fixtures,
+    # and `--validate` over the real dependency manifest. Both belong beside the method check
+    # rather than in the weekly job -- they are agreements between files a PR edits, and the
+    # weekly job is where a break would go unnoticed.
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -129,6 +134,19 @@ jobs:
         run: bash .github/test-check-method.sh
       - name: Method check (anchors, profile agreement, work-type completeness, layers)
         run: bash .github/check-method.sh
+      # Only the drift check's fixtures, never the check itself: comparing pins with upstream
+      # needs the network and belongs to the weekly schedule (upstream-drift.yml), whereas a
+      # PR that breaks the check has to fail here rather than a week later in a job nobody
+      # watches. The fixtures are offline by construction, so this adds no flakiness and no
+      # rate-limit surface to a required-adjacent job.
+      - name: Drift check self-test
+        run: bash .github/test-check-upstream-drift.sh
+      # The check's parse-only half, against the real manifest. Comparing pins with upstream
+      # needs the network and belongs to the weekly schedule; reading the manifest does not,
+      # and has to fail here: one unreadable row aborts the comparison and takes every other
+      # row's verdict with it, so a malformed row must not be able to ship green.
+      - name: Dependency manifest is readable and every pin has a known scheme
+        run: bash .github/check-upstream-drift.sh --validate
 
   test:
     needs: changes
