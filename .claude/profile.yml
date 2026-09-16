@@ -207,11 +207,13 @@ review:
         - ".github/ISSUE_TEMPLATE/**"
         - ".github/setup-labels.sh"
         - ".github/profile-env.sh"
-        # The two checked-in checks, their fixtures and the git hooks: each is a gate or a
-        # rule's mechanical half, so an edit to one is `workflow` work like the rule itself.
+        # The two checked-in checks, their fixtures, the git hooks and the Claude Code
+        # PreToolUse guard: each is a gate or a rule's mechanical half, so an edit to one is
+        # `workflow` work like the rule itself.
         - ".github/check-*"
         - ".github/test-check-*"
         - ".github/hooks/**"
+        - ".claude/hooks/**"
         - ".claude/skills/**"
         - ".claude/agents/**"
         - ".claude/profile.yml"
