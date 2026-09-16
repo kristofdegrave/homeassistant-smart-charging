@@ -36,24 +36,33 @@ from a list** —
 
 ```sh
 grep -rnE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
-  .github/workflows/ .github/ISSUE_TEMPLATE/ .github/setup-labels.sh .claude/profile.yml
+  .github/workflows/ .github/ISSUE_TEMPLATE/ .github/setup-labels.sh \
+  .claude/profile.yml .claude/skills/
 ```
 
-— run with the label being renamed in place of the alternation. Every hit is a place the rename
-has to reach: a worker's `context_labels` variable or `case` block, a reason string a human
-reads, a guard's own `case`, an issue form's `labels:` key that stamps the label on every issue
-filed through it, the profile's `labels` section that `.github/setup-labels.sh` writes to the
-repository, and any later workflow that names a label to apply or to branch on. The grep is the
-obligation; the examples are illustrations of what it turns up, never the set.
+— run with the label being renamed in place of the alternation. `.claude/skills/` is in the
+list for the same reason `CLAUDE.md`'s table and `docs/reference/work-types/<label>/` are named
+below: a skill is read by a worker at run time, and a skill's **frontmatter `description`** is
+loaded on every run, so a stale label there is both wrong and expensive.
+
+Every hit is a **candidate**, not an obligation — four of the labels are ordinary English words
+in these trees, `workflow` above all, so the rule over-includes on purpose and the reader
+decides per hit whether it is the label or the word. What it turns up, by way of illustration
+and never as the set: a worker's `context_labels` variable or `case` block, a reason string a
+human reads, a guard's own `case`, an issue form's `labels:` key that stamps the label on every
+issue filed through it, the profile's `labels` section that `.github/setup-labels.sh` writes to
+the repository, a skill that names the labels it applies, and any later workflow that names a
+label to apply or to branch on.
 
 Two more places carry the same vocabulary
 without being part of the pipeline's own configuration — though both are read by the workers at
 run time, which is what makes *renaming* a label expensive here rather than merely tedious:
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
-a label means moving a directory, not editing a line, for each label that has one (today,
-`adr`, `development`, `documentation`, `requirement`, `specs`, `testing`, `uc` and `workflow`),
-and then
+a label means moving a directory, not editing a line, for each label that has one — which
+labels those are is the profile's `work_types.enabled` crossed with what each directory
+actually holds, and `.github/check-method.py`'s check 4 is what holds the two together — and
+then
 fixing every cross-directory reference the move breaks. **Find them by rule, not from a
 list**: every **relative-path** reference that leaves a label's own directory for another
 label's — `../<label>/…`, whether it is a markdown link or a bare path in prose, and in
@@ -79,8 +88,8 @@ The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
 artifact gets — is [work-types/README.md](../work-types/README.md)'s; what belongs here is only
 that the label is the directory name, so a rename moves a directory. Adding a label means
-updating those eight — the work-types directory only where the new label gets a file of its
-own, which is not a given and need not be a work file (`workflow`'s directory holds only a
+updating every place the two rules above turn up — the work-types directory only where the new
+label gets a file of its own, which is not a given and need not be a work file (`workflow`'s directory holds only a
 review checklist); renaming one additionally means updating any form that stamps it. A
 rename that misses `close-guard.yml` fails open silently — its `case` simply stops matching —
 so that one is checked, not assumed.
@@ -91,7 +100,7 @@ reviewer for *How it is reviewed* — so the row is the selection itself rather 
 one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
 cell in either *How* column — and changing the table's own shape expensive, since it now
 reaches every worker at once.
-Adding or renaming a label is a third thing again, and not cheap: see the eight places above.
+Adding or renaming a label is a third thing again, and not cheap: run the two rules above.
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
@@ -104,8 +113,8 @@ half, since a job that never runs cannot add a reviewer either. All three now ca
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **action/state labels** (`needs-draft`, `needs-review`, `needs-work`, `needs-approval`,
-`needs-decision`) are not context labels either. They are defined in exactly one of those
-eight places — `.claude/profile.yml`'s `labels`; where another of the eight mentions one (an issue
+`needs-decision`) are not context labels either. They are defined in exactly one place
+the rule above turns up — `.claude/profile.yml`'s `labels`; where another hit mentions one (an issue
 form's guidance text, `_ai-draft.yml`'s reason string, `ai-pipeline.yml`'s Action/state line)
 it is prose telling a human which trigger to add next, never a value a worker matches on, so a
 rename there is a wording fix rather than a sync obligation. What binds instead is the set of
@@ -219,11 +228,19 @@ reconciliation to a `commit:` pin, and repeat every run until they get one. A lo
 *errors* is not a verdict at all: the run fails and writes nothing, rather than opening a
 report whose rows are silently incomplete.
 
-Everything the workflow decides lives in the script, and the workflow itself only calls it and
-carries the answer to GitHub. That is why: the splice and the did-anything-change comparison
-were inline shell in the job until a review observed that the one piece of logic able to
-destroy a maintainer's writing was also the one piece no fixture could reach. Logic in the
-job is logic no test covers, in a job nobody watches.
+Decisions live in the script, and the workflow calls it and carries the answer to GitHub. That
+is why: the splice and the did-anything-change comparison were inline shell in the job until a
+review observed that the one piece of logic able to destroy a maintainer's writing was also the
+one piece no fixture could reach. Logic in the job is logic no test covers, in a job nobody
+watches.
+
+One decision necessarily stays in the job — which issue *is* the report, since finding it means
+querying GitHub — and it is the untested remainder the rule above would otherwise hide. It has
+already been wrong once: the author condition was first written with the REST spelling of the
+bot login against a call served from GraphQL, where the same actor is rendered differently, and
+a condition that matches nothing does not fail but opens a fresh issue every week. The value
+now in the file is the one `gh` actually returns for this repository's own bot-authored items,
+read off a real query rather than reasoned from a doc.
 
 The check's fixtures (`.github/test-check-upstream-drift.sh`) are offline by construction and
 run twice: in `ci.yml`, so a PR that breaks the check fails on that PR, and again inside the

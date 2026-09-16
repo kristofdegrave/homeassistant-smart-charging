@@ -116,16 +116,24 @@ jobs:
           # the job would splice into a stranger's issue, comment on it, and never open the
           # real one, with no pin bump ever closing it. A maintainer cannot change who opened
           # an issue, so constraining the author costs nothing the marker match was defending.
-          # Compared in jq rather than passed as `--author`: the qualifier's translation is not
-          # something this repository can exercise (no bot-authored issue exists yet to test
-          # against), and a filter that silently matched nothing would open a fresh issue every
-          # week -- the pile invariant 3 forbids.
+          #
+          # `app/github-actions` and not `github-actions[bot]`: this call is served from gh's
+          # GraphQL path, which renders a bot actor with an `app/` prefix, where REST spells the
+          # same actor `github-actions[bot]`. The REST spelling here would match nothing, and a
+          # condition that matches nothing does not fail -- it opens a fresh issue every week,
+          # the pile invariant 3 forbids. Not reasoned from the docs: `gh pr list --json author`
+          # in this repository returns `app/github-actions` for the PRs this same actor opened
+          # (and `app/dependabot` for that one), which is the same command shape and the same
+          # renderer as the call below. The `is_bot` half is belt and braces: it is false for
+          # every human account, so a planted marker cannot pass even if the login rendering
+          # changes again.
           #
           # The explicit high limit is the trap the tracker recipes warn about: `gh issue list`
           # pages silently, and a missed row reads as "no issue exists" rather than erroring.
           number=$(gh issue list --repo "$REPO" --state open --limit 500 \
             --json number,body,author \
-            --jq "[.[] | select(.author.login == \"github-actions[bot]\")
+            --jq "[.[] | select(.author.is_bot == true)
+                       | select(.author.login == \"app/github-actions\")
                        | select(.body | contains(\"$marker_start\"))] | first | .number // empty")
 
           if [ -z "$number" ]; then
