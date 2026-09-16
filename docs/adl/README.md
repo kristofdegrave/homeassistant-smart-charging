@@ -49,5 +49,6 @@ template.
 | [0040](0040-fifth-mandated-adapter-case-unit-set.md) | A fifth mandated adapter case — a numeric role's expected unit set and its behaviour on a foreign or absent unit (extends ADR-0009) | Accepted |
 | [0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) | The CI reviewer reads its instructions from the base branch and its subject from the PR | Accepted |
 | [0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | A state-of-charge-unavailable cycle holds the deadline-unreachable clear rather than firing it (narrows [ADR-0024](0024-deadline-unreachable-cleared-event.md)) | Accepted |
+| [0043](0043-scheduled-upstream-drift-watcher.md) | The upstream-drift watcher — a scheduled, issue-writing job over the profile's pin manifest | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
