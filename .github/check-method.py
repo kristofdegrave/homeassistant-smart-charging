@@ -442,9 +442,13 @@ def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings
     author in the fall-through row and pointed at the wrong prefix -- the drift this check
     exists to refuse. Both ends are re-derived: the labels from the profile, the document from
     whatever the **Definition of Done** topic links to, so moving the file moves the check with
-    it. One direction only: a row for a label the profile no longer declares is indistinguishable
-    from the fall-through row's own backticked labels, so a retired label's row is the reviewer's
-    to catch, not this check's.
+    it. Two stated limits. One direction only: a row for a label the profile no longer declares
+    is indistinguishable from the fall-through row's own backticked labels -- the key set below
+    absorbs every backticked span in a row's first cell, `docs/plans/**`, `bug` and `enhancement`
+    included -- so a retired label's row is the reviewer's to catch, not this check's. And the
+    topic's owner cell is read for its FIRST link: the cell this one carries holds exactly one,
+    where other routing-table cells hold two, so a cell that ever leads with another document
+    would need the first link that resolves instead.
     """
     owner = next((cell for topic, cell in guide.topics if topic.startswith(DOD_TOPIC)), None)
     if owner is None:
@@ -456,19 +460,21 @@ def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings
     path = root / doc
     if not path.is_file():
         return  # check 2 already reports a link target that does not exist
-    table = section(read_text(path), COMMIT_SECTION)
-    if not table:
+    text = read_text(path)
+    prefixes = section(text, COMMIT_SECTION)
+    if not prefixes:
         findings.add(3, doc, f"no `## {COMMIT_SECTION}` section to key by context label")
         return
+    where = f"{doc}:{next(n for _, n, h in headings(text) if h == COMMIT_SECTION)}"
     keyed: set[str] = set()
-    for cells in table_rows(table):
+    for cells in table_rows(prefixes):
         if cells:
             keyed.update(re.findall(r"`([^`]+)`", cells[0]))
     if not keyed:
-        findings.add(3, doc, f"`## {COMMIT_SECTION}` has no table keyed by context label")
+        findings.add(3, where, f"`## {COMMIT_SECTION}` has no table keyed by context label")
         return
     for label in sorted(set(enabled) - keyed):
-        findings.add(3, doc, f"context label `{label}` has no commit-prefix row")
+        findings.add(3, where, f"context label `{label}` has no commit-prefix row")
 
 
 def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) -> None:

@@ -322,6 +322,8 @@ case_run "3: an enabled context label with no commit-prefix row fails" 1 "contex
   "sed -i '/^| \`beta\` | \`beta:\`/d' docs/reference/dod.md"
 case_run "3: a Definition of Done document without the prefix section fails" 1 "no \`## Commit message conventions\` section" \
   "sed -i '/^## Commit message conventions$/,\$d' docs/reference/dod.md"
+case_run "3: a commit-prefix table with no backticked key fails" 1 "has no table keyed by context label" \
+  "printf '# DoD\n\n## Commit message conventions\n\n| L | P | E |\n|---|---|---|\n| alpha | x: | x: a thing |\n' > docs/reference/dod.md"
 
 # --- 4  work-type completeness -------------------------------------------------------------
 case_run "4: an enabled work type missing its bar fails" 1 "has no done.md" \
@@ -401,7 +403,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=72
+EXPECTED=73
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

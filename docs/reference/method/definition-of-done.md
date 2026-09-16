@@ -130,5 +130,8 @@ matching current practice (`git log`):
 | `workflow` (CI/skill/agent-authoring changes) | `workflow:` | `workflow: a weekly drift check reads the profile's dependency pins and reports what moved` |
 | anything else (a fix, refactor, chore not tied to a plan task) — including an issue carrying only a `bug`/`enhancement` kind label, which has no context label to infer from | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
 
+One row per context label, and `.github/check-method.py`'s check 3 fails when an enabled one
+has none — so a label added to the profile is a row owed here.
+
 CI's `_ai-draft.yml` uses its own coarser commit-prefix mapping for the initial draft commit
 only — see [ci-pipeline.md](ci-pipeline.md).

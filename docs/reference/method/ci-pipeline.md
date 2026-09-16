@@ -61,7 +61,9 @@ run time, which is what makes *renaming* a label expensive here rather than mere
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
 a label means moving a directory, not editing a line, for each label that has one — which
 labels those are is the profile's `work_types.enabled` crossed with what each directory
-actually holds, and `.github/check-method.py`'s check 4 is what holds the two together — and
+actually holds, and `.github/check-method.py`'s check 4 is what holds the two together; and the
+commit-prefix table of the document `CLAUDE.md`'s **Definition of Done** topic owns, one row
+per context label, which that script's check 3 holds against the profile — and
 then
 fixing every cross-directory reference the move breaks. **Find them by rule, not from a
 list**: every **relative-path** reference that leaves a label's own directory for another
