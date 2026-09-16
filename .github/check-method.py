@@ -17,7 +17,9 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
-                        same set; the table's changed-path map equals review.path_map;
+                        same set; the table's changed-path map equals review.path_map; the
+                        commit-prefix table of the document the **Definition of Done** topic
+                        owns has a row for every one of those labels;
                         docs/reference/profile.md exists and has a `## Flow` section, and
                         every flow deviation -- a `###` under it -- names, in backticks, at
                         least one work type, each of them enabled
@@ -114,6 +116,11 @@ LAYERS = {"method", "project", "stack"}
 # The project's prose profile; its `## Flow` section is the deviation contract check 3 reads.
 PROFILE_DOC = "docs/reference/profile.md"
 FLOW_SECTION = "Flow"
+# The commit-prefix table check 3 reads: the topic that owns the document, and the section
+# whose first table is keyed by context label. The document itself is never named here -- it
+# is whatever that topic's routing-table entry currently links to.
+DOD_TOPIC = "Definition of Done"
+COMMIT_SECTION = "Commit message conventions"
 WORK_TYPES = "docs/reference/work-types"
 OVERLAYS_DIR = "overlays"
 # The overlay slot a core role file carries, and the rule a work file carries.
@@ -425,6 +432,43 @@ def check_profile_agreement(root: Path, guide: Guide, profile: dict, findings: F
                 f"review.path_map routes to `{work_type}`, which is not enabled",
             )
     check_flow_deviations(root, enabled, findings)
+    check_commit_prefixes(root, guide, enabled, findings)
+
+
+def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings: Findings) -> None:
+    """Every enabled context label is keyed by the commit-prefix table.
+
+    The table claims a prefix per context label, so a label enabled without a row leaves its
+    author in the fall-through row and pointed at the wrong prefix -- the drift this check
+    exists to refuse. Both ends are re-derived: the labels from the profile, the document from
+    whatever the **Definition of Done** topic links to, so moving the file moves the check with
+    it. One direction only: a row for a label the profile no longer declares is indistinguishable
+    from the fall-through row's own backticked labels, so a retired label's row is the reviewer's
+    to catch, not this check's.
+    """
+    owner = next((cell for topic, cell in guide.topics if topic.startswith(DOD_TOPIC)), None)
+    if owner is None:
+        return  # check 1 already reports a routing table with no such topic
+    link = LINK_RE.search(owner)
+    if link is None:
+        return  # check 2 already reports a topic that links to no document
+    doc = link.group(1).partition("#")[0]
+    path = root / doc
+    if not path.is_file():
+        return  # check 2 already reports a link target that does not exist
+    table = section(read_text(path), COMMIT_SECTION)
+    if not table:
+        findings.add(3, doc, f"no `## {COMMIT_SECTION}` section to key by context label")
+        return
+    keyed: set[str] = set()
+    for cells in table_rows(table):
+        if cells:
+            keyed.update(re.findall(r"`([^`]+)`", cells[0]))
+    if not keyed:
+        findings.add(3, doc, f"`## {COMMIT_SECTION}` has no table keyed by context label")
+        return
+    for label in sorted(set(enabled) - keyed):
+        findings.add(3, doc, f"context label `{label}` has no commit-prefix row")
 
 
 def check_flow_deviations(root: Path, enabled: list[str], findings: Findings) -> None:

@@ -54,6 +54,7 @@ build_fixture() {
 |---|---|
 | **Contribution workflow** | [wf.md](docs/reference/wf.md) — the chain. |
 | **Issue conventions** | [wf.md#issue-conventions](docs/reference/wf.md#issue-conventions) |
+| **Definition of Done** | [dod.md](docs/reference/dod.md) — the floor, and the commit prefixes. |
 | **Project profile** | [profile.md](docs/reference/profile.md) and `.claude/profile.yml` |
 EOF
   cat > "$d/.claude/profile.yml" <<'EOF'
@@ -162,6 +163,17 @@ resolve: `CLAUDE.md`'s **Issue** is a prefix of a topic.
 
 `<label>/<n>`.
 EOF
+  cat > "$d/docs/reference/dod.md" <<'EOF'
+# Definition of Done
+
+## Commit message conventions
+
+| Context label | Default prefix | Example |
+|---|---|---|
+| `alpha` | `alpha:` | `alpha: a thing` |
+| `beta` | `beta:` | `beta: another thing` |
+| anything else | conventional-commit type | `fix: a thing` |
+EOF
   cat > "$d/docs/reference/profile.md" <<'EOF'
 ---
 layer: project
@@ -258,6 +270,8 @@ case_run "a stack token outside the work-type tree is not this check's" 0 - \
 case_run "one word of a multi-word token is not the token" 0 - \
   "printf 'A Widget alone, and a Kit alone.\n' >> docs/reference/work-types/alpha/done.md"
 case_run "a review-only work type needs no Skills rule and no slot" 0 - "true"
+case_run "one commit-prefix row may key two labels at once" 0 - \
+  "printf '# DoD\n\n## Commit message conventions\n\n| L | P | E |\n|---|---|---|\n| \`alpha\` / \`beta\` | \`x:\` | \`x: a thing\` |\n' > docs/reference/dod.md"
 
 # --- 1  anchors, outward -------------------------------------------------------------------
 case_run "1: an unresolvable pointer in a skill fails" 1 "**Nowhere**" \
@@ -304,6 +318,10 @@ case_run "3: a profile document without a Flow section fails" 1 "has no \`## Flo
   "sed -i '/^## Flow$/,\$d' docs/reference/profile.md"
 case_run "3: no profile document at all fails" 1 "the profile document is absent" \
   "rm docs/reference/profile.md && sed -i 's#\[profile.md\](docs/reference/profile.md)#[wf.md](docs/reference/wf.md)#' CLAUDE.md"
+case_run "3: an enabled context label with no commit-prefix row fails" 1 "context label \`beta\` has no commit-prefix row" \
+  "sed -i '/^| \`beta\` | \`beta:\`/d' docs/reference/dod.md"
+case_run "3: a Definition of Done document without the prefix section fails" 1 "no \`## Commit message conventions\` section" \
+  "sed -i '/^## Commit message conventions$/,\$d' docs/reference/dod.md"
 
 # --- 4  work-type completeness -------------------------------------------------------------
 case_run "4: an enabled work type missing its bar fails" 1 "has no done.md" \
@@ -383,7 +401,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=69
+EXPECTED=72
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \
