@@ -334,7 +334,8 @@ link and every backticked path in `CLAUDE.md` resolves, an anchored link to a he
 document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
 agreement:** the Model selection table and changed-path map agree with the profile's
 `work_types.enabled`, `labels.context` and `review.path_map`; the commit-prefix table of the
-document the **Definition of Done** topic owns has a row for every enabled context label;
+document `CLAUDE.md`'s **Definition of Done** topic routes to has a row for every enabled
+context label;
 `docs/reference/profile.md`
 exists and has a **Flow** section, and every deviation it states — each `###` there — names
 at least one work type in backticks, every one of them enabled. **4, work-type completeness:**

@@ -320,7 +320,7 @@ case_run "3: no profile document at all fails" 1 "the profile document is absent
   "rm docs/reference/profile.md && sed -i 's#\[profile.md\](docs/reference/profile.md)#[wf.md](docs/reference/wf.md)#' CLAUDE.md"
 case_run "3: an enabled context label with no commit-prefix row fails" 1 "context label \`beta\` has no commit-prefix row" \
   "sed -i '/^| \`beta\` | \`beta:\`/d' docs/reference/dod.md"
-case_run "3: a Definition of Done document without the prefix section fails" 1 "no \`## Commit message conventions\` section" \
+case_run "3: a Definition of Done document without the prefix section fails" 1 "\`## Commit message conventions\` is absent or empty" \
   "sed -i '/^## Commit message conventions$/,\$d' docs/reference/dod.md"
 case_run "3: a commit-prefix table with no backticked key fails" 1 "has no table keyed by context label" \
   "printf '# DoD\n\n## Commit message conventions\n\n| L | P | E |\n|---|---|---|\n| alpha | x: | x: a thing |\n' > docs/reference/dod.md"

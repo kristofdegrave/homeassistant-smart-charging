@@ -19,7 +19,7 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         work_types.enabled in .claude/profile.yml; labels.context names the
                         same set; the table's changed-path map equals review.path_map; the
                         commit-prefix table of the document the **Definition of Done** topic
-                        owns has a row for every one of those labels;
+                        routes to has a row for every one of those labels;
                         docs/reference/profile.md exists and has a `## Flow` section, and
                         every flow deviation -- a `###` under it -- names, in backticks, at
                         least one work type, each of them enabled
@@ -116,9 +116,9 @@ LAYERS = {"method", "project", "stack"}
 # The project's prose profile; its `## Flow` section is the deviation contract check 3 reads.
 PROFILE_DOC = "docs/reference/profile.md"
 FLOW_SECTION = "Flow"
-# The commit-prefix table check 3 reads: the topic that owns the document, and the section
-# whose first table is keyed by context label. The document itself is never named here -- it
-# is whatever that topic's routing-table entry currently links to.
+# The commit-prefix table check 3 reads: the topic whose routing entry names the document, and
+# the section whose first table is keyed by context label. The document itself is never named
+# here -- it is whatever that topic's routing-table entry currently links to.
 DOD_TOPIC = "Definition of Done"
 COMMIT_SECTION = "Commit message conventions"
 WORK_TYPES = "docs/reference/work-types"
@@ -463,7 +463,7 @@ def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings
     text = read_text(path)
     prefixes = section(text, COMMIT_SECTION)
     if not prefixes:
-        findings.add(3, doc, f"no `## {COMMIT_SECTION}` section to key by context label")
+        findings.add(3, doc, f"`## {COMMIT_SECTION}` is absent or empty")
         return
     where = f"{doc}:{next(n for _, n, h in headings(text) if h == COMMIT_SECTION)}"
     keyed: set[str] = set()
