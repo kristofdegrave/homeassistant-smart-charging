@@ -14,10 +14,11 @@
 #   grep -rln 'profile\.yml' .github/ .claude/ docs/
 #
 # Every hit is a candidate: some name the file to say what it holds rather than to read it.
-# The CI workers are among the hits and are the case worth knowing — _ai-review.yml reads the
-# `labels` section at run time and nothing else from this file: it resolves review routing from
-# CLAUDE.md's Model selection table, and the enumeration it does carry its own copy of is the
-# diff enumeration, which is a different thing from `review.path_map` below. Which parts of
+# The CI workers are among the hits and are the case worth knowing. No step of _ai-review.yml
+# reads this file; what it does is tell its review worker to take the label vocabulary — the
+# `labels` section, and nothing else here — from the pull request's own copy. Routing it
+# resolves from CLAUDE.md's Model selection table, and the enumeration it carries its own copy
+# of is its diff enumeration, a different thing from `review.path_map` below. Which parts of
 # this file a given worker reads is that workflow's to state, not this header's.
 
 repo:
