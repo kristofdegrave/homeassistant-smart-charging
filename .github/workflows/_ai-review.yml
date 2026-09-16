@@ -1,10 +1,11 @@
 name: AI review (reusable)
 
 # Reusable worker for the `review` task — called by ai-pipeline.yml when a doc PR, a PR
-# touching the pipeline itself (.github/workflows, .claude/skills, .claude/agents,
-# .github/setup-labels.sh, .github/profile-env.sh, .github/check-*, .github/test-check-*,
-# .github/hooks, .claude/profile.yml, .github/ISSUE_TEMPLATE), or a PR touching
-# custom_components/ or tests/, gets `needs-review`.
+# touching the pipeline itself, or a PR touching custom_components/ or tests/, gets
+# `needs-review`. Which trees those are is ai-pipeline.yml's `paths:` filter and the diff
+# enumeration in the review step below — not restated here, because this comment was a fifth
+# copy of the set those four enumerate, and had already drifted from it.
+#
 # Runs a fresh Opus review, then routes on the verdict marker Claude embeds:
 #   clean                            -> add `needs-approval` and stop; the maintainer reviews
 #   remarks, any non-docs path       -> add `needs-approval` + `needs-decision` + a comment saying
