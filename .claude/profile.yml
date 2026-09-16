@@ -8,9 +8,13 @@
 # prose, in docs/reference/profile.md; this file holds only what a script or a command needs
 # verbatim.
 #
-# Readers today: .github/setup-labels.sh (`labels`), .github/profile-env.sh (shell variables
-# for the recipes in docs/reference/method/tracker-mechanics.md). The CI workers still carry their
-# own copies of the label set and the path map; making them read this file is its own issue.
+# Who reads it is not listed here — a list of readers is the kind that rots the moment one is
+# added, and it has. Find them by rule instead:
+#
+#   grep -rln 'profile\.yml' .github/ .claude/ docs/
+#
+# The CI workers still carry their own copies of the label set and the path map, so they are
+# not among the hits; making them read this file is its own issue.
 
 repo:
   owner: kristofdegrave

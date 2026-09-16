@@ -41,15 +41,13 @@ One verdict per row, and the difference between them matters:
 
   current       the pinned commit is still the newest commit touching the path upstream
   drifted       upstream moved; the report links the compare view between the two commits
-  unresolvable  the pin is a `sha256:` content hash of SKILL.md recorded by the marketplace
-                installer, and the installer's hash function is not reproducible here -- a
-                locally computed sha256 of the same bytes does not match a lockfile hash even
-                for a copy that never diverged. So these rows can be neither confirmed nor
-                refuted, and reporting them as "drifted" would be a claim this script cannot
-                make. They are reported once, as needing reconciliation to a `commit:` pin.
+  unresolvable  the pin is a `sha256:` installer content hash, which this script cannot
+                recompute, so the row is reported as needing reconciliation to a `commit:` pin
+                rather than given a verdict it cannot support. Why it cannot: the routed
+                document.
   missing       no commit upstream touches the path at all: renamed, deleted, or the whole
-                repository moved. Reported, not silently passed -- it is the loudest kind of
-                drift, and the one a naive "compare the shas" check reads as "no change".
+                repository moved. Reported in its own section, never folded in with
+                `unresolvable`.
 
 A lookup that errors is not a verdict: it exits 2 and writes nothing, so a flaky API minute
 fails the run visibly instead of producing a report that quietly omits rows.

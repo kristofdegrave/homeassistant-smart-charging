@@ -110,12 +110,9 @@ jobs:
           # may change either, and each change would otherwise hide the open report and open a
           # second one.
           #
-          # The author, because the marker is published -- it is in this repository, in the
-          # script and in every report -- and this repository is public. Without this condition
-          # anyone able to open an issue could paste the marker into one and become the report:
-          # the job would splice into a stranger's issue, comment on it, and never open the
-          # real one, with no pin bump ever closing it. A maintainer cannot change who opened
-          # an issue, so constraining the author costs nothing the marker match was defending.
+          # The author, because the marker is published and this repository is public; why that
+          # follows, and why constraining the author costs nothing the marker match was
+          # defending, are the routed document's.
           #
           # `app/github-actions` and not `github-actions[bot]`: this call is served from gh's
           # GraphQL path, which renders a bot actor with an `app/` prefix, where REST spells the

@@ -45,10 +45,11 @@ list for the same reason `CLAUDE.md`'s table and `docs/reference/work-types/<lab
 below: a skill is read by a worker at run time, and a skill's **frontmatter `description`** is
 loaded on every run, so a stale label there is both wrong and expensive.
 
-Every hit is a **candidate**, not an obligation — four of the labels are ordinary English words
-in these trees, `workflow` above all, so the rule over-includes on purpose and the reader
-decides per hit whether it is the label or the word. What it turns up, by way of illustration
-and never as the set: a worker's `context_labels` variable or `case` block, a reason string a
+Every hit is a **candidate**, not an obligation. Most of the labels are also ordinary English
+words in these trees — `workflow` above all, but `development`, `testing`, `documentation`,
+`requirement` and `specs` each run into the hundreds of innocent uses between them — so the
+rule over-includes on purpose and the reader decides per hit whether it is the label or the
+word. What it turns up, by way of illustration and never as the set: a worker's `context_labels` variable or `case` block, a reason string a
 human reads, a guard's own `case`, an issue form's `labels:` key that stamps the label on every
 issue filed through it, the profile's `labels` section that `.github/setup-labels.sh` writes to
 the repository, a skill that names the labels it applies, and any later workflow that names a
@@ -128,13 +129,13 @@ that applies them — so a rename is checked there rather than assumed from here
 either. Adding or renaming one means updating that set, and the **Pipeline steps** below where
 the label's meaning is stated.
 
-The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one of those
-places — `.claude/profile.yml`'s `labels` — and in none of the other seven, including
-`docs/reference/work-types/<label>/`, which a kind label never gets. They are not context labels
-([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), so adding or
-renaming one never touches `ai-pipeline.yml`'s header, `_ai-draft.yml`'s
-`context_labels`/reason string/`case` block, `close-guard.yml`'s `case` block, an issue form,
-or `CLAUDE.md`'s **Model selection** table. `_ai-draft.yml` consequently cannot see them, which
+The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one place —
+`.claude/profile.yml`'s `labels` — and the rules above turn up nothing else for them, not even
+a `docs/reference/work-types/<label>/` directory, which a kind label never gets. They are not
+context labels ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**),
+so adding or renaming one is a one-line change in the profile: run the grep for `bug` or
+`enhancement` and every hit is prose about them rather than a value a worker matches on.
+`_ai-draft.yml` consequently cannot see them, which
 is the intended behaviour on all three shapes: a `bug` issue with no context label is refused
 with *No context label found*; a `bug` issue that also carries one routes on that one, exactly
 as if the kind label were absent (so `count` is still 1 and the single-context-label refusal is
@@ -208,8 +209,11 @@ then read as a change every week afterwards. A body whose markers are missing, d
 reversed is **refused** rather than merged optimistically — each of those shapes destroys text
 if it is guessed at, and refusing fails the run loudly instead. The body is rewritten only when
 its content actually changed, compared on content rather than bytes — that is a weaker claim
-than "when the set of rows changed", and deliberately so: an advanced head sha or a moved date
-on a row already listed is a real change to the report. The workflow never closes it: the report ends when a human acts on it, and
+than "when the set of rows changed", and deliberately so: a row already listed whose upstream
+head has moved again is a real change to the report, though the set of rows did not move.
+When it does rewrite, it also posts one short comment, because an edited body notifies nobody
+— that comment is the whole of how a maintainer learns the report moved, which is why the
+rewrite condition being right matters more than it looks. The workflow never closes it: the report ends when a human acts on it, and
 the act is the same either way — **adopt the upstream change, or decide it does not apply, and
 bump the pin in the PR that records the decision**. That PR closes the report through its own
 `Closes` reference, which is what stops the row reappearing. A report closed without a pin
