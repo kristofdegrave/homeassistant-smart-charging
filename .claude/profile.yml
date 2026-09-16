@@ -237,11 +237,10 @@ review:
 #   path       path of the skill inside that repository
 #   pin        `commit:<sha>` — the last upstream commit touching `path` at reconciliation —
 #              or `sha256:<hash>` where only the installer's content hash of SKILL.md was
-#              recorded (skills-lock.json). No commit is known for those, and the installer's
-#              hash function is not reproducible from the file: a locally computed sha256 of
-#              the same bytes does not match the lockfile's hash even for a copy that never
-#              diverged. So the drift check can neither confirm nor refute them — it reports
-#              each as unresolvable, every run, until it is reconciled to a `commit:` pin.
+#              recorded (skills-lock.json). The drift check can neither confirm nor refute a
+#              `sha256:` row and reports each as unresolvable until it is reconciled to a
+#              `commit:` pin; why, and what reconciling one means, are in the section routed
+#              to above.
 #   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
 #              the developer's machine by the plugin named, and not part of this repository
 dependencies:
@@ -296,6 +295,16 @@ dependencies:
     - name: research
       source: mattpocock/skills
       path: skills/engineering/research
+      pin: commit:321658273cb1
+      installed: repo
+    - name: diagnosing-bugs
+      source: mattpocock/skills
+      path: skills/engineering/diagnosing-bugs
+      pin: commit:321658273cb1
+      installed: repo
+    - name: resolving-merge-conflicts
+      source: mattpocock/skills
+      path: skills/engineering/resolving-merge-conflicts
       pin: commit:321658273cb1
       installed: repo
     # Upstream-intact marketplace install; used by the design documents, not by a stack.

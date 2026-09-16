@@ -136,6 +136,12 @@ jobs:
       # rate-limit surface to a required-adjacent job.
       - name: Drift check self-test
         run: bash .github/test-check-upstream-drift.sh
+      # The check's parse-only half, against the real manifest. Comparing pins with upstream
+      # needs the network and belongs to the weekly schedule; reading the manifest does not,
+      # and has to fail here: one unreadable row aborts the comparison and takes every other
+      # row's verdict with it, so a malformed row must not be able to ship green.
+      - name: Dependency manifest is readable and every pin has a known scheme
+        run: bash .github/check-upstream-drift.sh --validate
 
   test:
     needs: changes

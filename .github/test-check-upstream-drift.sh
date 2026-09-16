@@ -16,6 +16,21 @@ CHECK="$HERE/check-upstream-drift.sh"
 pass=0
 fail=0
 
+# The same discovery the wrapper does, for the one mutation that needs an interpreter of its
+# own: hardcoding `python` would fail a case on a host that has only `python3`, for an
+# environment reason the wrapper already solves.
+PY=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    PY="$candidate"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "test-check-upstream-drift: no python on PATH (tried python3, python)" >&2
+  exit 2
+fi
+
 fail_case() { printf 'FAIL  %s\n' "$1"; shift; printf '%s\n' "$*" | sed 's/^/        /'; fail=$((fail + 1)); }
 ok_case()   { printf 'ok    %s\n' "$1"; pass=$((pass + 1)); }
 
@@ -106,14 +121,24 @@ case_run() {
 # --- a manifest with nothing to report -----------------------------------------------------
 # Every row but the current one is dropped, so exit 0 is the whole verdict: no report at all,
 # not an empty one.
-only_current="python - <<'PY'
+only_current="\$PY - <<'PY'
 import io
 lines = io.open('.claude/profile.yml', encoding='utf-8').read().split('\n')
 keep = lines[:lines.index('    - name: moved-skill')]
 io.open('.claude/profile.yml', 'w', encoding='utf-8', newline='\n').write('\n'.join(keep) + '\n')
 PY"
 case_run "every pin current: exit 0 and no report" 0 "1 dependencies - 1 current" "$only_current"
-case_run "a current pin produces no table row" 0 '!Upstream moved' "$only_current"
+dir=$(new_fixture) || dir=""
+if [ -n "$dir" ]; then
+  (cd "$dir" && eval "$only_current") >/dev/null 2>&1
+  out=$(bash "$CHECK" --root "$dir" --responses "$dir/responses.json" --out "$dir/none.md" 2>&1); rc=$?
+  if [ "$rc" = 0 ] && [ ! -e "$dir/none.md" ]; then
+    ok_case "a clean run writes no report file at all, not an empty one"
+  else
+    fail_case "a clean run writes no report file at all, not an empty one" "exit $rc" "$out"
+  fi
+  rm -rf "$dir"
+fi
 
 # --- one fixture per verdict ---------------------------------------------------------------
 case_run "the full manifest reports and exits 1" 1 "Upstream moved" "true"
@@ -121,11 +146,57 @@ case_run "a moved pin is listed with its upstream head" 1 "999999999999" "true"
 case_run "a moved pin links the compare view" 1 \
   "https://github.com/acme/skills/compare/bbbbbbbbbbbb...999999999999" "true"
 case_run "a current pin appears nowhere in the report" 1 '!current-skill' "true"
-case_run "a path no commit touches is reported, not passed" 1 "renamed, deleted or moved" "true"
+case_run "a path no commit touches gets its own section" 1 "## Gone from upstream" "true"
+case_run "a gone path is not folded in with the unverifiable rows" 1 \
+  '!| `gone-skill` | `acme/widgets` | `skills/gone` | `commit:cccccccccccc` | no commit' "true"
 case_run "an installer hash is unresolvable, not drifted" 1 "cannot be recomputed here" "true"
 case_run "an installer hash never reaches the moved table" 1 "| \`hashed-skill\` | \`acme/widgets\` | \`skills/hashed\` | \`sha256:dddddddddddd\` |" "true"
+case_run "an installer hash is absent from the moved table's rendering" 1 \
+  '!`skills/hashed` | `dddddddddddd`' "true"
 case_run "the report carries the marker the workflow matches on" 1 \
   "<!-- ai-upstream-drift-report -->" "true"
+case_run "the report is delimited, so the workflow can replace only its own region" 1 \
+  "<!-- /ai-upstream-drift-report -->" "true"
+case_run "the report says where a human note belongs" 1 "Notes belong in a comment" "true"
+
+# --markers is the workflow's only source for both markers; if it ever disagreed with what
+# report() writes, the workflow would match nothing and open a fresh issue every week.
+dir=$(new_fixture) || dir=""
+if [ -n "$dir" ]; then
+  markers=$(bash "$CHECK" --root "$dir" --markers 2>/dev/null)
+  bash "$CHECK" --root "$dir" --responses "$dir/responses.json" --out "$dir/r.md" >/dev/null 2>&1
+  start=$(printf '%s\n' "$markers" | sed -n 1p)
+  end=$(printf '%s\n' "$markers" | sed -n 2p)
+  if [ -n "$start" ] && [ -n "$end" ] \
+     && grep -qF -- "$start" "$dir/r.md" && grep -qF -- "$end" "$dir/r.md"; then
+    ok_case "--markers prints exactly the two markers the report carries"
+  else
+    fail_case "--markers prints exactly the two markers the report carries" "got: $markers"
+  fi
+  rm -rf "$dir"
+fi
+
+# --- --validate: the parse-only mode ci.yml runs against the real manifest -----------------
+validate_run() {
+  local name="$1" want="$2" want_out="$3" mutate="$4" dir out rc
+  dir=$(new_fixture) || { fail_case "$name" "could not build fixture"; return; }
+  (cd "$dir" && eval "$mutate") || { fail_case "$name" "mutation failed"; rm -rf "$dir"; return; }
+  out=$(bash "$CHECK" --root "$dir" --validate 2>&1); rc=$?
+  rm -rf "$dir"
+  if [ "$rc" != "$want" ]; then
+    fail_case "$name" "expected exit $want, got $rc" "$out"
+  elif [ "$want_out" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$want_out"; then
+    fail_case "$name" "output did not contain: $want_out" "$out"
+  else
+    ok_case "$name"
+  fi
+}
+validate_run "--validate accepts a readable manifest, with no network" 0 \
+  "manifest valid (4 dependencies)" "rm -f responses.json"
+validate_run "--validate rejects a row missing a key" 2 "is missing path" \
+  "sed -i '/^      path: skills\/moved$/d' .claude/profile.yml"
+validate_run "--validate rejects an unrecognised pin scheme" 2 "unrecognised pin" \
+  "sed -i 's#pin: commit:bbbbbbbbbbbb#pin: v1.2.3#' .claude/profile.yml"
 case_run "both groups are read, not just the first" 1 "gone-skill" "true"
 case_run "the summary counts every verdict" 1 \
   "4 dependencies - 1 current, 1 drifted, 1 missing, 1 unresolvable" "true"
@@ -165,7 +236,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without a profile exits 2, not 0" \
               || fail_case "a root without a profile exits 2, not 0" "exit $rc" "$out"
 
-EXPECTED=21
+EXPECTED=29
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d - a fixture was skipped silently\n' \

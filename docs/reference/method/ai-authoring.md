@@ -446,9 +446,11 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
 
 ## Vendored skills are forked on purpose
 
-Four skills came from external sources via a marketplace install and are recorded in
-`skills-lock.json` with their upstream hash: `python-anti-patterns`, `async-python-patterns`,
-`ha-integration-knowledge`, `domain-driven-design`. Two of them — `python-anti-patterns` and
+Every skill this project did not write itself is declared in `.claude/profile.yml`'s
+`dependencies` — that manifest, not this paragraph, is the list. Four of them arrived by
+**marketplace install** and are additionally recorded in `skills-lock.json` with their
+upstream hash: `python-anti-patterns`, `async-python-patterns`, `ha-integration-knowledge`,
+`domain-driven-design`. Two of them — `python-anti-patterns` and
 `async-python-patterns` — have since been **rewritten for this repo**: trimmed to the rules that
 apply to an async Home Assistant custom integration, and cross-linked so no rule is stated twice.
 `ha-integration-knowledge` carries one local note (the custom-integration path mapping);
@@ -473,13 +475,10 @@ Two obligations follow, and both are cheap only if they are met at the time:
   refuses an undeclared copy — the layer rule above reads an undeclared skill as the method's
   own, which is precisely the wrong answer for a file this project did not write, and it also
   leaves the copy out of the drift check that would otherwise tell you upstream had moved.
-- **A drift report is answered by bumping the pin, whichever way the decision went.** The
-  weekly check compares each pin with upstream and opens one issue listing what no longer
-  matches (`CLAUDE.md`'s **Contribution workflow** topic routes to the CI document that owns
-  it). Adopting the upstream change and rejecting it both end the same way: the pin moves to
-  the commit the decision was made against, in the PR that records the decision. Leaving the
-  pin where it is, having decided, reopens the same report next week — the pin records that
-  someone looked, not that the two trees are identical.
+- **A drift report is answered by bumping the pin, whichever way the decision went** — the
+  pin records that someone looked, not that the two trees are identical. The weekly check that
+  opens such a report, and what closes it, are the CI document's (`CLAUDE.md`'s **Contribution
+  workflow** topic routes to it).
 
 ## How to measure
 

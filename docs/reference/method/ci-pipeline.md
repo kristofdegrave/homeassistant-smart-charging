@@ -171,14 +171,18 @@ no change to run on, because the change happens in someone else's repository.
 
 **It never edits a skill and never edits the manifest.** These copies are adaptations, not
 mirrors — several deliberately drop or invert upstream behaviour — so an upstream commit is a
-question, not a patch. The workflow's token grants `issues: write` and nothing else, so the
-property is enforced by what it *can* do rather than only by what its steps say. It applies
-`workflow` and no other label: a scheduled job able to apply `needs-draft`, `needs-review` or
-`needs-work` would spawn drafting or review work nobody asked for.
+question, not a patch. The workflow's token grants no write beyond opening and editing one
+issue, so the property is enforced by what it *can* do rather than only by what its steps say.
+It applies `workflow` and no other label: a scheduled job able to apply `needs-draft`,
+`needs-review` or `needs-work` would spawn drafting or review work nobody asked for.
 
-**One open report, updated in place.** The report is found by a marker in its body rather than
-by its title, so retitling it while working it cannot produce a second one, and the body is
-rewritten only when the set of rows actually changed — an unchanged week touches nothing and
+**One open report, updated in place.** The report is found by a marker in its body — not by
+its title and not by its label, either of which a maintainer may change while triaging it, and
+each of which would otherwise hide the open report and open a second one. Only the region
+between that marker and its closing pair is the workflow's: a note a maintainer adds around it
+survives the next run, which a wholesale body replacement would both destroy and then read as
+a change every week afterwards. The body is rewritten only when the set of rows actually
+changed, compared on content rather than bytes, so an unchanged week touches nothing and
 notifies nobody. The workflow never closes it: the report ends when a human acts on it, and
 the act is the same either way — **adopt the upstream change, or decide it does not apply, and
 bump the pin in the PR that records the decision**. That PR closes the report through its own
@@ -186,9 +190,10 @@ bump the pin in the PR that records the decision**. That PR closes the report th
 bump comes straight back on the next run, correctly.
 
 Four verdicts, and the distinctions are the point. `current` and `drifted` are the ordinary
-pair. `missing` — no commit upstream touches the path at all — is reported rather than passed:
-a renamed or deleted path is the loudest kind of drift and precisely what a naive sha
-comparison reads as "nothing changed". `unresolvable` covers the rows pinned to a `sha256:`
+pair. `missing` — no commit upstream touches the path at all — is reported rather than passed,
+under a heading of its own: a renamed or deleted path is the loudest kind of drift and
+precisely what a naive sha comparison reads as "nothing changed", so it does not share a
+section with the rows that are permanently unverifiable. `unresolvable` covers the rows pinned to a `sha256:`
 content hash recorded by the marketplace installer: that hash is not reproducible here — a
 locally computed sha256 of the same bytes does not match a lockfile hash even for a copy that
 never diverged — so those rows can be neither confirmed nor refuted, and calling them
@@ -200,6 +205,11 @@ report whose rows are silently incomplete.
 The check's fixtures (`.github/test-check-upstream-drift.sh`) are offline by construction and
 run twice: in `ci.yml`, so a PR that breaks the check fails on that PR, and again inside the
 scheduled job, since a weekly job nobody watches is exactly where a broken check would rot.
+`ci.yml` also runs the check itself in its `--validate` mode — parse the manifest, check every
+pin's scheme, touch no network. That mode exists because one unreadable row aborts the whole
+comparison and so takes every *other* row's verdict down with it; without a PR-time check, a
+malformed row would ship green and surface only as a red scheduled run, in the job that
+argument says nobody watches.
 
 ## Pipeline steps
 
