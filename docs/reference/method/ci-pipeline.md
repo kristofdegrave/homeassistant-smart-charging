@@ -55,8 +55,7 @@ issue filed through it, the profile's `labels` section that `.github/setup-label
 the repository, a skill that names the labels it applies, and any later workflow that names a
 label to apply or to branch on.
 
-Two more places carry the same vocabulary
-without being part of the pipeline's own configuration — though both are read by the workers at
+The same vocabulary is carried outside the pipeline's own configuration too — though both are read by the workers at
 run time, which is what makes *renaming* a label expensive here rather than merely tedious:
 `CLAUDE.md`'s **Model selection** table, one row per context label,
 and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
@@ -71,19 +70,30 @@ label's — `../<label>/…`, whether it is a markdown link or a bare path in pr
 `grep -rn '\.\./' docs/reference/work-types/` enumerates the candidates in one command;
 renaming a label means fixing every hit naming it, on both sides.
 
-No count is stated here on purpose. This sentence is a sync obligation — it exists for the
-case where someone forgets to update a list — so a hand-maintained list inside it is the
+No count is stated in either rule on purpose. A rule like these is a sync obligation — it
+exists for the case where someone forgets to update a list — so a hand-maintained list inside it is the
 defect it is meant to prevent, and it has drifted every time one has been tried. The rule
 also survives the labels still to migrate, each of which adds more such references.
 
-Three things the rule deliberately excludes, so a rename executor does not chase them.
+That path rule is not the whole of this tree, because a label is named here in prose as often
+as it is named in a path — `development`'s completion bar names `testing` repeatedly without a
+single `../`. So the tree takes the **same name rule** the pipeline trees take:
+
+```sh
+grep -rniE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
+  docs/reference/work-types/
+```
+
+Every hit is a candidate, on the same terms as before: most of these words are also ordinary
+English, and the reader decides per hit. What the two rules are each for: the path one finds
+the references a *directory move* breaks, which is mechanical; the name one finds the prose a
+*rename* makes wrong, which no path check can see.
+
+Two things both rules deliberately over-report, so a rename executor does not chase them.
 A reference that leaves the tree entirely (`../../../adl/…`) does not name a label and
 survives the move. A reference that stays **inside** one label's own directory — between
 `documentation/`'s two per-branch subdirectories, or from one of them back up to the file that
-routed there — moves with the directory it sits in. And a route
-by **label name** through the *Model selection* table rather than by path — `development`'s
-bar sending the `tests/**` half to the `testing` row, and the work files that name a row —
-carries no `../` at all: the table named just above is where a rename fixes those.
+routed there — moves with the directory it sits in.
 
 The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
@@ -109,17 +119,18 @@ runs at all, and `_ai-review.yml`'s diff enumeration decides which files a check
 that will read it there instead of here. Adding a tree means editing all four. `docs/design/**` was the standing proof of what happens
 otherwise: it sat in the *no context label* row and in neither of the other two, so a
 `docs/design`-only PR spawned no job — which takes out the **label** half as well as the path
-half, since a job that never runs cannot add a reviewer either. All three now carry it.
+half, since a job that never runs cannot add a reviewer either. Every one of the four carries
+it now.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
 conventions, which forwards to [contribution-workflow.md](contribution-workflow.md).
 
 The **action/state labels** (`needs-draft`, `needs-review`, `needs-work`, `needs-approval`,
 `needs-decision`) are not context labels either. They are defined in exactly one place
-the rule above turns up — `.claude/profile.yml`'s `labels`; where another hit mentions one (an issue
-form's guidance text, `_ai-draft.yml`'s reason string, `ai-pipeline.yml`'s Action/state line)
-it is prose telling a human which trigger to add next, never a value a worker matches on, so a
-rename there is a wording fix rather than a sync obligation. What binds instead is the set of
-places that *match* or *apply* them: `ai-pipeline.yml`'s three `if:` guards, which compare
+the rule above turns up — `.claude/profile.yml`'s `labels`. The same grep returns many more
+hits, in retry comments and guidance text across the workers; those are prose telling a human
+which trigger to add next, never a value a worker matches on, so a rename there is a wording
+fix rather than a sync obligation. What binds instead is the set of
+places that *match* or *apply* them: `ai-pipeline.yml`'s `if:` guards, which compare
 `github.event.label.name` against a trigger label by string and — like `close-guard.yml`'s
 `case` block above — fail open silently on a rename, every job simply never firing; `_ai-review.yml`'s
 verdict routing (and `_ai-draft.yml`/`_ai-fix.yml` for the two trigger hand-offs); and, for
@@ -129,13 +140,14 @@ that applies them — so a rename is checked there rather than assumed from here
 either. Adding or renaming one means updating that set, and the **Pipeline steps** below where
 the label's meaning is stated.
 
-The **kind-of-work labels** (`bug`, `enhancement`) are deliberately in exactly one place —
-`.claude/profile.yml`'s `labels` — and the rules above turn up nothing else for them, not even
-a `docs/reference/work-types/<label>/` directory, which a kind label never gets. They are not
-context labels ([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**),
-so adding or renaming one is a one-line change in the profile: run the grep for `bug` or
-`enhancement` and every hit is prose about them rather than a value a worker matches on.
-`_ai-draft.yml` consequently cannot see them, which
+The **kind-of-work labels** (`bug`, `enhancement`) are defined in `.claude/profile.yml`'s
+`labels` and get no `docs/reference/work-types/<label>/` directory, which a kind label never
+gets. They are not context labels
+([contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**), and no worker
+matches on them — but "the profile and nowhere else" would be wrong, and was: run the same
+greps for `bug` or `enhancement` and they turn up a skill naming the labels it applies, which
+is a real hit and the expensive kind, since a skill's text is read at run time. What renaming
+one does *not* touch is anything a worker branches on. `_ai-draft.yml` cannot see them, which
 is the intended behaviour on all three shapes: a `bug` issue with no context label is refused
 with *No context label found*; a `bug` issue that also carries one routes on that one, exactly
 as if the kind label were absent (so `count` is still 1 and the single-context-label refusal is

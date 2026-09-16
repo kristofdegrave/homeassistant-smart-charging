@@ -126,12 +126,20 @@ jobs:
           # changes again.
           #
           # The explicit high limit is the trap the tracker recipes warn about: `gh issue list`
-          # pages silently, and a missed row reads as "no issue exists" rather than erroring.
-          number=$(gh issue list --repo "$REPO" --state open --limit 500 \
-            --json number,body,author \
-            --jq "[.[] | select(.author.is_bot == true)
-                       | select(.author.login == \"app/github-actions\")
-                       | select(.body | contains(\"$marker_start\"))] | first | .number // empty")
+          # pages silently, and a missed row reads as "no issue exists" rather than erroring --
+          # which here means opening a duplicate report every week. The limit alone is a guess,
+          # so the count is checked against it below rather than trusted.
+          limit=500
+          issues=$(gh issue list --repo "$REPO" --state open --limit "$limit" \
+            --json number,body,author)
+          if [ "$(printf '%s' "$issues" | jq 'length')" -ge "$limit" ]; then
+            echo "::error::$limit open issues returned; the report may be past the page and a duplicate would be opened"
+            exit 2
+          fi
+          number=$(printf '%s' "$issues" \
+            | jq -r "[.[] | select(.author.is_bot == true)
+                         | select(.author.login == \"app/github-actions\")
+                         | select(.body | contains(\"$marker_start\"))] | first | .number // empty")
 
           if [ -z "$number" ]; then
             url=$(gh issue create --repo "$REPO" --title "$TITLE" --body-file "$REPORT" \

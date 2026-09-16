@@ -9,12 +9,14 @@
 # verbatim.
 #
 # Who reads it is not listed here — a list of readers is the kind that rots the moment one is
-# added, and it has. Find them by rule instead:
+# added, and it had. Find them by rule instead:
 #
 #   grep -rln 'profile\.yml' .github/ .claude/ docs/
 #
-# The CI workers still carry their own copies of the label set and the path map, so they are
-# not among the hits; making them read this file is its own issue.
+# Every hit is a candidate: some name the file to say what it holds rather than to read it.
+# The CI workers are among the hits and are the case worth knowing — _ai-review.yml reads the
+# `labels` section at run time, while the path map it uses is still its own copy. Which of the
+# two a given worker takes from here is that workflow's to state, not this header's.
 
 repo:
   owner: kristofdegrave
@@ -242,7 +244,7 @@ review:
 #   pin        `commit:<sha>` — the last upstream commit touching `path` at reconciliation —
 #              or `sha256:<hash>` where only the installer's content hash of SKILL.md was
 #              recorded (skills-lock.json); the drift check reports such a row as unresolvable
-#              until it is reconciled to a `commit:` pin, for the reason the section routed to
+#              until it is reconciled to a `commit:` pin, for the reason the CI document routed to
 #              above gives.
 #   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
 #              the developer's machine by the plugin named, and not part of this repository

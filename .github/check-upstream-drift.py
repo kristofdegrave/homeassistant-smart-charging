@@ -8,9 +8,10 @@ the pin keeps claiming a reconciliation that is no longer true. This script is w
 
 It reads the manifest, asks GitHub what each pinned path looks like upstream today, and writes
 a Markdown report of everything that no longer matches. It never edits a skill and never edits
-the manifest, and it is not this file's place to say why: that argument belongs to the document
-`CLAUDE.md`'s **Authoring AI artifacts** topic routes to, which owns it. What is stated here is
-only what this script does.
+the manifest; why that is the right behaviour, and why a pin is bumped by a decision rather
+than an automatic re-sync, are the CI and authoring documents' respectively -- reached through
+`CLAUDE.md`'s **Contribution workflow** and **Authoring AI artifacts** topics, the same split
+the profile's `dependencies` header makes. What is stated here is only what this script does.
 
   Usage: check-upstream-drift.py [--root DIR] [--out FILE] [--responses FILE]
                                  [--validate] [--markers]
@@ -43,8 +44,8 @@ One verdict per row, and the difference between them matters:
   drifted       upstream moved; the report links the compare view between the two commits
   unresolvable  the pin is a `sha256:` installer content hash, which this script cannot
                 recompute, so the row is reported as needing reconciliation to a `commit:` pin
-                rather than given a verdict it cannot support. Why it cannot: the routed
-                document.
+                rather than given a verdict it cannot support. Why it cannot be recomputed is
+                the CI document's, reached through the first of the two topics above.
   missing       no commit upstream touches the path at all: renamed, deleted, or the whole
                 repository moved. Reported in its own section, never folded in with
                 `unresolvable`.
