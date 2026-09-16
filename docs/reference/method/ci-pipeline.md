@@ -30,68 +30,82 @@ separation the `workflow` review checklist's non-negotiables enforce).
 
 The context-label vocabulary itself (values and meanings) is documented once, in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. What lives here
-is the CI-side consistency obligation: the same vocabulary is baked into the pipeline's own
-configuration in several places that must all move together, and they are found **by rule, not
-from a list** —
+is the consistency obligation: the same vocabulary is baked in wherever a worker, a script or
+an instruction to a future run names a label, and all of those must move together. Three rules
+find them, and each is **a rule, not a list** — the scope of every one is stated so that it
+cannot exclude a file, because a scope enumerated by hand is the same defect the rules exist to
+catch, and was: `.github/create-uc-issues.sh` applies a context label with
+`gh issue create --label uc` and sat outside an earlier scope list for as long as that list
+was maintained by hand.
+
+**The name rule** finds the prose and the values a *rename* makes wrong, and it reads the whole
+repository:
 
 ```sh
-grep -rnE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
-  .github/workflows/ .github/ISSUE_TEMPLATE/ .github/setup-labels.sh \
-  .claude/profile.yml .claude/skills/
+git ls-files -z | xargs -0 grep -nE '\buc\b'
 ```
 
-— run with the label being renamed in place of the alternation. `.claude/skills/` is in the
-list for the same reason `CLAUDE.md`'s table and `docs/reference/work-types/<label>/` are named
-below: a skill is read by a worker at run time, and a skill's **frontmatter `description`** is
-loaded on every run, so a stale label there is both wrong and expensive.
+— run once per label being renamed, with that label in place of `uc`. Nothing is excluded, and
+nothing needs to be: a label word is a candidate wherever it appears, and the trees a list
+would have left out are exactly the ones that bit. The price is volume, which differs by label
+rather than being uniform, and is the honest cost of a scope that cannot miss.
 
 Every hit is a **candidate**, not an obligation. Most of the labels are also ordinary English
-words in these trees — `workflow` above all, but `development`, `testing`, `documentation`,
-`requirement` and `specs` each run into the hundreds of innocent uses between them — so the
-rule over-includes on purpose and the reader decides per hit whether it is the label or the
-word. What it turns up, by way of illustration and never as the set: a worker's `context_labels` variable or `case` block, a reason string a
-human reads, a guard's own `case`, an issue form's `labels:` key that stamps the label on every
-issue filed through it, the profile's `labels` section that `.github/setup-labels.sh` writes to
-the repository, a skill that names the labels it applies, and any later workflow that names a
-label to apply or to branch on.
+words — `workflow` and `requirement` above all — so the rule over-includes on purpose and the
+reader decides per hit whether it is the label or the word. What it turns up, by way of
+illustration and never as the set: a worker's `context_labels` variable or `case` block, a
+reason string a human reads, a guard's own `case`, an issue form's `labels:` key that stamps
+the label on every issue filed through it, the profile's `labels` section that
+`.github/setup-labels.sh` writes to the repository, a one-off script that applies the label
+when it files issues, a skill that names the labels it applies, `CLAUDE.md`'s **Model
+selection** table, and the method documents that name a label in prose or in a heading. A hit
+inside `.claude/skills/`, `.claude/agents/` or a worker prompt is the expensive kind: it is
+read at run time, and a skill's **frontmatter `description`** is loaded on every run, so a
+stale label there is both wrong and costly.
 
-The same vocabulary is carried outside the pipeline's own configuration too — though both are read by the workers at
-run time, which is what makes *renaming* a label expensive here rather than merely tedious:
-`CLAUDE.md`'s **Model selection** table, one row per context label,
-and `docs/reference/work-types/<label>/`, where the label is a **directory name** — so renaming
-a label means moving a directory, not editing a line, for each label that has one — which
-labels those are is the profile's `work_types.enabled` crossed with what each directory
-actually holds, and `.github/check-method.py`'s check 4 is what holds the two together — and
-then
-fixing every cross-directory reference the move breaks. **Find them by rule, not from a
-list**: every **relative-path** reference that leaves a label's own directory for another
-label's — `../<label>/…`, whether it is a markdown link or a bare path in prose, and in
-**either** direction, since a label's directory is referred to as often as it refers out.
-`grep -rn '\.\./' docs/reference/work-types/` enumerates the candidates in one command;
-renaming a label means fixing every hit naming it, on both sides.
-
-No count is stated in either rule on purpose. A rule like these is a sync obligation — it
-exists for the case where someone forgets to update a list — so a hand-maintained list inside it is the
-defect it is meant to prevent, and it has drifted every time one has been tried. The rule
-also survives the labels still to migrate, each of which adds more such references.
-
-That path rule is not the whole of this tree, because a label is named here in prose as often
-as it is named in a path — `development`'s completion bar names `testing` repeatedly without a
-single `../`. So the tree takes the **same name rule** the pipeline trees take:
+**The directory rule** exists because `docs/reference/work-types/<label>/` spells the label as
+a **directory name** — so renaming a label means moving a directory, not editing a line, for
+each label that has one; which labels those are is the profile's `work_types.enabled` crossed
+with what each directory actually holds, and `.github/check-method.py`'s check 4 is what holds
+the two together. Every reference naming that directory breaks with the move, and references
+reach it from outside the tree as well as within it, so this rule also reads the whole
+repository:
 
 ```sh
-grep -rniE '\b(adr|uc|requirement|specs|development|testing|workflow|documentation)\b' \
-  docs/reference/work-types/
+git ls-files -z | xargs -0 grep -nE 'work-types/uc/'
 ```
 
-Every hit is a candidate, on the same terms as before: most of these words are also ordinary
-English, and the reader decides per hit. What the two rules are each for: the path one finds
-the references a *directory move* breaks, which is mechanical; the name one finds the prose a
-*rename* makes wrong, which no path check can see.
+Outside-the-tree hits are real work and are not caught by anything else: `check-method.py`'s
+check 2 resolves link and path targets only in `CLAUDE.md`, so a reference from a method
+document or an ADR to a renamed label's directory dangles silently.
 
-Two things both rules deliberately over-report, so a rename executor does not chase them.
-A reference that leaves the tree entirely (`../../../adl/…`) does not name a label and
-survives the move. A reference that stays **inside** one label's own directory — between
+**The relative-path rule** covers what the directory rule cannot see, because a reference
+between two labels' directories is written relatively and never spells `work-types/`:
+
+```sh
+grep -rn '\.\./' docs/reference/work-types/
+```
+
+Every `../<label>/…` hit is a candidate, whether it is a markdown link or a bare path in prose,
+and in **either** direction, since a label's directory is referred to as often as it refers
+out — `uc/` and `requirement/` point at each other today. Renaming a label means fixing every
+hit naming it, on both sides.
+
+No count is stated in any of the three on purpose. A rule like these is a sync obligation — it
+exists for the case where someone forgets to update a list — so a hand-maintained list inside
+it is the defect it is meant to prevent, and it has drifted every time one has been tried,
+in the scope of the rule as readily as in its results. The rules also survive the labels still
+to migrate, each of which adds more such references.
+
+What each is for: the name rule finds the prose and values a *rename* makes wrong, which no
+path check can see; the directory and relative-path rules find the references a *directory
+move* breaks, which is mechanical.
+
+Two things the path rules deliberately over-report, so a rename executor does not chase them.
+A reference that leaves the tree entirely (`../../../adl/…`) is unaffected by the move, even
+where the path happens to contain a label word — `testing/overlays/home-assistant.md` links
+`../../../../adl/0009-testing-strategy.md`, which the name rule hits on `testing` and which no
+rename touches. And a reference that stays **inside** one label's own directory — between
 `documentation/`'s two per-branch subdirectories, or from one of them back up to the file that
 routed there — moves with the directory it sits in.
 
@@ -99,7 +113,7 @@ The shape of that tree — the roles a label's
 directory holds, and the per-branch subdirectories a label whose work covers more than one
 artifact gets — is [work-types/README.md](../work-types/README.md)'s; what belongs here is only
 that the label is the directory name, so a rename moves a directory. Adding a label means
-updating every place the two rules above turn up — the work-types directory only where the new
+updating every place the three rules above turn up — the work-types directory only where the new
 label gets a file of its own, which is not a given and need not be a work file (`workflow`'s directory holds only a
 review checklist); renaming one additionally means updating any form that stamps it. A
 rename that misses `close-guard.yml` fails open silently — its `case` simply stops matching —
@@ -111,7 +125,7 @@ reviewer for *How it is reviewed* — so the row is the selection itself rather 
 one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
 cell in either *How* column — and changing the table's own shape expensive, since it now
 reaches every worker at once.
-Adding or renaming a label is a third thing again, and not cheap: run the two rules above.
+Adding or renaming a label is a third thing again, and not cheap: run the three rules above.
 
 The row is not the whole routing, though. `ai-pipeline.yml`'s path filter decides whether a job
 runs at all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
@@ -126,7 +140,7 @@ conventions, which forwards to [contribution-workflow.md](contribution-workflow.
 
 The **action/state labels** (`needs-draft`, `needs-review`, `needs-work`, `needs-approval`,
 `needs-decision`) are not context labels either. They are defined in exactly one place
-the rule above turns up — `.claude/profile.yml`'s `labels`. The same grep returns many more
+the name rule above turns up — `.claude/profile.yml`'s `labels`. The same grep returns many more
 hits, in retry comments and guidance text across the workers; those are prose telling a human
 which trigger to add next, never a value a worker matches on, so a rename there is a wording
 fix rather than a sync obligation. What binds instead is the set of
@@ -272,12 +286,17 @@ argument says nobody watches.
 - **Trigger**: a maintainer labels an issue `needs-draft` plus exactly one context label — a
   context label alone never triggers anything; only an *action* label (`needs-draft` on an
   issue; `needs-review`/`needs-work` on a PR) spawns an AI job. `workflow` and `documentation`
-  are never auto-drafted — neither is in `_ai-draft.yml`'s label set (`workflow` because a
-  drafted label is contained by an allow-list of the trees its drafts actually write — one tree
-  for each doc label — and that list never reaches the files instructing future drafts. A
-  `workflow` change **is** those instructing files — `.github/`, `.claude/`, `CLAUDE.md` — so
-  no allow-list can contain one; `documentation` simply isn't wired in yet). A human authors
-  both drafts by hand. The review step is still automated
+  are never auto-drafted, but they reach that outcome by different mechanisms and a maintainer
+  sees the difference. `workflow` **is** in `_ai-draft.yml`'s `context_labels`, and its `case`
+  arm refuses with a reason of its own: a drafted label is contained by an allow-list of the
+  trees its drafts actually write — one tree for each doc label — and that list never reaches
+  the files instructing future drafts, while a `workflow` change **is** those instructing files
+  (`.github/`, `.claude/`, `CLAUDE.md`), so no allow-list can contain one. `documentation` is
+  absent from that variable entirely, so it never reaches a `case` arm: a `documentation` issue
+  is refused with *No context label found*, which is the wrong explanation and is why the label
+  counts as not wired in yet rather than deliberately refused. Being in the variable also means
+  `workflow` participates in the multiple-context-labels refusal, which `documentation` does
+  not. A human authors both drafts by hand. The review step is still automated
   for `workflow` and for `documentation`, since
   routing reaches both through the changed paths and not only through the issue's context label.
   `docs/design/**` is in `ai-pipeline.yml`'s path filter and `_ai-review.yml`'s diff enumeration,
