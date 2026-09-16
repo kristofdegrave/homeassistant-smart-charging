@@ -65,11 +65,9 @@ stale label there is both wrong and costly.
 
 **The directory rule** exists because `docs/reference/work-types/<label>/` spells the label as
 a **directory name** — so renaming a label means moving a directory, not editing a line, for
-each label that has one; which labels those are is the profile's `work_types.enabled` crossed
-with what each directory actually holds, and `.github/check-method.py`'s check 4 is what holds
-the two together. Every reference naming that directory breaks with the move, and references
-reach it from outside the tree as well as within it, so this rule also reads the whole
-repository:
+each label that has one. Every reference naming that directory breaks with the move, and
+references reach it from outside the tree as well as within it, so this rule also reads the
+whole repository:
 
 ```sh
 git ls-files -z | xargs -0 grep -nE 'work-types/uc/'
@@ -90,6 +88,16 @@ Every `../<label>/…` hit is a candidate, whether it is a markdown link or a ba
 and in **either** direction, since a label's directory is referred to as often as it refers
 out — `uc/` and `requirement/` point at each other today. Renaming a label means fixing every
 hit naming it, on both sides.
+
+**Two per-label sites are already checked rather than grepped for**, both by
+`.github/check-method.py` against the profile's `work_types.enabled`: check 4, that each
+enabled label's `docs/reference/work-types/<label>/` directory exists and is complete — which
+is also what says which labels have a directory for the rule above to move — and check 3, that
+the commit-prefix table of the document `CLAUDE.md`'s **Definition of Done** topic routes to
+carries a row for it, one row per context label, with no directory moving for it. A label
+added or renamed owes both, and the PR goes red rather than the obligation resting on someone
+remembering to run a grep. They are the shape the rest of this section is not yet: where an
+agreement can be decided mechanically, a check is worth more than a rule stated well.
 
 No count is stated in any of the three on purpose. A rule like these is a sync obligation — it
 exists for the case where someone forgets to update a list — so a hand-maintained list inside
