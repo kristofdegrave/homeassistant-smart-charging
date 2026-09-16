@@ -11,7 +11,7 @@ ported project reads first.
 
 ### The profile's deviations apply over this document
 
-Before following a stage, read [profile.md](profile.md)'s **Flow**. It states either that this
+Before following a stage, read [profile.md](../profile.md)'s **Flow**. It states either that this
 project follows the flow as written, or one `###` per deviation — a stage removed, added or
 reordered, a gate changed — each with its why. A deviation applies over the stage it names; the
 contract for how one is written is that section's, and the method check refuses a deviation
@@ -470,7 +470,7 @@ None of the method's; the commands are `CLAUDE.md`'s **Tracker mechanics** topic
 
 The trees the artifact stages above write into, and which document owns what. The full
 methodology is documented in
-[2026-06-24-analysis-approach-design.md](../plans/2026-06-24-analysis-approach-design.md) — that
+[2026-06-24-analysis-approach-design.md](../../plans/2026-06-24-analysis-approach-design.md) — that
 plan doc's own Document Structure/Writing Order sections predate the pivot recorded in
 `docs/analysis/flows/README.md`; this topic and the **Analysis** stage's order above are the
 current ones.

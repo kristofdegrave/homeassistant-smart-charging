@@ -9,7 +9,7 @@ task-by-task build order). Both **derive** from an already-approved slice of
 Two words for two sizes. The spec covers one **build slice** — `project-plan.md`'s unit. Its
 tasks are the flow's **vertical slices** — the unit one child issue, one PR and one verify-live
 pass are each cut to, as the **Ticket** stage of
-[idea-to-product.md](../../idea-to-product.md) defines it. The task entries below are where
+[idea-to-product.md](../../method/idea-to-product.md) defines it. The task entries below are where
 that shape is written down, which is why each carries the **Blocked by** line and the
 **Verify live** list the flow later reads off it.
 

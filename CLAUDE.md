@@ -3,7 +3,7 @@
 Smart Charging is a solar-first, capacity-tariff-aware EV charging integration for Home
 Assistant, built analysis-first: behaviour is written down in `docs/analysis/**` before it is
 designed or coded. Its process is layered — a **method** that travels between repositories
-(`docs/reference/**`, the step skills, the `reviewer` agent, the work-type files), a
+(`docs/reference/method/**`, the step skills, the `reviewer` agent, the work-type files), a
 **profile** holding what is true of this project alone (`.claude/profile.yml` for values a
 script reads, `docs/reference/profile.md` for facts with a why), and **stack packages** (the
 Home Assistant and Python skills) declared in the profile. This file is the method's routing
@@ -33,7 +33,7 @@ skill owning the step, not by prose in this file.
 One row per enabled context label: how the work is done, how it is reviewed, and the model
 each side runs on. Why the table is shaped this way, and the obligations on whoever edits it
 (review model, path-map enumerations, a label rename), are
-[model-selection.md](docs/reference/model-selection.md); the routing rule a run applies is
+[model-selection.md](docs/reference/method/model-selection.md); the routing rule a run applies is
 stated under the table.
 
 | Context label | How the work is done | Work model | How it is reviewed | Review model |
@@ -117,19 +117,19 @@ artifacts** document.
 
 | Topic | Owner |
 |---|---|
-| **Idea-to-product flow** | [idea-to-product.md](docs/reference/idea-to-product.md) — the method's default flow from a captured idea to its closed epic: the stages, each with its artifact, its gate and its skills, and how a stage is skipped or deviated from; this project's deviations are `profile.md`'s **Flow**. |
-| **Contribution workflow** | [contribution-workflow.md](docs/reference/contribution-workflow.md) — the chain (file the issue → implement → review → fix → clean up) and its rulebook, for an interactive session; it runs unattended from the step it is entered at until a clean pass or the review cap; only **Clean up** is never reached by the chain running onward — it starts from the human stating that the merge happened. [ci-pipeline.md](docs/reference/ci-pipeline.md) — the same lifecycle run by CI. The stages either side of it are the **Idea-to-product flow** topic; the floor before the PR is the **Definition of Done** topic. |
-| **Issue conventions** | [contribution-workflow.md#issue-conventions](docs/reference/contribution-workflow.md#issue-conventions) — context and kind labels, board Size/Estimate, the anchored `Plan:` line, epics as native sub-issues, branch naming. |
-| **Definition of Done** | [definition-of-done.md](docs/reference/definition-of-done.md) — the project-wide floor an author self-checks before opening the PR, and commit message conventions; it routes to a row's per-type completion bar. |
-| **Tracker mechanics** | [tracker-mechanics.md](docs/reference/tracker-mechanics.md) — the concrete `gh` commands, with their rate-limit failure modes, REST fallbacks and Windows/Git Bash quirks. Read it before typing one, and again when a call is refused, silently no-ops, or must be trusted without a read-back. Mechanics only: when to file and what a label means are **Contribution workflow** and **Issue conventions**. |
+| **Idea-to-product flow** | [idea-to-product.md](docs/reference/method/idea-to-product.md) — the method's default flow from a captured idea to its closed epic: the stages, each with its artifact, its gate and its skills, and how a stage is skipped or deviated from; this project's deviations are `profile.md`'s **Flow**. |
+| **Contribution workflow** | [contribution-workflow.md](docs/reference/method/contribution-workflow.md) — the chain (file the issue → implement → review → fix → clean up) and its rulebook, for an interactive session; it runs unattended from the step it is entered at until a clean pass or the review cap; only **Clean up** is never reached by the chain running onward — it starts from the human stating that the merge happened. [ci-pipeline.md](docs/reference/method/ci-pipeline.md) — the same lifecycle run by CI. The stages either side of it are the **Idea-to-product flow** topic; the floor before the PR is the **Definition of Done** topic. |
+| **Issue conventions** | [contribution-workflow.md#issue-conventions](docs/reference/method/contribution-workflow.md#issue-conventions) — context and kind labels, board Size/Estimate, the anchored `Plan:` line, epics as native sub-issues, branch naming. |
+| **Definition of Done** | [definition-of-done.md](docs/reference/method/definition-of-done.md) — the project-wide floor an author self-checks before opening the PR, and commit message conventions; it routes to a row's per-type completion bar. |
+| **Tracker mechanics** | [tracker-mechanics.md](docs/reference/method/tracker-mechanics.md) — the concrete `gh` commands, with their rate-limit failure modes, REST fallbacks and Windows/Git Bash quirks. Read it before typing one, and again when a call is refused, silently no-ops, or must be trusted without a read-back. Mechanics only: when to file and what a label means are **Contribution workflow** and **Issue conventions**. |
 | **Project profile** | [profile.md](docs/reference/profile.md) and `.claude/profile.yml` — repository, board and ids, labels, enabled work types, path map, review cap, dependency pins, git identity, merge strategy, flow deviations. |
 | **Research sources** | [profile.md#research-sources](docs/reference/profile.md#research-sources) — this project's primary sources, highest trust first; the `research` skill carries the procedure. |
-| **Document structure** | [idea-to-product.md#document-structure](docs/reference/idea-to-product.md#document-structure) — what lives in `docs/analysis/`, `docs/design/`, `docs/adl/` and `docs/postmortems/`, and which document owns what. |
-| **Writing order** | [idea-to-product.md#analysis-first-in-this-order](docs/reference/idea-to-product.md#analysis-first-in-this-order) — a rule of the flow's **Analysis** stage; the design documents follow at its **Design** stage. |
-| **Requirements standard** | [idea-to-product.md#what-never-how--moscow-smart-and-the-6cs](docs/reference/idea-to-product.md#what-never-how--moscow-smart-and-the-6cs) — a rule of the **Analysis** stage: what not how, MoSCoW, SMART, the 6Cs. |
-| **DDD alignment (lightweight)** | [idea-to-product.md#two-ddd-concepts-adopted-tactical-ddd-out-of-scope](docs/reference/idea-to-product.md#two-ddd-concepts-adopted-tactical-ddd-out-of-scope) — a rule of the **Analysis** stage: glossary-first, domain events. |
-| **Review protocol for analysis documents** | [idea-to-product.md#the-draft-and-the-review-come-from-the-uc-and-requirement-rows](docs/reference/idea-to-product.md#the-draft-and-the-review-come-from-the-uc-and-requirement-rows) — that rule of the **Analysis** stage and the two that follow it: no tracking refs in a document body, ADRs included; the `specs`-issue gate on `needs-approval`. |
-| **Flow document standard** | [idea-to-product.md#section-order-and-mermaid-types](docs/reference/idea-to-product.md#section-order-and-mermaid-types) — a rule of the **Analysis** stage. |
+| **Document structure** | [idea-to-product.md#document-structure](docs/reference/method/idea-to-product.md#document-structure) — what lives in `docs/analysis/`, `docs/design/`, `docs/adl/` and `docs/postmortems/`, and which document owns what. |
+| **Writing order** | [idea-to-product.md#analysis-first-in-this-order](docs/reference/method/idea-to-product.md#analysis-first-in-this-order) — a rule of the flow's **Analysis** stage; the design documents follow at its **Design** stage. |
+| **Requirements standard** | [idea-to-product.md#what-never-how--moscow-smart-and-the-6cs](docs/reference/method/idea-to-product.md#what-never-how--moscow-smart-and-the-6cs) — a rule of the **Analysis** stage: what not how, MoSCoW, SMART, the 6Cs. |
+| **DDD alignment (lightweight)** | [idea-to-product.md#two-ddd-concepts-adopted-tactical-ddd-out-of-scope](docs/reference/method/idea-to-product.md#two-ddd-concepts-adopted-tactical-ddd-out-of-scope) — a rule of the **Analysis** stage: glossary-first, domain events. |
+| **Review protocol for analysis documents** | [idea-to-product.md#the-draft-and-the-review-come-from-the-uc-and-requirement-rows](docs/reference/method/idea-to-product.md#the-draft-and-the-review-come-from-the-uc-and-requirement-rows) — that rule of the **Analysis** stage and the two that follow it: no tracking refs in a document body, ADRs included; the `specs`-issue gate on `needs-approval`. |
+| **Flow document standard** | [idea-to-product.md#section-order-and-mermaid-types](docs/reference/method/idea-to-product.md#section-order-and-mermaid-types) — a rule of the **Analysis** stage. |
 | **Architecture Decision Records (ADRs)** | [work-types/adr/done.md#architecture-decision-records-adrs](docs/reference/work-types/adr/done.md#architecture-decision-records-adrs) — every architectural decision is captured as an ADR before the work that depends on it is committed; the worthiness test and its two carve-outs. |
-| **Post-mortems** | [contribution-workflow.md#post-mortems](docs/reference/contribution-workflow.md#post-mortems) — a dated snapshot of reasoning, never a source of truth; how it is reviewed. |
-| **Authoring AI artifacts** | [ai-authoring.md](docs/reference/ai-authoring.md) — how a skill, agent definition or CI worker prompt is written; quality and review-integrity rules always win over any token saving. |
+| **Post-mortems** | [contribution-workflow.md#post-mortems](docs/reference/method/contribution-workflow.md#post-mortems) — a dated snapshot of reasoning, never a source of truth; how it is reviewed. |
+| **Authoring AI artifacts** | [ai-authoring.md](docs/reference/method/ai-authoring.md) — how a skill, agent definition or CI worker prompt is written; quality and review-integrity rules always win over any token saving. |

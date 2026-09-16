@@ -37,7 +37,7 @@ linking to the ADR worthiness test) that must stay in sync with what it referenc
 Always read:
 
 - The changed files.
-- `docs/reference/ai-authoring.md`, which `CLAUDE.md`'s **Authoring AI artifacts** section
+- `docs/reference/method/ai-authoring.md`, which `CLAUDE.md`'s **Authoring AI artifacts** section
   routes to — the shared vocabulary, the checklist for each artifact type (skill / agent /
   CI worker prompt), and its non-negotiables. A work-type document under
   `docs/reference/work-types/<label>/` is one of these artifacts even though it is not a skill;
@@ -47,13 +47,13 @@ Always read:
 - If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
   guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
 - If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
-  (`.claude/agents/`): `docs/reference/ci-pipeline.md`, for each job's stated scope
+  (`.claude/agents/`): `docs/reference/method/ci-pipeline.md`, for each job's stated scope
   (draft/review/fix are one task each) and the `needs-*` label contract.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.claude/profile.yml`'s `labels` (the
   set `.github/setup-labels.sh` writes), plus
-  `docs/reference/contribution-workflow.md`'s **Issue conventions** — the canonical
+  `docs/reference/method/contribution-workflow.md`'s **Issue conventions** — the canonical
   context-label vocabulary, to check the form's `labels:` value against it — and
-  `docs/reference/ci-pipeline.md`'s **Label vocabulary sync**, to check the CI-side files stay
+  `docs/reference/method/ci-pipeline.md`'s **Label vocabulary sync**, to check the CI-side files stay
   in step; and, for `adr.yml`, the document `CLAUDE.md`'s **Architecture Decision Records
   (ADRs)** topic routes to, since the form links to it.
 
@@ -89,7 +89,7 @@ Always read:
 
 **(4) Authoring checklist (per artifact type)**
 - Apply the matching checklist section (skill / agent / CI worker prompt) of
-  `docs/reference/ai-authoring.md` to the changed file(s) — or, for a work-type document, the
+  `docs/reference/method/ai-authoring.md` to the changed file(s) — or, for a work-type document, the
   skill checklist as that reference scopes it.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
@@ -101,9 +101,9 @@ Always read:
   see; a core file that reads *the stack overlay names it* with no overlay entry that does is
   a broken route — Major, since the rule then has no home.
 - The context-label vocabulary's values are
-  `docs/reference/contribution-workflow.md`'s and the CI-side sync obligation — every pipeline
+  `docs/reference/method/contribution-workflow.md`'s and the CI-side sync obligation — every pipeline
   place that vocabulary is baked into and must move together — is
-  `docs/reference/ci-pipeline.md`'s. A change to one place that doesn't update the rest is a
+  `docs/reference/method/ci-pipeline.md`'s. A change to one place that doesn't update the rest is a
   Major finding (silent drift in the vocabulary the whole label-driven pipeline trusts).
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.claude/profile.yml`'s `labels` defines — one of the canonical context labels above, or the
@@ -124,7 +124,7 @@ Always read:
   directly, or a topic that resolves to nothing, is a Minor finding — Major where it is the
   only route to something the artifact must read. The heading shape of the routed documents is
   not this item's to score: the convention, and where that shape is and is not yet reached, is
-  stated once in `docs/reference/ai-authoring.md`; this item checks the pointer, not the
+  stated once in `docs/reference/method/ai-authoring.md`; this item checks the pointer, not the
   target.
 - The same rule read the other way, and one of the shapes `docs/reference/ai-authoring.md`
   names as the residue its check cannot decide: a rule or path the diff **states** where
@@ -143,7 +143,7 @@ Always read:
   changed, never as a sweep** — a finding raised against untouched prose is out of scope.
 - If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
   interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
-  itself — per `docs/reference/ci-pipeline.md`, those are CI-only triggers; an interactive
+  itself — per `docs/reference/method/ci-pipeline.md`, those are CI-only triggers; an interactive
   session does review/fix locally instead. Flag as Major (silently hands work to CI the human
   didn't ask for, and can collide with CI's own loop-cap accounting).
 

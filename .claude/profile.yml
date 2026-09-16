@@ -9,7 +9,7 @@
 # verbatim.
 #
 # Readers today: .github/setup-labels.sh (`labels`), .github/profile-env.sh (shell variables
-# for the recipes in docs/reference/tracker-mechanics.md). The CI workers still carry their
+# for the recipes in docs/reference/method/tracker-mechanics.md). The CI workers still carry their
 # own copies of the label set and the path map; making them read this file is its own issue.
 
 repo:
@@ -53,9 +53,9 @@ board:
 # (six hex digits, no `#`) and description. A description must stay under GitHub's
 # 100-character cap and contain no tab or backslash: the script's read-back compares it
 # through jq's @tsv, which escapes both, and a mismatch there can never be cleared by
-# re-running. What each group means is docs/reference/contribution-workflow.md's
+# re-running. What each group means is docs/reference/method/contribution-workflow.md's
 # **Issue conventions**; the CI-side places the context vocabulary is also baked into are
-# docs/reference/ci-pipeline.md's **Label vocabulary sync**.
+# docs/reference/method/ci-pipeline.md's **Label vocabulary sync**.
 labels:
   pretriage:
     - name: idea
@@ -177,7 +177,7 @@ stacks:
 
 review:
   # Review passes an interactive session may run per PR before the loop stops and escalates;
-  # counted from the most recent reset event, as docs/reference/contribution-workflow.md's
+  # counted from the most recent reset event, as docs/reference/method/contribution-workflow.md's
   # **Rounds and the cap** defines. That section routes here for the number rather than
   # stating it. CI's own loop cap is _ai-review.yml's and is not this key.
   interactive_cap: 2
@@ -223,7 +223,7 @@ review:
 # No workflow reads it yet: a scheduled drift check that compares each pin with upstream is
 # planned as its own issue and will read these rows. A pin is bumped by a decision recorded
 # in the PR that bumps it — never by an automatic re-sync, since several of these are
-# adaptations rather than copies (docs/reference/ai-authoring.md's **Vendored skills are
+# adaptations rather than copies (docs/reference/method/ai-authoring.md's **Vendored skills are
 # forked on purpose**). The four `sha256:` rows are also in skills-lock.json, the marketplace
 # installer's own record; this file is the one the method reads, and the two move together —
 # a re-install that changes the lockfile's hash changes the pin here in the same PR.

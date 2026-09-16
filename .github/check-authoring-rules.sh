@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enforce the part of the authoring rule (docs/reference/ai-authoring.md) that a grep can
+# Enforce the part of the authoring rule (docs/reference/method/ai-authoring.md) that a grep can
 # decide with certainty: a skill or agent definition must not carry a MARKDOWN LINK to a
 # project documentation file. It points at the CLAUDE.md section owning the topic instead.
 #
