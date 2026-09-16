@@ -212,6 +212,7 @@ review:
         - ".github/check-*"
         - ".github/test-check-*"
         - ".github/hooks/**"
+        - ".claude/hooks/**"
         - ".claude/skills/**"
         - ".claude/agents/**"
         - ".claude/profile.yml"
