@@ -34,10 +34,14 @@ Five forces pull on whatever answers that.
   here — a locally computed sha256 of the same bytes does not match a lockfile hash even for a
   copy that never diverged — so those rows can be neither confirmed nor refuted by any
   comparison this repository can run.
-- **A write grant that fires on a clock is a new trust boundary.** Every write-capable job in
-  this repository fires on an event a named human caused: a label a maintainer applied, a merge
-  to `main`, a tag. A scheduled job has no human anywhere in its trigger, and its grant is
-  therefore the first here that is exercised without one.
+- **A write grant that fires on a clock is a new trust boundary.** Every write-capable *job
+  this repository authors* fires on an event a named human caused: a label a maintainer
+  applied, a merge to `main`, a tag. A scheduled job has no human anywhere in its trigger, so
+  its grant is the first this repository issues that is exercised without one. Dependabot is
+  configured here and does run weekly, but it is the boundary's other side rather than a
+  counter-example: its ability to write is GitHub's own service grant, not a token this
+  repository hands to steps it wrote, and there is no job definition here whose permissions
+  anyone could get wrong.
 
 That last force is why this is a record rather than a PR description. The test/CI/dev-tooling
 carve-out in `CLAUDE.md`'s **Architecture Decision Records (ADRs)** topic explicitly does not
@@ -65,7 +69,9 @@ Let an existing updater track the sources.
   open and update one pull request per moved dependency.
 - Con: it tracks package ecosystems and whole repositories, not an arbitrary path inside an
   unrelated repository — and a path is exactly the unit pinned here. Its output is also a
-  patch, which is the shape the second force rules out.
+  patch, which is the shape the second force rules out. This is not a guess about an unadopted
+  tool: Dependabot is already configured here for two ecosystems, and neither of them can be
+  made to address a skill's directory in a repository this project does not depend on.
 
 ### Option C — Vendor upstream unmodified (submodule or subtree) and adapt in a layer on top
 
@@ -212,7 +218,7 @@ is deliberately not a precondition here, per Option F.
    rg -n -e 'schedule:' \
          -e '^[[:space:]]*(contents|issues|pull-requests|actions|checks|packages|statuses|deployments|discussions|security-events|id-token):[[:space:]]*write' \
          -e 'WORKFLOW_PAT' \
-         .github/workflows
+         .github
    ```
 
    …plus five sites listed explicitly in the table below. This is a **hybrid** of the template's
@@ -229,14 +235,18 @@ is deliberately not a precondition here, per Option F.
    as no permission key at all. Without that arm the three `_ai-*.yml` workers — where most of
    this repository's automated writing actually happens — do not appear at all.
 
-   The path is `.github/workflows`, the tree whose topology this decision is about. Everything
-   the decision governs *outside* that tree is a prose or data site carrying no workflow syntax,
-   so no widening of the pattern reaches it and the five are named instead. One consequence
-   worth stating: `docs/adl/` is outside the path, so this record is not a hit of its own search
-   and needs no self-row.
+   The path is `.github` rather than `.github/workflows`, and the difference is one file:
+   `.github/dependabot.yml`, which the first arm returns and which is weekly clock-triggered
+   automation that opens pull requests here. Narrowing to the workflows directory would have
+   dropped the one configured automation this decision's own Option B is about — the shape of
+   width failure the template warns against, arrived at by path rather than by pattern. What the
+   path still does not reach is the prose and data outside `.github` altogether: those sites
+   carry no workflow syntax at all, no widening of the pattern finds them, and the five are
+   therefore named instead. One consequence worth stating: `docs/adl/` is outside the path, so
+   this record is not a hit of its own search and needs no self-row.
 
-   The search returns **7 files**; with the five listed sites, **12** are enumerated — **10** in
-   the table below and **2** out of scope under 3.
+   The search returns **8 files**; with the five listed sites, **13** are enumerated — **10** in
+   the table below and **3** out of scope under 3.
 
    Three workflows return nothing, and that is a result rather than a gap: `ci.yml`,
    `close-guard.yml` and `coverage.yml` declare `contents: read` with read-only job scopes, hold
@@ -253,9 +263,18 @@ is deliberately not a precondition here, per Option F.
 | `.claude/profile.yml` *(listed)* | Carries `dependencies`, now machine-read: 12 `commit:` rows and 4 `sha256:` rows | **Does not conform in those four rows** — each is reported `unresolvable` every run until reconciled to a `commit:` pin, which is the follow-up above; the manifest and its 12 other rows conform |
 | `docs/reference/method/ci-pipeline.md` *(listed)* | States why the job exists, what it may not do, the four verdicts, and how a report is closed | Conforms — it is where the operational detail lives, which is why this record cites rather than repeats it |
 | `.github/workflows/ai-pipeline.yml` | The autonomous pipeline's entry: `contents`/`issues`/`pull-requests: write` per calling job, every job gated on a `labeled` event whose sender is a named maintainer | Conforms — a human is in its trigger, the property the scheduled job cannot have and compensates for by writing no label that dispatches |
-| `.github/workflows/_ai-draft.yml`, `_ai-fix.yml`, `_ai-review.yml` | Reusable workers; declare no `permissions:` of their own and inherit the caller's, and use `WORKFLOW_PAT` where a label must trigger the next job and for Projects reads | Conform — same trigger property as their caller; named here because the PAT is a write surface no permission key shows |
+| `.github/workflows/_ai-draft.yml`, `_ai-fix.yml`, `_ai-review.yml` | Reusable workers. None declares a write grant of its own: the first two declare no `permissions:` at all and inherit the caller's, and `_ai-review.yml` declares only `contents: read` on its `skill-scan` job. All three use `WORKFLOW_PAT` where a label must trigger the next job and for Projects reads | Conform — same trigger property as their caller; named here because the PAT is a write surface no permission key shows |
 
-3. **Out of scope** (2 files):
+3. **Out of scope** (3 files):
+
+   `.github/dependabot.yml` — weekly ecosystem updates for GitHub Actions and pip, opened as
+   pull requests and merged only by the manual approval every PR here needs. It is on the other
+   side of this decision's boundary rather than governed by it: nothing in this repository
+   issues it a token or writes its steps, so the standing constraint above — a token scoped to
+   the one artifact written, no `needs-*` label, one artifact updated in place — has nothing
+   here to bind. It keeps doing exactly that, and this record neither extends to it nor argues
+   its stream of pull requests should become one issue.
+
    `.github/workflows/release-please.yml` and `.github/workflows/release.yml` — release
    automation, whose `contents: write` (and `pull-requests: write`) exists to publish this
    repository's own artifacts on a merge to `main` and on a tag. They watch nothing external,
