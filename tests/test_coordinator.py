@@ -224,6 +224,18 @@ def _seed_today_deadline(coord, hours_from_now):
     ).time()
 
 
+def _seed_pursued_occurrence(coord, hours_from_now):
+    """R5's urgency state is the pursued OCCURRENCE, not a flag, so a test needing urgency in
+    effect on entry seeds the occurrence rather than a boolean -- the same value
+    `resolve_next_occurrence` produces from the departure time `_seed_today_deadline` writes,
+    so the two stay in step when a test seeds both.
+
+    Returns the occurrence, for the tests that assert it comes back unchanged."""
+    occurrence = dt_util.now() + timedelta(hours=hours_from_now)
+    coord._pursued_occurrence = occurrence
+    return occurrence
+
+
 def _seed_ample_peak_headroom(coord, kw=AMPLE_PEAK_HEADROOM_KW):
     seed_ample_peak_headroom(coord, kw=kw)
 
@@ -2288,7 +2300,7 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
     coord.active_mode = MODE_POWER
     coord.target_current = 5.0  # above the ~3.26 A the deadline below requires
     coord.soc_limit_override = 80.0
-    coord._urgency_latched = True
+    _seed_pursued_occurrence(coord, hours_from_now=1)
     _seed_today_deadline(coord, hours_from_now=1)
     _seed_ample_peak_headroom(coord)
 
@@ -2297,7 +2309,7 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
     # The handback fired: Power's own 5.0 A request covers the ~3.26 A required.
     assert coord._required_current.urgent is False
     # And the latch was released, not merely reported False for this cycle.
-    assert coord._urgency_latched is False
+    assert coord._pursued_occurrence is None
 
 
 async def test_handback_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
@@ -2323,7 +2335,7 @@ async def test_handback_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
     # No solar capability and sun up -> Auto's own baseline (rows 3-5, urgent=False) falls
     # through to Off, whose 0 A can never satisfy the handback. Captar's own 16 A would, which
     # is precisely why the handback must not read the dispatched mode.
-    coord._urgency_latched = True
+    _seed_pursued_occurrence(coord, hours_from_now=2)
     _seed_today_deadline(coord, hours_from_now=2)
     _seed_ample_peak_headroom(coord)
 
@@ -2901,7 +2913,7 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     coord.soc_limit_override = 80.0
     # Latched on entry (issue #1078): the handback, not the engage test, is what these
     # tariff tests discriminate through -- see the row-4 test's docstring.
-    coord._urgency_latched = True
+    _seed_pursued_occurrence(coord, hours_from_now=3)
     _seed_today_deadline(coord, hours_from_now=3)
     _seed_ample_peak_headroom(coord)
 
@@ -2934,7 +2946,7 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     coord.soc_limit_override = 80.0
     # Latched on entry (issue #1078): the handback, not the engage test, is what these
     # tariff tests discriminate through -- see the row-4 test's docstring.
-    coord._urgency_latched = True
+    _seed_pursued_occurrence(coord, hours_from_now=3)
     _seed_today_deadline(coord, hours_from_now=3)
     _seed_ample_peak_headroom(coord)
 
@@ -2964,7 +2976,7 @@ async def test_low_tariff_mapped_true_matches_default(hass, freezer):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
-    coord._urgency_latched = True
+    _seed_pursued_occurrence(coord, hours_from_now=3)
     _seed_today_deadline(coord, hours_from_now=3)
     _seed_ample_peak_headroom(coord)
 
@@ -3695,11 +3707,11 @@ async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_enga
 
     Cycle 1 engages urgency on a tight deadline. Cycle 2 moves the deadline far enough out that
     the slack test would NOT fire on its own, with a baseline of `Off` that can never satisfy the
-    handback -- urgency must still be in effect, and `_urgency_latched` must still be set.
+    handback -- urgency must still be in effect, and `_pursued_occurrence` must still be set.
 
-    This is the test that makes the latch real: with `self._urgency_latched = urgent` deleted from
-    the coordinator, every other urgency test still passes, because they all seed the flag by hand
-    and run a single cycle.
+    This is the test that makes the held occurrence real: with the `self._pursued_occurrence`
+    assignment gone from the coordinator, every other urgency test still passes, because they
+    all seed the occurrence by hand and run a single cycle.
     """
     freezer.move_to("2026-01-15 12:00:00")
     # low_tariff mapped False so Auto's row 4 (Overnight top-up) cannot match: the baseline falls
@@ -3721,11 +3733,11 @@ async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_enga
     # Cycle 1: 7.5 kWh over 1.25 h at 230 V = ~26.09 A required. That is over the 12.8 A slack
     # threshold AND over the 16 A escalated rate, so this cycle is Unreachable -- which is still
     # urgency in effect (Unreachable is a strict subset of Urgent), and what this test needs is
-    # simply that the latch is set.
+    # simply that an occurrence is pursued.
     _seed_today_deadline(coord, hours_from_now=1.25)
     await coord._async_update_data()
     assert coord._required_current.urgent is True
-    assert coord._urgency_latched is True
+    assert coord._pursued_occurrence is not None
 
     # Cycle 2: 6 h out, ~5.43 A required -- far under the 12.8 A threshold, so the slack test
     # alone would leave this Normal. The latch, and an `Off` baseline that cannot hand back
@@ -3733,7 +3745,7 @@ async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_enga
     _seed_today_deadline(coord, hours_from_now=6)
     await coord._async_update_data()
     assert coord._required_current.urgent is True
-    assert coord._urgency_latched is True
+    assert coord._pursued_occurrence is not None
 
 
 async def test_urgency_latch_is_held_not_cleared_across_an_ev_soc_fault_cycle(hass, freezer):
@@ -3753,13 +3765,13 @@ async def test_urgency_latch_is_held_not_cleared_across_an_ev_soc_fault_cycle(ha
     coord.soc_limit_override = 80.0
     _seed_ample_peak_headroom(coord)
     _seed_today_deadline(coord, hours_from_now=1.25)
-    coord._urgency_latched = True
+    held = _seed_pursued_occurrence(coord, hours_from_now=1.25)
 
     adapters[ROLE_EV_SOC]._value = None
     result = await coord._async_update_data()
 
     assert result.fault is True
-    assert coord._urgency_latched is True  # held, not cleared
+    assert coord._pursued_occurrence == held  # held, not released
 
 
 async def test_urgency_latch_clears_on_disconnect(hass, freezer):
@@ -3782,11 +3794,11 @@ async def test_urgency_latch_clears_on_disconnect(hass, freezer):
     _seed_today_deadline(coord, hours_from_now=1.25)
 
     await coord._async_update_data()
-    assert coord._urgency_latched is True
+    assert coord._pursued_occurrence is not None
 
     adapters[ROLE_CHARGER_STATUS]._canonical = STATE_DISCONNECTED
     await coord._async_update_data()
-    assert coord._urgency_latched is False
+    assert coord._pursued_occurrence is None
 
 
 # --- R5's escalated maximum permitted rate: the operands that actually bind (issue #1078) ---
@@ -3932,3 +3944,112 @@ async def test_urgency_is_judged_against_the_escalated_rate_not_c1(hass, freezer
     # ~8.15 A required: over 8.0/1.25 = 6.4, under 16.0/1.25 = 12.8.
     assert coord._required_current.required_a == pytest.approx(8.15, abs=0.05)
     assert coord._required_current.urgent is True
+
+
+# --- R5 pursued occurrence, threaded by M1 (issue #1190, T4) -------------------------------
+
+
+async def test_should_thread_one_pursued_occurrence_across_engage_hold_and_release(hass, freezer):
+    """R5's urgency state is the occurrence being chased, owned and threaded by the Coordinator
+    (control-cycle.md's Trigger section; resolution-rules.md, 'Clearing urgency').
+
+    Three cycles, probing the actual datetime rather than a flag. Cycle 2 deliberately re-seeds
+    a LATER departure time: the occurrence already pursued must survive the departure-deadline
+    rule resolving to a different time (resolution-rules.md, 'Missed-deadline hold'), which is
+    the end-to-end form of the engine's own preservation rule.
+    """
+    # Arrange -- no solar capability and a mapped-False low tariff, so Auto's baseline rows fall
+    # through to Off (0 A), which can never satisfy the handback. 75 kWh * (80-70)% = 7.5 kWh.
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(
+        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
+    )
+    config = dataclasses.replace(_config(), solar_available=False)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    engaged_occurrence = dt_util.now() + timedelta(hours=1.25)
+
+    # Act / Assert -- cycle 1 engages: 7.5 kWh over 1.25 h at 230 V is ~26.09 A, over both the
+    # 12.8 A slack threshold and the 16 A escalated rate.
+    _seed_today_deadline(coord, hours_from_now=1.25)
+    await coord._async_update_data()
+    assert coord._required_current.urgent is True
+    assert coord._pursued_occurrence == engaged_occurrence
+
+    # Cycle 2 holds, and does NOT re-anchor onto the later departure time just seeded: ~5.43 A
+    # required is far under the slack threshold, so only the latch keeps urgency in effect.
+    _seed_today_deadline(coord, hours_from_now=6)
+    await coord._async_update_data()
+    assert coord._required_current.urgent is True
+    assert coord._pursued_occurrence == engaged_occurrence
+
+    # Cycle 3 releases: state of charge reaches the active SOC limit, so the required current is
+    # 0 A and the handback holds trivially (resolution-rules.md's release list).
+    adapters[ROLE_EV_SOC]._value = 80.0
+    await coord._async_update_data()
+    assert coord._required_current.urgent is False
+    assert coord._pursued_occurrence is None
+
+
+async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable(
+    hass, freezer
+):
+    """A cycle on which state of charge is unavailable establishes nothing about the deadline,
+    so it is deliberately NOT one of R5's exits: "the System holds whichever state it was
+    already in" (UC05's State model; ADR-0024).
+
+    Set up in `Power`, not a solar mode. `is_soc_gated` is False for `Off` and `Power`
+    (coordinator_cycle.py), so those are the only modes where a missing reading reaches the
+    non-resolvable early return at all instead of faulting upstream -- written with a solar mode
+    active, this test would pass on the fault path and prove nothing.
+    """
+    # Arrange -- a live hold: the pursued occurrence has already elapsed.
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    held = dt_util.now() - timedelta(hours=1)
+    coord._pursued_occurrence = held
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert -- unchanged, not released.
+    assert coord._pursued_occurrence == held
+
+
+async def test_should_release_the_pursued_occurrence_when_the_car_disconnects(hass, freezer):
+    """A disconnect is different in kind from an unavailable reading: it ends the connected
+    session and is a real exit, so it releases the occurrence (resolution-rules.md's release
+    list; UC05's State model, "A disconnect is different in kind").
+
+    The same `Power` fixture as its sibling above, so the two differ only in the half of
+    `deadline_resolvable` that fails.
+    """
+    # Arrange
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_DISCONNECTED, ev_soc=70.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._pursued_occurrence = dt_util.now() - timedelta(hours=1)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert coord._pursued_occurrence is None
