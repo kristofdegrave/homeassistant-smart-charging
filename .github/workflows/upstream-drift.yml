@@ -104,15 +104,10 @@ jobs:
           # still agree with itself.
           marker_start=$(bash .github/check-upstream-drift.sh --markers | sed -n 1p)
 
-          # Two conditions, and each is doing a different job.
-          #
-          # The body marker, not the title and not the label: a maintainer triaging the report
-          # may change either, and each change would otherwise hide the open report and open a
-          # second one.
-          #
-          # The author, because the marker is published and this repository is public; why that
-          # follows, and why constraining the author costs nothing the marker match was
-          # defending, are the routed document's.
+          # Two conditions, and each is doing a different job: a marker in the body -- not the
+          # title and not the label -- and the issue's author. Why each is the one it is, and
+          # why constraining the author costs nothing the marker match was defending, are the
+          # routed document's.
           #
           # `app/github-actions` and not `github-actions[bot]`: this call is served from gh's
           # GraphQL path, which renders a bot actor with an `app/` prefix, where REST spells the

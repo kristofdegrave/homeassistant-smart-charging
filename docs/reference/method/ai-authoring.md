@@ -466,9 +466,9 @@ Two consequences:
   unreferenced byte-identical duplicate and has been removed; don't reintroduce it.
 - **A re-sync from upstream would revert that work.** The `computedHash` entries in
   `skills-lock.json` describe where a skill came from, not what it must still contain — and
-  the same four hashes are declared as pins in `.claude/profile.yml`'s `dependencies`, the
+  the same hashes are declared as `sha256:` pins in `.claude/profile.yml`'s `dependencies`, the
   copy the method reads; the two move together, in the same PR. Before
-  re-pulling any of the four, check whether the local copy has diverged — for the two rewritten
+  re-pulling any of them, check whether the local copy has diverged — for the two rewritten
   ones, re-apply the trim rather than accepting the upstream text.
 
 Two obligations follow, and both are cheap only if they are met at the time:
