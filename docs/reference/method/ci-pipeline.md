@@ -74,9 +74,15 @@ whole repository:
 git ls-files -z | xargs -0 grep -nE 'work-types/uc/'
 ```
 
-Outside-the-tree hits are real work and are not caught by anything else: `check-method.py`'s
-check 2 resolves link and path targets only in `CLAUDE.md`, so a reference from a method
-document or an ADR to a renamed label's directory dangles silently.
+Outside-the-tree hits written as a repo-rooted path — `docs/reference/work-types/uc/done.md`,
+or the directory with its trailing slash — are gated: `check-method.py`'s check 2 resolves
+link and path targets in every live file it walks, so that reference goes red on the rename
+rather than dangling. What this grep is still for is the residue that check states it cannot
+resolve: the snapshot trees it skips (`docs/adl/**`, `docs/plans/**` and the two frozen ones),
+a bare path written without its root segment (`work-types/uc/done.md`) that the check has no
+base to resolve, and a reference written as an absolute
+`github.com/<owner>/<repo>/blob/<ref>/…` URL — the shape `.github/ISSUE_TEMPLATE/adr.yml`
+uses.
 
 **The in-tree rule** covers what the directory rule cannot see: inside
 `docs/reference/work-types/`, a label's directory is named without the `work-types/` prefix —
@@ -106,8 +112,12 @@ is also what says which labels have a directory for the rule above to move — a
 the commit-prefix table of the document `CLAUDE.md`'s **Definition of Done** topic routes to
 carries a row for it, one row per context label, with no directory moving for it. A label
 added or renamed owes both, and the PR goes red rather than the obligation resting on someone
-remembering to run a grep. They are the shape the rest of this section is not yet: where an
-agreement can be decided mechanically, a check is worth more than a rule stated well.
+remembering to run a grep. They are the shape the rest of this section is reaching for, and
+check 2's target resolution is the directory rule's half of it — mechanical because a path
+either resolves or it does not. What stays a rule stated well is what needs judgment: the
+name rule, which has to tell the label `workflow` from the English word, and the in-tree
+rule, whose bare prefix-less `uc/done.md` names no tree the check can root it at (written as
+a markdown link, `../uc/done.md` resolves against its own directory and is caught).
 
 No count is stated in any of the three on purpose. A rule like these is a sync obligation — it
 exists for the case where someone forgets to update a list — so a hand-maintained list inside

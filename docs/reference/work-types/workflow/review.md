@@ -126,7 +126,7 @@ Always read:
   not this item's to score: the convention, and where that shape is and is not yet reached, is
   stated once in `docs/reference/method/ai-authoring.md`; this item checks the pointer, not the
   target.
-- The same rule read the other way, and one of the shapes `docs/reference/ai-authoring.md`
+- The same rule read the other way, and one of the shapes `docs/reference/method/ai-authoring.md`
   names as the residue its check cannot decide: a rule or path the diff **states** where
   another file owns it, with no pointer written at all — so there is no link to catch and no
   pointer to fail. Where that owner is another skill, agent or prompt, the one-source-of-truth

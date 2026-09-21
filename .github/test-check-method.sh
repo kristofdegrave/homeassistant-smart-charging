@@ -254,6 +254,22 @@ case_run "a layer: project override takes a method-tree doc out of check 5" 0 - 
   "sed -i '1i ---\nlayer: project\n---\n' docs/reference/wf.md && printf 'Owned by acme.\n' >> docs/reference/wf.md"
 case_run "a pointer in a frozen tree is not checked" 0 - \
   "mkdir -p docs/postmortems && printf 'Then \`CLAUDE.md\`'\"'\"'s **Long Gone** section said so.\n' > docs/postmortems/2020-01-01-x.md"
+case_run "a relative link resolves against its own directory" 0 - \
+  "printf 'See [the bar](dod.md).\n' >> docs/reference/wf.md"
+case_run "a backticked directory that exists resolves" 0 - \
+  "printf 'The work type lives in \`docs/reference/work-types/alpha/\`.\n' >> docs/reference/wf.md"
+case_run "a stale path in an ADR is not checked" 0 - \
+  "mkdir -p docs/adl && printf 'Per \`docs/reference/gone.md\` as it stood.\n' > docs/adl/0001.md"
+case_run "a stale path in a plan is not checked" 0 - \
+  "mkdir -p docs/plans && printf 'The file was \`docs/reference/gone.md\` then.\n' > docs/plans/2020-01-01-x.md"
+case_run "a stale path in a frozen tree is not checked" 0 - \
+  "mkdir -p docs/postmortems && printf 'It read \`docs/reference/gone.md\`.\n' > docs/postmortems/2020-01-01-y.md"
+case_run "a partial path with no top-level first segment is not checked" 0 - \
+  "printf 'The engine is \`engines/soc_target.py\`.\n' >> docs/reference/wf.md"
+case_run "an absolute URL naming a missing path is not checked" 0 - \
+  "printf 'See [there](https://github.com/example/other/blob/main/docs/reference/gone.md).\n' >> docs/reference/wf.md"
+case_run "a backticked path inside a fenced block is not checked" 0 - \
+  "printf '\`\`\`\nedit \`docs/reference/gone.md\`\n\`\`\`\n' >> docs/reference/wf.md"
 case_run "a stack-group dependency is neither layered nor scanned" 0 - "true"
 case_run "a layer: stack override on an authored skill file is accepted" 0 - \
   "printf -- '---\nlayer: stack\n---\n\nStack notes naming acme.\n' > .claude/skills/step/widgets.md"
@@ -296,6 +312,22 @@ case_run "2: a routing-table entry with no link fails" 1 "links to no document" 
   "sed -i 's#| \[wf.md\](docs/reference/wf.md) — the chain. |#| the chain, in wf.md |#' CLAUDE.md"
 case_run "2: a ### heading under no ## fails" 1 "sits under no \`##\`" \
   "printf -- '---\nlayer: method\n---\n\n# Loose\n\n### Orphan rule\n\nText.\n' > docs/reference/loose.md"
+case_run "2: a stale path a snapshot tree may keep fails in a live document" 1 "names docs/reference/gone.md, which does not exist" \
+  "printf 'Read \`docs/reference/gone.md\` first.\n' >> docs/reference/wf.md"
+case_run "2: the partial path's repo-rooted spelling fails" 1 "names src/engines/soc_target.py, which does not exist" \
+  "printf 'The engine is \`src/engines/soc_target.py\`.\n' >> docs/reference/wf.md"
+case_run "2: the URL's target written as a relative link fails" 1 "link target gone.md does not exist" \
+  "printf 'See [there](gone.md).\n' >> docs/reference/wf.md"
+case_run "2: a backticked work-type directory that does not exist fails" 1 "names docs/reference/work-types/gamma/, which does not exist" \
+  "printf 'Renamed to \`docs/reference/work-types/gamma/\`.\n' >> docs/reference/wf.md"
+case_run "2: a dangling relative link in a skill fails" 1 ".claude/skills/step/SKILL.md:9: link target notes.md does not exist" \
+  "printf 'See [the notes](notes.md).\n' >> .claude/skills/step/SKILL.md"
+case_run "2: a dangling backticked path in a CI workflow prompt fails" 1 ".github/workflows/_x.yml:1: names docs/reference/gone.md, which does not exist" \
+  "mkdir -p .github/workflows && printf 'prompt: read \`docs/reference/gone.md\`\n' > .github/workflows/_x.yml"
+case_run "2: a link fragment no heading in the target carries fails outside CLAUDE.md" 1 "no heading in dod.md has that anchor" \
+  "printf 'See [the prefixes](dod.md#nope).\n' >> docs/reference/wf.md"
+case_run "2: a link written repo-rooted from a nested file fails" 1 "link target docs/reference/dod.md does not exist" \
+  "printf 'See [the bar](docs/reference/dod.md).\n' >> docs/reference/wf.md"
 
 # --- 3  profile agreement ------------------------------------------------------------------
 case_run "3: an enabled work type without a row fails" 1 "has no Model selection row" \
@@ -403,7 +435,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=73
+EXPECTED=89
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \
