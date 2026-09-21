@@ -27,7 +27,8 @@ repository; `.github/profile-env.sh`, which prints its tracker values for the re
 recipes), an issue form
 (`.github/ISSUE_TEMPLATE/`), the harness configuration that decides what a local run may do
 (`.claude/settings.json` and the hooks it wires, `.claude/hooks/`), or the canonical process
-reference (`docs/reference/`, `CLAUDE.md`). The workflow, skill and agent files run with write-scoped credentials
+reference (`docs/reference/`, `CLAUDE.md`). The workflow, skill and agent files run with
+write-scoped credentials
 (`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,
 so this checklist weighs security at least as heavily as quality. An issue form carries no
 credentials itself but can still point at load-bearing process semantics (e.g. `adr.yml`
@@ -99,16 +100,24 @@ Always read:
   skill checklist as that reference scopes it.
 - The harness configuration has no section there, deliberately — that reference says why, and
   routes its criteria here. So judge a change to `.claude/settings.json` or `.claude/hooks/`
-  on these instead: a guard **fails closed**, meaning an unparsed input, an unexpected
-  argument shape or the script's own error path refuses rather than allows (a guard that
-  falls through to "permit" on anything it did not understand is Critical); the change is
-  carried by the guard's own test suite, extended in the same diff where it adds or narrows a
-  refusal (a behaviour change with no test is Major, since nothing else exercises the script);
-  `settings.json` still wires every hook script the repo ships and names no path that does not
-  exist (a hook silently unwired is Critical — the rule it enforces reads as enforced and is
-  not); and any widening of what a run may do without asking — a new allow entry, a matcher
-  narrowed so fewer calls reach the guard — is explained in the PR, per **(1)**'s last bullet,
-  which governs this file as much as a workflow's.
+  on these instead. **Every fall-through to "permit" is argued where it happens.** The guard
+  this project ships is an accident guard and not a sandbox — it says so in its own header,
+  and it fails *open* on an input it cannot parse, with the reasoning written at the line it
+  happens. That is a decision, not a defect, and this item does not reopen it: what it scores
+  is a fall-through that is **undocumented, silent, or newly introduced by the diff** —
+  Critical, since a guard that quietly permits what it did not understand reads as enforcing a
+  rule it is not. Widening an existing one is checked as a widening, below.
+  **The change is carried by the guard's own test suite**, extended in the same diff that adds
+  or narrows a refusal — a behaviour change with no test is Major, since nothing else
+  exercises the script.
+  **The wiring and the tree still match**: every command `settings.json` names resolves to a
+  file that exists, and every script under `.claude/hooks/` that is meant to run as a hook is
+  wired — which is not every file there, a `test-*` harness being a suite the repo runs and
+  not a hook. A hook silently unwired is Critical; the rule it enforces reads as enforced and
+  is not.
+  **Nothing widens what a run may do without asking** — a new `permissions.allow` entry, a
+  matcher narrowed so fewer calls reach the guard — without the PR explaining why, per
+  **(1)**'s last bullet, which governs this file as much as a workflow's.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
 - A work-type core file (any `.md` under `docs/reference/work-types/`, branch files included,
