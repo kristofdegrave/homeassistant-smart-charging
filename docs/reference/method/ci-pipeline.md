@@ -78,11 +78,14 @@ Outside-the-tree hits written as a repo-rooted path — `docs/reference/work-typ
 or the directory with its trailing slash — are gated: `check-method.py`'s check 2 resolves
 link and path targets in every live file it walks, so that reference goes red on the rename
 rather than dangling. What this grep is still for is the residue that check states it cannot
-resolve: the snapshot trees it skips (`docs/adl/**`, `docs/plans/**` and the two frozen ones),
-a bare path written without its root segment (`work-types/uc/done.md`) that the check has no
-base to resolve, and a reference written as an absolute
-`github.com/<owner>/<repo>/blob/<ref>/…` URL — the shape `.github/ISSUE_TEMPLATE/adr.yml`
-uses.
+resolve, and the files it never opens. The residue in full: the snapshot trees it skips
+(`docs/adl/**`, `docs/plans/**` and the two frozen ones); a bare path written without its root
+segment (`work-types/uc/done.md`) that the check has no base to resolve; a reference written as
+an absolute `github.com/<owner>/<repo>/blob/<ref>/…` URL, the shape
+`.github/ISSUE_TEMPLATE/adr.yml` uses; every file outside the trees check 1 walks — the rest of
+`.github/`, `README.md`, `tests/**`, `custom_components/**` — since this grep is `git
+ls-files`-wide and the check is not; and any reference inside a fenced code block, which the
+check skips by design and which the two `sh` fences in this very section are.
 
 **The in-tree rule** covers what the directory rule cannot see: inside
 `docs/reference/work-types/`, a label's directory is named without the `work-types/` prefix —

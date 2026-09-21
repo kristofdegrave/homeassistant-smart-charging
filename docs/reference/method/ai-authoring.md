@@ -335,7 +335,8 @@ walks, minus the snapshot trees (the two frozen ones plus `docs/adl/**` and `doc
 dated records whose paths state what was true at their date rather than what the tree holds
 now) — a link against the directory it is written in and an anchored one to a heading of its
 target, a backticked path at the repository root and only when its first segment names
-something there; and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
+something there; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
+no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
 agreement:** the Model selection table and changed-path map agree with the profile's
 `work_types.enabled`, `labels.context` and `review.path_map`; the commit-prefix table of the
 document `CLAUDE.md`'s **Definition of Done** topic routes to has a row for every enabled

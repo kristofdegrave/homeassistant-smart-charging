@@ -270,6 +270,16 @@ case_run "an absolute URL naming a missing path is not checked" 0 - \
   "printf 'See [there](https://github.com/example/other/blob/main/docs/reference/gone.md).\n' >> docs/reference/wf.md"
 case_run "a backticked path inside a fenced block is not checked" 0 - \
   "printf '\`\`\`\nedit \`docs/reference/gone.md\`\n\`\`\`\n' >> docs/reference/wf.md"
+case_run "a backticked directory without its trailing slash is not checked" 0 - \
+  "printf 'Renamed to \`docs/reference/work-types/gamma\`.\n' >> docs/reference/wf.md"
+case_run "a link target containing a glob is not checked" 0 - \
+  "printf 'See [the tree](../reference/*.md).\n' >> docs/reference/wf.md"
+case_run "a link to an existing directory resolves" 0 - \
+  "printf 'The tree is [here](work-types/).\n' >> docs/reference/wf.md"
+case_run "a fragment on a directory target is not checked" 0 - \
+  "printf 'The tree is [here](work-types/#nope).\n' >> docs/reference/wf.md"
+case_run "a stale path in the archive tree is not checked" 0 - \
+  "mkdir -p docs/archive && printf 'It read \`docs/reference/gone.md\`.\n' > docs/archive/old.md"
 case_run "a stack-group dependency is neither layered nor scanned" 0 - "true"
 case_run "a layer: stack override on an authored skill file is accepted" 0 - \
   "printf -- '---\nlayer: stack\n---\n\nStack notes naming acme.\n' > .claude/skills/step/widgets.md"
@@ -328,6 +338,8 @@ case_run "2: a link fragment no heading in the target carries fails outside CLAU
   "printf 'See [the prefixes](dod.md#nope).\n' >> docs/reference/wf.md"
 case_run "2: a link written repo-rooted from a nested file fails" 1 "link target docs/reference/dod.md does not exist" \
   "printf 'See [the bar](docs/reference/dod.md).\n' >> docs/reference/wf.md"
+case_run "2: a link to a directory that does not exist fails" 1 "link target work-types/gamma/ does not exist" \
+  "printf 'The tree is [here](work-types/gamma/).\n' >> docs/reference/wf.md"
 
 # --- 3  profile agreement ------------------------------------------------------------------
 case_run "3: an enabled work type without a row fails" 1 "has no Model selection row" \
@@ -435,7 +447,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=89
+EXPECTED=95
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

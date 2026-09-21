@@ -150,6 +150,18 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # record of where the file was, not a claim about the tree today -- rewriting it to resolve
 # would falsify the record. The two frozen trees are excluded for the reason check 1 excludes
 # them. Every other tree check 1 walks is live prose that has to resolve.
+#
+# Check 1 keeps walking docs/adl and docs/plans, and the difference is not an inconsistency:
+# the two checks ask different questions of the same file. A pointer is about the method's
+# headings as they stand today, which a dated document is as wrong about as any other; a path
+# is about the tree the document was describing when it was written.
+#
+# A vendored dependency skill under .claude/skills/ IS in scope here, deliberately, although
+# check 5 never scans one: a repo-rooted path that does not exist is broken for a reader of
+# this repository whoever wrote the file, and some of them name one today (`tests/` and
+# `tests/test_dashboard.py`). The residual risk is stated rather than designed around -- an
+# upstream refresh could add a path this tree does not hold, and the answer then is a fix
+# upstream or an exclusion decided on that case, not a silent skip now.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
@@ -389,6 +401,14 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
     deliberately differ from this working tree, and choosing the ref to resolve it against is
     a different question from whether this tree holds the file. The one such reference in this
     repository sits in .github/ISSUE_TEMPLATE/, a tree neither check walks.
+
+    Three narrower skips, so this docstring is the whole list the module header promises it is:
+    a target containing `*` is a pattern and not a path; a #fragment is resolved only into a
+    markdown file, because a directory and a non-markdown file have no headings to resolve it
+    against; and a backticked directory counts only with its trailing slash, because
+    `work-types/uc` without one cannot be told from an extensionless file or a fragment of
+    prose, and the slash is what states the intent. Each of the six skips has a fixture that
+    pins it and, where a covered spelling of the same defect exists, one that fails on it.
     """
     where = rel(root, path)
     seen: set[str] = set()
