@@ -80,12 +80,15 @@ link and path targets in every live file it walks, so that reference goes red on
 rather than dangling. What this grep is still for is the residue that check states it cannot
 resolve, and the files it never opens. The residue in full: the snapshot trees it skips
 (`docs/adl/**`, `docs/plans/**` and the two frozen ones); a bare path written without its root
-segment (`work-types/uc/done.md`) that the check has no base to resolve; a reference written as
-an absolute `github.com/<owner>/<repo>/blob/<ref>/…` URL, the shape
-`.github/ISSUE_TEMPLATE/adr.yml` uses; every file outside the trees check 1 walks — the rest of
-`.github/`, `README.md`, `tests/**`, `custom_components/**` — since this grep is `git
-ls-files`-wide and the check is not; and any reference inside a fenced code block, which the
-check skips by design and which the two `sh` fences in this very section are.
+segment (`work-types/uc/done.md`) that the check has no base to resolve; the directory written
+without its trailing slash (`docs/reference/work-types/uc`), which the check skips because one
+bare word cannot be told from a fragment of prose; a path named in prose with no backticks at
+all, which nothing marks as a path; a reference written as an absolute
+`github.com/<owner>/<repo>/blob/<ref>/…` URL, the shape `.github/ISSUE_TEMPLATE/adr.yml` uses;
+every file outside the trees check 1 walks — the rest of `.github/`, `README.md`, `tests/**`,
+`custom_components/**` — since this grep is `git ls-files`-wide and the check is not; and any
+reference inside a fenced code block, which the check skips by design and which the two `sh`
+fences in this very section are.
 
 **The in-tree rule** covers what the directory rule cannot see: inside
 `docs/reference/work-types/`, a label's directory is named without the `work-types/` prefix —

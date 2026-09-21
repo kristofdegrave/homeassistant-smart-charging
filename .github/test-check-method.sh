@@ -280,6 +280,10 @@ case_run "a fragment on a directory target is not checked" 0 - \
   "printf 'The tree is [here](work-types/#nope).\n' >> docs/reference/wf.md"
 case_run "a stale path in the archive tree is not checked" 0 - \
   "mkdir -p docs/archive && printf 'It read \`docs/reference/gone.md\`.\n' > docs/archive/old.md"
+case_run "an in-page anchor link is not checked" 0 - \
+  "printf 'See [below](#nowhere).\n' >> docs/reference/wf.md"
+case_run "a backticked root-level file is not checked" 0 - \
+  "printf 'The lock file is \`nope-lock.json\`.\n' >> docs/reference/wf.md"
 case_run "a stack-group dependency is neither layered nor scanned" 0 - "true"
 case_run "a layer: stack override on an authored skill file is accepted" 0 - \
   "printf -- '---\nlayer: stack\n---\n\nStack notes naming acme.\n' > .claude/skills/step/widgets.md"
@@ -340,6 +344,10 @@ case_run "2: a link written repo-rooted from a nested file fails" 1 "link target
   "printf 'See [the bar](docs/reference/dod.md).\n' >> docs/reference/wf.md"
 case_run "2: a link to a directory that does not exist fails" 1 "link target work-types/gamma/ does not exist" \
   "printf 'The tree is [here](work-types/gamma/).\n' >> docs/reference/wf.md"
+case_run "2: a dangling link whose text wraps across a line fails" 1 "docs/reference/wf.md:11: link target gone.md does not exist" \
+  "printf 'See [the missing\ndocument](gone.md).\n' >> docs/reference/wf.md"
+case_run "2: a dangling backticked path in a declared dependency skill fails" 1 "dep-skill/SKILL.md:7: names docs/reference/gone.md, which does not exist" \
+  "printf 'Read \`docs/reference/gone.md\` first.\n' >> .claude/skills/dep-skill/SKILL.md"
 
 # --- 3  profile agreement ------------------------------------------------------------------
 case_run "3: an enabled work type without a row fails" 1 "has no Model selection row" \
@@ -447,7 +455,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=95
+EXPECTED=99
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

@@ -16,7 +16,8 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         the file it is written in, to an existing path and, where it carries a
                         #fragment, to a heading of that markdown file; every repo-rooted path
                         named in backticks -- a file, or a directory written with its trailing
-                        slash -- exists. Plus, in CLAUDE.md alone: every routing-table entry
+                        slash -- exists. A link is resolved whether or not its text wraps onto
+                        a second line. Plus, in CLAUDE.md alone: every routing-table entry
                         links to a document, and no `###` heading in CLAUDE.md or
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
@@ -166,7 +167,12 @@ SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
 POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
-LINK_RE = re.compile(r"\[[^\]]*\]\(<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\)")
+# A markdown link. Its text may wrap onto one following line and no more -- the same bound
+# POINTER_RE takes, and for the same reason: prose here wraps at ~100 columns, so a wrapped
+# link is ordinary (46 of them sit in the trees check 2 walks), while an unbounded `[` could
+# swallow paragraphs and invent a link that was never written. The destination itself never
+# wraps.
+LINK_RE = re.compile(r"\[[^\]\n]*(?:\n[^\]\n]*)?\]\(<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\)")
 # A backticked repo path: a file with an extension, or a directory written with its trailing
 # slash -- `docs/reference/work-types/workflow/` is the shape a label rename moves, and the
 # reason the directory form is matched at all.
@@ -402,47 +408,70 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
     a different question from whether this tree holds the file. The one such reference in this
     repository sits in .github/ISSUE_TEMPLATE/, a tree neither check walks.
 
-    Three narrower skips, so this docstring is the whole list the module header promises it is:
-    a target containing `*` is a pattern and not a path; a #fragment is resolved only into a
-    markdown file, because a directory and a non-markdown file have no headings to resolve it
-    against; and a backticked directory counts only with its trailing slash, because
-    `work-types/uc` without one cannot be told from an extensionless file or a fragment of
-    prose, and the slash is what states the intent. Each of the six skips has a fixture that
-    pins it and, where a covered spelling of the same defect exists, one that fails on it.
+    The narrower skips, so this docstring is the whole list the module header promises it is:
+    a link target containing `*` is a pattern and not a path; a link that is an in-page anchor
+    alone (`#section`) points at no file; a #fragment is resolved only into a markdown file,
+    because a directory and a non-markdown file have no headings to resolve it against; a
+    backticked directory counts only with its trailing slash, because `work-types/uc` without
+    one cannot be told from an extensionless file or a fragment of prose, and the slash is what
+    states the intent; and a backticked path with no `/` at all -- a root-level file such as
+    `skills-lock.json` -- is not matched, since one bare word in backticks is far more often a
+    name than a path. A backticked path needs no glob guard: BACKTICK_PATH_RE cannot capture a
+    `*` in the first place.
+
+    Every skip named here, and the snapshot trees above, has a fixture that pins it, and, where
+    a covered spelling of the same defect exists, one that fails on it. The known limit that is
+    NOT a skip: a link whose text wraps over more than two lines is not matched at all.
     """
     where = rel(root, path)
     seen: set[str] = set()
-    for number, line in strip_fences(read_text(path)):
-        for m in LINK_RE.finditer(line):
-            target = m.group(1)
-            if target.startswith("#") or URL_RE.match(target) or "*" in target:
-                continue
-            if target in seen:
-                continue
-            seen.add(target)
-            file_part, _, fragment = target.partition("#")
-            if not file_part:
-                continue
-            resolved = path.parent / file_part
-            if not resolved.exists():
-                findings.add(2, f"{where}:{number}", f"link target {file_part} does not exist")
-                continue
-            if fragment and resolved.is_file() and resolved.suffix == ".md":
-                if fragment not in {slug(h) for _, _, h in headings(read_text(resolved))}:
-                    findings.add(
-                        2,
-                        f"{where}:{number}",
-                        f"link {target}: no heading in {file_part} has that anchor",
-                    )
-        for m in BACKTICK_PATH_RE.finditer(line):
-            target = m.group(1)
-            if "*" in target or target in seen:
-                continue
-            seen.add(target)
-            if target.split("/")[0] not in top:
-                continue
-            if not (root / target).exists():
-                findings.add(2, f"{where}:{number}", f"names {target}, which does not exist")
+    # Matched over the whole file rather than line by line, because a link's text wraps: a
+    # per-line scan silently skipped every wrapped link, which is the commonest link shape in
+    # this repository's prose. Fenced lines are blanked rather than dropped, as check 1 blanks
+    # them, so an offset still gives the true line -- and a finding points at the line the link
+    # STARTS on, computed from the match offset, not from any loop index.
+    raw = read_text(path)
+    kept = {number for number, _ in strip_fences(raw)}
+    text = "\n".join(
+        line if number in kept else "" for number, line in enumerate(raw.splitlines(), 1)
+    )
+
+    def line_of(offset: int) -> int:
+        return text.count("\n", 0, offset) + 1
+
+    for m in LINK_RE.finditer(text):
+        target = m.group(1)
+        if target.startswith("#") or URL_RE.match(target) or "*" in target:
+            continue
+        if target in seen:
+            continue
+        seen.add(target)
+        file_part, _, fragment = target.partition("#")
+        if not file_part:
+            continue
+        number = line_of(m.start())
+        resolved = path.parent / file_part
+        if not resolved.exists():
+            findings.add(2, f"{where}:{number}", f"link target {file_part} does not exist")
+            continue
+        if fragment and resolved.is_file() and resolved.suffix == ".md":
+            if fragment not in {slug(h) for _, _, h in headings(read_text(resolved))}:
+                findings.add(
+                    2,
+                    f"{where}:{number}",
+                    f"link {target}: no heading in {file_part} has that anchor",
+                )
+    for m in BACKTICK_PATH_RE.finditer(text):
+        target = m.group(1)
+        if target in seen:
+            continue
+        seen.add(target)
+        if target.split("/")[0] not in top:
+            continue
+        if not (root / target).exists():
+            findings.add(
+                2, f"{where}:{line_of(m.start())}", f"names {target}, which does not exist"
+            )
 
 
 def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
