@@ -282,7 +282,7 @@ toggles.*
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4, `docs/plans/2026-07-21-notifications-design.md`) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
+| `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4 — the [Notification Resource Access](../design/system-design.md)) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
 | `sensor.smart_charging_reminder_lead_h` | state | — | h | mirrors `reminder_lead_h` (config-options); disabled by default (ADR-0031) | plug-in reminder lead time (R12) | user | — |
 | `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | UC05 | user (anytime), UC12 |
@@ -374,8 +374,7 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   condition, whose `binary_sensor` exists for the dashboard (R19) — no requirement asks for it to be
   observable. A future use-case or dashboard row needing it would add the row then.
 - **`solar surplus`, `time to full charge`, and `peak headroom` are each now surfaced as a
-  diagnostic sensor, added for the UC11 dashboard build (`docs/plans/2026-07-08-runtime-dashboard-design.md`
-  Decisions 3–4).** Like the effective peak limit and active SOC limit above, each is computed
+  diagnostic sensor, added for the UC11 dashboard build.** Like the effective peak limit and active SOC limit above, each is computed
   fresh every control cycle, never stored: `sensor.smart_charging_solar_surplus_w` from
   `charger_power − net_power`; `sensor.smart_charging_time_to_full` from the EV battery capacity,
   `ev_soc`, the active SOC limit, and `charger_current`; `sensor.smart_charging_peak_headroom_a`

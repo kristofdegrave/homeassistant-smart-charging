@@ -761,5 +761,4 @@ ADRs 0020 and later post-date this reconciliation and are not covered here.
 Once approved, this document is consumed to produce the implementation task breakdown
 (`docs/design/project-plan.md`) — how that breakdown is written is reached through the
 `documentation` row of `CLAUDE.md`'s **Model selection** table — and the pre-existing scaffolding
-plan (drafted 2026-07-04, before this design phase, and never merged, so `docs/plans/` holds no
-such document) is reconciled against that breakdown in that document's §6.
+plan (drafted 2026-07-04, before this design phase, and never merged) is reconciled against that breakdown in that document's §6.
