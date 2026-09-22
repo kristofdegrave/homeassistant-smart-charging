@@ -128,8 +128,7 @@ untouched by this change, since `time.process_time()` is a cumulative counter li
 - `tests/benchmarks/test_coordinator_perf.py`'s `_measure_one_batch` replaces
   `_process.cpu_times()` before/after sampling with `time.process_time()` before/after
   sampling for the CPU delta; the RSS sampling via `_process.memory_info().rss` is
-  unchanged. `docs/plans/2026-08-17-real-perf-tests-design.md` needs a matching update
-  to its §2 measurement-primitive sketch and its ADR-0026 cross-reference.
+  unchanged.
 - The committed `tests/benchmarks/baseline.json` `median_cpu_ms` value was seeded under
   the old `cpu_times()` primitive; it must be re-seeded (via
   `tests/benchmarks/update_baseline.py`, the existing human-run process — ADR-0026's

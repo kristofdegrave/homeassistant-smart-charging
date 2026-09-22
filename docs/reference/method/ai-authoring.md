@@ -15,6 +15,18 @@ Applying those two literally would flag a work file for naming a `docs/` path or
 command, which is exactly what the carve-out permits. Author and reviewer build against the
 same list.
 
+**The harness configuration is a fourth artifact under `.claude/`, and this reference does not
+govern it.** `.claude/settings.json` and the hooks it wires (`.claude/hooks/`) drive Claude
+runs as surely as a skill does — a `PreToolUse` guard decides whether a tool call happens at
+all — but they are executable configuration, not text a run reads as instruction, so the rules
+below have nothing to bite on: there is no `description` to trigger on, no context budget to
+spend, and the routing rule has no purchase on a script, which reaches a project document by
+naming its path in a message a human reads, not by routing a run to it. A checklist section
+here would be items none of which a reviewer could apply. Its criteria are the `workflow`
+review checklist's instead — the one `CLAUDE.md`'s **Model selection** table names for that
+tree. Naming the class here is what stops a reviewer reading its absence as "no criteria
+exist".
+
 This reference exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
 [Project-dependent content routes through
@@ -330,10 +342,17 @@ every pointer under `.claude/**`, `docs/**` and `.github/workflows/**` resolves 
 (the outward direction stated under **Headings are the API** above; the two frozen trees,
 `docs/postmortems/**` and `docs/archive/**`, are left out, since a document the rules say is
 never revised cannot be the thing a blocking gate asks to edit). **2, anchors inward:** every
-link and every backticked path in `CLAUDE.md` resolves, an anchored link to a heading of its
-document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
-agreement:** the Model selection table and changed-path map agree with the profile's
-`work_types.enabled`, `labels.context` and `review.path_map`; the commit-prefix table of the
+link and every repo-rooted backticked path resolves — in `CLAUDE.md` and in every file check 1
+walks, minus the snapshot trees (the two frozen ones plus `docs/adl/**` and `docs/plans/**`,
+dated records whose paths state what was true at their date rather than what the tree holds
+now) — a link against the directory it is written in and an anchored one to a heading of its
+target, a backticked path at the repository root and only when its first segment names
+something there; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
+no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
+agreement:** the Model selection table agrees with the profile's `work_types.enabled` and
+`labels.context` — the changed-path map is not this check's, but
+`.github/check-path-map.py`'s, which holds it and the two CI enumerations to
+`review.path_map`; the commit-prefix table of the
 document `CLAUDE.md`'s **Definition of Done** topic routes to has a row for every enabled
 context label;
 `docs/reference/profile.md`
@@ -466,9 +485,9 @@ Two consequences:
   unreferenced byte-identical duplicate and has been removed; don't reintroduce it.
 - **A re-sync from upstream would revert that work.** The `computedHash` entries in
   `skills-lock.json` describe where a skill came from, not what it must still contain — and
-  the same four hashes are declared as pins in `.claude/profile.yml`'s `dependencies`, the
+  the same hashes are declared as `sha256:` pins in `.claude/profile.yml`'s `dependencies`, the
   copy the method reads; the two move together, in the same PR. Before
-  re-pulling any of the four, check whether the local copy has diverged — for the two rewritten
+  re-pulling any of them, check whether the local copy has diverged — for the two rewritten
   ones, re-apply the trim rather than accepting the upstream text.
 
 Two obligations follow, and both are cheap only if they are met at the time:

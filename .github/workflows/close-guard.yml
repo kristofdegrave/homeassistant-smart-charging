@@ -71,8 +71,8 @@ jobs:
             labels=$(gh api "repos/$REPO/issues/$n" --jq '.labels[].name')
             while IFS= read -r label; do
               # `development` and `testing` are context labels -- see
-              # docs/reference/method/ci-pipeline.md's "Label vocabulary sync", which lists this block
-              # among the places a rename has to reach.
+              # docs/reference/method/ci-pipeline.md's "Label vocabulary sync", which names this block
+              # as one a rename has to reach, and checked rather than assumed.
               case "$label" in
                 development|testing) offenders="$offenders #$n ($label)" ;;
               esac

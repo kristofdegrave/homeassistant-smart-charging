@@ -73,6 +73,7 @@ on:
       - ".github/test-check-*"
       - ".github/hooks/**"
       - ".claude/hooks/**"
+      - ".claude/settings.json"
       - ".github/ISSUE_TEMPLATE/**"
       - "custom_components/**"
       - "tests/**"

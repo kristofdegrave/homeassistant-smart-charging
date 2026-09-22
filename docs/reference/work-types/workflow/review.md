@@ -25,8 +25,12 @@ A change to this project's AI pipeline itself and the process docs it is driven 
 (`.claude/profile.yml`; `.github/setup-labels.sh`, which writes its `labels` to the
 repository; `.github/profile-env.sh`, which prints its tracker values for the reference's
 recipes), an issue form
-(`.github/ISSUE_TEMPLATE/`), or the canonical process reference (`docs/reference/`,
-`CLAUDE.md`). The workflow, skill and agent files run with write-scoped credentials
+(`.github/ISSUE_TEMPLATE/`), the harness configuration that decides what a run may do
+(`.claude/settings.json` and the hooks it wires, `.claude/hooks/`) — a local session and a CI
+worker alike, which is why the committed settings file is the restricted one and
+`settings.local.json` is the ignored one, as `.gitignore` says at the line — or the canonical
+process reference (`docs/reference/`, `CLAUDE.md`). The workflow, skill and agent files run with
+write-scoped credentials
 (`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,
 so this checklist weighs security at least as heavily as quality. An issue form carries no
 credentials itself but can still point at load-bearing process semantics (e.g. `adr.yml`
@@ -49,6 +53,11 @@ Always read:
 - If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
   (`.claude/agents/`): `docs/reference/method/ci-pipeline.md`, for each job's stated scope
   (draft/review/fix are one task each) and the `needs-*` label contract.
+- If a changed file is `.claude/settings.json` or under `.claude/hooks/`: the other half of
+  the pair — the wiring names the script, the script is what the wiring runs, and a review of
+  one that never opened the other cannot tell whether the guard still fires — together with
+  its test suite, and the rule it mechanizes, which is
+  `docs/reference/method/contribution-workflow.md`'s **Commit & push authorization**.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.claude/profile.yml`'s `labels` (the
   set `.github/setup-labels.sh` writes), plus
   `docs/reference/method/contribution-workflow.md`'s **Issue conventions** — the canonical
@@ -91,6 +100,29 @@ Always read:
 - Apply the matching checklist section (skill / agent / CI worker prompt) of
   `docs/reference/method/ai-authoring.md` to the changed file(s) — or, for a work-type document, the
   skill checklist as that reference scopes it.
+- The harness configuration has no section there, deliberately — that reference says why, and
+  routes its criteria here. So judge a change to `.claude/settings.json` or `.claude/hooks/`
+  on these instead. **Every fall-through to "permit" is argued where it happens.** The guard
+  this project ships is an accident guard and not a sandbox — it says so in its own header,
+  and it fails *open* on an input it cannot parse, with the reasoning written at the line it
+  happens. That is a decision, not a defect, and this item does not reopen it: what it scores
+  is a fall-through that is **undocumented at the line it happens, taken without saying so on
+  input the guard could not parse, or newly introduced by the diff** — Critical, since a guard
+  that quietly permits what it did not understand reads as enforcing a rule it is not. A
+  permit the guard reached on input it *did* parse — an unlisted subcommand of a family it
+  watches — is in scope by its header, not a silent fall-through. Widening an existing one is
+  checked as a widening, below.
+  **The change is carried by the guard's own test suite**, extended in the same diff that adds
+  or narrows a refusal — a behaviour change with no test is Major, since nothing else
+  exercises the script.
+  **The wiring and the tree still match**: every command `settings.json` names resolves to a
+  file that exists, and every script under `.claude/hooks/` that is meant to run as a hook is
+  wired — which is not every file there, a `test-*` harness being a suite run by hand from the
+  repo, not a hook. A hook silently unwired is Critical; the rule it enforces reads as enforced and
+  is not.
+  **Nothing widens what a run may do without asking** — a new `permissions.allow` entry, a
+  matcher narrowed so fewer calls reach the guard — without the PR explaining why, per
+  **(1)**'s last bullet, which governs this file as much as a workflow's.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
 - A work-type core file (any `.md` under `docs/reference/work-types/`, branch files included,
@@ -126,7 +158,7 @@ Always read:
   not this item's to score: the convention, and where that shape is and is not yet reached, is
   stated once in `docs/reference/method/ai-authoring.md`; this item checks the pointer, not the
   target.
-- The same rule read the other way, and one of the shapes `docs/reference/ai-authoring.md`
+- The same rule read the other way, and one of the shapes `docs/reference/method/ai-authoring.md`
   names as the residue its check cannot decide: a rule or path the diff **states** where
   another file owns it, with no pointer written at all — so there is no link to catch and no
   pointer to fail. Where that owner is another skill, agent or prompt, the one-source-of-truth

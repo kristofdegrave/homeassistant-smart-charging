@@ -15,10 +15,10 @@ The producer fires the event as a **level signal, not an edge**. `coordinator.py
 `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` on **every** control cycle for which the Deadline Engine's
 `RequiredCurrentResult.unreachable` is `True` (`engines/deadline.py`:
 `unreachable = required_a > maximum_permitted_rate_a`), not only on the cycle the condition first
-holds. Two documents record this as deliberate rather than incidental: Task 5.2's test docstring in
-`docs/plans/2026-07-21-deadline-soc-management.md`:958-962 ("published every cycle …
-`unreachable` flag is True — including re-firing on a later cycle that is still Unreachable, not
-only on the Normal/Urgent -> Unreachable transition edge"), and UC05's own domain-events section
+holds. Two records state this as deliberate rather than incidental: the test docstring of the task
+that built it ("published every cycle … `unreachable` flag is True — including re-firing on a
+later cycle that is still Unreachable, not only on the Normal/Urgent -> Unreachable transition
+edge"), and UC05's own domain-events section
 (`docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md`:96, "or re-fires while remaining in
 Unreachable"). The rationale is that the consumer must not have to catch one exact tick, and that
 the payload's required current stays fresh. There is no counterpart fired when `unreachable` goes
@@ -249,10 +249,6 @@ invisible to it — and a clear fires on the first healthy cycle that genuinely 
   - `docs/analysis/control-cycle.md` — no change: its "Domain events produced" list deliberately
     omits the deadline events (they live in UC05); if a future edit lists them there, it must list
     the pair, not the onset alone.
-- **Plan-doc follow-ups**: `docs/plans/2026-07-21-deadline-soc-management-design.md` §10 and
-  `docs/plans/2026-07-21-notifications-design.md` §0/§9/§7 both enumerate the events their slice
-  emits and consumes and both name `DeadlineUnreachableNotified` as the sole R5 event; each needs the
-  clear event added on its own side of the edge, plus a task for the work below.
 - **Implementation this unblocks** (the follow-up #546's "Scope for a follow-up" asks for, now
   decided): an `EVENT_DEADLINE_UNREACHABLE_CLEARED` constant in
   `custom_components/smart_charging/const.py`; producer-side edge detection in
