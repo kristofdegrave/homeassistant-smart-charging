@@ -99,15 +99,12 @@ labels:
     - name: adr
       color: 5319e7
       description: "Architecture Decision Record"
-    - name: specs
-      color: 006b75
-      description: "Implementation spec (design + TDD plan) work"
     - name: development
       color: c5def5
-      description: "Implementation task (code + tests), pinned to a Plan: docs/plans task"
+      description: "Implementation task (code + tests), one task of an epic's implementation spec"
     - name: testing
       color: bfd4f2
-      description: "Test-authoring work, pinned to a Plan: docs/plans task"
+      description: "Test-authoring work, one task of an epic's implementation spec"
     - name: workflow
       color: e99695
       description: "CI/skill/agent-authoring change (review only — no auto-drafter)"
@@ -140,7 +137,6 @@ work_types:
     - adr
     - uc
     - requirement
-    - specs
     - documentation
     - development
     - testing
@@ -205,8 +201,6 @@ review:
       paths: ["docs/adl/**"]
     - work_type: uc
       paths: ["docs/analysis/**"]
-    - work_type: specs
-      paths: ["docs/plans/**"]
     - work_type: documentation
       paths: ["docs/design/**"]
     - work_type: development

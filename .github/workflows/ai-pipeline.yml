@@ -13,15 +13,16 @@ name: AI documentation pipeline
 #                  needs-decision (PR — alongside needs-approval when a review exits with findings
 #                  still open and no automatic fix following, so such a PR is distinguishable
 #                  from a clean one)
-#   Context/type : uc | requirement | adr | specs | development | testing | workflow |
+#   Context/type : uc | requirement | adr | development | testing | workflow |
 #                  documentation   (the last two are never auto-drafted; see below)
 #     `adr` is also load-bearing in the draft job's concurrency group expression below (keys
 #     the shared ai-draft-adr group) — a rename there needs updating too, or the guard silently
 #     degrades back to per-issue grouping with no error.
 # A context label says WHAT to draft and gives the reviewer context; the action label is the
-# go-signal. `development`/`testing` drafts must additionally pin an approved task via a
-# `Plan: docs/plans/<file>.md#T<task-number>` line in the issue body — see _ai-draft.yml's header
-# comment for the full containment story. `workflow` (CI/skill/agent changes) is deliberately
+# go-signal. A `development`/`testing` issue body IS the task, cut from the implementation spec
+# in its epic's body (ADR-0044), so the drafter additionally requires such an issue to have a
+# parent epic — see _ai-draft.yml's header comment for the full containment story, including
+# what that edge does and does not establish. `workflow` (CI/skill/agent changes) is deliberately
 # never auto-drafted — only its review is wired (see _ai-review.yml and
 # docs/reference/work-types/workflow/review.md).
 # Review picks its checklists from CLAUDE.md's Model selection table, which routes on the
@@ -60,7 +61,6 @@ on:
       - "docs/analysis/**"
       - "docs/adl/**"
       - "docs/design/**"
-      - "docs/plans/**"
       - "docs/reference/**"
       - "CLAUDE.md"
       - ".github/workflows/**"

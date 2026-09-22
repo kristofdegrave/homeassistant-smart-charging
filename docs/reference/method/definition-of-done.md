@@ -86,14 +86,14 @@ merge** — the author's own claim, about whichever behaviours the author chose 
 branch. Every vertical slice therefore also gets a **verify-live** pass once it is
 deployed, run by the author of the merged slice ([idea-to-product.md](idea-to-product.md)'s
 **Verify live** stage places it in the wider flow). A vertical slice is what the flow's
-**Ticket** stage cuts a child issue to, so on the plan track it is one task entry, one issue
+**Ticket** stage cuts a child issue to, so it is one task in its epic, one issue
 and one PR — the same unit this page's self-check ran on, observed again in a different place
 and against a different standard:
 
 - **The list comes from the spec, not from memory** — fixed before the slice was built. That
-  the spec carries one per task, and what each item has to name, is an item of the `specs`
-  completion bar ([work-types/specs/done.md](../work-types/specs/done.md), named in that row of
-  `CLAUDE.md`'s **Model selection** table) — so a missing or unusable list is a finding
+  the spec carries one per task, and what each item has to name, is settled by the
+  decomposition that wrote the epic body, per `CLAUDE.md`'s **Idea-to-product flow** — so a
+  missing or unusable list is a finding
   against the spec, caught when the spec is reviewed rather than when this pass is run.
 - **The result is a comment on the epic**: the observed value for each item on that list, plus
   a log excerpt or dashboard screenshot. Where the work has no epic — a single-artifact idea,
@@ -124,11 +124,10 @@ matching current practice (`git log`):
 | `adr` | `docs:` (mention `ADR-NNNN` in the description) | `docs: add ADR-0029 process-time for perf-test CPU measurement` |
 | `uc` | `UC<NN>:` | `UC12: rewrite the Requirements-satisfied section to match current R20/R18` |
 | `requirement` | `docs:` | `docs: correct ADR-0028's departure-time restore-state claim` |
-| `specs` (implementation spec: design + TDD plan, `docs/plans/**`) | `specs:` for a new plan, `docs:` for a revision/review pass | `specs: nine-step topic-grouped config-flow implementation design + TDD plan` |
 | `documentation` (design docs, `docs/design/**`) | `docs:` | `docs: revise the volatility-based service decomposition` (illustrative) |
-| `development` / `testing` | `T<task-number>:` matching the issue's `Plan:` line | `T3: config flow accepts a low-tariff state-translation table` |
+| `development` / `testing` | `T<task-number>:` matching the task's number in its epic | `T3: config flow accepts a low-tariff state-translation table` |
 | `workflow` (CI/skill/agent-authoring changes) | `workflow:` | `workflow: a weekly drift check reads the profile's dependency pins and reports what moved` |
-| anything else (a fix, refactor, chore not tied to a plan task) — including an issue carrying only a `bug`/`enhancement` kind label, which has no context label to infer from | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
+| anything else (a fix, refactor, chore not tied to a task) — including an issue carrying only a `bug`/`enhancement` kind label, which has no context label to infer from | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
 
 One row per context label, and `.github/check-method.py`'s check 3 fails when an enabled one
 has none — so a label added to the profile is a row owed here.

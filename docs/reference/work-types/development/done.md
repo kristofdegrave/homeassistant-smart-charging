@@ -16,7 +16,7 @@ route is the whole of what this bar says about tests, and it is stated once, her
 
 ## The bar
 
-**(1) Correctness against the spec.** The code does what its plan task and the cited analysis
+**(1) Correctness against the spec.** The code does what its task — the issue body — and the cited analysis
 behaviour specify — the acceptance criteria and worked examples come out of the code as written.
 An off-by-one, a wrong operand, a sign error or a boundary error is **Major**, and is named with
 a concrete failing input rather than as a suspicion. Where the wrong result is a safety
