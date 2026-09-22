@@ -42,7 +42,7 @@ Given the CapTar [capability](../system-overview.md#ubiquitous-language) is abse
 When the System requests the configured Power target current
 Then the R3 peak clamp does not run at all — in this or any other mode (R3, `control-cycle.md`, step 5) — whatever `power_respect_peak` holds, so that option has no effect and is not even presented for configuration ([UC12](UC12-configure-installation-through-guided-flow.md), R18).
 And net import is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1), exactly as in 3a, but by the installation's declared billing arrangement rather than by a user choice — there is no CapTar peak to protect on such an installation, and no monthly peak demand billed against one.
-And the sustained-R3-breach stop and its `Power`-mode cooldown (Exception flows, State model) can never fire, since the clamp they respond to never runs.
+And the sustained-R3-breach stop, and the `Power`-mode cooldown it would start (Exception flows, State model), can never fire, since the clamp they respond to never runs; a fault stop (C5) still starts that cooldown.
 
 ## Exception flows
 
@@ -97,6 +97,11 @@ resolution are applied by the shared mechanism and are referenced, not repeated,
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected" precondition
 and exits this use-case's scope from any state, returning to Idle; on disconnect the active SOC limit
 resets to the default (R7), which is why the diagram does not draw a disconnect edge from every state.
+
+A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging is a
+fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as a sustained R3 breach does — and so whatever the peak-protection option and the CapTar capability (R11), and charging
+resumes only through Cooldown's own exit. It can arise on any charging cycle, which is why the
+diagram does not draw it either.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |

@@ -237,15 +237,14 @@ limit for step 5.
   voltage (default 230 V) for the cycle (NF4); the cycle still completes.
 - **A required role is unavailable.** When a role C5's table lists as required for the active
   mode is unavailable, the cycle does not go on to decide a current from the readings it has: it
-  is a [fault](system-overview.md#ubiquitous-language) (C5) — 0 A on that same cycle, with no hold
-  first, and `sensor.smart_charging_status` reads `Fault`. An unavailable optional role is not
+  is a [fault](system-overview.md#ubiquitous-language) (C5). Its 0 A write is a set charger
+  current like step 8's and emits `ChargerCurrentSet`. An unavailable optional role is not
   this case: its fallback, like the nominal voltage above, lets the cycle complete. When the
   status returns to `OK`, and when charging may then resume, are C5's; the cooldown a fault stop
   starts is R11's.
 - **An unexpected error interrupts the cycle.** Wherever in steps 1–8 it arises — a reading, a
-  mode module, a clamp or the write in step 8 — the cycle is a fault exactly as above (C5), and the
-  charger is never left at the current an earlier cycle set. When the error is in the write
-  itself, the System still attempts the 0 A write.
+  mode module, a clamp or the write in step 8 — the cycle is a fault exactly as above (C5): the
+  System always attempts the 0 A write, including when the error is in the write itself.
 - **Peak breach persists** (CapTar capability present only). A momentary breach only triggers a clamp, not a stop. The charger
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the

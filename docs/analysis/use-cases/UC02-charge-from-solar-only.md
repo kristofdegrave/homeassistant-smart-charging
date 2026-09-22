@@ -117,6 +117,11 @@ the active SOC limit resets to the default, any solar step-up is cleared (R7), a
 connection is a fresh session's first start — which is why the diagram does not draw a
 disconnect edge from every state.
 
+A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging or
+Hold is a fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as the mode's own
+stop does (R11), and charging resumes only through Cooldown's own exits. It can arise in any
+charging state, which is why the diagram does not draw it either.
+
 `Idle → Charging` carries one further guard, the [restart debounce](../system-overview.md#ubiquitous-language)
 (R11, shared with sibling UC01): before the has-charged flag is first set, `Idle` starts
 charging as soon as the start threshold is met, with no debounce, and sets the flag. Once the
