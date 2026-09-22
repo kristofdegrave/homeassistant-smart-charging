@@ -168,8 +168,8 @@ belongs here — the opening pass says where it attaches.
 Where the bullets below call for an epic, it is filed first, Size only. If the idea started
 as an issue, link it from the epic body and close the idea issue once it is fully captured —
 never relabel the idea issue as the epic, because an epic stays open tracking children long
-after the idea itself is decomposed. The brainstormed decisions move into its body under *Decisions so far*
-(**Brainstorm** above).
+after the idea itself is decomposed. The brainstormed decisions move into its body under
+*Decisions so far* (**Brainstorm** above).
 
 Whether the strand needs an epic at all is settled here, and written on the issue so it is not
 re-argued:
@@ -420,8 +420,9 @@ structural decision the design surfaced has its ADR first (the **ADR** stage's g
 
 One task of the epic body per issue, TDD one behaviour at a time, against the files the
 `development` row names. The row's work file carries the loop itself, the pre-commit
-self-check and the stack references it sends the author to; its bar, and the **Definition of Done** the contribution workflow names, carry what a finished
-task must show, the Runtime check included. Stack skills are the work file's to name, never
+self-check and the stack references it sends the author to; its bar, and the **Definition of
+Done** the contribution workflow names, carry what a finished task must show, the Runtime
+check included. Stack skills are the work file's to name, never
 this document's.
 
 ### Artifact: the task's code and its tests, one PR per task
