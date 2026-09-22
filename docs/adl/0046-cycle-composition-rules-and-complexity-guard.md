@@ -28,8 +28,9 @@ Forces:
 - **ADR-0023 kept some of the shape on purpose.** It left in `_run_cycle`'s body the provisional
   and final `resolve_effective_peak_limit` calls, both `_reset_mode_state_if_changed` calls,
   `CycleContext` fields assigned in place with no reordering, the Home Assistant events fired
-  from the body, and the final write, fault-recovery and `CycleResult` block. Some of that is where the regrowth sits: values are
-  held both as locals and as `ctx` fields, and a new concern lands as a block beside them.
+  from the body, and the final write, fault-recovery and `CycleResult` block. Some of that is
+  where the regrowth sits: values are held both as locals and as `ctx` fields, and a new
+  concern lands as a block beside them.
 - **No mechanical check.** Nothing in the lint configuration fails on a function's size or
   branching, so ADR-0023's "short, literal sequence" was a goal no build enforced.
 - **Fault cycles hold state.** Both fault exits sit upstream of state a successful cycle
@@ -73,19 +74,21 @@ Enable ruff's complexity rules on the cycle's files and leave ADR-0023's choices
 ADR-0023's two unit kinds, carried forward, plus a rule for what the body may hold, four
 answers ADR-0023 gave differently or left open, and the guard of Option C to hold the result:
 
-- **`CycleContext` is built once, right after the required-role read succeeds**, from the
-  required reads and what derives from them alone (the debounced baseline). Every value a later
-  step reads is a field on it, written by the step that resolves it — never also a local. The
-  construction advances no state, so building it above the state-of-charge fault exit moves
-  nothing a fault cycle holds.
+- **The cycle's `CycleContext` is built once, right after the required-role read succeeds**,
+  from the required reads, what derives from them alone (the debounced baseline) and the
+  cycle's clock readings. A value more than one later step reads is a field on it, written by
+  the step that resolves it — never also a local. A result only the next call reads is passed
+  to that call as an argument, as `desired` is through the clamps, so a step's signature still
+  says what it reads. The construction advances no state, so building it above the
+  state-of-charge fault exit moves nothing a fault cycle holds.
 - **The provisional peak limit moves into the fault exit.** Its only consumer is the
   state-of-charge fault's result, so that exit resolves the non-urgent limit itself; the body
   resolves the effective peak limit once, after urgency, and assigns it once.
 - **Both resets stay**, as two calls: each is a distinct point where the active mode can
   change, and dropping the first would give a `Manual` switch's dry run stale per-mode state.
-- **Events fire from the step that resolves what they report**, not from the body. That step is
-  a coordinator method, so `hass.bus` stays coordinator-side, the boundary ADR-0012 draws from
-  ADR-0009 and ADR-0010.
+- **Events fire from the coordinator method that calls the resolution they report**, not from
+  the body; where a pure unit resolves it, the method wraps that unit and the unit never fires.
+  So `hass.bus` stays coordinator-side, the boundary ADR-0012 draws from ADR-0009 and ADR-0010.
 
 - Pro: Every force above has an answer: the body stays auditable against ADR-0006, the fault
   exits keep holding what they hold, a value has one home, and the build fails on regrowth.
@@ -96,6 +99,8 @@ answers ADR-0023 gave differently or left open, and the guard of Option C to hol
   grows.
 - Con: More coordinator methods to navigate, and the step-kind judgment ADR-0023 left to each
   extraction remains.
+- Con: `CycleContext` gains a field for each value several steps share, so the carrier grows
+  with the cycle, and a step that takes it reads more than its signature names.
 
 ## Decision
 
@@ -106,13 +111,14 @@ saying what the size is of. ADR-0023's two unit kinds, its rejection of the pipe
 
 **`_run_cycle`'s body holds only:**
 
-1. Calls to named steps, one statement each; a result a later step reads is written onto
-   `ctx`, or is the sentinel a fault test reads.
-2. The two fault exits: a test of that sentinel and a literal `return` of the result a single
-   fault-exit step builds — the return stays in the body, ADR-0007's one path.
+1. Calls to named steps, one statement each. A result more than one later step reads is
+   written onto `ctx`; one only the next call reads is a local passed to it; a fault test's
+   sentinel is a local the test reads.
+2. The two fault exits: a test of that sentinel and a literal `return` of the fault result, built
+   by that exit's own step — the return stays in the body, ADR-0007's one path.
 3. The two `_reset_mode_state_if_changed` calls.
 4. Mode dispatch, the R3 clamp, the C4 clamp and the floor/cap invariant, as four distinct calls
-   in ADR-0006's order.
+   in ADR-0006's order, `desired` passed from each to the next.
 5. The charger write, then the return of the result a named step builds — that step also records
    the last-successful-cycle timestamp and the fault recovery, so the timestamp keeps
    ADR-0021's meaning: a cycle whose write raised was not a successful one.
@@ -121,15 +127,15 @@ Nothing else: no inline arithmetic or predicate, no branch other than the two fa
 no event fired from the body (Option D's fourth answer). A comment in the body is at most a
 one-line pointer; a step's reasoning is its docstring.
 
-**No step moves across a fault exit.** What a fault cycle leaves untouched today, it leaves
-untouched after any change under this record.
+**No step that advances state moves across a fault exit.** What a fault cycle leaves untouched
+today, it leaves untouched after any change under this record.
 
-**The guard.** Ruff's `C901` (complexity) and `PLR0915` (statement count) hold
+**The guard.** A cyclomatic-complexity limit and a statement-count limit hold
 `custom_components/smart_charging/coordinator.py` and
 `custom_components/smart_charging/coordinator_cycle.py`, at the thresholds the `development`
-completion bar states: `max-complexity = 10` and `max-statements = 35` when adopted. The
-numbers are the bar's to set. Removing either rule from the guard, or either file, contradicts
-this record.
+completion bar will state. The instance adopted is ruff's `C901` and `PLR0915`, at
+`max-complexity = 10` and `max-statements = 35`; the tool and the numbers are the bar's to set.
+Removing either limit, or either file, from the guard contradicts this record.
 
 ## Consequences
 
@@ -163,7 +169,7 @@ this record.
 |---|---|---|
 | `coordinator.py:445` `_run_cycle` (search 1, 2) | 68 statements, complexity 11: inline blocks, events, arithmetic and the final result block in the body | Does not conform: follow-up restructure |
 | `coordinator.py:511` provisional `resolve_effective_peak_limit` | Resolved in the body for the state-of-charge fault's result | Does not conform: moves into the fault exit |
-| `coordinator.py:740` final `resolve_effective_peak_limit` | The one assignment to `ctx.effective_peak_limit_kw`, also kept as a local | Does not conform: the local goes |
+| `coordinator.py:740` final `resolve_effective_peak_limit` | The final resolution, assigned to `ctx.effective_peak_limit_kw` at `:749` and also kept as a local | Does not conform: the local goes |
 | `coordinator.py:523`, `:784` `_reset_mode_state_if_changed()` | The two resets | Conform |
 | `coordinator.py:579` `CycleContext(` | Built after smoothing, mid-cycle; values held both as locals and fields | Does not conform: built after the required-role read |
 | `coordinator.py:1382` `CycleContext(` in `_mode_desired_current` | The baseline dry run's own throwaway carrier, never passed to a clamp | Conforms: not the cycle's carrier |
