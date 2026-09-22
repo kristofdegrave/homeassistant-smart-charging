@@ -9,7 +9,7 @@ In the context of a `_run_cycle` that regrew past the size ADR-0023 decomposed, 
 that said how to extract a block but nothing that stopped the next one landing inline, we
 decided on named-step composition with a stated body rule and a complexity guard, to keep the
 cycle a short literal sequence that fails the build when it regrows, accepting a threshold
-that a large new concern meets only by adding a step, never by growing one.
+that a large new concern meets by adding a step rather than growing the body.
 
 ## Context
 
@@ -34,9 +34,10 @@ Forces:
 - **No mechanical check.** Nothing in the lint configuration fails on a function's size or
   branching, so ADR-0023's "short, literal sequence" was a goal no build enforced.
 - **Fault cycles hold state.** Both fault exits sit upstream of state a successful cycle
-  advances — the last-successful-cycle timestamp (ADR-0021), the deadline-unreachable edge
-  (ADR-0024), the urgency latch — and ADR-0007 requires one fault-handling code path. A step
-  moved across a fault exit changes behaviour.
+  advances — the last-successful-cycle timestamp (ADR-0021), which a charger write that raises
+  must not advance either, the deadline-unreachable edge (ADR-0024), the urgency latch — and
+  ADR-0007 requires one fault-handling code path. A step moved across a fault exit changes
+  behaviour.
 - **The two resets are two points of change.** A `Manual` mode change is final before the
   cycle starts, and the baseline dry run reads per-mode state before `Auto`'s own mode is
   resolved; `Auto`'s change is known only after that resolution.
@@ -72,15 +73,16 @@ Enable ruff's complexity rules on the cycle's files and leave ADR-0023's choices
 ### Option D — Named-step composition with a stated body rule, and a complexity guard
 
 ADR-0023's two unit kinds, carried forward, plus a rule for what the body may hold, four
-answers ADR-0023 gave differently or left open, and the guard of Option C to hold the result:
+answers decided afresh, and the guard of Option C to hold the result:
 
 - **The cycle's `CycleContext` is built once, right after the required-role read succeeds**,
-  from the required reads, what derives from them alone (the debounced baseline) and the
-  cycle's clock readings. A value more than one later step reads is a field on it, written by
-  the step that resolves it — never also a local. A result only the next call reads is passed
-  to that call as an argument, as `desired` is through the clamps, so a step's signature still
-  says what it reads. The construction advances no state, so building it above the
-  state-of-charge fault exit moves nothing a fault cycle holds.
+  from the required reads, the debounced baseline computed just before it, and the cycle's
+  clock readings. A value more than one later step reads is a field on it, written by the step
+  that resolves it — never also a local. A result only the next call reads is passed to that
+  call as an argument, as `desired` is through the clamps, so a value passed that way is named
+  in the signature; the floor/cap result is the one exception, a local passed to both the
+  charger write and the result step. The construction itself advances no state, so building
+  it above the state-of-charge fault exit moves nothing a fault cycle holds.
 - **The provisional peak limit moves into the fault exit.** Its only consumer is the
   state-of-charge fault's result, so that exit resolves the non-urgent limit itself; the body
   resolves the effective peak limit once, after urgency, and assigns it once.
@@ -112,16 +114,17 @@ saying what the size is of. ADR-0023's two unit kinds, its rejection of the pipe
 **`_run_cycle`'s body holds only:**
 
 1. Calls to named steps, one statement each. A result more than one later step reads is
-   written onto `ctx`; one only the next call reads is a local passed to it; a fault test's
-   sentinel is a local the test reads.
+   written onto `ctx`; one only the next call reads is a local passed to it; the floor/cap
+   result is a local passed to the write and the result step; a fault test's sentinel is a
+   local the test reads.
 2. The two fault exits: a test of that sentinel and a literal `return` of the fault result, built
    by that exit's own step — the return stays in the body, ADR-0007's one path.
 3. The two `_reset_mode_state_if_changed` calls.
 4. Mode dispatch, the R3 clamp, the C4 clamp and the floor/cap invariant, as four distinct calls
    in ADR-0006's order, `desired` passed from each to the next.
 5. The charger write, then the return of the result a named step builds — that step also records
-   the last-successful-cycle timestamp and the fault recovery, so the timestamp keeps
-   ADR-0021's meaning: a cycle whose write raised was not a successful one.
+   the last-successful-cycle timestamp and the fault recovery, after the write, as the
+   *Fault cycles hold state* force requires.
 
 Nothing else: no inline arithmetic or predicate, no branch other than the two fault tests, and
 no event fired from the body (Option D's fourth answer). A comment in the body is at most a
@@ -133,7 +136,7 @@ today, it leaves untouched after any change under this record.
 **The guard.** A cyclomatic-complexity limit and a statement-count limit hold
 `custom_components/smart_charging/coordinator.py` and
 `custom_components/smart_charging/coordinator_cycle.py`, at the thresholds the `development`
-completion bar will state. The instance adopted is ruff's `C901` and `PLR0915`, at
+completion bar sets. The instance adopted is ruff's `C901` and `PLR0915`, at
 `max-complexity = 10` and `max-statements = 35`; the tool and the numbers are the bar's to set.
 Removing either limit, or either file, from the guard contradicts this record.
 
@@ -142,7 +145,7 @@ Removing either limit, or either file, from the guard contradicts this record.
 - Easier: reading the cycle against ADR-0006, and seeing a regrowth — it fails the lint job
   instead of reaching review. Harder: a fix that would be three inline lines becomes a named
   step, and a step near its own limit is split rather than extended.
-- ADR-0023's Status reads `Superseded by ADR-0046`, and its ADL row matches, in this change.
+- ADR-0023's Status reads `Superseded by ADR-0046`, and its ADL row matches.
 - Follow-up:
   - The `development` completion bar gains the gate at this threshold over these files, landing
     just before the restructure.
@@ -150,6 +153,8 @@ Removing either limit, or either file, from the guard contradicts this record.
     these two files in the same change, so the method cannot regrow between them.
   - `system-design.md` gains a cycle-composition account beside §5.1's account of the cycle's
     order.
+  - `project-plan.md`'s account of the cycle's decomposition cites this record once the
+    restructure lands, since its "only partly realized" status then no longer holds.
 - A step that fits neither unit kind, or a concern that cannot be one statement in the body,
   is a new decision, as ADR-0012 and ADR-0023 left it.
 
@@ -178,9 +183,10 @@ Removing either limit, or either file, from the guard contradicts this record.
 | `engines/billing_protection.py:40` `def resolve_effective_peak_limit` | The pure engine function | Conforms |
 | `coordinator.py:744`, `:909`; `sensor.py:211` | A comment or docstring naming the resolution or the reset | Conform: prose, not a call |
 | Every other function in search 2 (69 hits) | At most 34 statements and complexity 9 | Conform |
-| `coordinator.py`, `coordinator_cycle.py`, `tests/test_coordinator.py`, `tests/test_coordinator_cycle.py` (search 3: 16 hits) | Cite ADR-0023 for an extraction this record carries forward | Conform: the citation resolves and the extraction stands |
-| `docs/design/project-plan.md:298, 322, 468, 473` (search 3) | Cite ADR-0023 as the cycle's decomposition | Conform: the record resolves; re-pointing is the follow-up design change's call |
-| `docs/adl/README.md` (search 3: 2 hits) | ADR-0023's ADL row, and this record's | Both written in this change |
+| `coordinator.py:615`, `:654` (search 3) | Cite ADR-0023 for keeping `today_weekday` and the `deadline_resolvable` predicate inline in `_run_cycle` | Do not conform: rewritten by the follow-up restructure |
+| The other 14 hits in `coordinator.py`, `coordinator_cycle.py`, `tests/test_coordinator.py`, `tests/test_coordinator_cycle.py` (search 3) | Cite ADR-0023 for an extraction this record carries forward | Conform: the citation resolves and the extraction stands |
+| `docs/design/project-plan.md:298, 322, 468, 473` (search 3) | Cite ADR-0023 as the cycle's decomposition, `:473` calling its goal only partly realized | Do not conform once the restructure lands: follow-up |
+| `docs/adl/README.md` (search 3: 2 hits) | ADR-0023's ADL row, and this record's | Conform: both rows as this record's supersession sets them |
 
 Out of scope:
 
