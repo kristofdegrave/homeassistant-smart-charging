@@ -7,7 +7,9 @@ tag-keyed response capture / stale-tag guard is exercised through the genuine me
 than re-implemented in a test double.
 
 Anchors: docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md (preconditions, trigger, state
-model), docs/plans/2026-07-21-notifications-design.md Sec4/Sec5/Sec6/Sec7.
+model), docs/analysis/entity-catalog.md (home-day flag), ADR-0003 (RA4 adapter role),
+ADR-0009 (pure/HA split), ADR-0011 (DeadlineUnreachableNotified), ADR-0018 (RA3 Store
+read/write), ADR-0024 (notify-once pair).
 """
 
 import logging

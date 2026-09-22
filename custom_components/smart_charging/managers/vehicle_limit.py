@@ -6,8 +6,9 @@ ActiveSocLimitChanged event fires alongside -- M2 observes the entity, not the b
 it reads inputs through adapters and writes the vehicle through the vehicle_charge_limit
 adapter / adopts manual changes into number.smart_charging_soc_limit_override. It NEVER
 calls or is called by the Coordinator.
-No control-cycle logic, no clamps, no set-point -- see
-docs/plans/2026-07-21-vehicle-limit-manager-design.md.
+No control-cycle logic, no clamps, no set-point -- the Vehicle-Limit Manager takes the
+resolved active SOC limit from the Coordinator's own composition and makes no SOC-Target
+call of its own (system-design Sec5.2, ADR-0011).
 
 Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA3's Store
 (ADR-0018), never a coordinator reference, setter, or event.

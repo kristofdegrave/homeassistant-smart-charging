@@ -1012,8 +1012,8 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     call, seeing the identical (urgent=False) input as the baseline call, resolves to the same
     mode. Proves the two calls agree when nothing escalates, not just when it does.
 
-    The name is historical and two `docs/plans/` documents cite it as evidence for ADR-0017's
-    policy extraction, so it is kept: but since #1078 the 16 A Solar baseline is NOT what keeps
+    The name is historical -- it evidenced ADR-0017's policy extraction and is kept for that
+    reason: but since #1078 the 16 A Solar baseline is NOT what keeps
     this out of urgency -- the slack test is, at 0.435 A required against a 25.6 A threshold.
     The baseline would only matter to the handback, which needs a latch this call does not
     carry. What the test still pins is the two select() calls agreeing when nothing escalates."""

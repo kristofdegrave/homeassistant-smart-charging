@@ -5,17 +5,16 @@ A Manager (system-design Sec4 rule 5 / ADR-0011): reads RA1/RA2 adapter roles, s
 reads back the actionable prompt through RA4 (adapters/notify.py), and writes the
 resolved answer through the RA3 Store (ADR-0018) onto switch.smart_charging_home_day.
 Decides nothing itself -- notification_state.evaluate_prompt (M3's pure logic, plain
-pytest, docs/plans/2026-07-21-notifications-design.md Sec7) is the single source of the
-UC08 lifecycle; this module only observes the preconditions/trigger and carries out the
-send/write effects that function only signals. This module NEVER calls or is called by
-the Coordinator (M1) -- system-design Sec4 rule 5 -- and imports nothing from
-coordinator.py.
+pytest per ADR-0009) is the single source of the UC08 lifecycle
+(docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md "State model"); this module only
+observes the preconditions/trigger and carries out the send/write effects that function
+only signals. This module NEVER calls or is called by the Coordinator (M1) -- system-design
+Sec4 rule 5 -- and imports nothing from coordinator.py.
 
-Per the design doc Sec5: midnight is a per-evaluation wall-clock comparison
-(`dt_util.now()` date rollover), driven by the caller's own tick -- no new HA
-timer/scheduler primitive. `async_evaluate`'s `now` parameter defaults to `dt_util.now()`
-for production callers and is overridable by tests, the same shape `evaluate_prompt`
-itself takes explicitly.
+Midnight is a per-evaluation wall-clock comparison (`dt_util.now()` date rollover), driven
+by the caller's own tick -- no new HA timer/scheduler primitive. `async_evaluate`'s `now`
+parameter defaults to `dt_util.now()` for production callers and is overridable by tests,
+the same shape `evaluate_prompt` itself takes explicitly.
 
 R5 delivery: `on_deadline_unreachable`/`on_deadline_unreachable_cleared`/`register_listeners`
 subscribe to the Coordinator's published `DeadlineUnreachableNotified` and
