@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the order a decomposition's closing step files its children in.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of a decomposition's closing step - running its review pass, and filing its children.
 ---
 
 # File a task issue
@@ -43,25 +43,19 @@ half-scoped.
 
 ## Filing the children of a decomposition
 
-A decomposition's children are filed as one closing step, and each stage below finishes before
-the next starts. What the epic body must contain is the closing step's, per
-**Idea-to-product flow** above; the checklist the pass applies is `CLAUDE.md`'s
-**Decomposition checklist**.
+The closing step's four steps, their order and what the epic body must contain are the flow's,
+per **Idea-to-product flow** above — don't re-derive them here. This section holds the mechanics
+of the two steps that have any; the checklist the pass applies is `CLAUDE.md`'s **Decomposition
+checklist**.
 
-1. **The epic body is written.** It is the spec, so nothing else has to be drafted first and no
-   child exists yet to be cut from it.
-2. **One agent pass over that body**, while the decomposition is still cheap to change. Write
-   the body to a scratch file — the `reviewer` agent reads files and reaches no tracker — and
-   spawn that agent once, naming the scratch file's absolute path and the **Decomposition
-   checklist** it is to apply. Fix what it finds in the epic body itself: there is no PR here,
-   so there is no review payload to post and no thread to resolve. Read the body back from the
-   tracker afterwards, so the fix is confirmed rather than assumed.
-3. **The human partner reads the fixed body and says to go on.** The pass is one agent run
-   followed by that read — it is not repeated and carries no round cap, so a finding it raises
-   is answered before the read rather than in a later round.
-4. **The children are filed**, in build order, each through the checklist above: its own task
-   text as the body, its `Source:` lines, its native sub-issue edge to the epic, and a
-   blocked-by edge to each child it cannot start before.
+- **Running the pass** (the flow's step 2). Write the body to a scratch file — the `reviewer`
+  agent reads files and reaches no tracker — and spawn that agent once, naming the scratch
+  file's absolute path and that checklist. Fix what it finds in the epic body itself: there is
+  no PR here, so there is no review payload to post and no thread to resolve. Read the body back
+  from the tracker afterwards, so the fix is confirmed rather than assumed.
+- **Filing the children** (the flow's step 4). Each goes through the checklist at the top of
+  this file: its own task text as the body, its `Source:` lines, its native sub-issue edge to
+  the epic, and a blocked-by edge to each child it cannot start before.
 
 Done when every task in the epic body has an issue carrying its label, Size/Estimate, `Source:`
 lines and edges, and no task in that body is left without one.

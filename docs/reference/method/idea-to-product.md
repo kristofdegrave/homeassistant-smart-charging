@@ -125,7 +125,8 @@ Every idea goes down exactly one track. The split is whether the behaviour alrea
 **New behaviour** → the artifact chain, as far as the idea reaches: an `adr` if a structural
 decision surfaced (`CLAUDE.md`'s **Architecture Decision Records** topic has the bar for that
 — and the **ADR** stage is entered the moment one does, **Brainstorm** included, which is why
-it is re-entrant), `requirement` and/or `uc`, design, spec, then the task issues.
+it is re-entrant), `requirement` and/or `uc`, design, then the spec and the task issues the
+**Decompose** stage's closing step produces.
 
 **Bug or enhancement against shipped behaviour** (the `bug`/`enhancement` kind label,
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**; no context label
@@ -152,21 +153,22 @@ gate does not apply; the track written on the issue is enough.
 
 ## 4. Decompose
 
-A **single-artifact** idea is one issue, filed directly (`file-task-issue`); no epic, no spec,
-and nothing below applies to it. A **multi-artifact strand** gets an epic, and this stage is
-where every issue it will ever have is filed.
+Every issue a strand gets is filed here — the epic, the issues the artifact stages run
+against, and one child per task of the spec. A strand that needs no epic files one issue and
+stops; which strands those are is the first bullet set below.
 
-It runs in **two passes with the artifact stages between them**, the way the **ADR** stage
-below is entered twice: the issues those stages run against have to exist before they start,
-and the spec has to derive from what they merged. The **opening pass** runs straight after
-**Route**; the **closing step** runs once **Design** has merged.
+The stage is **entered twice, with the artifact stages in between**, the way the **ADR** stage
+below is: the issues those stages run against have to exist before they start, and the spec has
+to derive from what they merged. The **opening pass** runs straight after **Route**; the
+**closing step** runs once **Design** has merged. An issue that surfaces after both still
+belongs here — the opening pass says where it attaches.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
 
-The epic issue is filed first, Size only. If the idea started as an issue, link it from the
-epic body and close the idea issue once it is fully captured — never relabel the idea issue as
-the epic, because an epic stays open tracking children long after the idea itself is
-decomposed. The brainstormed decisions move into its body under *Decisions so far*
+Where the bullets below call for an epic, it is filed first, Size only. If the idea started
+as an issue, link it from the epic body and close the idea issue once it is fully captured —
+never relabel the idea issue as the epic, because an epic stays open tracking children long
+after the idea itself is decomposed. The brainstormed decisions move into its body under *Decisions so far*
 (**Brainstorm** above).
 
 Whether the strand needs an epic at all is settled here, and written on the issue so it is not
@@ -175,6 +177,8 @@ re-argued:
 - **New behaviour**: always an epic, so there is always a body for the spec.
 - **Bug track**: an epic only when brainstorming yields more than one slice. A one-slice fix
   goes straight from the routed issue to work.
+- **A single-artifact idea**: no epic, so no spec and no closing step — one issue, filed
+  directly (`file-task-issue`), and the stage ends there.
 
 Everything already decidable is filed now: the `adr` issue if a structural decision surfaced,
 and any already-scoped `uc`, `requirement`, `documentation` or `workflow` issue. Anything that
@@ -194,8 +198,9 @@ inventing a scheme ad hoc.
 ### The closing step: the epic body is the spec, and its children are the tasks
 
 Once **Design** has merged, the spec for one build slice is written into the epic's body and
-the children are cut from it. Four steps, each finishing before the next starts; the `gh`
-calls and the per-child checklist are `file-task-issue`'s.
+the children are cut from it. Four steps, each finishing before the next starts. This list is
+the order; the mechanics of running each one — the scratch file, the dispatch, the `gh` calls,
+the per-child filing checklist — are `file-task-issue`'s.
 
 1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. Nothing
    else has to be written first, and no child exists yet to be cut from it.
@@ -209,9 +214,19 @@ calls and the per-child checklist are `file-task-issue`'s.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` into concrete
 files, functions and tests, citing the analysis documents and the ADRs rather than restating or
-overriding them. A service, call direction or behavioural rule that is not already in those
-documents is not invented here: it is an issue against the document that owns it, run through
-that document's own issue-first cycle, and the draft resumes after.
+overriding them. A service or call direction the design does not already name is not invented
+here: it is an issue against the design document, run through that document's own issue-first
+cycle, and the draft resumes after. Before writing a **behavioural** rule into the body, read
+the document that owns it and act on which of three cases it is:
+
+- **It says the same thing** — a duplicate. Cut it and cite the source.
+- **No document says it** — the body would hold the only copy. Keep the text exactly as it
+  stands, say so out loud on the issue, and open an issue against the document that should own
+  it; the text becomes a citation once that document states the rule, never a deletion here. A
+  decision, a file layout, a signature or a test boundary appears only here by construction and
+  is not this case.
+- **It says something different** — stop. No wording of the body resolves it; take it to the
+  owning document.
 
 **What the body carries**, and nothing another document owns:
 
@@ -229,18 +244,22 @@ that document's own issue-first cycle, and the draft resumes after.
 **A task is a vertical, demoable slice**: a narrow end-to-end path through every layer it
 touches, sized to one context window, and observable on its own once deployed. Layer-shaped
 tasks ("the adapter ticket", "the entity ticket") are the anti-pattern — they cannot be demoed
-and cannot be verified live. Each entry names its exact file paths and its concrete failing
-test, its test boundary, the tasks it is **blocked by** (or `none`, stated either way, so the
-filer can tell an empty set from an omission), the documents it is cut from, and its
-**Verify live** list — one item per observable, the entity id and the value with its unit, or
-`none` and why in one line. That list is written now, not after deployment: a list written
-once the build exists is written from what the build produced rather than from what the task
-promised, and nothing downstream can tell those two apart.
+and cannot be verified live. Each entry carries these keys, one item per key:
 
-Each child issue is then filed with that entry as its body, its context label and board
-fields, its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and
-the anchored `Source:` lines naming the documents the entry was cut from — the sources rule
-under [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**.
+- **Files and test** — the exact paths, and the concrete failing test the task starts from.
+- **Test boundary** — which harness that failing test drives through.
+- **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way so
+  the filer can tell an empty set from an omission.
+- **Sources** — the documents the entry was cut from.
+- **Verify live** — one item per observable: the entity id and the value with its unit, or
+  `none` and why in one line. Written now, not after deployment — a list written once the build
+  exists is written from what the build produced rather than from what the task promised, and
+  nothing downstream can tell those two apart.
+
+Each child issue is then filed with that entry as its body, its context label and board fields,
+its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and the
+anchored `Source:` lines naming the entry's sources, per
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**.
 
 ### Artifact: the epic, and one issue per task
 
@@ -260,7 +279,7 @@ nothing else.
 ### Skills
 
 `file-task-issue`; `brainstorming` — scoping the slice boundary and the deferrals before the
-body is drafted.
+body is drafted; `writing-plans` — deriving the task entries and their build order.
 
 ## 5. ADR
 
@@ -400,9 +419,8 @@ structural decision the design surfaced has its ADR first (the **ADR** stage's g
 ## 8. Implementation
 
 One task of the epic body per issue, TDD one behaviour at a time, against the files the
-`development` row names. The row's work file carries the loop itself, the pre-commit self-check and the stack
-references it sends the author to;
-its bar, and the **Definition of Done** the contribution workflow names, carry what a finished
+`development` row names. The row's work file carries the loop itself, the pre-commit
+self-check and the stack references it sends the author to; its bar, and the **Definition of Done** the contribution workflow names, carry what a finished
 task must show, the Runtime check included. Stack skills are the work file's to name, never
 this document's.
 
@@ -495,8 +513,8 @@ None of the method's; the commands are `CLAUDE.md`'s **Tracker mechanics** topic
 ## Document structure
 
 The trees the artifact stages above write into, and which document owns what. This topic and
-the **Analysis** stage's order above are the current statement of both — `docs/analysis/flows/README.md`
-records the pivot that made them so.
+the **Analysis** stage's order above are the current statement of both —
+`docs/analysis/flows/README.md` records the pivot that made them so.
 
 ### The analysis documents
 
