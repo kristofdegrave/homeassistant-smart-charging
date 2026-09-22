@@ -556,12 +556,11 @@ jobs:
             that file next to the checklist's own findings — the scan report's own
             severity label is not authoritative, your verified judgment is.
 
-            For any changed file under `docs/adl/`: before treating its Status as fixed/settled,
-            run `git show ${{ inputs.base_sha }}:<path>` for that file (it
-            will fail with "does not exist" for a brand-new ADR, which is fine — treat that as
-            a draft). Every ADR that exists on the base branch is immutable, whatever its Status
-            there — `Superseded` and `Deprecated` included; only a file this PR adds is a draft
-            the author can still fix normally.
+            For any changed file under `docs/adl/`: before treating the record as a draft, run
+            `git show ${{ inputs.base_sha }}:<path>` for that file — the base read, not the
+            working tree, decides whether the record exists, and `adr/review.md`'s check (A)
+            says what follows from that. "Does not exist" means a brand-new ADR, a draft; a
+            read that fails for any other reason means the record is treated as existing.
 
             Additionally, run
             `gh api "repos/${{ github.repository }}/pulls/${{ inputs.pr_number }}/comments" --paginate`

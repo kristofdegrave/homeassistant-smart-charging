@@ -214,7 +214,7 @@ The first artifact stage, and a **re-entrant** one: it is entered at the first p
 structural decision surfaces — usually Brainstorm — and entered again whenever a later stage
 surfaces another, Design being the usual case. Whether a decision is architectural at all, the
 calibration test and the two carve-outs are `CLAUDE.md`'s **Architecture Decision Records
-(ADRs)** topic; once accepted, the ADR is edited only as the `adr` work file permits and
+(ADRs)** topic; once merged, the ADR is edited only as the `adr` work file permits and
 otherwise superseded, per the same topic.
 
 ### Artifact: one numbered record under `docs/adl/`

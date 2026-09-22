@@ -67,7 +67,8 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Immutable once merged.** An ADR that exists on the base is edited in exactly three ways,
   whatever its Status there — `Superseded` and `Deprecated` records included — and this list is
   the rule's only home, for author, fixer and reviewer alike:
-  - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation;
+  - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation, or
+    to correct one merged as anything but `Accepted` — the bar's item 10 — to `Accepted`;
   - a typo fix that changes no meaning;
   - a repair of something that directs the reader to act and is **actually broken**:
     - a link that no longer resolves: re-point it at the same content's new path; where that
@@ -87,7 +88,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
     - Not on the base → a draft; fix normally.
     - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
       tree. Treat the record as merged and say in the summary that the base read failed. A
-      wrong Skipped entry is one a human reads and reverses; a wrong edit rewrites an accepted
+      wrong Skipped entry is one a human reads and reverses; a wrong edit rewrites a merged
       record unseen.
   - **A finding whose fix would be an edit outside the list is Skipped, not fixed.** One that
     the decision is wrong is recorded as a candidate for a superseding ADR; any other is recorded
