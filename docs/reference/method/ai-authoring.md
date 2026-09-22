@@ -16,7 +16,8 @@ command, which is exactly what the carve-out permits. Author and reviewer build 
 same list.
 
 **One Vocabulary entry, *Clutter*, reaches further than this file's subject**, and states its
-own reach there.
+own reach there. One Principle, *Write rules as items*, guides further still, as guidance
+rather than a rule.
 
 **The harness configuration is a fourth artifact under `.claude/`, and this reference does not
 govern it.** `.claude/settings.json` and the hooks it wires (`.claude/hooks/`) drive Claude
@@ -415,6 +416,15 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
   main cost; the read cost is per use, not per cold session — see item 2 above.)
 - **Scope the read.** Tell a run *which* file to read, so it doesn't fan out across `docs/`.
   The review worker already does this — one checklist per changed path, never all of them.
+- **Write rules as items, with the shortest example that teaches them.** A rule goes in a bullet
+  or a table row, one rule per item, with an example only where the rule alone would be misread;
+  prose is for reasoning that does not break into items. A reader scans items and finds the one
+  that applies; a paragraph has to be read whole. The `adr` work-type files are the worked
+  example: each rule one item, and a table where rows beat prose (bar items 3 and 11). Whether a
+  paragraph should have been a list is guidance, not a check — it is not decidable the way
+  *Clutter* is. The example half is already scored where *Clutter*'s oversized-example form or
+  the skill checklist's example item applies. It also guides the ADR, analysis and design
+  documents their work types draft, whose work files point here.
 - **Keep stable files stable.** Prompt caching only pays off when the cached prefix does
   not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
   `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill

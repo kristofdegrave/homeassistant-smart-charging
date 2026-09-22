@@ -20,8 +20,11 @@ here, and a change that touches both documents follows both.
 
 ## Rules
 
-The rules either document is written by are the branch file's. One holds for both branches and
-is stated once, here.
+The rules either document is written by are the branch file's. Two hold for both branches and
+are stated once, here: the form below, and the skills.
+
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
 
 ### Skills
 
