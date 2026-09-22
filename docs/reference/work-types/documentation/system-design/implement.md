@@ -59,8 +59,6 @@ branch of this work type, and [its own work file](../project-plan/implement.md).
 
 ## Rules
 
-- **Form** — rules as items, each with the shortest example that teaches it, per
-  [`ai-authoring.md`'s Principles](../../../method/ai-authoring.md#principles). Guidance, not scored.
 - **Volatility drives the cut, not function** — the bar's item 1 states it and judges it. What
   that means while drafting: every service must answer "what varies here, and why", not just
   "what does this do".

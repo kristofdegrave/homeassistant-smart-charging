@@ -59,8 +59,8 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 
 ## Rules
 
-- **Form** — rules as items, each with the shortest example that teaches it, per
-  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles). Guidance, not scored.
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
 - **What, not how.** Describe observable behaviour. No modules, platform services, timer
   helpers, or persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
   ("the active SOC limit", "charger status") — the `sc_` binding lives in

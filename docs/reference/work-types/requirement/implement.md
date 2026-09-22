@@ -68,8 +68,6 @@ which names this block and judges conformance to it.
 
 ## Rules
 
-- **Form** — rules as items, each with the shortest example that teaches it, per
-  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles). Guidance, not scored.
 The rules a finished requirement is judged by are the bar's, at the severity each miss lands
 at, and are not repeated here. Two of them have a drafting order this file owns:
 
@@ -80,6 +78,8 @@ at, and are not repeated here. Two of them have a drafting order this file owns:
   5.2 judges the criterion-level form of it. What that means while drafting: if you cannot
   state the criterion without naming a module, a service call or a data structure, the *what*
   hasn't been found yet.
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
 
 ### Skills
 
