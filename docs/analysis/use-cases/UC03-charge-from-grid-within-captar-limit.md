@@ -132,7 +132,7 @@ stateDiagram-v2
 
 - **R4** — Captar mode grid charging (charges to the peak-headroom set-point whenever active and its own conditions hold, independent of tariff; 0 A default when no condition permits charging).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), sensor smoothing (R10), and voltage-aware conversion (NF4).
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), sensor smoothing (R10), and voltage-aware conversion (R22).
 
 ## Relationships
 

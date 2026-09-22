@@ -373,58 +373,52 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ---
 
-## Non-functional requirements
+### R22 — Voltage-aware power conversion
 
-### NF1 — Coordinator executes modes; profiles select them
-
-**Priority:** Must
-**What:** The coordinator executes whichever charging mode is currently active and contains no logic for deciding which mode should be active. Choosing the mode is the responsibility of the active profile.
+**Priority:** Should
+**What:** The system converts between charging current and power using the measured [supply voltage](system-overview.md#ubiquitous-language) when a healthy reading is available, and falls back to a configurable nominal voltage when it is not.
 
 **Acceptance criteria:**
 
-- [ ] The coordinator reads the active mode and dispatches to the matching mode module; it contains no rules that choose or change the active mode.
-- [ ] The active mode is set either by the user / an external source (the `Manual` profile) or by the `Auto` profile (R16).
-- [ ] Changing the active mode changes the coordinator's behaviour within the next control cycle.
+- [ ] When the measured supply voltage is healthy — available and above 0 V — current↔power conversions use that measured value, taking effect within the next control cycle.
+- [ ] When no healthy supply-voltage reading is available, conversions use a user-configurable nominal voltage (default 230 V).
+- [ ] Current-derived thresholds (such as the minimum charging current and any threshold expressed in amperes) remain correct as the measured supply voltage varies.
+
+---
+
+## Non-functional requirements
+
+A non-functional requirement states a quality of the product, never how it is built. NF1, NF2 and NF4 are **retired entries**: each keeps its heading so that every existing citation of it still resolves, carries no criteria of its own, and names the requirement or the decision records that now hold its content. A new citation names that destination, never the retired id.
+
+### NF1 — Coordinator executes modes; profiles select them
+
+**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md).
 
 ---
 
 ### NF2 — One self-contained unit per mode and per profile
 
-**Priority:** Must
-**What:** Each charging mode — and each profile — is implemented in its own self-contained unit with no logic belonging to another.
-
-**Acceptance criteria:**
-
-- [ ] There is exactly one unit of logic per charging mode (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) and one per profile (`Manual`, `Auto`).
-- [ ] No mode's or profile's logic references or branches on another mode's or profile's internals.
-- [ ] A mode or profile can be changed, replaced, or added one at a time without altering the others.
+**Retired.** This was a statement of code structure, not a quality of the product. That each charging mode and each profile is its own self-contained unit is decided by [ADR-0002](../adl/0002-domain-and-package-layout.md), [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one quality — a mode or profile changed alone — is now NF3's criterion on changing one mode or profile.
 
 ---
 
 ### NF3 — All device I/O via adapter roles
 
 **Priority:** Must
-**What:** All charging logic reads its inputs and issues its outputs through the integration's own internal adapter roles rather than raw device entities.
+**What:** The system assumes no particular charger, vehicle or meter: every reading it takes and every command it issues crosses an [adapter role](system-overview.md#ubiquitous-language) the installation maps to its own device, so one piece of hardware can be replaced without changing the rest, and each charging mode or profile can likewise be changed on its own.
 
 **Acceptance criteria:**
 
-- [ ] Every sensor value used by the charging logic is read through an adapter role, not a raw upstream entity.
-- [ ] Every command the logic issues — setting charger current, starting/stopping charging, writing the vehicle charge limit — is issued through an adapter role, not a raw device entity or service.
-- [ ] No charging logic references a raw device or third-party integration entity directly, for input or output.
 - [ ] Replacing the underlying charger or vehicle requires re-mapping only the affected adapter role, not changing the charging logic.
+- [ ] Changing, replacing or adding one charging mode or profile leaves the observable behaviour of every other mode and profile unchanged.
+
+How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003-hardware-abstraction-adapters.md).
 
 ---
 
 ### NF4 — Voltage-aware power conversion
 
-**Priority:** Should
-**What:** The system converts between charging current and power using the measured supply voltage when a healthy reading is available, and falls back to a configurable nominal voltage when it is not.
-
-**Acceptance criteria:**
-
-- [ ] When a healthy supply-voltage reading is available, current↔power conversions use that measured value, taking effect within the next control cycle.
-- [ ] When no healthy supply-voltage reading is available, conversions use a user-configurable nominal voltage (default 230 V).
-- [ ] Current-derived thresholds (such as the minimum charging current and any threshold expressed in amperes) remain correct as the measured supply voltage varies.
+**Retired.** This was functional behaviour, not a quality of the product; it is now [R22](#r22--voltage-aware-power-conversion).
 
 ---
 
@@ -452,7 +446,7 @@ the requirement or rule that reads it governs what its absence means.
 | charger power (`charger_power`) | always | fault |
 | charger current, the set-point output (`charger_current`) | always | a write that fails is a fault, and the System still attempts the 0 A write |
 | state of charge (`ev_soc`) | only in `Solar`, `SolarOnly` and `Captar`, and only while the car is connected | fault in those modes. In `Off` and `Power` the cycle runs without it and does not fault (ADR-0042); deadline urgency, which needs it in every mode, establishes nothing on that cycle (R5). While the car is disconnected no mode needs it |
-| grid voltage (`grid_voltage`) | no | the nominal voltage is used (NF4) |
+| grid voltage (`grid_voltage`) | no | the nominal voltage is used (R22) |
 | low-tariff signal (`low_tariff`) | no | the low-tariff flag is treated as always active |
 | EV battery capacity, sensed (`ev_battery_capacity`) | no | the configured battery capacity is used (R15) |
 | external monthly-peak reading (`monthly_peak_external`) | no | the monthly-peak-demand operand rests on the internally-tracked value alone (R3) |
