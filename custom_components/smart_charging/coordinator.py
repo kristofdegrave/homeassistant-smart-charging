@@ -636,6 +636,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # mapped at all), Auto simply keeps whatever active_mode it last resolved -- a
         # deliberate, scope-truthful simplification, same as required-current's own guard
         # inside resolve_deadline_urgency.
+        # This `active_profile` check is deliberately NOT routed through the ADR-0017
+        # PROFILE_POLICIES registry (issue #573): it decides WHETHER mode selection dispatches
+        # this cycle at all, not WHICH mode is selected -- the one decision ADR-0017's Context
+        # scopes to the registry. The actual selection (both the baseline and the real call)
+        # already goes through PROFILE_POLICIES[PROFILE_AUTO].select(...) in
+        # resolve_deadline_urgency, gated by this same flag.
         auto_dispatchable = (
             self.active_profile == PROFILE_AUTO
             and status in CHARGEABLE_STATES
