@@ -255,9 +255,9 @@ things, and the edge detector must then be told which — it cannot be recovered
   `coordinator.py`. Tests: the detector's hold at the `coordinator_cycle.py` tier, and a coordinator
   cycle with `Manual`+`Power`/`Off`, the car connected and `ev_soc` `None`, firing no clear. That
   slice's T5 lands a strict-xfail test of exactly this, which turns red the moment the fix lands —
-  un-xfailing it belongs to the same change. The same change corrects the fault-path comments in
-  `engines/deadline.py` and `tests/engines/test_deadline.py`, which state that the edge "keys on that
-  flag alone": true of ADR-0024, no longer true once the fire site is threaded.
+  un-xfailing it belongs to the same change. The same change corrects the backstop-release comments
+  in `engines/deadline.py` and `tests/engines/test_deadline.py`, which state that the edge "keys on
+  that flag alone": true of ADR-0024, no longer true once the fire site is threaded.
 - **Analysis-doc follow-up** — a `uc`/`requirement` issue, not opened here.
   `docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md` and the
   `DeadlineUnreachableCleared` glossary entry in `docs/analysis/system-overview.md` both state the
@@ -314,8 +314,8 @@ things, and the edge detector must then be told which — it cannot be recovered
    *(Amended ahead of the per-slice spec tree's retirement: the rows and out-of-scope entries that
    named files in that tree were removed, and the counts above are of the sites that survive it.
    Until that tree is gone the search as written returns 26 files — the 16 counted here plus the 10
-   in the retiring tree. The same amendment added the two fault-path sites this record's own width
-   argument names but the table had never listed. The decision, its Status and every other line of
+   in the retiring tree. The same amendment added the two backstop-release sites the search has
+   always returned but the table had never listed. The decision, its Status and every other line of
    this record are unchanged.)*
 
 2. **Per-hit verdict** (rows grouped by verdict; every file the search returns appears here or in 3).
@@ -324,9 +324,9 @@ things, and the edge detector must then be told which — it cannot be recovered
 | --- | --- | --- |
 | `custom_components/smart_charging/coordinator_cycle.py` | `DeadlineUnreachableEdge.resolve` takes `unreachable` alone, and `resolve_deadline_urgency`'s `if not inputs.deadline_resolvable` returns one `unreachable=False` for both halves of the predicate | **Does not conform** — the split and the further input land here |
 | `custom_components/smart_charging/coordinator.py` | Fires the clear off `self._unreachable_edge.resolve(required.unreachable)` alone; its two fault early-returns already hold the prior flag, but a non-SOC-gated cycle with `ev_soc is None` reaches neither | **Does not conform** — fires the spurious clear; must thread the "established an outcome" fact to the fire site |
+| `custom_components/smart_charging/engines/deadline.py`, `tests/engines/test_deadline.py` | State the unnarrowed fire rule in the missed-deadline backstop-release branch and its tests: `_unreachable_edge` "keys on that flag alone (ADR-0024)" and is what fires the clear | **Does not conform** — true of ADR-0024 and no longer true once the fire site takes the further input; the comments are corrected with it |
 | `docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md`, `docs/analysis/system-overview.md` | State the correct rule — the state is held and the event does not fire — justified as "a *fault* cycle" | **Does not conform in its stated reason only**; the rule itself is what this ADR records |
 | `docs/analysis/requirements.md` (the explicitly listed site) | R5's acceptance criterion states the rule this decision aligns to: a cycle on which state of charge is unavailable ends no occasion, and the system neither notifies nor re-arms | Conforms — it is the authority, not a site this decision changes; unlike UC05 and the glossary it gives no reason that `is_soc_gated` can falsify |
-| `custom_components/smart_charging/engines/deadline.py`, `tests/engines/test_deadline.py` | Carry the fault-path comments this section's width argument names: both state that `_unreachable_edge` "keys on that flag alone (ADR-0024)" and is what fires the clear | **Does not conform** — that is the unnarrowed mechanism; the comments describe the fire rule this decision changes, so they are corrected with the fire site |
 | `custom_components/smart_charging/const.py`, `custom_components/smart_charging/__init__.py` | Define the event constant and subscribe before the first refresh | Conform — unaffected; the narrowing is entirely about *when* the producer fires |
 | `custom_components/smart_charging/managers/notification_manager.py` | Re-arms `_deadline_unreachable_notified` on every clear received | Conforms — the consumer must trust the producer (ADR-0011); it keeps re-arming on exactly the events it gets |
 | `tests/test_coordinator_cycle.py`, `tests/test_coordinator.py`, `tests/managers/test_notification_manager.py` | Pin the `True`→`False` detection, the disconnect and R18 exits firing, a fault cycle not firing, and the consumer's re-arm | Conform — every behaviour they pin survives; none pins the SOC-unavailable case, which the implementation follow-up adds |
