@@ -25,9 +25,10 @@ half-scoped.
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
 2. **Pick the one context label**, set Size/Estimate, and — for a child of a decomposition —
-   write the anchored `Source:` lines. Their format is fixed by ADR-0044 and is not yet
-   written into a method document, so that record is its only statement until one owns it —
-   **Issue conventions** covers the other fields. A finding against
+   write the anchored `Source:` lines. What each entry's sources name, and how finely, is the
+   closing step's, under `CLAUDE.md`'s **Idea-to-product flow**; the line's own format belongs
+   to **Issue conventions** and is not stated there yet, so follow the shape the epic body's
+   **Sources** key already uses. **Issue conventions** covers the other fields. A finding against
    already-shipped behaviour also takes a **kind label** (`bug`/`enhancement`); which labels
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
