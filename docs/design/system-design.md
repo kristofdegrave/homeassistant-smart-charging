@@ -599,8 +599,8 @@ The read is unsolicited, unlike §5.2's — nothing guarantees the entity is pop
 reminder tick fires. Before the Coordinator's first cycle, or while the diagnostic entity is
 unavailable, UC10's below-limit precondition is simply not established and no reminder is due; once
 populated, the value carries the one-cycle latency [§8.2](#82-adrs-written-after-this-design-0010-0019)
-already accepts for a Coordinator-published Store read (ADR-0018). UC10 records no exception flow
-for the unpopulated case.
+already accepts for a Coordinator-published Store read (ADR-0018). UC10's *Active SOC limit not
+resolved* exception flow states the unpopulated case.
 
 **What the static diagram draws.** [§4](#4-static-architecture)'s solid Manager→Engine edges are the
 calls this design realizes somewhere — in a §5 sequence, or in [§3](#3-service-catalog)'s and §4's
