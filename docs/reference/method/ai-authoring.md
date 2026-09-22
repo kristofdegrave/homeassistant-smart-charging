@@ -15,6 +15,18 @@ Applying those two literally would flag a work file for naming a `docs/` path or
 command, which is exactly what the carve-out permits. Author and reviewer build against the
 same list.
 
+**The harness configuration is a fourth artifact under `.claude/`, and this reference does not
+govern it.** `.claude/settings.json` and the hooks it wires (`.claude/hooks/`) drive Claude
+runs as surely as a skill does — a `PreToolUse` guard decides whether a tool call happens at
+all — but they are executable configuration, not text a run reads as instruction, so the rules
+below have nothing to bite on: there is no `description` to trigger on, no context budget to
+spend, and the routing rule has no purchase on a script, which reaches a project document by
+naming its path in a message a human reads, not by routing a run to it. A checklist section
+here would be items none of which a reviewer could apply. Its criteria are the `workflow`
+review checklist's instead — the one `CLAUDE.md`'s **Model selection** table names for that
+tree. Naming the class here is what stops a reviewer reading its absence as "no criteria
+exist".
+
 This reference exists so that every new authored artifact is lean
 *and* predictable by construction: the [Vocabulary](#vocabulary) names the failure modes,
 [Project-dependent content routes through
