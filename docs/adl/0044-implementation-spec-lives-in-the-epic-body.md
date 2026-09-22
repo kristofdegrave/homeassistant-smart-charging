@@ -18,10 +18,14 @@ that a plan is never a source of truth: it restates what the ADRs, use-cases and
 decided, in the order one slice will build them. It is dead the day its last task merges. Yet
 it merges into `main` and stays, and the tree is now the project's largest artifact class —
 57 files. Being in the tree makes it behave like a source whether or not anyone intends it to:
-one ADR's Blast radius table carries ten plan-file rows it has to reconcile, and five other
-ADRs carry "plan-doc follow-up" items whose content is an accepted record telling a shipped
-plan that it is now wrong. That bill is paid on every new ADR, forever, for files nobody will
-read again. Two files per slice doubles it.
+one ADR's Blast radius table carries ten plan-file rows it has to reconcile, five other ADRs
+carry "plan-doc follow-up" items whose content is an accepted record telling a shipped plan
+that it is now wrong, and eight shipped source and test files cite a plan file in a docstring
+as the authority for what they do. That bill is paid on every new ADR, forever, for files
+nobody will read again. Two files per slice doubles it. What the tree buys in exchange is real
+and should be said: it is the one place a spec's engineering decisions that outlive the slice
+have ever had, and it is the only form in which a spec is versioned alongside the code it
+describes.
 
 **The spec is reviewed as a diff, which is the wrong instrument.** A spec merges through the
 same PR loop as everything else: reviewer, findings, fix, re-review, up to the review cap. But
@@ -30,7 +34,10 @@ the errors the `development` reviewer catches later anyway, because it reads the
 analysis documents and the ADRs. What no per-task reviewer can ever see is what lives *between*
 tasks: an in-scope requirement that no task implements, slicing by layer instead of by
 behaviour, an order that cannot be built, a scope boundary drawn in the wrong place,
-conventions that disagree across tasks. The loop costs rounds and catches the cheap half.
+conventions that disagree across tasks. The loop costs rounds and catches the cheap half —
+though "cheap" is not "worthless": those rounds do find real restatement and consistency
+errors, and a review instrument that has caught them for every spec so far is not obviously
+worth discarding on the strength of what it cannot see.
 
 **The task end pulls the other way.** Today a worker is responsible for finding its own
 sources. That makes a thin or wrong issue body harmless to correctness — the worker goes to the
@@ -122,7 +129,9 @@ what to read. The second only has a live answer once the first is settled.
   body harmless.
 - Con: the decomposer owns a per-task completeness judgement whose misses fail silently — an
   under-pointed task yields an under-informed implementation, and nothing in the task itself
-  shows the pointer set was short.
+  shows the pointer set was short. The obvious mitigation, letting a worker whose anchors fall
+  short go and find the rest and say so in its PR, only converts a silent miss into a reported
+  one; it does not stop the miss, and it leans on the worker noticing that something is absent.
 - Con: granularity is a judgement a check cannot make; an over-precise anchor looks tidier than
   the right one while being worse.
 
@@ -157,9 +166,10 @@ purpose, and its second gives every task the whole spec to avoid writing three l
 Cons are taken as the terms of the trade rather than as objections: the inversion is real and
 is what makes the decomposer's judgement load-bearing, which is precisely why the decomposition
 gets its own review pass, and why that pass's checklist must judge anchor granularity — the
-Con a check cannot cover. The silent-miss Con is bounded by an escape rather than removed: a
-worker whose anchors do not answer what its task requires goes and finds the rest, and reports
-in its PR that it did, so a decomposer's misses surface instead of being absorbed.
+Con a check cannot cover. The silent-miss Con is bounded rather than removed, on the terms F
+itself states: the escape converts a silent miss into a reported one, which is worth having
+and is not a fix, so the Consequences below make it a standing obligation rather than leaving
+it as an aspiration.
 
 Two ends of one decision, one record. Splitting them would produce two ADRs each citing the
 other at every turn, and each appearing in the other's Blast radius.
@@ -176,6 +186,24 @@ which have native edges, and not code paths. The anchor is optional under a smal
 self-contained-unit rule. The rule binds every child of a decomposition and no issue filed
 outside one, where nobody determined the sources in advance and the work file's instruction to
 go and find them is correct.
+
+**The escape is an obligation, not a permission.** Because those lines replace the hunt, a
+worker whose anchors do not answer what its task requires does not stop and does not guess: it
+goes and finds the rest, and **states in its PR description that it had to, and what it read**.
+That report is the only signal a decomposer's miss ever produces, so omitting it is a defect in
+the PR rather than a courtesy skipped. It bounds the silent-miss consequence without removing
+it — a worker who never notices the gap still reports nothing.
+
+**Amending an Accepted ADR that cites a plan file is not re-deciding it.** Eleven Accepted
+records cite plan files, and the immutability rule forbids editing an Accepted record's
+Context, Decision or Consequences *to reflect a change of mind*. Removing a pointer to a
+deleted file, or striking a follow-up item that instructs someone to update a file that no
+longer exists, is neither: the decision the record took is untouched and its Status does not
+change. Those citations are therefore folded inward — the rationale a record leans on is
+restated from the analysis document or ADR that owns it — rather than left as links into a
+deleted tree, which would be the worse outcome the immutability rule was never meant to
+protect. A post-mortem is the opposite case and stays as it is, because its whole value is
+being a dated snapshot rather than a maintained record.
 
 **What becomes easier.** A new ADR's Blast radius no longer searches a tree of dead derived
 files, and no accepted record acquires a follow-up item against a shipped plan. A slice is one
@@ -194,35 +222,51 @@ its work-type directory is deleted. The method documents merge the Spec and Tick
 one closing step and drop the `docs/plans/` tree from the document structure. The decomposition
 checklist is written, reachable from the routing table, and carries an item for anchor
 granularity. The skills that name a plan file or the `Plan:` line move to the epic body and the
-decomposition pass. Durable documents that cite a plan file have that citation folded inward.
-Plans of shipped slices are deleted; a plan whose epic is still open stays until that epic
-closes, and is deleted then.
+decomposition pass. Durable documents that cite a plan file, and the shipped source and test
+files that cite one in a docstring, have that citation folded inward. Plans of shipped slices
+are deleted; a plan whose epic is still open stays until that epic closes, and is deleted then.
 
 **Blast radius.** Search:
 
 ```
-rg -n "docs/plans|\bspecs\b|^Plan:" CLAUDE.md .claude .github docs
+rg -n "docs/plans|\bspecs\b|Plan:" CLAUDE.md README.md .claude .github docs custom_components tests
 ```
 
-Wide enough because the decision retires three separately-named things and no one name reaches
-the others: keying only on `docs/plans` drops the label, the work type, the Model-selection row
-and the drafter case, none of which mention the tree; keying only on `specs` drops the tree and
-the anchored line; `^Plan:` is the line's own proven shape, and matching it unanchored would
-sweep every prose sentence containing the word. The unquoted word alternative is deliberate
-over a backtick-quoted one: the method documents discuss the work type in plain prose as often
-as in code spans, and narrowing to the span form would drop those. It catches generic English
-"specs" as well, accounted for below rather than excluded by narrowing.
+Wide enough on both axes it could fail on, pattern and path.
 
-70 files match today. Every one of them either restates the retired shape or lives in the
-retired tree, so the table has no conforming rows; they are grouped by what has to happen to
-them.
+*Pattern.* The decision retires three separately-named things and no one name reaches the
+others: keying only on `docs/plans` drops the label, the work type, the Model-selection row and
+the drafter case, none of which mention the tree; keying only on `specs` drops the tree and the
+line; `Plan:` is the line's own shape. The colon carries the narrowing, so the term is
+deliberately left **unanchored** — anchoring it to line start reads as tighter but drops the
+skill that *writes* the line and the skill that resolves it, both of which discuss it mid
+sentence, and buys nothing, since `Plan:` with its colon matches only 14 files across the paths
+below and every one is a genuine site. The unquoted word form is likewise deliberate over a
+backtick-quoted one: the method documents discuss the work type in plain prose as often as in
+code spans. That breadth catches generic English "specs" too, accounted for below rather than
+excluded by narrowing.
+
+*Path.* The list is explicit rather than the repository root, and this is load-bearing, not a
+convenience: `rg` skips dot-directories by default, so a root search silently returns 15 fewer
+hits than this one, every one of them under `.claude/` or `.github/` — which is where the skills,
+the profile, the drafter and the path filters live. Those are the most governed sites in the
+set, so the tidier-looking search is the one that misses most. The trees named are every tree
+that can hold prose or code: the four documentation and automation roots, plus
+`custom_components/` and `tests/`, which were reached only after the docstring citations turned
+up there and are exactly what an enumeration keyed on documentation trees alone would have lost.
+
+**81 files match on `origin/main`; 83 with this change**, which adds two hits of its own — this
+record, and the ADL row it lands with, both reconciled at the end of this section. Every match
+either restates the retired shape or lives in the retired tree, so the table has no conforming
+rows; they are grouped by what has to happen to them, and the groups below enumerate the 81.
 
 | Sites | What they do today | Verdict |
 |---|---|---|
 | **Pipeline enumerations** (9): `CLAUDE.md`, `.claude/profile.yml`, `.github/workflows/_ai-draft.yml`, `.github/workflows/_ai-review.yml`, `.github/workflows/ai-pipeline.yml`, `.github/check-method.py`, `.github/test-check-method.sh`, `.github/ISSUE_TEMPLATE/idea.yml`, `.github/CODEOWNERS` | Carry the `specs` row, label, drafter case, `docs/plans/**` path entry, `Plan:` checks and heading parser, and the tree's code owner | Does not conform |
 | **Method documents** (19), all under `docs/reference/`: `method/idea-to-product.md`, `method/contribution-workflow.md`, `method/definition-of-done.md`, `method/ci-pipeline.md`, `method/model-selection.md`, `method/ai-authoring.md`, `profile.md`, `work-types/README.md`, `work-types/specs/implement.md`, `work-types/specs/done.md`, `work-types/specs/review.md`, `work-types/uc/implement.md`, `work-types/uc/done.md`, `work-types/uc/review.md`, `work-types/development/implement.md`, `work-types/development/review.md`, `work-types/adr/review.md`, `work-types/documentation/project-plan/implement.md`, `work-types/documentation/system-design/implement.md` | Describe the spec as a file pair under `docs/plans/`, send an author to "the plan task", or file gaps as `specs` issues | Does not conform |
-| **Skills** (4): `.claude/skills/cleanup/SKILL.md`, `.claude/skills/work-idea/SKILL.md`, `.claude/skills/grilling/SKILL.md`, `.claude/skills/resolving-merge-conflicts/SKILL.md` | Name the `specs` label, the `specs` work file, or a plan file as the artifact a step produces or resolves | Does not conform |
-| **Durable documents citing a plan file** (14): `docs/adl/0012`, `0015`, `0020`, `0022`, `0023`, `0024`, `0027`, `0028`, `0029`, `0041`, `0042`, `docs/analysis/entity-catalog.md`, `docs/design/project-plan.md`, `docs/design/system-design.md` | Lean on a plan file for a rationale, carry a "plan-doc follow-up" item against one, or list `docs/plans/**` among the reviewed trees | Does not conform |
+| **Skills** (6): `.claude/skills/file-task-issue/SKILL.md`, `.claude/skills/implement/SKILL.md`, `.claude/skills/cleanup/SKILL.md`, `.claude/skills/work-idea/SKILL.md`, `.claude/skills/grilling/SKILL.md`, `.claude/skills/resolving-merge-conflicts/SKILL.md` | Write the anchored `Plan:` line, resolve it before dispatching, or name the `specs` label, the `specs` work file or a plan file as the artifact a step produces or resolves | Does not conform |
+| **Durable documents citing a plan file** (15): `docs/adl/0012`, `0015`, `0020`, `0022`, `0023`, `0024`, `0027`, `0028`, `0029`, `0041`, `0042`, `docs/analysis/entity-catalog.md`, `docs/design/project-plan.md`, `docs/design/system-design.md`, `README.md` | Lean on a plan file for a rationale, carry a "plan-doc follow-up" item against one, list `docs/plans/**` among the reviewed trees, or link a plan file from the project README's own methodology table | Does not conform |
+| **Shipped source and test files citing a plan file** (8): `custom_components/smart_charging/notification_state.py`, `managers/notification_manager.py`, `managers/vehicle_limit.py`, `adapters/store.py`, `tests/test_notification_state.py`, `tests/test_coordinator_cycle.py`, `tests/managers/test_notification_manager.py`, `tests/engines/test_deadline.py` | Cite a plan file in a module or test docstring as the authority for what the code does | Does not conform |
 | **The retired tree** (22 of the 57 files under `docs/plans/`) | Are the spec files themselves, or cross-reference each other | Does not conform |
 
 Out of scope (2):
@@ -234,5 +278,10 @@ Out of scope (2):
   whose single hit is the English word "specs" in an outsourcing-decision table, unrelated to
   the work type. It keeps saying what it says.
 
-This record is itself the 71st hit of the search once it lands, and conforms by construction:
-it names the retired shape only to retire it.
+The five groups account for 9 + 19 + 6 + 15 + 8 = 57 files, the out-of-scope list for 2, and
+the retired tree for 22: 81, which is every match on `origin/main`.
+
+This change adds the two remaining hits of its own search, and both conform by construction.
+This record is one of them — it names the retired shape only in order to retire it. Its ADL row
+in `docs/adl/README.md` is the other, and it matches for the same reason and on the same terms.
+83 after it lands, all accounted for.
