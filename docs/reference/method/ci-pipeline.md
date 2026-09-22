@@ -408,8 +408,8 @@ argument says nobody watches.
   quotation accuracy (see `CLAUDE.md`'s **Post-mortems** topic). Review is a fresh-agent
   pass run interactively instead. If a checklist for it is ever written, the directory is added
   to `.claude/profile.yml`'s `review.path_map` and followed out into all three consumers — the
-  watched-path check refuses any other order — and this bullet becomes the record of why it was
-  absent.
+  watched-path check refuses any state in which the four disagree, whichever of them is short —
+  and this bullet becomes the record of why it was absent.
 - **Draft** (`_ai-draft.yml`, ≈ the **File the issue** and implement steps): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its

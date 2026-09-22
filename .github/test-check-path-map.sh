@@ -128,8 +128,12 @@ case_run "a consumer may list the trees in another order" 0 - \
   "sed -i '/^      - \"src\/\*\*\"\$/d' .github/workflows/ai-pipeline.yml \
    && sed -i 's#^      - \"CLAUDE.md\"#      - \"CLAUDE.md\"\n      - \"src/**\"#' .github/workflows/ai-pipeline.yml \
    && [ \"\$(grep -E '^      - \"' .github/workflows/ai-pipeline.yml | tail -1)\" = '      - \"src/**\"' ]"
+# Inserted INSIDE the marker's paragraph, not after the blank line below it: the paragraph
+# scoping alone would carry a case written the easy way, and it would still pass with the
+# arrow-cursor scan removed. The real CLAUDE.md names the other enumerations, and
+# `docs/postmortems/**`, in backticks inside this paragraph — that is the shape being pinned.
 case_run "backticked prose after the last arrow is not part of the map" 0 - \
-  "sed -i 's#^Nothing else in this file is parsed.#The same set is in \`ai-pipeline.yml\`; \`docs/postmortems/**\` keeps its own rule.#' CLAUDE.md \
+  "sed -i 's#^\`docs/reference/work-types/beta/review.md\`. Every entry names a checklist file.\$#\`docs/reference/work-types/beta/review.md\`. The same set is in \`ai-pipeline.yml\`; \`docs/postmortems/**\` keeps its own rule.#' CLAUDE.md \
    && grep -qF 'docs/postmortems/**' CLAUDE.md"
 case_run "a pathspec entry quoted where it need not be is still one tree" 0 - \
   "sed -i \"s#-- src #-- 'src' #\" .github/workflows/_ai-review.yml \

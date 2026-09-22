@@ -40,9 +40,9 @@ Each consumer spells the set in its own grammar, and the translation is this scr
           commit made halfway through adding a tree
 
   Exit 0  every consumer carries exactly the source's set (with --warn: always, unless 2)
-       1  at least one consumer disagrees, or the source routes a tree to a work type that is
-          not enabled; every finding names the file, the enumeration inside it, and the tree --
-          "they disagree" is not something an author can act on
+       1  at least one consumer disagrees; or the source lists a tree twice, or routes one to a
+          work type that is not enabled. Every finding names the file, the enumeration inside
+          it, and the tree -- "they disagree" is not something an author can act on
        2  usage or environment error: a file that cannot be read or parsed, or a consumer
           whose enumeration cannot be located at all. Located-or-fail rather than
           treated-as-empty on purpose: an enumeration this script cannot find is exactly when
