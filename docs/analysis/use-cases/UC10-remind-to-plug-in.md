@@ -56,9 +56,9 @@ Then the System sends no reminder — there is nothing left for the driver to pl
 
 **Active SOC limit not resolved.**
 Given the car is home, disconnected, and within the lead time of the next departure time
-When no resolved [active SOC limit](../system-overview.md#ubiquitous-language) is available to compare state of charge against — before the first control cycle has resolved one, or while its readout (`sensor.smart_charging_active_soc_limit`) is unavailable
+When no resolved [active SOC limit](../system-overview.md#ubiquitous-language) is yet available to compare state of charge against (for example at start-up, before one has first been resolved)
 Then the System sends no reminder, and the reminder-due readout (`binary_sensor.smart_charging_plug_in_reminder`) stays off — the below-limit precondition is not established, so no reminder is due.
-And the departure window is not consumed: the reminder stays armed, so once an active SOC limit is resolved and every precondition and the trigger hold, the reminder for that same window is sent.
+And the departure window is not consumed: the reminder stays armed, so once an active SOC limit is resolved while the current time is still within the lead time and every other precondition holds, the reminder for that same window is sent.
 
 **Plug-in reminder suppressed by its notification gating.**
 Given every precondition other than the notification gating holds — the car is home, disconnected, below the active SOC limit, and within the lead time of the next departure time

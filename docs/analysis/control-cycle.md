@@ -52,7 +52,7 @@ homed in the rule or use-case that defines its lifecycle.
   own charge limit; it subsumes the cause-specific step-up / solar-reserve transitions into one
   consumer contract (ADR-0011). That names the consumers of the *event* only: the *entity* also
   has readers that take its value at a point in time without subscribing to its changes, and
-  `entity-catalog.md`'s *Read by* column is where they are listed.
+  `entity-catalog.md`'s *Read by* column lists every reader of the entity, event consumers included.
 - `PeakLimitClamped` — the peak-protection step reduced the mode's desired current to keep
   net import at or below the [effective peak limit](system-overview.md#ubiquitous-language)
   minus the [safety margin](system-overview.md#ubiquitous-language); signals that peak
