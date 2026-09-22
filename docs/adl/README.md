@@ -7,7 +7,7 @@ template.
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| [0001](0001-use-architecture-decision-records.md) | Use Architecture Decision Records, with a Nygard+options template | Accepted |
+| [0001](0001-use-architecture-decision-records.md) | Use Architecture Decision Records, with a Nygard+options template — its template's section list narrowed by [ADR-0045](0045-every-adr-opens-with-a-summary.md) | Accepted |
 | [0002](0002-domain-and-package-layout.md) | Domain slug and package layout for the `smart_charging` integration | Accepted |
 | [0003](0003-hardware-abstraction-adapters.md) | Hardware abstraction via config-flow entity mapping and Python adapters — the unmatched-`charger_status`-raw-state clause narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0004](0004-owned-vs-mapped-entities.md) | Owned control/diagnostic entities vs. mapped hardware entities | Accepted |
@@ -51,6 +51,6 @@ template.
 | [0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | A state-of-charge-unavailable cycle holds the deadline-unreachable clear rather than firing it (narrows [ADR-0024](0024-deadline-unreachable-cleared-event.md)) | Accepted |
 | [0043](0043-scheduled-upstream-drift-watcher.md) | The upstream-drift watcher — a scheduled, issue-writing job over the profile's pin manifest | Accepted |
 | [0044](0044-implementation-spec-lives-in-the-epic-body.md) | The implementation spec lives in its epic's body, and each task carries the sources it was cut from — retiring `docs/plans/**` and the `specs` work type | Accepted |
-| [0045](0045-every-adr-opens-with-a-summary.md) | Every ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
+| [0045](0045-every-adr-opens-with-a-summary.md) | Every new ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
