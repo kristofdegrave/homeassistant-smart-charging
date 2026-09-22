@@ -76,8 +76,9 @@ Accepted.
 
 This narrows ADR-0001 the way ADR-0033 narrows a record without superseding it. What is narrowed
 is one clause: the section list in ADR-0001's Decision gains a Summary before Context. What
-stands is everything else: the reasoning of ADR-0001's Option C, the numbering, immutability and supersession.
-The rule is forward-binding: it governs ADRs written from here on, this one first.
+stands is everything else: the reasoning of ADR-0001's Option C, the numbering, immutability
+and supersession. The rule is forward-binding: it governs ADRs written from here on, this one
+first.
 
 ## Consequences
 
