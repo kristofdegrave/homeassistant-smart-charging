@@ -96,8 +96,8 @@ split, not a cost to drive to zero. `grill-me` spends cognitive load to buy zero
 step, in-file reference, reference disclosed behind a pointer. **Progressive disclosure** is the
 move down that ladder — inline what every branch needs, disclose what only some reach; the
 per-label `docs/reference/work-types/` tree is that move applied to the seven reviewer agents
-it replaced. **Co-location** decides what sits beside a piece once it
-lands: a concept's definition, rules and caveats under one heading. The context-label
+it replaced. **Co-location** decides what sits beside a piece once it lands: a concept's
+definition, rules and caveats under one heading. The context-label
 vocabulary is the counter-example — values canonical in `contribution-workflow.md`, CI-side sync
 obligation in `ci-pipeline.md`, the `workflow` review checklist spending a paragraph
 reassembling the two.

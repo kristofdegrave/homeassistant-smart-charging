@@ -258,8 +258,10 @@ and cannot be verified live. Each entry carries these keys, one item per key:
 
 Each child issue is then filed with that entry as its body, its context label and board fields,
 its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and the
-anchored `Source:` lines naming the entry's sources, per
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**.
+anchored `Source:` lines naming the entry's sources. The other fields are
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**'; the `Source:`
+line's own format is fixed by ADR-0044 and not yet written into a method document, so that
+record is its only statement until one owns it.
 
 ### Artifact: the epic, and one issue per task
 
@@ -271,15 +273,13 @@ one child per task.
 
 The opening pass's own gate is that nothing downstream starts without an issue to run against.
 The closing step's is the pass of step 2 and the human read of step 3, both complete before any
-child is filed, and then every task in the body having an issue — each with one context label,
-its board fields, its `Source:` lines, its sub-issue edge and its blocked-by edges, the rules
-being **Issue conventions**'. The **Implementation** stage starts from those issues and from
+child is filed, and then every task in the body having an issue, filed as step 4 above says. The **Implementation** stage starts from those issues and from
 nothing else.
 
 ### Skills
 
 `file-task-issue`; `brainstorming` — scoping the slice boundary and the deferrals before the
-body is drafted; `writing-plans` — deriving the task entries and their build order.
+body is drafted.
 
 ## 5. ADR
 
@@ -377,7 +377,11 @@ artifact-specific additions, and this rule is the first of them:
 ### Gate: a change touching shipped behaviour has an epic carrying its spec before `needs-approval`
 
 **A `requirement` or `uc` change that touches shipped behaviour does not get
-`needs-approval` until an epic whose body carries the spec exists for it.** Without it, an
+`needs-approval` until the epic that will carry its spec exists for it.** The epic, not the
+written body: the opening pass files it at **Decompose**, while the body is written at the
+closing step once **Design** has merged — so requiring the body here would ask for an artifact
+this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
+filed long before its plan was drafted. Without it, an
 analysis document can merge describing behaviour the code does not have.
 The review loop applies that label automatically on a clean verdict and knows nothing about
 child issues ([ci-pipeline.md](ci-pipeline.md)), so on a CI-driven PR the same condition is

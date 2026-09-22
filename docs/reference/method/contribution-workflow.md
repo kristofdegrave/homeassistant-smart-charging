@@ -191,8 +191,7 @@ routes to — so the work actually gets picked up. Implementing each child is it
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
 two conditions, step 4 establishes the first — every child closed — and never the second,
 which is an observation on the real installation and the human's: `cleanup` reads the
-epic's open-children count after the linked issue is *done* and any task issues a merged spec
-owes are filed, and reports it; what the report says at zero is the skill's own step. It never
+epic's open-children count after the linked issue is *done*, and reports it; what the report says at zero is the skill's own step. It never
 closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
 sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
 cannot.

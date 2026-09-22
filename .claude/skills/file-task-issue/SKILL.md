@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of a decomposition's closing step - running its review pass, and filing its children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of a decomposition's closing step — running its review pass, and filing its children.
 ---
 
 # File a task issue
