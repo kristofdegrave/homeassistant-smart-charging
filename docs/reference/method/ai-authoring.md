@@ -15,9 +15,8 @@ Applying those two literally would flag a work file for naming a `docs/` path or
 command, which is exactly what the carve-out permits. Author and reviewer build against the
 same list.
 
-**One Vocabulary entry reaches further than this file's subject.** *Clutter* binds every
-document whose completion bar or review checklist points at it, `docs/**` included; the entry
-states its own reach.
+**One Vocabulary entry, *Clutter*, reaches further than this file's subject**, and states its
+own reach there.
 
 **The harness configuration is a fourth artifact under `.claude/`, and this reference does not
 govern it.** `.claude/settings.json` and the hooks it wires (`.claude/hooks/`) drive Claude
@@ -124,8 +123,8 @@ clutter finding**: a long document whose every line is load-bearing is correct, 
 one to look shorter only moves the duplication. A length a template sets is conformance, judged
 by that document's own bar. Severity: **Minor**; **Major** where a restated copy already
 disagrees with its owner, since a reader then has two answers. Scope: as **Permanent scope: as
-written or changed, never as a sweep** below states it, applied to every document this entry
-binds. ADR-0042's Context is the worked example: it quotes ADR-0024's exit-table row and R5's
+written or changed, never as a sweep** below states it for pointers, read for the content a
+change writes. ADR-0042's Context is the worked example: it quotes ADR-0024's exit-table row and R5's
 criterion and traces `_run_cycle`'s early returns — restatement and narrative — where one sentence
 naming the site carries the force.
 

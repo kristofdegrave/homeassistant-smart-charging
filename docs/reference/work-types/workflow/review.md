@@ -127,9 +127,8 @@ Always read:
   linked from one is a Minor finding (Major if the duplicate has already drifted).
 - *Clutter*, the Vocabulary entry in `docs/reference/method/ai-authoring.md`: its narrative and
   oversized-example forms are judged by that entry, at its severities. Its restatement form is
-  not scored twice — the item above governs a copy of another artifact's rule, and the
-  unpointed-restatement item below a copy of a reference document's, `CLAUDE.md`'s or the
-  profile's, each at its own severities.
+  not scored here: the item above, or the item below that begins *The same rule read the other
+  way*, governs it — whichever covers the owner — at that item's severities.
 - A work-type core file (any `.md` under `docs/reference/work-types/`, branch files included,
   outside an `overlays/` directory) names no stack skill and
   spells no stack token — the method check refuses both, and `work-types/README.md`'s **Stack
