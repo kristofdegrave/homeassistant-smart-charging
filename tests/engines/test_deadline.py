@@ -1,16 +1,16 @@
 """Plain-pytest tests for the Deadline Engine (E4): departure-deadline resolution
 (R14) and required-current/urgency computation (R5/R15).
 
-This module used to open with a long note explaining why its constants deviated from
-docs/plans/2026-07-21-deadline-soc-management-design.md §6's literal worked example: under
-the old no-next-day-rollover contract, the plan's own `NOW = 22:00` / `DEADLINE = 06:00`
-pairing ("next-day 06:00 -- 8 hours remaining") could not produce a positive window, so the
-tests were kept same-day to stay within that contract. Issue #1005 resolved the underlying
-inconsistency in favour of the plan (and of requirements.md R15): choosing the occurrence is
-now `resolve_next_occurrence`'s job, and `resolve_required_current` takes the already-chosen
-datetime, so the two concerns are testable separately and the plan's cross-midnight example
-is expressible. The same-day constants below are kept only because they reproduce the plan's
-exact arithmetic (75 kWh * 30% / 8h / 230V = 12.228 A), not because of any date constraint.
+This module used to open with a long note explaining why its constants deviated from the
+cross-midnight worked example this docstring now states: plug in at 22:00 against a 06:00
+departure, an 8-hour window, charging 75 kWh * 30% over 8 h at 230 V needs 12.228 A. Under
+the old no-next-day-rollover contract, that 22:00-to-06:00 pairing could not produce a
+positive window, so the tests were kept same-day to stay within that contract. Issue #1005
+resolved the underlying inconsistency in favour of requirements.md R15: choosing the
+occurrence is now `resolve_next_occurrence`'s job, and `resolve_required_current` takes the
+already-chosen datetime, so the two concerns are testable separately and the cross-midnight
+worked example above is expressible. The same-day constants below are kept only because they
+reproduce that worked example's exact arithmetic, not because of any date constraint.
 """
 
 from datetime import UTC, datetime, time, timedelta
@@ -28,7 +28,7 @@ MON_DEFAULT = time(6, 0)
 
 NOW = datetime(2026, 7, 21, 22, 0)  # Tuesday 22:00
 
-# 8 hours apart -- reproduces the plan's exact worked-example numbers.
+# 8 hours apart -- reproduces this module's own worked-example numbers (see docstring).
 FORMULA_NOW = datetime(2026, 7, 21, 6, 0)  # 06:00
 FORMULA_DEADLINE_AT = datetime(2026, 7, 21, 14, 0)  # 14:00 -- 8 hours remaining
 
@@ -267,7 +267,7 @@ def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
     assert result.unreachable is True  # deadline in the past -> max urgency, not an exception
     assert result.urgent is True  # Unreachable is a subset of Urgent (resolution-rules.md)
     # Issue #650: this saturation to float('inf') is this pure engine's own documented
-    # contract (design doc Sec6) and must stay unchanged -- any capping to a finite,
+    # contract and must stay unchanged -- any capping to a finite,
     # meaningful value (e.g. maximum_permitted_rate_a) happens at the coordinator boundary,
     # where the result crosses into the HA-bound DeadlineUnreachableNotified event payload.
     assert result.required_a == float("inf")
@@ -393,9 +393,9 @@ def test_next_occurrence_treats_a_departure_time_exactly_now_as_passed():
 
 
 def test_next_occurrence_spans_midnight_for_the_plans_own_worked_example():
-    # docs/plans/2026-07-21-deadline-soc-management-design.md Sec 6's literal pairing --
-    # plug in at 22:00 against an 06:00 departure -- now resolves to the 8-hour window the
-    # plan always described, instead of a 16-hour-negative one.
+    # This module's own worked example (see docstring): plug in at 22:00 against an 06:00
+    # departure -- now resolves to the 8-hour window that pairing always described, instead
+    # of a 16-hour-negative one.
     occurrence = resolve_next_occurrence(
         deadline_today=time(6, 0), deadline_tomorrow=time(6, 0), now=NOW
     )
@@ -404,7 +404,7 @@ def test_next_occurrence_spans_midnight_for_the_plans_own_worked_example():
 
 
 def test_overnight_deadline_is_urgent_only_on_the_real_remaining_window():
-    # End-to-end over both functions: the plan's 22:00 -> 06:00 case charging 75 kWh * 30%
+    # End-to-end over both functions: the worked example's 22:00 -> 06:00 case charging 75 kWh * 30%
     # over 8 hours needs 12.228 A -- NOT the infinite, always-unreachable figure the old
     # same-day contract produced. The escalated rate is 14.0 A here so the slack test fires
     # (12.228 > 14.0/1.25 = 11.2) while the deadline stays reachable (12.228 <= 14.0); this
