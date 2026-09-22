@@ -161,7 +161,7 @@ stateDiagram-v2
 
 - **R1** — Solar-first charging (start threshold, amp-step rounding round-up set-point using all available surplus, grid fallback, post-surplus hold).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3, only while the CapTar capability is present — R18) and grid-supply-ceiling (C4, always) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3, only while the CapTar capability is present — R18) and grid-supply-ceiling (C4, always) clamps (`control-cycle.md`), voltage-aware conversion (R22), and the solar capability gate (R18).
 
 ## Relationships
 
