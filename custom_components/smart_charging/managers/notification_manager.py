@@ -70,7 +70,7 @@ _LOGGER = logging.getLogger(__name__)
 # exact wording, so it is this Manager's own presentation detail, not a cited anchor.
 _PROMPT_TITLE = "Smart Charging"
 _PROMPT_MESSAGE = "Will the car be home tomorrow?"
-# R5's deadline-unreachable notice (design Sec9) -- also this Manager's own presentation
+# R5's deadline-unreachable notice -- this Manager's own presentation
 # detail; required_a is the current the deadline would need, per DeadlineUnreachableNotified's
 # own payload (ATTR_REQUIRED_CURRENT_A, coordinator.py) -- included for the driver's context,
 # not re-derived (ADR-0011: consume the published event, never recompute urgency).
@@ -91,7 +91,7 @@ class NotificationManager:
     - `_state`/`_date` are in-memory only and reset to Not-sent on every HA restart, so a
       restart between a prompt being sent and midnight can cause a second prompt the same
       evening (UC08's "at most once per evening" is only guaranteed within one HA session).
-    Restart persistence is not part of the notifications design doc and is left for a
+    Restart persistence is not required by UC08 and is left for a
     follow-up if it proves to matter in practice.
     """
 
@@ -113,8 +113,8 @@ class NotificationManager:
         self._adapters = adapters
         self._entry_id = entry_id
         self._store = store
-        # .get(..., DEFAULT_*) -- design doc §3: "an entry that predates these keys reads
-        # each with its DEFAULT_* fallback, no config-entry migration is needed", the same
+        # .get(..., DEFAULT_*): an entry that predates these keys reads
+        # each with its DEFAULT_* fallback, no config-entry migration is needed -- the same
         # pattern __init__.py/coordinator.py already use for every options-bucket value.
         self._enabled = bool(
             config.get(CONF_EVENING_PROMPT_ENABLED, DEFAULT_EVENING_PROMPT_ENABLED)
@@ -270,7 +270,7 @@ class NotificationManager:
         self._deadline_unreachable_notified = False
 
     def register_listeners(self) -> list[Callable[[], None]]:
-        """Wire M3's R5 delivery triggers (design Sec9, ADR-0024): subscribes to the
+        """Wire M3's R5 delivery triggers (ADR-0024): subscribes to the
         Coordinator's published `DeadlineUnreachableNotified` and `DeadlineUnreachableCleared`
         bus events. Called once at setup; the caller registers each returned unsub via
         `entry.async_on_unload` (ADR-0008, mirrors VehicleLimitManager.register_listeners)."""

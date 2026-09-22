@@ -2,16 +2,15 @@
 (R14) and required-current/urgency computation (R5/R15).
 
 This module used to open with a long note explaining why its constants deviated from the
-worked example below: `NOW = 22:00` / `DEADLINE = 06:00` ("next-day 06:00 -- 8 hours
-remaining") -- under the old no-next-day-rollover contract that pairing could not produce a
+cross-midnight worked example this docstring now states: plug in at 22:00 against a 06:00
+departure, an 8-hour window, charging 75 kWh * 30% over 8 h at 230 V needs 12.228 A. Under
+the old no-next-day-rollover contract, that 22:00-to-06:00 pairing could not produce a
 positive window, so the tests were kept same-day to stay within that contract. Issue #1005
 resolved the underlying inconsistency in favour of requirements.md R15: choosing the
 occurrence is now `resolve_next_occurrence`'s job, and `resolve_required_current` takes the
 already-chosen datetime, so the two concerns are testable separately and the cross-midnight
-worked example is expressible. The same-day constants below are kept only because they
-reproduce that worked example's exact arithmetic -- plug in at 22:00 against a 06:00
-departure, an 8-hour window, charging 75 kWh * 30% over 8 h at 230 V needs 12.228 A -- not
-because of any date constraint.
+worked example above is expressible. The same-day constants below are kept only because they
+reproduce that worked example's exact arithmetic, not because of any date constraint.
 """
 
 from datetime import UTC, datetime, time, timedelta
@@ -268,7 +267,7 @@ def test_deadline_already_passed_saturates_instead_of_dividing_by_zero():
     assert result.unreachable is True  # deadline in the past -> max urgency, not an exception
     assert result.urgent is True  # Unreachable is a subset of Urgent (resolution-rules.md)
     # Issue #650: this saturation to float('inf') is this pure engine's own documented
-    # contract (design doc Sec6) and must stay unchanged -- any capping to a finite,
+    # contract and must stay unchanged -- any capping to a finite,
     # meaningful value (e.g. maximum_permitted_rate_a) happens at the coordinator boundary,
     # where the result crosses into the HA-bound DeadlineUnreachableNotified event payload.
     assert result.required_a == float("inf")

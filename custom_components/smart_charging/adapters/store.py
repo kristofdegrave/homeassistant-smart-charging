@@ -98,7 +98,7 @@ class Store:
             )
         else:
             # switch.turn_on/turn_off take no value payload -- the value picks the service,
-            # not a service-call argument (design doc's write-half addendum, switch case).
+            # not a service-call argument.
             domain, service, service_data = (
                 Platform.SWITCH,
                 SERVICE_TURN_ON if value else SERVICE_TURN_OFF,
