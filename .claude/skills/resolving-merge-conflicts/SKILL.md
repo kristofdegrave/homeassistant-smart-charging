@@ -80,8 +80,10 @@ Three cases are not ordinary hunk-merging:
 
 - **The two sides disagree about what the system should do.** In product code, that is not a
   merge decision. Behaviour is owned by the analysis documents that `CLAUDE.md`'s **Document
-  structure** topic lists, and an implementation spec derives from them rather than designing
-  it. Resolve the mechanical part, then stop and escalate the disagreement to the owning analysis doc through its own issue-first cycle.
+  structure** topic lists, and an implementation spec derives from them rather than deciding
+  behaviour itself — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
+  routes to owns that rule. Resolve the mechanical part, then stop and escalate the
+  disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
   code.
 - **Generated or index-like content** — an epic body listing its children, a numbered

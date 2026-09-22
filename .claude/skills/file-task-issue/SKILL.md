@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the order a decomposition's closing step runs in — epic body, one review pass, the human read, then the children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the order a decomposition's closing step files its children in.
 ---
 
 # File a task issue
@@ -54,7 +54,10 @@ closing step's, per **Idea-to-product flow** above.
    spawn that agent once, naming the scratch file's absolute path and the decomposition
    checklist it is to apply. Fix what it finds in the epic body itself: there is no PR here, so
    there is no review payload to post and no thread to resolve. Read the body back from the
-   tracker afterwards, so the fix is confirmed rather than assumed.
+   tracker afterwards, so the fix is confirmed rather than assumed. While that checklist has no
+   file yet, say so in the dispatch: the agent's own rule for criteria it cannot read then
+   makes the gap part of its report, rather than leaving a pass run with no criteria to read
+   as a clean one.
 3. **The human partner reads the fixed body and says to go on.** The pass is one agent run
    followed by that read — it is not repeated and carries no round cap, so a finding it raises
    is answered before the read rather than in a later round.

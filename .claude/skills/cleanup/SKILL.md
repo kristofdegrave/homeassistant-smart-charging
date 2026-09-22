@@ -94,9 +94,10 @@ file — a reference is not a dispatch, and none of them runs it.
 
 Done when the PR is confirmed merged, every added or deleted path is verified on `origin/main`,
 the worktree is gone or its blocker is reported, the linked issue's Status is Done or stated
-why not, and the issue's epic is named with its open-children count — with the drafted summary
-when that count is zero — or the issue is stated to have none, or the parent read's failure is
-reported in place of a count. Report those five facts and stop.
+why not, and the issue's epic is named with its open-children count — with the drafted summary,
+and any plan file the transition rule turned up, when that count is zero — or the issue is
+stated to have none, or the parent read's failure is reported in place of a count. Report those
+five facts and stop.
 
 ## Rules
 

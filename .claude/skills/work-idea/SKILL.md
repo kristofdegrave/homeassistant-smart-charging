@@ -44,10 +44,10 @@ only sequences those stages and says which skill performs each. Cite it, never r
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
    single-artifact idea, an epic whose body is the spec plus the children cut from it for a
    multi-artifact strand — moving the brainstormed decisions wherever the flow document says
-   they end up. `file-task-issue` owns the closing step that files them — the agent pass over
-   the epic body, the human read, then the children with their edges — so the epic body never
+   they end up. `file-task-issue` owns the closing step that files them, so the epic body never
    carries a checklist of them; what a child is and in what order children are filed is the
-   flow document's. A part still too fuzzy to scope keeps the `idea` label and gets worked later — recursion is expected, not an error.
+   flow document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
+   later — recursion is expected, not an error.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
@@ -82,8 +82,6 @@ epic. The mistakes that are this skill's own:
 - Leaving brainstormed decisions in chat scrollback, or leaving them on the idea issue after
   an epic was filed instead of moving them into the epic body.
 - Designing a fix on the shipped-behaviour track before the claim has been reproduced.
-- Filing child issues before the epic body they are cut from exists and has had its review
-  pass — they then cite nothing, and the pass has no whole decomposition left to read.
 - Giving a child issue two context labels (e.g. both `uc` and `requirement`) because the
   idea touches both — split it into two children instead.
 - Treating this as a green light to start implementing once issues exist — each child still
