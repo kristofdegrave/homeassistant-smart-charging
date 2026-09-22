@@ -121,9 +121,8 @@ A choice about structure that is expensive to reverse or materially constrains f
 Borderline case: would reversing or swapping this choice touch more than one module, or a
 contract other code depends on? This supplements the categories above, never overrides them —
 a *product-code* choice listed there stays architectural even when well encapsulated. Only the
-carve-outs below
-narrow that. Serious deliberation is not proof either way: weigh it against the reach test and
-the *why* question.
+carve-outs below narrow that. Serious deliberation is not proof either way: weigh it against the
+reach test and the *why* question.
 
 - **Test, CI or dev-tooling choices** — which tool or library a script calls (a benchmarking
   library, a measurement helper, a lint tool). Not architectural unless product code takes a
