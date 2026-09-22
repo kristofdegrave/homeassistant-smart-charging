@@ -18,7 +18,7 @@ that a plan is never a source of truth: it restates what the ADRs, use-cases and
 decided, in the order one slice will build them. It is dead the day its last task merges. Yet
 it merges into `main` and stays, and the tree is now the project's largest artifact class —
 57 files. Being in the tree makes it behave like a source whether or not anyone intends it to:
-one ADR's Blast radius table carries ten plan-file rows it has to reconcile, five other ADRs
+one ADR's Blast radius table carries ten plan-file rows it has to reconcile, four other ADRs
 carry "plan-doc follow-up" items whose content is an accepted record telling a shipped plan
 that it is now wrong, and eight shipped source and test files cite a plan file in a docstring
 as the authority for what they do. That bill is paid on every new ADR, forever, for files
@@ -223,8 +223,14 @@ one closing step and drop the `docs/plans/` tree from the document structure. Th
 checklist is written, reachable from the routing table, and carries an item for anchor
 granularity. The skills that name a plan file or the `Plan:` line move to the epic body and the
 decomposition pass. Durable documents that cite a plan file, and the shipped source and test
-files that cite one in a docstring, have that citation folded inward. Plans of shipped slices
-are deleted; a plan whose epic is still open stays until that epic closes, and is deleted then.
+files that cite one in a docstring, have that citation folded inward. The same applies to the
+method and work-type files that send a reader *to* a plan file for a template, a method or a
+rationale — six do, five naming a specific file and one a glob, and each would otherwise point
+at a deleted file; the content they rely on moves into the document that will survive, or the
+pointer goes. That is distinct from the files that merely describe the tree or the anchored
+line's shape, which the `specs` retirement above already covers. Plans of
+shipped slices are deleted; a plan whose epic is still open stays until that epic closes, and
+is deleted then.
 
 **Blast radius.** Search:
 
@@ -278,8 +284,9 @@ Out of scope (2):
   whose single hit is the English word "specs" in an outsourcing-decision table, unrelated to
   the work type. It keeps saying what it says.
 
-The five groups account for 9 + 19 + 6 + 15 + 8 = 57 files, the out-of-scope list for 2, and
-the retired tree for 22: 81, which is every match on `origin/main`.
+The table's first five groups account for 9 + 19 + 6 + 15 + 8 = 57 files, its sixth — the
+retired tree — for 22, and the out-of-scope list for 2: 81, which is every match on
+`origin/main`.
 
 This change adds the two remaining hits of its own search, and both conform by construction.
 This record is one of them — it names the retired shape only in order to retire it. Its ADL row
