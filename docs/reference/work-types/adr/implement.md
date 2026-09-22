@@ -76,7 +76,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
     Nothing is restated or added in place of either. A link that still resolves is not broken,
     however it could break later, and a path mentioned in prose is not an instruction.
 
-  Anything else is not an edit to that record. A change of mind is a new ADR that supersedes it;
+  Nothing else is changed in that record. A change of mind is a new ADR that supersedes it;
   a better write-up, a Summary, a sturdier link are left as the record stands. Two guards:
   - **Read "Accepted" from the base, not the working tree:** `git show <base>:<path>`, `<base>`
     the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
