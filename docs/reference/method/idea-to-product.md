@@ -301,17 +301,16 @@ artifact-specific additions, and this rule is the first of them:
   meant to record durable reasoning — describe the underlying fact directly instead (e.g.
   "has since been reworded", not "issue #29 has since reworded"). This applies to ADRs too.
 
-### Gate: a change touching shipped behaviour has a `specs` issue before `needs-approval`
+### Gate: a change touching shipped behaviour has an epic carrying its spec before `needs-approval`
 
 **A `requirement` or `uc` change that touches shipped behaviour does not get
-`needs-approval` until a `specs` issue exists for it** — a child of the epic, where there is
-one. Without it, an analysis document can merge describing behaviour the code does not have.
+`needs-approval` until an epic whose body carries the spec exists for it.** Without it, an
+analysis document can merge describing behaviour the code does not have.
 The review loop applies that label automatically on a clean verdict and knows nothing about
 child issues ([ci-pipeline.md](ci-pipeline.md)), so on a CI-driven PR the same condition is
-checked by whoever approves the merge. The `specs` issue is the earliest artifact that can
-carry that obligation — a `development`/`testing` issue cannot, because it needs an approved
-plan's anchored `Plan:` line ([contribution-workflow.md](contribution-workflow.md)'s **Issue
-conventions**), and no such plan exists until the spec itself is drafted and reviewed.
+checked by whoever approves the merge. The epic is the earliest artifact that can
+carry that obligation — a `development`/`testing` child cannot, because it is cut from that
+epic's body by the decomposition, so none exists until the spec has been written into it.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work
 file carries.
 

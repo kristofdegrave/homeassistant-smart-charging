@@ -114,7 +114,7 @@ its first rule is to apply what this section states over the stages it names. Th
 the **deviation contract**, and it has exactly two shapes. Either it says **Default** — the
 flow as written, no stage removed, added or reordered, no gate changed — and carries no `###`
 at all. Or it carries one `###` per deviation, each heading naming, in backticks, the context
-label of the work type whose stage it changes — ``### The `specs` stage is skipped on the bug
+label of the work type whose stage it changes — ``### The `documentation` stage is skipped on the bug
 track``, say — with the why beneath it, and never a copy of the flow, which would drift from
 the method's. **Every backticked span in a deviation heading is read as a work type**, so
 nothing else in the heading is backticked: a kind label, a file or a status goes in plain

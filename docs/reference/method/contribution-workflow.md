@@ -184,8 +184,8 @@ fully clean verification-only task — closing is left to that reference, which 
 
 **An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
 itself — the `development`/`testing` children are filed as part of the decomposition that wrote
-the epic body, per [idea-to-product.md](idea-to-product.md)'s closing step, so the work actually
-gets picked up. Implementing each child is its own issue and its own chain.
+the epic body, per [idea-to-product.md](idea-to-product.md)'s **Ticket** stage, so the work
+actually gets picked up. Implementing each child is its own issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its

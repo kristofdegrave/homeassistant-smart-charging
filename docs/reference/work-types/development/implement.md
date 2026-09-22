@@ -18,16 +18,18 @@ row's — `done.md`'s preamble states that split and why; the loop below is wher
   children; how that decomposition is made and reviewed is `CLAUDE.md`'s **Idea-to-product
   flow**.
 - Work the tasks in the epic's order; a task can be built only once every task it depends on
-  exists or is stubbed (the plan states its `Depends on`).
+  exists or is stubbed (the issue's blocked-by edges state that).
 
 ## Building the task
 
 **The implement step (do the work)**: read, in this order, before writing anything —
 
-- the task's own section of the plan, the **ADR it cites**, and the **analysis behaviour** it
-  realises (`docs/analysis/control-cycle.md`, `resolution-rules.md`, `requirements.md`, the
-  relevant use-case). The plan's formulas and thresholds are **test anchors** attributed to
-  those documents: reproduce them, don't reinvent them;
+- the **issue body**, which is the task, the **ADR it cites**, and the **analysis behaviour**
+  it realises (`docs/analysis/control-cycle.md`, `resolution-rules.md`, `requirements.md`, the
+  relevant use-case). Where the issue carries `Source:` lines, those name what to read and
+  replace the hunt; where it does not, find the sources yourself. Any formula or threshold the
+  task states is a **test anchor** attributed to those documents: reproduce them, don't
+  reinvent them;
 - the **platform reference** the stack overlay names, before writing anything that touches the
   platform's APIs.
 
@@ -76,8 +78,8 @@ verify, don't perform.
   rule and its one exception. What that means while writing: reach for an enum or a named
   constant the *first* time a literal is compared or assigned more than once — don't wait for
   the review to flag it.
-- **Plan inconsistency → truthful, task-scoped implementation, surfaced.** If a task's literal
-  instruction conflicts with the plan's own ordering, or would require an untruthful declaration
+- **Task inconsistency → truthful, task-scoped implementation, surfaced.** If a task's literal
+  instruction conflicts with its epic's own ordering, or would require an untruthful declaration
   (advertising a capability a later task hasn't built yet), or would creep into another task's
   files, don't silently follow the literal text and don't paper over it. Implement the minimal
   truthful version scoped to this task, record which later task owns the deferred piece, and
@@ -98,7 +100,7 @@ Mistakes in how the work is done. The defects themselves are enumerated once, in
 so none of them is restated here:
 
 - Writing implementation before the red test, or a test that passes without the code.
-- Starting from the plan's task text alone, without the ADR it cites and the analysis behaviour
+- Starting from the task text alone, without the ADR it cites and the analysis behaviour
   it realises — which is how a formula gets reinvented instead of reproduced.
 - Treating the `testing` row's files as optional because the tests were written here rather than
   under a `testing` issue — they are the same artifact.
