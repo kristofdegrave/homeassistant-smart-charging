@@ -64,9 +64,9 @@ lines and edges, and no task in that body is left without one.
 
 ## Common mistakes
 
-The conventions are `CLAUDE.md`'s **Issue conventions**, not this list; the ones this skill's
-users trip on most are the context label, the `Source:` lines, Size and Estimate, and epic
-edges.
+The conventions are `CLAUDE.md`'s **Issue conventions**, not this list — except the `Source:`
+lines, whose owner is item 2 above; the ones this skill's users trip on most are the context
+label, those lines, Size and Estimate, and epic edges.
 What a drafter run does when one of them is wrong is the CI side of `CLAUDE.md`'s
 **Contribution workflow**. The mistakes that are this skill's own:
 

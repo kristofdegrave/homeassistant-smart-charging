@@ -104,11 +104,10 @@ the task needs without handing it the whole tree?
 A line naming a document where the task turns on one section of it is **Minor** — the worker
 re-derives the reading the decomposer already did. A line anchored so tightly that the section
 around it is needed to make sense of it is **Minor** for the mirror reason. A task whose lines
-do not reach a document it plainly requires is **Major**. Granularity is all this item
-scores, against the
-smallest-self-contained-unit rule the closing step states with the **Sources** key. The
-eventual `Source:` line's format is fixed by ADR-0044 and is not yet written into a method document — until it is, that
-record is its only statement, so do not score format here.
+do not reach a document it plainly requires is **Major**. Granularity is all this item scores,
+against the smallest-self-contained-unit rule the closing step states with the **Sources** key.
+The eventual `Source:` line's format is fixed by ADR-0044 and is not yet written into a method
+document — until it is, that record is its only statement, so do not score format here.
 
 **(10) Every task carries a usable Verify-live list.** An absent list on a task that changes
 observable runtime behaviour is **Major** — the pass is then run from memory, which is what it
