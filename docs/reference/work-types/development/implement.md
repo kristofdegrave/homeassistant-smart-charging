@@ -72,7 +72,7 @@ verify, don't perform.
   test anchors attributed to their source.
 - **Never regress a safety invariant.** The bar's item 4, *Safety not weakened*, states it and
   judges it. What that means while writing: clamps, floor/cap and the fault path stay intact and
-  un-merged — a task that seems to need one loosened is a task whose plan is wrong, so surface
+  un-merged — a task that seems to need one loosened is a task whose epic is wrong, so surface
   it rather than weakening the invariant.
 - **No magic strings or numbers, written that way the first time.** The bar's item 3 states the
   rule and its one exception. What that means while writing: reach for an enum or a named

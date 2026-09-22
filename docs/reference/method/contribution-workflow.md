@@ -184,8 +184,8 @@ fully clean verification-only task — closing is left to that reference, which 
 
 **An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
 itself — the `development`/`testing` children are filed as part of the decomposition that wrote
-the epic body, per [idea-to-product.md](idea-to-product.md)'s **Ticket** stage, so the work
-actually gets picked up. Implementing each child is its own issue and its own chain.
+the epic body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
+routes to — so the work actually gets picked up. Implementing each child is its own issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
@@ -303,7 +303,7 @@ number is the GitHub issue number. **An issue carrying only a kind label** (`bug
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
 defined segment, matching the `bug/<n>` branches such work already uses. Earlier branches for
 *this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
-alternatives (`development/<n>` keeps its own meaning above — a plan-pinned task). When both
+alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
 axes are present the **context label wins**, so the branch matches what `_ai-draft.yml` would
 compute from the same issue. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
