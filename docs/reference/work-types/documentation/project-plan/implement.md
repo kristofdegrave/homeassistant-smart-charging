@@ -46,6 +46,8 @@ derived from.
 
 ## Rules
 
+- **Form** — rules as items, each with the shortest example that teaches it, per
+  [`ai-authoring.md`'s Principles](../../../method/ai-authoring.md#principles). Guidance, not scored.
 - **Derive, don't design** — the bar's item 1 states it and judges it. What that means while
   drafting: this document translates an already-approved architecture into a sequence; it does
   not introduce new services or change call directions. If building the plan reveals a gap in

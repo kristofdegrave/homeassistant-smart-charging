@@ -68,6 +68,8 @@ which names this block and judges conformance to it.
 
 ## Rules
 
+- **Form** — rules as items, each with the shortest example that teaches it, per
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles). Guidance, not scored.
 The rules a finished requirement is judged by are the bar's, at the severity each miss lands
 at, and are not repeated here. Two of them have a drafting order this file owns:
 

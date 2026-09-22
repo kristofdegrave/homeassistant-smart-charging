@@ -415,6 +415,14 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
   main cost; the read cost is per use, not per cold session — see item 2 above.)
 - **Scope the read.** Tell a run *which* file to read, so it doesn't fan out across `docs/`.
   The review worker already does this — one checklist per changed path, never all of them.
+- **Write rules as items, with the shortest example that teaches them.** A rule goes in a bullet
+  or a table row, one rule per item, with an example only where the rule alone would be misread;
+  prose is for reasoning that does not break into items. A reader scans items and finds the one
+  that applies; a paragraph has to be read whole. The three `adr` work-type files are the worked
+  example — rewritten from paragraphs to items with every rule and severity kept, and three new
+  bar items added at about the same total length. Guidance, not a check: whether a paragraph should have been a list is not decidable
+  the way *Clutter* is, so no bar scores it. It also guides the documents the work types draft,
+  whose work files point here.
 - **Keep stable files stable.** Prompt caching only pays off when the cached prefix does
   not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
   `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill

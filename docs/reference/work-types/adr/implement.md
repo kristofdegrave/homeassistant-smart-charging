@@ -50,6 +50,8 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 
 ## Rules
 
+- **Form** — rules as items, each with the shortest example that teaches it, per
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles). Guidance, not scored.
 - **Reference, don't restate.** Anywhere in the record, cite a requirement or use-case (`R7`,
   `UC03`) rather than re-deriving it.
 - **One problem, one decision per ADR** — the bar's item 7, *One problem, one decision*. A
