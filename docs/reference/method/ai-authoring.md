@@ -98,7 +98,27 @@ vocabulary is the counter-example — values canonical in `contribution-workflow
 obligation in `ci-pipeline.md`, the `workflow` review checklist spending a paragraph
 reassembling the two.
 **Sprawl** is length itself, even where every line is live and unique: `domain-driven-design` is
-194 upstream-intact lines in a tree every cold run loads.
+194 upstream-intact lines in a tree every cold run loads. It is a cost of **always-loaded**
+material only; anywhere else, length is not a finding and clutter, below, is the test.
+
+**Clutter** is content a reader of *this* document does not need, because another document owns
+it or no document does. It is the one term here that also binds project documents under
+`docs/**`: their completion bars point here for it, and so does the `workflow` checklist for
+`.claude/**`. Four forms:
+- **Restatement** — a formula, threshold, rule, rationale or requirement reproduced from the
+  document that owns it, instead of cited.
+- **Narrative** — text around a decision that states no fact the decision does not carry: how
+  the problem was found, what was tried first, how the discussion went.
+- **An oversized example** — a worked example longer than the rule it illustrates.
+- **Asserted, not owned** — a fact stated here that another document owns, left for the reader
+  to reconcile.
+
+The test for every form: the finding names the document that owns the content, or — for
+narrative — the reason removing it loses no fact. A finding that can do neither is not clutter.
+**Length alone is never a finding**: a long document whose every line is load-bearing is
+correct, and splitting one to look shorter only moves the duplication. Severity: **Minor**;
+**Major** where the copy already disagrees with its owner, since a reader then has two answers.
+Scope: what the change writes or rewrites, never a sweep of untouched text.
 
 **Completion criteria.** Every step ends on a condition telling the run it is done. *Clarity*:
 can it tell done from not-done? A fuzzy bound invites **premature completion** — stopping early

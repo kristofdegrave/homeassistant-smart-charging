@@ -58,3 +58,8 @@ line item sits **before** the task that depends on it.
   **Minor**: it is busywork, not a missing gate.
 - A flag positioned after the task that depends on it is **Major**: the ADR would then be
   retrofitted to a built service, which is the thing the flag exists to prevent.
+
+**(5) No clutter.** Content another document owns — the design's service cuts, an ADR's
+rationale, a requirement — or that states no fact, is judged by the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary), at the severities
+and in the scope it states.

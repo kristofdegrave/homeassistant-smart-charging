@@ -67,6 +67,10 @@ for a mechanism smuggled into a *what*; **Minor** for an incidental implementati
 **(3.2) The 6Cs pass.** Clarity, Concision, Completeness, Consistency, Correctness,
 Concreteness, per `CLAUDE.md`'s **Requirements standard**. A miss is **Minor** unless it makes
 the document wrong or unusable, which the items above already catch at their own severity.
+**Concision is decided as clutter**, by the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../method/ai-authoring.md#vocabulary) — its test, severities
+and scope — never by length. Items 2.2 and 2.3 are that test applied to a requirement and to a
+mechanism, and keep their own severities.
 
 **(3.3) No tracking refs in the body.** The rule — no PR numbers, no issue tracking statuses —
 and its reason are in `CLAUDE.md`'s **Review protocol for analysis documents** section, which

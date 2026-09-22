@@ -77,3 +77,8 @@ item 3 validates against.
 diagram (Mermaid `sequenceDiagram`) per major use case. A missing static diagram is **Major** —
 item 2 and item 3 are both decided against it. A major use case with no dynamic diagram is
 **Minor** per occurrence, **Major** where the document has none at all.
+
+**(6) No clutter.** Content another document owns — a mechanism, a requirement, an ADR's
+rationale — or that states no fact, is judged by the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary), at the severities
+and in the scope it states.
