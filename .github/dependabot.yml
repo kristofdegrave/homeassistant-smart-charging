@@ -28,3 +28,8 @@ updates:
         patterns:
           - "homeassistant"
           - "pytest-homeassistant-custom-component"
+    ignore:
+      # ruff 0.16 also formats Python code blocks inside Markdown (see requirements-test.txt),
+      # so moving past 0.15 is a decision, not a weekly bump. Patch releases still come through.
+      - dependency-name: "ruff"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
