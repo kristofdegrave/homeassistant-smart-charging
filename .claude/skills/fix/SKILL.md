@@ -1,6 +1,6 @@
 ---
 name: fix
-description: Use in an interactive session to run this project's contribution workflow's fix step on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for the fix step is the address-review-remarks skill, never this one.
+description: Use in an interactive session to run this project's contribution workflow's fix step on a PR (/fix #N) — address each review finding by re-authoring with the work files for the issue's context label and the PR's changed trees, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for the fix step is the address-review-remarks skill, never this one.
 ---
 
 # Fix review findings
@@ -15,14 +15,15 @@ type, and none of it is restated here. Read it there for: locating findings from
 one-per-run summary and the markers it must and must not carry (§5), and the local
 commit-and-push half (§6). Its §4 — the reply call and the `ai-fix-ack` marker — is reached
 through `resolve-review-thread`, not from here, so one thread gets one reply. Its §3 — dispatch
-on the linked issue's context label, re-author with that row's work file, and the branch for a
-row that names none — is where that dispatch lives; this skill does not restate it.
+on the linked issue's context label and on each changed tree, re-author with those rows' work
+files, and the branch for a change that yields none — is where that dispatch lives; this skill
+does not restate it.
 
 ## The one thing this skill adds to the dispatch
 
 §3 says which file to re-author with. It cannot say which **model** to do it on, because CI
-picks its own and only a local run has the choice: the row's *Work model* column says which
-model it wants, so name it, and leave switching to the human partner.
+picks its own and only a local run has the choice: the label row's *Work model* column says
+which model it wants, so name it, and leave switching to the human partner.
 
 ## Before any fix: stale exit labels
 
@@ -49,7 +50,7 @@ Per finding:
 
 Then once, for the run:
 
-3. Commit and push (§6), with the commit prefix this row's work takes — the Definition of Done
+3. Commit and push (§6), with the commit prefix the label row's work takes — the Definition of Done
    routed from `CLAUDE.md`'s **Contribution workflow** section carries the per-type prefixes.
    §6's own example is `docs:` because that skill is scoped to docs.
 4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`, after

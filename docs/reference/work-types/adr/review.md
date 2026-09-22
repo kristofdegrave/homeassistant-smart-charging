@@ -32,17 +32,17 @@ reference — judge the ADR on internal merit.
 Apply every item of [`done.md`](done.md) at the severity and in the scope it states. Two more
 checks are about the **change**, which an author checking their own draft cannot make:
 
-**(A) Immutability.** The change *edits* an existing ADR's Summary / Context / Decision /
-Consequences — other than adding a Status supersession line or fixing a typo → **Critical**. A
-change of mind is a new ADR that supersedes the old one, never a rewrite.
+**(A) Immutability.** The change edits an existing ADR in any way
+[`implement.md`](implement.md)'s *Immutable once merged* does not list → **Critical**.
 - Judge from the diff, never the file as it now stands. Under the bar's item 10 every ADR reads
   `Accepted` from its first draft, so a working-tree read turns each draft revision into a
   false Critical.
-- Fires only on an **existing** record — lines on the LEFT side — whose Status there was
-  already `Accepted`. A file the change adds is a new record; revising it is drafting.
+- Fires on every **existing** record — one with lines on the LEFT side — whatever its Status
+  there: a `Superseded` or `Deprecated` record is as immutable as an `Accepted` one. A file the
+  change adds is a new record; revising it is drafting.
 
 **(B) The change is complete as a change.** A bar item can be met by a file you weren't shown.
 Check this diff carries the ADL row (bar item 2, *Template conformance*) and, for a
-supersession, the old record's Status-line edit (bar item 8, *It doesn't contradict an Accepted
-ADR without superseding it*). Report a miss against that item at its severity. `implement.md`
+supersession or deprecation, the old record's Status-line edit (bar item 8, *It doesn't
+contradict an Accepted ADR without superseding it*) with its ADL row's Status changed to match. Report a miss against that item at its severity. `implement.md`
 already puts them in one PR, so the finding is an incomplete PR, not a case for a separate one.

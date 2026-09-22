@@ -157,9 +157,10 @@ rename that misses `close-guard.yml` fails open silently — its `case` simply s
 so that one is checked, not assumed.
 
 All three workers read the table rather than carrying their own copy of the work-file and
-checklist mappings — the drafter and the fix worker for the *How the work is done* column, the
-reviewer for *How it is reviewed* — so the row is the selection itself rather than a mirror of
-one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
+checklist mappings — the drafter and the fix worker for the *How the work is done* column (the
+fix worker also for the row each changed tree's checklist belongs to, as the review routes by
+path), the reviewer for *How it is reviewed* — so the row is the selection itself rather than
+a mirror of one kept in sync by hand. That is what makes changing what a label routes *to* cheap — one
 cell in either *How* column — and changing the table's own shape expensive, since it now
 reaches every worker at once.
 Adding or renaming a label is a third thing again, and not cheap: run the three rules above.

@@ -64,24 +64,35 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
-- **Immutable once Accepted.** Never edit an Accepted ADR's Summary, Context, Decision or
-  Consequences to reflect a change of mind — write a superseding ADR. This file is the only home
-  for the **author and fix side**; a fix run reaches it through the `adr` row. The reviewer's
-  side lives in the `adr` row's review column and CI's review prompt, and is not a duplicate of
-  this. Two guards, because the rule is easy to over-apply:
-  - **Read "Accepted" from the base, not the working tree:** `git show <base>:<path>`, `<base>`
+- **Immutable once merged.** An ADR that exists on the base is edited in exactly three ways,
+  whatever its Status there — `Superseded` and `Deprecated` records included — and this list is
+  the rule's only home, for author, fixer and reviewer alike:
+  - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation, or
+    to correct one merged as anything but `Accepted` — the bar's item 10 — to `Accepted`;
+  - a typo fix that changes no meaning;
+  - a repair of something that directs the reader to act and is **actually broken**:
+    - a link that no longer resolves: re-point it at the same content's new path; where that
+      content is gone, keep its name in prose and drop the link;
+    - an instruction against a file that no longer exists: strike it.
+
+    Nothing is restated or added in place of either. A link that still resolves is not broken,
+    however it could break later, and a path mentioned in prose is not an instruction.
+
+  Nothing else is changed in that record. A change of mind is a new ADR that supersedes it;
+  a better write-up, a Summary, a sturdier link are left as the record stands. Two guards:
+  - **Read existence from the base, not the working tree:** `git show <base>:<path>`, `<base>`
     the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
-    branch name may not resolve in a fresh checkout. Under the bar's item 10 every draft reads
-    `Accepted` in the working tree.
-    - Not on the base, or not `Accepted` there → fix normally.
+    branch name may not resolve in a fresh checkout. The Status line decides nothing: under the
+    bar's item 10 every draft reads `Accepted` in the working tree, and a record that is on the
+    base was merged as a decision taken, whichever Status it carries now.
+    - Not on the base → a draft; fix normally.
     - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
-      tree. Treat the record as Accepted, so only a finding that the *decision* is wrong is
-      **Skipped**, and say in the summary that the base read failed. A wrong Skipped entry is
-      one a human reads and reverses; a wrong edit rewrites an accepted decision unseen.
-  - **Only the *decision* is immutable, not the write-up.** A missing Con, a Decision not
-    referencing its options, a Consequence that doesn't follow: fixed normally. Only a finding
-    that an Accepted decision is wrong becomes **Skipped**, recorded as a candidate for a
-    superseding ADR.
+      tree. Treat the record as merged and say in the summary that the base read failed. A
+      wrong Skipped entry is one a human reads and reverses; a wrong edit rewrites a merged
+      record unseen.
+  - **A finding whose fix would be an edit outside the list is Skipped, not fixed.** One that
+    the decision is wrong is recorded as a candidate for a superseding ADR; any other is recorded
+    as declined under this rule.
 
 ### Skills
 
