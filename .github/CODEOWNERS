@@ -9,7 +9,6 @@
 
 # Analysis layer and project guardrails — called out explicitly for clarity.
 /docs/analysis/         @kristofdegrave
-/docs/plans/            @kristofdegrave
 /.github/               @kristofdegrave
 /.claude/               @kristofdegrave
 /CLAUDE.md              @kristofdegrave
