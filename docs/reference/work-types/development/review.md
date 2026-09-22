@@ -25,8 +25,8 @@ Always read:
 
 - The changed product-code files and their mirrored tests — the trees the stack overlay
   names — from the diff the caller gives you, or the files whole.
-- The implementation-plan task the change realizes — the change's spec. The `specs` row of
-  `CLAUDE.md`'s **Model selection** table names the artifact and the tree it lives in.
+- The task the change realizes — the issue body — and the spec it was cut from, which is the
+  body of that issue's parent epic.
 - The behaviour the change implements, in this project's analysis documents — the
   authoritative "what". `CLAUDE.md`'s **Document structure** section names them and says which
   holds what.

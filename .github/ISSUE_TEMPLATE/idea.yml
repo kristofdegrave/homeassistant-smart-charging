@@ -10,7 +10,7 @@ body:
         boundaries, not yet clear whether it's a use-case, requirement, ADR, or
         implementation task. It'll be worked with the `work-idea` skill: brainstormed
         interactively and decomposed into one or more properly context-labeled follow-up
-        issues (`uc`, `requirement`, `adr`, `development`, `testing`, `workflow`).
+        issues (`uc`, `requirement`, `adr`, `development`, `testing`, `documentation`, `workflow`).
 
         Don't force a context label onto this issue yourself — that decision happens
         during decomposition, not at filing time.

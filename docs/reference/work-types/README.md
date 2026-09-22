@@ -49,7 +49,7 @@ and this line is the copy that shrinks.
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
 `review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
-`requirement`, `specs`, `development`, `testing`, `documentation` and `workflow` — every label
+`requirement`, `development`, `testing`, `documentation` and `workflow` — every label
 that has a directory, `requirement/review.md` being a pointer to `uc/`'s the way its `done.md`
 is. A label whose directory holds `review.md` and nothing else is migrated, not half-built —
 see the paragraph above. What a generic reviewer holds instead — the output contract, the anchoring rules and how

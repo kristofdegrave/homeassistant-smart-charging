@@ -59,7 +59,6 @@ routes to.
 4. **Clean up** (`cleanup`, triggered by the human stating that the merge happened).
    - Verify the change is on `origin/main`; remove the task's worktree; board **Status** →
      the *done* column.
-   - A merged `specs` PR: file its task issues (**Merge and issue closing** below).
    - Then the issue's epic, if it has one: report its open-children count — after the filing
      above, which may have added children (**Merge and issue closing** below).
 
@@ -183,11 +182,10 @@ auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it op
 only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
 fully clean verification-only task — closing is left to that reference, which fires on merge.
 
-**A merged `specs` issue produces task issues, not code.** Its approved plan doesn't implement
-itself — file the `development`/`testing` task issues per [idea-to-product.md](idea-to-product.md)'s
-**Ticket** stage (one per task, each with the anchored `Plan:` line) so the work actually gets
-picked up. Filing them is part of finishing the spec issue, inside step 4; implementing them is
-a new issue and a new chain.
+**An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
+itself — the `development`/`testing` children are filed as part of the decomposition that wrote
+the epic body, per [idea-to-product.md](idea-to-product.md)'s closing step, so the work actually
+gets picked up. Implementing each child is its own issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
@@ -249,9 +247,9 @@ session's own footprint by the session's markers, never by author.
 
 ## Issue conventions
 
-- **Context label** matches the artifact type: `adr`, `uc`, `requirement`, `specs`
-  (implementation spec: design + TDD plan, `docs/plans/**`), `development`/`testing`
-  (implementation tasks against an approved plan), `workflow` (CI/skill/agent-authoring
+- **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
+  `development`/`testing`
+  (implementation tasks, each one child of an epic whose body carries the spec), `workflow` (CI/skill/agent-authoring
   changes), `documentation` (design-doc changes, `docs/design/**` — reviewed, but not yet
   wired into automated drafting). The label set itself — every name, colour and description,
   and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
@@ -286,7 +284,7 @@ session's own footprint by the session's markers, never by author.
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
-  shipped behaviour also needs a `specs` issue to exist for it — see
+  shipped behaviour also needs an epic whose body carries the spec to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
   condition and explains why the automatic label cannot enforce it.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
@@ -299,7 +297,7 @@ session's own footprint by the session's markers, never by author.
   cleared the trigger by then.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
-(`adr`, `uc`, `requirement`, `specs`, `development`, `testing`, `workflow`, `documentation`),
+(`adr`, `uc`, `requirement`, `development`, `testing`, `workflow`, `documentation`),
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's

@@ -109,13 +109,14 @@ or it does not. Behaviour the code does not implement at all is this second case
 exemption from it. The same applies where the code implements something measurably different:
 a different default, bound, unit or ordering.
 
-**(4.3) A gap is filed.** Where the code does not satisfy an in-scope item, a `specs` child
-issue for that gap is filed as part of this PR and referenced in the body — a `specs` issue,
-never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow** section routes to.
+**(4.3) A gap is filed.** Where the code does not satisfy an in-scope item, an **epic** for
+that gap is filed as part of this PR and referenced in the body — an epic, whose body will
+carry the spec, never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow**
+section routes to.
 A gap found and left unfiled is **Major**.
 
 **While drafting**, both items are discharged as you go rather than reconstructed at the end:
-write each finding into the PR body as you take the item, and open the `specs` issue in the
+write each finding into the PR body as you take the item, and open the epic in the
 same session so the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes
 to the filing commands. This is the one piece of drafting order the bar carries, because both
 work files would otherwise hold the same copy of it.

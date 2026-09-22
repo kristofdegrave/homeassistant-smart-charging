@@ -63,7 +63,7 @@ list above does not grow for this check.
 
 **(B) What you can assert about that item depends on the evidence you were given.** This is the
 half of the bar's *Scope of that Major* the bar hands here, and it is stated once — here. Given
-the PR body and no reference to a filed `specs` issue for the gap, that Major is assertable —
+the PR body and no reference to a filed epic for the gap, that Major is assertable —
 report it. *Not* given the PR body, you cannot tell a missing filing from an unseen one: report
 **Minor** and say the gap is Major unless such an issue has been filed for it. Never report
 Major on evidence you were not given — the code for a new requirement or a new use-case

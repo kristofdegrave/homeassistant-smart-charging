@@ -1,8 +1,8 @@
 # Work type: `development` — how the work is done
 
-Turn one task from an approved implementation plan (`docs/plans/<slice>.md`) into working,
-test-covered product code, **test-first**. The plan owns *what* to build and *in what order*;
-this file is *how* one task gets built. Where the product code lives, and the platform and
+Turn one task into working, test-covered product code, **test-first**. The task is the issue
+body; the spec it was cut from is the body of that issue's parent epic, which owns *what* to
+build and *in what order*. This file is *how* one task gets built. Where the product code lives, and the platform and
 language it is written in, are the stack overlays' (**Overlays**, below).
 
 This file is the `development` row's work file in `CLAUDE.md`'s **Model selection** table. It
@@ -13,10 +13,11 @@ row's — `done.md`'s preamble states that split and why; the loop below is wher
 
 ## Before you start
 
-- The task must come from an **approved** implementation plan — never write product code
-  without that plan in place. The plan is produced by the `specs` work type, which
-  `CLAUDE.md`'s **Model selection** table routes to.
-- Work the tasks in the plan's order; a task can be built only once every task it depends on
+- The task must come from an **approved** spec — never write product code without one in
+  place. The spec is the parent epic's body, and the issue you are building is one of its
+  children; how that decomposition is made and reviewed is `CLAUDE.md`'s **Idea-to-product
+  flow**.
+- Work the tasks in the epic's order; a task can be built only once every task it depends on
   exists or is stubbed (the plan states its `Depends on`).
 
 ## Building the task

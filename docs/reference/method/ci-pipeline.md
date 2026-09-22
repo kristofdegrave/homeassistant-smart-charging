@@ -202,8 +202,8 @@ one does *not* touch is anything a worker branches on. `_ai-draft.yml` cannot se
 is the intended behaviour on all three shapes: a `bug` issue with no context label is refused
 with *No context label found*; a `bug` issue that also carries one routes on that one, exactly
 as if the kind label were absent (so `count` is still 1 and the single-context-label refusal is
-unaffected); and a `bug`+`development` issue must still resolve an anchored `Plan:` line, so
-unpinned fix work fails closed rather than being drafted from free-text issue content. What a
+unaffected); and a `bug`+`development` issue must still resolve a parent epic, so
+unparented fix work fails closed rather than being drafted from free-text issue content. What a
 kind label *does* reach is the doc side: [contribution-workflow.md](contribution-workflow.md)'s
 **Issue conventions** owns the two-axis rule and every other document points at it, so renaming
 one means updating the profile's `labels` (and re-running `setup-labels.sh`) and that section —
@@ -418,12 +418,12 @@ argument says nobody watches.
   unset, unreadable or not one of the five tiers falls back to the M tier with a workflow
   warning rather than failing the run — Estimate is planning-only and isn't read by any
   workflow. `development`/`testing` additionally require a
-  resolved `Plan:` line — the exact,
-  anchored format (`Plan: docs/plans/<file>.md#T<task-number>`, nothing else on that line: no
-  backticks, no trailing `(PR #NNN)`, no surrounding sentence) is the sole scope-pinning
-  mechanism letting this job act on untrusted issue-body text, so it must resolve to exactly
-  one plan file and task id (`<task-number>` matching the plan's own numbering, e.g. `T3.1`,
-  `T5`) or the run fails. **The file describing the artifact is not named in the workflow**: the
+  **parent epic**, read from the sub-issues REST endpoint
+  (`repos/{repo}/issues/{n}/parent`) rather than from any body text: the epic's existence is
+  what makes the issue body a decomposed task rather than free text, and it is the scope
+  bound letting this job act on untrusted issue-body text. No parent, a read that returns
+  nothing, or any other failure fails the run closed. The parent's body is never fetched, so
+  the boundary stays at one issue body. **The file describing the artifact is not named in the workflow**: the
   worker reads `CLAUDE.md`'s **Model selection** table row for the label and follows whatever
   its *How the work is done* column names. That is what lets a work type move out of
   `.claude/`, and change how many files it is split into, without this workflow changing; a
@@ -431,7 +431,7 @@ argument says nobody watches.
   memory. Runs that file's *content* steps only (draft, self-checks) —
   never its review/commit/report steps, since the workflow owns those. Opens the PR with
   `Closes #<issue-number>` and its own, coarser commit-prefix mapping (`_ai-draft.yml`'s
-  `commit_prefix`: `docs` for `uc`/`requirement`/`adr`/`specs`, `feat` for `development`,
+  `commit_prefix`: `docs` for `uc`/`requirement`/`adr`, `feat` for `development`,
   `test` for `testing`) — deliberately simpler than the
   [commit message conventions](definition-of-done.md) table, since a single draft commit has
   no per-UC/per-task number to interpolate yet; that granularity is added by later human/CI

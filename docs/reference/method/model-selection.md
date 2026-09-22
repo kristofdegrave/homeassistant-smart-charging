@@ -121,8 +121,8 @@ guarantees no changed tree goes unreviewed, and it is also the half that cannot 
 PR body, which on a fork PR is written by whoever opened it, so the worst a crafted body can do
 is add a reviewer, never remove one. The label
 row is the addition: it brings the checklist written for this kind of work even when the change
-landed somewhere else. A `workflow` PR editing `docs/plans/**` therefore gets the `specs`
-checklist for the file and the `workflow` checklist for the subject, and a `development` PR
+landed somewhere else. A `documentation` PR editing `docs/design/**` therefore gets the
+`documentation` checklist for the file and its label's checklist for the subject, and a `development` PR
 that also edits a workflow file gets the `workflow` checklist on that file rather than nothing.
 
 ## Two rows that differ from the rest
