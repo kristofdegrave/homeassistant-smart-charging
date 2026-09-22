@@ -36,17 +36,18 @@ only sequences those stages and says which skill performs each. Cite it, never r
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
    new-behaviour track this step does not apply.
-5. **Settle whether the strand needs a `specs` issue** — the flow document says when one is
-   required on each track, and which analysis change cannot be approved until it exists. Where
-   it is required, it is one of the children filed below, and the `specs` work type drafts it
-   later.
+5. **Settle whether the strand needs an epic whose body carries the spec** — the flow document
+   says when one is required on each track, and which analysis change cannot be approved until
+   it exists. Where it is required, that epic is what step 6 files, and its body is written in
+   the closing step below rather than drafted later as a separate artifact.
    Record the answer on the issue either way, so it is not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
-   single-artifact idea, an epic plus its children for a multi-artifact strand — moving the
-   brainstormed decisions wherever the flow document says they end up. `file-task-issue` owns
-   attaching a child to its epic, so the epic body never carries a checklist of them; what a
-   child is and in what order children are filed is the flow document's. A part still too fuzzy
-   to scope keeps the `idea` label and gets worked later — recursion is expected, not an error.
+   single-artifact idea, an epic whose body is the spec plus the children cut from it for a
+   multi-artifact strand — moving the brainstormed decisions wherever the flow document says
+   they end up. `file-task-issue` owns the closing step that files them, so the epic body never
+   carries a checklist of them; what a child is and in what order children are filed is the
+   flow document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
+   later — recursion is expected, not an error.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
@@ -71,8 +72,8 @@ only sequences those stages and says which skill performs each. Cite it, never r
 
 The rules of the flow document and of `CLAUDE.md`'s **Issue conventions** are not restated
 here; the ones this cycle trips on most are designing before a shipped-behaviour claim is
-reproduced (step 4), filing a `development`/`testing` child before the plan it must cite is
-approved (step 6), a child with two context labels, and relabelling the idea issue as the
+reproduced (step 4), filing a child before the epic body it is cut from has been through its
+review pass (step 6), a child with two context labels, and relabelling the idea issue as the
 epic. The mistakes that are this skill's own:
 
 - Closing the parent idea issue when only part of it was decomposed.
@@ -81,8 +82,6 @@ epic. The mistakes that are this skill's own:
 - Leaving brainstormed decisions in chat scrollback, or leaving them on the idea issue after
   an epic was filed instead of moving them into the epic body.
 - Designing a fix on the shipped-behaviour track before the claim has been reproduced.
-- Filing `development`/`testing` child issues before an approved plan exists for them to cite
-  in their `Plan:` line.
 - Giving a child issue two context labels (e.g. both `uc` and `requirement`) because the
   idea touches both — split it into two children instead.
 - Treating this as a green light to start implementing once issues exist — each child still

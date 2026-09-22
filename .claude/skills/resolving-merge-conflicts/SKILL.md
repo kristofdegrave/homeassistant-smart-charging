@@ -56,15 +56,16 @@ in this order of usefulness:
 1. **The commit message** — its prefix names the kind of work the commit did; the prefix
    vocabulary is in the completion-bar doc's commit-message conventions, reached from
    `CLAUDE.md`'s **Contribution workflow** topic.
-2. **The anchored `Plan:` line**, where the issue that commit's PR closes carries one — only
-   implementation-track issues do. It points at the exact task in an implementation plan, which
-   states what that task was allowed to change. `CLAUDE.md`'s **Issue conventions** topic gives that
-   line's required format and which issues must carry it.
+2. **The anchored `Source:` lines**, where the issue that commit's PR closes carries them —
+   only a child of a decomposition does. They name the documents that task was cut from, which
+   state what it was allowed to change. `CLAUDE.md`'s **Issue conventions** topic gives those
+   lines' required format and which issues must carry them.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
-   whose other children are often the other side of the conflict.
+   whose body is the spec both sides were cut from and whose other children are often the other
+   side of the conflict.
 4. **The owning specification document** — the analysis and design documents that `CLAUDE.md`'s
-   **Document structure** section lists, reached from the plan task or from the changed file
-   itself.
+   **Document structure** section lists, reached from the issue's `Source:` lines or from the
+   changed file itself.
 
 A side whose intent you cannot state in one sentence is a side you cannot resolve. Keep reading.
 
@@ -79,9 +80,10 @@ Three cases are not ordinary hunk-merging:
 
 - **The two sides disagree about what the system should do.** In product code, that is not a
   merge decision. Behaviour is owned by the analysis documents that `CLAUDE.md`'s **Document
-  structure** topic lists, and specs derive from them rather than design it
-  (the `specs` work file's *derive, don't design*). Resolve the mechanical part, then stop and
-  escalate the disagreement to the owning analysis doc through its own issue-first cycle.
+  structure** topic lists, and an implementation spec derives from them rather than deciding
+  behaviour itself — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
+  routes to owns that rule. Resolve the mechanical part, then stop and escalate the
+  disagreement to the owning analysis doc through its own issue-first cycle.
   Picking a winner inside a merge commit writes an undocumented behavioural decision into the
   code.
 - **Generated or index-like content** — an epic body listing its children, a numbered

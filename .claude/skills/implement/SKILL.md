@@ -32,8 +32,16 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    branch name from something already merged there. The branch-naming rule under `CLAUDE.md`'s
    **Issue conventions** grants one override, the number segment; nothing else about the
    implement step is the work file's to override.
-2. If the issue pins a `Plan:` line, resolve it before dispatching — the work file assumes the
-   task it names is already identified.
+2. Take the task from the issue itself: its body is the task text, and where the issue is a
+   child of an epic, that epic's body is what it was cut from — which artifact that is, and
+   which issues are cut from one, are the closing step of the flow `CLAUDE.md`'s
+   **Idea-to-product flow** topic routes to. Where the issue carries anchored `Source:` lines,
+   resolve them before dispatching and read what they name; where it carries none, the work
+   file's own instruction to go and find the sources stands. The line's format, which issues
+   must carry it, and what such a line does and does not stand in for are the sources rule
+   under `CLAUDE.md`'s **Issue conventions**. Where the lines do not answer what the task
+   requires, go and find the rest, and state in the PR description that you had to and what
+   you read, so the gap is visible rather than absorbed.
 3. Worktree, branch and board **Status** per the implement step. The worktree is cut from the
    fetched `origin/main`, never a stale local `main`:
    `git fetch origin && git worktree add -b <branch> <path> origin/main`. When deliberately
