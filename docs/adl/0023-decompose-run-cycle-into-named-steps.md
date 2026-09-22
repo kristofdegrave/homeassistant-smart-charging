@@ -227,7 +227,7 @@ and a growing edit surface for every new cross-cutting concern — is real and w
 - Choosing between the two unit kinds is a judgment call at extraction time, not a fixed
   recipe — a future contributor adding a new step still has to ask "does this touch an
   adapter" the way this ADR's own Decision section had to.
-- Follow-up: an implementation spec and TDD task plan, the same pattern
+- Follow-up: a `docs/plans` implementation spec and TDD task plan, the same pattern
   ADR-0012 used, is the next step — this ADR does not itself implement any code change, and
   the exact method names, boundaries, and test list are implementation-spec-level detail,
   not part of this decision.
