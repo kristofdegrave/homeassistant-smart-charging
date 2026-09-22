@@ -31,7 +31,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 2. **Draft against `docs/adl/template.md`**, section by section — the Summary last, though it
    sits first:
    - **Context — the forces, not the derivation.** The bar's item 3, *Context states the
-     forces*, judges it. Write what was found, not how: one sentence naming the site beats four
+     forces — not the answer, and not the derivation*, judges it. Write what was found, not how: one sentence naming the site beats four
      paragraphs proving it.
    - **Considered options** — every option seriously evaluated, each with a real Pro and Con
      (the bar's item 4, *The considered options are real*). Reached this section with only the

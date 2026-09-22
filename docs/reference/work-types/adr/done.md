@@ -16,7 +16,8 @@ How an ADR is written is `implement.md`; checks about the *change* belong with t
 **(2) Template conformance.**
 - Status / Summary / Context / Considered options / Decision / Consequences, in that order,
   under those exact names, per `docs/adl/template.md`. Summary is required from ADR-0045 on; a
-  record before it has the other five.
+  record before it conforms with the other five. A section missing, renamed or out of order →
+  **Major**.
 - Filename `NNNN-kebab-case-title.md`, `NNNN` the next 4-digit integer after the highest
   existing `docs/adl/NNNN-*`.
 - `docs/adl/README.md` (the ADL) has a row for it whose title and Status match the record.
@@ -89,7 +90,7 @@ a target the table does not mark linkable → **Major**:
 | Target | Rule |
 |---|---|
 | Another ADR | Always linkable, whole-file — supersession and narrowing must be navigable. |
-| `docs/analysis/system-overview.md`, `requirements.md`, `entity-catalog.md`, `resolution-rules.md`; `docs/design/system-design.md` | Linkable, whole-file, with the item cited by identifier in prose (`R5`). No anchor to a heading that carries a title — a retitle breaks it, as with a use-case file; a title-free heading such as `#ubiquitous-language` is fine. |
+| `docs/analysis/system-overview.md`, `requirements.md`, `entity-catalog.md`, `resolution-rules.md`; `docs/design/system-design.md` | Linkable, whole-file, with the item cited by identifier in prose (`R5`). No anchor to an item's own heading (`### R5 — <title>`): its anchor contains the title, so a retitle breaks it, as with a use-case file. A section heading such as `#ubiquitous-language` is fine. |
 | A use-case | Cited by identifier (`UC12`), never linked: the filename embeds the title, so a retitle breaks the link. |
 | The issue comment recording a `research` finding the Context rests on | Linkable — the comment is the record of how the finding was established, per the `research` skill. |
 | An external URL | Only when the decision is *about* the external thing (a template's source, a dependency adopted), with its identity legible in prose so a dead link still leaves a name. |
@@ -101,12 +102,11 @@ writes in an ADR it **adds**. A link already in an Accepted record is out of sco
 would be the immutability violation the reviewer scores as Critical.
 
 **(12) The Summary matches the record.** Applies to an ADR the change adds.
-- It names the chosen option as Considered options names it, accepts one of that option's
-  stated Cons, and adds no argument of its own. A mismatch → **Major**: a summary that
-  contradicts its record misleads worse than none.
-- At most five lines, in the Y-statement shape — *In the context of <situation>, facing
-  <concern>, we decided <option> to achieve <quality>, accepting <downside>*. Longer, or
-  another shape → **Minor**.
+- It names the chosen option as Considered options names it and accepts one of that option's
+  stated Cons. A mismatch → **Major**: a summary that contradicts its record misleads worse
+  than none.
+- In the shape and within the length `docs/adl/template.md` specifies. Longer, or another
+  shape → **Minor**.
 
 ## Architecture Decision Records (ADRs)
 

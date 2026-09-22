@@ -15,7 +15,7 @@ Both reach this file through `CLAUDE.md`'s **Model selection** table.
 
 In `docs/adl/`:
 - the ADR under review;
-- `template.md` — the authoritative template, Summary first;
+- `template.md` — the authoritative template, Summary before Context;
 - `0001-use-architecture-decision-records.md` — why ADRs, and why this template;
 - `README.md` — the Architecture Decision Log;
 - every other ADR — contradiction and duplication are judged against the full log, not the

@@ -7,7 +7,7 @@ Status: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN
 
 At most five lines, in the Y-statement shape (ADR-0045): *In the context of <situation>,
 facing <concern>, we decided <option> to achieve <quality>, accepting <downside>*. Name the
-chosen option as Considered options names it, and accept one of its stated Cons. Write it last.
+chosen option as Considered options names it, and accept one of its stated Cons.
 
 ## Context
 
