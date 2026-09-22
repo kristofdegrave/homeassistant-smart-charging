@@ -83,8 +83,9 @@ left it otherwise is corrected once the pass is clean, before `needs-approval`. 
 human partner with any other Status → **Major**: the ADL row (item 2) would record a decision
 the log says was never taken.
 
-**(11) Links point only at targets that outlive the record.** An Accepted record's body can't be
-edited to repair a link, so a link that can break is a defect when written. A markdown link to
+**(11) Links point only at targets that outlive the record.** An Accepted record is touched only
+once a link has actually broken, so every link that can break is a future edit to an immutable
+record — a defect when written. A markdown link to
 a target the table does not mark linkable → **Major**:
 
 | Target | Rule |
@@ -98,8 +99,9 @@ a target the table does not mark linkable → **Major**:
 | Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired | Named in prose, not linked. |
 
 Links only, not mentions: a path written in prose doesn't break. Applies to links the change
-writes in an ADR it **adds**. A link already in an Accepted record is out of scope: repairing it
-would be the immutability violation the reviewer scores as Critical.
+writes in an ADR it **adds**. A link already in an Accepted record is out of scope: it stays
+until it actually breaks, and is then repaired under `implement.md`'s *Immutable once
+Accepted*.
 
 **(12) The Summary matches the record.** Applies to an ADR the change adds.
 - It names the chosen option as Considered options names it and accepts one of that option's

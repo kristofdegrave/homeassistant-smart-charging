@@ -32,8 +32,8 @@ reference — judge the ADR on internal merit.
 Apply every item of [`done.md`](done.md) at the severity and in the scope it states. Two more
 checks are about the **change**, which an author checking their own draft cannot make:
 
-**(A) Immutability.** The change *edits* an existing ADR's Summary / Context / Decision /
-Consequences — other than adding a Status supersession line or fixing a typo → **Critical**. A
+**(A) Immutability.** The change edits an existing ADR in any way
+[`implement.md`](implement.md)'s *Immutable once Accepted* does not list → **Critical**. A
 change of mind is a new ADR that supersedes the old one, never a rewrite.
 - Judge from the diff, never the file as it now stands. Under the bar's item 10 every ADR reads
   `Accepted` from its first draft, so a working-tree read turns each draft revision into a

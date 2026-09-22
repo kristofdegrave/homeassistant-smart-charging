@@ -64,24 +64,31 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
-- **Immutable once Accepted.** Never edit an Accepted ADR's Summary, Context, Decision or
-  Consequences to reflect a change of mind — write a superseding ADR. This file is the only home
-  for the **author and fix side**; a fix run reaches it through the `adr` row. The reviewer's
-  side lives in the `adr` row's review column and CI's review prompt, and is not a duplicate of
-  this. Two guards, because the rule is easy to over-apply:
+- **Immutable once Accepted.** An ADR that is `Accepted` on the base is edited in exactly three
+  ways — this list is the rule's only home, and review check (A) scores against it:
+  - its Status line, to record a supersession (`Superseded by ADR-NNNN`);
+  - a typo fix that changes no meaning;
+  - a repair of something a reader could still act on that is **actually broken**: a link that no
+    longer resolves, or an instruction against a file that no longer exists. The repair is the
+    smallest that makes it work again. A link that still resolves is not broken, however it
+    could break later, and a path mentioned in prose is not an instruction.
+
+  Anything else is not an edit to that record. A change of mind is a new ADR that supersedes it;
+  a better write-up, a Summary, a sturdier link are left as the record stands. This file is the
+  only home for the **author and fix side**; a fix run reaches it through the `adr` row. Two
+  guards:
   - **Read "Accepted" from the base, not the working tree:** `git show <base>:<path>`, `<base>`
     the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
     branch name may not resolve in a fresh checkout. Under the bar's item 10 every draft reads
     `Accepted` in the working tree.
-    - Not on the base, or not `Accepted` there → fix normally.
+    - Not on the base, or not `Accepted` there → a draft; fix normally.
     - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
-      tree. Treat the record as Accepted, so only a finding that the *decision* is wrong is
-      **Skipped**, and say in the summary that the base read failed. A wrong Skipped entry is
-      one a human reads and reverses; a wrong edit rewrites an accepted decision unseen.
-  - **Only the *decision* is immutable, not the write-up.** A missing Con, a Decision not
-    referencing its options, a Consequence that doesn't follow: fixed normally. Only a finding
-    that an Accepted decision is wrong becomes **Skipped**, recorded as a candidate for a
-    superseding ADR.
+      tree. Treat the record as Accepted and say in the summary that the base read failed. A
+      wrong Skipped entry is one a human reads and reverses; a wrong edit rewrites an accepted
+      record unseen.
+  - **A finding outside the list is Skipped, not fixed.** On a record Accepted on the base, a
+    finding that the decision is wrong is recorded as a candidate for a superseding ADR; any
+    other is recorded as declined under this rule.
 
 ### Skills
 
