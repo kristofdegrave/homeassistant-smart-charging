@@ -42,6 +42,7 @@ is a new ADR that supersedes the old one, never a rewrite.
   already `Accepted`. A file the change adds is a new record; revising it is drafting.
 
 **(B) The change is complete as a change.** A bar item can be met by a file you weren't shown.
-Check this diff carries the ADL row (bar item 2) and, for a supersession, the old record's
-Status-line edit (bar item 8). Report a miss against that item at its severity. `implement.md`
+Check this diff carries the ADL row (bar item 2, *Template conformance*) and, for a
+supersession, the old record's Status-line edit (bar item 8, *It doesn't contradict an Accepted
+ADR without superseding it*). Report a miss against that item at its severity. `implement.md`
 already puts them in one PR, so the finding is an incomplete PR, not a case for a separate one.

@@ -7,7 +7,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - What the finished record must satisfy: `done.md`, the completion bar. Most of what a review
   will say is already there — open it before drafting, not after.
 - Whether the decision should be an ADR at all is settled when the issue is filed and re-checked
-  against the bar's item 1 — not while drafting.
+  against the bar's item 1, *It should be an ADR at all* — not while drafting.
 
 ## Before the branch exists
 
@@ -40,7 +40,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
      the template (the bar's item 6, *The Blast radius enumeration is complete*).
    - **Links** — only the targets the bar's item 11, *Links point only at targets that outlive
      the record*, allows; name everything else in prose.
-     For example the use-case is cited as `UC12`, never linked by its file.
+     For example, the use-case is cited as `UC12`, never linked by its file.
 
 ## Rules
 
@@ -66,7 +66,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
     branch name may not resolve in a fresh checkout. Under the bar's item 10 every draft reads
     `Accepted` in the working tree.
     - Not on the base, or not `Accepted` there → fix normally.
-    - Base unreadable (no ref fetched, command unavailable) → don't fall back to the working
+    - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
       tree. Treat the record as Accepted, so only a finding that the *decision* is wrong is
       **Skipped**, and say in the summary that the base read failed. A wrong Skipped entry is
       one a human reads and reverses; a wrong edit rewrites an accepted decision unseen.

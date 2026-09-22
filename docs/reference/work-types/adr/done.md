@@ -81,8 +81,9 @@ left it otherwise is corrected once the pass is clean, before `needs-approval`. 
 human partner with any other Status → **Major**: the ADL row (item 2) would record a decision
 the log says was never taken.
 
-**(11) Links point only at targets that outlive the record.** An Accepted ADR can't be edited
-to repair a link, so a link that can break is a defect when written. A markdown link outside
+**(11) Links point only at targets that outlive the record.** An Accepted record's Context,
+Decision and Consequences can't be edited to repair a link, so a link that can break is a
+defect when written. A markdown link outside
 this list → **Major**:
 
 | Target | Rule |
@@ -92,7 +93,8 @@ this list → **Major**:
 | A use-case | Cited by identifier (`UC12`), never linked: the filename embeds the title, so a retitle breaks the link. |
 | The issue comment recording a `research` finding the Context rests on | Linkable — the comment is the record of how the finding was established, per the `research` skill. |
 | An external URL | Only when the decision is *about* the external thing (a template's source, a dependency adopted), with its identity legible in prose so a dead link still leaves a name. |
-| Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired, any other issue or PR | Named in prose, not linked. |
+| Any other issue or PR | Neither linked nor cited by number: state the fact itself; `git log` reaches the PR from the record (the tracking-refs rule below). |
+| Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired | Named in prose, not linked. |
 
 Links only, not mentions: a path written in prose doesn't break. Applies to links the change
 writes in an ADR it **adds**. A link already in an Accepted record is out of scope: repairing it
@@ -116,9 +118,10 @@ A choice about structure that is expensive to reverse or materially constrains f
 
 ### The calibration test and the two carve-outs
 
-Borderline case: would reversing this choice touch more than one module, or a contract other
-code depends on? This supplements the categories above, never overrides them — a *product-code*
-choice listed there stays architectural even when well encapsulated. Only the carve-outs below
+Borderline case: would reversing or swapping this choice touch more than one module, or a
+contract other code depends on? This supplements the categories above, never overrides them —
+a *product-code* choice listed there stays architectural even when well encapsulated. Only the
+carve-outs below
 narrow that. Serious deliberation is not proof either way: weigh it against the reach test and
 the *why* question.
 
