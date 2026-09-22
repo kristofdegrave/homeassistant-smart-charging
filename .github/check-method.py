@@ -11,9 +11,14 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         (minus the two frozen trees, below) and .github/workflows/**
                         resolves, by prefix, to a `##` heading of CLAUDE.md or to a **Topic**
                         row of its routing table
-  2  anchors, inward    every link in CLAUDE.md resolves to an existing file and, where it
-                        carries a #fragment, to a heading of that file; every repo path
-                        CLAUDE.md names in backticks exists; no `###` heading in CLAUDE.md or
+  2  anchors, inward    in CLAUDE.md and in every file check 1 walks minus the snapshot
+                        trees (below): every markdown link resolves, against the directory of
+                        the file it is written in, to an existing path and, where it carries a
+                        #fragment, to a heading of that markdown file; every repo-rooted path
+                        named in backticks -- a file, or a directory written with its trailing
+                        slash -- exists. A link is resolved whether or not its text wraps onto
+                        a second line. Plus, in CLAUDE.md alone: every routing-table entry
+                        links to a document, and no `###` heading in CLAUDE.md or
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
@@ -75,6 +80,14 @@ so a pointer left behind there is history, not a break. Pointers inside fenced c
 are skipped, as check 2 skips fenced headings; a pointer in an inline code span is not, which
 is why the placeholder below has to be excepted by name.
 
+Why check 2's scope is check 1's trees and not CLAUDE.md alone: a path that does not exist is
+a defect wherever it is written, and the case that made it one is docs/reference/work-types/,
+where the context label IS a directory name -- renaming a label moves the directory, and every
+reference to it, in any file, breaks at once. Which trees are left out of that scope and why is
+SNAPSHOT_TREES above; which reference shapes resolve, which are skipped and for what reason, is
+resolve_references(). What check 2 cannot do is the other half of a rename: telling the label
+`workflow` from the English word. That is judgment, and it stays the `workflow` checklist's.
+
 The one literal exception, so it is a stated limit rather than a surprise: the pointer form is
 documented as `` `CLAUDE.md`'s **Topic** `` in the authoring reference and the workflow
 checklist, and that placeholder is skipped by name in check 1.
@@ -132,11 +145,40 @@ STACK_GROUP = "stack"
 POINTER_PLACEHOLDER = "Topic"
 POINTER_TREES = (".claude", "docs", ".github/workflows")
 FROZEN_TREES = ("docs/postmortems", "docs/archive")
+# Check 2 resolves its targets over the trees check 1 walks, minus these. A dated record is a
+# snapshot of what was true when it was written: docs/adl/** states a decision at a date and
+# docs/plans/** a plan or design of a task that has since shipped, so a path in one is a
+# record of where the file was, not a claim about the tree today -- rewriting it to resolve
+# would falsify the record. The two frozen trees are excluded for the reason check 1 excludes
+# them. Every other tree check 1 walks is live prose that has to resolve.
+#
+# Check 1 keeps walking docs/adl and docs/plans, and the difference is not an inconsistency:
+# the two checks ask different questions of the same file. A pointer is about the method's
+# headings as they stand today, which a dated document is as wrong about as any other; a path
+# is about the tree the document was describing when it was written.
+#
+# A vendored dependency skill under .claude/skills/ IS in scope here, deliberately, although
+# check 5 never scans one: a repo-rooted path that does not exist is broken for a reader of
+# this repository whoever wrote the file, and some of them name one today (`tests/` and
+# `tests/test_dashboard.py`). The residual risk is stated rather than designed around -- an
+# upstream refresh could add a path this tree does not hold, and the answer then is a fix
+# upstream or an exclusion decided on that case, not a silent skip now.
+SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
 POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
-LINK_RE = re.compile(r"\[[^\]]*\]\(<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\)")
-BACKTICK_PATH_RE = re.compile(r"`((?:\.?[A-Za-z0-9_-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)`")
+# A markdown link. Its text may wrap onto one following line and no more -- the same bound
+# POINTER_RE takes, and for the same reason: prose here wraps at ~100 columns, so a wrapped
+# link is ordinary (46 of them sit in the trees check 2 walks), while an unbounded `[` could
+# swallow paragraphs and invent a link that was never written. The destination itself never
+# wraps.
+LINK_RE = re.compile(r"\[[^\]\n]*(?:\n[^\]\n]*)?\]\(<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\)")
+# A backticked repo path: a file with an extension, or a directory written with its trailing
+# slash -- `docs/reference/work-types/workflow/` is the shape a label rename moves, and the
+# reason the directory form is matched at all.
+BACKTICK_PATH_RE = re.compile(r"`((?:\.?[A-Za-z0-9_-]+/)+(?:[A-Za-z0-9_.-]+\.[A-Za-z0-9]+)?)`")
+# Anything with a scheme -- http:, https:, mailto: -- is not a path in this tree.
+URL_RE = re.compile(r"[a-z][a-z0-9+.-]*:")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 TABLE_ROW_RE = re.compile(r"^\|(.*)\|\s*$")
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
@@ -339,37 +381,112 @@ def check_outward(root: Path, guide: Guide, findings: Findings) -> None:
                 )
 
 
+def top_level(root: Path) -> set[str]:
+    """The names directly under the repository root: what a bare path may be rooted at."""
+    return {entry.name for entry in root.iterdir()}
+
+
+def resolve_references(root: Path, path: Path, top: set[str], findings: Findings) -> None:
+    """Check 2's target resolution for one file: its links and its backticked repo paths.
+
+    A markdown link is resolved the way a renderer resolves it -- against the directory of the
+    file it is written in -- and its #fragment against the headings of a markdown target. So a
+    link written repo-rooted from a nested file is a finding, because that is what it is: a
+    link that does not render.
+
+    A backticked path has no such base. The repo root is the only anchor it can have, so it is
+    resolved there, and only when its first segment names something at the root. A first
+    segment that names nothing there -- `engines/soc_target.py`, a path inside the product
+    package, or `uc/done.md`, a path inside the work-type tree -- is a partial path whose base
+    this check cannot know, and is skipped. What that costs: a reference whose own first
+    segment has gone stale reads as a partial path and is skipped with it. The alternative,
+    guessing a base, turns every partial path in the repository into a finding.
+
+    An absolute URL is skipped whatever it names, the `github.com/<owner>/<repo>/blob/<ref>/`
+    form included. It names a path on a published ref of some repository, which may
+    deliberately differ from this working tree, and choosing the ref to resolve it against is
+    a different question from whether this tree holds the file. The one such reference in this
+    repository sits in .github/ISSUE_TEMPLATE/, a tree neither check walks.
+
+    The narrower skips, so this docstring is the whole list the module header promises it is:
+    a link target containing `*` is a pattern and not a path; a link that is an in-page anchor
+    alone (`#section`) points at no file; a #fragment is resolved only into a markdown file,
+    because a directory and a non-markdown file have no headings to resolve it against; a
+    backticked directory counts only with its trailing slash, because `work-types/uc` without
+    one cannot be told from an extensionless file or a fragment of prose, and the slash is what
+    states the intent; and a backticked path with no `/` at all -- a root-level file such as
+    `skills-lock.json` -- is not matched, since one bare word in backticks is far more often a
+    name than a path. A backticked path needs no glob guard: BACKTICK_PATH_RE cannot capture a
+    `*` in the first place.
+
+    Every skip named here, and the snapshot trees above, has a fixture that pins it, and, where
+    a covered spelling of the same defect exists, one that fails on it. The known limit that is
+    NOT a skip: a link whose text wraps over more than two lines is not matched at all.
+    """
+    where = rel(root, path)
+    seen: set[str] = set()
+    # Matched over the whole file rather than line by line, because a link's text wraps: a
+    # per-line scan silently skipped every wrapped link, which is the commonest link shape in
+    # this repository's prose. Fenced lines are blanked rather than dropped, as check 1 blanks
+    # them, so an offset still gives the true line -- and a finding points at the line the link
+    # STARTS on, computed from the match offset, not from any loop index.
+    raw = read_text(path)
+    kept = {number for number, _ in strip_fences(raw)}
+    text = "\n".join(
+        line if number in kept else "" for number, line in enumerate(raw.splitlines(), 1)
+    )
+
+    def line_of(offset: int) -> int:
+        return text.count("\n", 0, offset) + 1
+
+    for m in LINK_RE.finditer(text):
+        target = m.group(1)
+        if target.startswith("#") or URL_RE.match(target) or "*" in target:
+            continue
+        if target in seen:
+            continue
+        seen.add(target)
+        file_part, _, fragment = target.partition("#")
+        if not file_part:
+            continue
+        number = line_of(m.start())
+        resolved = path.parent / file_part
+        if not resolved.exists():
+            findings.add(2, f"{where}:{number}", f"link target {file_part} does not exist")
+            continue
+        if fragment and resolved.is_file() and resolved.suffix == ".md":
+            if fragment not in {slug(h) for _, _, h in headings(read_text(resolved))}:
+                findings.add(
+                    2,
+                    f"{where}:{number}",
+                    f"link {target}: no heading in {file_part} has that anchor",
+                )
+    for m in BACKTICK_PATH_RE.finditer(text):
+        target = m.group(1)
+        if target in seen:
+            continue
+        seen.add(target)
+        if target.split("/")[0] not in top:
+            continue
+        if not (root / target).exists():
+            findings.add(
+                2, f"{where}:{line_of(m.start())}", f"names {target}, which does not exist"
+            )
+
+
 def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
-    text = guide.text
     for topic, owner in guide.topics:
         if not LINK_RE.search(owner):
             findings.add(2, "CLAUDE.md", f"routing-table entry **{topic}** links to no document")
-    seen: set[str] = set()
-    for _, line in strip_fences(text):
-        for m in LINK_RE.finditer(line):
-            target = m.group(1)
-            if re.match(r"[a-z]+:", target) or target in seen:
+    top = top_level(root)
+    files = [root / "CLAUDE.md"]
+    for tree in POINTER_TREES:
+        for path in walk(root, tree, (".md", ".yml", ".yaml")):
+            if any(rel(root, path).startswith(snapshot + "/") for snapshot in SNAPSHOT_TREES):
                 continue
-            seen.add(target)
-            file_part, _, fragment = target.partition("#")
-            if not file_part:
-                continue
-            path = root / file_part
-            if not path.is_file():
-                findings.add(2, "CLAUDE.md", f"link target {file_part} does not exist")
-                continue
-            if fragment and fragment not in {slug(h) for _, _, h in headings(read_text(path))}:
-                findings.add(
-                    2, "CLAUDE.md", f"link {target}: no heading in {file_part} has that anchor"
-                )
-    for _, line in strip_fences(text):
-        for m in BACKTICK_PATH_RE.finditer(line):
-            path = m.group(1)
-            if "*" in path or path in seen:
-                continue
-            seen.add(path)
-            if not (root / path).exists():
-                findings.add(2, "CLAUDE.md", f"names {path}, which does not exist")
+            files.append(path)
+    for path in files:
+        resolve_references(root, path, top, findings)
     docs = [root / "CLAUDE.md"] + walk(root, "docs/reference", (".md",))
     for path in docs:
         under_h2 = False

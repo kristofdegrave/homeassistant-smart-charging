@@ -342,8 +342,13 @@ every pointer under `.claude/**`, `docs/**` and `.github/workflows/**` resolves 
 (the outward direction stated under **Headings are the API** above; the two frozen trees,
 `docs/postmortems/**` and `docs/archive/**`, are left out, since a document the rules say is
 never revised cannot be the thing a blocking gate asks to edit). **2, anchors inward:** every
-link and every backticked path in `CLAUDE.md` resolves, an anchored link to a heading of its
-document, and no `###` precedes its `##` in `CLAUDE.md` or `docs/reference/**`. **3, profile
+link and every repo-rooted backticked path resolves — in `CLAUDE.md` and in every file check 1
+walks, minus the snapshot trees (the two frozen ones plus `docs/adl/**` and `docs/plans/**`,
+dated records whose paths state what was true at their date rather than what the tree holds
+now) — a link against the directory it is written in and an anchored one to a heading of its
+target, a backticked path at the repository root and only when its first segment names
+something there; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
+no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
 agreement:** the Model selection table and changed-path map agree with the profile's
 `work_types.enabled`, `labels.context` and `review.path_map`; the commit-prefix table of the
 document `CLAUDE.md`'s **Definition of Done** topic routes to has a row for every enabled
