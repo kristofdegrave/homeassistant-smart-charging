@@ -59,9 +59,17 @@ Fixing is re-authoring — work with the same context the original author had:
   template, rules, bar items and common-mistakes list are what define a correct fix, and none
   of that is restated here. The bar is also what the review applied, so a fix that satisfies
   the finding but leaves a bar item failing is not finished.
-- **Where the row names no work file, or there is no linked issue or no context label**, there
-  is nothing to re-author with. Fix what the finding states, keep the severity policy of
-  section 2, and say in the summary that no work file governed the change.
+- **Apply each changed tree's work file too, to that tree's files.** The review routes by
+  changed path as well as by label — the no-label row's path map, in the same section — so the
+  fix does too. For every tree the PR changes that the path map sends to a checklist, apply the
+  *How the work is done* files of the row that checklist belongs to, to the changed files under
+  that tree; a row already applied is not applied twice, and a row naming none adds nothing.
+  The case this exists for: a PR of another label that edits a record under `docs/adl/**` is
+  still bound by the `adr` work file's rule on changing a merged record.
+- **Where neither the label nor a changed tree yields a work file** — no linked issue, no
+  context label, or rows that name none — there is nothing to re-author with. Fix what the
+  finding states, keep the severity policy of section 2, and say in the summary that no work
+  file governed the change.
 - **A work file's rule about changing an already-merged artifact overrides the finding**,
   including the conditions that file attaches to when the rule applies. Such a finding becomes
   a **Skipped** entry in the summary, recorded with why, rather than an edit.

@@ -1,6 +1,6 @@
 ---
 name: fix
-description: Use in an interactive session to run this project's contribution workflow's fix step on a PR (/fix #N) — address each review finding by re-authoring with the work file for the issue's context label, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for the fix step is the address-review-remarks skill, never this one.
+description: Use in an interactive session to run this project's contribution workflow's fix step on a PR (/fix #N) — address each review finding by re-authoring with the work files for the issue's context label and the PR's changed trees, then reply per thread and resolve once the fixes are pushed. Interactive sessions only; CI's entry for the fix step is the address-review-remarks skill, never this one.
 ---
 
 # Fix review findings
@@ -15,8 +15,9 @@ type, and none of it is restated here. Read it there for: locating findings from
 one-per-run summary and the markers it must and must not carry (§5), and the local
 commit-and-push half (§6). Its §4 — the reply call and the `ai-fix-ack` marker — is reached
 through `resolve-review-thread`, not from here, so one thread gets one reply. Its §3 — dispatch
-on the linked issue's context label, re-author with that row's work file, and the branch for a
-row that names none — is where that dispatch lives; this skill does not restate it.
+on the linked issue's context label and on each changed tree, re-author with those rows' work
+files, and the branch for a change that yields none — is where that dispatch lives; this skill
+does not restate it.
 
 ## The one thing this skill adds to the dispatch
 
