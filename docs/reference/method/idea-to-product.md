@@ -250,7 +250,11 @@ and cannot be verified live. Each entry carries these keys, one item per key:
 - **Test boundary** — which harness that failing test drives through.
 - **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way so
   the filer can tell an empty set from an omission.
-- **Sources** — the documents the entry was cut from.
+- **Sources** — the documents the entry was cut from, each named at the smallest
+  self-contained unit the task turns on: a section where the task turns on one, the whole file
+  where the document is argued as a whole. Naming a document the task needs only part of makes
+  the worker re-derive the reading; anchoring so tightly that the surrounding text is needed to
+  read it is the same fault mirrored.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
   `none` and why in one line. Written now, not after deployment — a list written once the build
   exists is written from what the build produced rather than from what the task promised, and
@@ -273,7 +277,8 @@ one child per task.
 
 The opening pass's own gate is that nothing downstream starts without an issue to run against.
 The closing step's is the pass of step 2 and the human read of step 3, both complete before any
-child is filed, and then every task in the body having an issue, filed as step 4 above says. The **Implementation** stage starts from those issues and from
+child is filed, and then every task in the body having an issue, filed as step 4 above says.
+The **Implementation** stage starts from those issues and from
 nothing else.
 
 ### Skills
@@ -374,7 +379,7 @@ artifact-specific additions, and this rule is the first of them:
   meant to record durable reasoning — describe the underlying fact directly instead (e.g.
   "has since been reworded", not "issue #29 has since reworded"). This applies to ADRs too.
 
-### Gate: a change touching shipped behaviour has an epic carrying its spec before `needs-approval`
+### Gate: a change touching shipped behaviour has an epic that will carry its spec before `needs-approval`
 
 **A `requirement` or `uc` change that touches shipped behaviour does not get
 `needs-approval` until the epic that will carry its spec exists for it.** The epic, not the

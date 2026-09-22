@@ -40,6 +40,12 @@ item scores against whichever documents hold those here.
 
 ## The checklist
 
+Two items below re-state a list the closing step owns — the body's sections in (1), the task
+entry's keys in (4). A gate names its owner and stops there; a checklist cannot, because it has
+to attach a severity to each element. The lists are therefore scored here and defined
+there, and
+a change to either belongs in the closing step first.
+
 **(1) The body carries its own sections.** The closing step fixes what a body must hold; score
 it against that list before scoring anything in it. A body with no scope statement and success
 criteria, no decisions with the table mapping every piece to its named service in
@@ -93,17 +99,21 @@ that document — never a recommendation to cut the text here, which holds the o
 
 **(9) The sources are granular enough to work from, and no more.** What is scored here is each
 task entry's **Sources** key — the pass runs before any child is filed, so the anchored
-`Source:` lines cut from it do not exist yet. Read them as the worker will: do they reach what the task needs without handing it the whole tree?
+`Source:` lines cut from it do not exist yet. Read them as the worker will: do they reach
+what the task needs without handing it the whole tree?
 A line naming a document where the task turns on one section of it is **Minor** — the worker
 re-derives the reading the decomposer already did. A line anchored so tightly that the section
 around it is needed to make sense of it is **Minor** for the mirror reason. A task whose lines
-do not reach a document it plainly requires is **Major**. Granularity is all this item scores. The line's
+do not reach a document it plainly requires is **Major**. Granularity is all this item
+scores, against the
+smallest-self-contained-unit rule the closing step states with the **Sources** key. The line's
 format is fixed by ADR-0044 and is not yet written into a method document — until it is, that
 record is its only statement, so do not score format here.
 
 **(10) Every task carries a usable Verify-live list.** An absent list on a task that changes
 observable runtime behaviour is **Major** — the pass is then run from memory, which is what it
-exists to prevent. A task with nothing observable says `none` and why in one line; an entry with neither a
+exists to prevent. A task with nothing observable says `none` and why in one line; an entry
+with neither a
 list nor that line is **Major** too. An item naming no concrete entity id, or a value carried
 without its unit, is **Minor**.
 

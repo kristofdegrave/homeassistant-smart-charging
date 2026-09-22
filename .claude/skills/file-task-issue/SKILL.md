@@ -9,7 +9,7 @@ Filing an issue correctly the first time avoids a wasted `needs-draft` cycle lat
 is the checklist to run through before running `gh issue create`, not a replacement for
 deciding *what* the issue is about.
 
-Context labels, project-board Size/Estimate fields, the anchored `Source:` lines, and epic
+Context labels, project-board Size/Estimate fields and epic
 membership (native sub-issues and blocked-by edges) are all defined once, and `CLAUDE.md`'s
 **Issue conventions** section routes to wherever that is — start there for what each means and
 when it applies. *Which* issues a strand gets and in what order — the epic whose body is the
@@ -25,7 +25,9 @@ half-scoped.
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
 2. **Pick the one context label**, set Size/Estimate, and — for a child of a decomposition —
-   write the anchored `Source:` lines, per **Issue conventions** above. A finding against
+   write the anchored `Source:` lines. Their format is fixed by ADR-0044 and is not yet
+   written into a method document, so that record is its only statement until one owns it —
+   **Issue conventions** covers the other fields. A finding against
    already-shipped behaviour also takes a **kind label** (`bug`/`enhancement`); which labels
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
