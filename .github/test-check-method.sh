@@ -96,12 +96,9 @@ stacks:
       - gizmo
       - Widget Kit
 review:
+  # No `path_map` here: the changed-path map is .github/check-path-map.py's, not this check's,
+  # so a copy in this fixture would read as covered by a suite that never looks at it.
   interactive_cap: 2
-  path_map:
-    - work_type: alpha
-      paths: ["src/**"]
-    - work_type: beta
-      paths: [".claude/**", "docs/reference/**", "CLAUDE.md"]
 dependencies:
   stack:
     - name: stack-skill
@@ -356,12 +353,6 @@ case_run "3: a row for a work type the profile does not enable fails" 1 "is not 
   "sed -i '/^    - beta$/d; /^    - name: beta$/,/^      description: \"beta work\"$/d' .claude/profile.yml"
 case_run "3: context labels and enabled work types differing fails" 1 "name different sets" \
   "sed -i 's/^    - name: beta$/    - name: gamma/' .claude/profile.yml"
-case_run "3: a path the table routes and the profile does not fails" 1 "profile.yml review.path_map does not" \
-  "sed -i 's#paths: \[\"src/\*\*\"\]#paths: [\"lib/**\"]#' .claude/profile.yml"
-case_run "3: a path the profile routes and the table does not fails" 1 "CLAUDE.md's path map does not" \
-  "sed -i 's#paths: \[\"src/\*\*\"\]#paths: [\"src/**\", \"lib/**\"]#' .claude/profile.yml"
-case_run "3: a path map entry routing to a work type that is not enabled fails" 1 "which is not enabled" \
-  "sed -i 's#    - work_type: alpha#    - work_type: gamma#' .claude/profile.yml"
 case_run "3: a flow deviation naming a work type that is not enabled fails" 1 "flow deviation names \`gamma\`, which is not an enabled work type" \
   "printf '\n### The \`gamma\` stage is removed\n\nBecause.\n' >> docs/reference/profile.md"
 case_run "3: a flow deviation naming no work type fails" 1 "names no work type in backticks" \
@@ -455,7 +446,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=99
+EXPECTED=96
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

@@ -349,8 +349,10 @@ now) — a link against the directory it is written in and an anchored one to a 
 target, a backticked path at the repository root and only when its first segment names
 something there; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
 no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
-agreement:** the Model selection table and changed-path map agree with the profile's
-`work_types.enabled`, `labels.context` and `review.path_map`; the commit-prefix table of the
+agreement:** the Model selection table agrees with the profile's `work_types.enabled` and
+`labels.context` — the changed-path map is not this check's, but
+`.github/check-path-map.py`'s, which holds it and the two CI enumerations to
+`review.path_map`; the commit-prefix table of the
 document `CLAUDE.md`'s **Definition of Done** topic routes to has a row for every enabled
 context label;
 `docs/reference/profile.md`

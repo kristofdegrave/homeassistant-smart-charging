@@ -63,8 +63,12 @@ stated under the table.
 file, which the generic `reviewer` agent applies. This list **is** CI's mapping — the review
 worker resolves it from here rather than carrying its own copy. The same set is enumerated in
 `ai-pipeline.yml`'s path filter, `_ai-review.yml`'s diff enumeration and `.claude/profile.yml`'s
-`review.path_map`, so adding a tree here means adding it in all four; how each omission fails
-is in the document this section routes to. `docs/postmortems/**` keeps its
+`review.path_map` — which is the **source** of the other three: of the *set*, not of the
+routing, which resolves from this list as the sentence above says. Adding a tree still means
+adding it in all four, but no longer means remembering to: `.github/check-path-map.py` fails the
+PR naming each enumeration still missing it. Why the three are verified rather than generated,
+and how each omission would fail if one ever shipped, are in the document this section routes
+to and the CI document it routes onward to. `docs/postmortems/**` keeps its
 own rule from the **Post-mortems** topic: a plain fresh-agent pass weighted to quotation
 accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md` or the pipeline.
 

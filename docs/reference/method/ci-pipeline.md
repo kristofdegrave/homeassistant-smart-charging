@@ -165,10 +165,11 @@ reaches every worker at once.
 Adding or renaming a label is a third thing again, and not cheap: run the three rules above.
 
 The row is not the whole routing, though: the path map it carries is one of four enumerations
-of one set, and adding a tree means editing all four. Which four, which of them a check holds
-together and which are still kept by hand, and how each omission fails, are stated once — in
-the document `CLAUDE.md`'s **Model selection** topic routes to, under **The path map is one of
-four enumerations of one set** — and are not restated here. What belongs here is only the two
+of one set, and adding a tree means editing all four. Which four, which of them is the source,
+and how each omission would fail, are stated once — in the document `CLAUDE.md`'s **Model
+selection** topic routes to, under **The path map is one of four enumerations of one set** —
+and are not restated here; the check that holds the other three to the source is **The
+watched-path check** below. What belongs here is only the two
 that are this pipeline's own: `ai-pipeline.yml`'s path filter decides whether a job runs at
 all, and `_ai-review.yml`'s diff enumeration decides which files a checklist can see.
 `file-task-issue/SKILL.md` doesn't hold its own copy — it points at `CLAUDE.md`'s Issue
@@ -233,6 +234,66 @@ sidebar all count. It is evaluated as of the last push or edit, though: a sideba
 
 It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
 in branch protection's required checks on `main`.
+
+## The watched-path check
+
+`.github/check-path-map.py` asks one question: do the three consumers of the watched-path set
+still carry exactly the set the profile declares? `.claude/profile.yml`'s `review.path_map` is
+the **source** — the only copy that says what a tree is *for*, and the only one a script can
+read without parsing prose. It is the source of the *set*; routing still resolves from
+`CLAUDE.md`'s Model selection table, which is what the review worker reads. The three consumers
+are `ai-pipeline.yml`'s `on.pull_request.paths`, which
+decides whether any job runs; `_ai-review.yml`'s `git diff … -- <paths>` enumeration, which
+decides what a checklist can see; and `CLAUDE.md`'s no-label row, the human-readable authority.
+`ci.yml`'s `method` job runs it, blocking, with its fixtures first;
+`.github/hooks/pre-commit` runs it locally as a warning, for the same reason it warns rather
+than blocks on the method check.
+
+**It exists because a careful author was not enough.** The set was spelled four times by hand,
+and a tree left out of one of them is invisible in exactly the way a tree nobody thought about
+is — the review simply never looks there, and nothing goes red. A finding therefore names the
+file, the enumeration inside it and the tree: "they disagree" is not something an author can
+act on, and an author who has to re-derive which of four files is short is back where the check
+found them.
+
+**Verified, not generated — decided per consumer.** Deriving a consumer from the source is the
+stronger shape in general, and it is not the shape any of these three take.
+
+- `ai-pipeline.yml`'s path filter **cannot** be derived at run time: GitHub reads it to decide
+  whether to start a job at all, so there is no run to generate it in. The alternative is a
+  generated file checked in — which still needs this check, because a checked-in generated file
+  can be hand-edited or left stale. Generation would therefore remove no failure mode, only add
+  a generator and a did-you-run-it obligation.
+- `_ai-review.yml`'s diff enumeration **could** be derived: a step could read the profile and
+  emit the pathspec into the prompt. It is not, for a reason that is about trust rather than
+  effort. The enumeration decides what the reviewer can see, and a PR that shrank the profile
+  would then shrink its own review — the self-routing guard's concern, one file over. Deriving
+  it safely means deriving it from the *base* commit's profile, which is a decision about that
+  trust boundary and belongs with the ADR that records it, not with this check. Until then the
+  hardcoded list is verified, and a PR that shrinks the profile fails here instead.
+- `CLAUDE.md`'s row is prose. It interleaves the trees with the checklist each routes to and
+  with the paragraph's own argument; generating it would trade the document people actually
+  read for a block nobody may edit. It is verified, and that is the right shape for the only
+  copy a human is meant to read.
+
+**The translation is the check's, and it is why all three need parsing rather than comparing.**
+Each consumer spells the same tree in its own grammar: an Actions path filter takes the
+source's globs verbatim, a git pathspec names the directory (`docs/reference`, not
+`docs/reference/**`), and `CLAUDE.md` pairs each tree with a work type. A consumer that spells
+a tree in another consumer's grammar reports twice — once as the tree it is missing, once as
+the one it carries — because "missing `src`" alone would read as a tree nobody has.
+
+**An enumeration it cannot find exits 2, never 0.** A check that passes because it read nothing
+is the failure this one exists to remove, so a missing path filter, a missing (or doubled)
+`git diff` line, a `CLAUDE.md` without the map paragraph and an unparseable profile each fail
+as an environment error rather than as agreement. The fixtures
+(`.github/test-check-path-map.sh`) cover both verdicts and that one: a complete layout that
+passes, one case per finding the check can report, and the exit-2 cases. They run before the
+check itself in `ci.yml`, as every other check's here do.
+
+The set's own agreement was the method check's until this check existed, for the two of the
+four copies it could see. It is now one check's, whole — `.github/check-method.py` holds no
+part of it, and says so at the line where it used to.
 
 ## The upstream-pin drift check
 
@@ -345,8 +406,10 @@ argument says nobody watches.
   the CI reviewer. That is deliberate — every one of the reviewer checklists is written against
   an artifact that asserts behaviour, and none fits a narrative document whose review is about
   quotation accuracy (see `CLAUDE.md`'s **Post-mortems** topic). Review is a fresh-agent
-  pass run interactively instead. If a checklist for it is ever written, add the directory to
-  both places and this bullet becomes the record of why it was absent.
+  pass run interactively instead. If a checklist for it is ever written, the directory is added
+  to `.claude/profile.yml`'s `review.path_map` and followed out into all three consumers — the
+  watched-path check refuses any state in which the four disagree, whichever of them is short —
+  and this bullet becomes the record of why it was absent.
 - **Draft** (`_ai-draft.yml`, ≈ the **File the issue** and implement steps): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its
