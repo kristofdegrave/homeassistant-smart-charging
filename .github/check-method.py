@@ -22,9 +22,8 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
                         work_types.enabled in .claude/profile.yml; labels.context names the
-                        same set; the table's changed-path map equals review.path_map; the
-                        commit-prefix table of the document the **Definition of Done** topic
-                        routes to has a row for every one of those labels;
+                        same set; the commit-prefix table of the document the **Definition of
+                        Done** topic routes to has a row for every one of those labels;
                         docs/reference/profile.md exists and has a `## Flow` section, and
                         every flow deviation -- a `###` under it -- names, in backticks, at
                         least one work type, each of them enabled
@@ -336,23 +335,6 @@ class Guide:
     def resolves(self, topic: str) -> bool:
         return any(target.startswith(topic) for target in self.targets())
 
-    def path_map(self) -> set[tuple[str, str]]:
-        """(path, work type) pairs from the 'routes by changed path' paragraph."""
-        marker = "**The no-label row routes by changed path**"
-        start = self.selection.find(marker)
-        if start < 0:
-            return set()
-        paragraph = self.selection[start + len(marker) :]
-        end = paragraph.find("\n\n")
-        paragraph = paragraph if end < 0 else paragraph[:end]
-        pairs: set[tuple[str, str]] = set()
-        cursor = 0
-        for m in re.finditer(r"→\s*`docs/reference/work-types/([^/`]+)/review\.md`", paragraph):
-            for path in re.findall(r"`([^`]+)`", paragraph[cursor : m.start()]):
-                pairs.add((path, m.group(1)))
-            cursor = m.end()
-        return pairs
-
 
 # --- the five checks -------------------------------------------------------------------------
 
@@ -522,32 +504,10 @@ def check_profile_agreement(root: Path, guide: Guide, profile: dict, findings: F
             f"labels.context {sorted(context)} and work_types.enabled {sorted(enabled)} "
             "name different sets",
         )
-    in_guide = guide.path_map()
-    in_profile: set[tuple[str, str]] = set()
-    for entry in (profile.get("review") or {}).get("path_map") or []:
-        for path in entry.get("paths") or []:
-            in_profile.add((path, entry.get("work_type")))
-    if not in_guide:
-        findings.add(3, "CLAUDE.md", "no changed-path map found under Model selection")
-    for path, work_type in sorted(in_guide - in_profile):
-        findings.add(
-            3,
-            "CLAUDE.md",
-            f"path map has `{path}` -> {work_type}; profile.yml review.path_map does not",
-        )
-    for path, work_type in sorted(in_profile - in_guide):
-        findings.add(
-            3,
-            ".claude/profile.yml",
-            f"review.path_map has `{path}` -> {work_type}; CLAUDE.md's path map does not",
-        )
-    for _, work_type in sorted(in_profile):
-        if work_type not in enabled:
-            findings.add(
-                3,
-                ".claude/profile.yml",
-                f"review.path_map routes to `{work_type}`, which is not enabled",
-            )
+    # The watched-path set -- `review.path_map` and the three enumerations that consume it --
+    # is deliberately not this check's. It belongs to .github/check-path-map.py, whole: one set
+    # with one owner, rather than this check holding two of the four copies to each other and
+    # something else holding the rest. That script's header states the split from its side.
     check_flow_deviations(root, enabled, findings)
     check_commit_prefixes(root, guide, enabled, findings)
 

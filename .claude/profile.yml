@@ -192,11 +192,14 @@ review:
   interactive_cap: 2
   # Changed path → the work type whose review checklist judges it. This is the no-label row
   # of CLAUDE.md's Model selection table, and applies to every PR whatever its label. It is
-  # one of four enumerations of the same set — that row, ai-pipeline.yml's path filter and
-  # _ai-review.yml's diff enumeration are the others. The method check (.github/check-method.py)
-  # holds this copy and CLAUDE.md's row to each other; the two CI enumerations are still kept
-  # in step by hand, so adding a tree means adding it in all four. CLAUDE.md's row states the
-  # obligation.
+  # the SOURCE of four enumerations of the same set — that row, ai-pipeline.yml's path filter
+  # and _ai-review.yml's diff enumeration are the three consumers, each spelling it in its own
+  # grammar. The watched-path check (.github/check-path-map.py, run by ci.yml) holds all three
+  # to this copy and names which one is missing which tree, so adding a tree still means
+  # editing all four but no longer means remembering to. Only this copy says what a tree is
+  # *for*, which is why it is the source and not merely the fourth. CLAUDE.md's row states the
+  # obligation; the CI document its Contribution workflow topic routes to states why the three
+  # are verified against this rather than generated from it.
   path_map:
     - work_type: adr
       paths: ["docs/adl/**"]
