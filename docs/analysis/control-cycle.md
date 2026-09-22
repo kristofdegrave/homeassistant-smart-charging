@@ -235,6 +235,17 @@ limit for step 5.
 
 - **No healthy supply-voltage reading.** Conversions fall back to the configurable nominal
   voltage (default 230 V) for the cycle (NF4); the cycle still completes.
+- **A required role is unavailable.** When a role C5's table lists as required for the active
+  mode is unavailable, the cycle does not go on to decide a current from the readings it has: it
+  is a [fault](system-overview.md#ubiquitous-language) (C5) — 0 A on that same cycle, with no hold
+  first, and `sensor.smart_charging_status` reads `Fault`. An unavailable optional role is not
+  this case: its fallback, like the nominal voltage above, lets the cycle complete. When the
+  status returns to `OK`, and when charging may then resume, are C5's; the cooldown a fault stop
+  starts is R11's.
+- **An unexpected error interrupts the cycle.** Wherever in steps 1–8 it arises — a reading, a
+  mode module, a clamp or the write in step 8 — the cycle is a fault exactly as above (C5), and the
+  charger is never left at the current an earlier cycle set. When the error is in the write
+  itself, the System still attempts the 0 A write.
 - **Peak breach persists** (CapTar capability present only). A momentary breach only triggers a clamp, not a stop. The charger
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
@@ -300,7 +311,9 @@ Upholds but does not home: **NF1** (coordinator executes, never chooses the mode
 `resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
 urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
 **NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
-(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R7** (active SOC
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **C5** (the fault
+stop) is enforced on any cycle a required role is unavailable or an error interrupts (*Edge
+cases*). **R7** (active SOC
 limit) is homed in `resolution-rules.md` (the resolution table) and applied by
 [UC09](use-cases/UC09-sync-charge-limit-with-car.md); this document only fixes *when* in the cycle
 the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, step 4) and
