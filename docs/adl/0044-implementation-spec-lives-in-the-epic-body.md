@@ -18,7 +18,8 @@ that a plan is never a source of truth: it restates what the ADRs, use-cases and
 decided, in the order one slice will build them. It is dead the day its last task merges. Yet
 it merges into `main` and stays, and the tree is now the project's largest artifact class —
 57 files. Being in the tree makes it behave like a source whether or not anyone intends it to:
-one ADR's Blast radius table carries ten plan-file rows it has to reconcile, four other ADRs
+one ADR's Blast radius section reconciles ten plan files across its table and its out-of-scope
+list, four other ADRs
 carry "plan-doc follow-up" items whose content is an accepted record telling a shipped plan
 that it is now wrong, and eight shipped source and test files cite a plan file in a docstring
 as the authority for what they do. That bill is paid on every new ADR, forever, for files
@@ -111,7 +112,8 @@ what to read. The second only has a live answer once the first is settled.
 
 - Pro: no per-child authoring; the parent is the single copy, so it cannot drift from the tasks.
 - Con: widens the drafter's untrusted-data boundary from one issue's body to a second,
-  separately-editable one, which is the boundary an accepted record deliberately drew narrow.
+  separately-editable one — two inputs a non-author can edit where there is now one, each
+  needing the same scrutiny, for a drafter that runs unattended.
 - Con: hands every task an entire spec to save it three lines, so each task's prompt carries
   the scope, decisions and test strategy of tasks it is not building.
 - Con: reintroduces a fetch-and-parse step of exactly the kind retiring the `Plan:` line
@@ -161,8 +163,9 @@ Con, accepted because the pass is followed by a human read and because a capped 
 body would recreate the cost it removes.
 
 F over D because D's second Con is the one that decides it: D saves nothing, and the saving was
-the point. F over E because E's first Con crosses a boundary an accepted record drew on
-purpose, and its second gives every task the whole spec to avoid writing three lines. F's own
+the point. F over E because E's first Con doubles the unattended drafter's untrusted inputs for
+no gain F does not already give, and its second gives every task the whole spec to avoid
+writing three lines. F's own
 Cons are taken as the terms of the trade rather than as objections: the inversion is real and
 is what makes the decomposer's judgement load-bearing, which is precisely why the decomposition
 gets its own review pass, and why that pass's checklist must judge anchor granularity — the
