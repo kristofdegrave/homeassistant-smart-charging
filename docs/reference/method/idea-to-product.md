@@ -508,7 +508,7 @@ each is written and what "finished" means for it is the **Design** stage above.
 
 ```text
 docs/adl/
-  template.md            — ADR template (Nygard + Considered options)
+  template.md            — ADR template (Summary + Nygard + Considered options)
   0001-...md, 0002-...md — one file per architectural decision, sequential, never renumbered
 ```
 

@@ -3,6 +3,12 @@
 Date: YYYY-MM-DD <!-- the date this ADR was created; never changes, even if Status later does -->
 Status: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN
 
+## Summary
+
+At most five lines, in the Y-statement shape (ADR-0045): *In the context of <situation>,
+facing <concern>, we decided <option> to achieve <quality>, accepting <downside>*. Name the
+chosen option as Considered options names it, and accept one of its stated Cons. Write it last.
+
 ## Context
 
 What is the issue we're seeing that motivates this decision? State the forces at

@@ -15,7 +15,7 @@ Both reach this file through `CLAUDE.md`'s **Model selection** table.
 
 In `docs/adl/`:
 - the ADR under review;
-- `template.md` — the authoritative template;
+- `template.md` — the authoritative template, Summary first;
 - `0001-use-architecture-decision-records.md` — why ADRs, and why this template;
 - `README.md` — the Architecture Decision Log;
 - every other ADR — contradiction and duplication are judged against the full log, not the
@@ -32,9 +32,9 @@ reference — judge the ADR on internal merit.
 Apply every item of [`done.md`](done.md) at the severity and in the scope it states. Two more
 checks are about the **change**, which an author checking their own draft cannot make:
 
-**(A) Immutability.** The change *edits* an existing ADR's Context / Decision / Consequences —
-other than adding a Status supersession line or fixing a typo → **Critical**. A change of mind
-is a new ADR that supersedes the old one, never a rewrite.
+**(A) Immutability.** The change *edits* an existing ADR's Summary / Context / Decision /
+Consequences — other than adding a Status supersession line or fixing a typo → **Critical**. A
+change of mind is a new ADR that supersedes the old one, never a rewrite.
 - Judge from the diff, never the file as it now stands. Under the bar's item 10 every ADR reads
   `Accepted` from its first draft, so a working-tree read turns each draft revision into a
   false Critical.

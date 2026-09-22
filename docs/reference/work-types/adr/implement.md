@@ -28,16 +28,22 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
    The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, judges the
    result. Cheap before the Decision is written, expensive after;
    the step most often skipped.
-2. **Draft against `docs/adl/template.md`**, section by section:
+2. **Draft against `docs/adl/template.md`**, section by section — the Summary last, though it
+   sits first:
    - **Context — the forces, not the derivation.** The bar's item 3, *Context states the
      forces*, judges it. Write what was found, not how: one sentence naming the site beats four
      paragraphs proving it.
    - **Considered options** — every option seriously evaluated, each with a real Pro and Con
      (the bar's item 4, *The considered options are real*). Reached this section with only the
      chosen option? Stop and name what else was on the table, even "do nothing".
-   - **Decision** — name the option and point at its trade-offs; don't restate them.
-   - **Consequences** — follow-up work, what gets easier or harder, and the Blast radius per
-     the template (the bar's item 6, *The Blast radius enumeration is complete*).
+   - **Decision** — name the option and point at its trade-offs; don't restate them (the bar's
+     item 4 again).
+   - **Consequences** — follow-up work, what gets easier or harder (the bar's item 5,
+     *Consequences follow from the Decision*), and the Blast radius per the template (the bar's
+     item 6, *The Blast radius enumeration is complete*).
+   - **Summary** — written once the Decision is settled, from the Decision and the chosen
+     option's Cons, never from memory of the argument (the bar's item 12, *The Summary matches
+     the record*).
    - **Links** — only the targets the bar's item 11, *Links point only at targets that outlive
      the record*, allows; name everything else in prose.
      For example, the use-case is cited as `UC12`, never linked by its file.
@@ -56,10 +62,10 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
-- **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences to
-  reflect a change of mind — write a superseding ADR. This file is the only home for the
-  **author and fix side**; a fix run reaches it through the `adr` row. The reviewer's side
-  lives in the `adr` row's review column and CI's review prompt, and is not a duplicate of
+- **Immutable once Accepted.** Never edit an Accepted ADR's Summary, Context, Decision or
+  Consequences to reflect a change of mind — write a superseding ADR. This file is the only home
+  for the **author and fix side**; a fix run reaches it through the `adr` row. The reviewer's
+  side lives in the `adr` row's review column and CI's review prompt, and is not a duplicate of
   this. Two guards, because the rule is easy to over-apply:
   - **Read "Accepted" from the base, not the working tree:** `git show <base>:<path>`, `<base>`
     the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
