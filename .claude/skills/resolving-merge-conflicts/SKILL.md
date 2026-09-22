@@ -54,12 +54,13 @@ Reconstruct *intent* before touching a marker. Each side of a conflict here has 
 in this order of usefulness:
 
 1. **The commit message** — its prefix names the kind of work the commit did; the prefix
-   vocabulary is in the completion-bar doc's commit-message conventions, reached from
-   `CLAUDE.md`'s **Contribution workflow** topic.
+   vocabulary is the commit-message conventions under `CLAUDE.md`'s **Definition of Done**
+   topic.
 2. **The anchored `Source:` lines**, where the issue that commit's PR closes carries them —
    only a child of a decomposition does. They name the documents that task was cut from, which
-   state what it was allowed to change. `CLAUDE.md`'s **Issue conventions** topic gives those
-   lines' required format and which issues must carry them.
+   state what it was allowed to change. Their required format, and which issues must carry
+   them, belong to `CLAUDE.md`'s **Issue conventions** and are not stated there yet — read the
+   lines as the issue gives them.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
    whose body is the spec both sides were cut from and whose other children are often the other
    side of the conflict.
