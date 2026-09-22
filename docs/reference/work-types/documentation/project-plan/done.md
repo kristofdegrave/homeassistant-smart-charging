@@ -13,7 +13,7 @@ has a bar per document, and which one a change falls under, is stated once in th
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a task
 breakdown's correctness is judged by whether it follows the architecture it derives from, not by
-Clarity/Concision/etc.
+Clarity/Concision/etc. Clutter is still checked, as item 5 below.
 
 **The plan is never judged alone.** Every item below is decided against
 `docs/design/system-design.md` — the version in the same change if the change touches it, the
@@ -59,7 +59,6 @@ line item sits **before** the task that depends on it.
 - A flag positioned after the task that depends on it is **Major**: the ADR would then be
   retrofitted to a built service, which is the thing the flag exists to prevent.
 
-**(5) No clutter.** Content another document owns — the design's service cuts, an ADR's
-rationale, a requirement — or that states no fact, is judged by the *Clutter* entry in
-[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary), at the severities
-and in the scope it states.
+**(5) No clutter**, as the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary) defines it, at its
+severities and in its scope.

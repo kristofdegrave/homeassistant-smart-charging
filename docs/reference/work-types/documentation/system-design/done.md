@@ -12,7 +12,7 @@ a bar per document, and which one a change falls under, is stated once in the la
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a service
 decomposition's correctness is judged by whether each cut encapsulates a real volatility and the
-call directions hold, not by Clarity/Concision/etc.
+call directions hold, not by Clarity/Concision/etc. Clutter is still checked, as item 6 below.
 
 **What the design is judged against, beyond itself.** In `docs/analysis/`:
 `system-overview.md` (the authoritative Ubiquitous Language glossary and the control-loop /
@@ -78,7 +78,6 @@ diagram (Mermaid `sequenceDiagram`) per major use case. A missing static diagram
 item 2 and item 3 are both decided against it. A major use case with no dynamic diagram is
 **Minor** per occurrence, **Major** where the document has none at all.
 
-**(6) No clutter.** Content another document owns — a mechanism, a requirement, an ADR's
-rationale — or that states no fact, is judged by the *Clutter* entry in
-[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary), at the severities
-and in the scope it states.
+**(6) No clutter**, as the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary) defines it, at its
+severities and in its scope.

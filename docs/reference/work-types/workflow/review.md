@@ -125,9 +125,11 @@ Always read:
   **(1)**'s last bullet, which governs this file as much as a workflow's.
 - One source of truth per fact: a rule duplicated across skills/agents/prompts instead of
   linked from one is a Minor finding (Major if the duplicate has already drifted).
-- The other three forms of clutter — narrative, an oversized example, a fact asserted but not
-  owned — are judged by the *Clutter* entry in `docs/reference/method/ai-authoring.md`'s
-  Vocabulary, at its severities and in its scope. The item above is its restatement form.
+- *Clutter*, the Vocabulary entry in `docs/reference/method/ai-authoring.md`: its narrative and
+  oversized-example forms are judged by that entry, at its severities. Its restatement form is
+  not scored twice — the item above governs a copy of another artifact's rule, and the
+  unpointed-restatement item below a copy of a reference document's, `CLAUDE.md`'s or the
+  profile's, each at its own severities.
 - A work-type core file (any `.md` under `docs/reference/work-types/`, branch files included,
   outside an `overlays/` directory) names no stack skill and
   spells no stack token — the method check refuses both, and `work-types/README.md`'s **Stack
