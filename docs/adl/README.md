@@ -51,5 +51,6 @@ template.
 | [0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | A state-of-charge-unavailable cycle holds the deadline-unreachable clear rather than firing it (narrows [ADR-0024](0024-deadline-unreachable-cleared-event.md)) | Accepted |
 | [0043](0043-scheduled-upstream-drift-watcher.md) | The upstream-drift watcher — a scheduled, issue-writing job over the profile's pin manifest | Accepted |
 | [0044](0044-implementation-spec-lives-in-the-epic-body.md) | The implementation spec lives in its epic's body, and each task carries the sources it was cut from — retiring `docs/plans/**` and the `specs` work type | Accepted |
+| [0045](0045-every-adr-opens-with-a-summary.md) | Every ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
