@@ -65,18 +65,19 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
 - **Immutable once Accepted.** An ADR that is `Accepted` on the base is edited in exactly three
-  ways — this list is the rule's only home, and review check (A) scores against it:
-  - its Status line, to record a supersession (`Superseded by ADR-NNNN`);
+  ways — this list is the rule's only home, for author, fixer and reviewer alike:
+  - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation;
   - a typo fix that changes no meaning;
-  - a repair of something a reader could still act on that is **actually broken**: a link that no
-    longer resolves, or an instruction against a file that no longer exists. The repair is the
-    smallest that makes it work again. A link that still resolves is not broken, however it
-    could break later, and a path mentioned in prose is not an instruction.
+  - a repair of something that directs the reader to act and is **actually broken**:
+    - a link that no longer resolves: re-point it at the same content's new path; where that
+      content is gone, keep its name in prose and drop the link;
+    - an instruction against a file that no longer exists: strike it.
+
+    Nothing is restated or added in place of either. A link that still resolves is not broken,
+    however it could break later, and a path mentioned in prose is not an instruction.
 
   Anything else is not an edit to that record. A change of mind is a new ADR that supersedes it;
-  a better write-up, a Summary, a sturdier link are left as the record stands. This file is the
-  only home for the **author and fix side**; a fix run reaches it through the `adr` row. Two
-  guards:
+  a better write-up, a Summary, a sturdier link are left as the record stands. Two guards:
   - **Read "Accepted" from the base, not the working tree:** `git show <base>:<path>`, `<base>`
     the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
     branch name may not resolve in a fresh checkout. Under the bar's item 10 every draft reads
@@ -86,9 +87,9 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
       tree. Treat the record as Accepted and say in the summary that the base read failed. A
       wrong Skipped entry is one a human reads and reverses; a wrong edit rewrites an accepted
       record unseen.
-  - **A finding outside the list is Skipped, not fixed.** On a record Accepted on the base, a
-    finding that the decision is wrong is recorded as a candidate for a superseding ADR; any
-    other is recorded as declined under this rule.
+  - **A finding whose fix would be an edit outside the list is Skipped, not fixed.** One that
+    the decision is wrong is recorded as a candidate for a superseding ADR; any other is recorded
+    as declined under this rule.
 
 ### Skills
 

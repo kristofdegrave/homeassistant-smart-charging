@@ -4,6 +4,10 @@ What must be true of a finished ADR: the author self-checks against it, the revi
 How an ADR is written is `implement.md`; checks about the *change* belong with the reviewer. No
 6Cs pass — an ADR is judged on whether its options and trade-offs are real.
 
+**Scope: the bar scores a record the change adds.** On a record already `Accepted` on the base,
+only review check (A) applies, and whether a permitted edit is itself correct — a finding the
+fixer may not act on is not raised.
+
 ## The bar
 
 **(1) It should be an ADR at all.** The decision meets the worthiness test in the
@@ -83,10 +87,10 @@ left it otherwise is corrected once the pass is clean, before `needs-approval`. 
 human partner with any other Status → **Major**: the ADL row (item 2) would record a decision
 the log says was never taken.
 
-**(11) Links point only at targets that outlive the record.** An Accepted record is touched only
-once a link has actually broken, so every link that can break is a future edit to an immutable
-record — a defect when written. A markdown link to
-a target the table does not mark linkable → **Major**:
+**(11) Links point only at targets that outlive the record.** An Accepted record's link is touched
+only once it has actually broken, so every link that can break is a future edit to an immutable
+record — a defect when written. A markdown link to a target the table does not mark linkable →
+**Major**:
 
 | Target | Rule |
 |---|---|
@@ -159,7 +163,7 @@ reach test and the *why* question.
   value or computed reading as an entity is not, on its own, a boundary change, and stays in
   this carve-out.
 
-### The bar applies to new decisions; supersede, never edit in place
+### The bar applies to new decisions; supersede, never re-decide in place
 
 - The bar does not make an Accepted ADR non-architectural retroactively. A past decision that
   no longer holds is superseded (per `docs/adl/template.md`), never edited away.

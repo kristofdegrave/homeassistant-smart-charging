@@ -33,8 +33,7 @@ Apply every item of [`done.md`](done.md) at the severity and in the scope it sta
 checks are about the **change**, which an author checking their own draft cannot make:
 
 **(A) Immutability.** The change edits an existing ADR in any way
-[`implement.md`](implement.md)'s *Immutable once Accepted* does not list → **Critical**. A
-change of mind is a new ADR that supersedes the old one, never a rewrite.
+[`implement.md`](implement.md)'s *Immutable once Accepted* does not list → **Critical**.
 - Judge from the diff, never the file as it now stands. Under the bar's item 10 every ADR reads
   `Accepted` from its first draft, so a working-tree read turns each draft revision into a
   false Critical.
