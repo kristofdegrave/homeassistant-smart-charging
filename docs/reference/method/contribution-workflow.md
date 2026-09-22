@@ -289,10 +289,14 @@ session's own footprint by the session's markers, never by author.
   shipped behaviour also needs a `specs` issue to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
   condition and explains why the automatic label cannot enforce it.
-- **Task issues** (`development`/`testing` label) filed against an approved
-  `docs/plans/<slice>.md` TDD plan must include an exact, anchored `Plan:` line identifying the
-  plan file and task id (nothing else on that line) — see [ci-pipeline.md](ci-pipeline.md) for
-  the required format and why it must be anchored. Get it right at filing time.
+- **Task issues** (`development`/`testing` label) are **children of the epic whose body
+  carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
+  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge is
+  what says the body was cut from a decomposition somebody reviewed rather than typed straight
+  into an issue, and `_ai-draft.yml` refuses to draft one without it (see
+  [ci-pipeline.md](ci-pipeline.md)). Get the edge on at filing time; adding it afterwards works
+  (**Epic-first for multi-artifact strands** above has both forms) but the refusal has already
+  cleared the trigger by then.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `specs`, `development`, `testing`, `workflow`, `documentation`),

@@ -9,12 +9,16 @@ name: AI draft (reusable)
 #   - add-paths restricted to the matching tree (custom_components/** or tests/**), same
 #     defense-in-depth mechanism the docs types get from docs/**.
 #   - the issue body IS the task — one task of the implementation spec that lives in its
-#     epic's body, written there by the decomposition that reviewed it. So the issue MUST
-#     have a parent epic: that edge is what says the body is a decomposed, pre-scoped task
-#     rather than free text somebody wrote directly into an issue, and the drafter never
-#     invents scope from the latter. No parent -> refuse to draft, same as an unrecognized
-#     context label. The parent's body is deliberately NOT fetched: the edge is checked, the
-#     spec is not read, so the drafter's untrusted-data boundary stays at one issue body.
+#     epic's body, written there by the decomposition that reviewed it (ADR-0044, which also
+#     retired the `Plan:` line this replaced). So the issue MUST have a parent epic, and no
+#     parent -> refuse to draft, same as an unrecognized context label. What that edge buys is
+#     weaker than what the resolved plan task bought, and deliberately so: it establishes that
+#     the issue sits under SOME parent, not that the parent holds a reviewed decomposition,
+#     where the old check resolved a heading inside a merged, reviewed file. ADR-0044 took that
+#     trade knowingly — "issue bodies become load-bearing for correctness" is its own wording
+#     — and what still bounds it is the maintainer who applies `needs-draft`. The parent's body
+#     is deliberately NOT fetched: the edge is checked, the spec is not read, so the drafter's
+#     untrusted-data boundary stays at one issue body.
 #   - custom_components/tests PRs get an automatic review (_ai-review.yml), against the
 #     development and testing checklists, before a human looks, same as every other drafted PR.
 #   - a maintainer's manual merge approval stays mandatory regardless (CLAUDE.md).
@@ -157,8 +161,8 @@ jobs:
           # development/testing implement a pre-scoped task instead of inventing scope from
           # free-text issue content — the containment story for code relies on this (see the
           # header comment). The issue body IS that task, one task of the implementation spec
-          # in its epic's body; what says it was cut from a reviewed decomposition rather than
-          # typed straight into an issue is the parent edge. That edge is checked by the
+          # in its epic's body (ADR-0044); the parent edge is what says it was cut from a
+          # decomposition rather than typed straight into an issue. That edge is checked by the
           # "Validate the task's parent epic" step below, which needs a token this step,
           # running before Checkout, does not have — so all this one does is say whether the
           # check applies.
@@ -305,15 +309,13 @@ jobs:
             exit 0
           }
 
-          # The sub-issues REST API's own "get parent issue" read: it stays readable while the
-          # GraphQL limiter is tripped, which the GraphQL `parent` field does not. An issue with
-          # no parent 404s rather than returning an empty object — and so does an issue that
-          # does not exist, so the status alone cannot tell the two apart. The message can:
-          # `No parent issue found` is a readable issue with no parent; anything else is not a
-          # verdict about the epic and must not be reported as one. One call with stderr folded
-          # in, so `out` is the parent's number on success and that message on failure; errexit
-          # is off for this step (`set -uo`) so the failing call's status reaches `rc` instead
-          # of ending the job before the case below can tell the two apart.
+          # The sub-issues REST API's own "get parent issue" read, and why a 404's MESSAGE
+          # rather than its status is what the case below keys on, are the reference CLAUDE.md's
+          # **Tracker mechanics** topic routes to; the literal below is the one part of that
+          # fact this file has to carry, because it is code. One call with stderr folded in, so
+          # `out` is the parent's number on success and the message on failure; errexit is off
+          # for this step (`set -uo`) so the failing call's status reaches `rc` instead of
+          # ending the job before the case below can read it.
           out=$(gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE/parent" --jq '.number' 2>&1)
           rc=$?
 
@@ -329,6 +331,14 @@ jobs:
           err=$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-500)
 
           case "$err" in
+            "")
+              # rc != 0 with nothing on stderr, or rc == 0 with no number: either way the read
+              # said nothing, so there is no message to key on and "the read failed" would be
+              # the wrong thing to print when rc is 0. Fails closed like the arm below, but
+              # says what actually happened.
+              echo "::warning::Reading issue #$ISSUE's parent returned nothing (exit $rc) — refusing to draft rather than assume the task was decomposed."
+              fail "Couldn't verify whether #$ISSUE has a parent epic: the parent read returned nothing (exit $rc), so this is not a report that the epic is missing. Check the issue is readable and re-label \`needs-draft\` to retry; if it genuinely has no parent, add the sub-issue edge first."
+              ;;
             *"No parent issue found"*)
               fail "\`$TYPE\` issue #$ISSUE has no parent epic. A \`$TYPE\` issue body is one task of the implementation spec that lives in its epic's body, so the drafter only implements an issue that was cut from one — add the issue as a sub-issue of its epic and re-label \`needs-draft\`."
               ;;

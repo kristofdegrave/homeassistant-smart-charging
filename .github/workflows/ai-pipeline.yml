@@ -20,8 +20,9 @@ name: AI documentation pipeline
 #     degrades back to per-issue grouping with no error.
 # A context label says WHAT to draft and gives the reviewer context; the action label is the
 # go-signal. A `development`/`testing` issue body IS the task, cut from the implementation spec
-# in its epic's body, so the drafter additionally requires such an issue to have a parent epic
-# — see _ai-draft.yml's header comment for the full containment story. `workflow` (CI/skill/agent changes) is deliberately
+# in its epic's body (ADR-0044), so the drafter additionally requires such an issue to have a
+# parent epic — see _ai-draft.yml's header comment for the full containment story, including
+# what that edge does and does not establish. `workflow` (CI/skill/agent changes) is deliberately
 # never auto-drafted — only its review is wired (see _ai-review.yml and
 # docs/reference/work-types/workflow/review.md).
 # Review picks its checklists from CLAUDE.md's Model selection table, which routes on the
