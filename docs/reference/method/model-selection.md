@@ -160,8 +160,10 @@ is wider than either label sharing it — `requirement`'s file points at the sam
 `_ai-review.yml`'s diff enumeration, which decides what a checklist can see. Those two are
 enumerations beside the row's list, and `.claude/profile.yml`'s `review.path_map` is the
 fourth — and the **source** of the other three, because it is the only one that says what a
-tree is *for* and the copy the CI workers resolve routing from. That is why the row states
-that adding a tree means adding it in all four.
+tree is *for* and the only one a script can read without parsing prose. It is the source of the
+*set* and not of the routing: the CI workers still resolve routing from the row above, and
+`.claude/profile.yml`'s own header says no step of `_ai-review.yml` reads that file. That is
+why the row states that adding a tree means adding it in all four.
 
 Which it still does, but not from memory: the watched-path check
 (`.github/check-path-map.py`, run by `ci.yml`) holds all three consumers to the source and

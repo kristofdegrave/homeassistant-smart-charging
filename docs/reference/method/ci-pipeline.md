@@ -239,8 +239,10 @@ in branch protection's required checks on `main`.
 
 `.github/check-path-map.py` asks one question: do the three consumers of the watched-path set
 still carry exactly the set the profile declares? `.claude/profile.yml`'s `review.path_map` is
-the **source** — the only copy that says what a tree is *for*, and the copy a review resolves
-routing from. The three consumers are `ai-pipeline.yml`'s `on.pull_request.paths`, which
+the **source** — the only copy that says what a tree is *for*, and the only one a script can
+read without parsing prose. It is the source of the *set*; routing still resolves from
+`CLAUDE.md`'s Model selection table, which is what the review worker reads. The three consumers
+are `ai-pipeline.yml`'s `on.pull_request.paths`, which
 decides whether any job runs; `_ai-review.yml`'s `git diff … -- <paths>` enumeration, which
 decides what a checklist can see; and `CLAUDE.md`'s no-label row, the human-readable authority.
 `ci.yml`'s `method` job runs it, blocking, with its fixtures first;
@@ -404,8 +406,10 @@ argument says nobody watches.
   the CI reviewer. That is deliberate — every one of the reviewer checklists is written against
   an artifact that asserts behaviour, and none fits a narrative document whose review is about
   quotation accuracy (see `CLAUDE.md`'s **Post-mortems** topic). Review is a fresh-agent
-  pass run interactively instead. If a checklist for it is ever written, add the directory to
-  both places and this bullet becomes the record of why it was absent.
+  pass run interactively instead. If a checklist for it is ever written, the directory is added
+  to `.claude/profile.yml`'s `review.path_map` and followed out into all three consumers — the
+  watched-path check refuses any other order — and this bullet becomes the record of why it was
+  absent.
 - **Draft** (`_ai-draft.yml`, ≈ the **File the issue** and implement steps): resolves the model and branch
   (`<context-label>/<issue-number>`, [contribution-workflow.md](contribution-workflow.md)'s own
   scheme, or a label's own override per its **Branch naming** note) from the label. Its

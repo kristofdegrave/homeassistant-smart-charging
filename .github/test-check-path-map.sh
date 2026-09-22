@@ -118,12 +118,22 @@ case_run() {
 }
 
 # --- the layout as built passes, and the accepted shapes are pinned ------------------------
+# An accepted shape expects the verdict the *unmutated* layout already gives, so a mutation
+# that quietly matched nothing would pass its case for the wrong reason — a `sed -i` with no
+# match succeeds. Each of these therefore ends in an assertion that its edit landed, which the
+# harness reads as "mutation failed" rather than as a pass. The exit-1 and exit-2 cases need no
+# such assertion: their baseline is 0, so a no-op fails them loudly.
 case_run "four trees across three consumers is clean" 0 "check-path-map: clean (4 trees, 3 consumers)" "true"
 case_run "a consumer may list the trees in another order" 0 - \
-  "python -c \"import io,re;p='.github/workflows/ai-pipeline.yml';s=open(p,encoding='utf-8').read();s=s.replace('      - \\\"src/**\\\"\n      - \\\".github/workflows/**\\\"','      - \\\".github/workflows/**\\\"\n      - \\\"src/**\\\"');open(p,'w',encoding='utf-8',newline='\n').write(s)\""
+  "sed -i '/^      - \"src\/\*\*\"\$/d' .github/workflows/ai-pipeline.yml \
+   && sed -i 's#^      - \"CLAUDE.md\"#      - \"CLAUDE.md\"\n      - \"src/**\"#' .github/workflows/ai-pipeline.yml \
+   && [ \"\$(grep -E '^      - \"' .github/workflows/ai-pipeline.yml | tail -1)\" = '      - \"src/**\"' ]"
 case_run "backticked prose after the last arrow is not part of the map" 0 - \
-  "sed -i 's#^Nothing else in this file is parsed.#The same set is in \`ai-pipeline.yml\`; \`docs/postmortems/**\` keeps its own rule.#' CLAUDE.md"
-case_run "a pathspec entry quoted where it need not be is still one tree" 0 -   "sed -i \"s#-- src #-- 'src' #\" .github/workflows/_ai-review.yml"
+  "sed -i 's#^Nothing else in this file is parsed.#The same set is in \`ai-pipeline.yml\`; \`docs/postmortems/**\` keeps its own rule.#' CLAUDE.md \
+   && grep -qF 'docs/postmortems/**' CLAUDE.md"
+case_run "a pathspec entry quoted where it need not be is still one tree" 0 - \
+  "sed -i \"s#-- src #-- 'src' #\" .github/workflows/_ai-review.yml \
+   && grep -qF -- \"-- 'src' \" .github/workflows/_ai-review.yml"
 
 # --- a tree in the source that a consumer does not carry -----------------------------------
 # The acceptance criterion, as a fixture: adding a tree to the source fails until all three
@@ -168,6 +178,9 @@ case_run "a tree CLAUDE.md routes to the wrong checklist fails" 1 \
   "CLAUDE.md: the no-label row's path map is missing \`src/** -> alpha\`" \
   "sed -i 's#^\`src/\*\*\` → \`docs/reference/work-types/alpha/review.md\`;#\`src/**\` → \`docs/reference/work-types/beta/review.md\`;#' CLAUDE.md"
 case_run "a tree routed to a work type nobody enables fails at the source" 1   ".claude/profile.yml: \`review.path_map\` routes \`src/**\` to \`alpha\`, which \`work_types.enabled\` does not name"   "sed -i '/^    - alpha$/d' .claude/profile.yml"
+case_run "a tree listed twice in the source fails there, not silently" 1 \
+  ".claude/profile.yml: \`review.path_map\` lists \`src/**\` more than once" \
+  "sed -i 's#^      paths: \[\"src/\*\*\"\]#      paths: [\"src/**\", \"src/**\"]#' .claude/profile.yml"
 case_run "a tree listed twice in one consumer fails" 1 \
   "\`on.pull_request.paths\` lists \`src/**\` more than once" \
   "sed -i 's#^      - \"src/\*\*\"#      - \"src/**\"\n      - \"src/**\"#' .github/workflows/ai-pipeline.yml"
@@ -205,7 +218,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root with no profile at all exits 2, not 1" \
               || fail_case "a root with no profile at all exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=25
+EXPECTED=26
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

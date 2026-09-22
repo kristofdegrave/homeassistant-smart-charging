@@ -308,7 +308,7 @@ def rel(root: Path, path: Path) -> str:
 
 
 class Guide:
-    """What the check reads out of CLAUDE.md: headings, routing topics, the table, the map."""
+    """What the check reads out of CLAUDE.md: headings, routing topics, the selection table."""
 
     def __init__(self, text: str) -> None:
         self.text = text

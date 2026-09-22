@@ -8,8 +8,10 @@ in exactly the way a tree nobody thought about is, which is what makes the drift
 script is what notices.
 
 `.claude/profile.yml`'s `review.path_map` is the **source**. It is the only one of the four
-that says what a tree is *for* -- the work type whose checklist judges it -- and it is the copy
-the CI review worker resolves routing from. The other three are consumers:
+that says what a tree is *for* -- the work type whose checklist judges it -- and the only one
+in a form a script can read without parsing prose. Routing itself still resolves from
+`CLAUDE.md`'s Model selection table, which is where the CI review worker reads it; this copy is
+the source of the *set*, not of the routing. The other three are consumers:
 
   .github/workflows/ai-pipeline.yml   `on.pull_request.paths` -- GitHub's own path filter,
                                       which decides whether any job runs at all
@@ -225,16 +227,21 @@ def compare(source: list[tuple[str, str]], text: str, consumer) -> list[str]:
     return findings
 
 
-def unrouted(profile: dict, source: list[tuple[str, str]]) -> list[str]:
-    """Findings against the source itself: a tree routed to a work type nobody enables.
+def source_findings(profile: dict, source: list[tuple[str, str]]) -> list[str]:
+    """Findings against the source itself: a repeated tree, or one routed to no enabled type.
 
     Checked here rather than beside the rest of the profile's self-agreement, because the
     consumers below are compared against whatever this says: a tree routed to a work type with
     no checklist behind it would otherwise be propagated into all three, agreeing perfectly and
-    routing nothing.
+    routing nothing. The duplicate rule is the same one `compare` applies to each consumer --
+    the source needs it too, and needs it here, because the comparison below is set-based and
+    would collapse a repeated tree without a word.
     """
     enabled = list((profile.get("work_types") or {}).get("enabled") or [])
     findings = []
+    paths = [path for path, _ in source]
+    for repeated in sorted({p for p in paths if paths.count(p) > 1}):
+        findings.append(f"{SOURCE}: `review.path_map` lists `{repeated}` more than once")
     for path, work_type in source:
         if work_type not in enabled:
             findings.append(
@@ -257,7 +264,7 @@ def main(argv: list[str]) -> int:
     try:
         profile = profile_document(read(args.root, SOURCE))
         source = source_map(profile)
-        findings: list[str] = unrouted(profile, source)
+        findings: list[str] = source_findings(profile, source)
         for consumer in CONSUMERS:
             findings += compare(source, read(args.root, consumer[0]), consumer)
     except Unreadable as exc:

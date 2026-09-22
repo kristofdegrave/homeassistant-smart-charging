@@ -114,11 +114,11 @@ jobs:
     # caught instead. Whether it is a *required* status check is branch protection's call,
     # like `authoring`.
     #
-    # The job also carries the watched-path check (`.github/check-path-map.py`) and its
-    # fixtures, and the two PR-time halves of the upstream-drift check: its fixtures,
-    # and `--validate` over the real dependency manifest. Both belong beside the method check
-    # rather than in the weekly job -- they are agreements between files a PR edits, and the
-    # weekly job is where a break would go unnoticed.
+    # The job also carries the watched-path check (`.github/check-path-map.py`) with its
+    # fixtures, and the two PR-time halves of the upstream-drift check: its fixtures, and
+    # `--validate` over the real dependency manifest. All of them belong beside the method
+    # check rather than in the weekly job -- each is an agreement between files a PR edits, and
+    # the weekly job is where a break would go unnoticed.
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:

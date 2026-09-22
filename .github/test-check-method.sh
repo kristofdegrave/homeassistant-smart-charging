@@ -96,12 +96,9 @@ stacks:
       - gizmo
       - Widget Kit
 review:
+  # No `path_map` here: the changed-path map is .github/check-path-map.py's, not this check's,
+  # so a copy in this fixture would read as covered by a suite that never looks at it.
   interactive_cap: 2
-  path_map:
-    - work_type: alpha
-      paths: ["src/**"]
-    - work_type: beta
-      paths: [".claude/**", "docs/reference/**", "CLAUDE.md"]
 dependencies:
   stack:
     - name: stack-skill
