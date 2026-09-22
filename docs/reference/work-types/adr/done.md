@@ -4,7 +4,7 @@ What must be true of a finished ADR: the author self-checks against it, the revi
 How an ADR is written is `implement.md`; checks about the *change* belong with the reviewer. No
 6Cs pass — an ADR is judged on whether its options and trade-offs are real.
 
-**Scope: the bar scores a record the change adds.** On a record already `Accepted` on the base,
+**Scope: the bar scores a record the change adds.** On a record that already exists on the base,
 only review check (A) applies, and whether a permitted edit is itself correct — a finding the
 fixer may not act on is not raised.
 
@@ -87,7 +87,7 @@ left it otherwise is corrected once the pass is clean, before `needs-approval`. 
 human partner with any other Status → **Major**: the ADL row (item 2) would record a decision
 the log says was never taken.
 
-**(11) Links point only at targets that outlive the record.** An Accepted record's link is touched
+**(11) Links point only at targets that outlive the record.** A merged record's link is touched
 only once it has actually broken, so every link that can break is a future edit to an immutable
 record — a defect when written. A markdown link to a target the table does not mark linkable →
 **Major**:
@@ -103,9 +103,9 @@ record — a defect when written. A markdown link to a target the table does not
 | Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired | Named in prose, not linked. |
 
 Links only, not mentions: a path written in prose doesn't break. Applies to links the change
-writes in an ADR it **adds**. A link already in an Accepted record is out of scope: it stays
+writes in an ADR it **adds**. A link already in a merged record is out of scope: it stays
 until it actually breaks, and is then repaired under `implement.md`'s *Immutable once
-Accepted*.
+merged*.
 
 **(12) The Summary matches the record.** Applies to an ADR the change adds.
 - It names the chosen option as Considered options names it and accepts one of that option's

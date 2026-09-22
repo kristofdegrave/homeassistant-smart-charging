@@ -559,9 +559,9 @@ jobs:
             For any changed file under `docs/adl/`: before treating its Status as fixed/settled,
             run `git show ${{ inputs.base_sha }}:<path>` for that file (it
             will fail with "does not exist" for a brand-new ADR, which is fine — treat that as
-            a draft). Only an ADR whose Status was **already** `Accepted` on the base branch is
-            immutable; a Status introduced or still `Proposed` on this PR's head is a draft the
-            author can still fix normally.
+            a draft). Every ADR that exists on the base branch is immutable, whatever its Status
+            there — `Superseded` and `Deprecated` included; only a file this PR adds is a draft
+            the author can still fix normally.
 
             Additionally, run
             `gh api "repos/${{ github.repository }}/pulls/${{ inputs.pr_number }}/comments" --paginate`
