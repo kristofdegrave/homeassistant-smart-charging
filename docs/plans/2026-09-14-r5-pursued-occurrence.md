@@ -361,7 +361,7 @@ notification acceptance criterion in `requirements.md` for the behaviour; `UC05`
   `coordinator.py:731-738` (the latch comment block, which also states the fault-cycle rule the new
   field inherits), `coordinator_cycle.py:62` (`net_w`'s "coordinator.py's separate `smoothed_net_w`"
   — no longer separate), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
-  a second at T5), and `project-plan.md`'s Phase-2 status row (`:101`) alongside its E4 and M1 status
+  a second at T5), and `project-plan.md`'s Phase-2 status row (`:102`) alongside its E4 and M1 status
   lines, all describe a model this slice replaces. A grep for `urgency_latched` catches none of them,
   which is why this bullet is a list and not a grep.
 - `grep` `tests/` for `xfail`: none. T5's strict marker is the slice's only one and T13 removes it;

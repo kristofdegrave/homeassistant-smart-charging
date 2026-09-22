@@ -32,7 +32,7 @@ and by `system-overview.md`'s `escalated maximum permitted rate` and `maximum pe
 entries, which is where this spec cites it. The design layer now says the same in its own terms —
 `project-plan.md` E5 ("the readout to a raw one, R5's to the smoothed baseline") and
 `system-design.md` §5.1 (`:450`, `:452`), both of which fit the escalated rate's peak and C4
-headrooms to the smoothed baseline. `system-design.md:158` (Billing Protection) carries the
+headrooms to the smoothed baseline. `system-design.md:160` (Billing Protection) carries the
 in-force-versus-raised limit contrast.
 
 `system-design.md` §5.1's sequence is unchanged by this slice: no step is added, removed or

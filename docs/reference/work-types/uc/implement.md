@@ -66,10 +66,10 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 - **What, not how.** Describe observable behaviour. No modules, platform services, timer
   helpers, or persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
   ("the active SOC limit", "charger status") — the `sc_` binding lives in
-  `docs/analysis/entity-catalog.md`. For an autonomous behaviour the state set, its
-  transitions, their thresholds and the set-point rule **are** the observable contract, so a
-  State model is "what"; the excluded "how" is the code realization — which module, which timer
-  helper holds a cooldown, how the state survives a restart.
+  `docs/analysis/entity-catalog.md`. The bar's item 3.1 states it and judges it, carve-out
+  included. What that means while drafting: a State model is a *what*, so write the states,
+  transitions, thresholds and set-point rule without hedging — it is the code realization of
+  them that is the excluded *how*.
 - **Don't duplicate mechanism.** Reference `docs/analysis/control-cycle.md` (read → smooth →
   dispatch → clamp → set; peak clamp R3, grid ceiling clamp C4, rapid-cycling R11) and
   `docs/analysis/resolution-rules.md` (active SOC limit R7, departure deadline R14, effective

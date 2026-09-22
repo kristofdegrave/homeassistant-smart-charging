@@ -146,9 +146,8 @@ POINTER_TREES = (".claude", "docs", ".github/workflows")
 FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # Check 2 resolves its targets over the trees check 1 walks, minus these. A dated record is a
 # snapshot of what was true when it was written: docs/adl/** states a decision at a date and
-# docs/plans/** a plan or design of a task that has since shipped, so a path in one is a
-# record of where the file was, not a claim about the tree today -- rewriting it to resolve
-# would falsify the record. The two frozen trees are excluded for the reason check 1 excludes
+# docs/plans/** a plan or design of one build slice, so a path in one is a record of where the
+# file was, not a claim about the tree today -- rewriting it to resolve would falsify the record. The two frozen trees are excluded for the reason check 1 excludes
 # them. Every other tree check 1 walks is live prose that has to resolve.
 #
 # Check 1 keeps walking docs/adl and docs/plans, and the difference is not an inconsistency:
@@ -162,6 +161,13 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # `tests/test_dashboard.py`). The residual risk is stated rather than designed around -- an
 # upstream refresh could add a path this tree does not hold, and the answer then is a fix
 # upstream or an exclusion decided on that case, not a silent skip now.
+#
+# docs/plans is a RETIRED tree (ADR-0044) that is not yet empty: the plans of shipped slices are
+# deleted, and the pair of an open slice stays until its epic closes. Its entry here expires with
+# the last file, and four other sites expire with it -- the comment above, the fixture in
+# .github/test-check-method.sh that needs a docs/plans file to exercise this exclusion, and the
+# two method documents that describe this tuple, docs/reference/method/ci-pipeline.md and
+# docs/reference/method/ai-authoring.md. The deletion trigger itself is the cleanup skill's.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
@@ -521,8 +527,8 @@ def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings
     whatever the **Definition of Done** topic links to, so moving the file moves the check with
     it. Two stated limits. One direction only: a row for a label the profile no longer declares
     is indistinguishable from the fall-through row's own backticked labels -- the key set below
-    absorbs every backticked span in a row's first cell, `docs/plans/**`, `bug` and `enhancement`
-    included -- so a retired label's row is the reviewer's to catch, not this check's. And the
+    absorbs every backticked span in a row's first cell, `bug` and `enhancement` included -- so a
+    retired label's row is the reviewer's to catch, not this check's. And the
     topic's owner cell is read for its FIRST link: the cell this one carries holds exactly one,
     where other routing-table cells hold two, so a cell that ever leads with another document
     would need the first link that resolves instead.
