@@ -5,4 +5,7 @@ psutil==7.2.2
 pytest
 pytest-cov
 pytest-homeassistant-custom-component==0.13.346
-ruff==0.16.8
+# The one ruff pin: ci.yml's lint job installs the version named here. 0.16 also formats
+# Python code blocks inside Markdown, which the skills and docs are not written for; moving
+# past 0.15 is a decision of its own, not a routine bump.
+ruff==0.15.22
