@@ -86,7 +86,7 @@ merge** — the author's own claim, about whichever behaviours the author chose 
 branch. Every vertical slice therefore also gets a **verify-live** pass once it is
 deployed, run by the author of the merged slice ([idea-to-product.md](idea-to-product.md)'s
 **Verify live** stage places it in the wider flow). A vertical slice is what the flow's
-**Ticket** stage cuts a child issue to, so it is one task in its epic, one issue
+**Decompose** stage cuts a child issue to, so it is one task in its epic, one issue
 and one PR — the same unit this page's self-check ran on, observed again in a different place
 and against a different standard:
 

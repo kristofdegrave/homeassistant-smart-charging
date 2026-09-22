@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the order a decomposition's closing step files its children in.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of a decomposition's closing step — running its review pass, and filing its children.
 ---
 
 # File a task issue
@@ -9,7 +9,7 @@ Filing an issue correctly the first time avoids a wasted `needs-draft` cycle lat
 is the checklist to run through before running `gh issue create`, not a replacement for
 deciding *what* the issue is about.
 
-Context labels, project-board Size/Estimate fields, the anchored `Source:` lines, and epic
+Context labels, project-board Size/Estimate fields and epic
 membership (native sub-issues and blocked-by edges) are all defined once, and `CLAUDE.md`'s
 **Issue conventions** section routes to wherever that is — start there for what each means and
 when it applies. *Which* issues a strand gets and in what order — the epic whose body is the
@@ -25,7 +25,10 @@ half-scoped.
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
 2. **Pick the one context label**, set Size/Estimate, and — for a child of a decomposition —
-   write the anchored `Source:` lines, per **Issue conventions** above. A finding against
+   write the anchored `Source:` lines. What each entry's sources name, and how finely, is the
+   closing step's, under `CLAUDE.md`'s **Idea-to-product flow**; the line's own format belongs
+   to **Issue conventions** and is not stated there yet, so follow the shape the epic body's
+   **Sources** key already uses. **Issue conventions** covers the other fields. A finding against
    already-shipped behaviour also takes a **kind label** (`bug`/`enhancement`); which labels
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
@@ -43,36 +46,28 @@ half-scoped.
 
 ## Filing the children of a decomposition
 
-A decomposition's children are filed as one closing step, and each stage below finishes before
-the next starts. What the epic body must contain, and the checklist the pass applies, are the
-closing step's, per **Idea-to-product flow** above.
+The closing step's four steps, their order and what the epic body must contain are the flow's,
+per **Idea-to-product flow** above — don't re-derive them here. This section holds the mechanics
+of the two steps that have any; the checklist the pass applies is `CLAUDE.md`'s **Decomposition
+checklist**.
 
-1. **The epic body is written.** It is the spec, so nothing else has to be drafted first and no
-   child exists yet to be cut from it.
-2. **One agent pass over that body**, while the decomposition is still cheap to change. Write
-   the body to a scratch file — the `reviewer` agent reads files and reaches no tracker — and
-   spawn that agent once, naming the scratch file's absolute path and the decomposition
-   checklist it is to apply. Fix what it finds in the epic body itself: there is no PR here, so
-   there is no review payload to post and no thread to resolve. Read the body back from the
-   tracker afterwards, so the fix is confirmed rather than assumed. While that checklist has no
-   file yet, say so in the dispatch: the agent's own rule for criteria it cannot read then
-   makes the gap part of its report, rather than leaving a pass run with no criteria to read
-   as a clean one.
-3. **The human partner reads the fixed body and says to go on.** The pass is one agent run
-   followed by that read — it is not repeated and carries no round cap, so a finding it raises
-   is answered before the read rather than in a later round.
-4. **The children are filed**, in build order, each through the checklist above: its own task
-   text as the body, its `Source:` lines, its native sub-issue edge to the epic, and a
-   blocked-by edge to each child it cannot start before.
+- **Running the pass** (the flow's step 2). Write the body to a scratch file — the `reviewer`
+  agent reads files and reaches no tracker — and spawn that agent once, naming the scratch
+  file's absolute path and that checklist. Fix what it finds in the epic body itself: there is
+  no PR here, so there is no review payload to post and no thread to resolve. Read the body back
+  from the tracker afterwards, so the fix is confirmed rather than assumed.
+- **Filing the children** (the flow's step 4). Each goes through the checklist at the top of
+  this file: its own task text as the body, its `Source:` lines, its native sub-issue edge to
+  the epic, and a blocked-by edge to each child it cannot start before.
 
 Done when every task in the epic body has an issue carrying its label, Size/Estimate, `Source:`
 lines and edges, and no task in that body is left without one.
 
 ## Common mistakes
 
-The conventions are `CLAUDE.md`'s **Issue conventions**, not this list; the ones this skill's
-users trip on most are the context label, the `Source:` lines, Size and Estimate, and epic
-edges.
+The conventions are `CLAUDE.md`'s **Issue conventions**, not this list — except the `Source:`
+lines, whose owner is item 2 above; the ones this skill's users trip on most are the context
+label, those lines, Size and Estimate, and epic edges.
 What a drafter run does when one of them is wrong is the CI side of `CLAUDE.md`'s
 **Contribution workflow**. The mistakes that are this skill's own:
 
