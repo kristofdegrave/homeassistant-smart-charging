@@ -38,8 +38,8 @@ stake.
 **(4) The considered options are real.**
 - Every option has at least one genuine Pro **and** one genuine Con. No real Con → **Major**:
   the option was not seriously considered, or a Con is being hidden.
-- At least one **rejected** option. Only the chosen one → **Major**. "Do nothing" counts when
-  it was genuinely on the table.
+- At least one **rejected** option. Only the chosen one → **Major**. "Do nothing" / "keep the
+  status quo" counts when it was genuinely on the table.
 - The Decision **references** the options' trade-offs rather than restating them, and adds no
   argument the Considered options section doesn't ground. New ungrounded argument →
   **Major**; mere restatement → **Minor**.
@@ -50,8 +50,9 @@ stake.
 
 **(6) The Blast radius enumeration is complete.** Consequences carry the enumeration
 `docs/adl/template.md` specifies: a re-runnable search, a verdict per hit, an explicit
-out-of-scope list. Run the search exactly as written; one that needs translating before it runs
-is itself a finding. **Major** in each case, naming the sites missed:
+out-of-scope list. Run the search exactly as written: the template requires it in the dialect you
+hold, so one that needs translating before it runs fails the width test below. **Major** in each
+case, naming the sites missed:
 - the section is absent;
 - the search fails the template's width test, dropping something the decision also governs;
 - a hit is in neither the table nor the out-of-scope list.
@@ -65,14 +66,14 @@ Applies to an ADR the change **adds**. An existing record it only modifies is ou
 adding the section there would be the immutability violation the reviewer scores as Critical.
 
 **(7) One problem, one decision.** An ADR bundling two or more independent structural choices
-is split → **Major**.
+→ **Major**; split it.
 
 **(8) It doesn't contradict an Accepted ADR without superseding it.** Where it contradicts one,
 it says so, and the old ADR's **Status line only** reads `Superseded by ADR-NNNN`. A
 contradiction with no supersession → **Critical**.
 
 **(9) Terminology matches** the glossary in `docs/analysis/system-overview.md` and the usage in
-other ADRs → **Minor**.
+other ADRs. A term that departs from them → **Minor**.
 
 **(10) Status is `Accepted` before `needs-approval`.** The only home of this convention: **an
 ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it. A round that
@@ -89,15 +90,15 @@ this list → **Major**:
 | Another ADR | Always linkable, whole-file — supersession and narrowing must be navigable. |
 | `docs/analysis/system-overview.md`, `requirements.md`, `entity-catalog.md`, `resolution-rules.md`; `docs/design/system-design.md` | Linkable; anchored where it points at a definition, row or clause. Unanchored there → **Minor**. |
 | A use-case | Cited by identifier (`UC12`), never linked: the filename embeds the title, so a retitle breaks the link. |
+| The issue comment recording a `research` finding the Context rests on | Linkable — the comment is the record of how the finding was established, per the `research` skill. |
 | An external URL | Only when the decision is *about* the external thing (a template's source, a dependency adopted), with its identity legible in prose so a dead link still leaves a name. |
-| Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired, an issue or PR | Named in prose, not linked. |
+| Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired, any other issue or PR | Named in prose, not linked. |
 
-Links only, not mentions: a path written in prose doesn't break.
+Links only, not mentions: a path written in prose doesn't break. Applies to links the change
+writes in an ADR it **adds**. A link already in an Accepted record is out of scope: repairing it
+would be the immutability violation the reviewer scores as Critical.
 
 ## Architecture Decision Records (ADRs)
-
-When a decision is an ADR at all — the test item 1 applies, reached from `CLAUDE.md`'s routing
-table under this heading.
 
 ### Every architectural decision is captured before the work that depends on it
 
@@ -118,7 +119,8 @@ A choice about structure that is expensive to reverse or materially constrains f
 Borderline case: would reversing this choice touch more than one module, or a contract other
 code depends on? This supplements the categories above, never overrides them — a *product-code*
 choice listed there stays architectural even when well encapsulated. Only the carve-outs below
-narrow that. Serious deliberation is not proof either way.
+narrow that. Serious deliberation is not proof either way: weigh it against the reach test and
+the *why* question.
 
 - **Test, CI or dev-tooling choices** — which tool or library a script calls (a benchmarking
   library, a measurement helper, a lint tool). Not architectural unless product code takes a
@@ -132,8 +134,8 @@ narrow that. Serious deliberation is not proof either way.
 
   The line is **who is bound by the choice**, not which directory holds the code: a taxonomy
   binds every future test and reviewer, a library only the files importing it. So a test
-  fixture's internals are on the library side however elaborate; its tier is on the taxonomy
-  side.
+  fixture's or simulator's internals are on the library side however elaborate; its tier is on
+  the taxonomy side.
 - **Domain/business rules** — a formula, a precedence order, which values are surfaced — even
   when seriously debated. They go in `docs/analysis/requirements.md` or
   `docs/analysis/resolution-rules.md`. Surfacing, renaming or mirroring an existing config

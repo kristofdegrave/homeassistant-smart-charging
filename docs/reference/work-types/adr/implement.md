@@ -25,29 +25,34 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 ## Drafting
 
 1. **Cross-check existing ADRs and design docs first** — does this contradict an Accepted ADR?
-   The bar's item 8 judges the result. Cheap before the Decision is written, expensive after;
+   The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, judges the
+   result. Cheap before the Decision is written, expensive after;
    the step most often skipped.
 2. **Draft against `docs/adl/template.md`**, section by section:
-   - **Context — the forces, not the derivation.** The bar's item 3 judges it. Write what was
-     found, not how: one sentence naming the site beats four paragraphs proving it. Cite
-     (`R7`, `UC03`, ADR-0024) rather than quoting or re-deriving.
+   - **Context — the forces, not the derivation.** The bar's item 3, *Context states the
+     forces*, judges it. Write what was found, not how: one sentence naming the site beats four
+     paragraphs proving it.
    - **Considered options** — every option seriously evaluated, each with a real Pro and Con
-     (the bar's item 4). Reached this section with only the chosen option? Stop and name what
-     else was on the table, even "do nothing".
+     (the bar's item 4, *The considered options are real*). Reached this section with only the
+     chosen option? Stop and name what else was on the table, even "do nothing".
    - **Decision** — name the option and point at its trade-offs; don't restate them.
    - **Consequences** — follow-up work, what gets easier or harder, and the Blast radius per
-     the template (the bar's item 6).
-   - **Links** — only the targets the bar's item 11 allows; name everything else in prose.
+     the template (the bar's item 6, *The Blast radius enumeration is complete*).
+   - **Links** — only the targets the bar's item 11, *Links point only at targets that outlive
+     the record*, allows; name everything else in prose.
      For example the use-case is cited as `UC12`, never linked by its file.
 
 ## Rules
 
-- **One problem, one decision per ADR** — the bar's item 7. A design doc bundling several
-  architectural choices yields several ADRs.
+- **Reference, don't restate.** Anywhere in the record, cite a requirement or use-case (`R7`,
+  `UC03`) rather than re-deriving it.
+- **One problem, one decision per ADR** — the bar's item 7, *One problem, one decision*. A
+  design doc bundling several architectural choices yields several ADRs.
 - **One PR per ADR** — no second ADR, no unrelated non-ADR work, however close. The ADL row
   (the bar's item 2) and any supersession Status-line edit (item 8) belong in that same PR. A
   genuine follow-up on the same ADR uses the workflow's multi-PR convention for its issue.
-- **Status `Accepted` from the first draft** — the bar's item 10 is the rule's only home.
+- **Status `Accepted` from the first draft** — the bar's item 10, *Status is `Accepted` before
+  `needs-approval`*, is the rule's only home.
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
@@ -57,8 +62,9 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   lives in the `adr` row's review column and CI's review prompt, and is not a duplicate of
   this. Two guards, because the rule is easy to over-apply:
   - **Read "Accepted" from the base, not the working tree:** `git show <base>:<path>`, `<base>`
-    the base commit the caller gives (CI's prompt supplies it; locally, the PR's base). Under
-    the bar's item 10 every draft reads `Accepted` in the working tree.
+    the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
+    branch name may not resolve in a fresh checkout. Under the bar's item 10 every draft reads
+    `Accepted` in the working tree.
     - Not on the base, or not `Accepted` there → fix normally.
     - Base unreadable (no ref fetched, command unavailable) → don't fall back to the working
       tree. Treat the record as Accepted, so only a finding that the *decision* is wrong is
@@ -71,9 +77,8 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 
 ### Skills
 
-`research` for the facts Context rests on: state the finding as a fact and name its primary
-source in prose — linked only where the bar's item 11 allows an external URL. `receiving-code-review`
-in the review step. This work type names no stack skill.
+`research` for the facts an ADR's Context rests on, cited from the record by linking the issue
+comment; `receiving-code-review` in the review step. This work type names no stack skill.
 
 ## Common mistakes
 
