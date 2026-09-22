@@ -172,7 +172,7 @@ urgency comes to be in effect.
   resolved to "no deadline" — or the deadline capability is absent, so no deadline is resolved at
   all (R18) — no required current is computed and deadline urgency never applies.
 - **[Required current](system-overview.md#ubiquitous-language)** = energy needed ÷ time
-  remaining, converted to amperes via the resolved supply voltage (NF4).
+  remaining, converted to amperes via the resolved supply voltage (R22).
 - **[Escalated maximum permitted rate](system-overview.md#ubiquitous-language)** = the
   [maximum permitted rate](system-overview.md#ubiquitous-language) that *would* be in force if
   deadline urgency were engaged — that is, with the effective peak limit at the maximum peak

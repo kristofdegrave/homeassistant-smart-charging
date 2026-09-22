@@ -179,7 +179,7 @@ stateDiagram-v2
 
 - **R2** — Solar-only charging (start threshold default 1300 W, configurable amp-step rounding strategy — default `round down` keeping net import ≤ 0 W — bounded post-surplus hold (default 1 minute) before stopping, never charged from the grid under the default strategy outside that bounded hold).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3, only while the CapTar capability is present — R18) and grid-supply-ceiling (C4, always) clamps (`control-cycle.md`), voltage-aware conversion (NF4), and the solar capability gate (R18).
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md`), the rapid-cycling cooldown/min-current/restart-debounce invariant (R11) and the peak-protection (R3, only while the CapTar capability is present — R18) and grid-supply-ceiling (C4, always) clamps (`control-cycle.md`), voltage-aware conversion (R22), and the solar capability gate (R18).
 
 ## Relationships
 
