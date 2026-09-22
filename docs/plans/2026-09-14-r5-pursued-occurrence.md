@@ -248,7 +248,7 @@ path the split changes); **plain pytest** · `tests/test_coordinator_cycle.py` f
 the smoothing window and the debounced raw value disagree — asserts, in one test:
 
 - the escalated rate's **peak** bound is computed from the smoothed baseline;
-- its **C4 ceiling** bound is computed from the smoothed net reading (D-3, and #1167);
+- its **C4 ceiling** bound is computed from the smoothed net reading (`requirements.md` R5 `:91`);
 - the R3 clamp and the C4 clamp both still compute from raw;
 - `sensor.smart_charging_peak_headroom_a` is still the raw-based readout.
 
@@ -285,10 +285,10 @@ reader to infer it from the neighbour.
 **Mutation checks**, two — point the peak bound back at `ctx.baseline_w`, then the C4 bound back at
 `ctx.net_w`, and confirm the test fails each time on its own.
 
-**Anchors:** `requirements.md` R5 and R10; `system-overview.md`'s `escalated maximum permitted rate`
-and `maximum permitted rate` entries. **ADR-0012** governs the `CycleContext` field. D-3 records why
-no R3 deferral is applied (#1164) and why both bounds move rather than one (#1167) — both are asks
-against the analysis layer, and if either lands the other way, the source wins.
+**Anchors:** `requirements.md` R5 `:90-92` — the smoothed operand, every reading-dependent bound
+fitted to it, and no R3 deferral on it — and R10; `system-overview.md`'s `escalated maximum
+permitted rate` and `maximum permitted rate` entries. **ADR-0012** governs the `CycleContext`
+field.
 
 ## T11 — The two ACs that rot silently
 
@@ -375,8 +375,7 @@ notification acceptance criterion in `requirements.md` for the behaviour; `UC05`
 
 - **#1006 closes into this slice.** Its premise — a missed-deadline hold to build — no longer holds:
   T2 makes it a comparison. Close it referencing this plan rather than working it.
-- **#1164**, asking R5 or the glossary to state the undeferred smoothed operand in one line, and
-  **#1167**, asking it to state which reading each of the escalated rate's bounds is fitted to. Both
-  non-blocking; if either lands contradicting D-3, the source wins.
-- **#1141** brings `docs/design/` into line with the smoothed/raw split this slice builds. Not a
-  dependency — this spec derives from the analysis layer, which already states it.
+- Nothing else. The three asks this plan was drafted alongside have all landed: `requirements.md`
+  R5 `:90-92` now states the smoothed operand, its reading-dependent bounds and the absence of an
+  R3 deferral outright, and `docs/design/` states the same split in its own terms — so D-3 cites
+  them rather than deriving them.
