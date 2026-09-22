@@ -160,8 +160,8 @@ ADR-0011's no-direct-call rule can be checked for every Manager written from her
   guarantee — the inverse of `engines/`. Its tests are HA-harness tests under ADR-0009, and the
   boundary it makes checkable is ADR-0011's (no Manager imports another Manager), not
   "no `homeassistant.*` import".
-- This unblocks the M2 build from **Phase 3 onward** — the vehicle-limit slice's first build task
-  is where `custom_components/smart_charging/managers/vehicle_limit.py` is created. That slice
+- This unblocks the M2 build from **Phase 3 onward** — the vehicle-limit slice's Task 3.1 is where
+  `custom_components/smart_charging/managers/vehicle_limit.py` is first created. That slice
   already builds against `managers/vehicle_limit.py` and `tests/managers/test_vehicle_limit.py`,
   so its task text needs no edit; the M2 design's §8/§9.4 gate wording ("task set 4") under-states
   the first affected task and should be corrected in the follow-up.

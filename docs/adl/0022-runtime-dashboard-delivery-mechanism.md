@@ -10,8 +10,8 @@ The runtime dashboard's (UC11, R19) card types, layout, and label-driven extensi
 dashboard was specified, and that specification explicitly left "how the dashboard reaches the
 user" as an open question, deliberately out of scope there. Sequencing the dashboard work is where
 that gap was identified as needing its own ADR before the C5 implementation spec can be written;
-it initially framed the dependency as "HA's frontend/Lovelace **storage** API," a framing this ADR
-refines once the option set below is laid out in full — the chosen mechanism turns out not to use
+that sequencing initially framed the dependency as "HA's frontend/Lovelace **storage** API," a
+framing this ADR refines once the option set below is laid out in full — the chosen mechanism turns out not to use
 the storage API at all.
 
 That question has real, hard-to-reverse structural weight, so it gets its own ADR rather than

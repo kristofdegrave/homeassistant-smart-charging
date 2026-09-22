@@ -282,7 +282,7 @@ toggles.*
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3), reached through RA4, the Notification Resource Access | notification delivery target | (M3, `notification_manager.py`) | UC12 |
+| `notification_target` | adapter role | — | — | mapped to a `notify`-domain entity (NF3; RA4 — the [Notification Resource Access](../design/system-design.md)) | notification delivery target | (M3, `notification_manager.py`) | UC12 |
 | `reminder_lead_h` | config-options | options | h | 8 | plug-in reminder lead time (R12) | UC10 | user (anytime), UC12 |
 | `sensor.smart_charging_reminder_lead_h` | state | — | h | mirrors `reminder_lead_h` (config-options); disabled by default (ADR-0031) | plug-in reminder lead time (R12) | user | — |
 | `deadline_notice_enabled` | config-options | options | — | on | unreachable-deadline notice enable (R5, R18) | UC05 | user (anytime), UC12 |

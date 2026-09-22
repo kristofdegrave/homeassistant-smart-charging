@@ -231,7 +231,8 @@ per ADR-0021's own precedent.
   `_tile(entry.data[CONF_CHARGER_STATUS_ENTITY])` — should bind to the new sensor instead, closing
   the R19 AC1 gap this ADR's Context describes. The raw entity remains the *mapping* input either
   way; only the tile's binding changes. The new binding is recorded in whichever implementation
-  spec makes the change.
+  spec makes the change, not by rewriting the completed dashboard slice's own entity table — that
+  is a dated record of a finished slice, and at most gains a pointer forward.
 - The new sensor's state and `adapter_readings`' `charger_status` attribute must be fed from the
   same cached reading, so the two can never report different values for the same cycle. This is
   cheap for this role specifically: `coordinator.py`'s required-role read already assigns

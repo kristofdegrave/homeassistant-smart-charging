@@ -50,9 +50,10 @@ if (
 
 `is_soc_gated` is **False** on `_OffModeHandler` and `_PowerModeHandler` and True on the three
 SOC-gated handlers (`coordinator_cycle.py`), by design: the gate exists so `Power`/`Off` do not
-regress to needing an SOC sensor — stated as "success-criterion 6 / S2" in the spec of the slice that built the gate, and carried
-into `coordinator.py`'s own comment at the fault return. It is a slice-level criterion rather than
-a numbered requirement, which is why it is cited by that name. So `Manual`+`Off`, `Manual`+`Power`, and `Auto` without the
+regress to needing an SOC sensor — stated as "success-criterion 6 / S2" in the spec of the slice
+that built the gate, and carried into `coordinator.py`'s own comment at the fault return. It is a
+slice-level criterion rather than a numbered requirement, which is why it is cited by that name
+rather than by number. So `Manual`+`Off`, `Manual`+`Power`, and `Auto` without the
 CapTar capability — whose urgency row escalates to `Power` — reach the deadline block with
 `ev_soc is None`, a live occasion, and no fault. R5 is cross-cutting: it applies in every mode, which
 is precisely why `ev_soc`'s absence is not a fault outside the SOC-gated gate.
@@ -262,8 +263,8 @@ things, and the edge detector must then be told which — it cannot be recovered
   SOC-gated. The durable reason is that the cycle establishes nothing; the wording should say that,
   so the rule does not rest on a premise a `Power`/`Off` reader can falsify.
 - **Not this ADR's to fix**: `docs/analysis/resolution-rules.md`'s unconditional "a hold never
-  outlives one deadline cycle", which the same spec's second known deviation shows a sustained SOC-role
-  outage can suspend. That is a requirement-level clause in a different tree with a different
+  outlives one deadline cycle", which the R5 pursued-occurrence slice's second known deviation shows
+  a sustained SOC-role outage can suspend. That is a requirement-level clause in a different tree with a different
   reviewer, and gets its own `requirement` issue.
 - **What becomes harder.** ADR-0024's "every exit clears for free" no longer holds: a future guard
   that short-circuits to `unreachable=False` must declare which half it is, and one that forgets fires
@@ -308,8 +309,10 @@ things, and the edge detector must then be told which — it cannot be recovered
    and **2** out of scope under 3. With the explicitly listed `requirements.md` the table accounts
    for 13 files, so 15 sites are enumerated in all.
 
-   *(Amended when the per-slice spec tree was retired: the rows and out-of-scope entries that named
-   files in that tree went with it, and the counts above are of the sites that remain. The
+   *(Amended ahead of the per-slice spec tree's retirement: the rows and out-of-scope entries that
+   named files in that tree were removed, and the counts above are of the sites that survive it.
+   Until that tree is gone the search as written still returns those files, so a reader running it
+   today gets the pre-amendment figures — 24 files, 16 in the table and 8 out of scope. The
    decision, its Status and every other line of this record are unchanged.)*
 
 2. **Per-hit verdict** (rows grouped by verdict; every file the search returns appears here or in 3).
