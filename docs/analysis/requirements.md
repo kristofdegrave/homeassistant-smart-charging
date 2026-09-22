@@ -388,7 +388,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ## Non-functional requirements
 
-A non-functional requirement states a quality of the product, never how it is built. NF1, NF2 and NF4 are **retired entries**: each keeps its heading so that every existing citation of it still resolves, carries no criteria of its own, and names where its content went. A new citation names that destination, never the retired id.
+A non-functional requirement states a quality of the product, never how it is built. NF1, NF2 and NF4 are **retired entries**: each keeps its heading so that every existing citation of it still resolves, carries no criteria of its own, and names the requirement or the decision records that now hold its content. A new citation names that destination, never the retired id.
 
 ### NF1 — Coordinator executes modes; profiles select them
 
@@ -398,19 +398,21 @@ A non-functional requirement states a quality of the product, never how it is bu
 
 ### NF2 — One self-contained unit per mode and per profile
 
-**Retired.** This was a statement of code structure, not a quality of the product. That each charging mode and each profile is its own self-contained unit is decided by [ADR-0002](../adl/0002-domain-and-package-layout.md), [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one quality — a mode or profile changed alone — is NF3's AC2.
+**Retired.** This was a statement of code structure, not a quality of the product. That each charging mode and each profile is its own self-contained unit is decided by [ADR-0002](../adl/0002-domain-and-package-layout.md), [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one quality — a mode or profile changed alone — is now NF3's criterion on changing one mode or profile.
 
 ---
 
 ### NF3 — All device I/O via adapter roles
 
 **Priority:** Must
-**What:** The system assumes no particular charger, vehicle or meter: every reading it takes and every command it issues crosses an [adapter role](system-overview.md#ubiquitous-language) the installation maps to its own device, so one piece of hardware — or one charging mode or profile — can be replaced without changing the rest. How charging logic is kept to adapter roles is [ADR-0003](../adl/0003-hardware-abstraction-adapters.md)'s decision.
+**What:** The system assumes no particular charger, vehicle or meter: every reading it takes and every command it issues crosses an [adapter role](system-overview.md#ubiquitous-language) the installation maps to its own device, so one piece of hardware can be replaced without changing the rest, and each charging mode or profile can likewise be changed on its own.
 
 **Acceptance criteria:**
 
 - [ ] Replacing the underlying charger or vehicle requires re-mapping only the affected adapter role, not changing the charging logic.
-- [ ] A charging mode or profile can be changed, replaced, or added one at a time without altering the others.
+- [ ] Changing, replacing or adding one charging mode or profile leaves the observable behaviour of every other mode and profile unchanged.
+
+How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003-hardware-abstraction-adapters.md).
 
 ---
 
