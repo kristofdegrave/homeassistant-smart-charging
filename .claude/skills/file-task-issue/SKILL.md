@@ -44,20 +44,18 @@ half-scoped.
 ## Filing the children of a decomposition
 
 A decomposition's children are filed as one closing step, and each stage below finishes before
-the next starts. What the epic body must contain, and the checklist the pass applies, are the
-closing step's, per **Idea-to-product flow** above.
+the next starts. What the epic body must contain is the closing step's, per
+**Idea-to-product flow** above; the checklist the pass applies is `CLAUDE.md`'s
+**Decomposition checklist**.
 
 1. **The epic body is written.** It is the spec, so nothing else has to be drafted first and no
    child exists yet to be cut from it.
 2. **One agent pass over that body**, while the decomposition is still cheap to change. Write
    the body to a scratch file — the `reviewer` agent reads files and reaches no tracker — and
-   spawn that agent once, naming the scratch file's absolute path and the decomposition
-   checklist it is to apply. Fix what it finds in the epic body itself: there is no PR here, so
-   there is no review payload to post and no thread to resolve. Read the body back from the
-   tracker afterwards, so the fix is confirmed rather than assumed. While that checklist has no
-   file yet, say so in the dispatch: the agent's own rule for criteria it cannot read then
-   makes the gap part of its report, rather than leaving a pass run with no criteria to read
-   as a clean one.
+   spawn that agent once, naming the scratch file's absolute path and the **Decomposition
+   checklist** it is to apply. Fix what it finds in the epic body itself: there is no PR here,
+   so there is no review payload to post and no thread to resolve. Read the body back from the
+   tracker afterwards, so the fix is confirmed rather than assumed.
 3. **The human partner reads the fixed body and says to go on.** The pass is one agent run
    followed by that read — it is not repeated and carries no round cap, so a finding it raises
    is answered before the read rather than in a later round.

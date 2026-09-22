@@ -274,7 +274,7 @@ session's own footprint by the session's markers, never by author.
   raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
   its children's estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
-  **Ticket** stage for the full cycle (when to file the epic, what to file immediately vs.
+  **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
   relationship**. Neither is body text —
