@@ -108,6 +108,11 @@ would be the immutability violation the reviewer scores as Critical.
 - In the shape and within the length `docs/adl/template.md` specifies. Longer, or another
   shape → **Minor**.
 
+**(13) No clutter**, as the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../method/ai-authoring.md#vocabulary) defines it, at its
+severities and in its scope. Item 3's derivation Minor is that test applied to
+Context.
+
 ## Architecture Decision Records (ADRs)
 
 ### Every architectural decision is captured before the work that depends on it

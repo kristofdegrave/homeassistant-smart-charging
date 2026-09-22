@@ -15,6 +15,9 @@ Applying those two literally would flag a work file for naming a `docs/` path or
 command, which is exactly what the carve-out permits. Author and reviewer build against the
 same list.
 
+**One Vocabulary entry, *Clutter*, reaches further than this file's subject**, and states its
+own reach there.
+
 **The harness configuration is a fourth artifact under `.claude/`, and this reference does not
 govern it.** `.claude/settings.json` and the hooks it wires (`.claude/hooks/`) drive Claude
 runs as surely as a skill does — a `PreToolUse` guard decides whether a tool call happens at
@@ -97,8 +100,33 @@ lands: a concept's definition, rules and caveats under one heading. The context-
 vocabulary is the counter-example — values canonical in `contribution-workflow.md`, CI-side sync
 obligation in `ci-pipeline.md`, the `workflow` review checklist spending a paragraph
 reassembling the two.
-**Sprawl** is length itself, even where every line is live and unique: `domain-driven-design` is
-194 upstream-intact lines in a tree every cold run loads.
+**Sprawl** is length itself where the material is always loaded: every line is re-read by every
+cold run, even where each is live and unique. `CLAUDE.md` is the case — loaded in full on every
+run (item 2 above), and held to a routing table for that reason. Anywhere else, length is not a
+Sprawl finding; clutter, below, is the test.
+
+**Clutter** is content a reader of *this* document does not need, because another document owns
+it or it states no fact. It is the one entry here that reaches past this file's subject: it binds
+every document whose completion bar or review checklist points here for it. Three forms, each
+with what its finding must name:
+- **Restatement** — a formula, threshold, rule, rationale or fact reproduced from the document
+  that owns it instead of cited, leaving the reader two copies to reconcile. The finding names
+  the owner.
+- **Narrative** — text around a decision that states no fact the decision does not carry: how
+  the problem was found, what was tried first, how the discussion went. The finding says why
+  removing it loses no fact.
+- **An oversized example** — a worked example longer than the rule it illustrates. The finding
+  names the rule, and what a shorter example that still teaches it would drop.
+
+A finding that cannot name what its form requires is not clutter. **Length alone is never a
+clutter finding**: a long document whose every line is load-bearing is correct, and splitting
+one to look shorter only moves the duplication. A length a template sets is conformance, judged
+by that document's own bar. Severity: **Minor**; **Major** where a restated copy already
+disagrees with its owner, since a reader then has two answers. Scope: as **Permanent scope: as
+written or changed, never as a sweep** below states it for pointers, read for the content a
+change writes. ADR-0042's Context is the worked example: it quotes ADR-0024's exit-table row and R5's
+criterion and traces `_run_cycle`'s early returns — restatement and narrative — where one sentence
+naming the site carries the force.
 
 **Completion criteria.** Every step ends on a condition telling the run it is done. *Clarity*:
 can it tell done from not-done? A fuzzy bound invites **premature completion** — stopping early
