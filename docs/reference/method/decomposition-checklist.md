@@ -29,8 +29,9 @@ item scores against whichever documents hold those here.
 
 - The epic body, in full, before scoring anything.
 - The **closing step** of the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to — it
-  fixes what the body carries and what a task entry's keys are, which items (1), (3) and (4)
-  score against rather than restate.
+  fixes what the body carries, what a task entry's keys are and how its sources are cut.
+  Wherever an item below says the closing step fixes something, it scores against that rule
+  rather than restating it, so the step has to be read before any such item is applied.
 - `docs/design/system-design.md` and `docs/design/project-plan.md` — the slice the body claims
   to derive from, and the services it may name.
 - The analysis documents the body cites, every requirement it lists as in scope, and
@@ -41,10 +42,9 @@ item scores against whichever documents hold those here.
 ## The checklist
 
 Two items below re-state a list the closing step owns — the body's sections in (1), the task
-entry's keys in (4). A gate names its owner and stops there; a checklist cannot, because it has
-to attach a severity to each element. The lists are therefore scored here and defined
-there, and
-a change to either belongs in the closing step first.
+entry's keys in (4). A gate names its owner and stops there; a checklist cannot, because it
+has to attach a severity to each element. The lists are therefore scored here and defined
+there, and a change to either belongs in the closing step first.
 
 **(1) The body carries its own sections.** The closing step fixes what a body must hold; score
 it against that list before scoring anything in it. A body with no scope statement and success
@@ -99,15 +99,15 @@ that document — never a recommendation to cut the text here, which holds the o
 
 **(9) The sources are granular enough to work from, and no more.** What is scored here is each
 task entry's **Sources** key — the pass runs before any child is filed, so the anchored
-`Source:` lines cut from it do not exist yet. Read them as the worker will: do they reach
-what the task needs without handing it the whole tree?
+`Source:` lines cut from it do not exist yet. Read them as the worker will: do they reach what
+the task needs without handing it the whole tree?
 A line naming a document where the task turns on one section of it is **Minor** — the worker
 re-derives the reading the decomposer already did. A line anchored so tightly that the section
 around it is needed to make sense of it is **Minor** for the mirror reason. A task whose lines
 do not reach a document it plainly requires is **Major**. Granularity is all this item
 scores, against the
-smallest-self-contained-unit rule the closing step states with the **Sources** key. The line's
-format is fixed by ADR-0044 and is not yet written into a method document — until it is, that
+smallest-self-contained-unit rule the closing step states with the **Sources** key. The
+eventual `Source:` line's format is fixed by ADR-0044 and is not yet written into a method document — until it is, that
 record is its only statement, so do not score format here.
 
 **(10) Every task carries a usable Verify-live list.** An absent list on a task that changes
