@@ -43,7 +43,7 @@ Forces:
 
 At most five lines, before Context: *In the context of <situation>, facing <concern>, we
 decided <option> to achieve <quality>, accepting <downside>* — the established one-sentence ADR
-form.
+form without its "and neglected <other options>" clause, which Considered options carries.
 
 - Pro: The decision is on the first screen of every record, in a fixed shape a reviewer can
   check field by field against Considered options and Decision.
@@ -71,6 +71,8 @@ directly before Context. It is the only option that puts the decision at the top
 Its Con, drift, is contained by the fixed shape, which is Option B's Pro. The Summary names the
 chosen option as Considered options names it and accepts one of that option's stated Cons, so a
 mismatch is checked, not judged. A mismatch is therefore a defect of the record, not of style.
+Being a statement of the decision, the Summary is immutable with it once the record is
+Accepted.
 
 This narrows ADR-0001 the way ADR-0033 narrows a record without superseding it. What is narrowed
 is one clause: the section list in ADR-0001's Decision gains a Summary before Context. What
@@ -84,9 +86,11 @@ The rule is forward-binding: it governs ADRs written from here on, this one firs
 - ADR-0001's ADL row gains a pointer to this record in the same change; its Status stays
   `Accepted`.
 - Follow-up: the template, the ADR bar's template-conformance item, the ADR work file's
-  drafting guidance, and the method's description of the template gain the Summary section.
-  The bar also gains the check that the Summary matches the record, at Major, since a summary
-  contradicting its record misleads worse than none.
+  drafting guidance, the ADR review checklist's description of the template, and the method's
+  description of the template gain the Summary section. The bar gains the check that the
+  Summary matches the record, at Major. The immutability rule's section lists gain the Summary.
+  Search 1 does not reach those two lists, which name only the immutable sections; they are
+  listed below by hand.
 
 **Blast radius.** Two searches, run from the repository root:
 
@@ -103,6 +107,7 @@ The rule is forward-binding: it governs ADRs written from here on, this one firs
 | `docs/adl/template.md` (search 2) | No Summary section | Does not conform: follow-up |
 | `docs/reference/work-types/adr/done.md:22`, `implement.md:32`, `review.md:20` | List the template's five sections | Do not conform: follow-up |
 | `docs/reference/method/idea-to-product.md:511` | "ADR template (Nygard + Considered options)" | Does not conform: follow-up |
+| `docs/reference/work-types/adr/implement.md:54`, `review.md:44` (named by hand) | Name Context / Decision / Consequences as the sections an Accepted record may not change | Do not conform: follow-up |
 | `docs/reference/work-types/adr/done.md:23, 47, 143` | Point at the template without listing its sections | Conform |
 | `.github/check-authoring-rules.sh:8`, `.github/workflows/_ai-review.yml:374` | Name the template as a path | Conform |
 
@@ -110,8 +115,7 @@ Out of scope:
 
 - **ADR-0001 to ADR-0044** (44 hits of search 2, and the search-1 hits in ADR-0001, ADR-0040 and
   ADR-0041) keep their five sections and their text: the rule is forward-binding. Whether a
-  Summary may be backfilled into an Accepted record is not decided here; the ADR immutability
-  rule governs it as it stands.
+  Summary may be backfilled into an Accepted record is not decided here.
 - **This record** (search 2, and its own lines naming the template) states the decision and
   follows it.
 - **`.github/test-check-authoring-rules.sh:76-77, 87`** (search 1): fixture strings for the link
