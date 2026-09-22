@@ -193,8 +193,7 @@ re-enable.
   in each file's `async_setup_entry` — no behavior change for these five; only the mechanism
   producing it changes.
 - Follow-up: the implementation spec + TDD plan (`write-impl-spec`) this ADR called for has since
-  been filed and implemented (docs/plans/2026-08-21-capability-gated-entity-registry-disabling*.md,
-  epic #779); it covers the pre-add/post-add ordering, the USER-`disabled_by` non-override rule,
+  been filed and implemented (epic #779); it covers the pre-add/post-add ordering, the USER-`disabled_by` non-override rule,
   and the departure-time restore-state behavior above as an explicit test case.
 - Follow-up: if a future owned entity is ever gated by a notification-availability capability, it
   should use these same two helpers rather than inventing a third mechanism — this ADR's Decision

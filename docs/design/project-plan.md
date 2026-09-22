@@ -108,7 +108,7 @@ before the next phase depends on it.
 
 The phases record the *dependency* order, not the chronology the work followed. Implementation ran
 as vertical slices (a behaviour plus the Resource Access, Engines, and Client surface it needed),
-each with its own spec and TDD plan under `docs/plans/`. What the phase order guarantees, and what
+each with its own implementation spec and TDD plan. What the phase order guarantees, and what
 held throughout, is that no service was built before the services it calls existed.
 
 ---
@@ -699,8 +699,8 @@ A scaffolding plan drafted **2026-07-04**, before this design phase existed, pro
 sequence for the same ground. It referenced the ADRs directly rather than a project plan, was
 organized **functionally** (config flow → adapters → coordinator → the five modes → `Manual`
 profile → owned entities), and was scoped to UC01–UC04 (`Off`/`Solar`/`SolarOnly`/`Captar`/`Power` +
-`Manual`), deferring `Auto`, R5, R6, R8, R9, R12/R13 with `TODO(UCnn)` markers. It was never merged;
-`docs/plans/` holds no such document. This section is kept because two of its substantive
+`Manual`), deferring `Auto`, R5, R6, R8, R9, R12/R13 with `TODO(UCnn)` markers. It was never merged, and no
+copy of it is kept in this repository. This section is kept because two of its substantive
 corrections are cited as test anchors elsewhere in this plan, and because it records why the
 functional sequence was not the one adopted.
 
@@ -725,7 +725,7 @@ reference.** Rationale:
 
 **Disposition:** the scaffolding plan was retired in favour of this document, which carries the
 authoritative sequence; its corrections survive via the mapping above. Implementation then proceeded
-as a series of per-slice specs and TDD plans under `docs/plans/` (the `Power` MVP first, then
+as a series of per-slice implementation specs and TDD plans (the `Power` MVP first, then
 `Captar`, `Solar`/`SolarOnly`, deadline/SOC management, the vehicle-limit Manager, notifications,
 the RA3 Store, the config flow, and the dashboard), each derived from the tasks above rather than
 from the retired functional sequence.

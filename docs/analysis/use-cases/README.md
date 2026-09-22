@@ -1,8 +1,7 @@
 # Use-cases
 
 Goal-oriented behaviours of the smart-charging system, one per document. Each use-case follows
-the **use-case template** in the design doc
-([2026-06-25-use-cases-design.md](../../plans/2026-06-25-use-cases-design.md#use-case-template-use-casesucnn-md)):
+the same **use-case template**:
 Primary actor → Stakeholders → Scope/level → Preconditions → Trigger → Main success scenario →
 Alternate flows → Exception flows → Postconditions → State model → Domain events → Diagram →
 Requirements satisfied → Relationships. Scenario bodies are written in **Given / When / Then**

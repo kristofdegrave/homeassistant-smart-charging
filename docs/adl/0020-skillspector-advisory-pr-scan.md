@@ -90,7 +90,7 @@ judged-review model.
 - A follow-up issue must be opened to add the scan job and wire its report into `_ai-review.yml`'s
   existing review step (or a companion workflow it calls) — this ADR settles the decision and its
   constraints, not the exact YAML. This is a workflow-authoring change, not one backed by a
-  `docs/plans/` TDD plan, so it does not take the `development`/`testing` context label or a
+  plan-pinned TDD task, so it does not take the `development`/`testing` context label or a
   `Plan:` anchor line; it goes straight to implementation under `workflow-reviewer`'s cycle.
 - The implementation issue must require: (a) the SkillSpector install pinned to an exact tag or
   commit SHA, never a tracked branch; (b) `continue-on-error` at job level, not step level, so a

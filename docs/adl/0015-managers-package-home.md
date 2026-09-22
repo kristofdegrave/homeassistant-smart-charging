@@ -15,7 +15,7 @@ ADR names a home for the **other Managers**.
 Charging Coordinator (M1), the Vehicle-Limit Manager (M2), and the Notification Manager (M3);
 `docs/design/project-plan.md` §3 tracks them as tasks M1/M2/M3. Only M1 exists in code, as
 `coordinator.py` (plus `coordinator_cycle.py`, the state owners ADR-0012 extracted from it).
-M2 is next to be built (`docs/plans/2026-07-21-vehicle-limit-manager-design.md` §9.4), M3
+M2 is next to be built, M3
 follows in the Notifications slice — so the question "where does a Manager module live?" has
 to be answered now, before either lands, exactly as ADR-0010 had to answer it for the engines.
 
@@ -102,8 +102,8 @@ three test modules.
 
 No new subpackage. `vehicle_limit.py` and `notification_manager.py` join `coordinator.py`,
 `entity.py`, `config_flow.py`, and the platform files at the package root, and their tests join
-`tests/test_coordinator.py` in the `tests/` root — the convention
-`docs/plans/2026-07-21-notifications-design.md` §0 currently assumes.
+`tests/test_coordinator.py` in the `tests/` root — the convention the Notifications slice's
+implementation spec currently assumes.
 
 - Pro: Costs nothing to adopt (it is what happens by default), keeps import paths short, and
   is consistent with the one Manager that exists today; it also matches how most Home Assistant
@@ -160,22 +160,18 @@ ADR-0011's no-direct-call rule can be checked for every Manager written from her
   guarantee — the inverse of `engines/`. Its tests are HA-harness tests under ADR-0009, and the
   boundary it makes checkable is ADR-0011's (no Manager imports another Manager), not
   "no `homeassistant.*` import".
-- This unblocks the M2 build from **Phase 3 onward** — Task 3.1 of
-  `docs/plans/2026-07-21-vehicle-limit-manager.md` is where
-  `custom_components/smart_charging/managers/vehicle_limit.py` is first created. That plan
+- This unblocks the M2 build from **Phase 3 onward** — the vehicle-limit slice's first build task
+  is where `custom_components/smart_charging/managers/vehicle_limit.py` is created. That slice
   already builds against `managers/vehicle_limit.py` and `tests/managers/test_vehicle_limit.py`,
   so its task text needs no edit; the M2 design's §8/§9.4 gate wording ("task set 4") under-states
   the first affected task and should be corrected in the follow-up.
-- **`docs/plans/2026-07-21-notifications-design.md` must be updated** (§0, §7, §10, and the
-  paired task plan `2026-07-21-notifications.md`): it currently states there is no `managers/`
-  package and places M3 at the package root as `notification_manager.py`, "mirroring
-  `coordinator.py`". Under this decision M3's Manager module is
-  `managers/notification_manager.py` with `tests/managers/test_notification_manager.py`. The
-  pure `notification_state.py` that `2026-07-21-notifications.md` Phase 2 will create is *not* a
-  Manager module and is out of scope of this ADR; where pure notification logic lives is a
-  separate question for that slice.
-  Follow-up issues should track the design/plan update and, if that slice wants it, the
-  placement of its pure module.
+- **M3 moves with the same rule.** The Notifications slice was specified before this decision and
+  places M3 at the package root as `notification_manager.py`, "mirroring `coordinator.py`"; under
+  this decision M3's Manager module is `managers/notification_manager.py` with
+  `tests/managers/test_notification_manager.py`. The pure `notification_state.py` that slice
+  creates is *not* a Manager module and is out of scope of this ADR; where pure notification logic
+  lives is a separate question for that slice, and a follow-up issue should track it if that slice
+  wants it.
 - `docs/design/system-design.md` §4 and `docs/design/project-plan.md` gain a concrete file
   mapping for M2/M3; neither's content changes, only the note of where each Manager lands.
 - If `coordinator.py`'s root placement later becomes actively confusing — say a fourth Manager

@@ -193,7 +193,7 @@ routing rather than to the worker.
   and `docs/adl/0009-testing-strategy.md` — are read from the checkout, and the staging step's
   comment defers the question of widening the boundary to cover them to this record. They are
   not the only unstaged standards: a checklist also routes to `docs/analysis/**`,
-  `docs/design/**`, `docs/plans/**` and the accepted-ADR log as a whole, every one of them
+  `docs/design/**` and the accepted-ADR log as a whole, every one of them
   outside the watched roots and read from the merge ref. This ADR widens the boundary for none of them, and the
   `docs/adl/` pair is named separately only because the staging comment names it. Widening is
   deferred rather than rejected: `docs/adl/template.md` is the sharpest case precisely because a
@@ -276,7 +276,7 @@ it keeps doing exactly that. It is a *standard* a checklist routes to, though, w
 different question from being a consumer, and it is named as a limit under *What this does not
 close* rather than left to the silence of this list. This record is part 1's seventh hit and is
 the decision rather than a site it governs. The unstaged standards named under *Follow-up* —
-the two under `docs/adl/`, plus `docs/analysis/**`, `docs/design/**` and `docs/plans/**` — and
+the two under `docs/adl/`, plus `docs/analysis/**` and `docs/design/**` — and
 the structural gaps named under *What this does not close* are likewise matched by neither
 part; they keep being read from the checkout and from the merge ref respectively, and are named
 above as a known gap and as limits so that their absence from this table is stated rather than

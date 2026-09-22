@@ -265,12 +265,10 @@ entities.
 
 - **ADR-0025 is superseded in full.** Its Status becomes `Superseded by ADR-0027` and its ADL row is
   updated to match, in this same change; its Context, Decision and Consequences are left exactly as
-  written, per ADR-0001's immutability rule. No other *ADR* cites ADR-0025, but the approved
-  implementation spec `docs/plans/2026-08-13-guided-config-flow-design.md` does, and makes
-  "ADR-0025 reaching Accepted" its slice gate, barring any task from being committed against a
-  superseded ADR-0025 — so merging this change puts that spec's own gate condition on a superseded
-  record. Re-pointing that gate (and the spec's ADR-0025 citations) at ADR-0027 is a small follow-up
-  update the spec owes once this ADR is Accepted; it is named here, not attempted here. Where this
+  written, per ADR-0001's immutability rule. No other *ADR* cites ADR-0025; the guided config-flow
+  implementation spec did, making "ADR-0025 reaching Accepted" its slice gate so that no task could
+  be committed against a superseded ADR-0025 — that gate, and that spec's ADR-0025 citations, read
+  as ADR-0027 from here. Where this
   ADR restates ADR-0025's reasoning unchanged (the menu options, the accumulator,
   the framework-mandated entry points), the restatement — not the superseded record — is what
   applies from here.

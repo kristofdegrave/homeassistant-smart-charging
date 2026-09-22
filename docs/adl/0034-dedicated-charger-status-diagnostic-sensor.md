@@ -35,8 +35,8 @@ Three forces have since made `charger_status` the one role that clears that bar:
   the raw entity in one line.
 - **R19 AC1 asks for the canonical value and does not currently get it.** R19's first acceptance
   criterion requires the dashboard show "charger status (connected/charging/disconnected)". The
-  shipped dashboard (`dashboard.py`'s `_charging_status_cards`, per
-  `2026-08-11-runtime-dashboard-design.md`'s entity table) binds that tile to
+  shipped dashboard (`dashboard.py`'s `_charging_status_cards`, per the dashboard slice's own
+  entity table) binds that tile to
   `entry.data[CONF_CHARGER_STATUS_ENTITY]` — the household's **raw** charger entity, in whatever
   hardware-specific vocabulary that entity speaks (`B2`, `Charging`, `ready_to_charge`, …). The
   design doc justifies that binding on the grounds that the role is "a **required** role, always
@@ -230,9 +230,8 @@ per ADR-0021's own precedent.
   runtime dashboard's charger-status tile — `dashboard.py`'s `_charging_status_cards`, currently
   `_tile(entry.data[CONF_CHARGER_STATUS_ENTITY])` — should bind to the new sensor instead, closing
   the R19 AC1 gap this ADR's Context describes. The raw entity remains the *mapping* input either
-  way; only the tile's binding changes. The new binding is recorded in whichever impl spec makes
-  the change, not by rewriting `2026-08-11-runtime-dashboard-design.md`'s entity table — that
-  document is a dated record of a completed slice, and at most gains a pointer forward.
+  way; only the tile's binding changes. The new binding is recorded in whichever implementation
+  spec makes the change.
 - The new sensor's state and `adapter_readings`' `charger_status` attribute must be fed from the
   same cached reading, so the two can never report different values for the same cycle. This is
   cheap for this role specifically: `coordinator.py`'s required-role read already assigns

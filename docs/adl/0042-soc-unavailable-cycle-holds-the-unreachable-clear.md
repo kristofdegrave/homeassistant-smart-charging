@@ -50,10 +50,9 @@ if (
 
 `is_soc_gated` is **False** on `_OffModeHandler` and `_PowerModeHandler` and True on the three
 SOC-gated handlers (`coordinator_cycle.py`), by design: the gate exists so `Power`/`Off` do not
-regress to needing an SOC sensor — stated as "success-criterion 6 / S2" where the gate was built,
-`docs/plans/2026-07-20-solar-solaronly.md`, and carried into `coordinator.py`'s own comment at the
-fault return. It is a slice-plan criterion rather than a numbered requirement, which is why it is
-cited by that name and its home is given here. So `Manual`+`Off`, `Manual`+`Power`, and `Auto` without the
+regress to needing an SOC sensor — stated as "success-criterion 6 / S2" in the spec of the slice that built the gate, and carried
+into `coordinator.py`'s own comment at the fault return. It is a slice-level criterion rather than
+a numbered requirement, which is why it is cited by that name. So `Manual`+`Off`, `Manual`+`Power`, and `Auto` without the
 CapTar capability — whose urgency row escalates to `Power` — reach the deadline block with
 `ev_soc is None`, a live occasion, and no fault. R5 is cross-cutting: it applies in every mode, which
 is precisely why `ev_soc`'s absence is not a fault outside the SOC-gated gate.
@@ -66,7 +65,7 @@ Four forces bear on the fix:
 - **The defect is latent today and stops being latent with the next slice.** On the shipped tree the
   same cycle also clears `_urgency_latched` (`coordinator.py`, downstream of
   `deadline_resolvable=False` → `urgent=False`), so urgency ends outright and a later notice is a
-  legitimately new occasion — benign by accident. `docs/plans/2026-09-14-r5-pursued-occurrence-design.md`
+  legitimately new occasion — benign by accident. The R5 pursued-occurrence slice
   preserves the urgency state across such a cycle, as R5 requires, and not the notification state;
   its *Known deviation* bullet records the sequence that then re-notifies for one occasion, and
   defers the fix here rather than letting a spec silently contradict an Accepted ADR.
@@ -143,7 +142,7 @@ prior flag and reports no clear, exactly as it already does across the two fault
   the two halves are still separable. The holding behaviour it needs is not new — ADR-0024 already
   requires precisely it for fault cycles, with the same justification ("a cycle that established
   nothing must not decide anything"), so this generalises an existing rule rather than adding one.
-  `docs/plans/2026-09-14-r5-pursued-occurrence-design.md`'s D-5 already splits that same early return
+  The R5 pursued-occurrence slice's D-5 already splits that same early return
   for the pursued occurrence, so the shape exists and the two halves of one guard stop being split
   differently for two consumers. It leaves `RequiredCurrentResult`'s type and every other consumer of
   it untouched.
@@ -247,8 +246,8 @@ things, and the edge detector must then be told which — it cannot be recovered
 - **ADR-0024's ADL row** is annotated in this ADR's own PR (per the `adr` work file's one-PR rule), in
   the established narrowing form: its exit table's `ev_soc`-becomes-`None` clause narrowed by this
   ADR. Its Status stays `Accepted`; no other line of that record changes.
-- **Implementation follow-up** — a `development` issue against
-  `docs/plans/2026-09-14-r5-pursued-occurrence-design.md`, not opened here: split
+- **Implementation follow-up** — a `development` issue against the R5 pursued-occurrence
+  slice, not opened here: split
   `resolve_deadline_urgency`'s non-resolvable early return for the *event* the way D-5 already splits
   it for the pursued occurrence; give `DeadlineUnreachableEdge.resolve` its "established an outcome"
   input and the hold behaviour on it; thread that fact from the guard to the fire site in
@@ -262,9 +261,6 @@ things, and the edge detector must then be told which — it cannot be recovered
   **correct** rule and justify it as "a *fault* cycle", which is true only when the active mode is
   SOC-gated. The durable reason is that the cycle establishes nothing; the wording should say that,
   so the rule does not rest on a premise a `Power`/`Off` reader can falsify.
-- **Plan-doc follow-up** — `docs/plans/2026-07-21-deadline-soc-management-design.md` states the clear
-  fires on "`deadline_resolvable` going false" without splitting the halves; it needs the split on its
-  own side of the edge.
 - **Not this ADR's to fix**: `docs/analysis/resolution-rules.md`'s unconditional "a hold never
   outlives one deadline cycle", which the same spec's second known deviation shows a sustained SOC-role
   outage can suspend. That is a requirement-level clause in a different tree with a different
@@ -293,7 +289,7 @@ things, and the edge detector must then be told which — it cannot be recovered
    own rule in domain vocabulary — "ends no occasion … neither notifies nor re-arms" — and carries
    none of the five tokens, because a requirement names no code identifier. No pattern over
    identifiers reaches it, so it is named instead of pretended to; and a listed set alone could not
-   enumerate the 24 code and document sites the pattern finds.
+   enumerate the 14 code and document sites the pattern finds.
 
    The paths are the three trees this decision governs. Repo-root files are outside them, which
    drops only `CHANGELOG.md`'s two hits — generated release notes, which govern nothing and are not
@@ -308,9 +304,13 @@ things, and the edge detector must then be told which — it cannot be recovered
    `coordinator_cycle.py`'s early return — the site that causes the defect; a pattern on the guard
    alone drops every record stating the firing rule.
 
-   The search returns **24 files**, one of which is this record: **16** of them in the table below
-   and **8** out of scope under 3. With the explicitly listed `requirements.md` the table accounts
-   for 17 files, so 25 sites are enumerated in all.
+   The search returns **14 files**, one of which is this record: **12** of them in the table below
+   and **2** out of scope under 3. With the explicitly listed `requirements.md` the table accounts
+   for 13 files, so 15 sites are enumerated in all.
+
+   *(Amended when the per-slice spec tree was retired: the rows and out-of-scope entries that named
+   files in that tree went with it, and the counts above are of the sites that remain. The
+   decision, its Status and every other line of this record are unchanged.)*
 
 2. **Per-hit verdict** (rows grouped by verdict; every file the search returns appears here or in 3).
 
@@ -320,25 +320,13 @@ things, and the edge detector must then be told which — it cannot be recovered
 | `custom_components/smart_charging/coordinator.py` | Fires the clear off `self._unreachable_edge.resolve(required.unreachable)` alone; its two fault early-returns already hold the prior flag, but a non-SOC-gated cycle with `ev_soc is None` reaches neither | **Does not conform** — fires the spurious clear; must thread the "established an outcome" fact to the fire site |
 | `docs/analysis/use-cases/UC05-guarantee-ready-by-departure.md`, `docs/analysis/system-overview.md` | State the correct rule — the state is held and the event does not fire — justified as "a *fault* cycle" | **Does not conform in its stated reason only**; the rule itself is what this ADR records |
 | `docs/analysis/requirements.md` (the explicitly listed site) | R5's acceptance criterion states the rule this decision aligns to: a cycle on which state of charge is unavailable ends no occasion, and the system neither notifies nor re-arms | Conforms — it is the authority, not a site this decision changes; unlike UC05 and the glossary it gives no reason that `is_soc_gated` can falsify |
-| `docs/plans/2026-07-21-deadline-soc-management-design.md` | States the clear fires on the guard paths "(`deadline_resolvable` going false …)", unsplit | **Does not conform** |
 | `custom_components/smart_charging/const.py`, `custom_components/smart_charging/__init__.py` | Define the event constant and subscribe before the first refresh | Conform — unaffected; the narrowing is entirely about *when* the producer fires |
 | `custom_components/smart_charging/managers/notification_manager.py` | Re-arms `_deadline_unreachable_notified` on every clear received | Conforms — the consumer must trust the producer (ADR-0011); it keeps re-arming on exactly the events it gets |
 | `tests/test_coordinator_cycle.py`, `tests/test_coordinator.py`, `tests/managers/test_notification_manager.py` | Pin the `True`→`False` detection, the disconnect and R18 exits firing, a fault cycle not firing, and the consumer's re-arm | Conform — every behaviour they pin survives; none pins the SOC-unavailable case, which the implementation follow-up adds |
-| `docs/plans/2026-09-14-r5-pursued-occurrence-design.md`, `docs/plans/2026-09-14-r5-pursued-occurrence.md` | Record the deviation as deferred pending this ADR, and already split the same early return for the pursued occurrence | Conform |
-| `docs/plans/2026-07-21-notifications-design.md` | Describes the consumer side and the edge's `True`→`False` trigger, without claiming which guard paths reach it | Conforms |
 | `docs/design/project-plan.md`, `docs/design/system-design.md` | Name the event pairing in a service's published-events list | Conform |
 
-3. **Out of scope** (8 files):
+3. **Out of scope** (2 files):
    `docs/adl/0042-soc-unavailable-cycle-holds-the-unreachable-clear.md` — this record, which the
    search matches because it states the decision; it governs itself trivially and needs no verdict.
    `docs/adl/0024-deadline-unreachable-cleared-event.md` — the record being narrowed; immutable, stays
    `Accepted`, and keeps stating its decision, with the narrowing recorded in its ADL row.
-   `docs/plans/2026-07-21-deadline-soc-management.md` and `docs/plans/2026-07-21-notifications.md` —
-   task plans of shipped slices; they keep describing the code as it was built, and the correction
-   belongs to the code and to the design docs that state the rule, not to a build record.
-   `docs/plans/2026-08-10-run-cycle-named-steps-design.md`,
-   `docs/plans/2026-08-10-run-cycle-named-steps.md`,
-   `docs/plans/2026-08-10-dashboard-prerequisite-sensors-design.md` and
-   `docs/plans/2026-08-10-dashboard-prerequisite-sensors.md` — hit on `deadline_resolvable` only, in
-   the unrelated contexts of extracting the named cycle steps and placing a diagnostic sensor; they
-   state nothing about when the clear fires and keep doing exactly that.
