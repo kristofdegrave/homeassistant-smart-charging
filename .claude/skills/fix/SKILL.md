@@ -22,8 +22,8 @@ does not restate it.
 ## The one thing this skill adds to the dispatch
 
 §3 says which file to re-author with. It cannot say which **model** to do it on, because CI
-picks its own and only a local run has the choice: the row's *Work model* column says which
-model it wants, so name it, and leave switching to the human partner.
+picks its own and only a local run has the choice: the label row's *Work model* column says
+which model it wants, so name it, and leave switching to the human partner.
 
 ## Before any fix: stale exit labels
 
@@ -50,7 +50,7 @@ Per finding:
 
 Then once, for the run:
 
-3. Commit and push (§6), with the commit prefix this row's work takes — the Definition of Done
+3. Commit and push (§6), with the commit prefix the label row's work takes — the Definition of Done
    routed from `CLAUDE.md`'s **Contribution workflow** section carries the per-type prefixes.
    §6's own example is `docs:` because that skill is scoped to docs.
 4. Resolve the threads whose findings were actually fixed, via `resolve-review-thread`, after

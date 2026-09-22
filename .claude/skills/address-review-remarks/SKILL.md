@@ -62,8 +62,10 @@ Fixing is re-authoring — work with the same context the original author had:
 - **Apply each changed tree's work file too, to that tree's files.** The review routes by
   changed path as well as by label — the no-label row's path map, in the same section — so the
   fix does too. For every tree the PR changes that the path map sends to a checklist, apply the
-  *How the work is done* files of the row that checklist belongs to, to the changed files under
-  that tree; a row already applied is not applied twice, and a row naming none adds nothing.
+  *How the work is done* files of the row whose work-type directory holds that checklist, and
+  of any row whose own checklist file points at it — each to the changed files of its own kind
+  under that tree. A row already applied is not applied twice, and a row naming none adds
+  nothing.
   The case this exists for: a PR of another label that edits a record under `docs/adl/**` is
   still bound by the `adr` work file's rule on changing a merged record.
 - **Where neither the label nor a changed tree yields a work file** — no linked issue, no
