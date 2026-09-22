@@ -7,7 +7,9 @@ tag-keyed response capture / stale-tag guard is exercised through the genuine me
 than re-implemented in a test double.
 
 Anchors: docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md (preconditions, trigger, state
-model), docs/plans/2026-07-21-notifications-design.md Sec4/Sec5/Sec6/Sec7.
+model), docs/analysis/entity-catalog.md (home-day flag, charger_status), docs/design/
+system-design.md (Notification Resource Access, V11), ADR-0009 (pure/HA split), ADR-0011
+(DeadlineUnreachableNotified), ADR-0018 (RA3 Store read/write), ADR-0024 (notify-once pair).
 """
 
 import logging
@@ -225,8 +227,9 @@ async def test_skips_prompt_on_uc08_1a_1b_1c(hass):
 
 
 async def test_connected_while_charging_also_triggers(hass):
-    """UC08 trigger: `charger_status` is `connected` OR `charging` -- design §4's sole
-    "connected at home" signal."""
+    """UC08 trigger: `charger_status` is `connected` OR `charging` -- the two non-disconnected
+    values entity-catalog.md's `charger_status` row defines, both meaning "connected at home"
+    for this trigger."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass, status=STATE_CHARGING)
 
@@ -236,7 +239,7 @@ async def test_connected_while_charging_also_triggers(hass):
 
 
 async def test_stale_prompt_response_is_not_misread(hass):
-    """RA4 stale-tag guard (design §6): a prior evening's response tag must not resolve
+    """RA4 stale-tag guard: a prior evening's response tag must not resolve
     tonight's prompt. Exercises the real NotifyAdapter end-to-end through M3 rather than
     re-implementing the tag guard in a test double."""
     calls = _register_notify_capture(hass)
@@ -298,7 +301,7 @@ async def test_missing_notification_target_adapter_stays_inert(hass):
 
 
 async def test_missing_config_keys_fall_back_to_defaults(hass):
-    """Design doc §3: an entry that predates these options keys reads each with its
+    """An entry that predates these options keys reads each with its
     DEFAULT_* fallback -- no config-entry migration. A bare dict (no CONF_* keys at all)
     must not raise KeyError at construction."""
     manager = NotificationManager(

@@ -6,8 +6,9 @@ ActiveSocLimitChanged event fires alongside -- M2 observes the entity, not the b
 it reads inputs through adapters and writes the vehicle through the vehicle_charge_limit
 adapter / adopts manual changes into number.smart_charging_soc_limit_override. It NEVER
 calls or is called by the Coordinator.
-No control-cycle logic, no clamps, no set-point -- see
-docs/plans/2026-07-21-vehicle-limit-manager-design.md.
+No control-cycle logic, no clamps, no set-point -- the Vehicle-Limit Manager takes the
+resolved active SOC limit from the Coordinator's own composition and makes no SOC-Target
+call of its own (system-design Sec5.2, ADR-0011).
 
 Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA3's Store
 (ADR-0018), never a coordinator reference, setter, or event.
@@ -16,8 +17,7 @@ Covers the Vehicle->System manual-adoption reaction (UC09 steps 4-6, R6 AC 5),
 the disconnect-reset (UC09 steps 7-8, R6 AC 3), the
 System->vehicle write branch (UC09 step 2, R6 AC 2/4, gated on connected AND car_home (C2)),
 and `register_listeners`, wiring the three reactions above to real HA
-state changes at setup (design §5.4) -- M2 self-wires its own triggers rather than a
-dedicated C6 client (design §9.5).
+state changes at setup -- M2 self-wires its own triggers rather than a dedicated C6 client.
 """
 
 from __future__ import annotations
@@ -54,10 +54,10 @@ _LOGGER = logging.getLogger(__name__)
 class VehicleLimitManager:
     """Vehicle-Limit Manager (M2). Holds the adapter map and the echo-guard state.
 
-    `_last_written_limit` (design §6) records the value this Manager itself last wrote to
+    `_last_written_limit` records the value this Manager itself last wrote to
     the vehicle, so a subsequent vehicle-side report equal to it is recognised as an echo
     of our own write rather than a manual change. `_last_status` backs the disconnect-edge
-    detection (design §5.3) -- an unknown/unavailable status reading (`None`) never
+    detection -- an unknown/unavailable status reading (`None`) never
     overwrites it, so a transient dropout between two real readings can't erase the edge.
     """
 
@@ -77,7 +77,7 @@ class VehicleLimitManager:
         self._last_status: str | None = None
 
     async def on_status_changed(self, status: str | None) -> None:
-        """React to a canonical charger-status change (design §5.3). Disconnect edge -> reset.
+        """React to a canonical charger-status change. Disconnect edge -> reset.
 
         `status is None` (unregistered/unknown/unavailable read) is not a canonical state --
         it leaves `_last_status` untouched rather than being treated as "not connected", so a
@@ -91,24 +91,24 @@ class VehicleLimitManager:
             await self._reset_to_default()
 
     async def on_vehicle_limit_changed(self, reported: float | None) -> None:
-        """React to a vehicle-side charge-limit change (design §5.2). Adopt unless it is our
+        """React to a vehicle-side charge-limit change. Adopt unless it is our
         own echo.
 
         Holds regardless of car_home (C2 gates only System->vehicle writes, never this
         read+adopt direction). Deliberately never updates `_last_written_limit` -- the echo
-        guard tracks only the System's own writes to the vehicle (§5.1/§5.3), not a
+        guard tracks only the System's own writes to the vehicle, not a
         vehicle-originated adoption.
         """
         if reported is None:
             return
         if self._last_written_limit is not None and reported == self._last_written_limit:
-            return  # our own write reflecting back -- echo guard (design §6)
+            return  # our own write reflecting back -- echo guard
         adopted = min(max(float(reported), SOC_LIMIT_OVERRIDE_MIN), SOC_LIMIT_OVERRIDE_MAX)
         if await self._store.write(Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE, adopted):
             self._fire(EVENT_MANUAL_CHARGE_LIMIT_ADOPTED, adopted)
 
     async def on_active_soc_limit_changed(self, new_limit: float | None) -> None:
-        """React to a resolved active-SOC-limit change (design §5.1, ADR-0011). Writes the new
+        """React to a resolved active-SOC-limit change (ADR-0011). Writes the new
         value to the vehicle iff `charger_status` is connected/charging AND `car_home` is True
         (C2 -- UC09 alt 2a / R6 AC 4). `new_limit` is read from the materialized active-SOC-limit
         diagnostic sensor by the setup-time listener `register_listeners` wires.
@@ -132,8 +132,8 @@ class VehicleLimitManager:
             self._fire(EVENT_VEHICLE_CHARGE_LIMIT_SYNCED, value)
 
     async def prime_status(self) -> None:
-        """Seed `_last_status` from the ROLE_CHARGER_STATUS adapter's current reading
-        (design §5.3). Call once at setup, before `register_listeners` subscribes to future
+        """Seed `_last_status` from the ROLE_CHARGER_STATUS adapter's current reading.
+        Call once at setup, before `register_listeners` subscribes to future
         changes: `async_track_state_change_event` only fires on changes observed AFTER
         registration, so an unprimed manager on a reload/restart with the vehicle already
         connected would never see the "before" side of the next connected->disconnected
@@ -146,7 +146,7 @@ class VehicleLimitManager:
     def register_listeners(
         self, *, vehicle_entity_id: str, status_entity_id: str
     ) -> list[Callable[[], None]]:
-        """Wire M2's three triggers (design §5.4): the mapped `vehicle_charge_limit` and
+        """Wire M2's three triggers: the mapped `vehicle_charge_limit` and
         `charger_status` entities, and the materialized active-SOC-limit sensor. Called once
         at setup, only when `vehicle_charge_limit` is mapped -- the caller registers
         each returned unsub via `entry.async_on_unload` so a reload tears down and

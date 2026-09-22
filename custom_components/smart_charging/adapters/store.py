@@ -80,9 +80,9 @@ class Store:
 
         Two value shapes are supported today, one per real caller: a `float` into a
         `number` entity (M2 -> soc_limit_override), and a `bool` into a `switch` entity
-        (M3 -> home_day_flag, docs/plans/2026-08-09-ra3-store-write-half-design.md's
-        deferral, now closed). Other domains return False rather
-        than issuing a service call against an entity that cannot take it.
+        (M3 -> home_day_flag), per the write half of ADR-0018's Store decision. Other
+        domains return False rather than issuing a service call against an entity that
+        cannot take it.
         """
         if entity_domain not in (Platform.NUMBER, Platform.SWITCH):
             _LOGGER.debug("Store.write: unsupported entity domain %s", entity_domain)
@@ -98,7 +98,7 @@ class Store:
             )
         else:
             # switch.turn_on/turn_off take no value payload -- the value picks the service,
-            # not a service-call argument (design doc's write-half addendum, switch case).
+            # not a service-call argument.
             domain, service, service_data = (
                 Platform.SWITCH,
                 SERVICE_TURN_ON if value else SERVICE_TURN_OFF,
