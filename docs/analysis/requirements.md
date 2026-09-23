@@ -429,8 +429,8 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 
 **Acceptance criteria:**
 
-- [ ] A household that adds this repository to HACS as a custom integration repository can install every published version, and later update to a newer one, from HACS alone, without copying or editing any file by hand.
-- [ ] Every published version meets Home Assistant's rules for an integration's manifest and file structure, with no violation reported against it.
+- [ ] A household that adds this repository to HACS as a custom integration repository can install any published version whose declared minimum Home Assistant release (NF6) its own release meets, and later update to a newer such version, from HACS alone, without copying or editing any file by hand.
+- [ ] Every published version meets Home Assistant's rules for an integration's manifest and file structure, with no violation of those rules.
 
 ---
 
@@ -442,7 +442,7 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 **Acceptance criteria:**
 
 - [ ] Every published version declares a minimum Home Assistant release, which HACS shows the household before installing, so a household can see whether its own release is supported.
-- [ ] On the declared minimum release, the integration sets up without error and every acceptance criterion in this document holds — the dashboard included, which renders as R19 states rather than degraded.
+- [ ] On the declared minimum release, the integration sets up without error and every acceptance criterion in this document holds — the dashboard included, which renders as R19 states.
 - [ ] On the Home Assistant stable release current when a version is published, the same holds.
 
 ---
@@ -450,7 +450,7 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 ### NF7 — Local-only operation
 
 **Priority:** Must
-**What:** The system runs entirely inside the household's own Home Assistant instance: it depends on no external service or account, needs no software beyond what Home Assistant itself ships, and sends nothing outside the instance except the notifications the household opts into (R18).
+**What:** The system runs entirely inside the household's own Home Assistant instance: it depends on no external service or account, adds no Python package beyond those Home Assistant ships, and sends nothing outside the instance except the notifications the household opts into (R18).
 
 **Acceptance criteria:**
 
@@ -463,24 +463,24 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 ### NF8 — English and Dutch throughout
 
 **Priority:** Should
-**What:** Every text the system presents to the household is available in English and in Dutch, and is shown in the language Home Assistant is set to.
+**What:** Every text the system presents to the household is available in English and in Dutch, and is shown in Dutch wherever Dutch is the language that governs it, otherwise in English.
 
 **Acceptance criteria:**
 
 - [ ] Every text the system presents — entity names and state labels, the [configuration flow](system-overview.md#ubiquitous-language)'s step titles, field labels, descriptions and error messages (R20), the dashboard's view and card headings (R19), and every notification's title, message and action-button labels (R5, R12, R13) — exists in both English and Dutch, with no text present in one language and missing from the other. The product name "Smart Charging" is not translated.
-- [ ] With Home Assistant set to Dutch, every such text is shown in Dutch; set to English, in English; set to any other language, in English.
+- [ ] Text shown in the Home Assistant interface for a user — entity names and state labels, the configuration flow — is governed by that user's own language; text the system composes itself — the dashboard's headings and the notifications — by Home Assistant's system language. Where the governing language is Dutch the text is shown in Dutch; where it is English, or any other language, in English.
 
 ---
 
 ### NF9 — Owned entity ids independent of the language
 
 **Priority:** Must
-**What:** The entity id of every entity the system owns is the one `entity-catalog.md` lists, whatever language Home Assistant is set to, so an automation or dashboard written against that id works on every installation.
+**What:** The entity id of every entity the system owns is the one `entity-catalog.md` lists, whatever language Home Assistant or its users are set to, so an automation or dashboard written against that id works on every installation.
 
 **Acceptance criteria:**
 
-- [ ] On an installation set up with Home Assistant in any language, every owned entity registers under exactly the entity id `entity-catalog.md` lists for it; only its displayed name follows the language (NF8).
-- [ ] Changing Home Assistant's language after setup changes no owned entity's id.
+- [ ] On an installation set up in any language, every owned entity registers under exactly the entity id `entity-catalog.md` lists for it, wherever no other entity already holds that id; only its displayed name follows the language (NF8).
+- [ ] Changing Home Assistant's system language, or a user's language, after setup changes no owned entity's id.
 
 How the ids are pinned is decided by [ADR-0013](../adl/0013-stable-owned-entity-object-ids.md).
 
