@@ -158,6 +158,8 @@ up.
   (ADR-0010). Firing `ActiveSocLimitChanged` itself remains the coordinator's job, per
   ADR-0009/0010's boundary that HA I/O lives only on the coordinator side.
 - The R3/C4 clamp separation from ADR-0006 is unchanged and unaffected by this decision.
+- the four new units, the `CycleContext` shape, and the
+  before/after diff are implementation-spec-level detail, not part of this decision.
 - If a future addition reveals a similarly-shaped SRP/OCP violation elsewhere in
   `_run_cycle` not covered by these four units, that is a new decision to make at that
   time, not something this ADR forecloses or pre-answers.

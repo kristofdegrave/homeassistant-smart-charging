@@ -79,7 +79,7 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 
 Internal bookkeeping that is pure implementation — cooldown/hold timers, the smoothing ring
 buffer, reminder/prompt "already-sent" flags, restart-after-power-loss persistence — is **not**
-catalogued (it is "how", per the design doc), with one deliberate exception: the monthly peak
+catalogued (it is "how"), with one deliberate exception: the monthly peak
 demand row below states its own restart survival as a "what", since a value that restarted at
 0 kW would misstate the month's billed peak (R21) — see `control-cycle.md`'s *Coordinator
 restart* edge case for the reasoning. The catalog covers the configurable parameters, the
