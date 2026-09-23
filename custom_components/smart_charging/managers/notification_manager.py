@@ -1,15 +1,15 @@
 """Notification Manager (M3, V11) -- UC08 evening home-day prompt orchestration, plus R5
 deadline-unreachable notice delivery.
 
-A Manager (system-design Sec4 rule 5 / ADR-0011): reads RA1/RA2 adapter roles, sends and
+A Manager (system-design.md §4 rule 5 / ADR-0011): reads RA1/RA2 adapter roles, sends and
 reads back the actionable prompt through RA4 (adapters/notify.py), and writes the
 resolved answer through the RA3 Store (ADR-0018) onto switch.smart_charging_home_day.
 Decides nothing itself -- notification_state.evaluate_prompt (M3's pure logic, plain
 pytest per ADR-0009) is the single source of the UC08 lifecycle
 (docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md "State model"); this module only
 observes the preconditions/trigger and carries out the send/write effects that function
-only signals. This module NEVER calls or is called by the Coordinator (M1) -- system-design
-Sec4 rule 5 -- and imports nothing from coordinator.py.
+only signals. This module NEVER calls or is called by the Coordinator (M1) -- system-design.md
+§4 rule 5 -- and imports nothing from coordinator.py.
 
 Midnight is a per-evaluation wall-clock comparison (`dt_util.now()` date rollover), driven
 by the caller's own tick -- no new HA timer/scheduler primitive. `async_evaluate`'s `now`

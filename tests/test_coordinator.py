@@ -828,9 +828,9 @@ async def test_dispatches_to_captar_when_selected(hass):
 
 
 async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass):
-    """R3's bookkeeping is not Captar-specific -- Off/Power update it too. Bypasses the
-    ample-headroom test helpers deliberately, to observe the tracker's own cold-start
-    behavior."""
+    """R21: tracking runs on every control cycle regardless of the active mode -- Off/Power
+    update it too, not just Captar. Bypasses the ample-headroom test helpers deliberately, to
+    observe the tracker's own cold-start behavior."""
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=3400.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
@@ -843,7 +843,8 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
 
 
 async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
-    """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
+    """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary --
+    `charger_power - net_power`, raw, distinct from R10's
     smoothed control-path `surplus_w` (#602 T1). Cycle 2's baseline (net_w - charger_w =
     2000 - 3000 = -1000) happens to sit ABOVE cycle 1's (1000 - 3000 = -2000), so issue #990's
     debounce (which only delays a LOWER baseline) never engages here -- if a future edit
@@ -1198,7 +1199,8 @@ async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak
 
 
 async def test_adapter_readings_contains_every_currently_wired_role(hass):
-    """entity-catalog.md:154/ADR-0021 -- one key per currently-wired *read* role, excluding
+    """entity-catalog.md's `sensor.smart_charging_adapter_readings` row / ADR-0021 -- one key
+    per currently-wired *read* role, excluding
     ROLES_ADAPTER_READINGS_EXCLUDED (#602 T4)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0, ev_soc=50.0)
     adapters[ROLE_NOTIFICATION_TARGET] = _FakeNumeric("notify.mobile_app")  # write-only role
@@ -1340,7 +1342,7 @@ async def test_ev_soc_fault_does_not_advance_adapter_readings_at(hass, freezer):
     """Issue #648: the ev_soc-fault early return must NOT advance `_role_readings_at` to this
     cycle's own timestamp, exactly like the required-role fault path a few lines above it
     (coordinator.py's own comment: "the cache keeps whichever timestamp a prior successful
-    cycle set"). ADR-0021/entity-catalog.md:154 define
+    cycle set"). ADR-0021 and entity-catalog.md's own row define
     `sensor.smart_charging_adapter_readings`'s state as the timestamp of the LAST SUCCESSFUL
     cycle -- an ev_soc fault means this cycle wasn't one, so the timestamp must stay at
     cycle 1's value, not jump to cycle 2's, even though cycle 2's required-adapter read (status/
@@ -1392,8 +1394,9 @@ async def test_adapter_readings_at_advances_on_a_second_successful_cycle(hass, f
 
 
 async def test_time_to_full_min_matches_the_glossary_formula(hass):
-    """system-overview.md glossary/entity-catalog.md:152 -- capacity * (limit - soc) / 100,
-    projected at this cycle's own commanded (pre-clamp) current (#602 T3)."""
+    """system-overview.md glossary / entity-catalog.md's `sensor.smart_charging_time_to_full`
+    row -- capacity * (limit - soc) / 100, projected at the current `charger_current`
+    set-point (#602 T3)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord, result = await _run(hass, adapters, _config(), target=8.0)
     assert coord.active_mode == MODE_POWER
@@ -1458,8 +1461,9 @@ async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_
 
 
 async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
-    """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
-    clamp itself computes (#602 T2)."""
+    """entity-catalog.md's `sensor.smart_charging_peak_headroom_a` row / control-cycle.md
+    step 5 -- the same target and the same accepted household baseline the R3 clamp itself
+    holds, R3's deferral cases included (#602 T2)."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     config = dataclasses.replace(config, safety_margin_w=250.0)
@@ -1592,11 +1596,12 @@ async def test_peak_clamp_never_engages_for_a_selectable_mode_when_captar_absent
 
 
 async def test_power_never_stops_on_its_own_when_captar_capability_absent(hass):
-    """R17's own AC (requirements.md): with the CapTar capability absent, Power never stops
-    on its own and never enters a cooldown -- the force-stop branch this PR's gate now
-    prevents from running at all is Captar's own R3-breach stop (coordinator.py's
-    `_apply_peak_clamp`), so a sustained breach that would otherwise force a Captar-mode
-    cooldown must instead leave a Power-mode session commanding current, uninterrupted."""
+    """R11's AC (requirements.md): with the CapTar capability absent or R17's peak-protection
+    option off, Power never stops on its own and never enters a cooldown -- the force-stop
+    branch the capability gate prevents from running at all is Captar's own R3-breach stop
+    (coordinator.py's `_apply_peak_clamp`), so a sustained breach that would otherwise force a
+    Captar-mode cooldown must instead leave a Power-mode session commanding current,
+    uninterrupted."""
     config = _config()
     config = dataclasses.replace(
         config, max_peak_kw=1.0, peak_grace_min=0.0, captar_available=False
@@ -3413,7 +3418,7 @@ async def test_seed_monthly_peak_passes_a_negative_kw_through_unchanged(hass):
 
 
 # --- Task 4.1 (ADR-0012 coordinator decomposition): explicit ADR-0006 clamp-integrity check,
-# made permanent regression tests rather than a one-time manual read (plan Step 4). ---
+# made permanent regression tests rather than a one-time manual read. ---
 
 
 async def test_power_opt_out_of_r3_does_not_disable_c4_ceiling(hass):

@@ -149,7 +149,7 @@ ROLE_LOW_TARIFF = "low_tariff"
 ROLE_NOTIFICATION_TARGET = "notification_target"
 # Actionable home-day prompt action ids (UC08). The values
 # round-trip verbatim through HA's mobile_app_notification_action payload -- do not rename them
-# independently.
+# without changing every consumer of that payload.
 ACTION_HOMEDAY_YES = "HOMEDAY_YES"
 ACTION_HOMEDAY_NO = "HOMEDAY_NO"
 # RA1-VL + car_home (RA2 role, built early -- M2 is their first consumer).
@@ -208,7 +208,7 @@ CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
 CONF_SOLAR_AVAILABLE = "solar_available"  # bool, default False -- R18 scoped
 CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- R18 scoped
-# bool, default True (R18 AC1) -- entity-catalog.md's deadline capability row
+# bool, default True (R18 AC6) -- entity-catalog.md's deadline capability row
 CONF_DEADLINE_AVAILABLE = "deadline_available"
 # bool, default False (R18 AC9's named default-ABSENT exception) -- catalog *Capabilities*;
 # UC12 step 1

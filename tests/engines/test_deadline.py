@@ -6,7 +6,8 @@ cross-midnight worked example this docstring now states: plug in at 22:00 agains
 departure, an 8-hour window, charging 75 kWh * 30% over 8 h at 230 V needs 12.228 A. Under
 the old no-next-day-rollover contract, that 22:00-to-06:00 pairing could not produce a
 positive window, so the tests were kept same-day to stay within that contract. Issue #1005
-resolved the underlying inconsistency in favour of requirements.md R15: choosing the
+resolved the underlying inconsistency in favour of requirements.md R14's next-occurrence
+rule ("the next occurrence of that resolution still ahead of the current time"): choosing the
 occurrence is now `resolve_next_occurrence`'s job, and `resolve_required_current` takes the
 already-chosen datetime, so the two concerns are testable separately and the cross-midnight
 worked example above is expressible. The same-day constants below are kept only because they

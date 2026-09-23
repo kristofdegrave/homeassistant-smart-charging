@@ -216,7 +216,7 @@ async def test_manual_change_is_adopted_as_default(hass):
 
 
 async def test_echo_of_own_write_is_ignored(hass):
-    """UC09 exception flow / R6 AC (echo guard): a report equal to our last write -> no
+    """UC09's exception flow (the echo guard): a report equal to our last write -> no
     adoption, and no ManualChargeLimitAdopted -- the vehicle is reflecting back a write M2
     itself just made, not a manual change."""
     m = _manager(hass, vehicle=80.0)
@@ -316,7 +316,8 @@ async def test_soc_limit_change_writes_vehicle_when_connected_at_home(hass):
 
 
 async def test_soc_limit_change_writes_vehicle_when_connected_charging_at_home(hass):
-    """C2's "connected" gate covers both the connected and charging charger-status values."""
+    """UC09's precondition treats the car as connected on either charger-status value,
+    `connected` or `charging` (C2 is the separate at-home half of that precondition)."""
     m = _manager(hass, home=True, status=STATE_CHARGING)
 
     await m.on_active_soc_limit_changed(90.0)
@@ -351,7 +352,8 @@ async def test_no_write_when_car_home_is_unknown(hass):
 
 
 async def test_no_write_when_disconnected(hass):
-    """UC09 alt 2a / R6 AC 4/C2: disconnected -> no System write, even if car_home is True."""
+    """UC09's precondition / R6 AC 4 / C2: disconnected -> no System write, even if car_home
+    is True -- alt 2a is the away-from-home branch, not this one."""
     m = _manager(hass, home=True, status=STATE_DISCONNECTED)
 
     await m.on_active_soc_limit_changed(90.0)

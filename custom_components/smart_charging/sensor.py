@@ -260,7 +260,8 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
 
 
 class SolarSurplusSensor(_CoordinatorFieldSensor):
-    """Diagnostic: charger_power - net_power, raw (entity-catalog.md:151). Registry-gated on
+    """Diagnostic: charger_power - net_power, raw (entity-catalog.md's
+    `sensor.smart_charging_solar_surplus_w` row). Registry-gated on
     `solar_available` (ADR-0028) -- meaningless without a solar meter."""
 
     _attr_translation_key = "solar_surplus_w"
@@ -280,7 +281,8 @@ class SolarSurplusSensor(_CoordinatorFieldSensor):
 
 
 class PeakHeadroomSensor(_CoordinatorFieldSensor):
-    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md:153)."""
+    """Diagnostic: the R3 clamp's own headroom target, amps (entity-catalog.md's
+    `sensor.smart_charging_peak_headroom_a` row)."""
 
     _attr_translation_key = "peak_headroom_a"
     _object_id_suffix = OWNED_SUFFIX_PEAK_HEADROOM_A
@@ -300,7 +302,7 @@ class PeakHeadroomSensor(_CoordinatorFieldSensor):
 
 class TimeToFullSensor(_CoordinatorFieldSensor):
     """Diagnostic: minutes to the active SOC limit at the current set-point
-    (entity-catalog.md:152)."""
+    (entity-catalog.md's `sensor.smart_charging_time_to_full` row)."""
 
     _attr_translation_key = "time_to_full"
     _object_id_suffix = OWNED_SUFFIX_TIME_TO_FULL
@@ -366,9 +368,11 @@ def _format_mirror_value(value: Any) -> Any:
 @dataclass(frozen=True)
 class _ConfigMirrorSpec:
     """One row of the config-mirror sensor spec list `async_setup_entry` builds (ADR-0031,
-    entity-catalog.md). `value` is already resolved by `async_setup_entry` from whichever of the
-    three source buckets `async_setup_entry` builds it from (entry.data, config options, or a
-    resolved capability) -- `_ConfigMirrorSensor` itself never reads the config entry."""
+    entity-catalog.md). `value` is already resolved by `async_setup_entry`, from whichever of the
+    three source buckets the row comes from: `runtime_data.config` (a `SmartChargingConfig`
+    field -- most rows), `entry.data` (the two capability rows) or `entry.options` (the rows
+    that are not `SmartChargingConfig` fields) -- `_ConfigMirrorSensor` itself never reads the
+    config entry."""
 
     object_id_suffix: str
     unit: str | None
@@ -417,12 +421,12 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors (entity-catalog.md's disabled-by-default rows). T1: the
-    # four Capabilities rows. T2: the twelve Installation/Charger/Peak protection rows. T3: the
-    # 13 EV/Solar rows -- note solar_only_strategy/solar_only_midpoint are the
-    # SmartChargingConfig field names for the solar_only_rounding_strategy/
-    # solar_only_rounding_midpoint_pct catalog ids (they diverge from the catalog's documented
-    # object ids). T4: the six Power-mode/Notification rows.
+    # ADR-0031 config-mirror sensors, in entity-catalog.md's own grouping of its
+    # disabled-by-default rows: the four Capabilities rows, the twelve Installation/Charger/
+    # Peak-protection rows, the 13 EV/Solar rows, and the six Power-mode/Notification rows.
+    # Note solar_only_strategy/solar_only_midpoint are the SmartChargingConfig field names for
+    # the solar_only_rounding_strategy/solar_only_rounding_midpoint_pct catalog ids -- they
+    # diverge from the catalog's documented object ids.
     mirror_specs = [
         _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
         _ConfigMirrorSpec("captar_available", None, None, config.captar_available),

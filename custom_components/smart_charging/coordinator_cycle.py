@@ -2,7 +2,7 @@
 the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
 resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge (ADR-0024).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
-even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
+even though these aren't engines themselves (system-design.md §4 rule 4: an engine may not call
 another engine; these call engines).
 The five _*ModeHandler classes stay private -- build_mode_handlers() is the only construction
 site coordinator.py may reach across the module boundary for."""
@@ -139,9 +139,9 @@ class PeakDemandState:
         A faithful restore: no clamp, since `update()` itself can legitimately produce a
         negative `tracked_kw` on a net-export month (peak_demand_tracker.py's own contract).
         `month` is left unchanged when the restored state carries no `period_month` (an older
-        stored value) -- the 15-minute `window` is deliberately never seeded
-        (control-cycle.md's Monthly peak demand tracking: "not preserved and rebuilds after a
-        restart"), matching `update()`'s own reset-on-rollover behavior."""
+        stored value) -- the 15-minute `window` is deliberately never seeded (R21: the window
+        itself is "not preserved and rebuilds from the readings that follow the restart",
+        unlike the tracked value), matching `update()`'s own reset-on-rollover behavior."""
         self.tracked_kw = kw
         if month is not None:
             self.tracked_month = month

@@ -1,6 +1,6 @@
 """Vehicle-Limit Manager (M2, V12) -- bidirectional vehicle charge-limit sync (UC09/R6).
 
-A Manager (system-design §4 rule 5 / ADR-0011): triggered by HA state changes, including the
+A Manager (system-design.md §4 rule 5 / ADR-0011): triggered by HA state changes, including the
 materialized active-SOC-limit diagnostic sensor's own state changes (the entity the
 ActiveSocLimitChanged event fires alongside -- M2 observes the entity, not the bus event),
 it reads inputs through adapters and writes the vehicle through the vehicle_charge_limit
@@ -8,7 +8,7 @@ adapter / adopts manual changes into number.smart_charging_soc_limit_override. I
 calls or is called by the Coordinator.
 No control-cycle logic, no clamps, no set-point -- the Vehicle-Limit Manager takes the
 resolved active SOC limit from the Coordinator's own composition and makes no SOC-Target
-call of its own (system-design Sec5.2, ADR-0011).
+call of its own (system-design.md §5.2, ADR-0011).
 
 Homed under `managers/` per ADR-0015; `soc_limit_override` is reached through RA3's Store
 (ADR-0018), never a coordinator reference, setter, or event.

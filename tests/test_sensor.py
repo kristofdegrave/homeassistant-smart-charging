@@ -979,8 +979,8 @@ async def test_async_setup_entry_power_and_notification_mirrors_fall_back_to_the
 # --- Installation/Charger/Peak protection config-mirror sensors (T2, ADR-0031, #888) -------
 
 # (object_id_suffix, SmartChargingConfig field, unit, device_class) -- object_id_suffix is the
-# catalog's documented id; the field name diverges from it for four of these twelve
-# (entity-catalog.md's rows for them), which is exactly what this test pins.
+# catalog's documented id (entity-catalog.md); the SmartChargingConfig field name diverges from
+# that id for four of these twelve, which is exactly what this test pins.
 _T2_MIRROR_CASES = [
     ("smoothing_window", "smoothing_window", "cycles", None),
     (

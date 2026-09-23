@@ -166,7 +166,7 @@ OPTION_KEYS = (
     # flow its own table with a merge-not-replace terminal step, so it round-trips through
     # Configure+Save correctly.
     CONF_REMINDER_LEAD_H,
-    # T2: three new keys, deferred from T1 until a fragment actually carries each of them
+    # Three keys added once a fragment actually carries each of them
     # (_power_threshold_schema, _notifications_threshold_schema below).
     CONF_POWER_COOLDOWN_MIN,
     CONF_DEADLINE_NOTICE_ENABLED,
@@ -290,7 +290,7 @@ UC12_FIXED_STEP_ORDER = (
     STEP_NOTIFICATIONS,
 )
 
-# The config flow's own table (ADR-0027 Option C; T4 cut-over -- topic-step plan). Install and
+# The config flow's own table (ADR-0027 Option C). Install and
 # reconfigure share this one table (ADR-0027 point 3/5, ADR-0033): `power` has no mapping half
 # at all, so it is gated off entirely in reconfigure mode (a per-step gate, not a stop
 # condition, because it sits in the *middle* of the fixed order). `captar` has acquired a
@@ -313,7 +313,7 @@ CONFIG_TABLE: tuple[FlowStep, ...] = (
     ),
 )
 
-# The options flow's own table (ADR-0027 point 4; T7 cut-over -- topic-step plan): threshold
+# The options flow's own table (ADR-0027 point 4): threshold
 # halves only, gated on the *stored* capability flags (`self.config_entry.data`), never this
 # run's own answers -- the options flow never re-asks a capability, only its thresholds. `core`
 # IS a row here (unlike CONFIG_TABLE), because the options flow's own entry point,
@@ -515,7 +515,7 @@ def _deadline_threshold_schema(defaults: dict | None = None) -> vol.Schema:
 # --- The nine topic steps' schema fragments (ADR-0027, Consequences: "The schema fragments
 # are re-cut along topic lines"). CONFIG_TABLE and
 # OPTIONS_TABLE both walk these -- `_ungated_threshold_schema`, the always-shown catch-all
-# fragment these disperse from, was deleted at T7, dispersing across
+# fragment these disperse from, has been deleted, dispersing across
 # `core`, `grid`, `ev_charger`, `vehicle`, `power` and `captar` exactly as ADR-0027's
 # Consequences describe.
 
@@ -616,7 +616,7 @@ VEHICLE_MAPPING_SCHEMA = vol.Schema(
         # Optional here too: the field-level car-at-home rule
         # (_car_home_missing_error, UC12 4a) still fires on a filled-in charge limit or a
         # present deadline capability -- that guard is wired to this step below, in
-        # async_step_vehicle (topic-step plan T8).
+        # async_step_vehicle.
         vol.Optional(CONF_CAR_HOME_ENTITY): _entity(["device_tracker", "person", "binary_sensor"]),
     }
 )
@@ -1068,11 +1068,13 @@ class SmartChargingOptionsFlow(_TableWalkMixin, config_entries.OptionsFlow):
 
     async def _async_finish(self) -> config_entries.ConfigFlowResult:
         """UC12 1b: merge this run's answers into the stored options, never replace them
-        wholesale (ADR-0027's options-bucket intersection rule). `OptionsFlow.
+        wholesale. `OptionsFlow.
         async_create_entry` replaces `entry.options` outright, and this run's accumulator is
         deliberately narrower than the stored bucket whenever a capability is gated off --
         replacing rather than merging would silently delete that capability's thresholds the
         first time Configure is opened after withdrawing it through reconfigure (R20 AC7)."""
+        # ADR-0027's options-bucket rule: consume OPTION_KEYS by intersection with the
+        # accumulator, never by indexing every key.
         intersection = {k: self._answers[k] for k in OPTION_KEYS if k in self._answers}
         # Not OPTION_KEYS-intersected like every other key above: control_interval_s is
         # deliberately not an OPTION_KEYS member. Membership-guarded rather than direct

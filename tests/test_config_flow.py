@@ -1,6 +1,6 @@
 """HA-harness config-flow tests (ADR-0005).
 
-T4 (topic-step config-flow plan, ADR-0027) cut the install/reconfigure flow over from the
+T4 (ADR-0027) cut the install/reconfigure flow over from the
 seven-step model ADR-0025 (superseded by ADR-0027) specified to the nine topic steps. T7
 completes the re-cut: the options flow now walks its own nine-topic-step OPTIONS_TABLE too
 (ADR-0027 point 4) -- threshold halves only, gated on the *stored* capability flags, and the
@@ -466,7 +466,7 @@ async def test_factory_builds_adapter_matching_flow_submitted_states(hass):
     assert adapter._low_states == {"low", "off-peak"}
 
 
-# --- Step 1 (plan T4) named tests. ---
+# --- Step 1 (T4) named tests. ---
 
 
 def test_r20_ac1_core_mapping_is_exactly_the_four_capability_declarations():
@@ -830,8 +830,9 @@ async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_step_deadline
 
 
 async def test_car_home_guard_charge_limit_trigger_takes_precedence_when_both_fire(hass):
-    """UC12 4a: the charge-limit trigger is checked first, so a submission that trips both
-    triggers at once reports the message tied to the field just filled in on this same step."""
+    """UC12 4a gives car_home two independent triggers but states no precedence between them.
+    This pins the guard's own choice: it checks the charge-limit trigger first, so a submission
+    tripping both reports the message tied to the field just filled in on this same step."""
     result = await _run_install_flow(
         hass,
         capabilities={CONF_DEADLINE_AVAILABLE: True},
@@ -2514,7 +2515,7 @@ def test_uc12_config_table_is_uc12s_fixed_order_minus_the_core_entry_point():
 
 
 def test_uc12_1b_options_table_is_uc12s_fixed_order_plus_the_core_row():
-    """T7's own cut-over: the options flow's own nine-topic-step
+    """The options flow's own nine-topic-step
     table -- `core` prefixed onto UC12's fixed eight-row order, unlike CONFIG_TABLE where
     `core` is the shared entry point rather than a row of its own."""
     assert [row.step_id for row in OPTIONS_TABLE] == [STEP_CORE, *UC12_FIXED_STEP_ORDER]

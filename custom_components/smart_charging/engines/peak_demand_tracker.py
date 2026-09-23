@@ -4,7 +4,7 @@ A sibling module to billing_protection.py (ADR-0010: "the V6 pair ... stays two
 sibling modules ... their relationship is recorded by project-plan task E5
 bundling them, not by a directory"). Deliberately does NOT import
 signal_conditioning.smooth_net_power -- an engine may not call another engine
-(system-design Sec 4 rule 4). The coordinator (M1) is responsible for smoothing
+(system-design.md §4 rule 4). The coordinator (M1) is responsible for smoothing
 net_power over its OWN dedicated ~15-minute window (distinct from R10's short
 window) before calling this function; see requirements.md R21.
 """
@@ -26,8 +26,8 @@ def update_monthly_peak_demand(
     month's peak starts accumulating immediately from whatever the household is
     actually drawing, not from an artificial floor (requirements.md R21: "not
     reset to a fixed 0 kW that the household's actual draw must then climb back
-    from" -- which also explains why this alone does not guarantee immediate
-    charging headroom on a cold start).
+    from"). That alone does not guarantee immediate charging headroom on a cold
+    start -- the effective peak limit still has to clear the safety margin.
     """
     if tracked_month != current_month:
         return smoothed_kw, current_month

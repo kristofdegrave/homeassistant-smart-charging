@@ -199,7 +199,7 @@ async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_no
 
 
 async def test_reload_capability_flip_leaves_correct_registry_state_across_entities(hass):
-    """ADR-0028's integration checkpoint: a single config entry carrying both
+    """ADR-0028 end to end: a single config entry carrying both
     solar_available and deadline_available (SmartChargingDepartureTime is the only entity
     gated by both disabled_by *and* label sync at once; SolarSurplusSensor carries no label at
     all) flips each capability twice across two ADR-0008 reloads
@@ -774,8 +774,8 @@ async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(ha
     only catches a `state`-role catalog row whose *implementation* diverges from an existing
     entity -- it cannot notice a `state`-role row with no implementation at all, since there is
     then no registered entity to compare against. Two such rows currently exist:
-    `sensor.smart_charging_desired_current` (entity-catalog.md:183) and
-    `binary_sensor.smart_charging_plug_in_reminder` (entity-catalog.md:296, and no
+    `sensor.smart_charging_desired_current` (its own entity-catalog.md row) and
+    `binary_sensor.smart_charging_plug_in_reminder` (likewise, and no
     `binary_sensor` platform is even wired up in `PLATFORMS`) are documented but not yet built.
     """
     seed_charger_states(hass, status="Charging")
@@ -991,11 +991,10 @@ async def test_reload_does_not_leak_the_notify_adapters_action_listener(hass):
 
 
 async def test_setup_schedules_the_notification_manager_tick_on_the_configured_interval(hass):
-    """Task 5.2: M3's periodic evaluation runs on the same control interval M1 uses -- the
-    same Control-interval timer client (system-design.md), not a bespoke schedule of its
-    own -- a non-default interval, to
-    catch an implementation that hardcodes DEFAULT_CONTROL_INTERVAL_S instead of reading the
-    entry's own configured value."""
+    """Task 5.2: M3's periodic evaluation is scheduled on the entry's own configured control
+    interval -- the same interval value M1 ticks on, not a schedule of its own. Uses a
+    non-default interval to catch an implementation that hardcodes
+    DEFAULT_CONTROL_INTERVAL_S instead of reading the entry's configured value."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"

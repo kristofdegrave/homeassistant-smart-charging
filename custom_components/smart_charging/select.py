@@ -75,8 +75,9 @@ class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Select
 
 class ProfileSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, SelectEntity):
     """User-set charging profile -- `Manual` (the mode selector drives dispatch) or `Auto`
-    (E2's own mode-selection drives dispatch, R16). Mirrors `ModeSelect`'s own capability
-    gating above."""
+    (E2's own mode-selection drives dispatch, R16). Mirrors `ModeSelect`'s restore/select
+    shape above, with no capability gating of its own -- both profile options are always
+    offered."""
 
     _attr_translation_key = "profile"
     _object_id_suffix = OWNED_SUFFIX_PROFILE
