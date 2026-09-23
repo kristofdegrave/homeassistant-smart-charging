@@ -69,7 +69,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: python -m pip install ruff==0.15.22
+      # The ruff version comes from requirements-test.txt, the one place it is pinned, so the
+      # lint CI runs and the lint a local environment runs cannot drift apart.
+      - run: python -m pip install "$(grep -E '^ruff==' requirements-test.txt)"
       - run: ruff check .
       - run: ruff format --check .
 
