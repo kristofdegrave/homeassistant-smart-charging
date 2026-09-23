@@ -64,7 +64,7 @@ And the evening is skipped terminally, exactly as alternate flows 1a and 1b are:
 **Notification gating turned off while a prompt is already pending.**
 Given the System has sent the prompt and is waiting for an answer (state **Pending**)
 When either layer of the gating is subsequently turned off before the driver answers
-Then the System leaves the pending prompt standing and does not withdraw or void it: the gating governs only whether a notification is *sent* (R18 AC11), so the change takes effect from the next control cycle onward (R18 AC12) by suppressing prompts not yet sent, and a prompt already sent is not one of them.
+Then the System leaves the pending prompt standing and does not withdraw or void it: the gating governs only whether a notification is *sent* (R18 AC11), so the change takes effect from the next control cycle onward (NF11) by suppressing prompts not yet sent, and a prompt already sent is not one of them.
 And an answer given before midnight is honoured exactly as the main success scenario and alternate flow 3a describe — "yes" sets the home-day flag for tomorrow, "no" leaves it unset — and midnight arriving with no answer still times the prompt out (below).
 And the gating still applies in full to the following evening's prompt, which is not sent while either layer remains off.
 
