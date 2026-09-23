@@ -3,10 +3,11 @@
 Plain pytest, no HA harness needed (ADR-0009) -- this is a pure data-file check, like
 tests/test_translations.py's strings.json guard. NF6 requires the declared minimum to be true:
 the integration behaves as `docs/analysis/requirements.md` states on that release and on the
-stable release current when a version is published (#1031). The floor is derived from what the
-code actually uses -- `dashboard.py`'s `grid_options` (added in Home Assistant 2024.11) is the
-latest-introduced feature among the evidence recorded on #1031 -- and this test pins that
-derivation against silent drift, the same way #1031 found the previous, untrue value.
+stable release current when a version is published (#1031). This test does not re-derive the
+floor from the code -- it pins `hacs.json` to the minimum #1031 established
+(`dashboard.py`'s `grid_options`, added in Home Assistant 2024.11, is the binding feature).
+Re-derive and update both together when the shipped code adopts a still-newer HA feature, the
+same way #1031 found the previous, untrue value.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 # The derived minimum (#1031): the latest Home Assistant release introducing any feature the
 # shipped code uses. `dashboard.py`'s `grid_options` (every card) is the binding constraint --
-# see the PR description for the full evidence table and its primary sources.
+# see #1031 for the full evidence table and its primary sources.
 _DERIVED_HA_MINIMUM = "2024.11.0"
 
 
