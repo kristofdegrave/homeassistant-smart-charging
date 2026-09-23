@@ -1463,7 +1463,8 @@ async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_
 async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
     """entity-catalog.md's `sensor.smart_charging_peak_headroom_a` row / control-cycle.md
     step 5 -- the same target and the same accepted household baseline the R3 clamp itself
-    holds, R3's deferral cases included (#602 T2)."""
+    holds (#602 T2). R3's deferral cases are pinned separately, by
+    test_peak_headroom_a_does_not_spike_from_a_transient_stale_charger_power_reading."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     config = dataclasses.replace(config, safety_margin_w=250.0)

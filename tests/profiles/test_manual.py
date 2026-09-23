@@ -16,9 +16,9 @@ def test_select_returns_active_mode_unchanged(mode):
 
 def test_select_ignores_every_other_kwarg():
     """Manual's own contract: no automatic mode change regardless of observable conditions
-    (R16's Manual criterion, requirements.md; NF1's general no-automatic-changes rule
-    applies via its own parenthetical) -- proven here by passing Auto's full kwarg set
-    alongside active_mode and confirming none of it changes the result."""
+    (R16's Manual criterion, requirements.md; ADR-0017 for the profile-as-policy split) --
+    proven here by passing Auto's full kwarg set alongside active_mode and confirming none of
+    it changes the result."""
     result = ManualPolicy().select(
         active_mode=MODE_OFF,
         urgent=True,
