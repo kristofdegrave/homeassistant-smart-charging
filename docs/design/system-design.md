@@ -459,6 +459,7 @@ sequenceDiagram
     M-->>C: baseline desired current
     C->>DL: required current & urgency? (R5/R15 — the resolved deadline and effective battery<br/>capacity above, state of charge, the active SOC limit and the resolved supply voltage, which<br/>are the required-current formula's own five inputs; plus the escalated maximum permitted rate<br/>and baseline desired current the two R5 tests compare against; plus charger status and the<br/>declared deadline capability from the Store read above (R18), and the prior cycle's<br/>pursued occurrence)
     DL-->>C: urgency flag + unreachable flag + updated pursued occurrence + required<br/>current (none computed once that occurrence is in the past)
+    Note over C: publish DeadlineUnreachableNotified, or its paired DeadlineUnreachableCleared<br/>(ADR-0024), as applicable — from the urgency step that resolved them (§5.1.1)
     C->>P: which mode? (Manual: user selection · Auto: mode-selection w/ urgency, tariff, sun, surplus,<br/>active SOC limit, available modes, R9 reserve flag)
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
@@ -472,7 +473,7 @@ sequenceDiagram
     C->>I: R11 cooldown/hold gating + C1 floor/cap
     I-->>C: final current
     C->>A: write charger_current (skip if unchanged)
-    Note over C: publish ChargerCurrentSet / ActiveSocLimitReached /<br/>DeadlineUnreachableNotified and its paired DeadlineUnreachableCleared (ADR-0024)<br/>as applicable (ActiveSocLimitChanged already published above, at the resolution step)
+    Note over C: publish ChargerCurrentSet / ActiveSocLimitReached as applicable<br/>(ActiveSocLimitChanged and the deadline-unreachable pair already published above,<br/>each at the step that resolved it)
 ```
 
 The same sequence realizes every charging mode — only the Profile's answer (step: which mode) and
@@ -514,6 +515,93 @@ the only one R5 needs: a missed-deadline hold is that same value read after the 
 names has passed; `control-cycle.md`'s Trigger section
 names it among the values the cycle carries. **UC06/UC07** ride it too: the SOC-Target Engine returns a stepped-up or
 capped limit; no other step changes.
+
+#### 5.1.1 How the cycle is composed
+
+The sequence above gives the cycle's **order**. This subsection gives its **composition**, how
+the Charging Coordinator holds that order in code. It is decided by
+[ADR-0046](../adl/0046-cycle-composition-rules-and-complexity-guard.md), which carries the
+options and reasons. The composition sits below this design's altitude, as ADR-0012's
+decomposition does ([§8.2](#82-adrs-written-after-this-design-0010-0019)): it adds no service
+and no edge, and leaves [§4](#4-static-architecture)'s call directions unchanged.
+
+What follows is the composition the cycle is held to, not a description of today's code.
+ADR-0046's follow-ups realize it: the restructure of `_run_cycle` wherever it does not yet
+conform, the complexity guard in the lint configuration, and the `development` completion bar's
+gate.
+
+- **The body is the order, written out.** `_run_cycle` reads top to bottom as the sequence
+  above, in ADR-0006's order, one statement per step.
+  - Each step is a named unit of one of
+    [ADR-0023](../adl/0023-decompose-run-cycle-into-named-steps.md)'s two kinds: a coordinator
+    method, or a pure unit in `coordinator_cycle.py`. ADR-0023 defines both kinds.
+  - The clamp calls and the floor/cap are coordinator methods.
+  - Neither kind is a service in [§3](#3-service-catalog). A rule that belongs to a volatility
+    in [§2](#2-volatilities-the-cut) stays in that volatility's Engine, and the step calls it.
+  - Mode dispatch keeps ADR-0012's `ModeHandler` registry lookup.
+- **The body holds nothing else.** It holds only:
+  1. calls to named steps;
+  2. the two fault exits, both of them C5 faults:
+     - one for an always-required role being unavailable;
+     - one for state of charge being unavailable in a mode that requires it (C5's role table).
+
+     Each exit is a test of a sentinel, then a literal `return` of the fault result, which that
+     exit's own step builds. The returns stay in the body, so ADR-0007's single fault path
+     stays visible;
+  3. the two mode-state resets;
+  4. four distinct calls, in this order: mode dispatch, the R3 peak clamp, the C4
+     grid-supply-ceiling clamp, and the C1 floor/cap. Each call passes its desired current to
+     the next;
+  5. the charger write, then the return of the cycle's result. A named step builds that result.
+     After the write, the same step also records the last successful cycle and the end of a
+     fault.
+
+  The body holds no inline arithmetic, no inline predicate, and no branch except the two fault
+  tests. It fires no Home Assistant event. A comment in the body is at most a one-line pointer;
+  a step's reasoning goes in its docstring.
+- **A value has one home.** The cycle's carrier (`CycleContext`) is built once, right after the
+  required-role read succeeds. Its inputs are:
+  - the required readings;
+  - the accepted [household baseline](../analysis/system-overview.md#ubiquitous-language);
+  - the cycle's clock readings.
+
+  Values are placed by these rules:
+  - A value that more than one later step reads is a field on the carrier. The step that
+    resolves it writes it, and it is never also kept as a local.
+  - A result that only the next call reads is passed to that call as an argument, the way the
+    desired current passes through the clamps.
+  - Two values are locals: the floor/cap result, which goes to both the charger write and the
+    result step; and a fault test's sentinel, which only that test reads.
+
+  Building the carrier advances no state, so it can sit above the state-of-charge fault exit.
+- **The effective peak limit is resolved once**, after urgency, on the success path. The
+  state-of-charge fault exit resolves the non-urgent limit that its own result reports, inside
+  its own step. No provisional limit exists in the body.
+- **Both resets stay, as two calls.** The first catches a `Manual` change and runs before the
+  baseline query. The second catches an `Auto` change and runs once the Profile has resolved
+  the active mode.
+- **No step that advances state crosses a fault exit, in either direction.** What a fault cycle
+  advances today, it still advances. What it leaves untouched, it still leaves untouched. The
+  untouched state includes:
+  - the last-successful-cycle timestamp (ADR-0021), which a charger write that raises does not
+    advance either;
+  - UC05's `Unreachable` state, and with it whether `DeadlineUnreachableCleared` fires (ADR-0024);
+  - R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language).
+- **An event fires from the coordinator method that calls the resolution it reports.** Where a
+  pure unit does the resolving, the method wraps that unit, and the unit never fires the event.
+  - `ActiveSocLimitChanged` fires where the active SOC limit is resolved.
+  - The `DeadlineUnreachableNotified`/`DeadlineUnreachableCleared` pair fires where urgency is
+    resolved.
+
+  The Home Assistant event bus stays on the coordinator side, the boundary ADR-0012 draws.
+- **A complexity guard holds the body to this shape.** The guard is two limits over
+  `coordinator.py` and `coordinator_cycle.py`: one on cyclomatic complexity and one on
+  statement count. A function that exceeds either limit fails the lint job. The `development`
+  completion bar sets the tool and the thresholds; this design does not. Removing either
+  limit, or either file, from the guard contradicts ADR-0046.
+
+A new concern arrives as a new step, not as a block inside the body. A concern that fits
+neither unit kind, or that cannot be one statement in the body, needs a new decision.
 
 ### 5.2 Vehicle charge-limit sync (UC09)
 
