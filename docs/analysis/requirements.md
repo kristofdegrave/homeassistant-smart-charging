@@ -429,7 +429,7 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 
 **Acceptance criteria:**
 
-- [ ] A household that adds this repository to HACS as a custom integration repository can install any published version whose declared minimum Home Assistant release (NF6) its own release meets, and later update to a newer such version, from HACS alone, without copying or editing any file by hand. The one prerequisite from outside this repository is the `auto-entities` dashboard card the runtime dashboard (R19) renders with, itself installed from HACS.
+- [ ] A household that adds this repository to HACS as a custom integration repository can install any published version whose declared minimum Home Assistant release (NF6) its own release meets, and later update to a newer such version, from HACS alone, without copying or editing any file by hand. Any dashboard card the runtime dashboard (R19) needs beyond those Home Assistant ships is itself installable from HACS and is named in the installation instructions.
 - [ ] Every published version meets Home Assistant's rules for an integration's manifest and file structure.
 
 ---
@@ -468,7 +468,7 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 **Acceptance criteria:**
 
 - [ ] Every text the system presents — entity names and state labels, the [configuration flow](system-overview.md#ubiquitous-language)'s step titles, field labels, descriptions and error messages (R20), the dashboard's view and card headings (R19), and every notification's title, message and action-button labels (R5, R12, R13) — exists in both English and Dutch, with no text present in one language and missing from the other. The product name "Smart Charging" is not translated.
-- [ ] State labels and the configuration flow are governed by the viewing user's own language; entity names, the dashboard's headings and the notifications, which are fixed once for the whole installation, by Home Assistant's system language. Where the governing language is Dutch the text is shown in Dutch; where it is English, or any other language, in English.
+- [ ] State labels and the configuration flow are governed by the viewing user's own language; entity names, the dashboard's headings and the notifications, which are the same for every user of the installation, by Home Assistant's system language, including after that language is changed. Where the governing language is Dutch the text is shown in Dutch; where it is English, or any other language, in English.
 
 ---
 
