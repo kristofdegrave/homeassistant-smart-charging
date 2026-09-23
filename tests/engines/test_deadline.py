@@ -326,7 +326,7 @@ def test_boundary_required_equals_maximum_rate_is_still_reachable():
     assert result.unreachable is False
 
 
-# --- Next-occurrence resolution (R15, issue #1005) ---------------------------------------
+# --- Next-occurrence resolution (R14, issue #1005) ---------------------------------------
 
 
 def test_next_occurrence_is_today_when_departure_time_still_ahead():
@@ -340,7 +340,7 @@ def test_next_occurrence_is_today_when_departure_time_still_ahead():
 def test_next_occurrence_rolls_to_tomorrow_once_todays_departure_time_has_passed():
     # THE #1005 REGRESSION. 07:00 against an afternoon `now` used to resolve as a deadline
     # 8 hours in the PAST, saturating required_a to infinity and pinning `urgent` True for
-    # the rest of the day. R15: judged as the next day's occurrence instead.
+    # the rest of the day. R14: judged as the next day's occurrence instead.
     assert resolve_next_occurrence(
         deadline_today=time(7, 0),
         deadline_tomorrow=time(7, 0),

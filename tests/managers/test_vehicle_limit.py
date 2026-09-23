@@ -352,8 +352,8 @@ async def test_no_write_when_car_home_is_unknown(hass):
 
 
 async def test_no_write_when_disconnected(hass):
-    """UC09's precondition / R6 AC 4 / C2: disconnected -> no System write, even if car_home
-    is True -- alt 2a is the away-from-home branch, not this one."""
+    """UC09's precondition (connected AND car_home): disconnected -> no System write, even if
+    car_home is True -- alt 2a is the away-from-home branch, not this one."""
     m = _manager(hass, home=True, status=STATE_DISCONNECTED)
 
     await m.on_active_soc_limit_changed(90.0)
