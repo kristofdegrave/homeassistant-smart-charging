@@ -265,17 +265,13 @@ limit for step 5.
   does not grant a fresh, undebounced first start; only its debounce *timer* resets.
 - **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
   over the samples available so far until the window fills.
-- **Coordinator restart.** Restart-after-power-loss persistence of internal bookkeeping is not
-  catalogued — it is "how", not "what" (`entity-catalog.md`) — but this cycle's own timers,
-  including the has-charged flag and any running hold, cooldown, or restart-debounce timer, are
-  deliberately not required to survive one, consistent with `resolution-rules.md`'s
-  missed-deadline hold making the same choice. A connected car is therefore treated as a fresh
-  first start after a restart, with no restart debounce, even if it had charged before the
-  restart. The [monthly peak demand](system-overview.md#ubiquitous-language) is the one
-  deliberate exception, and a "what" rather than a "how": the peak already recorded for the
-  month in progress must survive a restart, because a value that began again from 0 kW would
-  misstate what CapTar bills for that month (R21). Its own 15-minute window is not preserved and
-  rebuilds after a restart, exactly as the smoothing-window edge case above describes.
+- **Coordinator restart or reload.** What survives either is NF14's: this cycle's own timers,
+  the has-charged flag and any running hold, cooldown or restart-debounce timer start afresh, so
+  a connected car is treated as a fresh first start, with no restart debounce, even if it had
+  charged before. The [monthly peak demand](system-overview.md#ubiquitous-language) survives,
+  because a value that began again from 0 kW would misstate what CapTar bills for that month
+  (R21); its 15-minute window rebuilds, exactly as the smoothing-window edge case above
+  describes.
 - **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net

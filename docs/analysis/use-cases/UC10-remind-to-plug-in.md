@@ -98,7 +98,7 @@ Transitions:
 - Sent → Armed (3a): charger status transitions from `disconnected` to `connected` and back to `disconnected` again (a connect/disconnect cycle), re-arming the reminder for the same departure window.
 - Sent → Armed (3b): the departure window changes — the next departure time passes and a later day's resolved deadline becomes the next one, or the resolved deadline is otherwise updated — re-arming the reminder for the new window.
 
-This state is scoped to the EV driver's plug-in decision only; it is unrelated to any charging use-case's own state (UC01–UC05), which starts fresh once the car is actually plugged in.
+A restart or reload starts this model afresh at Armed (NF14), so a reminder already sent for the current window may be sent once more. This state is scoped to the EV driver's plug-in decision only; it is unrelated to any charging use-case's own state (UC01–UC05), which starts fresh once the car is actually plugged in.
 
 ## Domain events produced
 

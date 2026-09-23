@@ -91,7 +91,7 @@ The prompt lifecycle for a single evening, re-armed at midnight when the home-da
 - **Answered-no** — the EV driver answered "no" before midnight; the home-day flag stays unset.
 - **Timed-out** — midnight arrived with no answer; treated the same as answered-no (flag stays unset).
 
-Not sent (whether never triggered, or skipped for any of the reasons above), answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only when the home-day flag resets at midnight and the next evening's trigger condition is evaluated.
+Not sent (whether never triggered, or skipped for any of the reasons above), answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only when the home-day flag resets at midnight and the next evening's trigger condition is evaluated, or when a restart or reload starts the lifecycle afresh (NF14) — which may send the evening's prompt once more.
 
 ## Domain events produced
 
