@@ -104,7 +104,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
-> **Reconfigure-flow timing note.** R18 requires a capability change to take effect "within the next control cycle." The reconfigure flow reloads the config entry, which restarts the coordinator — the new capability set is therefore in force from the coordinator's first cycle after the reload, satisfying R18 rather than conflicting with it.
+> **Reconfigure-flow timing note.** NF11 requires a change saved through the configuration flow — a capability change included (R18) — to take effect "within the next control cycle." The reconfigure flow reloads the config entry, which restarts the coordinator — the new capability set is therefore in force from the coordinator's first cycle after the reload, satisfying NF11 rather than conflicting with it.
 
 ### Core & coordinator
 
