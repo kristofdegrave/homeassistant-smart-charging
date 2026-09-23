@@ -28,7 +28,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Powe
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Power`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Power`-mode cooldown this mode's own stop or a fault stop (C5) starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -55,6 +55,11 @@ Then the coordinator reduces the charger current — or, on a sustained R3 breac
 Given the System is charging in `Power` mode
 When state of charge reaches the active SOC limit — the plain default, or a leftover solar step-up or solar-reserve cap (R9) from before `Power` was selected (see Relationships: `Power`'s own logic never puts either in effect, whether selected under `Manual` or via `Auto`'s deadline-urgency exception)
 Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+
+**Fault stop.**
+Given the System is charging in `Power` mode
+When a [fault](../system-overview.md#ubiquitous-language) cuts the current (C5)
+Then, from `Charging`, the System enters Cooldown for the `Power`-mode cooldown, whatever the peak-protection option and the CapTar capability (R11), and resumes only through Cooldown's own exits (State model). This stop does not emit `PowerChargingStopped`, which names this mode's own stops only; the fault is surfaced by `sensor.smart_charging_status` (C5).
 
 ## Postconditions
 
