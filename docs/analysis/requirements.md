@@ -280,7 +280,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Under `Auto`, SOC-limit coordination raises the active SOC limit via the solar step-up (R8) while charging in a solar mode, and, when its own solar-reserve conditions hold (R9), lowers the active SOC limit and declines to select a mode for opportunistic overnight top-up — coordinating the limit alongside the mode is `Auto`'s job, not a rule the selected mode enforces.
 - [ ] Under `Auto`, mode selection never selects a mode that is unavailable given the installation's capabilities (R18).
 - [ ] Under `Auto`, and while the deadline capability is present (R18), `Auto`'s mode-escalation levers switch from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and revert to a solar mode once grid charging is no longer required. When the CapTar capability is absent, the levers escalate to `Power` instead (R18) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — and still revert once the deadline is no longer at risk.
-- [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
+- [ ] An `Auto`-driven change of mode takes effect within the next control cycle. A change of profile does too, as NF11 states for every change the household makes.
 
 ---
 
@@ -316,7 +316,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Whether the household wants the system to send notifications at all (the notifications capability) is user-configurable, defaulting to **absent** — the one deliberate exception to the default-present convention above. The other three capabilities each record a fact about the installation that is already true of it, whereas sending notifications is a preference for the system to contact the household unprompted, something a household opts into rather than out of; a household that never answers the question is therefore left un-notified.
 - [ ] When the notifications capability is absent, the notification configuration surface is neither offered nor required: the notification-target mapping, each notification's own enable toggle (below), and the evening home-day prompt's time (R20, [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)). With no notification target mapped, the notifications themselves are undeliverable, not merely unconfigurable: R5's unreachable-deadline notice (Must), R12's plug-in reminder (Could), and R13's evening home-day prompt (Could) are not sent at all. No charging behaviour falls away with them — the capability gates no charging mode and no clamp, R5's charging levers (the peak-limit raise and `Auto`'s escalation) still apply, and the home-day flag's own mechanism (R13) still accepts its other configured inputs. The plug-in reminder's lead time (R12) stays a field of the deadline capability rather than of this one, but with no target mapped no reminder is sent whatever that lead time says.
 - [ ] Each notification the system can send carries its own [per-notification enable toggle](system-overview.md#ubiquitous-language), layered beneath this capability: R5's unreachable-deadline notice (`deadline_notice_enabled`), R12's plug-in reminder (`plug_in_reminder_enabled`), and R13's evening home-day prompt (`evening_prompt_enabled`). Gating is two-layer and conjunctive — a notification is sent only while the notifications capability is present **and** that notification's own toggle is on. Each toggle is user-configurable and defaults to **on**, following the default-present convention the solar, CapTar, and deadline capabilities follow rather than this capability's own default-absent exception: the opt-in decision is made once, at the capability, and a household that has just declared it wants to be contacted unprompted is presumed to want all three notifications and to narrow down from there. Turning one toggle off suppresses only its own notification and leaves the other two untouched; no charging mode, lever, or clamp falls away with it, the one indirect consequence being that R13's prompt is also one of the mechanisms that can set the home-day flag, so that mechanism goes with it (R13). Because the toggles belong to the notification configuration surface, they are neither offered nor required while the capability is absent (above), so a toggle sitting at its default never causes a notification on an installation that has not opted in.
-- [ ] Changing a capability, or any of the per-notification enable toggles above, takes effect within the next control cycle.
+- [ ] Changing a capability, or any of the per-notification enable toggles above, takes effect within the next control cycle, as NF11 states for every change the household makes.
 - [ ] The capability model is extensible: additional hardware, billing, or policy capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on it, without altering existing modes (NF2). Capabilities beyond solar, CapTar, deadline management, and notifications are out of scope this release.
 
 ---
@@ -392,7 +392,7 @@ A non-functional requirement states a quality of the product, never how it is bu
 
 ### NF1 — Coordinator executes modes; profiles select them
 
-**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one observable criterion — a change of the active mode takes effect within the next control cycle — is now [NF11](#nf11--responsiveness-to-a-change).
+**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one observable criterion — a change of the active mode takes effect within the next control cycle — is now [NF11](#nf11--responsiveness-to-a-change) for a change the household makes, and R16 for an `Auto`-driven one.
 
 ---
 
@@ -429,36 +429,36 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 
 **Acceptance criteria:**
 
-- [ ] Averaged over any 200 consecutive control cycles, the processing time spent on one cycle — excluding time spent waiting for a device or entity to respond — is at most 1 % of the configured control interval (NF11): 100 ms at the default 10 s, 50 ms at the 5 s minimum.
-- [ ] Once the smoothing window (R10) and the 15-minute window [monthly peak demand](system-overview.md#ubiquitous-language) is averaged over (R21) are both full, further cycles under unchanged configuration and unchanged readings retain no additional memory: across any 200 consecutive such cycles, the Home Assistant process's resident memory, with those cycles the only work it runs, grows by less than 5 MB in total.
+- [ ] On any hardware Home Assistant supports as an installation target, the mean processing time of one control cycle over any 200 consecutive cycles — excluding time spent waiting for a device or entity to respond — is at most 1 % of the configured control interval (NF11): 100 ms at the default 10 s, 50 ms at the 5 s minimum.
+- [ ] Under unchanged configuration and unchanged readings, with control cycles the only work the Home Assistant process runs: once the smoothing window (R10) and the 15-minute window [monthly peak demand](system-overview.md#ubiquitous-language) is averaged over (R21) are both full and a further 200 cycles have run, the process's resident memory never afterwards exceeds its level at that point by 5 MB or more, however many cycles run.
 
 ---
 
 ### NF11 — Responsiveness to a change
 
 **Priority:** Must
-**What:** A change the household makes to what the system should do is acted on by the next control cycle, and the control interval that bounds that wait is configurable within a stated range.
+**What:** A change the household makes to what the system should do takes effect within the next control cycle, and the control interval that bounds that wait is configurable within a stated range.
 
 **Acceptance criteria:**
 
 - [ ] The control interval is configurable in whole seconds (default 10 s, range 5 s or more, with no upper bound).
-- [ ] A change to a [runtime configuration](system-overview.md#ubiquitous-language) value — including a manual change of the [active mode](system-overview.md#ubiquitous-language) while the `Manual` [profile](system-overview.md#ubiquitous-language) is active — is acted on by the first control cycle that starts after the change. Acting on it means that cycle applies the active mode's own rules to the new value — a running cooldown or hold still runs its course (R11) — never that it keeps acting on the value it replaced.
-- [ ] A change saved through the [configuration flow](system-overview.md#ubiquitous-language), a change of the control interval itself included, is acted on from the first control cycle that runs after it is saved.
+- [ ] A change to a [runtime configuration](system-overview.md#ubiquitous-language) value — including a manual change of the [active mode](system-overview.md#ubiquitous-language) while the `Manual` [profile](system-overview.md#ubiquitous-language) is active — takes effect within the next control cycle: the first control cycle that starts after the change acts on the new value, subject to the rapid-cycling rules of R11 (a running cooldown, for example, still runs to completion), and never keeps acting on the value it replaced.
+- [ ] A change saved through the [configuration flow](system-overview.md#ubiquitous-language) — a capability, a threshold or default, or the control interval itself — takes effect within the next control cycle: the first control cycle that runs after it is saved uses the new value. Unlike a runtime configuration change, it does not leave a running cooldown to run to completion: no hold or cooldown running at that moment carries over.
 
-Where the control interval is kept, and that a change to it is applied by reloading the integration rather than live, is decided by [ADR-0005](../adl/0005-config-entry-structure-and-interval.md).
+Where the control interval is kept, and that a change saved through the configuration flow is applied by reloading the integration rather than live, is decided by [ADR-0005](../adl/0005-config-entry-structure-and-interval.md); that the reload resets running timers is decided by [ADR-0008](../adl/0008-reconfigure-reload-behavior.md).
 
 ---
 
 ### NF12 — Installation configuration survives an upgrade
 
 **Priority:** Must
-**What:** Upgrading the integration to a release that changes how an installation's configuration is stored never makes the household set the integration up again or re-enter anything.
+**What:** Upgrading the integration to a release that changes how an installation's configuration — every value set through the [configuration flow](system-overview.md#ubiquitous-language) — is stored never makes the household set the integration up again or re-enter any of it.
 
 **Acceptance criteria:**
 
-- [ ] After an upgrade, an installation configured under any earlier release loads and runs its control cycle without the configuration flow being run again.
-- [ ] Every [adapter role](system-overview.md#ubiquitous-language) mapping, [capability](system-overview.md#ubiquitous-language) declaration, threshold and default set before the upgrade keeps the value it had.
-- [ ] A setting the new release introduces takes its stated default until the user changes it.
+- [ ] After an upgrade, an installation configured under any earlier published release loads and runs its control cycle without the configuration flow being run again.
+- [ ] Every value set through the configuration flow before the upgrade — each [adapter role](system-overview.md#ubiquitous-language) mapping, [capability](system-overview.md#ubiquitous-language) declaration, threshold and configured default — keeps the value it had.
+- [ ] A configuration-flow setting the new release introduces takes its stated default until the user changes it.
 
 ---
 
