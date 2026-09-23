@@ -29,7 +29,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that smoot
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a rapid-cycling cooldown is still running after a previous stop (R11) — the [solar-mode cooldown](../system-overview.md#ubiquitous-language) this mode's own stop starts, or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the [solar-mode cooldown](../system-overview.md#ubiquitous-language) this mode's own stop or a fault stop (C5) starts, or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
 When smoothed solar surplus reaches the start threshold
 Then the System does not start charging until the cooldown has fully elapsed, then proceeds to step 2 or 2b depending on whether surplus is still at or above the start threshold once it does.
 
@@ -72,6 +72,11 @@ And when the CapTar capability is absent, the R3 clamp does not run at all — i
 Given the System is charging in `SolarOnly` mode
 When state of charge reaches the active SOC limit
 Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+
+**Fault stop.**
+Given the System is charging in `SolarOnly` mode
+When a [fault](../system-overview.md#ubiquitous-language) cuts the current (C5)
+Then, from `Charging` or `Hold`, the System enters Cooldown for the solar-mode cooldown (R11), and resumes only through Cooldown's own exits (State model). This stop does not emit `SolarOnlyChargingStopped`, which names this mode's own stops only; the fault is surfaced by `sensor.smart_charging_status` (C5).
 
 ## Postconditions
 
@@ -116,6 +121,11 @@ the active SOC limit resets to the default, any solar step-up is cleared (R7), a
 [has-charged flag](../system-overview.md#ubiquitous-language) is cleared (R11) — the next
 connection is a fresh session's first start — which is why the diagram does not draw a
 disconnect edge from every state.
+
+A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging or
+Hold is a fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as the mode's own
+stop does (R11), and charging resumes only through Cooldown's own exits. It can arise in any
+charging state, which is why the diagram does not draw it either.
 
 `Idle → Charging` carries one further guard, the [restart debounce](../system-overview.md#ubiquitous-language)
 (R11, shared with sibling UC01): before the has-charged flag is first set, `Idle` starts

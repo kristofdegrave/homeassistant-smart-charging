@@ -487,11 +487,11 @@ a changed capability's submit is the reconfigure flow (1a), and a changed per-no
 submit is the options flow (1b, above) — both trigger a config-entry reload (ADR-0008;
 `entity-catalog.md`'s reconfigure-flow timing note records the same fact for the capability half),
 so either kind of change is in force from the coordinator's first cycle after its own reload,
-meeting AC12's "within the next control cycle" by the one mechanism, not two.
+meeting NF11's "within the next control cycle", to which AC12 defers, by the one mechanism, not two.
 
 This use-case owns R18's *configurability* half — whether a capability or toggle is
-user-configurable, whether an absent capability's own inputs are offered/required, and the timing
-at which a submitted change of either kind takes effect (AC12). The *behavioural* half — what an
+user-configurable, whether an absent capability's own inputs are offered/required, and how a
+submitted change of either kind meets the timing NF11 sets for it (AC12). The *behavioural* half — what an
 absent capability or a disabled toggle actually changes about charging or notifications — is owned
 by whichever document realizes that behaviour: `resolution-rules.md` (Auto's mode-selection
 branches, AC2/AC5/AC7, and R15's no-remaining-effect clause of AC8), `control-cycle.md` (the peak

@@ -28,7 +28,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Capt
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Captar`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`); this is what can delay a deadline-urgency escalation into `Captar` for the remainder of a solar-mode cooldown (`../resolution-rules.md`)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Captar`-mode cooldown this mode's own stop or a fault stop (C5) starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`); this is what can delay a deadline-urgency escalation into `Captar` for the remainder of a solar-mode cooldown (`../resolution-rules.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -45,6 +45,11 @@ R3's own grace period (default 2 minutes, held at the minimum charging current b
 Given the System is charging in `Captar` mode
 When state of charge reaches the active SOC limit — whether the plain default, a stepped-up value, or a value `Auto` has lowered via the solar-reserve cap (R9) — the resolution is the same to `Captar`
 Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+
+**Fault stop.**
+Given the System is charging in `Captar` mode
+When a [fault](../system-overview.md#ubiquitous-language) cuts the current (C5)
+Then, from `Charging`, the System enters Cooldown for the `Captar` cooldown (R11), and resumes only through Cooldown's own exits (State model). This stop does not emit `CaptarChargingStopped`, which names this mode's own stops only; the fault is surfaced by `sensor.smart_charging_status` (C5).
 
 ## Postconditions
 
@@ -82,6 +87,11 @@ mechanism and are referenced, not repeated, here.
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected" precondition
 and exits this use-case's scope from any state, returning to Idle; on disconnect the active SOC limit
 resets to the default (R7), which is why the diagram does not draw a disconnect edge from every state.
+
+A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging is a
+fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as the mode's own stop does
+(R11), and charging resumes only through Cooldown's own exit. It can arise on any charging cycle,
+which is why the diagram does not draw it either.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |

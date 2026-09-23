@@ -478,7 +478,13 @@ class SolarStepUpGate:
     ) -> None:
         """R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- is_solar_mode_charging
         gates on THIS cycle's profile/mode/status, mirroring the coordinator's own prior inline
-        computation exactly. Mutates self.state in place; callers read .state afterward."""
+        computation exactly. Mutates self.state in place; callers read .state afterward.
+
+        The `profile == PROFILE_AUTO` check stays a plain flag rather than an ADR-0017
+        PROFILE_POLICIES registry lookup: ADR-0017's Context section is explicit that
+        SOC-limit coordination (R8/R9) is not part of Profile's decision at all -- it remains
+        the SOC-Target Engine's own job, gated by the active-profile/previous-mode flags the
+        Coordinator already holds, not a `profiles/`-owned object."""
         is_solar_mode_charging = (
             profile == PROFILE_AUTO and mode_is_solar and status in CHARGEABLE_STATES
         )
