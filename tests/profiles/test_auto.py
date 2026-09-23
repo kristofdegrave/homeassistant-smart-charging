@@ -79,7 +79,7 @@ def test_row3_never_selects_solar_without_the_capability():
 
 
 def test_row1_wins_over_row2_even_when_urgent():
-    # First-match-wins (resolution-rules.md/design doc §8): a full battery (row 1)
+    # First-match-wins (resolution-rules.md: "the first matching row wins"): a full battery (row 1)
     # still selects Off even if the deadline is simultaneously urgent (row 2) --
     # a full battery does not charge just because a deadline is close.
     modes = frozenset({MODE_OFF, MODE_POWER, MODE_CAPTAR})

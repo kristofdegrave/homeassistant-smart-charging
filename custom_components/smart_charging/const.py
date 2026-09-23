@@ -39,7 +39,7 @@ ATTR_ENTRY_ID = "entry_id"  # shared entry-scoping key across all three M2 event
 ATTR_LIMIT = "limit"  # M2 event payload key -- the SOC-limit value carried by the event
 
 # `MonthlyPeakSensor`'s (sensor.py) extra-restore-data / extra-state-attribute key for the
-# "YYYY-MM" period the tracked kW belongs to (design doc Sec 6.4) -- named once here so the
+# "YYYY-MM" period the tracked kW belongs to (requirements.md R21) -- named once here so the
 # restore round-trip (`_MonthlyPeakExtraStoredData`) and the live attribute stay in lockstep.
 ATTR_PERIOD_MONTH = "period_month"
 
@@ -105,8 +105,8 @@ OWNED_SUFFIX_PEAK_HEADROOM_A = "peak_headroom_a"
 OWNED_SUFFIX_ADAPTER_READINGS = "adapter_readings"
 OWNED_SUFFIX_CHARGER_STATUS = "charger_status"
 
-# Runtime dashboard (C5, #601) -- HA label marking every runtime-classified owned entity for the
-# `auto-entities` card (2026-07-08-runtime-dashboard-design.md Decision 1).
+# Runtime dashboard (C5, #601) -- HA label marking every runtime-classified owned entity so the
+# dashboard's `auto-entities` card can select them structurally rather than by a hand-kept list.
 LABEL_SC_RUNTIME = "sc_runtime"
 DASHBOARD_URL_PATH = "smart-charging"
 DASHBOARD_FILENAME = "dashboard_generated.yaml"
@@ -143,13 +143,13 @@ ROLE_SUN = "sun"
 # Optional at the factory level (NF3), like the other RA2 roles -- unmapped or a
 # None reading keeps the glossary's single-tariff "always active" default.
 ROLE_LOW_TARIFF = "low_tariff"
-# RA4 (notifications design doc §3): message dispatch + simulated action response.
+# RA4: message dispatch + simulated action response.
 # Optional at the factory level (NF3), like the other RA-role extensions above -- present
 # only when the notification target is mapped.
 ROLE_NOTIFICATION_TARGET = "notification_target"
-# Actionable home-day prompt action ids (UC08; notifications design doc §5/§6). The values
+# Actionable home-day prompt action ids (UC08). The values
 # round-trip verbatim through HA's mobile_app_notification_action payload -- do not rename them
-# independently of the design doc.
+# independently.
 ACTION_HOMEDAY_YES = "HOMEDAY_YES"
 ACTION_HOMEDAY_NO = "HOMEDAY_NO"
 # RA1-VL + car_home (RA2 role, built early -- M2 is their first consumer).
@@ -178,7 +178,7 @@ ROLES_ADAPTER_READINGS_EXCLUDED = frozenset(
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
 DEFAULT_CONTROL_INTERVAL_S = 10
-# E5 15-minute averaging window (design doc Sec 6.4) -- __init__.py's setup-time
+# E5 15-minute averaging window (requirements.md R21) -- __init__.py's setup-time
 # `peak_window_size` derivation (SmartChargingConfig, issue #570) is this constant's only reader.
 PEAK_WINDOW_SECONDS = 900
 # Issue #990: how many consecutive cycles a lower (more permissive) baseline_w reading must
@@ -206,35 +206,35 @@ CONF_NET_POWER_ENTITY = "net_power_entity"
 CONF_CHARGER_POWER_ENTITY = "charger_power_entity"
 CONF_GRID_VOLTAGE_ENTITY = "grid_voltage_entity"  # optional (NF4)
 CONF_EV_SOC_ENTITY = "ev_soc_entity"  # optional at the factory level (RA1 extension)
-CONF_SOLAR_AVAILABLE = "solar_available"  # bool, default False -- design doc §3, R18 scoped
-CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- design doc §3, R18 scoped
+CONF_SOLAR_AVAILABLE = "solar_available"  # bool, default False -- R18 scoped
+CONF_CAPTAR_AVAILABLE = "captar_available"  # bool, default True -- R18 scoped
 # bool, default True (R18 AC1) -- entity-catalog.md's deadline capability row
 CONF_DEADLINE_AVAILABLE = "deadline_available"
-# bool, default False (R18 AC9's named default-ABSENT exception) -- topic-step config-flow
-# design D-1; catalog *Capabilities*; UC12 step 1
+# bool, default False (R18 AC9's named default-ABSENT exception) -- catalog *Capabilities*;
+# UC12 step 1
 CONF_NOTIFICATIONS_AVAILABLE = "notifications_available"
-# optional at the factory level (NF3) -- design doc §3, R15
+# optional at the factory level (NF3), R15
 CONF_EV_BATTERY_CAPACITY_ENTITY = "ev_battery_capacity_entity"
-# optional at the factory level (NF3) -- design doc §3, R14
+# optional at the factory level (NF3), R14
 CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"
-# optional at the factory level (NF3) -- design doc §3, R9/R13
+# optional at the factory level (NF3), R9/R13
 CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
-# required only when CONF_SOLAR_AVAILABLE (R9 needs it) -- design doc §3
+# required only when CONF_SOLAR_AVAILABLE (R9 needs it)
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
-# optional, new key (topic-step config-flow design D-1/D-2) -- catalog *`Solar` mode*, the
+# optional, new key -- catalog *`Solar` mode*, the
 # solar_power adapter role (NF3 optional-role); UC12 step 7. Wired for reading only (issue
 # #911); R10 AC1's sampling/averaging for this role stays deferred pending #587.
 CONF_SOLAR_POWER_ENTITY = "solar_power_entity"
 # optional at the factory level (NF3) -- Auto mode-selection row 4 (R16)
 CONF_LOW_TARIFF_ENTITY = "low_tariff_entity"
-# raw states meaning "low tariff", comma-separated (low-tariff state-translation design doc §2)
+# raw states meaning "low tariff", comma-separated
 CONF_LOW_TARIFF_STATES = "low_tariff_states"
-# RA4 role mapping (notifications design doc §3) -- required for M3 to deliver at all, though
+# RA4 role mapping -- required for M3 to deliver at all, though
 # the factory-level role built from it stays optional (NF3) like its siblings above.
 CONF_NOTIFICATION_TARGET_ENTITY = "notification_target_entity"
 CONF_VEHICLE_CHARGE_LIMIT_ENTITY = "vehicle_charge_limit_entity"  # optional (UC09 precondition)
 # required when vehicle_charge_limit is mapped, OR when the deadline capability is declared
-# present (UC12 4a, topic-step config-flow design D-3)
+# present (UC12 4a)
 CONF_CAR_HOME_ENTITY = "car_home_entity"
 # optional at the factory level (NF3) -- ADR-0030, the captar-step mapping half (ADR-0033)
 CONF_MONTHLY_PEAK_EXTERNAL_ENTITY = "monthly_peak_external_entity"
@@ -243,8 +243,8 @@ CONF_MONTHLY_PEAK_EXTERNAL_ENTITY = "monthly_peak_external_entity"
 # strings.json/translations/en.json's config.error keys exactly --
 # tests/test_config_flow_translations.py walks every one of these against that section.
 ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED = "required_when_vehicle_limit_mapped"
-# car_home_entity's second trigger (topic-step config-flow design D-3) -- UC12 4a's deadline-
-# capability half, reported on the `vehicle` step alongside the existing charge-limit trigger.
+# car_home_entity's second trigger (UC12 4a's deadline-capability half), reported on the
+# `vehicle` step alongside the existing charge-limit trigger.
 ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE = "required_when_deadline_available"
 
 # --- Config entry OPTIONS — thresholds/defaults + interval. "Turn-the-dial" tuning
@@ -256,8 +256,8 @@ CONF_MAX_CURRENT = "max_current"
 CONF_GRID_CEILING_A = "grid_ceiling_a"
 CONF_GRID_SAFETY_OFFSET_A = "grid_safety_offset_a"  # C4 safety margin below the fuse rating
 CONF_DEFAULT_TARGET_CURRENT = "default_target_current"
-# R11 Power-mode cooldown duration, new key (topic-step config-flow design D-1); catalog
-# *`Power` mode*; UC12 step 5. No consumer yet -- contract-first for the R11 slice (Deferrals).
+# R11 Power-mode cooldown duration, new key -- catalog
+# *`Power` mode*; UC12 step 5. No consumer yet -- contract-first for the R11 slice.
 CONF_POWER_COOLDOWN_MIN = "power_cooldown_min"
 CONF_CONTROL_INTERVAL_S = "control_interval_s"
 CONF_SMOOTHING_WINDOW = "smoothing_window"  # R10 rolling-window sample count
@@ -276,11 +276,11 @@ CONF_SOLAR_ONLY_MIDPOINT = "solar_only_midpoint"  # R2 round_nearest fractional 
 # config-time default; the entity is the runtime value that solar step-up/reserve-cap (R7)
 # sit on top of.
 CONF_DEFAULT_SOC_LIMIT = "default_soc_limit"
-CONF_SAFETY_MARGIN_W = "safety_margin_w"  # Captar peak-protection margin (design doc §3, E5)
-CONF_MAX_PEAK_KW = "max_peak_kw"  # Captar billing-protection peak limit (design doc §3, E5)
+CONF_SAFETY_MARGIN_W = "safety_margin_w"  # Captar peak-protection margin (E5)
+CONF_MAX_PEAK_KW = "max_peak_kw"  # Captar billing-protection peak limit (E5)
 CONF_PEAK_FLOOR_KW = "peak_floor_kw"  # Effective-peak-limit floor, R3 (issue #754)
-CONF_PEAK_GRACE_MIN = "peak_grace_min"  # Captar grace period before peak enforcement (design §3)
-CONF_CAPTAR_COOLDOWN_MIN = "captar_cooldown_min"  # Captar mode cooldown duration (design doc §3)
+CONF_PEAK_GRACE_MIN = "peak_grace_min"  # Captar grace period before peak enforcement
+CONF_CAPTAR_COOLDOWN_MIN = "captar_cooldown_min"  # Captar mode cooldown duration
 CONF_POWER_RESPECT_PEAK = "power_respect_peak"  # R17 opt-out: Power mode honors the peak limit
 CONF_EV_BATTERY_CAPACITY_KWH = "ev_battery_capacity_kwh"  # R15 required-current formula input
 CONF_MAX_SOLAR_SOC = "max_solar_soc"  # R8 solar step-up ceiling
@@ -288,22 +288,20 @@ CONF_SOLAR_STEP_PP = "solar_step_pp"  # R8 solar step-up step size
 CONF_SOLAR_STEP_THRESHOLD_PP = "solar_step_threshold_pp"  # R8 solar step-up trigger gap
 CONF_SOLAR_RESERVE_SOC = "solar_reserve_soc"  # R9 overnight solar-reserve cap (runtime, R7 row 1)
 CONF_SOLAR_FORECAST_THRESHOLD_KWH = "solar_forecast_threshold_kwh"  # R9 solar-reserve forecast gate
-# UC08 evening home-day prompt options (notifications design doc §3). No prompt-timeout field is
-# presented -- midnight is the only answer deadline (notifications-design.md §3/§9); a later slice
-# briefly presented one anyway, since reverted (#813/#818).
+# UC08 evening home-day prompt options. No prompt-timeout field is
+# presented -- UC08 names midnight as the only answer deadline, with no separate configurable
+# timeout; a later slice briefly presented one anyway, since reverted (#813/#818).
 CONF_EVENING_PROMPT_ENABLED = "evening_prompt_enabled"  # input_boolean.sc_evening_prompt_enabled
 CONF_EVENING_PROMPT_TIME = "evening_prompt_time"  # input_datetime.sc_evening_prompt_time
 # R12 plug-in reminder lead time; UC12 (topic-step) step 8, the `deadline` step's threshold
-# half. No component reads this yet -- contract-first for the R12 plug-in-reminder slice
-# (design, Deferrals).
+# half. No component reads this yet -- contract-first for the R12 plug-in-reminder slice.
 CONF_REMINDER_LEAD_H = "reminder_lead_h"
-# R18 AC11's conjunctive gate for the deadline-unreachable notice (R5), new key (topic-step
-# config-flow design D-1); catalog *Reminders & prompts*; UC12 step 9. No consumer yet --
-# contract-first for the R5 notice slice (Deferrals).
+# R18 AC11's conjunctive gate for the deadline-unreachable notice (R5), new key -- catalog
+# *Reminders & prompts*; UC12 step 9. No consumer yet -- contract-first for the R5 notice slice.
 CONF_DEADLINE_NOTICE_ENABLED = "deadline_notice_enabled"
-# R18 AC11's conjunctive gate for the plug-in reminder (R12), new key (topic-step config-flow
-# design D-1); catalog *Reminders & prompts*; UC12 step 9. No consumer yet -- contract-first
-# for the R12 plug-in-reminder slice (Deferrals).
+# R18 AC11's conjunctive gate for the plug-in reminder (R12), new key -- catalog
+# *Reminders & prompts*; UC12 step 9. No consumer yet -- contract-first
+# for the R12 plug-in-reminder slice.
 CONF_PLUG_IN_REMINDER_ENABLED = "plug_in_reminder_enabled"
 
 DEFAULT_MIN_CURRENT = 6.0
@@ -338,19 +336,19 @@ DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH = 12.0
 DEFAULT_EVENING_PROMPT_ENABLED = True
 DEFAULT_EVENING_PROMPT_TIME = "18:00:00"
 DEFAULT_REMINDER_LEAD_H = 8.0
-# R18 deadline capability, absent-key read fallback -- catalog "on (present)" (design D-1).
+# R18 deadline capability, absent-key read fallback -- catalog "on (present)".
 DEFAULT_DEADLINE_AVAILABLE = True
-# R18 notifications capability, default absent AND absent-key read fallback -- both agree
-# (design D-1/D-5), unlike solar's form-vs-fallback split.
+# R18 notifications capability, default absent AND absent-key read fallback -- both agree,
+# unlike solar's form-vs-fallback split.
 DEFAULT_NOTIFICATIONS_AVAILABLE = False
-DEFAULT_POWER_COOLDOWN_MIN = 10.0  # minutes (design D-1, catalog default; R11)
-DEFAULT_DEADLINE_NOTICE_ENABLED = True  # catalog "on" (design D-1; R18 AC11)
-DEFAULT_PLUG_IN_REMINDER_ENABLED = True  # catalog "on" (design D-1; R18 AC11)
+DEFAULT_POWER_COOLDOWN_MIN = 10.0  # minutes (catalog default; R11)
+DEFAULT_DEADLINE_NOTICE_ENABLED = True  # catalog "on" (R18 AC11)
+DEFAULT_PLUG_IN_REMINDER_ENABLED = True  # catalog "on" (R18 AC11)
 
 SOC_LIMIT_OVERRIDE_MIN = 50.0  # percent (R6) -- shared by number.py's own bounds and the
 SOC_LIMIT_OVERRIDE_MAX = 100.0  # coordinator's set_soc_limit_override clamp (single source)
 
-# Guided-config-flow step ids (ADR-0027, design D-6) -- shared by config_flow.py's two step
+# Guided-config-flow step ids (ADR-0027) -- shared by config_flow.py's two step
 # tables and the translation-parity test. Only `async_step_user`/`async_step_reconfigure`/
 # `async_step_init` are framework-imposed names (ADR-0027 point 5) and are not listed here.
 STEP_CORE = "core"  # UC12 step 1

@@ -159,7 +159,7 @@ async def test_factory_builds_ev_soc_role_when_configured(hass):
 
 
 async def test_ev_soc_role_absent_when_not_configured(hass):
-    # An existing Power-MVP entry predates this field entirely (design doc §8/§9) --
+    # An existing Power-MVP entry predates this field entirely --
     # build_adapters must not KeyError on it.
     adapters = build_adapters(hass, _data())
     assert ROLE_EV_SOC not in adapters

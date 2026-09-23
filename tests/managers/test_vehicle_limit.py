@@ -4,7 +4,7 @@ Covers the skeleton constructor/echo-guard state (Task 3.1, corrected to ADR-001
 access shape), the disconnect-reset reaction (Task 3.2, UC09 steps 7-8, R6 AC 3), the
 Vehicle->System manual-adoption reaction (Task 3.3, UC09 steps 4-6, R6 AC 5), and the
 System->vehicle write-on-change reaction (Task 4.1, UC09 step 2, R6 AC 2/4, C2-gated --
-dormant until E3/M1 materialize sensor.smart_charging_active_soc_limit, design §0). Drives
+dormant until E3/M1 materialize sensor.smart_charging_active_soc_limit). Drives
 M2 through its public reaction methods directly (not HA listener plumbing -- that is Phase
 5's job).
 """
@@ -87,7 +87,8 @@ def _manager(
 
 
 def _manager_without_vehicle_adapter(hass, *, soc_override=80.0):
-    """No ROLE_VEHICLE_CHARGE_LIMIT entry -- design success-criterion 6, M2 stays inert."""
+    """No ROLE_VEHICLE_CHARGE_LIMIT entry -- UC09's precondition (role unmapped means the
+    use-case doesn't apply), M2 stays inert."""
     adapters = {
         ROLE_CAR_HOME: _ReadAdapter(True),
         ROLE_CHARGER_STATUS: _ReadAdapter(STATE_CONNECTED),
@@ -97,19 +98,19 @@ def _manager_without_vehicle_adapter(hass, *, soc_override=80.0):
 
 
 async def test_manager_starts_with_no_recorded_write(hass):
-    """UC09 design §6: the echo guard initialises empty -- nothing written yet."""
+    """UC09: the echo guard initialises empty -- nothing written yet."""
     m = _manager(hass)
     assert m._last_written_limit is None
 
 
 async def test_manager_starts_with_no_recorded_status(hass):
-    """Disconnect detection is edge-based (design §5.3) -- nothing observed yet."""
+    """Disconnect detection is edge-based -- nothing observed yet."""
     m = _manager(hass)
     assert m._last_status is None
 
 
 async def test_prime_status_seeds_last_status_from_the_adapter(hass):
-    """Task 5.1 / design §5.3: a freshly registered state-change listener only observes
+    """Task 5.1: a freshly registered state-change listener only observes
     FUTURE changes -- without priming, a reload/restart with the vehicle already connected
     would lose the connected->disconnected edge on the very next disconnect (the "before"
     side of the edge was never observed). `prime_status` seeds `_last_status` from the
@@ -125,7 +126,7 @@ async def test_prime_status_seeds_last_status_from_the_adapter(hass):
 async def test_prime_status_leaves_last_status_none_when_unmapped_or_unknown(hass):
     """A None reading (unmapped/unavailable/unknown) primes to None, not a canonical
     state -- the first later real reading still starts the edge from scratch, same as the
-    unprimed skeleton default (design §5.3)."""
+    unprimed skeleton default."""
     m = _manager(hass, status=None)
 
     await m.prime_status()
@@ -146,7 +147,7 @@ async def test_disconnect_from_connected_resets_vehicle_to_default(hass):
 
 
 async def test_disconnect_from_charging_resets_vehicle_to_default(hass):
-    """design §5.3: the edge's origin is "connected/charging", not just "connected"."""
+    """UC09 trigger 3: the edge's origin is "connected/charging", not just "connected"."""
     m = _manager(hass, vehicle=65.0, soc_override=80.0)
     await m.on_status_changed(STATE_CHARGING)
     await m.on_status_changed(STATE_DISCONNECTED)
@@ -154,7 +155,7 @@ async def test_disconnect_from_charging_resets_vehicle_to_default(hass):
 
 
 async def test_disconnected_non_edge_is_a_noop(hass):
-    """No prior connected status -> no reset (design §5.3 edge detection)."""
+    """No prior connected status -> no reset (edge detection)."""
     m = _manager(hass, vehicle=65.0)
     await m.on_status_changed(STATE_DISCONNECTED)
     await m.on_status_changed(STATE_DISCONNECTED)
@@ -163,7 +164,7 @@ async def test_disconnected_non_edge_is_a_noop(hass):
 
 async def test_unknown_status_reading_does_not_mask_the_edge(hass):
     """A transient unavailable/unknown status read (None) between two real readings must not
-    erase the edge -- connected -> None -> disconnected still resets (design §5.3)."""
+    erase the edge -- connected -> None -> disconnected still resets."""
     m = _manager(hass, vehicle=65.0, soc_override=80.0)
     await m.on_status_changed(STATE_CONNECTED)
     await m.on_status_changed(None)
@@ -172,7 +173,7 @@ async def test_unknown_status_reading_does_not_mask_the_edge(hass):
 
 
 async def test_reset_write_failure_is_swallowed(hass):
-    """A just-unplugged vehicle may be unreachable -- best-effort write (design §5.3)."""
+    """A just-unplugged vehicle may be unreachable -- best-effort write."""
     m = _manager(hass)
     await m.on_status_changed(STATE_CONNECTED)
 
@@ -194,7 +195,7 @@ async def test_reset_is_a_noop_when_no_default_soc_limit_is_available(hass):
 
 
 async def test_reset_is_a_noop_when_vehicle_adapter_is_unmapped(hass):
-    """design success-criterion 6: no vehicle_charge_limit role configured -> M2 stays inert."""
+    """UC09's precondition: no vehicle_charge_limit role configured -> M2 stays inert."""
     m = _manager_without_vehicle_adapter(hass)
     await m.on_status_changed(STATE_CONNECTED)
     await m.on_status_changed(STATE_DISCONNECTED)
@@ -231,7 +232,7 @@ async def test_echo_of_own_write_is_ignored(hass):
 
 
 async def test_adoption_does_not_update_the_echo_guard(hass):
-    """design §6: the echo guard tracks the System's own writes to the vehicle (§5.1/§5.3),
+    """The echo guard tracks only the System's own writes to the vehicle,
     never a vehicle-originated adoption -- otherwise a later, identical manual report would be
     wrongly swallowed as an echo of an adoption it never was."""
     m = _manager(hass)
@@ -275,7 +276,8 @@ async def test_adoption_clamps_below_the_number_range(hass):
 
 
 async def test_none_report_is_ignored(hass):
-    """A missing/unavailable vehicle read is not a manual change (design §4/§5)."""
+    """A missing/unavailable vehicle read (None) is not a manual change -- there is no
+    reliable reported value to adopt, so M2 skips rather than writing anything."""
     m = _manager(hass)
 
     await m.on_vehicle_limit_changed(None)
@@ -314,7 +316,7 @@ async def test_soc_limit_change_writes_vehicle_when_connected_at_home(hass):
 
 
 async def test_soc_limit_change_writes_vehicle_when_connected_charging_at_home(hass):
-    """design §5.1/C2: the guard's "connected" covers both connected and charging."""
+    """C2's "connected" gate covers both the connected and charging charger-status values."""
     m = _manager(hass, home=True, status=STATE_CHARGING)
 
     await m.on_active_soc_limit_changed(90.0)
@@ -333,7 +335,7 @@ async def test_no_write_when_away(hass):
 
 
 async def test_no_write_when_car_home_is_unknown(hass):
-    """design §4: a car_home read of None means "cannot confirm home" -> suppress the write,
+    """A car_home read of None means "cannot confirm home" -> suppress the write,
     same as an explicit False (fail-safe, C2)."""
     adapters = {
         ROLE_VEHICLE_CHARGE_LIMIT: _RWAdapter(80.0),
@@ -358,7 +360,7 @@ async def test_no_write_when_disconnected(hass):
 
 
 async def test_no_write_when_charger_status_is_unknown(hass):
-    """design §4: an unavailable/unknown charger_status read (None) is not a chargeable state
+    """An unavailable/unknown charger_status read (None) is not a chargeable state
     -- fails safe, same as an explicit disconnected reading (C2)."""
     m = _manager(hass, home=True, status=None)
 
@@ -368,7 +370,7 @@ async def test_no_write_when_charger_status_is_unknown(hass):
 
 
 async def test_no_write_when_car_home_role_is_unmapped(hass):
-    """§3/§9.1: car_home is required whenever vehicle_charge_limit is mapped at config time, but
+    """car_home is required whenever vehicle_charge_limit is mapped at config time, but
     the runtime guard must not crash/assume True if it is somehow absent -- fail-safe (C2)."""
     adapters = {
         ROLE_VEHICLE_CHARGE_LIMIT: _RWAdapter(80.0),
@@ -384,7 +386,7 @@ async def test_no_write_when_car_home_role_is_unmapped(hass):
 
 async def test_active_soc_limit_none_report_is_ignored(hass):
     """A missing/unavailable sensor read is not a resolved-limit change (mirrors
-    on_vehicle_limit_changed's None handling, design §5.1)."""
+    on_vehicle_limit_changed's None handling)."""
     m = _manager(hass, home=True, status=STATE_CHARGING)
 
     await m.on_active_soc_limit_changed(None)
@@ -393,8 +395,8 @@ async def test_active_soc_limit_none_report_is_ignored(hass):
 
 
 async def test_write_then_reflect_back_settles_without_a_second_write(hass):
-    """UC09 exception flow: §5.1 write -> vehicle echoes -> §5.2 echo guard suppresses
-    re-adoption and no second write occurs (settling loop, design §6)."""
+    """UC09 exception flow: write -> vehicle echoes -> echo guard suppresses
+    re-adoption and no second write occurs (settling loop)."""
     m = _manager(hass, home=True, status=STATE_CHARGING)
     adoption_events = async_capture_events(hass, EVENT_MANUAL_CHARGE_LIMIT_ADOPTED)
 
@@ -407,7 +409,7 @@ async def test_write_then_reflect_back_settles_without_a_second_write(hass):
 
 async def test_active_soc_limit_write_failure_is_swallowed(hass):
     """A vehicle unreachable at the moment of a resolved-limit change is best-effort, same as
-    the disconnect-reset branch (design §5.1, mirrors §5.3). The failed write must not report
+    the disconnect-reset branch. The failed write must not report
     success -- no VehicleChargeLimitSynced fires (mirrors
     test_adoption_event_not_fired_when_store_write_fails)."""
     m = _manager(hass, home=True, status=STATE_CHARGING)
@@ -425,7 +427,7 @@ async def test_active_soc_limit_write_failure_is_swallowed(hass):
 
 
 async def test_active_soc_limit_change_is_a_noop_when_vehicle_adapter_is_unmapped(hass):
-    """design success-criterion 6: no vehicle_charge_limit role configured -> M2 stays inert."""
+    """UC09's precondition: no vehicle_charge_limit role configured -> M2 stays inert."""
     m = _manager_without_vehicle_adapter(hass)
 
     await m.on_active_soc_limit_changed(90.0)

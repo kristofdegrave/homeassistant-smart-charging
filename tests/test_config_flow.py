@@ -399,8 +399,8 @@ async def test_reconfigure_grid_step_prefills_low_tariff_states(hass):
     # Issue #499 class: an entry already carrying CONF_LOW_TARIFF_STATES must render
     # it as the grid step's suggested value on reconfigure, and resubmitting the
     # prefilled form unchanged must not null it out. Unlike CONF_CONNECTED_STATES/
-    # CONF_CHARGING_STATES, this field is itself the raw value stored on the entry
-    # (design doc §2) -- no reconstruction from a derived value is needed to prefill it.
+    # CONF_CHARGING_STATES, this field is itself the raw value stored on the entry --
+    # no reconstruction from a derived value is needed to prefill it.
     data = dict(_RECONFIGURE_ENTRY_DATA)
     data[CONF_LOW_TARIFF_ENTITY] = "sensor.tariff"
     data[CONF_LOW_TARIFF_STATES] = "low, off-peak"
@@ -443,7 +443,7 @@ async def test_reconfigure_grid_step_prefills_low_tariff_states(hass):
 
 
 async def test_factory_builds_adapter_matching_flow_submitted_states(hass):
-    # Integration checkpoint (design doc §4 criterion 7): drive the config flow to
+    # Integration checkpoint: drive the config flow to
     # produce a real entry with a sensor-domain low_tariff mapping and a states
     # table, then feed entry.data into build_adapters and assert the resulting
     # LowTariffReadAdapter's _low_states matches -- proving the flow's output and
@@ -470,7 +470,7 @@ async def test_factory_builds_adapter_matching_flow_submitted_states(hass):
 
 
 def test_r20_ac1_core_mapping_is_exactly_the_four_capability_declarations():
-    """R20 AC1 / design success criterion 1: CORE_MAPPING_SCHEMA is the four capability
+    """R20 AC1: CORE_MAPPING_SCHEMA is the four capability
     declarations and nothing more -- no mapping field survives on `core` from the seven-step
     model, where it carried the four core mappings too."""
     assert _keys(CORE_MAPPING_SCHEMA) == {
@@ -488,7 +488,7 @@ async def test_uc12_install_all_capabilities_walks_all_nine_steps_in_order(hass)
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     visited = [result["step_id"]]
-    # deadline_available True makes car_home_entity required on the vehicle step (design D-3).
+    # deadline_available True makes car_home_entity required on the vehicle step (UC12 4a).
     step_inputs = {
         **_INSTALL_STEP_BASES,
         STEP_CORE: {**CORE_INPUT, **_ALL_CAPABILITIES_TRUE},
@@ -521,7 +521,7 @@ async def test_uc12_install_default_capabilities_skips_notifications(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     visited.append(result["step_id"])
     # DEFAULT_DEADLINE_AVAILABLE is True, so deadline is present by default too -- car_home is
-    # therefore required on the vehicle step (design D-3).
+    # therefore required on the vehicle step (UC12 4a).
     step_inputs = {
         **_INSTALL_STEP_BASES,
         STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"},
@@ -583,7 +583,7 @@ async def test_r20_ac2_install_traverses_exactly_uc12s_steps_in_order(
             CONF_NOTIFICATIONS_AVAILABLE: notifications,
         },
     }
-    # UC12 4a / design D-3: a present deadline capability requires car_home_entity on the
+    # UC12 4a: a present deadline capability requires car_home_entity on the
     # always-shown `vehicle` step -- fixture-only concession, not the behavior under test here.
     if deadline:
         step_inputs[STEP_VEHICLE] = {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}
@@ -606,7 +606,7 @@ async def test_r20_ac2_install_traverses_exactly_uc12s_steps_in_order(
 async def test_r20_ac5_grid_and_charger_bounds_are_asked_on_every_install_path(
     hass, solar, captar, deadline, notifications
 ):
-    """Design, Safety caveat: grid_ceiling_a / grid_safety_offset_a / nominal_voltage (grid) and
+    """grid_ceiling_a / grid_safety_offset_a / nominal_voltage (grid) and
     min_current / max_current (ev_charger) sit on ungated steps and can never be skipped by a
     capability gate, whatever the sixteen combinations declare."""
     result = await hass.config_entries.flow.async_init(
@@ -726,7 +726,7 @@ async def test_r18_ac11_notification_toggles_default_on_and_land_in_options(hass
 
 async def test_uc12_core_solar_available_defaults_true(hass):
     """R20 AC1's 'defaulting to present': the core step's rendered default for solar is True,
-    deliberately diverging from DEFAULT_SOLAR_AVAILABLE (design D-5). Proven by omitting the
+    deliberately diverging from DEFAULT_SOLAR_AVAILABLE. Proven by omitting the
     field from the submission and confirming the solar step still shows next."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -742,7 +742,7 @@ async def test_uc12_core_solar_available_defaults_true(hass):
 
 
 async def test_uc12_core_notifications_available_defaults_false(hass):
-    """The converse (design D-5): notifications' form default and DEFAULT_NOTIFICATIONS_
+    """The converse: notifications' form default and DEFAULT_NOTIFICATIONS_
     AVAILABLE agree, both False -- omitting the field must NOT show the notifications step."""
     result = await _run_install_flow(
         hass,
@@ -803,7 +803,7 @@ async def test_r20_ac6_blank_required_ev_soc_is_reported_on_the_vehicle_step(has
 async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_step_charge_limit_trigger(
     hass,
 ):
-    """UC12 4a / design D-3: a filled-in vehicle charge limit without car_home is rejected on
+    """UC12 4a: a filled-in vehicle charge limit without car_home is rejected on
     the vehicle step, field-local, with ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED."""
     result = await _run_install_flow(
         hass,
@@ -820,7 +820,7 @@ async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_step_charge_l
 
 
 async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_step_deadline_trigger(hass):
-    """UC12 4a's SECOND independent trigger (design D-3): a present deadline capability
+    """UC12 4a's SECOND independent trigger: a present deadline capability
     (declared earlier, on `core`) without car_home is rejected here too, with the OTHER error
     code -- ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE, not the charge-limit one."""
     result = await _run_install_flow(hass, capabilities={CONF_DEADLINE_AVAILABLE: True})
@@ -830,7 +830,7 @@ async def test_r20_ac6_missing_car_home_is_reported_on_the_vehicle_step_deadline
 
 
 async def test_car_home_guard_charge_limit_trigger_takes_precedence_when_both_fire(hass):
-    """Design D-3: the charge-limit trigger is checked first, so a submission that trips both
+    """UC12 4a: the charge-limit trigger is checked first, so a submission that trips both
     triggers at once reports the message tied to the field just filled in on this same step."""
     result = await _run_install_flow(
         hass,
@@ -1679,7 +1679,7 @@ async def test_r20_ac2_reconfigure_traverses_exactly_uc12s_mapping_halves(
 
 
 async def test_d7_reconfigure_prefills_notifications_available_from_a_stored_target(hass):
-    """Design D-7: an entry that predates notifications_available but stores a
+    """An entry that predates notifications_available but stores a
     notification_target_entity renders the declaration ON, reaches step 9, and keeps the
     stored mapping -- the accumulator-never-seeded rule would otherwise drop it silently."""
     data = entry_data_base(**{CONF_NOTIFICATION_TARGET_ENTITY: "notify.mobile_app"})
@@ -1697,8 +1697,8 @@ async def test_d7_reconfigure_prefills_notifications_available_from_a_stored_tar
 
     # Submit exactly the rendered suggestion for notifications_available (not a value typed
     # fresh in the test) -- proving the prefill itself, not just that the flag can be turned
-    # on some other way. The other three capabilities are explicitly declined (irrelevant to
-    # D-7) to keep the walk on the direct core -> grid -> ev_charger -> vehicle -> notifications
+    # on some other way. The other three capabilities are explicitly declined (irrelevant
+    # here) to keep the walk on the direct core -> grid -> ev_charger -> vehicle -> notifications
     # path -- entry.data has no stored answer for them, so nothing else is prefilled here.
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -1727,7 +1727,7 @@ async def test_d7_reconfigure_prefills_notifications_available_from_a_stored_tar
 
 
 async def test_d7_reconfigure_stored_flag_false_wins_over_a_stored_target(hass):
-    """Design D-7: `data.get(CONF_NOTIFICATIONS_AVAILABLE, bool(data.get(TARGET)))` -- the
+    """`data.get(CONF_NOTIFICATIONS_AVAILABLE, bool(data.get(TARGET)))` -- the
     STORED flag wins whenever the key is present, and is only derived from the target when
     the key predates this slice. An entry that already answered "no" on notifications, but
     still carries a stale notification_target_entity from before it was withdrawn, must keep
@@ -1753,7 +1753,7 @@ async def test_d7_reconfigure_stored_flag_false_wins_over_a_stored_target(hass):
 
 
 async def test_d7_reconfigure_declares_notifications_off_when_neither_key_is_stored(hass):
-    """Design D-7 negative case: an entry with neither notifications_available nor a stored
+    """Negative case: an entry with neither notifications_available nor a stored
     notification_target_entity renders the declaration OFF -- the derive-from-target fallback
     has nothing to derive from."""
     data = entry_data_base()
@@ -1958,7 +1958,7 @@ async def test_r20_ac2_options_traverses_exactly_the_stored_capabilities_steps(
     all sixteen combinations of the four capability flags."""
     per_step_input = {}
     if deadline:
-        # D-3's vehicle-step guard: a present deadline capability requires car_home_entity
+        # The vehicle step's own guard: a present deadline capability requires car_home_entity
         # on install, independent of this test's own concern.
         per_step_input[STEP_VEHICLE] = {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}
     entry = await _create_entry(
@@ -1993,9 +1993,9 @@ async def test_r20_ac2_options_traverses_exactly_the_stored_capabilities_steps(
 
 
 async def test_uc12_1b_options_gate_on_an_entry_predating_notifications_available(hass):
-    """Design 'Step ids': a MockConfigEntry whose data has no notifications_available key
-    (nor solar/captar/deadline_available -- every options gate's own absent-key fallback,
-    D-1) opens Configure without KeyError and skips step 9."""
+    """A MockConfigEntry whose data has no notifications_available key
+    (nor solar/captar/deadline_available -- every options gate's own absent-key fallback)
+    opens Configure without KeyError and skips step 9."""
     data = entry_data_base()
     assert CONF_SOLAR_AVAILABLE not in data
     assert CONF_CAPTAR_AVAILABLE not in data
@@ -2208,7 +2208,7 @@ async def test_r20_ac8_abandoning_options_leaves_the_options_bucket_exactly_as_i
     entry = await _create_entry(
         hass,
         capabilities={CONF_SOLAR_AVAILABLE: True, CONF_DEADLINE_AVAILABLE: True},
-        # D-3's vehicle-step guard: a present deadline capability requires car_home_entity.
+        # The vehicle step's own guard: a present deadline capability requires car_home_entity.
         per_step_input={STEP_VEHICLE: {**VEHICLE_INPUT, CONF_CAR_HOME_ENTITY: "person.driver"}},
     )
     original_options = dict(entry.options)
@@ -2455,7 +2455,7 @@ _CONFIG_FLOW_FRAMEWORK_STEPS = {
     "async_step_reconfigure",
     "async_step_core",
 }
-# Unlike CONFIG_TABLE, `core` IS an OPTIONS_TABLE row (design "Options table": the options
+# Unlike CONFIG_TABLE, `core` IS an OPTIONS_TABLE row (the options
 # flow's own entry point, async_step_init, renders no form of its own) -- so, unlike
 # `_CONFIG_FLOW_FRAMEWORK_STEPS`, `async_step_core` does NOT need excluding here: it is a
 # genuine table member and the converse test below passes it on that basis.
@@ -2514,7 +2514,7 @@ def test_uc12_config_table_is_uc12s_fixed_order_minus_the_core_entry_point():
 
 
 def test_uc12_1b_options_table_is_uc12s_fixed_order_plus_the_core_row():
-    """T7's own cut-over (design "Options table"): the options flow's own nine-topic-step
+    """T7's own cut-over: the options flow's own nine-topic-step
     table -- `core` prefixed onto UC12's fixed eight-row order, unlike CONFIG_TABLE where
     `core` is the shared entry point rather than a row of its own."""
     assert [row.step_id for row in OPTIONS_TABLE] == [STEP_CORE, *UC12_FIXED_STEP_ORDER]
@@ -2706,7 +2706,7 @@ class _StubOptionsFlow:
 
 def test_uc12_1b_options_gates_read_stored_flags_defensively():
     """ADR-0027 point 4: every options gate is .get(key, DEFAULT_*), so an entry predating
-    notifications_available -- the key this slice actually introduces (D-1); the other three
+    notifications_available -- the key this slice actually introduces; the other three
     capability keys already existed before this slice -- opens Configure without KeyError."""
     gates = {row.step_id: row.gate for row in OPTIONS_TABLE}
 

@@ -830,7 +830,7 @@ async def test_dispatches_to_captar_when_selected(hass):
 async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass):
     """R3's bookkeeping is not Captar-specific -- Off/Power update it too. Bypasses the
     ample-headroom test helpers deliberately, to observe the tracker's own cold-start
-    behavior (design doc Sec 6.4)."""
+    behavior."""
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=3400.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
@@ -1107,7 +1107,7 @@ async def test_mapped_but_unavailable_external_monthly_peak_is_not_a_fault(hass)
 
 
 async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_higher_external(hass):
-    # D-6: CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
+    # CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
     # the merged operand -- checked across TWO cycles, since monthly_peak_kw is produced by
     # self._peak_demand.update(...) before the merge; a refactor that wrote the merged value
     # back into the tracker would pass a one-cycle check and only surface on the next cycle.
@@ -1135,7 +1135,7 @@ async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_highe
 
 
 async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
-    # D-4: the mapped role's own raw reading surfaces via _read_role's cache write, same as
+    # The mapped role's own raw reading surfaces via _read_role's cache write, same as
     # any other wired read role.
     adapters = _adapters(
         status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=4.09
@@ -1152,7 +1152,7 @@ async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
 
 
 async def test_external_monthly_peak_merge_ignores_captar_available(hass):
-    # D-5: the merge is not gated on captar_available -- it runs, and moves
+    # The merge is not gated on captar_available -- it runs, and moves
     # effective_peak_limit_kw, even with the capability off. R21's own AC requires the
     # tracked/merged value to still be tracked and surfaced for observability regardless of
     # capability (issue #1018's fix means `_apply_peak_clamp` itself no longer consults it in
@@ -1177,7 +1177,7 @@ async def test_external_monthly_peak_merge_ignores_captar_available(hass):
 
 
 async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak(hass):
-    # D-3: the PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
+    # The PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
     # ev_soc-missing early-fault return) must also reflect the merged operand -- updating only
     # the final call site would leave this one on the unmerged value undetected.
     config = _config()
@@ -1940,7 +1940,7 @@ async def test_disconnect_clears_active_cooldown(hass):
 async def test_power_respects_peak_by_default(hass):
     """Power's own target(16A) would normally be commanded outright (existing MVP
     behavior); with power_respect_peak left at its default (True), R17 now ALSO
-    bounds it by the R3 clamp -- a deliberate behavior change (design doc Sec 7)."""
+    bounds it by the R3 clamp -- a deliberate behavior change."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     # Same headroom math as test_peak_clamp_reduces_captar_below_headroom: 10A available.
@@ -3536,7 +3536,7 @@ async def test_set_active_profile_falls_back_to_manual_on_unrecognized_stored_pr
 
 
 async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_none(hass):
-    """Success criterion 4: a missing/unresolvable read is not a fault -- keep the current value."""
+    """A missing/unresolvable read is not a fault -- keep the current value."""
     store = _FakeStore({})  # every read() call returns None
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30

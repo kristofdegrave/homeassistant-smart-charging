@@ -132,7 +132,7 @@ class ActiveModeSensor(_CoordinatorFieldSensor):
 
 @dataclass
 class _MonthlyPeakExtraStoredData(SensorExtraStoredData):
-    """SensorExtraStoredData + `period_month` ("YYYY-MM", design doc Sec 6.4)."""
+    """SensorExtraStoredData + `period_month` ("YYYY-MM", R21's monthly peak demand)."""
 
     period_month: str | None = None
 
@@ -153,9 +153,9 @@ class MonthlyPeakSensor(_CoordinatorPushMixin, RestoreSensor):
     """Diagnostic: the coordinator's tracked monthly peak, kW (C3). Restoring this
     sensor's prior value + `period_month` attribute seeds the coordinator's
     Peak-Demand Tracker's `(tracked_kw, tracked_month)` across a restart instead of
-    it starting cold at 0 kW (design doc Sec 6.4's persistence note) -- the 15-minute
-    smoothing window itself is deliberately NOT seeded here; Sec 6.4 is explicit that
-    it rebuilds from scratch post-restart, same as R10's own window."""
+    it starting cold at 0 kW (R21) -- the 15-minute smoothing window itself is
+    deliberately NOT seeded here; R21 is explicit that it rebuilds from scratch
+    post-restart, same as R10's own window."""
 
     _attr_translation_key = "monthly_peak_kw"
     _object_id_suffix = "monthly_peak_kw"
@@ -367,8 +367,8 @@ def _format_mirror_value(value: Any) -> Any:
 class _ConfigMirrorSpec:
     """One row of the config-mirror sensor spec list `async_setup_entry` builds (ADR-0031,
     entity-catalog.md). `value` is already resolved by `async_setup_entry` from whichever of the
-    three source buckets the design doc names -- `_ConfigMirrorSensor` itself never reads the
-    config entry."""
+    three source buckets `async_setup_entry` builds it from (entry.data, config options, or a
+    resolved capability) -- `_ConfigMirrorSensor` itself never reads the config entry."""
 
     object_id_suffix: str
     unit: str | None
@@ -417,12 +417,12 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors (design doc's 35-row mapping table). T1: the four
-    # Capabilities rows. T2: the twelve Installation/Charger/Peak protection rows. T3: the
+    # ADR-0031 config-mirror sensors (entity-catalog.md's disabled-by-default rows). T1: the
+    # four Capabilities rows. T2: the twelve Installation/Charger/Peak protection rows. T3: the
     # 13 EV/Solar rows -- note solar_only_strategy/solar_only_midpoint are the
     # SmartChargingConfig field names for the solar_only_rounding_strategy/
-    # solar_only_rounding_midpoint_pct catalog ids (naming-drift section, design doc). T4:
-    # the six Power-mode/Notification rows.
+    # solar_only_rounding_midpoint_pct catalog ids (they diverge from the catalog's documented
+    # object ids). T4: the six Power-mode/Notification rows.
     mirror_specs = [
         _ConfigMirrorSpec("solar_available", None, None, config.solar_available),
         _ConfigMirrorSpec("captar_available", None, None, config.captar_available),
@@ -440,7 +440,7 @@ async def async_setup_entry(
         ),
         # T2 slice: Installation/Charger/Peak protection (12 values). object_id_suffix is the
         # catalog's documented id; four diverge from the SmartChargingConfig field name they
-        # read (design doc's naming-drift table) -- grid_supply_ceiling_a/grid_ceiling_a,
+        # read -- grid_supply_ceiling_a/grid_ceiling_a,
         # nominal_voltage_v/nominal_voltage, min_current_a/min_current, max_current_a/max_current.
         _ConfigMirrorSpec("smoothing_window", "cycles", None, config.smoothing_window),
         _ConfigMirrorSpec(

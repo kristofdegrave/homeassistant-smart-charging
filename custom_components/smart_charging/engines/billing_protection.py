@@ -10,7 +10,7 @@ Captar/Power charging, while max() is applied before min() so the floor can
 never raise the limit above the maximum peak. The operand itself is the
 internally-tracked monthly peak merged with an optional external reading
 (ADR-0030/ADR-0032) -- see `resolve_monthly_peak_operand` below. Also the R3
-peak clamp with its grace-period breach tracker (Sec 6.2). The Peak-Demand
+peak clamp with its grace-period breach tracker (R3's configurable grace period). The Peak-Demand
 Tracker is a SEPARATE sibling module, `engines/peak_demand_tracker.py` --
 ADR-0010's Decision names both modules explicitly and states they "stay two
 sibling modules ... their relationship is recorded by project-plan task E5

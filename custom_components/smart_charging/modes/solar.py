@@ -2,9 +2,8 @@
 
 State machine: Idle -> [Debouncing] -> Charging -> Hold -> Cooldown, per UC01's state
 model, MINUS the SocReached phase UC01's own diagram draws -- that transition is
-entirely the coordinator's responsibility (M1), not this module's (see design doc
-§5's "Where the SOC gate itself lives"): a mode "has no opinion on why the limit is
-where it is" (R7), so it is never told SOC was reached at all -- the coordinator
+entirely the coordinator's responsibility (M1), not this module's: a mode "has no opinion on
+why the limit is where it is" (R7), so it is never told SOC was reached at all -- the coordinator
 simply stops calling step() and holds this state at idle() for as long as the gate
 holds. State is a small frozen dataclass threaded by the coordinator -- this module
 holds nothing itself; `now` (seconds, monotonic) is always injected.

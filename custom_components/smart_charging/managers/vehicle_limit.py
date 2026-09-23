@@ -214,7 +214,7 @@ class VehicleLimitManager:
             return False
         try:
             await adapter.write(value)
-        except Exception as err:  # noqa: BLE001 - a just-unplugged vehicle may be unreachable (§5.3)
+        except Exception as err:  # noqa: BLE001 - a just-unplugged vehicle may be unreachable
             _LOGGER.debug("vehicle_charge_limit write failed: %s", err)
             return False
         self._last_written_limit = value

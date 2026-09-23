@@ -10,7 +10,7 @@ from ._read_only import _ReadOnlyAdapter
 class TimeReadAdapter(_ReadOnlyAdapter):
     """Reads a time-of-day entity's native value.
 
-    Added for the `departure_external` role (design doc §4 note): its mapped entity's
+    Added for the `departure_external` role: its mapped entity's
     native value is a `datetime.time`, not a float (`NumericReadAdapter`) or a
     user-translated canonical string (`StatusReadAdapter`). Neither existing class fits
     without being reshaped, so this is a new, minimal adapter class of the same shape

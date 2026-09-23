@@ -9,8 +9,8 @@ from custom_components.smart_charging.profiles.manual import ManualPolicy
 @pytest.mark.parametrize("mode", [MODE_OFF, MODE_SOLAR, MODE_CAPTAR])
 def test_select_returns_active_mode_unchanged(mode):
     """resolution-rules.md: "Manual needs no table" -- a pure pass-through of the user's own
-    selection (R16's acceptance criterion), proven across every representative mode
-    (design doc §5), not just one."""
+    selection (R16's acceptance criterion), proven across every representative mode,
+    not just one."""
     assert ManualPolicy().select(active_mode=mode) == mode
 
 

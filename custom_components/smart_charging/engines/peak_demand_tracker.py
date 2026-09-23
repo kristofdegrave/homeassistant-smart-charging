@@ -6,7 +6,7 @@ bundling them, not by a directory"). Deliberately does NOT import
 signal_conditioning.smooth_net_power -- an engine may not call another engine
 (system-design Sec 4 rule 4). The coordinator (M1) is responsible for smoothing
 net_power over its OWN dedicated ~15-minute window (distinct from R10's short
-window) before calling this function; see design doc Sec 6.4.
+window) before calling this function; see requirements.md R21.
 """
 
 from __future__ import annotations
@@ -24,9 +24,10 @@ def update_monthly_peak_demand(
     wall-clock time -- this function stays pure. A month change resets the
     running peak to *this cycle's* own smoothed reading, not to 0 kW: a fresh
     month's peak starts accumulating immediately from whatever the household is
-    actually drawing, not from an artificial floor (design doc Sec 6.4's
-    bootstrap note -- which also explains why this alone does not guarantee
-    immediate charging headroom on a cold start).
+    actually drawing, not from an artificial floor (requirements.md R21: "not
+    reset to a fixed 0 kW that the household's actual draw must then climb back
+    from" -- which also explains why this alone does not guarantee immediate
+    charging headroom on a cold start).
     """
     if tracked_month != current_month:
         return smoothed_kw, current_month

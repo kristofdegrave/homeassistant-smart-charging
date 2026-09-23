@@ -63,7 +63,7 @@ def resolve_departure_deadline(
     other optional role in this system. When it IS mapped, its current reading
     (including None, "sensor currently reports no deadline") wins outright, per
     R14's "external sensor ... takes precedence over all configured values." The
-    coordinator (not this function) knows whether the role was configured (§10).
+    coordinator (not this function) knows whether the role was configured.
     """
     if external_configured:
         return external
