@@ -104,14 +104,14 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 
 > Extensible: a future capability (e.g. a home battery) would add one row here and gate its own modes/behaviours (R18, NF2).
 >
-> **Reconfigure-flow timing note.** R18 requires a capability change to take effect "within the next control cycle." The reconfigure flow reloads the config entry, which restarts the coordinator — the new capability set is therefore in force from the coordinator's first cycle after the reload, satisfying R18 rather than conflicting with it.
+> **Reconfigure-flow timing note.** NF11 requires a change saved through the configuration flow — a capability change included (R18) — to take effect "within the next control cycle." The reconfigure flow reloads the config entry, which restarts the coordinator — the new capability set is therefore in force from the coordinator's first cycle after the reload, satisfying NF11 rather than conflicting with it.
 
 ### Core & coordinator
 
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC06, UC07, UC11 | user, UC11 |
-| `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
+| `control_interval_s` | config-options | options | s | 10 (5 or more; NF11) | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
 | `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_smoothing_window` | state | — | cycles | mirrors `smoothing_window` (config-options); disabled by default (ADR-0031) | [smoothed value](system-overview.md#ubiquitous-language) (R10) | user | — |
 | `select.smart_charging_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) — the `Manual` profile's mode-override selection | control-cycle, UC11 | user (Manual), UC11 |
