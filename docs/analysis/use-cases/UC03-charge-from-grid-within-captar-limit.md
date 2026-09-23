@@ -84,9 +84,9 @@ and exits this use-case's scope from any state, returning to Idle; on disconnect
 resets to the default (R7), which is why the diagram does not draw a disconnect edge from every state.
 
 A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging is a
-fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as the mode's own stop does (R11), and charging
-resumes only through Cooldown's own exit. It can arise on any charging cycle, which is why the
-diagram does not draw it either.
+fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as the mode's own stop does
+(R11), and charging resumes only through Cooldown's own exit. It can arise on any charging cycle,
+which is why the diagram does not draw it either.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
