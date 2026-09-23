@@ -362,3 +362,20 @@ STEP_EV_CHARGER = "ev_charger"  # UC12 step 3
 STEP_VEHICLE = "vehicle"  # UC12 step 4
 STEP_POWER = "power"  # UC12 step 5
 STEP_NOTIFICATIONS = "notifications"  # UC12 step 9
+
+# NF8: dashboard headings and notification texts, composed by this integration rather than
+# an entity name or config-flow field, so none of strings.json's other (hassfest-schema-fixed)
+# categories fits them -- they live under the flat "common" category instead
+# (helpers/translation.py's gen_strings_schema; system_text.py reads it back). Home Assistant's
+# *system* language governs both surfaces (NF8 AC2), read via `async_get_translations`
+# (system_text.py), never the viewing user's own language.
+TRANSLATION_CATEGORY_COMMON = "common"
+KEY_DASHBOARD_SECTION_CHARGING_STATUS = "dashboard_section_charging_status"
+KEY_DASHBOARD_SECTION_POWER_FLOW = "dashboard_section_power_flow"
+KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS = "dashboard_section_runtime_settings"
+KEY_DASHBOARD_VIEW_DEADLINE = "dashboard_view_deadline"
+KEY_DASHBOARD_SECTION_DEPARTURE_TIMES = "dashboard_section_departure_times"
+KEY_NOTIFICATION_HOME_DAY_PROMPT_MESSAGE = "notification_home_day_prompt_message"
+KEY_NOTIFICATION_DEADLINE_UNREACHABLE_MESSAGE = "notification_deadline_unreachable_message"
+KEY_NOTIFICATION_HOME_DAY_ACTION_YES = "notification_home_day_action_yes"
+KEY_NOTIFICATION_HOME_DAY_ACTION_NO = "notification_home_day_action_no"

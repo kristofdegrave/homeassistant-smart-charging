@@ -53,6 +53,47 @@ async def test_write_includes_action_buttons_when_payload_is_actionable(hass):
     assert calls[0]["data"]["tag"]  # a unique tag was stamped
 
 
+async def test_write_labels_action_buttons_with_the_given_text_not_the_raw_id(hass):
+    """NF8: the home-day prompt's buttons read as a yes/no answer in the household's
+    language, not the raw `HOMEDAY_YES`/`HOMEDAY_NO` action id -- the id itself still
+    round-trips unchanged (asserted by the actions-id test above)."""
+    calls = _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(
+        NotificationRequest(
+            message="Home tomorrow?",
+            title="Smart Charging",
+            actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO],
+            action_labels={ACTION_HOMEDAY_YES: "Ja", ACTION_HOMEDAY_NO: "Nee"},
+        )
+    )
+    await hass.async_block_till_done()
+
+    labels_by_action = {a["action"]: a["title"] for a in calls[0]["data"]["actions"]}
+    assert labels_by_action == {ACTION_HOMEDAY_YES: "Ja", ACTION_HOMEDAY_NO: "Nee"}
+
+
+async def test_write_labels_action_buttons_with_the_raw_id_when_no_labels_are_given(hass):
+    """Pre-NF8 behaviour, unchanged for a caller that passes no `action_labels`."""
+    calls = _register_capture(hass)
+    adapter = NotifyAdapter(hass, "notify.mobile_app_phone")
+
+    await adapter.write(
+        NotificationRequest(
+            message="Home tomorrow?",
+            actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO],
+        )
+    )
+    await hass.async_block_till_done()
+
+    labels_by_action = {a["action"]: a["title"] for a in calls[0]["data"]["actions"]}
+    assert labels_by_action == {
+        ACTION_HOMEDAY_YES: ACTION_HOMEDAY_YES,
+        ACTION_HOMEDAY_NO: ACTION_HOMEDAY_NO,
+    }
+
+
 async def test_read_returns_the_action_for_the_current_tag(hass):
     calls = _register_capture(hass)
     adapter = NotifyAdapter(hass, "notify.mobile_app_phone")

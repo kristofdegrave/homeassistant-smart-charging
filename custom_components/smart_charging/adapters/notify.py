@@ -43,12 +43,17 @@ class NotificationRequest:
     `message`/`title` reach `notify.send_message` unchanged. `actions`, when given, are the
     action ids (e.g. `ACTION_HOMEDAY_YES`/`ACTION_HOMEDAY_NO`) HA renders as tappable
     buttons; a tap fires `EVENT_MOBILE_APP_NOTIFICATION_ACTION` carrying the tag stamped by
-    `NotifyAdapter.write` below -- callers never set a tag themselves.
+    `NotifyAdapter.write` below -- callers never set a tag themselves. `action_labels` (NF8),
+    when given, maps each action id to the button's own displayed text -- the action id
+    round-trips through the action event unchanged either way (design doc §6); an id absent
+    from the mapping, or no mapping at all, falls back to labelling the button with its own
+    raw id, this dataclass's pre-NF8 behaviour.
     """
 
     message: str
     title: str | None = None
     actions: list[str] | None = None
+    action_labels: dict[str, str] | None = None
 
 
 class NotifyAdapter:
@@ -99,10 +104,14 @@ class NotifyAdapter:
         if value.actions:
             self._current_tag = uuid.uuid4().hex
             self._last_action = None
+            labels = value.action_labels or {}
             service_data[ATTR_DATA] = {
                 _DATA_KEY_TAG: self._current_tag,
                 _DATA_KEY_ACTIONS: [
-                    {_DATA_KEY_ACTION: action, _ACTION_BUTTON_LABEL_KEY: action}
+                    {
+                        _DATA_KEY_ACTION: action,
+                        _ACTION_BUTTON_LABEL_KEY: labels.get(action, action),
+                    }
                     for action in value.actions
                 ],
             }

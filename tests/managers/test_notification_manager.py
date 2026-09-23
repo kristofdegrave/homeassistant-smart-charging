@@ -131,6 +131,25 @@ async def test_sends_actionable_prompt_when_uc08_trigger_holds(hass):
     assert manager._state is PromptState.PENDING
 
 
+async def test_prompt_message_and_action_labels_follow_the_system_language(hass):
+    """NF8 AC2: the home-day prompt's message and action-button labels follow Home
+    Assistant's *system* language -- Dutch here, unlike the notify title, which stays the
+    untranslated product name (NF8 AC1). The action ids themselves are unchanged (asserted
+    by test_sends_actionable_prompt_when_uc08_trigger_holds above)."""
+    hass.config.language = "nl"
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+
+    await manager.async_evaluate(EVENING)
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0]["message"] == "Is de auto morgen thuis?"
+    assert calls[0]["title"] == "Smart Charging"
+    labels_by_action = {a["action"]: a["title"] for a in calls[0]["data"]["actions"]}
+    assert labels_by_action == {ACTION_HOMEDAY_YES: "Ja", ACTION_HOMEDAY_NO: "Nee"}
+
+
 async def test_yes_response_writes_home_day_flag(hass):
     """UC08 main success scenario steps 3-4: RA4 read() returns HOMEDAY_YES (tag-matched)
     before midnight -> writes switch.smart_charging_home_day on through the Store
@@ -504,6 +523,23 @@ async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass):
         "(would need 12.5 A)."
     )
     assert "data" not in calls[0]  # plain notice, not actionable (no tag/actions payload)
+
+
+async def test_deadline_unreachable_notice_follows_the_system_language(hass):
+    """NF8 AC2: the required-current figure (R5) is still included, in the Dutch text."""
+    hass.config.language = "nl"
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0]["message"] == (
+        "Laadt op het maximale vermogen, maar bereikt uw streefwaarde niet voor vertrek "
+        "(zou 12.5 A nodig hebben)."
+    )
 
 
 async def test_deadline_unreachable_notice_is_delivered_only_once(hass):

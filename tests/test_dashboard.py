@@ -16,6 +16,11 @@ from custom_components.smart_charging.const import (
     DASHBOARD_FILENAME,
     DASHBOARD_URL_PATH,
     DOMAIN,
+    KEY_DASHBOARD_SECTION_CHARGING_STATUS,
+    KEY_DASHBOARD_SECTION_DEPARTURE_TIMES,
+    KEY_DASHBOARD_SECTION_POWER_FLOW,
+    KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS,
+    KEY_DASHBOARD_VIEW_DEADLINE,
     LABEL_SC_RUNTIME,
 )
 from custom_components.smart_charging.dashboard import (
@@ -24,6 +29,14 @@ from custom_components.smart_charging.dashboard import (
     build_dashboard_config,
 )
 from tests.helpers import entry_data_base
+
+_NL_HEADINGS = {
+    KEY_DASHBOARD_SECTION_CHARGING_STATUS: "Laadstatus",
+    KEY_DASHBOARD_SECTION_POWER_FLOW: "Vermogensstroom",
+    KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS: "Actuele instellingen",
+    KEY_DASHBOARD_VIEW_DEADLINE: "Vertrekdeadline",
+    KEY_DASHBOARD_SECTION_DEPARTURE_TIMES: "Vertrektijden",
+}
 
 
 def _entry(**data_overrides):
@@ -76,6 +89,42 @@ def test_the_deadline_view_is_titled_deadline_with_one_departure_times_section()
 
     assert view["title"] == "Deadline"
     assert [s["title"] for s in view["sections"]] == ["Departure times"]
+
+
+def test_headings_come_from_the_given_translations_dict_not_the_product_name():
+    """NF8: every view/card/section heading follows the given translations; the product
+    name (view/dashboard title "Smart Charging") is never translated (NF8 AC1)."""
+    config = build_dashboard_config(_entry(), _NL_HEADINGS)
+
+    overview = _view(config, "overview")
+    assert [s["title"] for s in overview["sections"]] == [
+        "Laadstatus",
+        "Vermogensstroom",
+        "Actuele instellingen",
+    ]
+    assert overview["title"] == "Smart Charging"
+    assert config["title"] == "Smart Charging"
+
+    deadline = _view(config, "deadline")
+    assert deadline["title"] == "Vertrekdeadline"
+    assert deadline["sections"][0]["title"] == "Vertrektijden"
+
+    # The auto-entities "Runtime settings" card's own inner title tracks the same key.
+    runtime_cards = _cards(config, "Actuele instellingen")
+    assert runtime_cards[1]["card"]["title"] == "Actuele instellingen"
+
+
+def test_headings_default_to_english_when_none_are_given():
+    """NF8 AC2's "English otherwise" default -- exercised by every other test in this module,
+    which calls `build_dashboard_config` with no `headings` at all."""
+    config = build_dashboard_config(_entry())
+
+    overview = _view(config, "overview")
+    assert [s["title"] for s in overview["sections"]] == [
+        "Charging status",
+        "Power flow",
+        "Runtime settings",
+    ]
 
 
 def test_the_mode_entity_is_rendered_by_exactly_the_gated_card_not_the_auto_entities_list():
@@ -257,6 +306,25 @@ async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_p
     panel = hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH]
     assert panel.config["mode"] == "yaml"
     assert panel.sidebar_title == "Smart Charging"
+
+
+async def test_register_dashboard_uses_dutch_headings_when_the_system_language_is_dutch(
+    hass, tmp_path
+):
+    """NF8 AC2: the dashboard's headings follow Home Assistant's system language, not a
+    viewing user's."""
+    hass.config.language = "nl"
+    assert await async_setup_component(hass, "lovelace", {})
+    entry = _entry()
+
+    await async_register_dashboard(hass, entry)
+
+    written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
+    config = yaml.safe_load(written)
+    overview = _view(config, "overview")
+    assert overview["sections"][0]["title"] == "Laadstatus"
+    # The product name stays untranslated even in a Dutch-language install (NF8 AC1).
+    assert overview["title"] == "Smart Charging"
 
 
 async def test_register_dashboard_twice_does_not_raise_or_duplicate(hass):
