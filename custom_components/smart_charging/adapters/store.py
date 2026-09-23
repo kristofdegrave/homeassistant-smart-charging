@@ -4,7 +4,7 @@ machine (ADR-0018/0019)."""
 from __future__ import annotations
 
 import logging
-from datetime import time
+from datetime import date, time
 from typing import TypeVar
 
 from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE
@@ -20,7 +20,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from ..const import DOMAIN
+from ..const import ATTR_APPLIES_TO, DOMAIN
 
 T = TypeVar("T", str, float, bool, time)
 
@@ -71,6 +71,36 @@ class Store:
             except ValueError:
                 return None
         return state.state
+
+    async def read_home_day_dates(self, unique_id_suffix: str) -> set[date] | None:
+        """NF14's one read that isn't a plain on/off/number/time value: `HomeDaySwitch`
+        (switch.py) binds itself to the calendar date(s) it applies to and exposes them as its
+        `ATTR_APPLIES_TO` state attribute (a list of ISO date strings) rather than as its bare
+        on/off state, since read()'s bool coercion above can only ever answer "is tomorrow's
+        flag set", never "which date(s) does the flag apply to" -- and both today's (set the
+        evening before) and tomorrow's (being set again right now) can be in force at once.
+
+        Same contract as read(): None means "unregistered or unavailable, unresolvable this
+        cycle" -- the caller (_read_owned_entities) keeps the prior cycle's dates rather than
+        clearing them, exactly like every other owned-entity read. A registered, available
+        switch with no dates set at all is a *resolved* empty set, not None -- that is what
+        "an unset flag stays unset (default off)" actually looks like coming through here."""
+        entity_id = self.resolve_entity_id(Platform.SWITCH, unique_id_suffix)
+        if entity_id is None:
+            return None
+        state = self._hass.states.get(entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return None
+        raw = state.attributes.get(ATTR_APPLIES_TO, [])
+        if not isinstance(raw, list):
+            return set()
+        dates: set[date] = set()
+        for iso in raw:
+            try:
+                dates.add(date.fromisoformat(iso))
+            except (TypeError, ValueError):
+                pass  # malformed attribute value -- drop it, keep the rest
+        return dates
 
     async def write(self, entity_domain: str, unique_id_suffix: str, value: float | bool) -> bool:
         """Set `value` on this entry's owned `entity_domain` entity identified by

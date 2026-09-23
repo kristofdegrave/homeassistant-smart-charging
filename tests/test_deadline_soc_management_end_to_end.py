@@ -3,11 +3,11 @@
 Every test is driven through `hass.config_entries.async_setup` + a full
 `coordinator.async_refresh()` cycle against mocked entity states -- never by calling the pure
 engine/profile functions directly (that's Phase 1's own test suites' job; this file proves the
-coordinator wiring). `active_mode`/`active_profile`/`home_day_flag`/`departure_dow_defaults`/
+coordinator wiring). `active_mode`/`active_profile`/`home_day_dates`/`departure_dow_defaults`/
 `departure_holiday_override`/`departure_home_day_override` are seeded via the real owned
-entities' HA state (`seed_owned_entity`, ADR-0018) -- the Coordinator reads them through the
-Store each cycle, so a direct `coordinator.<field> = ...` assignment would be silently
-overwritten by the next refresh.
+entities' HA state (`seed_owned_entity`/`seed_home_day`, ADR-0018) -- the Coordinator reads
+them through the Store each cycle, so a direct `coordinator.<field> = ...` assignment would
+be silently overwritten by the next refresh.
 
 All the thresholds this file's arithmetic depends on (battery capacity, solar step/threshold,
 solar-forecast threshold) are pinned explicitly in `_entry_options` via their own `DEFAULT_*`
@@ -15,6 +15,8 @@ constants, rather than left as bare literals relying on the module defaults -- s
 default change can't silently flip an Urgent/Unreachable or step-up boundary in these tests
 without also touching this file.
 """
+
+from datetime import timedelta
 
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -64,6 +66,7 @@ from tests.helpers import (
     entry_options_base,
     seed_ample_peak_headroom,
     seed_charger_states,
+    seed_home_day,
     seed_owned_entity,
     seed_today_deadline,
 )
@@ -449,7 +452,7 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass, freezer):
     assert coordinator.data.active_soc_limit == 80.0  # default limit, reserve not engaged
 
     # Reserved: every precondition now holds, no deadline anywhere for tomorrow.
-    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
+    seed_home_day(hass, {dt_util.now().date() + timedelta(days=1)})
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator.data.active_soc_limit == 55.0  # configured reserve cap, not default (80)
@@ -481,7 +484,7 @@ async def test_uc07_manual_profile_never_engages_the_reserve(hass, freezer):
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
-    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
+    seed_home_day(hass, {dt_util.now().date() + timedelta(days=1)})
 
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -504,7 +507,7 @@ async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass, fr
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
-    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
+    seed_home_day(hass, {dt_util.now().date() + timedelta(days=1)})
 
     # Reserve engaged first.
     await coordinator.async_refresh()

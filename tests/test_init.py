@@ -89,6 +89,7 @@ from tests.helpers import (
     entry_options_base,
     seed_ample_peak_headroom,
     seed_charger_states,
+    seed_home_day,
     seed_owned_entity,
 )
 
@@ -595,7 +596,7 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
 
     coordinator = entry.runtime_data.coordinator
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_AUTO)
-    seed_owned_entity(hass, "switch.smart_charging_home_day", "on")
+    seed_home_day(hass, {dt_util.now().date() + timedelta(days=1)})
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 

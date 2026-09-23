@@ -1,5 +1,6 @@
 """HA-harness tests for the RA3 Store (ADR-0018/0019)."""
 
+from datetime import date
 from datetime import time as time_of_day
 from unittest.mock import patch
 
@@ -9,6 +10,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.adapters.store import Store
 from custom_components.smart_charging.const import (
+    ATTR_APPLIES_TO,
     DOMAIN,
     OWNED_SUFFIX_HOME_DAY,
     OWNED_SUFFIX_MODE,
@@ -114,6 +116,48 @@ async def test_read_bool_off_returns_false(hass):
     _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "off")
     store = Store(hass, "entry1")
     assert await store.read(Platform.SWITCH, "home_day", bool) is False
+
+
+async def test_read_home_day_dates_returns_the_attribute_as_dates(hass):
+    """NF14: `read_home_day_dates` reads `ATTR_APPLIES_TO` -- the set of dates the flag
+    applies to -- not the plain on/off state `read(..., bool)` above coerces."""
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: ["2026-01-18", "2026-01-19"]})
+    store = Store(hass, "entry1")
+    assert await store.read_home_day_dates("home_day") == {
+        date(2026, 1, 18),
+        date(2026, 1, 19),
+    }
+
+
+async def test_read_home_day_dates_unregistered_returns_none(hass):
+    """Same contract as read(): None means "unresolvable this cycle", not "resolved to
+    empty" -- the coordinator keeps its prior dates rather than clearing them (NF14)."""
+    store = Store(hass, "entry1")
+    assert await store.read_home_day_dates("home_day") is None
+
+
+async def test_read_home_day_dates_unavailable_returns_none(hass):
+    _register(
+        hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", STATE_UNAVAILABLE
+    )
+    store = Store(hass, "entry1")
+    assert await store.read_home_day_dates("home_day") is None
+
+
+async def test_read_home_day_dates_registered_off_with_nothing_set_returns_empty_set(hass):
+    """The resolved-empty case, distinct from the two above: a real, available switch that
+    has never had a date bound to it -- "an unset flag stays unset (default off)"."""
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "off")
+    store = Store(hass, "entry1")
+    assert await store.read_home_day_dates("home_day") == set()
+
+
+async def test_read_home_day_dates_drops_a_malformed_entry(hass):
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: ["2026-01-18", "not-a-date"]})
+    store = Store(hass, "entry1")
+    assert await store.read_home_day_dates("home_day") == {date(2026, 1, 18)}
 
 
 async def test_read_time_parses_isoformat(hass):
