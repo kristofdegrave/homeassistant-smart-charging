@@ -34,6 +34,7 @@ from .const import (
     CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
+    CONF_POWER_COOLDOWN_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -62,6 +63,7 @@ from .const import (
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_POWER_COOLDOWN_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
@@ -178,6 +180,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         peak_grace_min=opts.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
         captar_cooldown_min=opts.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
         power_respect_peak=opts.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
+        power_cooldown_min=opts.get(CONF_POWER_COOLDOWN_MIN, DEFAULT_POWER_COOLDOWN_MIN),
         ev_battery_capacity_kwh=opts.get(
             CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
         ),

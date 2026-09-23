@@ -253,11 +253,20 @@ class _PowerModeHandler:
 
     is_soc_gated = False
     is_solar_mode = False
-    cooldown_minutes = 0.0  # never read -- Power is never stored in `_mode_state` either (R11
-    # AC3's own Power cooldown is not yet implemented; tracked separately from issue #974)
 
-    def __init__(self, target_current_getter: Callable[[], float]) -> None:
+    def __init__(
+        self, config: SmartChargingConfig, target_current_getter: Callable[[], float]
+    ) -> None:
+        self._config = config
         self._target_current_getter = target_current_getter
+
+    @property
+    def cooldown_minutes(self) -> float:
+        """R11 AC3/C5 (issue #1311): Power has no own stop condition that ever transitions
+        through `_dispatch_mode`'s generic cooldown-start detection (design doc Sec 3.4 --
+        it is never stored in `_mode_state`) -- this is read only by the coordinator's own
+        fault-stop cooldown start (`_start_fault_stop_cooldown`), never by that detection."""
+        return self._config.power_cooldown_min
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return power.desired_current(self._target_current_getter(), ctx.status), state
@@ -383,7 +392,7 @@ def build_mode_handlers(
     this instead of importing the five _*ModeHandler classes directly, keeping them private to
     this module. `target_current_getter` is threaded straight through to _PowerModeHandler
     (design doc Sec 3.4's own zero-arg getter, bound live rather than snapshotted); `config` to
-    every handler that reads config values (all but Off/Power).
+    every handler that reads config values (all but Off).
 
     Deliberately deviates from design doc Sec 3.4's own snippet, which shows coordinator.py
     building this same dict inline in `__init__` -- moved here instead so
@@ -391,7 +400,7 @@ def build_mode_handlers(
     itself (which handler gets `config` vs. the getter) is unchanged from that snippet."""
     return {
         MODE_OFF: _OffModeHandler(),
-        MODE_POWER: _PowerModeHandler(target_current_getter),
+        MODE_POWER: _PowerModeHandler(config, target_current_getter),
         MODE_SOLAR: _SolarModeHandler(config),
         MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
         MODE_CAPTAR: _CaptarModeHandler(config),
