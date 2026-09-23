@@ -48,9 +48,9 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
 
 ## Template (section order)
 
-**Given/When/Then, mapped** (Heap's BDD reading of a use case): Given = the preconditions ·
-When = the trigger and the actions it sets off · Then = the system's responses and the
-postconditions. The same mapping holds for the main, alternate and exception flows alike.
+**Given/When/Then, mapped**: Given = the preconditions · When = the trigger and the actions it
+sets off · Then = the system's responses and the postconditions. The same mapping holds for the
+main, alternate and exception flows alike.
 
 `# UCnn — <goal as active verb phrase>` then:
 Primary actor · Stakeholders & interests · Scope/level · **Preconditions** (testable state, not
@@ -68,8 +68,7 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
   ("the active SOC limit", "charger status") — the `sc_` binding lives in
   `docs/analysis/entity-catalog.md`. The bar's item 3.1 states it and judges it, carve-out
   included. What that means while drafting: a State model is a *what*, so write the states,
-  transitions, thresholds and set-point rule without hedging — it is the code realization of
-  them that is the excluded *how*.
+  transitions, thresholds and set-point rule without hedging.
 - **Don't duplicate mechanism.** Reference `docs/analysis/control-cycle.md` (read → smooth →
   dispatch → clamp → set; peak clamp R3, grid ceiling clamp C4, rapid-cycling R11) and
   `docs/analysis/resolution-rules.md` (active SOC limit R7, departure deadline R14, effective
