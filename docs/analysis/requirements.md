@@ -425,15 +425,17 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 ### NF14 — What survives a restart and a reload
 
 **Priority:** Must
-**What:** What the household has set, and the monthly peak demand, survive a [restart and a reload](system-overview.md#ubiquitous-language) of the system; everything else it works out while running starts afresh after either.
+**What:** What the household has set, and the monthly peak demand, survive a [restart and a reload](system-overview.md#ubiquitous-language) of the system; everything else it works out while running is cleared by either.
 
 **Acceptance criteria:**
 
 - [ ] Every [runtime configuration](system-overview.md#ubiquitous-language) value — the active profile, the mode selected under `Manual`, the `Power` target current, the default SOC limit (R6), each departure time (R14) and the home-day flag (R13) — holds the value last set after a restart and after a reload, from the first control cycle that follows. A value never set holds its default (`entity-catalog.md`).
-- [ ] The home-day flag survives only until the first midnight after it was set: after a restart or reload that spans that midnight it is unset, exactly as R13's daily reset would have left it. It survives at all because a flag lost mid-evening would lift the solar-reserve cap (R9) and drop the home-day departure override (R14) the household had asked for.
+- [ ] The home-day flag survives only until the first midnight after it was set: after a restart or reload that spans that midnight it is unset, exactly as R13's daily reset would have left it.
 - [ ] What the configuration flow captures (R20) — adapter-role mappings, capability declarations, thresholds and defaults — is unaffected by either; a reload is how a change to it takes effect.
 - [ ] The monthly peak demand survives both, as R21 states; its 15-minute window does not.
-- [ ] Nothing else the system derives while running survives a restart or a reload. Among what starts afresh: every running hold, cooldown and restart-debounce timer (R1, R2, R3, R11), the smoothing window (R10), the has-charged flag (R11), a solar step-up (R7, R8), the pursued occurrence and with it any missed-deadline hold (R5), and each notification's record of having been sent (R5, R12, R13). So after either, a connected car starts as on a fresh connection, and a notification whose condition still holds may be sent once more.
+- [ ] Nothing else the system derives while running survives a restart or a reload. Among what is cleared: every running hold, cooldown and restart-debounce timer, which no longer runs at all rather than starting over (R1, R2, R3, R11); the smoothing window, which refills (R10); the has-charged flag (R11); a solar step-up (R7, R8); the pursued occurrence and with it any missed-deadline hold (R5); and each notification's record of having been sent (R5, R12, R13). So after either, a connected car starts as on a fresh connection, and a notification whose condition still holds may be sent once more.
+
+The home-day flag is kept because losing it mid-evening would lift the solar-reserve cap (R9) and drop the home-day departure override (R14) the household had asked for; the midnight bound keeps it from carrying into a day it was not set for.
 
 ---
 

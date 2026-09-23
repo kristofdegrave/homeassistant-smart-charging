@@ -80,8 +80,9 @@ every row of that concern regardless of role; the **Role** column distinguishes 
 Internal bookkeeping that is pure implementation — cooldown/hold timers, the smoothing ring
 buffer, reminder/prompt "already-sent" flags — is **not** catalogued (it is "how", per the design
 doc). Which catalogued values survive a restart or a reload — every runtime configuration entity
-and the monthly peak demand — and that the rest starts afresh is NF14's. The catalog covers the configurable parameters, the
-device-I/O adapter roles, and the domain-level state and outputs the use-cases reference by name.
+and the monthly peak demand — and that the rest starts afresh is NF14's. The catalog covers the
+configurable parameters, the device-I/O adapter roles, and the domain-level state and outputs the
+use-cases reference by name.
 
 ---
 

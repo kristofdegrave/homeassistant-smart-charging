@@ -28,7 +28,7 @@ The notification gating decides only whether the triggered reminder is delivered
 
 1. **Given** the car is home, disconnected, below the active SOC limit, the next departure time is resolved to an actual deadline, and both the notifications capability and the plug-in reminder's own enable toggle are on (R12, R18).
 2. **When** the current time comes within the configured lead time of that departure time, **then** the System sends a single notification asking the driver to plug in.
-3. **And** no further reminder is sent for the same [departure window](../system-overview.md#ubiquitous-language) unless the charger is connected and then disconnected again (a connect/disconnect cycle re-arms the reminder).
+3. **And** no further reminder is sent for the same [departure window](../system-overview.md#ubiquitous-language) unless the charger is connected and then disconnected again (a connect/disconnect cycle re-arms the reminder), or a restart or reload intervenes (NF14).
 
 ## Alternate flows
 
@@ -65,7 +65,7 @@ Given every precondition other than the notification gating holds — the car is
 When either layer of the conjunctive gating is off — the worked example being the plug-in reminder's [per-notification enable toggle](../system-overview.md#ubiquitous-language) (`plug_in_reminder_enabled`) off even though the notifications capability is present and a notification target is mapped; the notifications capability being absent suppresses delivery identically (R18)
 Then the System sends no reminder — the driver's goal is not met by this use-case, by the household's own configuration.
 And the System still evaluates the reminder-due condition every control cycle and still exposes it as a readout (`binary_sensor.smart_charging_plug_in_reminder`), so the fact that a reminder is due remains observable while delivery is suppressed.
-And the once-per-departure-window rule still runs: the departure window is consumed exactly as if the reminder had been delivered, so re-enabling the suppressed gate part-way through that window releases no reminder for it. The next reminder the driver can receive is the one for a re-armed window (3a or 3b).
+And the once-per-departure-window rule still runs: the departure window is consumed exactly as if the reminder had been delivered, so re-enabling the suppressed gate part-way through that window releases no reminder for it. The next reminder the driver can receive is the one for a re-armed window (3a or 3b), or after a restart or reload (NF14).
 
 **No upcoming departure deadline.**
 Given the car is home, disconnected, and below the active SOC limit
@@ -80,9 +80,9 @@ Then the System sends a reminder to plug in a car that may already be plugged in
 ## Postconditions
 
 - The driver has been notified in time to plug in and let whichever charging use-case is active (UC01–UC05) reach the active SOC limit by the next departure time.
-- No further reminder is sent for the same departure window unless the charger has since gone through a connect/disconnect cycle, or the departure window itself has changed (3b).
+- No further reminder is sent for the same departure window unless the charger has since gone through a connect/disconnect cycle, the departure window itself has changed (3b), or a restart or reload has intervened (NF14).
 - No reminder is ever sent while the car is connected or already at or above the active SOC limit — the reminder tracks only the case where the driver still needs to act.
-- No reminder is ever delivered while the notifications capability is absent or the plug-in reminder's own enable toggle is off, and no reminder suppressed that way is ever released later for the same departure window.
+- No reminder is ever delivered while the notifications capability is absent or the plug-in reminder's own enable toggle is off, and no reminder suppressed that way is ever released later for the same departure window, other than after a restart or reload (NF14).
 - The reminder-due readout (`binary_sensor.smart_charging_plug_in_reminder`) is on whenever a reminder is due — on the main success scenario as well as while delivery is suppressed — so the driver can see the due condition independently of whether a notification was sent.
 
 ## State model
@@ -109,7 +109,7 @@ A restart or reload starts this model afresh at Armed (NF14), so a reminder alre
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Armed
+    [*] --> Armed: start, and after a<br/>restart or reload (NF14)
     Armed --> Sent: preconditions other than the<br/>notification gating hold AND<br/>within lead time of next departure time
     Sent --> Armed: connect, then disconnect again<br/>(same departure window, 3a)
     Sent --> Armed: departure window changes<br/>(next departure time passes or<br/>resolved deadline updated, 3b)
