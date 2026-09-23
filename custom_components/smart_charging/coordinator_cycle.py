@@ -140,8 +140,9 @@ class PeakDemandState:
         negative `tracked_kw` on a net-export month (peak_demand_tracker.py's own contract).
         `month` is left unchanged when the restored state carries no `period_month` (an older
         stored value) -- the 15-minute `window` is deliberately never seeded (R21: the window
-        itself is "not preserved and rebuilds from the readings that follow the restart",
-        unlike the tracked value), matching `update()`'s own reset-on-rollover behavior."""
+        itself is "not preserved and rebuilds from the readings that follow", unlike the
+        tracked value, which R21/NF14 do require to survive), matching `update()`'s own
+        reset-on-rollover behavior."""
         self.tracked_kw = kw
         if month is not None:
             self.tracked_month = month
