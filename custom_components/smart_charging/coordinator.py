@@ -284,8 +284,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         try:
             return await self._run_cycle()
         except Exception as err:  # noqa: BLE001 - every failure funnels to the fault path (ADR-0007)
-            self._log_fault(f"cycle exception: {err}")
-            self._start_fault_stop_cooldown()
+            self._enter_fault(f"cycle exception: {err}")
             await self._safe_write_zero()
             self._clear_baseline_deferral()
             return CycleResult(
@@ -453,8 +452,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         now_dt = dt_util.now()
         inputs = await self._read_cycle_inputs()
         if inputs is None:
-            self._log_fault("required adapter returned None")
-            self._start_fault_stop_cooldown()
+            self._enter_fault("required adapter returned None")
             await self._write(0.0)
             self._clear_baseline_deferral()
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
@@ -543,8 +541,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and status in CHARGEABLE_STATES
             and ev_soc is None
         ):
-            self._log_fault("ev_soc required while a solar mode is active but missing/None")
-            self._start_fault_stop_cooldown()
+            self._enter_fault("ev_soc required while a solar mode is active but missing/None")
             await self._write(0.0)
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
             # ADR-0021/entity-catalog.md:154 "last successful cycle" reasoning as the
@@ -1513,3 +1510,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if not self._was_faulted:
             _LOGGER.warning("smart_charging fault: %s", reason)
             self._was_faulted = True
+
+    def _enter_fault(self, reason: str) -> None:
+        """ADR-0007/C5's single fault-handling code path, one call: logs the fault
+        (`_log_fault`'s own once-per-outage discipline) and starts the fault stop's cooldown
+        (`_start_fault_stop_cooldown`, C5/R11, issue #1311) together, so each of the three
+        fault sites is one statement in its caller's body -- ADR-0046's body rule for
+        `_run_cycle` (a call to a named step, one statement each) rather than two."""
+        self._log_fault(reason)
+        self._start_fault_stop_cooldown()
