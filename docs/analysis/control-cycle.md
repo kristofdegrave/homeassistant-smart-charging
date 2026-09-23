@@ -192,7 +192,8 @@ flowchart TD
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
    mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion —
-   across a switch of the active mode included (edge case below),
+   across a switch of the active mode included (edge case below), and ended early only by a
+   disconnect, a restart or a reload (R11) —
    and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
    before actually cutting to 0 A (the post-surplus hold, R1/R2; the peak-breach grace period, R3,
    in every mode it can stop — the solar modes at the minimum current during grid fallback/`Hold`,
