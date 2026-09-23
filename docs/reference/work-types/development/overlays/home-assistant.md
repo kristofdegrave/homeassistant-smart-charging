@@ -47,10 +47,14 @@ each miss:
   tunables (the control interval) in options; an options change reloads the entry — **Major**.
 - **Cycle composition (ADR-0046):** no function in `coordinator.py` or `coordinator_cycle.py`
   exceeds ruff's `C901` at `max-complexity = 10` or `PLR0915` at `max-statements = 35` —
-  **Major**, since a cycle regrown past the limits is the shape ADR-0046 exists to stop. A
-  function already over a limit before the change (`_run_cycle`, until its restructure) is a
-  finding only where the change grows it. Taking either rule or either file out of the guard
-  contradicts ADR-0046 and is the same **Major**.
+  **Major**, since a cycle regrown past the limits is the shape ADR-0046 exists to stop. Taking
+  either rule or either file out of the guard contradicts ADR-0046 and is the same **Major**.
+  Until `_run_cycle`'s restructure enables both rules in `pyproject.toml`, `ruff check .` does
+  not decide this, so run `ruff check --select C901,PLR0915 --config
+  'lint.mccabe.max-complexity = 10' --config 'lint.pylint.max-statements = 35'` over the two
+  files instead; and `_run_cycle` itself, the one function over the limits today, is a finding
+  only where a change raises its `C901` or `PLR0915` measure. That restructure removes both
+  sentences.
 - **Native naming and package layout (ADR-0004/0002/0010):** owned entities use the
   `smart_charging_` native names, and files sit in the ADR-mandated package (`adapters/`,
   `modes/`, `engines/`, platform files and `coordinator.py`/`entity.py` at root) — **Major**,
