@@ -13,15 +13,18 @@ most two at once -- today's, set the evening before and still in force until mid
 tomorrow's, being set again right now by the switch or the evening prompt's "yes") and is what
 actually round-trips through `RestoreEntity`'s extra restore data. `is_on` and the `applies_to`
 attribute are both computed from it fresh on every read, so no separately-tracked boolean can
-fall out of sync with it, and `_applies_to` itself needs no mutation at local midnight:
-"tomorrow" simply stops being what it used to be the moment the date rolls over, without
-disturbing today's own (now separately dated) entry. HA's state machine, though, only shows a
-new value once something calls `async_write_ha_state()` -- left alone, the entity would still
-*compute* the right thing on every read but keep DISPLAYING the pre-midnight "on" until some
-other write happened to touch it. `_async_refresh_at_midnight` exists solely to trigger that
-one extra write at the moment `is_on` and `applies_to` are due to change on their own, so a
-dashboard or any other state-machine reader sees "tomorrow" go back to unset exactly when the
-switch itself says it should (R13's "reads off from midnight as before").
+fall out of sync with it, and "tomorrow" simply stops being what it used to be the moment the
+date rolls over, without disturbing today's own (now separately dated) entry -- no mutation is
+needed for that half of it. `_applies_to` DOES still need pruning of dates that have fully
+elapsed, though: nothing else ever removes one (R14 only ever resolves today's or tomorrow's
+deadline, so a past date is simply never queried again, not cleaned up by being queried), and
+without pruning it would grow by one entry per home day for as long as the switch runs without
+a restart. `_async_refresh_at_midnight` does both jobs at the one moment both are due: it drops
+any date that has ended, and it writes state so HA's state machine -- which only shows a new
+value once something calls `async_write_ha_state()` -- actually shows the `is_on`/`applies_to`
+value that was already true the instant the date rolled over, rather than keeping yesterday's
+"on" displayed until some unrelated write happens to touch it (R13's "reads off from midnight
+as before").
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import Platform
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
@@ -40,6 +43,7 @@ from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from . import SmartChargingConfigEntry
+from .adapters.store import parse_iso_dates
 from .const import ATTR_APPLIES_TO, LABEL_SC_RUNTIME, OWNED_SUFFIX_HOME_DAY
 from .entity import SmartChargingEntity, sync_labels
 
@@ -87,17 +91,11 @@ class HomeDaySwitch(SmartChargingEntity, RestoreEntity, SwitchEntity):
         if restored is not None:
             data = _HomeDayExtraStoredData.from_dict(restored.as_dict())
             if data is not None:
-                dates: set[date] = set()
-                for iso in data.applies_to:
-                    try:
-                        dates.add(date.fromisoformat(iso))
-                    except (TypeError, ValueError):
-                        pass  # malformed stored value -- drop it, keep the rest
                 # A date already in the past by the time HA restarts can never be resolved
                 # against again (R14 only ever resolves today's or tomorrow's deadline) --
                 # drop it rather than carrying it forever.
                 today = dt_util.now().date()
-                self._applies_to = {d for d in dates if d >= today}
+                self._applies_to = {d for d in parse_iso_dates(data.applies_to) if d >= today}
         self._unsub_midnight_refresh = async_track_time_change(
             self.hass, self._async_refresh_at_midnight, hour=0, minute=0, second=0
         )
@@ -108,10 +106,13 @@ class HomeDaySwitch(SmartChargingEntity, RestoreEntity, SwitchEntity):
             self._unsub_midnight_refresh = None
         await super().async_will_remove_from_hass()
 
-    async def _async_refresh_at_midnight(self, now: datetime) -> None:
-        """See the module docstring: `_applies_to` needs no mutation here, only a write so
-        HA's state machine actually shows the `is_on`/`applies_to` value that was already
-        true the instant the date rolled over."""
+    @callback
+    def _async_refresh_at_midnight(self, now: datetime) -> None:
+        """See the module docstring: drops any date that has fully elapsed (nothing else ever
+        prunes `_applies_to`), then writes state so HA's state machine actually shows the
+        `is_on`/`applies_to` value that was already true the instant the date rolled over."""
+        today = dt_util.now().date()
+        self._applies_to = {d for d in self._applies_to if d >= today}
         self.async_write_ha_state()
 
     @staticmethod

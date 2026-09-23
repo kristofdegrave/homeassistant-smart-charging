@@ -118,46 +118,101 @@ async def test_read_bool_off_returns_false(hass):
     assert await store.read(Platform.SWITCH, "home_day", bool) is False
 
 
-async def test_read_home_day_dates_returns_the_attribute_as_dates(hass):
+async def test_should_return_the_attribute_as_dates_when_the_switch_carries_applies_to(hass):
     """NF14: `read_home_day_dates` reads `ATTR_APPLIES_TO` -- the set of dates the flag
     applies to -- not the plain on/off state `read(..., bool)` above coerces."""
+    # Arrange
     _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
     hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: ["2026-01-18", "2026-01-19"]})
     store = Store(hass, "entry1")
-    assert await store.read_home_day_dates("home_day") == {
-        date(2026, 1, 18),
-        date(2026, 1, 19),
-    }
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result == {date(2026, 1, 18), date(2026, 1, 19)}
 
 
-async def test_read_home_day_dates_unregistered_returns_none(hass):
+async def test_should_return_none_when_the_switch_is_unregistered(hass):
     """Same contract as read(): None means "unresolvable this cycle", not "resolved to
     empty" -- the coordinator keeps its prior dates rather than clearing them (NF14)."""
+    # Arrange
     store = Store(hass, "entry1")
-    assert await store.read_home_day_dates("home_day") is None
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
 
 
-async def test_read_home_day_dates_unavailable_returns_none(hass):
+async def test_should_return_none_when_the_switch_is_unavailable(hass):
+    # Arrange
     _register(
         hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", STATE_UNAVAILABLE
     )
     store = Store(hass, "entry1")
-    assert await store.read_home_day_dates("home_day") is None
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
 
 
-async def test_read_home_day_dates_registered_off_with_nothing_set_returns_empty_set(hass):
-    """The resolved-empty case, distinct from the two above: a real, available switch that
+async def test_should_return_none_when_the_switch_is_unknown(hass):
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", STATE_UNKNOWN)
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
+async def test_should_return_an_empty_set_when_a_registered_switch_has_nothing_set(hass):
+    """The resolved-empty case, distinct from the three above: a real, available switch that
     has never had a date bound to it -- "an unset flag stays unset (default off)"."""
+    # Arrange
     _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "off")
     store = Store(hass, "entry1")
-    assert await store.read_home_day_dates("home_day") == set()
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result == set()
 
 
-async def test_read_home_day_dates_drops_a_malformed_entry(hass):
+async def test_should_drop_a_malformed_entry_and_keep_the_rest(hass):
+    # Arrange
     _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
     hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: ["2026-01-18", "not-a-date"]})
     store = Store(hass, "entry1")
-    assert await store.read_home_day_dates("home_day") == {date(2026, 1, 18)}
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result == {date(2026, 1, 18)}
+
+
+async def test_should_return_none_when_applies_to_is_not_a_list(hass):
+    """Dev-m2: a present-but-malformed `applies_to` (not a list at all) is "doesn't coerce",
+    the same outcome `read()`'s float/time branches give -- not a resolved empty set, which
+    the coordinator would apply and use to clear whatever dates were already in force."""
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: "not-a-list"})
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
 
 
 async def test_read_time_parses_isoformat(hass):

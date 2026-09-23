@@ -27,6 +27,23 @@ T = TypeVar("T", str, float, bool, time)
 _LOGGER = logging.getLogger(__name__)
 
 
+def parse_iso_dates(raw: object) -> set[date]:
+    """Parses a list of ISO ("YYYY-MM-DD") date strings into a `set[date]`, dropping anything
+    that isn't a well-formed date rather than raising; a non-list `raw` yields an empty set.
+    Shared by `Store.read_home_day_dates` below (the coordinator-side read) and
+    `HomeDaySwitch`'s own restore path (switch.py, the entity-side read) so the one parsing of
+    NF14's `ATTR_APPLIES_TO` value can't drift between the two call sites."""
+    if not isinstance(raw, list):
+        return set()
+    dates: set[date] = set()
+    for iso in raw:
+        try:
+            dates.add(date.fromisoformat(iso))
+        except (TypeError, ValueError):
+            pass  # malformed entry -- drop it, keep the rest
+    return dates
+
+
 class Store:
     """One instance per config entry (mirrors the Adapter factory's per-entry scoping,
     ADR-0003) -- read() and write() only ever resolve this entry's own owned entities."""
@@ -82,9 +99,13 @@ class Store:
 
         Same contract as read(): None means "unregistered or unavailable, unresolvable this
         cycle" -- the caller (_read_owned_entities) keeps the prior cycle's dates rather than
-        clearing them, exactly like every other owned-entity read. A registered, available
-        switch with no dates set at all is a *resolved* empty set, not None -- that is what
-        "an unset flag stays unset (default off)" actually looks like coming through here."""
+        clearing them, exactly like every other owned-entity read. That now also covers a
+        malformed `ATTR_APPLIES_TO` value (present but not a list): read()'s own float/time
+        branches return None when a value "doesn't coerce" rather than a resolved default, and
+        this follows the same rule rather than silently resolving to "no home days" and
+        clearing whatever dates were already applied. A registered, available switch with no
+        dates set at all is a *resolved* empty set, not None -- that is what "an unset flag
+        stays unset (default off)" actually looks like coming through here."""
         entity_id = self.resolve_entity_id(Platform.SWITCH, unique_id_suffix)
         if entity_id is None:
             return None
@@ -93,14 +114,8 @@ class Store:
             return None
         raw = state.attributes.get(ATTR_APPLIES_TO, [])
         if not isinstance(raw, list):
-            return set()
-        dates: set[date] = set()
-        for iso in raw:
-            try:
-                dates.add(date.fromisoformat(iso))
-            except (TypeError, ValueError):
-                pass  # malformed attribute value -- drop it, keep the rest
-        return dates
+            return None
+        return parse_iso_dates(raw)
 
     async def write(self, entity_domain: str, unique_id_suffix: str, value: float | bool) -> bool:
         """Set `value` on this entry's owned `entity_domain` entity identified by
@@ -110,9 +125,9 @@ class Store:
 
         Two value shapes are supported today, one per real caller: a `float` into a
         `number` entity (M2 -> soc_limit_override), and a `bool` into a `switch` entity
-        (M3 -> home_day_flag), per the write half of ADR-0018's Store decision. Other
-        domains return False rather than issuing a service call against an entity that
-        cannot take it.
+        (M3 -> switch.smart_charging_home_day), per the write half of ADR-0018's Store
+        decision. Other domains return False rather than issuing a service call against an
+        entity that cannot take it.
         """
         if entity_domain not in (Platform.NUMBER, Platform.SWITCH):
             _LOGGER.debug("Store.write: unsupported entity domain %s", entity_domain)

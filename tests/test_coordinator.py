@@ -2488,13 +2488,16 @@ async def test_passed_morning_deadline_does_not_pin_auto_to_captar_all_afternoon
     assert result.active_mode == MODE_SOLAR
 
 
-async def test_home_day_override_no_deadline_applies_at_0030_on_the_home_day(hass, freezer):
+async def test_should_resolve_no_deadline_when_checked_at_0030_on_a_home_day_whose_override_is_none(
+    hass, freezer
+):
     """NF14/R13's last acceptance criterion, the issue's own named scenario: a home-day
     override of "no deadline" applies for the WHOLE of the home day -- including just after
     midnight, when a stale, undated flag would already have fallen back to the day-of-week
     default (06:00) instead. Monday 2026-01-19 is the home day, with its weekday default at
     06:00 and its home-day override left at None ("no deadline", R14's terminal-but-one row
     winning over row 4)."""
+    # Arrange
     # freezer.move_to takes a UTC instant; this harness's local zone is US/Pacific
     # (UTC-8 in January), so 08:30 UTC is 00:30 local -- 00:30 on the home day itself.
     freezer.move_to("2026-01-19 08:30:00")
@@ -2508,24 +2511,27 @@ async def test_home_day_override_no_deadline_applies_at_0030_on_the_home_day(has
     coord.departure_home_day_override = None  # explicit "no deadline" override
     _seed_ample_peak_headroom(coord)
 
+    # Act
     await coord._async_update_data()
 
-    # "no deadline" (the home-day override) wins -- not the 06:00 weekday default.
+    # Assert -- "no deadline" (the home-day override) wins, not the 06:00 weekday default.
     assert coord._required_current.required_a is None
     assert coord._required_current.urgent is False
     assert coord._required_current.unreachable is False
 
 
-async def test_home_day_flag_does_not_leak_between_today_and_tomorrow(hass, freezer):
-    """The bug this task fixes: a flag bound to tomorrow alone must not also override
-    TODAY's own R14 resolution -- each date is looked up in `home_day_dates`
-    independently. Today (2026-01-18, a Sunday) has its own day-of-week default (06:00);
-    only tomorrow (2026-01-19, a Monday) is in `home_day_dates`, with a DIFFERENT home-day
-    override (08:00). Calling `resolve_deadline_for` for each date directly -- bypassing
-    R5/R15's next-occurrence rollover, which would otherwise obscure which value each date
-    actually resolved to -- proves today keeps its own default rather than picking up
-    tomorrow's override."""
-    freezer.move_to("2026-01-18 20:00:00")  # Sunday evening
+async def test_should_resolve_todays_own_default_when_only_tomorrow_is_in_home_day_dates(
+    hass, freezer
+):
+    """The bug this task fixes, today's half: a flag bound to tomorrow alone must not also
+    override TODAY's own R14 resolution -- each date is looked up in `home_day_dates`
+    independently. Today (2026-01-18, a Sunday) has its own day-of-week default (06:00); only
+    tomorrow (2026-01-19, a Monday) is in `home_day_dates`, with a DIFFERENT home-day override
+    (08:00). Calling `resolve_deadline_for` directly -- bypassing R5/R15's next-occurrence
+    rollover, which would otherwise obscure which value each date actually resolved to --
+    proves today keeps its own default rather than picking up tomorrow's override."""
+    # Arrange
+    freezer.move_to("2026-01-18 20:00:00")  # Sunday, local noon (US/Pacific)
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
     coord = SmartChargingCoordinator(
@@ -2539,11 +2545,37 @@ async def test_home_day_flag_does_not_leak_between_today_and_tomorrow(hass, free
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, baseline_w=0.0
     )
 
+    # Act
     _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
 
-    assert resolve_deadline_for(now_dt.date()) == time_of_day(6, 0)  # today: its own default
+    # Assert
+    assert resolve_deadline_for(now_dt.date()) == time_of_day(6, 0)
+
+
+async def test_should_resolve_the_override_when_tomorrow_is_in_home_day_dates(hass, freezer):
+    """The bug this task fixes, tomorrow's half: the same setup as the test above, but
+    checking tomorrow's own resolution picks up the home-day override it IS bound to."""
+    # Arrange
+    freezer.move_to("2026-01-18 20:00:00")  # Sunday, local noon (US/Pacific)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.home_day_dates = {date(2026, 1, 19)}  # tomorrow only, not today
+    coord.departure_dow_defaults[6] = time_of_day(6, 0)  # Sunday's own weekday default
+    coord.departure_home_day_override = time_of_day(8, 0)  # deliberately NOT today's default
+    now_dt = dt_util.now()
+    ctx = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, baseline_w=0.0
+    )
+
+    # Act
+    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+
+    # Assert
     tomorrow_date = now_dt.date() + timedelta(days=1)
-    assert resolve_deadline_for(tomorrow_date) == time_of_day(8, 0)  # tomorrow: the override
+    assert resolve_deadline_for(tomorrow_date) == time_of_day(8, 0)
 
 
 async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
@@ -3661,40 +3693,55 @@ async def test_read_owned_entities_clamps_soc_limit_override_via_existing_setter
     assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
 
 
-async def test_read_owned_entities_updates_home_day_dates(hass):
+async def test_should_apply_store_dates_when_read_owned_entities_runs(hass):
+    # Arrange
     tomorrow = dt_util.now().date() + timedelta(days=1)
     store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): {tomorrow}})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
+
+    # Act
     await coord._read_owned_entities()
+
+    # Assert
     assert coord.home_day_dates == {tomorrow}
 
 
-async def test_read_owned_entities_leaves_home_day_dates_unchanged_when_store_returns_none(hass):
+async def test_should_keep_the_prior_dates_when_the_store_read_is_unresolvable(hass):
     """NF14: same "None means unresolvable, keep current" convention as every `simple_reads`
     field (ADR-0018) -- an unregistered/unavailable switch (read_home_day_dates returning
     None) must not clear `home_day_dates`, so a test's own direct field assignment survives
     `_read_owned_entities` exactly like every other field's does."""
+    # Arrange
     store = _FakeStore({})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
     coord.home_day_dates = {dt_util.now().date()}
+
+    # Act
     await coord._read_owned_entities()
+
+    # Assert
     assert coord.home_day_dates == {dt_util.now().date()}
 
 
-async def test_read_owned_entities_applies_a_resolved_empty_home_day_dates(hass):
+async def test_should_clear_stale_dates_when_the_store_resolves_to_empty(hass):
     """The other half of the same contract: a REGISTERED, available switch with nothing set
     resolves to an explicit empty set (not None), and that DOES get applied -- "an unset flag
     stays unset (default off)" is a resolved value, not an unresolvable read."""
+    # Arrange
     store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): set()})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
     coord.home_day_dates = {dt_util.now().date()}  # a stale prior value
+
+    # Act
     await coord._read_owned_entities()
+
+    # Assert
     assert coord.home_day_dates == set()
 
 
