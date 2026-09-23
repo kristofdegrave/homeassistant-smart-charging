@@ -28,7 +28,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Powe
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Power`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Power`-mode cooldown this mode's own stop or a fault stop (C5) starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -42,7 +42,7 @@ Given the CapTar [capability](../system-overview.md#ubiquitous-language) is abse
 When the System requests the configured Power target current
 Then the R3 peak clamp does not run at all — in this or any other mode (R3, `control-cycle.md`, step 5) — whatever `power_respect_peak` holds, so that option has no effect and is not even presented for configuration ([UC12](UC12-configure-installation-through-guided-flow.md), R18).
 And net import is bounded only by the grid-supply-ceiling clamp (C4) and the minimum/maximum charging current (C1), exactly as in 3a, but by the installation's declared billing arrangement rather than by a user choice — there is no CapTar peak to protect on such an installation, and no monthly peak demand billed against one.
-And the sustained-R3-breach stop and its `Power`-mode cooldown (Exception flows, State model) can never fire, since the clamp they respond to never runs.
+And the sustained-R3-breach stop (Exception flows, State model) can never fire, since the clamp it responds to never runs, and so it can never start the `Power`-mode cooldown; a fault stop (C5) still does.
 
 ## Exception flows
 
@@ -55,6 +55,11 @@ Then the coordinator reduces the charger current — or, on a sustained R3 breac
 Given the System is charging in `Power` mode
 When state of charge reaches the active SOC limit — the plain default, or a leftover solar step-up or solar-reserve cap (R9) from before `Power` was selected (see Relationships: `Power`'s own logic never puts either in effect, whether selected under `Manual` or via `Auto`'s deadline-urgency exception)
 Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+
+**Fault stop.**
+Given the System is charging in `Power` mode
+When a [fault](../system-overview.md#ubiquitous-language) cuts the current (C5)
+Then, from `Charging`, the System enters Cooldown for the `Power`-mode cooldown, whatever the peak-protection option and the CapTar capability (R11), and resumes only through Cooldown's own exits (State model). This stop does not emit `PowerChargingStopped`, which names this mode's own stops only; the fault is surfaced by `sensor.smart_charging_status` (C5).
 
 ## Postconditions
 
@@ -97,6 +102,12 @@ resolution are applied by the shared mechanism and are referenced, not repeated,
 A disconnect (charger status leaving `connected`/`charging`) breaks the "car connected" precondition
 and exits this use-case's scope from any state, returning to Idle; on disconnect the active SOC limit
 resets to the default (R7), which is why the diagram does not draw a disconnect edge from every state.
+
+A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging is a
+fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as a sustained R3 breach
+does, but whatever the peak-protection option and the CapTar capability hold (R11); charging
+resumes only through Cooldown's own exit. It can arise on any charging cycle, which is why the
+diagram does not draw it either.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
@@ -156,7 +167,7 @@ stateDiagram-v2
 
 - **R17** — Power mode (charges at the configurable Power target current — default 10 A — regardless of solar surplus or the low-tariff flag; the configurable peak-protection option; C1 bounds always hold; the active SOC limit still applies).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07, though `Power` itself is Manual-only), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), and voltage-aware conversion (NF4). R10 sensor smoothing does not shape `Power`'s own set-point rule (it always requests the configured target current, unaffected by smoothed readings), but still governs the raw/smoothed split the R3 clamp relies on. `Power`'s availability regardless of either capability (R18, Preconditions) is realized in `entity-catalog.md`'s `select.smart_charging_mode` selector note, not in a mode-specific mechanism doc.
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07, though `Power` itself is Manual-only), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), and voltage-aware conversion (R22). R10 sensor smoothing does not shape `Power`'s own set-point rule (it always requests the configured target current, unaffected by smoothed readings), but still governs the raw/smoothed split the R3 clamp relies on. `Power`'s availability regardless of either capability (R18, Preconditions) is realized in `entity-catalog.md`'s `select.smart_charging_mode` selector note, not in a mode-specific mechanism doc.
 
 ## Relationships
 

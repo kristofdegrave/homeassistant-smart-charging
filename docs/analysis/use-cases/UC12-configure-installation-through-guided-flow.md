@@ -94,7 +94,7 @@ variants.
    the net-power mapping, the optional grid-voltage mapping, the optional low-tariff mapping (with
    its own state-translation table when the mapped entity does not already report on/off), the
    [supply voltage](../system-overview.md#ubiquitous-language) fallback used when the grid-voltage
-   mapping is absent (NF4), the [grid supply ceiling](../system-overview.md#ubiquitous-language),
+   mapping is absent (R22), the [grid supply ceiling](../system-overview.md#ubiquitous-language),
    and the [grid safety offset](../system-overview.md#ubiquitous-language) (C4). The
    supply-voltage fallback sits on this step, beside the grid-voltage mapping it substitutes for,
    rather than on the `ev_charger` step: both are the same "Installation area" concern in

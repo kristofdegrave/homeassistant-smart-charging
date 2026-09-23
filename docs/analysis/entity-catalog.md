@@ -124,9 +124,9 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | `sensor.smart_charging_grid_supply_ceiling_a` | state | — | A | mirrors `grid_supply_ceiling_a` (config-options); disabled by default (ADR-0031) | [grid supply ceiling](system-overview.md#ubiquitous-language) (C4) | user | — |
 | `grid_safety_offset_a` | config-options | options | A | 2 (larger with solar/battery) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_grid_safety_offset_a` | state | — | A | mirrors `grid_safety_offset_a` (config-options); disabled by default (ADR-0031) | [grid safety offset](system-overview.md#ubiquitous-language) (C4) | user | — |
-| `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | control-cycle | user (anytime), UC12 |
-| `sensor.smart_charging_nominal_voltage_v` | state | — | V | mirrors `nominal_voltage_v` (config-options); disabled by default (ADR-0031) | [supply voltage](system-overview.md#ubiquitous-language) fallback (NF4) | user | — |
-| `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (NF4) | control-cycle | — |
+| `nominal_voltage_v` | config-options | options | V | 230 | [supply voltage](system-overview.md#ubiquitous-language) fallback (R22) | control-cycle | user (anytime), UC12 |
+| `sensor.smart_charging_nominal_voltage_v` | state | — | V | mirrors `nominal_voltage_v` (config-options); disabled by default (ADR-0031) | [supply voltage](system-overview.md#ubiquitous-language) fallback (R22) | user | — |
+| `grid_voltage` | adapter role | — | V | mapped to the installation's grid voltage sensor (NF3) | [supply voltage](system-overview.md#ubiquitous-language) measured value (R22) | control-cycle | — |
 | `net_power` | adapter role | — | W | mapped to the installation's grid net-power meter (NF3); normalised to W at the adapter, converting a source entity that reports another power unit and assuming W when it reports none. A unit that is present but is not a convertible power unit reads as absent, which for this required role is a fault (ADR-0007): the charger is set to 0 A until the mapping is corrected. | [net import](system-overview.md#ubiquitous-language) — the one reading R10 smooths | control-cycle, UC01, UC02, UC11 | — |
 | `low_tariff` | adapter role | — | bool | mapped to the installation's tariff signal; when the mapped entity does not already report on/off, a user-supplied state-translation table lists which raw states count as low tariff, with every other raw state resolving to not-low-tariff (NF3; optional — treated as always `on` when not configured — single-tariff installation) | [low-tariff flag](system-overview.md#ubiquitous-language) | resolution-rules | — |
 
@@ -183,7 +183,7 @@ System-written native `sensor` entities (ADR-0004) that surface, as read-only di
 | `sensor.smart_charging_desired_current` | state | — | A | the active mode module's desired charger current, before the peak/grid clamps | desired charger current (control-cycle step 4) | (UC11) | control-cycle |
 | `sensor.smart_charging_effective_peak_limit` | state | — | kW | `min(max(max(monthly_peak_demand, monthly_peak_external), peak_floor_kw), maximum_peak)`, raised to the maximum peak during urgency (R5); resolved per `resolution-rules.md` | [effective peak limit](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_active_soc_limit` | state | — | % | resolved active SOC limit per `resolution-rules.md` (Active SOC limit table): solar-reserve cap → solar step-up → default; the entity `ActiveSocLimitChanged` fires on (ADR-0011) | [active SOC limit](system-overview.md#ubiquitous-language) — the resolved value in effect | UC09, UC10, UC11 | control-cycle |
-| `sensor.smart_charging_status` | state | — | — | `OK` / `Fault` (ADR-0007) | integration health status (ADR-0007) | (UC11) | control-cycle |
+| `sensor.smart_charging_status` | state | — | — | `OK` / `Fault` (C5, ADR-0007) | integration health status — `Fault` while the latest control cycle was a [fault](system-overview.md#ubiquitous-language) (C5) | (UC11) | control-cycle |
 | `sensor.smart_charging_solar_surplus_w` | state | — | W | `charger_power − net_power`, floored at 0, computed fresh each control cycle, never stored; reads the accepted [household baseline](system-overview.md#ubiquitous-language) (negated), resolved per `control-cycle.md` step 1 and subject to R3's deferral cases, so on a deferred cycle this value holds its previously displayed one. That resolution runs every cycle regardless of capability, so this value is well defined on a solar installation without CapTar, where R3's clamp itself never engages. Gated on the solar capability (R18) — registry-disabled while `solar_available` is off (ADR-0028), so the dashboard omits it (R19 AC4, UC11 3a) | [solar surplus](system-overview.md#ubiquitous-language) | UC11 | control-cycle |
 | `sensor.smart_charging_time_to_full` | state | — | min | derived from EV battery capacity (R15), `ev_soc`, the active SOC limit, and the current `charger_current` set-point; unavailable while `charger_current` is 0 A, zero once state of charge is at or above the active SOC limit | [time to full charge](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
 | `sensor.smart_charging_peak_headroom_a` | state | — | A | `(effective peak limit − safety margin − household baseline) ÷ supply voltage`, the same target and the same accepted [household baseline](system-overview.md#ubiquitous-language) the R3 peak-protection clamp holds — including R3's deferral cases, so on a deferred cycle this value holds its previously displayed one; the baseline is resolved per `control-cycle.md` step 1 and the clamp itself per step 5 (the effective peak limit itself is resolved per `resolution-rules.md`) | [peak headroom](system-overview.md#ubiquitous-language) | (UC11) | control-cycle |
@@ -470,13 +470,14 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   stay stored but unused — the mirror is a passive readout, so its behaviour follows its source row
   without a separate rule; the mapping has no mirror sensor of its own (adapter roles never do,
   ADR-0031's scope).
-- **`power_cooldown_min` has no effect while the CapTar capability is absent, but is not among
-  the CapTar-gated rows above.** R11's cooldown-entry acceptance criterion ties `Power`'s only own
-  stop condition to the sustained R3 breach, so without the capability `Power` never stops on its
-  own and this value is never consulted — the same dormant-but-stored shape as the six rows above.
-  It is nonetheless **presented regardless of capability**: R18 AC5 names only the four
-  peak-protection thresholds, the peak-protection option, and the `monthly_peak_external` mapping
-  as CapTar-gated fields of the installation flow, and [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)
+- **`power_cooldown_min` is not among the CapTar-gated rows above, and stays in effect while
+  the CapTar capability is absent.** Without the capability `Power` never stops on its own (R11's
+  cooldown-entry criteria tie its only own stop condition to the sustained R3 breach), but a
+  [fault](system-overview.md#ubiquitous-language) stop still starts the `Power` cooldown whatever
+  the capability (C5, R11), so this value is consulted on every installation. It is therefore
+  **presented regardless of capability**: R18 AC5 names only the four peak-protection
+  thresholds, the peak-protection option, and the `monthly_peak_external` mapping as CapTar-gated
+  fields of the installation flow, and [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)
   puts `power_cooldown_min` on the ungated `power` step, unlike `power_respect_peak` itself, which
   sits on the CapTar-gated `captar` step alongside `Captar`-mode's own cooldown.
 - **Deadline-dependent rows are conditional on the deadline capability (R18).** When

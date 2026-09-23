@@ -59,6 +59,12 @@ def resolve_solar_reserve_active(
     """R9/UC07's cap-activation condition -- shared by `resolve_active_soc_limit`'s
     row 1 and Auto mode-selection's row 4 (E2), per resolution-rules.md's note
     that both are "two separate effects of the same Auto decision."
+
+    The `profile == PROFILE_AUTO` check stays a plain flag rather than an ADR-0017
+    PROFILE_POLICIES registry lookup: ADR-0017's Context section is explicit that SOC-limit
+    coordination (R8/R9) is not part of Profile's decision at all -- SOC-Target keeps owning
+    it, parameterized by a flag Profile has no say in beyond existing, and Auto's row 4 above
+    receives this function's result as an input, not as a Profile-owned object.
     """
     return (
         profile == PROFILE_AUTO

@@ -191,9 +191,9 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 **Acceptance criteria:**
 
-- [ ] For a mode's own stop condition (the post-surplus hold, R1/R2, when smoothed surplus falls below the solar start threshold; the peak-breach grace period, R3, in every mode it can stop — `Solar`/`SolarOnly` at the minimum current during grid fallback/`Hold`, `Captar`, and `Power` while it respects the peak), the charger holds at the minimum charging current for that mode-specific hold period before actually cutting to 0 A — a momentary or quickly-recovering condition is ridden out rather than triggering an immediate stop. This criterion is about *when a mode's own logic decides to stop*; it does not apply to the C4 grid-supply-ceiling clamp (a hard safety limit that cuts immediately) or to reaching the active SOC limit (an intentional stop, not a fluctuating condition).
-- [ ] After charging stops on a mode's own stop condition (the criterion above), it does not restart until that mode's cooldown has fully elapsed (configurable; defaults: 2 minutes for solar modes, 10 minutes for `Captar`, 10 minutes for `Power`). A stop that is not a mode's own stop condition — for example the C4 grid-supply-ceiling clamp cutting to 0 A, reaching the active SOC limit (R7), or a disconnect — starts no cooldown.
-- [ ] `Power`'s only own stop condition is the sustained peak breach at the minimum charging current (R3), so its cooldown can be entered only while the CapTar capability is present (R18) and its peak-protection option is on (R17); with the capability absent or the option off, `Power` never stops on its own and never enters a cooldown.
+- [ ] For a mode's own stop condition (the post-surplus hold, R1/R2, when smoothed surplus falls below the solar start threshold; the peak-breach grace period, R3, in every mode it can stop — `Solar`/`SolarOnly` at the minimum current during grid fallback/`Hold`, `Captar`, and `Power` while it respects the peak), the charger holds at the minimum charging current for that mode-specific hold period before actually cutting to 0 A — a momentary or quickly-recovering condition is ridden out rather than triggering an immediate stop. This criterion is about *when a mode's own logic decides to stop*; it does not apply to the C4 grid-supply-ceiling clamp (a hard safety limit that cuts immediately), to a fault stop (C5, which also cuts immediately) or to reaching the active SOC limit (an intentional stop, not a fluctuating condition).
+- [ ] After charging stops on a mode's own stop condition (the criterion above), it does not restart until that mode's cooldown has fully elapsed (configurable; defaults: 2 minutes for solar modes, 10 minutes for `Captar`, 10 minutes for `Power`). A fault stop (C5) is the one other stop that starts a cooldown: charging does not restart until the cooldown of the mode active when the fault cut the current has fully elapsed, exactly as if that mode's own stop condition had stopped it. Any other stop that is not a mode's own stop condition — for example the C4 grid-supply-ceiling clamp cutting to 0 A, reaching the active SOC limit (R7), or a disconnect — starts no cooldown.
+- [ ] `Power`'s only own stop condition is the sustained peak breach at the minimum charging current (R3), so its own stop condition can start its cooldown only while the CapTar capability is present (R18) and its peak-protection option is on (R17); with the capability absent or the option off, `Power` never stops on its own, and a fault stop (C5, the criterion above) is the only stop that starts the `Power`-mode cooldown.
 - [ ] A cooldown, once started, always runs to completion and is not shortened by a change in conditions — **including a switch of the active mode**. A cooldown is scoped to the stop that started it, not to the mode that happened to be active at the time: it keeps blocking a restart in whichever mode is active when the restart would otherwise happen, for the duration fixed at the moment charging stopped (the stopping mode's own cooldown period, not the incoming mode's). The protection this requirement exists for is a property of the charger and the car, not of the system's internal mode bookkeeping — a restart one control cycle after a stop is equally hard on the car whether the same mode or a different one asks for it — so a mode switch must never be a way out of a cooldown. This matters most under `Auto`, where a mode switch is a routine system-initiated event (deadline-urgency escalation and revert, `resolution-rules.md`) rather than a user action, and would otherwise let a household hovering near the urgency threshold bypass the guarantee entirely. The deliberate trade-off: an urgency escalation (R5) may have to wait out the remainder of a running cooldown — a bounded delay to a best-effort guarantee — rather than this Must-priority hardware protection being defeated. A cooldown that has already elapsed is spent; a later mode switch does not revive it.
 - [ ] In `Solar` and `SolarOnly`, once the has-charged flag is set for the current connection, a start-threshold crossing (from below to at/above the threshold) while dwelling in `Idle` must hold continuously for a configurable restart debounce period (default 1 minute, shared by both modes) before charging actually starts — a single-cycle blip while waiting in `Idle` does not restart charging only to immediately need to stop again. This only gates a *crossing*: if the start threshold is already met at the moment the System enters `Idle` — whether `Idle` was reached because a cooldown elapsed or because the active SOC limit changed — there is no crossing to debounce and charging starts immediately, with no additional wait. Before the has-charged flag is first set — the connection's very first start — `Idle` starts charging as soon as the start threshold is met, with no debounce either. `Captar` and `Power` have no restart debounce, since their own start conditions do not depend on a fluctuating sensor reading.
 - [ ] The has-charged flag is set the first time a solar mode actually starts charging on the current connection, and is cleared only on disconnect or a coordinator restart — not by a mode switch, a cooldown elapsing, or reaching the active SOC limit.
@@ -373,58 +373,116 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 
 ---
 
-## Non-functional requirements
+### R22 — Voltage-aware power conversion
 
-### NF1 — Coordinator executes modes; profiles select them
-
-**Priority:** Must
-**What:** The coordinator executes whichever charging mode is currently active and contains no logic for deciding which mode should be active. Choosing the mode is the responsibility of the active profile.
+**Priority:** Should
+**What:** The system converts between charging current and power using the measured [supply voltage](system-overview.md#ubiquitous-language) when a healthy reading is available, and falls back to a configurable nominal voltage when it is not.
 
 **Acceptance criteria:**
 
-- [ ] The coordinator reads the active mode and dispatches to the matching mode module; it contains no rules that choose or change the active mode.
-- [ ] The active mode is set either by the user / an external source (the `Manual` profile) or by the `Auto` profile (R16).
-- [ ] Changing the active mode changes the coordinator's behaviour within the next control cycle.
+- [ ] When the measured supply voltage is healthy — available and above 0 V — current↔power conversions use that measured value, taking effect within the next control cycle.
+- [ ] When no healthy supply-voltage reading is available, conversions use a user-configurable nominal voltage (default 230 V).
+- [ ] Current-derived thresholds (such as the minimum charging current and any threshold expressed in amperes) remain correct as the measured supply voltage varies.
+
+---
+
+## Non-functional requirements
+
+A non-functional requirement states a quality of the product, never how it is built. NF1, NF2 and NF4 are **retired entries**: each keeps its heading so that every existing citation of it still resolves, carries no criteria of its own, and names the requirement or the decision records that now hold its content. A new citation names that destination, never the retired id.
+
+### NF1 — Coordinator executes modes; profiles select them
+
+**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md).
 
 ---
 
 ### NF2 — One self-contained unit per mode and per profile
 
-**Priority:** Must
-**What:** Each charging mode — and each profile — is implemented in its own self-contained unit with no logic belonging to another.
-
-**Acceptance criteria:**
-
-- [ ] There is exactly one unit of logic per charging mode (`Solar`, `SolarOnly`, `Captar`, `Power`, `Off`) and one per profile (`Manual`, `Auto`).
-- [ ] No mode's or profile's logic references or branches on another mode's or profile's internals.
-- [ ] A mode or profile can be changed, replaced, or added one at a time without altering the others.
+**Retired.** This was a statement of code structure, not a quality of the product. That each charging mode and each profile is its own self-contained unit is decided by [ADR-0002](../adl/0002-domain-and-package-layout.md), [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one quality — a mode or profile changed alone — is now NF3's criterion on changing one mode or profile.
 
 ---
 
 ### NF3 — All device I/O via adapter roles
 
 **Priority:** Must
-**What:** All charging logic reads its inputs and issues its outputs through the integration's own internal adapter roles rather than raw device entities.
+**What:** The system assumes no particular charger, vehicle or meter: every reading it takes and every command it issues crosses an [adapter role](system-overview.md#ubiquitous-language) the installation maps to its own device, so one piece of hardware can be replaced without changing the rest, and each charging mode or profile can likewise be changed on its own.
 
 **Acceptance criteria:**
 
-- [ ] Every sensor value used by the charging logic is read through an adapter role, not a raw upstream entity.
-- [ ] Every command the logic issues — setting charger current, starting/stopping charging, writing the vehicle charge limit — is issued through an adapter role, not a raw device entity or service.
-- [ ] No charging logic references a raw device or third-party integration entity directly, for input or output.
 - [ ] Replacing the underlying charger or vehicle requires re-mapping only the affected adapter role, not changing the charging logic.
+- [ ] Changing, replacing or adding one charging mode or profile leaves the observable behaviour of every other mode and profile unchanged.
+
+How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003-hardware-abstraction-adapters.md).
 
 ---
 
 ### NF4 — Voltage-aware power conversion
 
-**Priority:** Should
-**What:** The system converts between charging current and power using the measured supply voltage when a healthy reading is available, and falls back to a configurable nominal voltage when it is not.
+**Retired.** This was functional behaviour, not a quality of the product; it is now [R22](#r22--voltage-aware-power-conversion).
+
+---
+
+### NF5 — Installable as a Home Assistant custom integration
+
+**Priority:** Must
+**What:** A household installs and updates the system through HACS (the Home Assistant Community Store) as a custom repository, and the integration meets the rules Home Assistant sets for an integration's manifest and structure.
 
 **Acceptance criteria:**
 
-- [ ] When a healthy supply-voltage reading is available, current↔power conversions use that measured value, taking effect within the next control cycle.
-- [ ] When no healthy supply-voltage reading is available, conversions use a user-configurable nominal voltage (default 230 V).
-- [ ] Current-derived thresholds (such as the minimum charging current and any threshold expressed in amperes) remain correct as the measured supply voltage varies.
+- [ ] A household that adds this repository to HACS as a custom integration repository can install any published version whose declared minimum Home Assistant release (NF6) its own release meets, and later update to a newer such version, from HACS alone, without copying or editing any file by hand. Any dashboard card the runtime dashboard (R19) needs beyond those Home Assistant ships is itself installable from HACS and is named in the installation instructions.
+- [ ] Every published version meets Home Assistant's rules for an integration's manifest and file structure.
+
+---
+
+### NF6 — A declared Home Assistant minimum the system runs on
+
+**Priority:** Should
+**What:** The system declares the oldest Home Assistant release it supports, and that declaration is true: on that release, as on the stable release current when a version is published, the system behaves as these requirements state.
+
+**Acceptance criteria:**
+
+- [ ] Every published version declares a minimum Home Assistant release, which HACS shows the household before installing, so a household can see whether its own release is supported.
+- [ ] On the declared minimum release, the integration sets up without error and every acceptance criterion in this document holds — the dashboard included, which renders as R19 states.
+- [ ] On the Home Assistant stable release current when a version is published, the same holds.
+
+---
+
+### NF7 — Local-only operation
+
+**Priority:** Must
+**What:** The system runs entirely inside the household's own Home Assistant instance: it depends on no external service or account, adds no Python package beyond those Home Assistant ships, and sends nothing outside the instance except the notifications the household opts into (R18).
+
+**Acceptance criteria:**
+
+- [ ] With the instance's internet connection unavailable, every functional requirement and constraint in this document holds except delivery of a notification, provided the mapped entities keep reporting. Whether a mapped device itself needs the internet is that device's own integration's concern; the system reaches devices only through the [adapter roles](system-overview.md#ubiquitous-language) the installation maps (NF3).
+- [ ] Installing the system adds no Python package beyond those Home Assistant ships.
+- [ ] The system sends no data out of the instance — no telemetry, usage statistics or error reports. Its only outbound content is the text of a notification it sends to the notification target the household maps, and only while the [notifications capability](system-overview.md#ubiquitous-language) is present (R18). What a mapped entity's own integration does with a value the system writes to it — a cloud-connected charger or vehicle, for instance — is that integration's concern, as in AC1.
+
+---
+
+### NF8 — English and Dutch throughout
+
+**Priority:** Should
+**What:** Every text the system presents to the household is available in English and in Dutch, and is shown in Dutch wherever Dutch is the language that governs it, otherwise in English.
+
+**Acceptance criteria:**
+
+- [ ] Every text the system presents — entity names and state labels, the [configuration flow](system-overview.md#ubiquitous-language)'s step titles, field labels, descriptions and error messages (R20), the dashboard's view and card headings (R19), and every notification's title, message and action-button labels (R5, R12, R13) — exists in both English and Dutch, with no text present in one language and missing from the other. The product name "Smart Charging" is not translated.
+- [ ] State labels and the configuration flow are governed by the viewing user's own language; entity names, the dashboard's headings and the notifications, which are the same for every user of the installation, by Home Assistant's system language, including after that language is changed. Where the governing language is Dutch the text is shown in Dutch; where it is English, or any other language, in English.
+
+---
+
+### NF9 — Owned entity ids independent of the language
+
+**Priority:** Must
+**What:** The entity id of every entity the system owns is the one `entity-catalog.md` lists, whatever language Home Assistant or its users are set to, so an automation or dashboard written against that id works on every installation.
+
+**Acceptance criteria:**
+
+- [ ] On an installation set up in any language, every owned entity registers under exactly the entity id `entity-catalog.md` lists for it, wherever no other entity already holds that id; only its displayed name follows the language (NF8).
+- [ ] Changing Home Assistant's system language, or a user's language, after setup changes no owned entity's id.
+
+How the ids are pinned is decided by [ADR-0013](../adl/0013-stable-owned-entity-object-ids.md).
 
 ---
 
@@ -438,3 +496,22 @@ These are hard rules that must never be violated, regardless of mode or circumst
 | C2 | The vehicle charge limit is changed only while the car is at home; no charge-limit change is made remotely. |
 | C3 | Net grid import is never allowed to exceed the effective peak limit (which rises to the maximum peak only during deadline urgency), and charging targets a safety margin below it. This limit is conditional, not universal — there are exactly two cases in which it does not apply, in both of which net import is bounded only by the grid supply ceiling (C4): (a) the CapTar capability is absent (R18), in which case there is no peak protection to apply in any mode, since R3 does not run at all; (b) the CapTar capability is present but `Power` mode has its peak-protection option disabled (R17), in which case that mode alone may breach the CapTar peak. Outside those two cases it applies in every mode, including `Power` itself while that option is enabled (the default). C4 is the only truly unconditional import limit. |
 | C4 | Net grid import (all household load plus charging) never exceeds the grid supply ceiling; the charger targets a configurable grid safety offset below the ceiling, checked against raw (unsmoothed) readings so a sudden swing cannot trip the main fuse before the next control cycle reacts. This hard limit applies in every mode and under every capability declaration, including `Power` mode with CapTar peak protection disabled (R17) and an installation without the CapTar capability (R18) — the two cases in which it is the only clamp in force (C3). |
+| C5 | When a required [adapter role](system-overview.md#ubiquitous-language) (table below) is unavailable on a control cycle, or an unexpected error interrupts one, the System is in [fault](system-overview.md#ubiquitous-language): that cycle sets the charger current to 0 A — with no hold period first, and with no substitute value guessed for the missing reading — and `sensor.smart_charging_status` reads `Fault`. A fault that cuts a charging current is a fault stop and starts the active mode's cooldown (R11); a fault while the current is already 0 A stops nothing and starts none. The fault ends, and the status returns to `OK`, on the first later control cycle that completes with every required role available and no error, with no further wait. From that cycle charging may resume, but only once any cooldown the fault stop started has elapsed and then only when the active mode's own start condition holds — never resuming without passing through both. An unavailable optional role is never a fault. Each fault, however many cycles it lasts, is logged once at warning level, and its end once at info level (ADR-0007). |
+
+**Required and optional roles (C5).** Which adapter roles a control cycle needs is the one thing
+C5 depends on that differs between modes, so it is stated here once. A role not listed as
+required is optional: its absence — unmapped, or mapped and unavailable — is never a fault, and
+the requirement or rule that reads it governs what its absence means.
+
+| Role | Required | When unavailable |
+| --- | --- | --- |
+| charger status (`charger_status`) | always | fault. A raw charger state the translation table does not list is not an unavailable reading: it resolves to `disconnected` (ADR-0035) |
+| net import (`net_power`) | always | fault |
+| charger power (`charger_power`) | always | fault |
+| charger current, the set-point output (`charger_current`) | always | a write that fails is a fault, and the System still attempts the 0 A write |
+| state of charge (`ev_soc`) | only in `Solar`, `SolarOnly` and `Captar`, and only while the car is connected | fault in those modes. In `Off` and `Power` the cycle runs without it and does not fault (ADR-0042); deadline urgency, which needs it in every mode, establishes nothing on that cycle (R5). While the car is disconnected no mode needs it |
+| grid voltage (`grid_voltage`) | no | the nominal voltage is used (R22) |
+| low-tariff signal (`low_tariff`) | no | when not configured, the low-tariff flag is treated as always active ([low-tariff flag](system-overview.md#ubiquitous-language)); a mapped signal that is unavailable is never a fault |
+| EV battery capacity, sensed (`ev_battery_capacity`) | no | the configured battery capacity is used (R15) |
+| external monthly-peak reading (`monthly_peak_external`) | no | the monthly-peak-demand operand rests on the internally-tracked value alone (R3) |
+| every other role | no | never a fault; governed by the requirement that reads it |

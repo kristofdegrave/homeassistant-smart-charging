@@ -73,7 +73,7 @@ flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3)"]
     Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
-    Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
+    Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — R22)"]
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
     Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule: smoothed net_w,<br/>raw charger_w, supply voltage)"]
@@ -112,7 +112,7 @@ flowchart TD
    of this cycle consumes it, since [solar surplus](system-overview.md#ubiquitous-language) is
    `charger_w − net_w` (R10). Step 1 reads it every cycle solely to surface it as an attribute of
    `sensor.smart_charging_adapter_readings` (ADR-0021), so it stays a raw reading throughout.
-3. **Resolve the supply voltage (NF4).** The coordinator selects the [supply
+3. **Resolve the supply voltage (R22).** The coordinator selects the [supply
    voltage](system-overview.md#ubiquitous-language) used for all amperes↔watts conversions this
    cycle: the measured grid voltage when a healthy reading is available, otherwise the
    configurable nominal voltage (default 230 V). Using the live value keeps current-derived
@@ -236,7 +236,18 @@ limit for step 5.
 ## Edge cases
 
 - **No healthy supply-voltage reading.** Conversions fall back to the configurable nominal
-  voltage (default 230 V) for the cycle (NF4); the cycle still completes.
+  voltage (default 230 V) for the cycle (R22); the cycle still completes.
+- **A required role is unavailable.** When a role C5's table lists as required for the active
+  mode is unavailable, the cycle does not go on to decide a current from the readings it has: it
+  is a [fault](system-overview.md#ubiquitous-language) (C5). Its 0 A write, when it succeeds, is
+  a set charger current like step 8's and emits `ChargerCurrentSet`. An unavailable optional role is not
+  this case: its fallback, like the nominal voltage above, lets the cycle complete. When the
+  status returns to `OK`, and when charging may then resume, are C5's; the cooldown a fault stop
+  starts is R11's.
+- **An unexpected error interrupts the cycle.** Wherever in steps 1–8 it arises — a reading, a
+  mode module, a clamp or the write in step 8 — the cycle is a fault exactly as above (C5): the
+  System always attempts the 0 A write, including when the error is in the write itself. A write
+  that fails sets nothing, so no `ChargerCurrentSet` is emitted for it.
 - **Peak breach persists** (CapTar capability present only). A momentary breach only triggers a clamp, not a stop. The charger
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
@@ -291,7 +302,7 @@ limit for step 5.
 - **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop/restart-debounce invariant in step 7).
 - **R21** — Monthly peak demand tracking (the per-cycle bookkeeping in *Monthly peak demand
   tracking* above; runs whatever the declared capabilities, unlike step 5's clamp).
-- **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
+- **R22** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
 clamp-skip half of AC5 (step 5 is skipped entirely, not merely widened, while the CapTar
@@ -302,7 +313,9 @@ Upholds but does not home: **NF1** (coordinator executes, never chooses the mode
 `resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
 urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
 **NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
-(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R7** (active SOC
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **C5** (the fault
+stop) is enforced on any cycle a required role is unavailable or an error interrupts (*Edge
+cases*). **R7** (active SOC
 limit) is homed in `resolution-rules.md` (the resolution table) and applied by
 [UC09](use-cases/UC09-sync-charge-limit-with-car.md); this document only fixes *when* in the cycle
 the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, step 4) and
