@@ -1,8 +1,8 @@
 """Peak-Demand Tracker (E5, part 2/2). Pure -- no HA imports (ADR-0006/0009).
 
-A sibling module to billing_protection.py (ADR-0010: "the V6 pair ... stays two
-sibling modules ... their relationship is recorded by project-plan task E5
-bundling them, not by a directory"). Deliberately does NOT import
+A sibling module to billing_protection.py (ADR-0010: the V6 pair "stays two sibling modules
+in `engines/`; their relationship is recorded by project-plan task E5 bundling them, not by a
+directory"). Deliberately does NOT import
 signal_conditioning.smooth_net_power -- an engine may not call another engine
 (system-design.md §4 rule 4). The coordinator (M1) is responsible for smoothing
 net_power over its OWN dedicated ~15-minute window (distinct from R10's short

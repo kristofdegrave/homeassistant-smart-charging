@@ -421,9 +421,12 @@ async def async_setup_entry(
         capability_met=solar_available,
     )
 
-    # ADR-0031 config-mirror sensors, in entity-catalog.md's own grouping of its
-    # disabled-by-default rows: the four Capabilities rows, the twelve Installation/Charger/
-    # Peak-protection rows, the 13 EV/Solar rows, and the six Power-mode/Notification rows.
+    # ADR-0031 config-mirror sensors, grouped as entity-catalog.md groups its
+    # disabled-by-default rows where the two coincide: the four Capabilities rows, the 13
+    # EV/Solar rows and the six Power-mode/Notification rows. The twelve
+    # Installation/Charger/Peak-protection entries below are this module's own T2 slice --
+    # ten of them are the catalog's rows under those three headings, plus smoothing_window
+    # (catalog *Core & coordinator*) and power_respect_peak (catalog *`Power` mode*).
     # Note solar_only_strategy/solar_only_midpoint are the SmartChargingConfig field names for
     # the solar_only_rounding_strategy/solar_only_rounding_midpoint_pct catalog ids -- they
     # diverge from the catalog's documented object ids.

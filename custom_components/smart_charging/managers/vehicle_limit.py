@@ -1,6 +1,6 @@
 """Vehicle-Limit Manager (M2, V12) -- bidirectional vehicle charge-limit sync (UC09/R6).
 
-A Manager (system-design.md §4 rule 5 / ADR-0011): triggered by HA state changes, including the
+A Manager (system-design.md §4 rules 1-2 / ADR-0011): triggered by HA state changes, including the
 materialized active-SOC-limit diagnostic sensor's own state changes (the entity the
 ActiveSocLimitChanged event fires alongside -- M2 observes the entity, not the bus event),
 it reads inputs through adapters and writes the vehicle through the vehicle_charge_limit

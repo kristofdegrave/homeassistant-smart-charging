@@ -187,9 +187,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`
         # (and in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry, R3);
         # cleared to `None` only on disconnect (`_dispatch_mode`'s own early branch) -- same
-        # reset trigger as `_mode_state`/`_has_charged` there, per R7's "unplug/replug" resume
-        # condition. Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the
-        # entire point (issue #974).
+        # reset trigger as `_mode_state`/`_has_charged` there, per R7's resume condition for a
+        # car unplugged and replugged. Deliberately NOT reset by
+        # `_reset_mode_state_if_changed` -- that is the entire point (issue #974).
         self._active_cooldown: ActiveCooldown | None = None
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
@@ -341,7 +341,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # Solar power: read every cycle, same as grid voltage, but not yet a control-path
         # operand -- issue #911 wires this role for reading (adapter_readings mirror) only.
-        # R10 AC1's sampling/averaging and #587's real-consumer decision stay deferred.
+        # R10 AC2 reads it raw and never smooths it; #587's real-consumer decision is what
+        # stays deferred.
         await self._read_role(ROLE_SOLAR_POWER)
 
         # Any required role missing -> fault (ADR-0007).
@@ -498,9 +499,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         # ADR-0030/ADR-0032: an optional external monthly-peak reading (DSO/smart-meter),
         # merged with the internally-tracked value into the clamp's operand. Never gated on
-        # captar_available -- R21 AC (tracking runs every cycle regardless of which capabilities
-        # are declared) requires the value to still be tracked and surfaced for observability
-        # even when the CapTar capability is absent, though `_peak_clamp_would_run`'s own gate
+        # captar_available -- R21 AC7 (tracking runs every cycle regardless of which
+        # capabilities are declared) requires the value to still be tracked and surfaced for
+        # observability even when the CapTar capability is absent, though
+        # `_peak_clamp_would_run`'s own gate
         # (R3 AC1, issue #1018) means no charging decision ends up consulting it in that case.
         # monthly_peak_kw itself keeps meaning only the internally-tracked peak: it is
         # never overwritten with the merged value, so a live spike this integration observes
@@ -598,7 +600,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
         # already this cycle's final value (set externally before the cycle runs); under Auto,
         # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
-        # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
+        # later, below) -- one cycle of lag, which is what R16 allows an Auto-driven mode
+        # change ("takes effect within the next control cycle").
         # ADR-0023: SolarStepUpGate computes is_solar_mode_charging internally from these same
         # inputs and mutates its own `.state` in place; callers read `.state` afterward.
         self._step_up_gate.resolve(

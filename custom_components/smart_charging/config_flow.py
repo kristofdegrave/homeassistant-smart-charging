@@ -894,7 +894,8 @@ class SmartChargingConfigFlow(_TableWalkMixin, config_entries.ConfigFlow, domain
     async def async_step_deadline(self, user_input=None):
         """UC12 (topic-step) step 8: the departure-time mapping (+ the home-day carve-out,
         R20 AC5) + reminder-lead threshold, gated on deadline declared this run.
-        No step-local guard: UC12 marks neither field required (R18 AC7)."""
+        No step-local guard: UC12 step 8 marks the external departure-time mapping optional,
+        and alt flow 5c does the same for the home-day one."""
         schema = DEADLINE_MAPPING_SCHEMA
         if self._mode is not FlowMode.RECONFIGURE:
             schema = schema.extend(_deadline_threshold_schema().schema)

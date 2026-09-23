@@ -20,7 +20,7 @@ class TimeReadAdapter(_ReadOnlyAdapter):
     Returns None when the entity is missing/unavailable/unknown OR its native state can't
     be parsed as a time (e.g. a source sensor currently reporting a non-time value like
     "no deadline") -- the ADR-0007 fault signal, same as every other read adapter, and
-    also R14's own "external sensor currently reports no deadline" case.
+    also R14's case of a mapped external sensor that currently resolves to no deadline.
     """
 
     async def read(self) -> time | None:
