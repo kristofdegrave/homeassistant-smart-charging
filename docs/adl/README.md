@@ -29,7 +29,7 @@ template.
 | [0020](0020-skillspector-advisory-pr-scan.md) | Advisory SkillSpector scan feeding the workflow-reviewer AI review | Accepted |
 | [0021](0021-adapter-readings-diagnostic-sensor.md) | Adapter-role readings surfaced via a single diagnostic sensor's attributes | Accepted |
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Accepted |
-| [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Accepted |
+| [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Superseded by ADR-0046 |
 | [0024](0024-deadline-unreachable-cleared-event.md) | Paired clear event to re-arm the deadline-unreachable notice per occasion — its exit table's `ev_soc`-becomes-`None` clause, and the reach of its fault-cycle hold rule, narrowed by [ADR-0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | Accepted |
 | [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Superseded by ADR-0029 |
@@ -52,5 +52,6 @@ template.
 | [0043](0043-scheduled-upstream-drift-watcher.md) | The upstream-drift watcher — a scheduled, issue-writing job over the profile's pin manifest | Accepted |
 | [0044](0044-implementation-spec-lives-in-the-epic-body.md) | The implementation spec lives in its epic's body, and each task carries the sources it was cut from — retiring `docs/plans/**` and the `specs` work type | Accepted |
 | [0045](0045-every-adr-opens-with-a-summary.md) | Every new ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
+| [0046](0046-cycle-composition-rules-and-complexity-guard.md) | The control cycle's composition rules, held by a complexity guard (supersedes [ADR-0023](0023-decompose-run-cycle-into-named-steps.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
