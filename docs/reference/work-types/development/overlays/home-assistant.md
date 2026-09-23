@@ -45,6 +45,12 @@ each miss:
   fallback) and is **Major** if routed to the fault path instead.
 - **Config data/options split (ADR-0005):** mappings, translations and thresholds in data;
   tunables (the control interval) in options; an options change reloads the entry — **Major**.
+- **Cycle composition (ADR-0046):** no function in `coordinator.py` or `coordinator_cycle.py`
+  exceeds ruff's `C901` at `max-complexity = 10` or `PLR0915` at `max-statements = 35` —
+  **Major**, since a cycle regrown past the limits is the shape ADR-0046 exists to stop. A
+  function already over a limit before the change (`_run_cycle`, until its restructure) is a
+  finding only where the change grows it. Taking either rule or either file out of the guard
+  contradicts ADR-0046 and is the same **Major**.
 - **Native naming and package layout (ADR-0004/0002/0010):** owned entities use the
   `smart_charging_` native names, and files sit in the ADR-mandated package (`adapters/`,
   `modes/`, `engines/`, platform files and `coordinator.py`/`entity.py` at root) — **Major**,
