@@ -183,9 +183,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # case) requires a running cooldown to survive exactly that switch, blocking a restart
         # in whichever mode is active when it would otherwise happen, for the duration fixed at
         # the moment charging stopped. `None` means no cooldown is running. Set in
-        # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`
-        # (and in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry, R3);
-        # cleared to `None` only on disconnect (`_dispatch_mode`'s own early branch) -- same
+        # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`;
+        # in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry (R3); and,
+        # since issue #1311, in `_start_fault_stop_cooldown` for a fault stop -- the latter two
+        # both through the shared `_start_cooldown` helper. Cleared to `None` only on disconnect
+        # (`_dispatch_mode`'s own early branch) -- same
         # reset trigger as `_mode_state`/`_has_charged` there, per R7's "unplug/replug" resume
         # condition. Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the
         # entire point (issue #974).
@@ -1002,15 +1004,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         capability (R11 AC3 as amended). A fault while the current in force is already 0 A
         starts none, which is why the gate below is on `_last_commanded_a` -- the value the
         coordinator itself last actually wrote (`_write`'s own field), never `None`-coalesced
-        to 0 -- rather than on `active_mode` or on the mode's own per-mode phase. In practice
-        `Off` never reaches the branch below either, since its own dispatch always commands
-        0 A, so `_last_commanded_a` is already 0 by the next cycle Off is active -- but that is
-        a consequence of the same current-based gate, not a special case for it. `None` (no
-        write has ever happened yet this coordinator instance, e.g. immediately after a
-        restart) is deliberately NOT treated as "already 0 A": a restart's own timers reset
-        regardless (NF14), so a cooldown started here for a charger that may still be
-        delivering current from before the restart is the conservative direction, not a
-        C5 violation (C5 excuses only a current genuinely already at 0 A).
+        to 0 -- rather than on `active_mode` or on the mode's own per-mode phase. `Off`
+        usually reaches the same early return as any other mode already at 0 A, since its own
+        dispatch always commands 0 A -- but not always: `None` (no write has ever happened yet
+        this coordinator instance, e.g. immediately after a restart) is deliberately NOT
+        treated as "already 0 A", so a fault on the very first cycle after a restart while
+        `Off` is active (or the cycle that switches into `Off`) DOES reach `_start_cooldown`
+        and read `Off`'s own `cooldown_minutes` (0.0) -- harmlessly, since an
+        already-elapsed, zero-length `ActiveCooldown` blocks nothing. The `None` case itself:
+        a restart's own timers reset regardless (NF14), so a cooldown started here for a
+        charger that may still be delivering current from before the restart is the
+        conservative direction, not a C5 violation (C5 excuses only a current genuinely
+        already at 0 A).
 
         Called from all three of `_async_update_data`/`_run_cycle`'s fault paths (ADR-0007's
         single fault-handling code path), before the forced 0 A write -- so `_last_commanded_a`
@@ -1498,7 +1503,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         self._last_commanded_a = value
         if self._write_zero_failing:
-            _LOGGER.info("smart_charging recovered: 0 A write during fault succeeded again")
+            _LOGGER.info("smart_charging recovered: charger-current write succeeded again")
             self._write_zero_failing = False
 
     async def _safe_write_zero(self) -> None:

@@ -489,6 +489,77 @@ async def test_should_log_recovery_once_at_info_when_the_zero_write_succeeds_aga
     assert len(recovery_infos) == 1
 
 
+async def test_should_log_recovery_when_the_write_outage_ends_via_an_ordinary_clean_cycle(
+    hass, caplog
+):
+    """C5's last sentence/issue #1311: a write outage that ends through an ORDINARY clean
+    cycle -- both the read-side fault and the write itself recovering together, so the
+    recovery is observed through `_run_cycle`'s normal end-of-cycle `_write(desired)`, never
+    through another faulted `_safe_write_zero` retry -- must still log its recovery once at
+    INFO. Pins `_write_zero_failing`'s clear/log living in `_write` itself (the single write
+    site), not only inside `_safe_write_zero`; a version of the fix that cleared the flag only
+    inside `_safe_write_zero` would leave it stuck `True` here."""
+    # Arrange
+    adapters = _adapters(status=None)  # required-adapter fault -> _run_cycle's own self._write(0.0)
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        await coord._async_update_data()
+    assert coord._write_zero_failing is True
+
+    # Act -- both the read side and the write adapter recover, so this cycle is clean end to
+    # end and never reaches `_safe_write_zero` at all.
+    caplog.clear()
+    coord._adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_CHARGING)
+    coord._adapters[ROLE_CHARGER_CURRENT] = _FakeNumeric(0.0)
+    with caplog.at_level(logging.INFO, logger=coordinator_module.__name__):
+        result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert coord._write_zero_failing is False
+    write_recovery_infos = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.INFO and "recovered" in r.getMessage() and "write" in r.getMessage()
+    ]
+    assert len(write_recovery_infos) == 1
+
+
+async def test_should_start_cooldown_when_a_fault_hits_a_fresh_coordinator_with_no_prior_write(
+    hass,
+):
+    """C5/R11 (issue #1311) negative-of-negative case: `_last_commanded_a` starts `None` (no
+    write has happened yet, e.g. immediately after a restart) and must NOT be treated the same
+    as "already 0 A" -- a fault on the very first cycle a fresh coordinator instance ever runs
+    still starts a cooldown, the conservative direction, since the charger may still be
+    delivering current from before the restart. Pins the `== 0.0` gate in
+    `coordinator.py`'s `_start_fault_stop_cooldown` against a regression to the old
+    `is None or <= 0`."""
+    # Arrange
+    config = _config(solar_cooldown_min=5.0)
+    adapters = _adapters(status=None, net_w=0.0, charger_w=0.0, ev_soc=50.0)  # faults immediately
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    assert coord._last_commanded_a is None  # no write has ever happened yet
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._active_cooldown is not None
+    assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
+
+
 @pytest.mark.parametrize(
     "status,ev_soc,expected_reason",
     [
@@ -2085,7 +2156,7 @@ async def test_should_start_no_cooldown_when_a_fault_hits_while_the_current_is_a
     "power_respect_peak,captar_available",
     [(True, True), (True, False), (False, True), (False, False)],
 )
-async def test_should_start_power_cooldown_on_fault_regardless_of_peak_option_and_captar(
+async def test_should_start_power_cooldown_when_faulted_regardless_of_peak_option_and_captar(
     hass, power_respect_peak, captar_available
 ):
     """R11 AC3 as amended (issue #1311): Power enters the fault-stop cooldown whatever its
@@ -2166,6 +2237,7 @@ async def test_should_start_cooldown_when_ev_soc_missing_is_the_fault(hass):
     # Assert
     assert result.fault is True
     assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+    assert coord._active_cooldown is not None
     assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
 
 
@@ -2196,7 +2268,7 @@ async def test_should_stay_blocked_when_the_fault_stop_cooldown_has_not_yet_elap
     assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
 
 
-async def test_should_resume_via_start_condition_not_pre_fault_current_once_cooldown_elapses(
+async def test_should_resume_when_cooldown_elapses_via_start_condition_not_pre_fault_current(
     hass,
 ):
     """C5/R11 (issue #1311): once the fault stop's cooldown has elapsed, charging resumes only

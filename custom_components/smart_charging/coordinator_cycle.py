@@ -166,11 +166,12 @@ class ActiveCooldown:
     the duration fixed at the moment charging stopped -- not the incoming mode's own duration.
 
     `stop_at` (monotonic seconds, `ctx.now`) and `duration_s` are captured once, at the
-    instant a mode's own stop condition transitions it into `Phase.COOLDOWN` -- `duration_s`
-    is deliberately a plain float copied out of the stopping mode's own `cooldown_minutes` at
-    that instant, not re-read from config later, so a live config change mid-cooldown can
-    never shorten (or lengthen) a cooldown already running, mirroring R11's "not shortened by
-    a change in conditions" acceptance criterion."""
+    instant a mode's own stop condition transitions it into `Phase.COOLDOWN`, or, since issue
+    #1311, a fault stop does (C5/R11 AC2, via `coordinator.py`'s `_start_fault_stop_cooldown`)
+    -- `duration_s` is deliberately a plain float copied out of the stopping mode's own
+    `cooldown_minutes` at that instant, not re-read from config later, so a live config change
+    mid-cooldown can never shorten (or lengthen) a cooldown already running, mirroring R11's
+    "not shortened by a change in conditions" acceptance criterion."""
 
     stop_at: float
     duration_s: float
@@ -201,13 +202,16 @@ class ModeHandler(Protocol):
     """R11/issue #974: this mode's own rapid-cycling cooldown duration -- read by the
     coordinator at the instant it detects a fresh transition into `Phase.COOLDOWN`, to fix
     `ActiveCooldown.duration_s` for the coordinator-scoped cooldown (see coordinator.py's
-    `_active_cooldown` field), and, since issue #1311, by `_start_fault_stop_cooldown` for a
-    fault stop. 0.0 and never read for `Off`, which is never stored in `_mode_state` or
-    transitions through this module's shared cooldown-detection code in `_dispatch_mode`, and
-    whose own commanded current is always 0 A so a fault never starts a cooldown for it either
-    (C5). `Power` is the one mode whose `cooldown_minutes` is non-zero and genuinely read
-    despite never being stored in `_mode_state` -- only by the fault-stop path, since Power
-    has no own stop condition that reaches `_dispatch_mode`'s detection (R11 AC3)."""
+    `_active_cooldown` field), and, since issue #1311, by `_start_cooldown` (called from
+    `_start_fault_stop_cooldown`) for a fault stop. `Off`'s is 0.0, and read only in the one
+    edge case `_start_fault_stop_cooldown`'s own docstring names (a fault immediately after a
+    restart, or on the cycle switching into `Off`, while `_last_commanded_a` is not yet known
+    to be 0 A) -- reading it there starts an already-elapsed, harmless zero-length cooldown,
+    never a genuine stop; `Off` is never stored in `_mode_state` or transitions through this
+    module's shared cooldown-detection code in `_dispatch_mode` either way. `Power` is the one
+    mode whose `cooldown_minutes` is non-zero and genuinely read despite never being stored in
+    `_mode_state` -- only by the fault-stop path, since Power has no own stop condition that
+    reaches `_dispatch_mode`'s detection (R11 AC3)."""
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         """Return (desired_current_a, new_state); does not mutate ctx or state in place."""
@@ -236,8 +240,10 @@ class _OffModeHandler:
 
     is_soc_gated = False
     is_solar_mode = False
-    cooldown_minutes = 0.0  # never read -- Off is never stored in `_mode_state` (design doc
-    # Sec 3.4)
+    cooldown_minutes = 0.0  # never stored in `_mode_state` (design doc Sec 3.4); read only by
+    # `_start_fault_stop_cooldown`'s own restart/mode-switch edge case (issue #1311, see
+    # `ModeHandler.cooldown_minutes`'s own docstring above), which then starts a harmless,
+    # already-elapsed zero-length cooldown -- never a genuine stop
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return 0.0, state
