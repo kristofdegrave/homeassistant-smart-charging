@@ -253,7 +253,7 @@ async def test_monthly_peak_external_empty_string_treated_as_absent(hass):
 
 
 def test_monthly_peak_external_not_excluded_from_adapter_readings():
-    # ADR-0030 D-4: the role is read by _run_cycle, so it must surface on the ADR-0021
+    # ADR-0030: the role is read by _run_cycle, so it must surface on the ADR-0021
     # adapter_readings diagnostic sensor by the existing default.
     assert ROLE_MONTHLY_PEAK_EXTERNAL not in ROLES_ADAPTER_READINGS_EXCLUDED
 

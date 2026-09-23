@@ -1151,7 +1151,7 @@ async def test_uc12_1a_reconfigure_visits_captar_when_present(hass):
 
 
 async def test_reconfigure_captar_step_prefills_the_external_monthly_peak_mapping(hass):
-    """D-7 / the silent-drop bug ADR-0033 names: an entry already carrying
+    """The silent-drop bug ADR-0033 names: an entry already carrying
     CONF_MONTHLY_PEAK_EXTERNAL_ENTITY must render it as the captar step's suggested value on
     reconfigure, and resubmitting the prefilled form unchanged must not null it out. Modeled on
     test_reconfigure_grid_step_prefills_low_tariff_states -- rendering a suggestion is not the

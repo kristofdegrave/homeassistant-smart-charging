@@ -45,7 +45,7 @@ def test_init_seeds_bounds_and_default():
 def test_init_clamps_out_of_range_default_target_current():
     """config_flow validates default_target_current with vol.Coerce(float) only, no
     [min_a, max_a] range -- an out-of-range configured default must clamp here too
-    (ADR-0014 criterion 6, entity-side clamp, distinct from the coordinator's own)."""
+    (ADR-0014, entity-side clamp, distinct from the coordinator's own)."""
     entity = TargetCurrentNumber(entry_id="abc", min_a=6.0, max_a=16.0, default=99.0)
     assert entity.native_value == 16.0
 

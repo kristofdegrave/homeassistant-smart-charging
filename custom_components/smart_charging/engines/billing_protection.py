@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 def resolve_monthly_peak_operand(internal_kw: float, external_kw: float | None) -> float:
     """Merge the internally-tracked monthly peak with an optional external reading
-    (ADR-0030/ADR-0032 D-2): the operand `resolve_effective_peak_limit` clamps against.
+    (ADR-0030/ADR-0032): the operand `resolve_effective_peak_limit` clamps against.
 
     Unmapped (`external_kw is None`) rests on the internal value alone (R3 AC9); mapped, the
     higher of the two wins (R3 AC8) -- the merge only ever raises the operand, it never lowers
