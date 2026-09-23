@@ -39,7 +39,7 @@ Then the System skips this use-case entirely for the evening — no notification
 **1b — Forecast too low to matter** — branches from step 1 (preconditions).
 Given the next-day solar-forecast yield does not exceed the configured threshold
 When the trigger condition would otherwise be met
-Then the System skips this use-case entirely for the evening — no notification is sent. R9's cap would not activate regardless of the driver's answer; tomorrow's flag stays unset, which also means R14's home-day departure override does not apply tomorrow (day-of-week default departure time is used instead) unless an external source has set the flag.
+Then the System skips this use-case entirely for the evening — no notification is sent. R9's cap would not activate regardless of the driver's answer; tomorrow's flag stays unset, which also means R14's home-day departure override does not apply tomorrow (day-of-week default departure time is used instead) unless another mechanism has set it.
 
 **1c — Car never connects before midnight** — branches from the Trigger (the other preconditions in step 1 hold, but the trigger condition never fires).
 Given the notification gating is satisfied, the forecast exceeds the threshold, and no external source has set the flag
@@ -65,7 +65,7 @@ And the evening is skipped terminally, exactly as alternate flows 1a and 1b are:
 Given the System has sent the prompt and is waiting for an answer (state **Pending**)
 When either layer of the gating is subsequently turned off before the driver answers
 Then the System leaves the pending prompt standing and does not withdraw or void it: the gating governs only whether a notification is *sent* (R18 AC11), so the change takes effect from the next control cycle onward (NF11) by suppressing prompts not yet sent, and a prompt already sent is not one of them.
-And an answer given before midnight is honoured exactly as the main success scenario and alternate flow 3a describe — "yes" sets the home-day flag for tomorrow, "no" leaves tomorrow's flag unset — and midnight arriving with no answer still times the prompt out (below).
+And an answer given before midnight is honoured exactly as the main success scenario and alternate flow 3a describe — "yes" sets the home-day flag for tomorrow, "no" leaves tomorrow's flag as it already was — and midnight arriving with no answer still times the prompt out (below).
 And the gating still applies in full to the following evening's prompt, which is not sent while either layer remains off.
 
 **No answer before midnight.**
@@ -123,9 +123,9 @@ sequenceDiagram
             Note over System: Home-day flag set<br/>("HomeDaySet")
         else Driver answers "no" before midnight
             Driver->>System: No
-            Note over System: Tomorrow's flag stays unset<br/>("HomeDayPromptDeclined")
+            Note over System: Tomorrow's flag unchanged<br/>("HomeDayPromptDeclined")
         else Midnight arrives with no answer
-            Note over System: Tomorrow's flag stays unset<br/>("HomeDayPromptTimedOut")
+            Note over System: Tomorrow's flag unchanged<br/>("HomeDayPromptTimedOut")
         end
     end
     Note over System: At midnight tomorrow becomes a new date;<br/>the flag applies to its own date only (R13)
