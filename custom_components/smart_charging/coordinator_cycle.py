@@ -481,10 +481,10 @@ class SolarStepUpGate:
         computation exactly. Mutates self.state in place; callers read .state afterward.
 
         The `profile == PROFILE_AUTO` check stays a plain flag rather than an ADR-0017
-        PROFILE_POLICIES registry lookup (issue #573): ADR-0017's Context section is explicit
-        that SOC-limit coordination (R8/R9) is not part of Profile's decision at all -- it
-        remains the SOC-Target Engine's own job, gated by the active-profile/previous-mode
-        flags the Coordinator already holds, not a `profiles/`-owned object."""
+        PROFILE_POLICIES registry lookup: ADR-0017's Context section is explicit that
+        SOC-limit coordination (R8/R9) is not part of Profile's decision at all -- it remains
+        the SOC-Target Engine's own job, gated by the active-profile/previous-mode flags the
+        Coordinator already holds, not a `profiles/`-owned object."""
         is_solar_mode_charging = (
             profile == PROFILE_AUTO and mode_is_solar and status in CHARGEABLE_STATES
         )
