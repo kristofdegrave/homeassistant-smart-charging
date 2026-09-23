@@ -523,20 +523,23 @@ the Charging Coordinator holds that order in code. [ADR-0046](../adl/0046-cycle-
 decides it, and ADR-0046 is where the options and reasons are. The composition sits below this
 design's altitude, as ADR-0012's decomposition does ([§8.2](#82-adrs-written-after-this-design-0010-0019)):
 it adds no service and no edge, and leaves [§4](#4-static-architecture)'s call directions as
-they are.
+they are. What follows is the composition the cycle is held to. Where today's `_run_cycle` does
+not yet conform, ADR-0046's follow-up restructure is what brings it there.
 
 - **The body is the order, written out.** `_run_cycle` reads top to bottom as the sequence
-  above, one statement per step, in ADR-0006's order. Each step is a named unit of one of two
-  kinds. A **coordinator method** holds a block that does I/O: it reads or writes through
-  Resource Access, or fires an event. A **pure unit** in `coordinator_cycle.py` holds gating
-  logic that keeps state of its own, and is free of Home Assistant. Neither kind is a service
+  above, one statement per step, in ADR-0006's order. Each step is a named unit of one of
+  [ADR-0023](../adl/0023-decompose-run-cycle-into-named-steps.md)'s two kinds, as ADR-0023
+  defines them. A **coordinator method** is an orchestration block that reads adapters or
+  delegates to an engine function, or both; the clamp calls and the floor/cap are of this kind.
+  A **pure unit** in `coordinator_cycle.py` is gating logic around an engine call, free of Home
+  Assistant, whether it keeps state of its own or not. Neither kind is a service
   in [§3](#3-service-catalog). A rule that belongs to a volatility in [§2](#2-volatilities-the-cut)
   stays in that volatility's Engine, and a step calls the Engine. Mode dispatch keeps ADR-0012's
   `ModeHandler` registry lookup.
 - **The body holds nothing else.** It may hold only:
   1. calls to named steps;
   2. the two fault exits, one for a required role being unavailable and one for state of
-     charge (C5). Each is a test of a sentinel, then a literal `return` of the fault result,
+     charge, both of them C5 faults. Each is a test of a sentinel, then a literal `return` of the fault result,
      which that exit's own step builds. The returns stay in the body, so ADR-0007's single
      fault path stays visible;
   3. the two mode-state resets;
@@ -554,25 +557,27 @@ they are.
   and the cycle's clock readings. A value that more than one later step reads is a field on the
   carrier, written by the step that resolves it and never also kept as a local. A result that
   only the next call reads is passed to that call as an argument, the way the desired current
-  passes through the clamps. The one exception is the floor/cap result: it is a local, passed
-  to both the charger write and the result step. Building the carrier advances no state, so it
+  passes through the clamps. There are two exceptions, both locals: the floor/cap result,
+  passed to both the charger write and the result step; and a fault test's sentinel, which
+  only that test reads. Building the carrier advances no state, so it
   can sit above the state-of-charge fault exit.
 - **The effective peak limit is resolved once**, after urgency, on the success path. The
   state-of-charge fault exit resolves the non-urgent limit its own result reports inside its
   own step. No provisional limit exists in the body.
-- **Both resets stay, as two calls.** Each is a separate point at which the active mode can
-  change. The first catches a `Manual` change, which is final before the cycle starts, and it
-  runs before the baseline query reads per-mode state. The second catches an `Auto` change,
-  which is known only once the Profile has resolved the active mode.
-- **No step that advances state crosses a fault exit.** Some state a fault cycle must leave
-  untouched: the last-successful-cycle timestamp (ADR-0021), which a charger write that raises
-  does not advance either; the deadline-unreachable edge (ADR-0024); and the urgency latch.
-  Every step that advances this state stays downstream of both fault exits, where it is today.
+- **Both resets stay, as two calls.** The first catches a `Manual` change and runs before the
+  baseline query. The second catches an `Auto` change and runs once the Profile has resolved
+  the active mode.
+- **No step that advances state crosses a fault exit**, in either direction: what a fault
+  cycle advances today it still advances, and what it leaves untouched it still leaves
+  untouched. The state it leaves untouched is the last-successful-cycle timestamp (ADR-0021),
+  which a charger write that raises does not advance either; the deadline-unreachable edge
+  (ADR-0024); and whether deadline [urgency](../analysis/system-overview.md#ubiquitous-language)
+  was in effect entering the cycle.
 - **An event fires from the coordinator method that calls the resolution it reports.** Where a
   pure unit does the resolving, the method wraps that unit, and the unit never fires the event.
   So `ActiveSocLimitChanged` fires where the active SOC limit is resolved, and the
   `DeadlineUnreachableNotified`/`DeadlineUnreachableCleared` pair fires where urgency is
-  resolved, which is not at the end of the cycle. The Home Assistant event bus stays on the
+  resolved. The Home Assistant event bus stays on the
   coordinator side, the boundary ADR-0012 draws.
 - **A complexity guard holds the body to this shape.** A cyclomatic-complexity limit and a
   statement-count limit cover `coordinator.py` and `coordinator_cycle.py`, and the lint job
