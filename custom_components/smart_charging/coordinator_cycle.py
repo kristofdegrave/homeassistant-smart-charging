@@ -199,11 +199,15 @@ class ModeHandler(Protocol):
 
     cooldown_minutes: float
     """R11/issue #974: this mode's own rapid-cycling cooldown duration -- read by the
-    coordinator only at the instant it detects a fresh transition into `Phase.COOLDOWN`, to
-    fix `ActiveCooldown.duration_s` for the coordinator-scoped cooldown (see coordinator.py's
-    `_active_cooldown` field). 0.0 and never read for Off/Power, neither of which is ever
-    stored in `_mode_state` or transitions through this module's shared cooldown-detection
-    code in `_dispatch_mode`."""
+    coordinator at the instant it detects a fresh transition into `Phase.COOLDOWN`, to fix
+    `ActiveCooldown.duration_s` for the coordinator-scoped cooldown (see coordinator.py's
+    `_active_cooldown` field), and, since issue #1311, by `_start_fault_stop_cooldown` for a
+    fault stop. 0.0 and never read for `Off`, which is never stored in `_mode_state` or
+    transitions through this module's shared cooldown-detection code in `_dispatch_mode`, and
+    whose own commanded current is always 0 A so a fault never starts a cooldown for it either
+    (C5). `Power` is the one mode whose `cooldown_minutes` is non-zero and genuinely read
+    despite never being stored in `_mode_state` -- only by the fault-stop path, since Power
+    has no own stop condition that reaches `_dispatch_mode`'s detection (R11 AC3)."""
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         """Return (desired_current_a, new_state); does not mutate ctx or state in place."""

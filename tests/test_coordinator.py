@@ -384,11 +384,14 @@ async def test_adr0007_logs_fault_once_per_outage_not_per_cycle(hass, caplog):
     assert len(warnings) == 1, "a new outage after a recovery must log again, not stay suppressed"
 
 
-async def test_adr0007_safe_write_zero_swallows_write_exception(hass, caplog):
+async def test_should_swallow_and_warn_not_raise_when_the_zero_write_itself_fails_during_a_fault(
+    hass, caplog
+):
     """ADR-0007's fault path must not itself raise if the write-back adapter is unavailable:
     _safe_write_zero's try/except must swallow the write exception (logged once at WARNING,
     C5's last sentence/issue #1311 -- not an ERROR with a traceback) rather than let it escape
     _async_update_data (issue #504)."""
+    # Arrange
     adapters = _adapters(status=STATE_CHARGING)
     adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()  # forces the outer cycle-exception fault path
     adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
@@ -399,20 +402,31 @@ async def test_adr0007_safe_write_zero_swallows_write_exception(hass, caplog):
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
 
+    # Act
     with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
         result = await coord._async_update_data()  # must not raise
 
+    # Assert
     assert result.fault is True
     assert result.commanded_current == 0.0
-    assert _FAULT_WRITE_SWALLOW_LOG in caplog.text
+    write_warnings = [
+        r
+        for r in caplog.records
+        if _FAULT_WRITE_SWALLOW_LOG in r.getMessage() and r.levelno == logging.WARNING
+    ]
+    assert len(write_warnings) == 1
+    assert write_warnings[0].exc_info is None, "no traceback -- WARNING, not _LOGGER.exception"
 
 
-async def test_adr0007_safe_write_zero_logs_the_write_failure_once_per_outage(hass, caplog):
+async def test_should_log_the_zero_write_failure_once_per_outage_when_it_keeps_failing(
+    hass, caplog
+):
     """C5's last sentence/issue #1311: while the 0 A write itself keeps failing, cycle after
     cycle, `_safe_write_zero` must log its WARNING once for the whole outage, not once per
     cycle -- the same once-per-outage discipline `_log_fault`/`_was_faulted` already give the
     read-side fault, but for a distinct piece of state (`_write_zero_failing`), since the write
     can keep failing for cycles after the read-side fault that first triggered it recovers."""
+    # Arrange
     adapters = _adapters(status=STATE_CHARGING)
     adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()
     adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
@@ -423,40 +437,51 @@ async def test_adr0007_safe_write_zero_logs_the_write_failure_once_per_outage(ha
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
 
+    # Act
     with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
         for _ in range(3):  # same write outage, three consecutive cycles
             result = await coord._async_update_data()
             assert result.fault is True
 
-    write_warnings = [r for r in caplog.records if _FAULT_WRITE_SWALLOW_LOG in r.getMessage()]
+    # Assert
+    write_warnings = [
+        r
+        for r in caplog.records
+        if _FAULT_WRITE_SWALLOW_LOG in r.getMessage() and r.levelno == logging.WARNING
+    ]
     assert len(write_warnings) == 1, "expected one WARNING for the whole outage, not one per cycle"
 
 
-async def test_adr0007_safe_write_zero_logs_recovery_once_at_info(hass, caplog):
+async def test_should_log_recovery_once_at_info_when_the_zero_write_succeeds_again(hass, caplog):
     """C5's last sentence/issue #1311: once the 0 A write itself starts succeeding again, that
     recovery is logged once at INFO -- the write-failure half of the once-per-outage discipline,
-    mirroring `_was_faulted`'s own recovery INFO log for the read side."""
+    mirroring `_was_faulted`'s own recovery INFO log for the read side. Runs the write-recovery
+    cycle twice to prove "once", not merely "at INFO": a second successful write while the read
+    side is still faulted must not log a second recovery."""
+    # Arrange
     adapters = _adapters(status=STATE_CHARGING)
     adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()
-    raising_write = _RaisingWriteNumeric()
-    adapters[ROLE_CHARGER_CURRENT] = raising_write
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
     )
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
-
     with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
         await coord._async_update_data()
     assert coord._write_zero_failing is True
 
+    # Act
     caplog.clear()
     coord._adapters[ROLE_CHARGER_CURRENT] = _FakeNumeric(0.0)  # the write recovers
     with caplog.at_level(logging.INFO, logger=coordinator_module.__name__):
-        result = await coord._async_update_data()
+        first = await coord._async_update_data()
+        second = await coord._async_update_data()  # still faulted on read; write keeps succeeding
 
-    assert result.fault is True  # the read-side fault (_RaisingNumeric) is still active
+    # Assert
+    assert first.fault is True  # the read-side fault (_RaisingNumeric) is still active
+    assert second.fault is True
     assert coord._write_zero_failing is False
     recovery_infos = [
         r for r in caplog.records if r.levelno == logging.INFO and "recovered" in r.getMessage()
@@ -1995,11 +2020,14 @@ async def test_disconnect_clears_active_cooldown(hass):
     assert result.commanded_current == 16.0
 
 
-async def test_fault_stop_starts_solar_cooldown_and_leaves_charging_state(hass):
+async def test_should_start_solar_cooldown_and_leave_charging_state_when_a_fault_cuts_the_current(
+    hass,
+):
     """C5/R11 (issue #1311): a fault that cuts a charging current is a fault stop and starts
     the active mode's own cooldown, exactly as that mode's own stop condition would, and takes
     the mode out of its charging state -- both the coordinator-scoped `_active_cooldown` and
     Solar's own per-mode `Phase.COOLDOWN`."""
+    # Arrange
     config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
     charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -2011,11 +2039,12 @@ async def test_fault_stop_starts_solar_cooldown_and_leaves_charging_state(hass):
     assert result.commanded_current > 0.0
     assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
 
-    # Required-adapter fault (coordinator.py's `_read_cycle_inputs`-is-None branch) cuts the
-    # current in force (>0) to 0 A.
+    # Act -- required-adapter fault (coordinator.py's `_read_cycle_inputs`-is-None branch)
+    # cuts the current in force (>0) to 0 A.
     coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     result = await coord._async_update_data()
 
+    # Assert
     assert result.fault is True
     assert result.commanded_current == 0.0
     assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
@@ -2023,53 +2052,76 @@ async def test_fault_stop_starts_solar_cooldown_and_leaves_charging_state(hass):
     assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
 
 
-async def test_fault_stop_starts_no_cooldown_when_current_already_zero(hass):
-    """C5/R11: a fault while the current in force is already 0 A starts no cooldown."""
+async def test_should_start_no_cooldown_when_a_fault_hits_while_the_current_is_already_zero(hass):
+    """C5/R11: a fault while the current in force is already 0 A starts no cooldown. Uses a
+    SOC-gated mode (Solar, idling below its start threshold) rather than `Off`, so the
+    assertion actually exercises the `_last_commanded_a`-based gate
+    (`coordinator.py`'s `_start_fault_stop_cooldown`) -- a mode-based gate (e.g. "skip only for
+    `Off`") would fail this test, since Solar's own `solar_cooldown_min` is non-zero here."""
+    # Arrange
     config = _config()
-    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    idle = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)  # 0 W surplus
     coord = SmartChargingCoordinator(
-        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+        hass, adapters=idle, config=config, interval_s=30, store=_FakeStore({})
     )
-    coord.active_mode = MODE_OFF
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
     result = await coord._async_update_data()
     assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
     assert coord._active_cooldown is None
 
+    # Act
     coord._adapters = _adapters(status=None, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     result = await coord._async_update_data()
 
+    # Assert
     assert result.fault is True
     assert result.commanded_current == 0.0
     assert coord._active_cooldown is None
 
 
-async def test_fault_stop_starts_power_cooldown_regardless_of_peak_option_and_captar(hass):
+@pytest.mark.parametrize(
+    "power_respect_peak,captar_available",
+    [(True, True), (True, False), (False, True), (False, False)],
+)
+async def test_should_start_power_cooldown_on_fault_regardless_of_peak_option_and_captar(
+    hass, power_respect_peak, captar_available
+):
     """R11 AC3 as amended (issue #1311): Power enters the fault-stop cooldown whatever its
     `power_respect_peak` option and the CapTar capability -- unlike Power's own stop condition
     (R3's sustained peak breach), which can only ever start a cooldown while both are true."""
-    config = _config(power_cooldown_min=9.0, power_respect_peak=False)
-    config = dataclasses.replace(config, captar_available=False)
+    # Arrange
+    config = dataclasses.replace(
+        _config(power_cooldown_min=9.0, power_respect_peak=power_respect_peak),
+        captar_available=captar_available,
+    )
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
     result = await coord._async_update_data()
     assert result.commanded_current == 10.0
 
+    # Act
     coord._adapters = _adapters(status=None, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     result = await coord._async_update_data()
 
+    # Assert
     assert result.fault is True
+    assert result.commanded_current == 0.0
     assert coord._active_cooldown is not None
     assert coord._active_cooldown.duration_s == config.power_cooldown_min * 60
 
 
-async def test_fault_stop_via_cycle_exception_also_starts_cooldown(hass):
+async def test_should_start_cooldown_when_the_cycle_exception_path_is_the_fault(hass):
     """C5/ADR-0007 (issue #1311): the exception path in `_async_update_data` is also a fault
     stop and starts the active mode's cooldown, exactly like the two `_run_cycle` early-return
     fault paths."""
+    # Arrange
     config = dataclasses.replace(_config(), captar_cooldown_min=6.0)
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -2082,18 +2134,21 @@ async def test_fault_stop_via_cycle_exception_also_starts_cooldown(hass):
     assert result.commanded_current > 0.0
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
 
+    # Act
     adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()  # forces _async_update_data's except path
     result = await coord._async_update_data()
 
+    # Assert
     assert result.fault is True
     assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
     assert coord._active_cooldown is not None
     assert coord._active_cooldown.duration_s == config.captar_cooldown_min * 60
 
 
-async def test_fault_stop_via_ev_soc_missing_also_starts_cooldown(hass):
+async def test_should_start_cooldown_when_ev_soc_missing_is_the_fault(hass):
     """C5/R11 (issue #1311): the ev_soc-missing early return in `_run_cycle` is also a fault
     stop and starts the active mode's cooldown."""
+    # Arrange
     config = _config(solar_cooldown_min=4.0)
     charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -2104,20 +2159,50 @@ async def test_fault_stop_via_ev_soc_missing_also_starts_cooldown(hass):
     result = await coord._async_update_data()
     assert result.commanded_current > 0.0
 
+    # Act
     coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=None)
     result = await coord._async_update_data()
 
+    # Assert
     assert result.fault is True
     assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
     assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
 
 
-async def test_charging_resumes_after_fault_stop_only_once_cooldown_elapses_and_via_start_condition(
+async def test_should_stay_blocked_when_the_fault_stop_cooldown_has_not_yet_elapsed(hass):
+    """C5/R11 (issue #1311): once a fault stop starts the cooldown, charging stays off even
+    once the fault itself clears and ample surplus returns, until the cooldown elapses."""
+    # Arrange
+    config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    await coord._async_update_data()
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+
+    # Act -- fault clears and ample surplus (above the start threshold) returns, but
+    # essentially no wall-clock time has passed since the fault stop.
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=1000.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+
+
+async def test_should_resume_via_start_condition_not_pre_fault_current_once_cooldown_elapses(
     hass,
 ):
-    """C5/R11 (issue #1311): charging resumes only once the fault stop's cooldown has elapsed,
-    and then only through the active mode's own start condition -- never straight back to the
-    current in force before the fault."""
+    """C5/R11 (issue #1311): once the fault stop's cooldown has elapsed, charging resumes only
+    through the active mode's own start condition -- never straight back to the current in
+    force before the fault."""
+    # Arrange
     config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
     charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -2128,34 +2213,58 @@ async def test_charging_resumes_after_fault_stop_only_once_cooldown_elapses_and_
     result = await coord._async_update_data()
     pre_fault_current = result.commanded_current
     assert pre_fault_current > 0.0
-
     coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
     await coord._async_update_data()
-    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+    # Lower (but still above-threshold) surplus, and the cooldown not yet elapsed -- see
+    # test_should_stay_blocked_when_the_fault_stop_cooldown_has_not_yet_elapsed above.
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=1000.0, ev_soc=50.0)
+    await coord._async_update_data()
 
-    # Fault clears and ample surplus (above the start threshold, but lower than the pre-fault
-    # reading) returns -- the cooldown has not elapsed (essentially no wall-clock time passed),
-    # so charging must stay off.
-    lower_surplus = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=1000.0, ev_soc=50.0)
-    coord._adapters = lower_surplus
-    result = await coord._async_update_data()
-    assert result.fault is False
-    assert result.commanded_current == 0.0
-    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
-
-    # Age both the coordinator-scoped cooldown and Solar's own per-mode Cooldown phase into
-    # the past, simulating the cooldown having elapsed.
+    # Act -- age both the coordinator-scoped cooldown and Solar's own per-mode Cooldown
+    # phase into the past, simulating the cooldown having elapsed.
     coord._active_cooldown = dataclasses.replace(coord._active_cooldown, stop_at=float("-inf"))
     coord._mode_state[MODE_SOLAR] = dataclasses.replace(
         coord._mode_state[MODE_SOLAR], phase_started_at=float("-inf")
     )
     result = await coord._async_update_data()
 
-    # Resumes through Solar's own start condition, computed from THIS cycle's (lower)
-    # surplus -- not restored straight back to the higher pre-fault current.
+    # Assert -- resumes through Solar's own start condition, computed from THIS cycle's
+    # (lower) surplus -- not restored straight back to the higher pre-fault current.
     assert result.commanded_current > 0.0
     assert result.commanded_current != pre_fault_current
     assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+
+
+async def test_should_stay_off_when_the_cooldown_elapses_but_the_start_condition_is_not_met(hass):
+    """C5/R11 (issue #1311) negative case: elapsing the cooldown alone must not resume
+    charging -- the mode's own start condition (surplus at/above the start threshold) still
+    has to hold, ruling out an implementation that resumes unconditionally once the cooldown
+    elapses regardless of current conditions."""
+    # Arrange
+    config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    await coord._async_update_data()
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    await coord._async_update_data()
+
+    # Act -- age the cooldown into the past, but surplus stays below the start threshold
+    # (net_w == charger_w -> 0 W surplus) on the recovery cycle.
+    coord._active_cooldown = dataclasses.replace(coord._active_cooldown, stop_at=float("-inf"))
+    coord._mode_state[MODE_SOLAR] = dataclasses.replace(
+        coord._mode_state[MODE_SOLAR], phase_started_at=float("-inf")
+    )
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
 
 
 async def test_power_respects_peak_by_default(hass):

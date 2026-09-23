@@ -414,13 +414,16 @@ def test_power_mode_handler_reads_target_current_fresh_each_call():
     assert second == 16.0
 
 
-def test_power_mode_handler_cooldown_minutes_reads_config():
+def test_should_read_power_cooldown_min_off_config_when_cooldown_minutes_is_read():
     """R11 AC3/C5 (issue #1311): unlike Off (always 0.0, never read), Power's own
     `cooldown_minutes` now reads `power_cooldown_min` off config -- the coordinator's
     fault-stop cooldown start is its only reader (design doc Sec 3.4; Power is never stored in
     `_mode_state` or reached by `_dispatch_mode`'s own generic cooldown-start detection)."""
+    # Arrange
     config = _config(power_cooldown_min=9.0)
     handler = _PowerModeHandler(config, lambda: 10.0)
+
+    # Act / Assert
     assert handler.cooldown_minutes == 9.0
 
 
