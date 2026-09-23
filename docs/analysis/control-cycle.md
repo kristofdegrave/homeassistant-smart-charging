@@ -191,7 +191,7 @@ flowchart TD
 7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
    the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
-   mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion —
+   mode-specific cooldown has elapsed, a cooldown in progress always runs to completion —
    across a switch of the active mode included (edge case below), and ended early only by a
    disconnect, a restart or a reload (R11) —
    and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
