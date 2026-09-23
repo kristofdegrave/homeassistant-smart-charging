@@ -357,9 +357,10 @@ next cycle the required current above governs normally again.
   backstop above bounds this rather than special-casing it: the user's own mode choice is not
   second-guessed (R16). The slack test bounds it further than the old baseline comparison did: such
   a session now spends only the run-up to the deadline in this state, not the whole night.
-- **Not preserved across a restart.** Engagement is an edge — the moment a deadline elapses — so a
-  restart spanning that moment leaves no hold, and the ordinary next-occurrence resolution governs.
-  Deliberate: no analysis-layer state survives a restart (`entity-catalog.md`).
+- **Not preserved across a restart or a reload.** The pursued occurrence is among what starts
+  afresh after either (NF14), so neither leaves a hold, and the ordinary next-occurrence
+  resolution governs. Engagement is an edge — the moment a deadline elapses — so a hold lost this
+  way is never re-derived.
 
 **Satisfies:** R5, R15 · **Consumed by:** the effective-peak-limit rule below, Auto mode-selection
 below, the active-SOC-limit rule above (the *Solar-reserve cap* row's own preconditions), UC05, UC07.
