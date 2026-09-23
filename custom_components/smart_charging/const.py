@@ -363,12 +363,18 @@ STEP_VEHICLE = "vehicle"  # UC12 step 4
 STEP_POWER = "power"  # UC12 step 5
 STEP_NOTIFICATIONS = "notifications"  # UC12 step 9
 
+# NF8 AC1: the product name is never translated -- the one exception among the dashboard/
+# notification text NF8 otherwise governs. Shared here so `dashboard.py`'s dashboard/view
+# title and `notification_manager.py`'s notify title state the exception once, not as two
+# independent literals.
+PRODUCT_NAME = "Smart Charging"
+
 # NF8: dashboard headings and notification texts, composed by this integration rather than
 # an entity name or config-flow field, so none of strings.json's other (hassfest-schema-fixed)
 # categories fits them -- they live under the flat "common" category instead
-# (helpers/translation.py's gen_strings_schema; system_text.py reads it back). Home Assistant's
-# *system* language governs both surfaces (NF8 AC2), read via `async_get_translations`
-# (system_text.py), never the viewing user's own language.
+# (script/hassfest/translations.py's gen_strings_schema; system_text.py reads it back). Home
+# Assistant's *system* language governs both surfaces (NF8 AC2), read via
+# `async_get_translations` (system_text.py), never the viewing user's own language.
 TRANSLATION_CATEGORY_COMMON = "common"
 KEY_DASHBOARD_SECTION_CHARGING_STATUS = "dashboard_section_charging_status"
 KEY_DASHBOARD_SECTION_POWER_FLOW = "dashboard_section_power_flow"

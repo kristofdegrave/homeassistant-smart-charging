@@ -47,13 +47,15 @@ from .const import (
     OWNED_SUFFIX_PROFILE,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     OWNED_SUFFIX_TIME_TO_FULL,
+    PRODUCT_NAME,
     PROFILE_MANUAL,
 )
 from .system_text import async_get_system_text
 
 # The product name -- deliberately never translated (NF8 AC1): it is a brand name, not
-# system-composed text, the same carve-out `_PROMPT_TITLE` takes in notification_manager.py.
-_TITLE = "Smart Charging"
+# system-composed text, the same carve-out notification_manager.py's own `_PROMPT_TITLE`
+# takes. `const.PRODUCT_NAME` is the one literal both modules read, not two independent ones.
+_TITLE = PRODUCT_NAME
 
 # NF8's English fallback for the headings below -- also `build_dashboard_config`'s default
 # when no `headings` is given, matching NF8 AC2's "English otherwise" for a caller that has

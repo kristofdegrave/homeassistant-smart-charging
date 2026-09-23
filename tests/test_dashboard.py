@@ -91,40 +91,35 @@ def test_the_deadline_view_is_titled_deadline_with_one_departure_times_section()
     assert [s["title"] for s in view["sections"]] == ["Departure times"]
 
 
-def test_headings_come_from_the_given_translations_dict_not_the_product_name():
-    """NF8: every view/card/section heading follows the given translations; the product
-    name (view/dashboard title "Smart Charging") is never translated (NF8 AC1)."""
+def test_should_use_the_given_translations_for_every_heading_when_headings_are_given():
+    """NF8: every view/card/section heading follows the given translations dict."""
+    # Act
     config = build_dashboard_config(_entry(), _NL_HEADINGS)
 
+    # Assert
     overview = _view(config, "overview")
     assert [s["title"] for s in overview["sections"]] == [
         "Laadstatus",
         "Vermogensstroom",
         "Actuele instellingen",
     ]
-    assert overview["title"] == "Smart Charging"
-    assert config["title"] == "Smart Charging"
-
     deadline = _view(config, "deadline")
     assert deadline["title"] == "Vertrekdeadline"
     assert deadline["sections"][0]["title"] == "Vertrektijden"
-
     # The auto-entities "Runtime settings" card's own inner title tracks the same key.
     runtime_cards = _cards(config, "Actuele instellingen")
     assert runtime_cards[1]["card"]["title"] == "Actuele instellingen"
 
 
-def test_headings_default_to_english_when_none_are_given():
-    """NF8 AC2's "English otherwise" default -- exercised by every other test in this module,
-    which calls `build_dashboard_config` with no `headings` at all."""
-    config = build_dashboard_config(_entry())
+def test_should_keep_the_product_name_untranslated_when_headings_are_given():
+    """The product name (dashboard/overview-view title "Smart Charging") is never
+    translated (NF8 AC1), even though every heading around it follows `_NL_HEADINGS`."""
+    # Act
+    config = build_dashboard_config(_entry(), _NL_HEADINGS)
 
-    overview = _view(config, "overview")
-    assert [s["title"] for s in overview["sections"]] == [
-        "Charging status",
-        "Power flow",
-        "Runtime settings",
-    ]
+    # Assert
+    assert config["title"] == "Smart Charging"
+    assert _view(config, "overview")["title"] == "Smart Charging"
 
 
 def test_the_mode_entity_is_rendered_by_exactly_the_gated_card_not_the_auto_entities_list():
@@ -308,22 +303,36 @@ async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_p
     assert panel.sidebar_title == "Smart Charging"
 
 
-async def test_register_dashboard_uses_dutch_headings_when_the_system_language_is_dutch(
+async def test_should_write_dutch_headings_to_the_dashboard_yaml_when_the_system_language_is_dutch(
     hass, tmp_path
 ):
     """NF8 AC2: the dashboard's headings follow Home Assistant's system language, not a
-    viewing user's."""
+    viewing user's -- through the real translation loader and the real written YAML file,
+    not a hand-fed dict. Checks all five headings (not only the first section's), so a
+    heading left English in `translations/nl.json` alone would fail this test even though
+    the generic key-parity guard in test_translations.py would not catch it."""
+    # Arrange
     hass.config.language = "nl"
     assert await async_setup_component(hass, "lovelace", {})
     entry = _entry()
 
+    # Act
     await async_register_dashboard(hass, entry)
 
+    # Assert
     written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
     config = yaml.safe_load(written)
     overview = _view(config, "overview")
-    assert overview["sections"][0]["title"] == "Laadstatus"
+    assert [s["title"] for s in overview["sections"]] == [
+        "Laadstatus",
+        "Vermogensstroom",
+        "Actuele instellingen",
+    ]
+    deadline = _view(config, "deadline")
+    assert deadline["title"] == "Vertrekdeadline"
+    assert deadline["sections"][0]["title"] == "Vertrektijden"
     # The product name stays untranslated even in a Dutch-language install (NF8 AC1).
+    assert config["title"] == "Smart Charging"
     assert overview["title"] == "Smart Charging"
 
 

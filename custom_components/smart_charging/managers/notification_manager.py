@@ -61,6 +61,7 @@ from ..const import (
     KEY_NOTIFICATION_HOME_DAY_ACTION_YES,
     KEY_NOTIFICATION_HOME_DAY_PROMPT_MESSAGE,
     OWNED_SUFFIX_HOME_DAY,
+    PRODUCT_NAME,
     ROLE_CHARGER_STATUS,
     ROLE_HOME_DAY_EXTERNAL,
     ROLE_NOTIFICATION_TARGET,
@@ -73,11 +74,13 @@ _LOGGER = logging.getLogger(__name__)
 
 # The product name -- deliberately never translated (NF8 AC1), unlike the message and the
 # action-button labels below, which follow HA's system language via `async_get_system_text`
-# (strings.json's `common` category, KEY_NOTIFICATION_* in const.py). UC08 main success
-# scenario step 2's actionable prompt text: no analysis doc catalogues an exact English
-# wording either, so it (and the deadline notice below) stay this Manager's own presentation
-# detail, not a cited anchor -- only their *existence* in both languages is NF8's requirement.
-_PROMPT_TITLE = "Smart Charging"
+# (strings.json's `common` category, KEY_NOTIFICATION_* in const.py). `const.PRODUCT_NAME` is
+# the one literal both this module and dashboard.py read, not two independent ones. UC08 main
+# success scenario step 2's actionable prompt text: no analysis doc catalogues an exact
+# English wording either, so it (and the deadline notice below) stay this Manager's own
+# presentation detail, not a cited anchor -- only their *existence* in both languages is
+# NF8's requirement.
+_PROMPT_TITLE = PRODUCT_NAME
 
 
 class NotificationManager:
@@ -250,8 +253,8 @@ class NotificationManager:
         if notify_adapter is None:
             return
         self._deadline_unreachable_notified = True
-        text = await async_get_system_text(self._hass)
         try:
+            text = await async_get_system_text(self._hass)
             await notify_adapter.write(
                 NotificationRequest(
                     message=text[KEY_NOTIFICATION_DEADLINE_UNREACHABLE_MESSAGE].format(
@@ -260,7 +263,10 @@ class NotificationManager:
                     title=_PROMPT_TITLE,
                 )
             )
-        except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors async_evaluate)
+        except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors async_evaluate);
+            # the translation lookup is inside this try too, so a lookup failure gets the same
+            # "not retried" warning as a delivery failure, rather than escaping this listener
+            # silently while the latch above still suppresses the notice for the occasion.
             _LOGGER.warning(
                 "Failed to deliver the deadline-unreachable notice (not retried -- the "
                 "notify-once latch is already set): %s",
