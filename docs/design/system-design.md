@@ -41,7 +41,9 @@ explicit for the first time — the package home for the cross-cutting Engines, 
 cross-Manager coordination as domain-event publish/subscribe rather than direct calls — were
 surfaced here as follow-ups and have since been **decided** by ADR-0010 and ADR-0011 respectively;
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles those and the later ADRs
-(0010–0019) that refine this design's mechanisms.
+(0010–0019) that refine this design's mechanisms, and
+[§8.3](#83-adrs-written-after-0019) accounts for every ADR after 0019 — each reconciled, or
+listed as out of scope because it decides process or test method rather than product.
 
 ---
 
@@ -235,9 +237,12 @@ takes a forbidden Client→Engine edge.
   protocol (`read()` / `write(value)`), ADR-0003: `charger_current` (r/w), `charger_power`,
   `charger_status` (with the raw→canonical translation table), `ev_soc`, `ev_battery_capacity`,
   `vehicle_charge_limit` (r/w), `car_home`, `net_power`, `grid_voltage`, `solar_power`,
-  `solar_forecast`, `low_tariff`, `departure_external`, `home_day_external`. Each isolates one
-  upstream entity's access mechanics — nothing more. A role returning `None` is the fault signal
-  ADR-0007 funnels into the C1/R11 stop path (grid voltage excepted, NF4).
+  `solar_forecast`, `low_tariff`, `departure_external`, `home_day_external`,
+  `monthly_peak_external` (ADR-0030). Each isolates one upstream entity's access mechanics —
+  nothing more. A *required* role returning `None` is the fault signal ADR-0007 funnels into the
+  C1/R11 stop path; which roles are required, per mode, and what an unavailable optional role
+  falls back to instead is [C5](../analysis/requirements.md#constraints)'s role table (grid
+  voltage's NF4 fallback among them).
 - **Notification Resource Access (V11)** — reaches the HA `notify` service / mobile app to deliver
   a message and receive an actionable response.
 - **Config/State Store access (V13)** — reads config-entry **data** (role mappings, translation
@@ -369,9 +374,9 @@ flowchart TD
    transition the consumer could not observe without duplicating the producer's computation;
    re-derive it by observing the adapter iff the trigger is an external HA state the consumer
    already reaches through Resource Access.** That leaves exactly **two** genuine Manager→Manager
-   edges as of ADRs 0001–0019 (see [§8.2](#82-adrs-written-after-this-design-0010-0019)'s scope
-   note), to which ADR-0024 later adds a third, paired with the first; all three are event-based
-   and all three are drawn above:
+   edges as of ADRs 0001–0019 (see [§8.2](#82-adrs-written-after-this-design-0010-0019)), to
+   which ADR-0024 later adds a third ([§8.3](#83-adrs-written-after-0019)), paired with the
+   first; all three are event-based and all three are drawn above:
    - `DeadlineUnreachableNotified` (UC05) — the Coordinator (via the Deadline Engine's
      determination) publishes it; the Notification Manager subscribes to deliver R5's notice. It
      re-fires on every cycle the condition holds, which is what makes the paired clear below
@@ -684,7 +689,8 @@ Every requirement is reachable from at least one service:
 [§8.1](#81-adrs-that-predate-this-design-0001-0009) reconciles the nine ADRs written *before* this
 design (the inverted order [§1](#1-relationship-to-the-analysis-docs-and-to-the-adrs) describes);
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles the ten written *after* it, which
-refine this design's mechanisms in the order CLAUDE.md prescribes.
+refine this design's mechanisms in the order CLAUDE.md prescribes;
+[§8.3](#83-adrs-written-after-0019) accounts for every ADR after 0019.
 
 ### 8.1 ADRs that predate this design (0001-0009)
 
@@ -732,7 +738,65 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 | 0018 | Entity-to-coordinator access via RA3's Store (pull read, Manager-initiated write) | **Formalizes this design's own mechanism; supersedes 0016/0014** | Adopts exactly what the static diagram (`Owned --> Store`), rule 1, and the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence already show: the Coordinator reads all eight owned control-entity values through the Store each cycle, and a Manager writing an owned entity on the user's behalf writes through the same Store. It accepts the one-cycle-latency consequence this design already accepted, leaves ADR-0006's step order intact (the read step gains a source), and confirms the Vehicle-Limit and Notification Managers' Store writes are Resource Access, not cross-Manager coordination under rule 5. |
 | 0019 | Package home for the RA3 Store (`adapters/store.py`) | **Extends ADR-0002/0010/0015; consistent** | Cites this document's own V1/V11/V13 grouping as decisive: the Store is Resource Access, so it joins the hardware roles and `adapters/notify.py` in `adapters/`. It relaxes ADR-0002/0003's "one class per role sharing the `Adapter` protocol" wording if the Store's method surface differs — a fact about one class, not about the layer this design draws. |
 
-ADRs 0020 and later post-date this reconciliation and are not covered here.
+### 8.3 ADRs written after 0019
+
+This section accounts for every ADR in `docs/adl/` numbered after 0019 — 27 records, ADR-0020
+through ADR-0046 at the time of writing. Each is in exactly one of two tables. The first holds
+the 19 that decide something about the product, reconciled the way
+[§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
+this design's boundary, narrow it, or extend it? The second holds the 8 that decide how the
+project works or how it verifies behaviour, which this design has no service for, each with its
+reason. A new ADR joins one of the two tables in the change that reconciles it; one that neither
+reconciles nor lists is unaccounted for, not out of scope.
+
+As in §8.2, no ADR in this range contradicts the decomposition. Three extend or narrow a
+mechanism this document describes, and each is reflected in the text above rather than left as a
+divergence: ADR-0024's clear event ([§4](#4-static-architecture) rule 5,
+[§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing),
+[§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)), ADR-0030's adapter role
+([§3](#3-service-catalog)'s Resource Access list) and ADR-0036's smoothed set (§3's
+Signal-Conditioning row). The same Resource Access bullet defers to
+[C5](../analysis/requirements.md#constraints)'s role table for which roles fault when
+unavailable, which the ADR-0038 and ADR-0042 rows cite.
+
+**Reconciled as product decisions.**
+
+| ADR | Subject | Verdict | Mapping to this design |
+| --- | --- | --- | --- |
+| 0021 | Adapter-role readings surfaced through one diagnostic sensor's attributes | **Adds a diagnostic output; consistent** | `sensor.smart_charging_adapter_readings` joins the Coordinator-written diagnostic outputs [§3](#3-service-catalog) lists, filled from the values the Coordinator already read for control. It is not an adapter and never mediates a read or write, so V1 keeps one class per role and NF3's boundary is untouched. It is one surface for the read-only adapter read-backs the dashboard Client shows (UC11). |
+| 0022 | Runtime-dashboard delivery mechanism | **Below this design's altitude; consistent** | A locked, YAML-mode dashboard regenerated on every setup is how the Runtime-dashboard Client's surface is materialized. The ADR itself holds that UC11 stays a Client with no service of its own: it adds no Manager or Engine call, and the dashboard still reads and writes only through the Store and the adapter read-backs, as [§4](#4-static-architecture) rule 1 draws it. |
+| 0023 | Decompose `_run_cycle` into named per-step methods | **Superseded (by ADR-0046)** | Recorded for completeness only. It organized code inside the Charging Coordinator Manager and moved no boundary; ADR-0046 carries forward its two unit kinds and its rejection of a uniform pipeline, and its row below is the reconciliation. |
+| 0024 | Paired clear event re-arming the deadline-unreachable notice | **Extends rule 5's event vocabulary; reflected above** | `DeadlineUnreachableCleared` is the third Manager→Manager edge in [§4](#4-static-architecture) rule 5 and the static diagram, published at the end of the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence and consumed in [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)'s re-arm branch. It pairs with the onset event on the same Coordinator → Notification Manager pair, so it adds no pair and no direction. ADR-0042 narrows which cycles may fire it. |
+| 0025 | Table-driven linear step sequence for the capability-gated config flow | **Superseded (by ADR-0027)** | Recorded for completeness only. ADR-0027 keeps its mechanism and replaces the step model it was written against; its row below is the reconciliation. |
+| 0027 | Table-driven linear step sequence for the nine-step, topic-grouped config flow | **Below this design's altitude; consistent** | Organizes the config-flow and options-flow Client (UC12): one table of gated steps per flow, one accumulator, and the data/options split applied once at save through the Store. ADR-0005's boundary and ADR-0008's reload on change stand as written. Its capability-gated step set is the third capability-gating realization [§3](#3-service-catalog) describes, gating on the declarations captured in the same run, so it takes no Client→Engine edge. |
+| 0028 | Registry-level disabling for capability-gated entities | **A setup-time capability gate; consistent** | An owned entity whose capability is absent is disabled in HA's entity registry when it is created, at setup and on reload — the same setup-time shape as the manual mode selector's option list in [§3](#3-service-catalog)'s capability gating, not a runtime Client→Engine call. A user's own enable or disable choice is never overridden by a capability change. |
+| 0030 | External monthly-peak sensor — optional adapter role | **Extends V1 with one optional role** | `monthly_peak_external` is one more adapter role in [§3](#3-service-catalog)'s Resource Access list, optional under [C5](../analysis/requirements.md#constraints): unmapped, it contributes nothing. Its reading is an input to the Billing-Protection Engine's effective peak limit (ADR-0032); the Peak-Demand Tracker keeps accumulating the self-tracked monthly peak (R21) unchanged. Where the role is mapped is ADR-0033's. |
+| 0031 | Config-entry values also exposed as disabled-by-default diagnostic sensors | **Adds read-only mirrors; consistent** | One read-only diagnostic sensor, disabled by default, per `config-options` value and per boolean capability in `config-data`, each read from the config entry — the Store's two buckets (V13). They are mirrors, never a second place a value can be set, so ADR-0005's placement stands and the owned population ADR-0004 draws is unchanged. |
+| 0032 | External monthly-peak sensor — precedence semantics | **Policy inside V6; consistent** | `max(internal, external)` is the monthly-peak operand the Billing-Protection Engine resolves before the effective peak limit, from both values the Coordinator hands it. The rule lives in that Engine, not in the Peak-Demand Tracker's state or in an adapter, so V6 still holds billing policy and Resource Access holds none. |
+| 0033 | The CapTar-gated `captar` step gains a mapping half | **Below this design's altitude; narrows ADR-0027** | Places the `monthly_peak_external` mapping on the config flow's CapTar-gated step, inside the same Client as ADR-0027. A household without the CapTar capability cannot map the role, and needs none: the peak clamp does not run without that capability (R18), so the role would have no consumer (V6). |
+| 0034 | Dedicated diagnostic sensor for the `charger_status` role | **Extends ADR-0021; adds a diagnostic output** | `sensor.smart_charging_charger_status` joins the Coordinator-written diagnostic outputs of [§3](#3-service-catalog), showing R19's canonical charger-status vocabulary. It is fed from the same cached reading as ADR-0021's attributes, so the two surfaces cannot disagree; neither is an adapter. |
+| 0035 | Unmatched `charger_status` raw states default to disconnected | **Narrows the fault signal at one adapter; consistent** | An unmatched raw state now resolves to disconnected inside the `charger_status` adapter's translation rather than to `None`, so it no longer reaches the fault path; an unavailable `charger_status` entity still reads `None` and faults (C5). The adapter still translates without deciding what a status means for charging, as [§4](#4-static-architecture)'s *What each layer must not hold* requires. |
+| 0036 | The control cycle's step 2 smooths net power only | **Narrows ADR-0006 step 2; reflected above** | [§3](#3-service-catalog)'s Signal-Conditioning row smooths `net_w` only and reads `solar_w` raw. Which readings have a smoothing window is R10's from here on; which form a step consumes stays ADR-0006's, and the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence is unchanged. |
+| 0038 | Unit contract at the power-read adapter boundary | **A contract at the V1 boundary; consistent** | Power-read adapters convert a recognized unit to the role's documented one, assume it with a warning when no unit is present, and read `None` when a present unit is not a power unit; `monthly_peak_external` also rejects an absent unit. Unit handling is access mechanics inside Resource Access, so every Engine receives a value in its documented unit, and a rejected reading is a required role's fault or an optional role's absence under [C5](../analysis/requirements.md#constraints). |
+| 0039 | The peak clamp discards a baseline reading taken during its own actuation | **Narrows an input to V6; consistent** | The Coordinator tells the Billing-Protection Engine's baseline debounce whether this cycle's reading was taken during its own actuation; the Engine keeps the decision. It gains a parameter, not a dependency, so it stays free of I/O and remains a stateful Engine under [§3](#3-service-catalog)'s signature test. |
+| 0040 | A fifth mandated adapter case — a numeric role's expected unit set | **A coverage obligation keyed to V1; consistent** | Extends ADR-0009 ([§8.1](#81-adrs-that-predate-this-design-0001-0009)) with a fifth mandated adapter case, which pins ADR-0038's behaviour. It is reconciled here rather than listed as test method because its obligation attaches to the adapter class that defines a read — the Resource Access unit [§3](#3-service-catalog) draws — and its expected unit set is a property of each role. |
+| 0042 | A state-of-charge-unavailable cycle holds the deadline-unreachable clear | **Narrows ADR-0024; consistent** | A cycle that establishes nothing about the deadline — state of charge unavailable while the car stays connected — holds the unreachable edge's prior flag and publishes no `DeadlineUnreachableCleared`; a disconnect still clears it. `Off` and `Power` run such a cycle without faulting ([C5](../analysis/requirements.md#constraints)'s role table). The edge is a unit inside the Coordinator, so no service or event edge changes. |
+| 0046 | The control cycle's composition rules, held by a complexity guard | **Below this design's altitude; supersedes ADR-0023** | Like ADR-0012, it organizes code inside the Charging Coordinator Manager and moves no boundary. It keeps ADR-0006's step order literal in the cycle's body, so the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence — the order — is unchanged, and keeps the R3 and C4 clamps two distinct calls (V6 and V7 stay split). Events fire from the Coordinator method that calls the resolution they report, never from a pure unit, which is this design's Manager-does-the-I/O rule. The complexity guard is a build check, not a service. |
+
+**Out of scope: process and test method.** These decide how the project works or how behaviour is
+verified. None adds, moves or relies on a service boundary, so there is nothing for this design to
+reconcile — the same verdict [§8.1](#81-adrs-that-predate-this-design-0001-0009) gives ADR-0001.
+
+| ADR | Subject | Kind | Reason |
+| --- | --- | --- | --- |
+| 0020 | Advisory SkillSpector scan feeding the AI review | Process | Scans the repository's AI instruction files in CI; nothing in the integration runs it. |
+| 0026 | `psutil` for perf-test CPU-time and RSS measurement | Test method | How the performance tests measure; superseded by ADR-0029. |
+| 0029 | `time.process_time()` for perf-test CPU measurement, `psutil` kept for RSS | Test method | How the performance tests measure; the bound they check is a requirement's, not this ADR's. |
+| 0037 | Scenario/timeline test tier | Test method | A third tier in how behaviour is verified over time, beside ADR-0009's two; it exercises the services through the Coordinator and adds none. |
+| 0041 | The CI reviewer reads its instructions from the base branch | Process | A trust boundary in the review pipeline. |
+| 0043 | Scheduled upstream-drift watcher | Process | A scheduled CI job over the project's pin manifest that files issues. |
+| 0044 | The implementation spec lives in the epic body | Process | Where a spec and its sources are kept in the tracker. |
+| 0045 | Every new ADR opens with a Summary | Process | The form of an ADR; narrows ADR-0001, itself process. |
 
 ---
 
@@ -756,7 +820,9 @@ ADRs 0020 and later post-date this reconciliation and are not covered here.
   ADRs 0010–0019 are reconciled in [§8.2](#82-adrs-written-after-this-design-0010-0019) — none
   contradicts the decomposition, and the two that changed a described mechanism (ADR-0011's event
   vocabulary, ADR-0018's Store) are reflected in [§4](#4-static-architecture) and
-  [§5](#5-dynamic-architecture) above.
+  [§5](#5-dynamic-architecture) above. Every ADR after 0019 is accounted for in
+  [§8.3](#83-adrs-written-after-0019): reconciled as a product decision, or listed as process or
+  test method with its reason.
 
 Once approved, this document is consumed to produce the implementation task breakdown
 (`docs/design/project-plan.md`) — how that breakdown is written is reached through the
