@@ -82,7 +82,8 @@ async def test_should_label_an_unmapped_action_with_its_raw_id_when_only_some_la
 ):
     """`NotificationRequest.action_labels`'s documented fallback: an action id absent from
     a *partial* mapping falls back to its own raw id, independently of a sibling action id
-    that IS mapped -- distinct from the all-labelled and no-mapping-at-all cases below."""
+    that IS mapped -- distinct from the all-labelled case above and the no-mapping-at-all
+    case below."""
     # Arrange
     calls = _register_capture(hass)
     adapter = NotifyAdapter(hass, "notify.mobile_app_phone")

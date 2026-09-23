@@ -594,26 +594,28 @@ async def test_should_translate_deadline_message_when_language_changes_mid_run(
 ):
     """NF8 AC2's "including after that language is changed": the manager re-fetches the
     system text on every send, so a single running instance picks up a language change with
-    no reload -- unlike the dashboard (system_text.py's own docstring)."""
-    # Arrange
+    no reload -- unlike the dashboard (system_text.py's own docstring). The precondition (an
+    English delivery on the first occasion) is set up in Arrange, not asserted here, so a
+    failure under this test's own name always means the *second*, Dutch delivery."""
+    # Arrange -- one English occasion, delivered and then cleared/re-armed.
     calls = _register_notify_capture(hass)
     manager = _manager(hass)
     manager.register_listeners()
-
-    # Act -- first occasion, English; cleared and re-armed; second occasion, Dutch.
     hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
     await hass.async_block_till_done()
+    assert calls[0]["message"] == (
+        "Charging at the maximum rate but still won't reach your target by departure "
+        "(would need 12.5 A)."
+    )
     manager.on_deadline_unreachable_cleared()
     hass.config.language = "nl"
+
+    # Act -- a second occasion, on the same manager instance, after the language changed.
     hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 14.0})
     await hass.async_block_till_done()
 
     # Assert
     assert len(calls) == 2
-    assert calls[0]["message"] == (
-        "Charging at the maximum rate but still won't reach your target by departure "
-        "(would need 12.5 A)."
-    )
     assert calls[1]["message"] == (
         "Laadt op het maximale vermogen, maar bereikt uw streefwaarde niet voor vertrek "
         "(zou 14.0 A nodig hebben)."

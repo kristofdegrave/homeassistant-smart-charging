@@ -1,11 +1,13 @@
 """NF8's system-language text: dashboard headings and notification texts.
 
-Both surfaces are composed by this integration itself, not by an entity's own name or the
-config flow (which the viewing user's language governs instead, R20) -- NF8 AC2 puts them
-under Home Assistant's *system* language, `hass.config.language`, including after that
-language changes. This is the mechanism HA already exposes for backend-composed text
-(`homeassistant.helpers.translation.async_get_translations`, the same loader entity names and
-the config flow use) -- no new mechanism, per the ha-integration-knowledge skill.
+Both surfaces are composed by this integration itself, not by an entity's own name -- which
+NF8 AC2 governs by HA's *system* language too, the same as the dashboard headings and
+notifications here -- nor by the config flow, which the *viewing user's* language governs
+instead (R20). NF8 AC2 puts this module's two surfaces under `hass.config.language`,
+including after that language changes. This is the mechanism HA already exposes for
+backend-composed text (`homeassistant.helpers.translation.async_get_translations`, the same
+loader entity names and the config flow use) -- no new mechanism, per the
+ha-integration-knowledge skill.
 
 This function itself always reads the *current* `hass.config.language` on every call --
 "including after that language changes" is therefore automatic for a caller that calls it
@@ -13,9 +15,7 @@ again, such as `managers/notification_manager.py`, which fetches fresh on every 
 `dashboard.py`'s `async_register_dashboard`, by contrast, calls this once and bakes the
 result into a written YAML file, so the dashboard picks up a language change only the next
 time it regenerates -- on `async_setup_entry` (a reload or a restart), the same trigger every
-other dashboard-affecting change already needs (ADR-0022). #1319's own "Verify live" step
-names a reload as that trigger explicitly, so this is the change's own scoping, not a gap
-this module leaves open.
+other dashboard-affecting change already needs (ADR-0022).
 
 The values themselves live in strings.json's `common` category (mirrored in
 translations/en.json and translations/nl.json) rather than under `entity`/`config`/`options`:

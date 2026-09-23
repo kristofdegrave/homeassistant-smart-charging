@@ -93,6 +93,8 @@ def test_the_deadline_view_is_titled_deadline_with_one_departure_times_section()
 
 def test_should_use_the_given_translations_for_every_heading_when_headings_are_given():
     """NF8: every view/card/section heading follows the given translations dict."""
+    # Arrange -- nothing beyond the module-level `_NL_HEADINGS` fixture and a plain entry.
+
     # Act
     config = build_dashboard_config(_entry(), _NL_HEADINGS)
 
@@ -114,6 +116,8 @@ def test_should_use_the_given_translations_for_every_heading_when_headings_are_g
 def test_should_keep_the_product_name_untranslated_when_headings_are_given():
     """The product name (dashboard/overview-view title "Smart Charging") is never
     translated (NF8 AC1), even though every heading around it follows `_NL_HEADINGS`."""
+    # Arrange -- nothing beyond the module-level `_NL_HEADINGS` fixture and a plain entry.
+
     # Act
     config = build_dashboard_config(_entry(), _NL_HEADINGS)
 
@@ -331,7 +335,26 @@ async def test_should_write_dutch_headings_to_the_dashboard_yaml_when_the_system
     deadline = _view(config, "deadline")
     assert deadline["title"] == "Vertrekdeadline"
     assert deadline["sections"][0]["title"] == "Vertrektijden"
-    # The product name stays untranslated even in a Dutch-language install (NF8 AC1).
+
+
+async def test_should_keep_the_dashboard_yaml_product_name_untranslated_when_the_language_is_dutch(
+    hass, tmp_path
+):
+    """NF8 AC1: the product name stays untranslated even in a Dutch-language install --
+    through the real registration path and the real written YAML file, not the pure builder
+    `test_should_keep_the_product_name_untranslated_when_headings_are_given` already covers."""
+    # Arrange
+    hass.config.language = "nl"
+    assert await async_setup_component(hass, "lovelace", {})
+    entry = _entry()
+
+    # Act
+    await async_register_dashboard(hass, entry)
+
+    # Assert
+    written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
+    config = yaml.safe_load(written)
+    overview = _view(config, "overview")
     assert config["title"] == "Smart Charging"
     assert overview["title"] == "Smart Charging"
 

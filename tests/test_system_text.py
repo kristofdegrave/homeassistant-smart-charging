@@ -1,7 +1,11 @@
 """Tests for NF8's system-language text loader (system_text.py).
 
 Anchors: docs/analysis/requirements.md#nf8--english-and-dutch-throughout AC2 (Home
-Assistant's system language, including after it changes).
+Assistant's system language). This file proves the per-call language lookup itself; the
+"including after it changes" half of AC2 -- a single running instance picking up a later
+language change with no reload -- is proven at the caller,
+tests/managers/test_notification_manager.py's
+test_should_translate_deadline_message_when_language_changes_mid_run.
 """
 
 from custom_components.smart_charging.const import (
@@ -56,6 +60,8 @@ async def test_should_strip_the_component_prefix_when_returning_keys(hass):
     internally -- callers here compare against the bare `KEY_*` slug instead. Asserting a
     known key is present (not just the absence of a prefix) keeps this test from passing
     against an `async_get_system_text` that always returned `{}`."""
+    # Arrange -- the `hass` fixture's default system language is English.
+
     # Act
     text = await async_get_system_text(hass)
 

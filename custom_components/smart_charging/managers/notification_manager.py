@@ -193,8 +193,8 @@ class NotificationManager:
             )
 
         if evaluation.should_send:
-            text = await async_get_system_text(self._hass)
             try:
+                text = await async_get_system_text(self._hass)
                 await notify_adapter.write(
                     NotificationRequest(
                         message=text[KEY_NOTIFICATION_HOME_DAY_PROMPT_MESSAGE],
