@@ -316,7 +316,7 @@ home-day flag also drives the solar-reserve cap (R9).*
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `home_day_external` | adapter role | — | bool | mapped to a calendar / presence source (NF3) | external [home-day flag](system-overview.md#ubiquitous-language) source (R9, R13; and R14's home-day departure override while the deadline capability is present) | resolution-rules, UC07, UC08 | — |
-| `switch.smart_charging_home_day` | state | runtime | bool | off; shows the flag for tomorrow, so it reads off again from midnight, while a flag set the day before keeps applying to its own date (R13); a restart or reload leaves it as it was (NF14) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, UC11 | UC08, UC11 |
+| `switch.smart_charging_home_day` | state | runtime | bool | off; shows and sets the flag for tomorrow, so it reads off again from midnight, while a flag set the day before stays fixed for its own date, which has begun (R13); a restart or reload keeps each flag bound to its date (NF14) | [home-day flag](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, UC11 | UC08, UC11 |
 
 The home-day flag drives the solar-reserve cap (R9) and, while the deadline capability is present (R18), the home-day departure override (R14). How it is set is deliberately left open (R13) — currently via the evening prompt (UC08) or an external source (NF3).
 
