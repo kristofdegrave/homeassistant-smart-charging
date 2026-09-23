@@ -518,75 +518,90 @@ capped limit; no other step changes.
 
 #### 5.1.1 How the cycle is composed
 
-The sequence above gives the cycle's **order**. This subsection gives its **composition**: how
-the Charging Coordinator holds that order in code. [ADR-0046](../adl/0046-cycle-composition-rules-and-complexity-guard.md)
-decides it, and ADR-0046 is where the options and reasons are. The composition sits below this
-design's altitude, as ADR-0012's decomposition does ([§8.2](#82-adrs-written-after-this-design-0010-0019)):
-it adds no service and no edge, and leaves [§4](#4-static-architecture)'s call directions as
-they are. What follows is the composition the cycle is held to. Where today's `_run_cycle` does
-not yet conform, ADR-0046's follow-up restructure is what brings it there.
+The sequence above gives the cycle's **order**. This subsection gives its **composition**, how
+the Charging Coordinator holds that order in code. It is decided by
+[ADR-0046](../adl/0046-cycle-composition-rules-and-complexity-guard.md), which carries the
+options and reasons. The composition sits below this design's altitude, as ADR-0012's
+decomposition does ([§8.2](#82-adrs-written-after-this-design-0010-0019)): it adds no service
+and no edge, and leaves [§4](#4-static-architecture)'s call directions unchanged.
+
+What follows is the composition the cycle is held to, not a description of today's code.
+ADR-0046's follow-ups realize it: the restructure of `_run_cycle` wherever it does not yet
+conform, the complexity guard in the lint configuration, and the `development` completion bar's
+gate.
 
 - **The body is the order, written out.** `_run_cycle` reads top to bottom as the sequence
-  above, one statement per step, in ADR-0006's order. Each step is a named unit of one of
-  [ADR-0023](../adl/0023-decompose-run-cycle-into-named-steps.md)'s two kinds, as ADR-0023
-  defines them. A **coordinator method** is an orchestration block that reads adapters or
-  delegates to an engine function, or both; the clamp calls and the floor/cap are of this kind.
-  A **pure unit** in `coordinator_cycle.py` is gating logic around an engine call, free of Home
-  Assistant, whether it keeps state of its own or not. Neither kind is a service
-  in [§3](#3-service-catalog). A rule that belongs to a volatility in [§2](#2-volatilities-the-cut)
-  stays in that volatility's Engine, and a step calls the Engine. Mode dispatch keeps ADR-0012's
-  `ModeHandler` registry lookup.
-- **The body holds nothing else.** It may hold only:
+  above, in ADR-0006's order, one statement per step.
+  - Each step is a named unit of one of
+    [ADR-0023](../adl/0023-decompose-run-cycle-into-named-steps.md)'s two kinds: a coordinator
+    method, or a pure unit in `coordinator_cycle.py`. ADR-0023 defines both kinds.
+  - The clamp calls and the floor/cap are coordinator methods.
+  - Neither kind is a service in [§3](#3-service-catalog). A rule that belongs to a volatility
+    in [§2](#2-volatilities-the-cut) stays in that volatility's Engine, and the step calls it.
+  - Mode dispatch keeps ADR-0012's `ModeHandler` registry lookup.
+- **The body holds nothing else.** It holds only:
   1. calls to named steps;
-  2. the two fault exits, both C5 faults: one for a required role being unavailable, and one
-     for state of charge being unavailable in a mode that requires it (C5's role table). Each is a test of a sentinel, then a literal `return` of the fault result,
-     which that exit's own step builds. The returns stay in the body, so ADR-0007's single
-     fault path stays visible;
+  2. the two fault exits, both of them C5 faults:
+     - one for an always-required role being unavailable;
+     - one for state of charge being unavailable in a mode that requires it (C5's role table).
+
+     Each exit is a test of a sentinel, then a literal `return` of the fault result, which that
+     exit's own step builds. The returns stay in the body, so ADR-0007's single fault path
+     stays visible;
   3. the two mode-state resets;
-  4. mode dispatch, the R3 peak clamp, the C4 grid-supply-ceiling clamp and the C1 floor/cap,
-     as four distinct calls, each passing its desired current to the next;
-  5. the charger write, then the return of the cycle's result. A named step builds that
-     result, and after the write it also records the last successful cycle and the end of a
+  4. four distinct calls, in this order: mode dispatch, the R3 peak clamp, the C4
+     grid-supply-ceiling clamp, and the C1 floor/cap. Each call passes its desired current to
+     the next;
+  5. the charger write, then the return of the cycle's result. A named step builds that result.
+     After the write, the same step also records the last successful cycle and the end of a
      fault.
 
-  The body holds no inline arithmetic or predicate, no branch except the two fault tests, and
-  no event. A comment in the body is at most a one-line pointer; a step's reasoning goes in its
-  docstring.
+  The body holds no inline arithmetic, no inline predicate, and no branch except the two fault
+  tests. It fires no Home Assistant event. A comment in the body is at most a one-line pointer;
+  a step's reasoning goes in its docstring.
 - **A value has one home.** The cycle's carrier (`CycleContext`) is built once, right after the
-  required-role read succeeds. It is built from the required readings, the debounced baseline
-  and the cycle's clock readings. A value that more than one later step reads is a field on the
-  carrier, written by the step that resolves it and never also kept as a local. A result that
-  only the next call reads is passed to that call as an argument, the way the desired current
-  passes through the clamps. There are two exceptions, both locals: the floor/cap result,
-  passed to both the charger write and the result step; and a fault test's sentinel, which
-  only that test reads. Building the carrier advances no state, so it
-  can sit above the state-of-charge fault exit.
+  required-role read succeeds. Its inputs are:
+  - the required readings;
+  - the accepted [household baseline](../analysis/system-overview.md#ubiquitous-language);
+  - the cycle's clock readings.
+
+  Values are placed by these rules:
+  - A value that more than one later step reads is a field on the carrier. The step that
+    resolves it writes it, and it is never also kept as a local.
+  - A result that only the next call reads is passed to that call as an argument, the way the
+    desired current passes through the clamps.
+  - Two values are locals: the floor/cap result, which goes to both the charger write and the
+    result step; and a fault test's sentinel, which only that test reads.
+
+  Building the carrier advances no state, so it can sit above the state-of-charge fault exit.
 - **The effective peak limit is resolved once**, after urgency, on the success path. The
-  state-of-charge fault exit resolves the non-urgent limit its own result reports inside its
-  own step. No provisional limit exists in the body.
+  state-of-charge fault exit resolves the non-urgent limit that its own result reports, inside
+  its own step. No provisional limit exists in the body.
 - **Both resets stay, as two calls.** The first catches a `Manual` change and runs before the
   baseline query. The second catches an `Auto` change and runs once the Profile has resolved
   the active mode.
-- **No step that advances state crosses a fault exit**, in either direction: what a fault
-  cycle advances today it still advances, and what it leaves untouched it still leaves
-  untouched. The state it leaves untouched is the last-successful-cycle timestamp (ADR-0021),
-  which a charger write that raises does not advance either; the deadline-unreachable edge
-  (ADR-0024); and whether deadline [urgency](../analysis/system-overview.md#ubiquitous-language)
-  was in effect entering the cycle.
+- **No step that advances state crosses a fault exit, in either direction.** What a fault cycle
+  advances today, it still advances. What it leaves untouched, it still leaves untouched. The
+  untouched state includes:
+  - the last-successful-cycle timestamp (ADR-0021), which a charger write that raises does not
+    advance either;
+  - UC05's `Unreachable` state, and with it whether `DeadlineUnreachableCleared` fires (ADR-0024);
+  - R5's [pursued occurrence](../analysis/system-overview.md#ubiquitous-language).
 - **An event fires from the coordinator method that calls the resolution it reports.** Where a
   pure unit does the resolving, the method wraps that unit, and the unit never fires the event.
-  So `ActiveSocLimitChanged` fires where the active SOC limit is resolved, and the
-  `DeadlineUnreachableNotified`/`DeadlineUnreachableCleared` pair fires where urgency is
-  resolved. The Home Assistant event bus stays on the
-  coordinator side, the boundary ADR-0012 draws.
-- **A complexity guard holds the body to this shape.** A cyclomatic-complexity limit and a
-  statement-count limit cover `coordinator.py` and `coordinator_cycle.py`, and the lint job
-  fails when a function exceeds either one. The tool and the thresholds are set by the
-  `development` completion bar, not by this design. Removing either limit, or either file,
-  from the guard contradicts ADR-0046.
+  - `ActiveSocLimitChanged` fires where the active SOC limit is resolved.
+  - The `DeadlineUnreachableNotified`/`DeadlineUnreachableCleared` pair fires where urgency is
+    resolved.
+
+  The Home Assistant event bus stays on the coordinator side, the boundary ADR-0012 draws.
+- **A complexity guard holds the body to this shape.** The guard is two limits over
+  `coordinator.py` and `coordinator_cycle.py`: one on cyclomatic complexity and one on
+  statement count. A function that exceeds either limit fails the lint job. The `development`
+  completion bar sets the tool and the thresholds; this design does not. Removing either
+  limit, or either file, from the guard contradicts ADR-0046.
 
 A new concern arrives as a new step, not as a block inside the body. A concern that fits
-neither unit kind, or cannot be one statement in the body, needs a new decision.
+neither unit kind, or that cannot be one statement in the body, needs a new decision.
 
 ### 5.2 Vehicle charge-limit sync (UC09)
 
