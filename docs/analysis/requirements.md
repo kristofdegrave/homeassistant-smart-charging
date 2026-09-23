@@ -429,8 +429,8 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 
 **Acceptance criteria:**
 
-- [ ] A household that adds this repository to HACS as a custom integration repository can install any published version whose declared minimum Home Assistant release (NF6) its own release meets, and later update to a newer such version, from HACS alone, without copying or editing any file by hand.
-- [ ] Every published version meets Home Assistant's rules for an integration's manifest and file structure, with no violation of those rules.
+- [ ] A household that adds this repository to HACS as a custom integration repository can install any published version whose declared minimum Home Assistant release (NF6) its own release meets, and later update to a newer such version, from HACS alone, without copying or editing any file by hand. The one prerequisite from outside this repository is the `auto-entities` dashboard card the runtime dashboard (R19) renders with, itself installed from HACS.
+- [ ] Every published version meets Home Assistant's rules for an integration's manifest and file structure.
 
 ---
 
@@ -456,7 +456,7 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 
 - [ ] With the instance's internet connection unavailable, every functional requirement and constraint in this document holds except delivery of a notification, provided the mapped entities keep reporting. Whether a mapped device itself needs the internet is that device's own integration's concern; the system reaches devices only through the [adapter roles](system-overview.md#ubiquitous-language) the installation maps (NF3).
 - [ ] Installing the system adds no Python package beyond those Home Assistant ships.
-- [ ] The system sends no data out of the instance — no telemetry, usage statistics or error reports. Its only outbound content is the text of a notification it sends to the notification target the household maps, and only while the [notifications capability](system-overview.md#ubiquitous-language) is present (R18).
+- [ ] The system sends no data out of the instance — no telemetry, usage statistics or error reports. Its only outbound content is the text of a notification it sends to the notification target the household maps, and only while the [notifications capability](system-overview.md#ubiquitous-language) is present (R18). What a mapped entity's own integration does with a value the system writes to it — a cloud-connected charger or vehicle, for instance — is that integration's concern, as in AC1.
 
 ---
 
@@ -468,7 +468,7 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 **Acceptance criteria:**
 
 - [ ] Every text the system presents — entity names and state labels, the [configuration flow](system-overview.md#ubiquitous-language)'s step titles, field labels, descriptions and error messages (R20), the dashboard's view and card headings (R19), and every notification's title, message and action-button labels (R5, R12, R13) — exists in both English and Dutch, with no text present in one language and missing from the other. The product name "Smart Charging" is not translated.
-- [ ] Text shown in the Home Assistant interface for a user — entity names and state labels, the configuration flow — is governed by that user's own language; text the system composes itself — the dashboard's headings and the notifications — by Home Assistant's system language. Where the governing language is Dutch the text is shown in Dutch; where it is English, or any other language, in English.
+- [ ] State labels and the configuration flow are governed by the viewing user's own language; entity names, the dashboard's headings and the notifications, which are fixed once for the whole installation, by Home Assistant's system language. Where the governing language is Dutch the text is shown in Dutch; where it is English, or any other language, in English.
 
 ---
 
