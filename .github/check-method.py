@@ -147,8 +147,9 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # Check 2 resolves its targets over the trees check 1 walks, minus these. A dated record is a
 # snapshot of what was true when it was written: docs/adl/** states a decision at a date and
 # docs/plans/** a plan or design of one build slice, so a path in one is a record of where the
-# file was, not a claim about the tree today -- rewriting it to resolve would falsify the record. The two frozen trees are excluded for the reason check 1 excludes
-# them. Every other tree check 1 walks is live prose that has to resolve.
+# file was, not a claim about the tree today -- rewriting it to resolve would falsify the
+# record. The two frozen trees are excluded for the reason check 1 excludes them. Every other
+# tree check 1 walks is live prose that has to resolve.
 #
 # Check 1 keeps walking docs/adl and docs/plans, and the difference is not an inconsistency:
 # the two checks ask different questions of the same file. A pointer is about the method's
@@ -164,10 +165,11 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 #
 # docs/plans is a RETIRED tree (ADR-0044) that is not yet empty: the plans of shipped slices are
 # deleted, and the pair of an open slice stays until its epic closes. Its entry here expires with
-# the last file, and four other sites expire with it -- the comment above, the fixture in
-# .github/test-check-method.sh that needs a docs/plans file to exercise this exclusion, and the
-# two method documents that describe this tuple, docs/reference/method/ci-pipeline.md and
-# docs/reference/method/ai-authoring.md. The deletion trigger itself is the cleanup skill's.
+# the last file, and five other sites expire with it -- the comment above, the fixture in
+# .github/test-check-method.sh that needs a docs/plans file to exercise this exclusion, the two
+# method documents that describe this tuple, docs/reference/method/ci-pipeline.md and
+# docs/reference/method/ai-authoring.md, and the cleanup skill's transition-period paragraph,
+# which is also the deletion trigger and says it goes when the tree is empty.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
