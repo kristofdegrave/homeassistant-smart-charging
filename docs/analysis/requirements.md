@@ -100,7 +100,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] When the required current exceeds the [escalated maximum permitted rate](system-overview.md#ubiquitous-language) outright — even charging at that maximum cannot meet the deadline — the system charges at the maximum permitted rate and sends the user a notification that the deadline is unreachable. Because that threshold is strictly above the engage threshold above, a deadline is never unreachable without urgency also being in effect.
 - [ ] The unreachable-deadline notice is sent only while the notifications capability is present **and** its own [per-notification enable toggle](system-overview.md#ubiquitous-language) (`deadline_notice_enabled`, default on) is on (R18). When that toggle is off, the notice is never sent even though the capability is present and a notification target is mapped. Charging behaviour is unaffected — the system still charges at the maximum permitted rate — and so is the occasion bookkeeping below: occasions still begin, end, and re-arm while the toggle is off. Turning it back on therefore releases no backlog of notices for occasions that have already passed, and releases no notice for an occasion that began while the toggle was off and is still in progress — only the next, distinct occasion sends one.
 - [ ] A single notification is sent per **occasion** on which the deadline is unreachable — an occasion being an unbroken spell in which it stays unreachable — and no further notification is sent for as long as that occasion lasts, however many control cycles it spans.
-- [ ] No further notification is sent for the same occasion unless the condition clears in between and the deadline later becomes unreachable again. The notification re-arms the moment the condition clears — the required current falls back within the escalated maximum permitted rate, the car is disconnected, the resolved deadline becomes "no deadline" (including the deadline capability becoming absent, R18), or a missed-deadline hold clears — so that later, distinct occasion sends a further notification within the same run of the system, without an intervening restart or reload. A control cycle on which state of charge is unavailable ends no occasion: no required current can be computed on it, so the system holds the notification state it already had and neither notifies nor re-arms. A mid-occasion change to the notifications capability (R18 AC12) is never a re-arm trigger: an occasion is defined by the deadline staying unreachable, which that capability does not affect. Its absence only suppresses delivery, so an occasion that begins or continues while it is absent runs on unnotified; when it becomes present again while that same occasion is still in effect and no notice has yet been sent for it, the notice is sent within the next control cycle — still one notification per occasion.
+- [ ] No further notification is sent for the same occasion unless the condition clears in between and the deadline later becomes unreachable again. The notification re-arms the moment the condition clears — the required current falls back within the escalated maximum permitted rate, the car is disconnected, the resolved deadline becomes "no deadline" (including the deadline capability becoming absent, R18), or a missed-deadline hold clears — so that later, distinct occasion sends a further notification within the same run of the system, without an intervening restart or reload. A control cycle on which state of charge is unavailable ends no occasion: no required current can be computed on it, so the system holds the notification state it already had and neither notifies nor re-arms. A mid-occasion change to the notifications capability (R18 AC12; when it takes effect is NF11's) is never a re-arm trigger: an occasion is defined by the deadline staying unreachable, which that capability does not affect. Its absence only suppresses delivery, so an occasion that begins or continues while it is absent runs on unnotified; when it becomes present again while that same occasion is still in effect and no notice has yet been sent for it, the notice is sent within the next control cycle — still one notification per occasion.
 - [ ] The deadline every criterion above is judged against is the next occurrence of the departure deadline (R14) — never an occurrence that has already passed today. A departure time earlier in the day than the current time therefore never engages urgency or the unreachable notification on that basis alone; it is judged as the next day's occurrence, with the full time remaining until then. The one exception is the missed-deadline hold below, which continues to pursue the occurrence that has just elapsed.
 - [ ] **Missed-deadline hold.** A departure time is a *target*, not a cutoff — the driver may leave later than planned — so the system does not stop the moment a deadline is missed. It is in a missed-deadline hold exactly when the pursued occurrence lies in the past: the deadline is then unreachable by definition and the system keeps charging as hard as the levers above allow. Because the hold is that reading rather than a second condition tracked beside urgency, three things follow without needing their own rules: it is anchored to the occurrence already missed, the departure-deadline rule rolling forward to a later occurrence (R14) cannot end it — nor can that later occurrence resolving to "no deadline" — and no required current is computed while it lasts, the time remaining not being positive. It ends when the pursued occurrence is released by the criterion above, or, as a backstop, when the occurrence **following** the pursued one elapses, or 24 hours pass since the pursued occurrence, whichever comes first — so a hold never outlives one deadline cycle. The 24-hour bound is what makes that guarantee unconditional: R14 lets any day resolve to "no deadline", so there is not always a following occurrence to wait for, and without the bound such a hold would run until state of charge or a disconnect ended it.
 - [ ] A car that connects only *after* a departure deadline has already elapsed, with urgency never having engaged for that occurrence, is never held: the deadline it is judged against is the next occurrence (R14) and it starts from normal operation. A hold is likewise not preserved across a restart spanning the moment the deadline elapsed.
@@ -262,7 +262,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] The usable battery capacity is user-configurable in kWh (default 75 kWh).
 - [ ] When a capacity sensor is configured (NF3), its value is used in preference to the configured number, falling back to the configured value if the sensor is unavailable.
 - [ ] The effective capacity (sensed or configured) is used when calculating the energy and time needed to meet a departure deadline (R5).
-- [ ] Changing the effective capacity changes the deadline calculation accordingly within the next control cycle.
+- [ ] A change in the sensed capacity changes the deadline calculation accordingly within the next control cycle; a change to the configured capacity takes effect as NF11 states.
 
 ---
 
@@ -280,7 +280,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Under `Auto`, SOC-limit coordination raises the active SOC limit via the solar step-up (R8) while charging in a solar mode, and, when its own solar-reserve conditions hold (R9), lowers the active SOC limit and declines to select a mode for opportunistic overnight top-up — coordinating the limit alongside the mode is `Auto`'s job, not a rule the selected mode enforces.
 - [ ] Under `Auto`, mode selection never selects a mode that is unavailable given the installation's capabilities (R18).
 - [ ] Under `Auto`, and while the deadline capability is present (R18), `Auto`'s mode-escalation levers switch from a solar mode to `Captar` when a departure deadline would otherwise be missed (R5), and revert to a solar mode once grid charging is no longer required. When the CapTar capability is absent, the levers escalate to `Power` instead (R18) — a deliberate, deadline-only exception to `Power` otherwise never being Auto-selected — and still revert once the deadline is no longer at risk.
-- [ ] A change of profile, or an `Auto`-driven change of mode, takes effect within the next control cycle.
+- [ ] An `Auto`-driven change of mode takes effect within the next control cycle. When a change of profile takes effect is NF11's.
 
 ---
 
@@ -316,7 +316,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] Whether the household wants the system to send notifications at all (the notifications capability) is user-configurable, defaulting to **absent** — the one deliberate exception to the default-present convention above. The other three capabilities each record a fact about the installation that is already true of it, whereas sending notifications is a preference for the system to contact the household unprompted, something a household opts into rather than out of; a household that never answers the question is therefore left un-notified.
 - [ ] When the notifications capability is absent, the notification configuration surface is neither offered nor required: the notification-target mapping, each notification's own enable toggle (below), and the evening home-day prompt's time (R20, [UC12](use-cases/UC12-configure-installation-through-guided-flow.md)). With no notification target mapped, the notifications themselves are undeliverable, not merely unconfigurable: R5's unreachable-deadline notice (Must), R12's plug-in reminder (Could), and R13's evening home-day prompt (Could) are not sent at all. No charging behaviour falls away with them — the capability gates no charging mode and no clamp, R5's charging levers (the peak-limit raise and `Auto`'s escalation) still apply, and the home-day flag's own mechanism (R13) still accepts its other configured inputs. The plug-in reminder's lead time (R12) stays a field of the deadline capability rather than of this one, but with no target mapped no reminder is sent whatever that lead time says.
 - [ ] Each notification the system can send carries its own [per-notification enable toggle](system-overview.md#ubiquitous-language), layered beneath this capability: R5's unreachable-deadline notice (`deadline_notice_enabled`), R12's plug-in reminder (`plug_in_reminder_enabled`), and R13's evening home-day prompt (`evening_prompt_enabled`). Gating is two-layer and conjunctive — a notification is sent only while the notifications capability is present **and** that notification's own toggle is on. Each toggle is user-configurable and defaults to **on**, following the default-present convention the solar, CapTar, and deadline capabilities follow rather than this capability's own default-absent exception: the opt-in decision is made once, at the capability, and a household that has just declared it wants to be contacted unprompted is presumed to want all three notifications and to narrow down from there. Turning one toggle off suppresses only its own notification and leaves the other two untouched; no charging mode, lever, or clamp falls away with it, the one indirect consequence being that R13's prompt is also one of the mechanisms that can set the home-day flag, so that mechanism goes with it (R13). Because the toggles belong to the notification configuration surface, they are neither offered nor required while the capability is absent (above), so a toggle sitting at its default never causes a notification on an installation that has not opted in.
-- [ ] Changing a capability, or any of the per-notification enable toggles above, takes effect within the next control cycle.
+- [ ] A change of a capability, or of any of the per-notification enable toggles above, is a change saved through the configuration flow; when it takes effect is NF11's.
 - [ ] The capability model is extensible: additional hardware, billing, or policy capabilities (e.g. a home battery) can be added later, each gating the modes and behaviours that depend on it, without altering existing modes (NF2). Capabilities beyond solar, CapTar, deadline management, and notifications are out of scope this release.
 
 ---
@@ -392,7 +392,7 @@ A non-functional requirement states a quality of the product, never how it is bu
 
 ### NF1 — Coordinator executes modes; profiles select them
 
-**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md).
+**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one observable criterion — a change of the active mode takes effect within the next control cycle — is now [NF11](#nf11--responsiveness-to-a-change) for a change the household makes, and R16 for an `Auto`-driven one.
 
 ---
 
@@ -483,6 +483,60 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 - [ ] Changing Home Assistant's system language, or a user's language, after setup changes no owned entity's id.
 
 How the ids are pinned is decided by [ADR-0013](../adl/0013-stable-owned-entity-object-ids.md).
+
+---
+
+### NF10 — Bounded control-cycle cost
+
+**Priority:** Must
+**What:** A [control cycle](system-overview.md#ubiquitous-language) costs a small fraction of the [control interval](system-overview.md#ubiquitous-language) it runs in, and running cycle after cycle never makes the integration hold a growing amount of memory, so it takes no growing share of the Home Assistant instance however long it runs.
+
+**Acceptance criteria:**
+
+- [ ] On the lowest-specification hardware Home Assistant officially supports as an installation target (as listed at the time of the release under test), the mean processing time of one control cycle over any 200 consecutive cycles — excluding time spent waiting for a device or entity to respond — is at most 1 % of the configured control interval (NF11): 100 ms at the default 10 s, 50 ms at the 5 s minimum.
+- [ ] Under unchanged configuration and unchanged readings, with control cycles the only work the Home Assistant process runs: once the window a [smoothed value](system-overview.md#ubiquitous-language) is averaged over (R10) and R21's 15-minute averaging window for [monthly peak demand](system-overview.md#ubiquitous-language) are both full and a further 200 cycles have run, the process's resident memory does not exceed its level at that point by 5 MB or more at any time during the following 24 hours of continuous running.
+
+---
+
+### NF11 — Responsiveness to a change
+
+**Priority:** Must
+**What:** A change the household makes to what the system should do takes effect within the next control cycle, and the control interval that bounds that wait is configurable within a stated range.
+
+**Acceptance criteria:**
+
+- [ ] The control interval is configurable in whole seconds (default 10 s, range 5 s or more, with no upper bound).
+- [ ] A change to a [runtime configuration](system-overview.md#ubiquitous-language) value — including a manual change of the [active mode](system-overview.md#ubiquitous-language) while the `Manual` [profile](system-overview.md#ubiquitous-language) is active — takes effect within the next control cycle: the first control cycle that starts after the change acts on the new value, subject to the rapid-cycling rules of R11 (a running cooldown, for example, still runs to completion), and never keeps acting on the value it replaced.
+- [ ] A change saved through the [configuration flow](system-overview.md#ubiquitous-language) — a capability, a threshold or default, or the control interval itself — takes effect within the next control cycle: the first control cycle that runs after it is saved uses the new value. Whether a post-surplus hold, peak-breach grace period or cooldown running at that moment carries over is R11's.
+
+Where the control interval is kept, and that a change saved through the configuration flow is applied by reloading the integration rather than live, is decided by [ADR-0005](../adl/0005-config-entry-structure-and-interval.md) for the thresholds and defaults, and by [ADR-0008](../adl/0008-reconfigure-reload-behavior.md) for the mappings and capability declarations.
+
+---
+
+### NF12 — Installation configuration survives an upgrade
+
+**Priority:** Must
+**What:** Upgrading the integration to a release that changes how an installation's configuration — every value set through the [configuration flow](system-overview.md#ubiquitous-language) — is stored never makes the household set the integration up again or re-enter any of it.
+
+**Acceptance criteria:**
+
+- [ ] After an upgrade, an installation configured under any earlier published release loads and runs its control cycle without the configuration flow being run again.
+- [ ] Every value set through the configuration flow before the upgrade — each [adapter role](system-overview.md#ubiquitous-language) mapping, [capability](system-overview.md#ubiquitous-language) declaration, threshold and configured default — keeps the value it had.
+- [ ] A configuration-flow setting the new release introduces takes its stated default until the user changes it.
+
+---
+
+### NF13 — Dashboard failure isolation
+
+**Priority:** Must
+**What:** A failure to provide the runtime dashboard (R19) never takes charging control down with it.
+
+**Acceptance criteria:**
+
+- [ ] When the dashboard cannot be provided, the integration still finishes setting up — its entities exist and control cycles run — and the failure is recorded in the Home Assistant log.
+- [ ] No control cycle's outcome depends on whether the dashboard was provided.
+
+How the dashboard is provided, and the upgrade fragility that makes this isolation necessary, are decided by [ADR-0022](../adl/0022-runtime-dashboard-delivery-mechanism.md).
 
 ---
 
