@@ -20,7 +20,7 @@
 
 Each evening, the car is connected at home (`charger_status` is `connected` or `charging`) at or after the configured evening prompt time (`evening_prompt_time`, default 18:00) — either because it was already connected when that time arrived, or because it connects afterward, provided this happens before midnight.
 Every precondition above — the notification gating included — is evaluated at the first moment the trigger condition stated above holds, and a precondition that does not hold at that moment skips the prompt for the whole evening rather than deferring it.
-This is deliberate and applies to every precondition, not only the notification gating: no precondition turning true later the same evening releases a prompt for it (alternate flows 1a and 1b, and the suppression exception flow, all read this way, consistent with **Not sent** being terminal for the evening in the State model).
+This is deliberate and applies to every precondition, not only the notification gating: no precondition turning true later the same evening releases a prompt for it, other than after a restart or reload (NF14, State model) (alternate flows 1a and 1b, and the suppression exception flow, all read this way, consistent with **Not sent** being terminal for the evening in the State model).
 
 ## Main success scenario
 
@@ -59,7 +59,7 @@ When either layer of the conjunctive gating is off — the worked example being 
 Then the System sends no prompt that evening — this use-case's goal is not met, by the household's own configuration, and nothing is queued for later delivery.
 And the household has not lost the ability to indicate a home day: the toggle withdraws only this mechanism, so the flag can still be set through any other configured mechanism — an external calendar or presence source, or the system's own manual home-day input ([UC11](UC11-monitor-and-manage-charging-configuration.md)), at least one of which always remains (R13 AC1, R13 AC2).
 And if no configured mechanism sets the flag, tomorrow is treated as not a home day (R13 AC4) — the same outcome as the driver answering "no", so R9's solar-reserve cap does not activate and R14's home-day departure override does not apply that day.
-And the evening is skipped terminally, exactly as alternate flows 1a and 1b are: turning the suppressed gate back on later the same evening releases no prompt for it. The next prompt the driver can receive is the following evening's, after the home-day flag resets at midnight (R13 AC5), unless a restart or reload starts the lifecycle afresh first (NF14).
+And the evening is skipped terminally, exactly as alternate flows 1a and 1b are: turning the suppressed gate back on later the same evening releases no prompt for it. The next prompt the driver can receive is the following evening's, once tomorrow has become a new date at midnight (R13), unless a restart or reload starts the lifecycle afresh first (NF14).
 
 **Notification gating turned off while a prompt is already pending.**
 Given the System has sent the prompt and is waiting for an answer (state **Pending**)
@@ -78,12 +78,12 @@ Then the System treats the lack of an answer as "no" and leaves the home-day fla
 - When this use-case's prompt runs (i.e. none of the skip conditions applied), the home-day flag reflects the EV driver's answer: set if "yes" was given before midnight, unset if "no" was given or midnight arrived with no answer.
 - When the prompt is skipped — because the notification gating was off, an external source had already set the flag, the next-day forecast did not exceed the threshold, or the car never connected before midnight — the flag is left exactly as it already was: as the external source resolved it (R9), or unset if nothing else had set it.
 - No prompt is ever sent while the notifications capability is absent or the evening prompt's own enable toggle is off, and no prompt suppressed that way is ever released later the same evening, other than after a restart or reload (NF14). A prompt already sent before either gate went off still resolves normally, by answer or by midnight. The home-day flag remains settable through every other configured mechanism (R13 AC1, R13 AC2); with none of them setting it, tomorrow is treated as not a home day (R13 AC4).
-- The home-day flag resets to unset each day at midnight (R13), independently of this use-case, so the prompt starts fresh every evening.
+- The home-day flag is set for one date and applies to that date alone (R13), independently of this use-case, so each evening's prompt asks about a date no earlier prompt has answered.
 - Setting the flag has no further effect within this use-case — whether and how the flag changes overnight charging is entirely [UC07](UC07-reserve-capacity-for-tomorrow.md)'s concern (R9).
 
 ## State model
 
-The prompt lifecycle for a single evening, re-armed at midnight when the home-day flag resets (R13):
+The prompt lifecycle for a single evening, re-armed at midnight, when tomorrow becomes a new date (R13):
 
 - **Not sent** — the trigger condition (car connected, at or after prompt time) has not yet been reached for this evening; or the prompt was skipped because the notification gating was off (either layer), an external source had already set the flag, the next-day forecast did not exceed the threshold, or the car never connected before midnight. A gated-off prompt advances nothing — the prompt is the only thing this use-case does, so with the gating off there is no state for it to reach beyond this one.
 - **Pending** — the notification has been sent and the System is waiting for an answer, up to midnight. Either layer of the gating being turned off while in this state does not withdraw the prompt (suppression-while-pending exception flow); the state still resolves by answer or by midnight.
@@ -91,7 +91,7 @@ The prompt lifecycle for a single evening, re-armed at midnight when the home-da
 - **Answered-no** — the EV driver answered "no" before midnight; the home-day flag stays unset.
 - **Timed-out** — midnight arrived with no answer; treated the same as answered-no (flag stays unset).
 
-Not sent (whether never triggered, or skipped for any of the reasons above), answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only when the home-day flag resets at midnight and the next evening's trigger condition is evaluated, or when a restart or reload starts the lifecycle afresh (NF14). A prompt still Pending at that moment is then asked again: it is sent once more if its trigger still holds before midnight, and it is the answer to that prompt that counts.
+Not sent (whether never triggered, or skipped for any of the reasons above), answered-yes, answered-no, and timed-out are all terminal for the evening; the cycle returns to Not sent only at midnight, when the next evening's trigger condition is evaluated, or when a restart or reload starts the lifecycle afresh (NF14). In that second case the evening's prompt is sent again if its trigger and preconditions still hold before midnight — whether the first was still Pending or already answered, since a flag the driver set survives (NF14) and only an external source's flag skips the prompt. An answer to the prompt sent again is handled as any evening's answer is (step 4, 3a); if it times out, the flag stays as it already was.
 
 ## Domain events produced
 
@@ -128,12 +128,12 @@ sequenceDiagram
             Note over System: Flag stays unset<br/>("HomeDayPromptTimedOut")
         end
     end
-    Note over System: Home-day flag resets<br/>at midnight (R13)
+    Note over System: At midnight tomorrow becomes a new date;<br/>the flag applies to its own date only (R13)
 ```
 
 ## Requirements satisfied
 
-- **R13** — Home-day indication: this use-case is one mechanism that satisfies R13 by offering an actionable yes/no evening prompt as a way to set the home-day flag (AC1); skipping when an external source has already acted, the forecast doesn't justify asking, or the car never connects before midnight; setting the flag on "yes"; treating no answer by midnight as "no"; the flag resetting each day at midnight (AC5).
+- **R13** — Home-day indication: this use-case is one mechanism that satisfies R13 by offering an actionable yes/no evening prompt as a way to set the home-day flag (AC1); skipping when an external source has already acted, the forecast doesn't justify asking, or the car never connects before midnight; setting the flag on "yes"; treating no answer by midnight as "no"; the flag applying to the one date it was set for (AC5).
   - AC2 — the prompt sent only while the notifications capability is present **and** `evening_prompt_enabled` is on, the toggle withdrawing this mechanism entirely rather than merely silencing it, with every other configured mechanism left intact.
   - AC3 — a flag this use-case sets is consumed downstream, by R9's solar-reserve cap ([UC07](UC07-reserve-capacity-for-tomorrow.md)) and, while the deadline capability is present (R18), by R14's departure home-day override (`resolution-rules.md`). This use-case produces the flag and has no visibility into either consumer (Postconditions, Relationships).
   - AC4 — when no configured mechanism sets the flag, tomorrow is treated as not a home day: the outcome of the suppression exception flow when nothing else acts, and of a "no" answer or a timeout.
