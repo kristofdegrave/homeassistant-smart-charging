@@ -111,7 +111,7 @@ device-I/O adapter roles, and the domain-level state and outputs the use-cases r
 | Id | Role | Setup | Unit | Default / range / source | Realizes | Read by | Written by |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `select.smart_charging_profile` | config | runtime | — | `Manual` / `Auto` (default `Manual`) | [profile](system-overview.md#ubiquitous-language) | control-cycle, resolution-rules, UC06, UC07, UC11 | user, UC11 |
-| `control_interval_s` | config-options | options | s | 10 | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
+| `control_interval_s` | config-options | options | s | 10 (5 or more; NF11) | [control interval](system-overview.md#ubiquitous-language) | control-cycle | user (anytime), UC12 |
 | `smoothing_window` | config-options | options | cycles | 4 | [smoothed value](system-overview.md#ubiquitous-language) (R10) | control-cycle | user (anytime), UC12 |
 | `sensor.smart_charging_smoothing_window` | state | — | cycles | mirrors `smoothing_window` (config-options); disabled by default (ADR-0031) | [smoothed value](system-overview.md#ubiquitous-language) (R10) | user | — |
 | `select.smart_charging_mode` | state | runtime | — | `Solar`/`SolarOnly`/`Captar`/`Power`/`Off` | [active mode](system-overview.md#ubiquitous-language) — the `Manual` profile's mode-override selection | control-cycle, UC11 | user (Manual), UC11 |

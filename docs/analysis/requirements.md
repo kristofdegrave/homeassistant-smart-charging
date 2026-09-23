@@ -392,7 +392,7 @@ A non-functional requirement states a quality of the product, never how it is bu
 
 ### NF1 — Coordinator executes modes; profiles select them
 
-**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md).
+**Retired.** This was a statement of code structure, not a quality of the product. That the coordinator executes whichever mode is active and never chooses it, and that the active profile chooses it, is decided by [ADR-0006](../adl/0006-coordinator-and-data-flow.md) and [ADR-0017](../adl/0017-profile-as-composed-mode-selection-policy.md). Its one observable criterion — a change of the active mode takes effect within the next control cycle — is now [NF11](#nf11--responsiveness-to-a-change).
 
 ---
 
@@ -419,6 +419,60 @@ How charging logic is kept to adapter roles is decided by [ADR-0003](../adl/0003
 ### NF4 — Voltage-aware power conversion
 
 **Retired.** This was functional behaviour, not a quality of the product; it is now [R22](#r22--voltage-aware-power-conversion).
+
+---
+
+### NF10 — Bounded control-cycle cost
+
+**Priority:** Must
+**What:** A [control cycle](system-overview.md#ubiquitous-language) costs a small fraction of the [control interval](system-overview.md#ubiquitous-language) it runs in, and running cycle after cycle never makes the integration hold more memory, so it takes no growing share of the Home Assistant instance however long it runs.
+
+**Acceptance criteria:**
+
+- [ ] Averaged over any 200 consecutive control cycles, the processing time spent on one cycle — excluding time spent waiting for a device or entity to respond — is at most 1 % of the configured control interval (NF11): 100 ms at the default 10 s, 50 ms at the 5 s minimum.
+- [ ] Once the smoothing window (R10) and the 15-minute window [monthly peak demand](system-overview.md#ubiquitous-language) is averaged over (R21) are both full, further cycles under unchanged configuration and unchanged readings retain no additional memory: across any 200 consecutive such cycles, the Home Assistant process's resident memory, with those cycles the only work it runs, grows by less than 5 MB in total.
+
+---
+
+### NF11 — Responsiveness to a change
+
+**Priority:** Must
+**What:** A change the household makes to what the system should do is acted on by the next control cycle, and the control interval that bounds that wait is configurable within a stated range.
+
+**Acceptance criteria:**
+
+- [ ] The control interval is configurable in whole seconds (default 10 s, range 5 s or more, with no upper bound).
+- [ ] A change to a [runtime configuration](system-overview.md#ubiquitous-language) value — including a manual change of the [active mode](system-overview.md#ubiquitous-language) while the `Manual` [profile](system-overview.md#ubiquitous-language) is active — is acted on by the first control cycle that starts after the change. Acting on it means that cycle applies the active mode's own rules to the new value — a running cooldown or hold still runs its course (R11) — never that it keeps acting on the value it replaced.
+- [ ] A change saved through the [configuration flow](system-overview.md#ubiquitous-language), a change of the control interval itself included, is acted on from the first control cycle that runs after it is saved.
+
+Where the control interval is kept, and that a change to it is applied by reloading the integration rather than live, is decided by [ADR-0005](../adl/0005-config-entry-structure-and-interval.md).
+
+---
+
+### NF12 — Installation configuration survives an upgrade
+
+**Priority:** Must
+**What:** Upgrading the integration to a release that changes how an installation's configuration is stored never makes the household set the integration up again or re-enter anything.
+
+**Acceptance criteria:**
+
+- [ ] After an upgrade, an installation configured under any earlier release loads and runs its control cycle without the configuration flow being run again.
+- [ ] Every [adapter role](system-overview.md#ubiquitous-language) mapping, [capability](system-overview.md#ubiquitous-language) declaration, threshold and default set before the upgrade keeps the value it had.
+- [ ] A setting the new release introduces takes its stated default until the user changes it.
+
+---
+
+### NF13 — Dashboard failure isolation
+
+**Priority:** Must
+**What:** A failure to provide the runtime dashboard (R19) never takes charging control down with it.
+
+**Acceptance criteria:**
+
+- [ ] When the dashboard cannot be provided, the integration still finishes setting up — its entities exist and control cycles run — and the failure is recorded in the Home Assistant log.
+- [ ] No control cycle's outcome depends on whether the dashboard was provided.
+
+How the dashboard is provided, and the upgrade fragility that makes this isolation necessary, are decided by [ADR-0022](../adl/0022-runtime-dashboard-delivery-mechanism.md).
 
 ---
 
