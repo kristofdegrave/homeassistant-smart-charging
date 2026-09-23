@@ -538,8 +538,8 @@ not yet conform, ADR-0046's follow-up restructure is what brings it there.
   `ModeHandler` registry lookup.
 - **The body holds nothing else.** It may hold only:
   1. calls to named steps;
-  2. the two fault exits, one for a required role being unavailable and one for state of
-     charge, both of them C5 faults. Each is a test of a sentinel, then a literal `return` of the fault result,
+  2. the two fault exits, both C5 faults: one for a required role being unavailable, and one
+     for state of charge being unavailable in a mode that requires it (C5's role table). Each is a test of a sentinel, then a literal `return` of the fault result,
      which that exit's own step builds. The returns stay in the body, so ADR-0007's single
      fault path stays visible;
   3. the two mode-state resets;
