@@ -3105,8 +3105,9 @@ async def test_solar_cooldown_delays_deadline_urgency_escalation_into_captar(has
     Idle by the mode switch (as before), but the coordinator-scoped `_active_cooldown` (fixed
     at Solar's own duration when it stopped) still blocks Captar's Idle -> Charging
     transition. This is control-cycle.md's own accepted trade-off: "an urgency escalation
-    (R5) may have to wait out the remainder of a running cooldown ... rather than this
-    Must-priority hardware protection being defeated"."""
+    can be held off for the remainder of a running cooldown (at most `Captar`'s 10
+    minutes), a bounded delay to R5's best-effort guarantee rather than a breach of R11's
+    Must-priority hardware protection"."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()

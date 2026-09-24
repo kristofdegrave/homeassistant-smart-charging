@@ -756,9 +756,11 @@ def test_should_release_the_pursued_occurrence_when_the_handback_clears_urgency(
 def test_should_keep_the_original_occurrence_when_the_deadline_resolves_to_a_different_time():
     """THE RULE THAT MAKES A HOLD REACHABLE AT ALL, on the ordinary path.
 
-    The pursued occurrence "survives a later occurrence resolving to 'no deadline' OR TO A
-    DIFFERENT TIME" (resolution-rules.md, 'Missed-deadline hold'). This case pins the second
-    half, which is the one the ordinary path implements: an occurrence still in the FUTURE,
+    The pursued occurrence is anchored: resolution-rules.md's 'Missed-deadline hold' says
+    "the departure-deadline rule rolling forward cannot move it, and that later occurrence
+    resolving to 'no deadline' cannot end it". This case pins the first half — a deadline
+    resolving to a DIFFERENT TIME, which is the one the ordinary path implements: an
+    occurrence still in the FUTURE,
     with `deadline_at` resolving elsewhere, must come back unmoved.
 
     It is deliberately set up with `pursued_occurrence != deadline_at`. An earlier version of
