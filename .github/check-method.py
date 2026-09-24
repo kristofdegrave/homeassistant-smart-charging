@@ -165,12 +165,9 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 #
 # docs/plans is a RETIRED tree (ADR-0044) that is not yet empty: the plans of shipped slices are
 # deleted, and the pair of an open slice stays until its epic closes. Its entry here expires with
-# the last file, and five other sites expire with it -- the two paragraphs above that name it,
-# the fixture in .github/test-check-method.sh that needs a docs/plans file to exercise this
-# exclusion, the two method documents that describe this tuple,
-# docs/reference/method/ci-pipeline.md and docs/reference/method/ai-authoring.md, and the
-# cleanup skill's transition-period paragraph, which is also the deletion trigger and says it
-# goes when the tree is empty.
+# the last file, and so does every other hit of `grep -rnE "docs/plans|plan file" .claude .github
+# docs/reference` -- run it then rather than trusting a list here. The deletion trigger itself is
+# the cleanup skill's transition-period rule, which is one of those hits.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".

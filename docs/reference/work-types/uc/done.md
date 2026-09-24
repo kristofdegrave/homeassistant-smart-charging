@@ -63,10 +63,11 @@ this is the most common form 2.2 takes.
 **(3.1) What, not how.** No implementation detail — modules, platform services, timer
 helpers, persistence. Entity ids that are part of the ubiquitous language are fine. **Major**
 for a mechanism smuggled into a *what*; **Minor** for an incidental implementation aside. One
-carve-out, which is why 5.1 can require what it requires: for an autonomous behaviour the state
-set, its transitions, their threshold conditions and the set-point rule **are** the observable
-contract, so a State model is a *what*. The excluded *how* is the code realization of it —
-which module, which timer helper holds a cooldown, how the state survives a restart.
+carve-out, which is why 5.1 can require what it requires: for a use-case that carries a State
+model under 5.1, the state set, its transitions, their threshold conditions and the set-point
+rule **are** the observable contract, so a State model is a *what*. The excluded *how* is the
+code realization of it — which module, which timer helper holds a cooldown, how the state
+survives a restart.
 
 **(3.2) The 6Cs pass.** Clarity, Concision, Completeness, Consistency, Correctness,
 Concreteness, per `CLAUDE.md`'s **Requirements standard**. A miss is **Minor** unless it makes
